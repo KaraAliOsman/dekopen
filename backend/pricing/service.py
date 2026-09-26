@@ -197,10 +197,12 @@ def preview(org_id, actor, request):
         'installation_rate_per_m2':repo.convert(rules['installation_rate_per_m2'],organization['currency'])}
     discount = request['discount_pct']
     state = discount_state(actor.active_organization.role,discount,request['confirmed'])
-    # Segment bands are a commercial guardrail, not a list-mode feature: a
-    # 5% RETAIL discount must not validate just because the pricing mode
-    # never reads the field.
-    validate_segment(request['segment'],discount,sum(p['quantity'] for p in positions))
+    if mode == PricingMode.COMMERCIAL_LIST_WITH_DISCOUNTS:
+        # Segment bands only bound the list-with-discounts catalogue: RETAIL
+        # requires 0% and ARCHITECT 8–12%, so applying them to the manual
+        # discount decision would make the estimator approval path
+        # unreachable for any negotiated discount.
+        validate_segment(request['segment'],discount,sum(p['quantity'] for p in positions))
     if mode == PricingMode.TARGET_GROSS_MARGIN_PROJECT and discount:
         raise PricingError('target_margin_already_defines_final_price')
     cost_lines, priced_lines, technical = [], [], []

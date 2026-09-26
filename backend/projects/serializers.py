@@ -67,7 +67,6 @@ class PositionResponseSerializer(serializers.Serializer):
     location_tag = serializers.CharField(allow_null=True)
     quantity = serializers.IntegerField()
     typology = serializers.CharField()
-    cost_net = serializers.CharField()
     price_net = serializers.CharField()
     discount_pct = serializers.CharField()
     design = PositionDesignSerializer()

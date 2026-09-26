@@ -138,7 +138,6 @@ function position(
     location_tag: location,
     quantity: 4,
     typology: "FIXED",
-    cost_net: "0",
     price_net: "0",
     discount_pct: "0",
     updated_at: "2026-09-18T15:00:00.123456Z",

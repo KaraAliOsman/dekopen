@@ -19901,8 +19901,6 @@ components:
           type: integer
         typology:
           type: string
-        cost_net:
-          type: string
         price_net:
           type: string
         discount_pct:
@@ -19916,7 +19914,6 @@ components:
           format: date-time
       required:
       - bom
-      - cost_net
       - design
       - discount_pct
       - id

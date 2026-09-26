@@ -66,7 +66,8 @@ POSITION_COLUMNS = (
     "color_exterior",
     "parametric_tree",
     "bom_snapshot",
-    "cost_net",
+    # cost_net is a commercial authority column — the shot-08 column grant
+    # excludes it from every member read; sale price stays readable.
     "price_net",
     "discount_pct",
     "updated_at",
@@ -171,8 +172,8 @@ def position_public(row):
             )
         },
         # The pricing authority writes these on apply — the workspace shows
-        # each vano's live net alongside its total, no re-derivation.
-        "cost_net": str(row["cost_net"]),
+        # each vano's live net alongside its total, no re-derivation. The
+        # cost side stays inside pricing operations (member-denied column).
         "price_net": str(row["price_net"]),
         "discount_pct": str(row["discount_pct"]),
         "design": design,
