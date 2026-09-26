@@ -206,6 +206,10 @@ export function AgentBody({
   }, [job?.state, onJobState]);
   const [message, setMessage] = useState("");
   const [thread, setThread] = useState<Turn[]>([]);
+  /** Instructions typed while a run is live — the backend can't interleave
+   * a second run, so they queue client-side and post once the job settles. */
+  const [pending, setPending] = useState<string[]>([]);
+  const pendingRef = useRef<string[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   /** One operation key per goal — a retried submit replays the audited loop
    * (each round is suffixed server-side) instead of debiting twice. */
@@ -258,6 +262,8 @@ export function AgentBody({
           pollTimer.current = window.setTimeout(() => void tick(), POLL_MS);
         } else {
           setBusy(false);
+          // Queued instructions flush in the job-state effect — it runs
+          // after this render commits, even if one queued mid-settle.
         }
       } catch {
         // A transient poll failure is not a job failure — keep watching.
@@ -276,6 +282,8 @@ export function AgentBody({
     setJob(null);
     setMessage("");
     setBusy(false);
+    pendingRef.current = [];
+    setPending([]);
     operationKey.current = null;
     let cancelled = false;
     void (async () => {
@@ -317,9 +325,23 @@ export function AgentBody({
 
   async function run(): Promise<void> {
     const trimmed = goal.trim();
-    if (!trimmed || busy) return;
+    if (!trimmed) return;
     // A terminal job can't take follow-ups — start a fresh one instead of
     // bouncing the message off a 409.
+    const followTarget = job && !TERMINAL_STATES.has(job.state) ? job : null;
+    if (followTarget && LIVE_STATES.has(followTarget.state)) {
+      // Mid-run instructions are accepted and delivered once the run
+      // settles — the claim chain can't interleave a second run anyway.
+      pendingRef.current = [...pendingRef.current, trimmed];
+      setPending(pendingRef.current);
+      setGoal("");
+      return;
+    }
+    if (busy) return;
+    await send(trimmed);
+  }
+
+  async function send(trimmed: string): Promise<void> {
     const followTarget = job && !TERMINAL_STATES.has(job.state) ? job : null;
     setBusy(true);
     setMessage("");
@@ -495,6 +517,34 @@ export function AgentBody({
       ),
     );
   }
+
+  const removePending = (index: number): void => {
+    pendingRef.current = pendingRef.current.filter((_, item) => item !== index);
+    setPending(pendingRef.current);
+  };
+
+  // Flush queued instructions once the run leaves live states — one at a
+  // time, so each pending becomes its own follow-up round on the same job.
+  useEffect(() => {
+    if (!job || LIVE_STATES.has(job.state)) return;
+    const queued = pendingRef.current;
+    if (!queued.length) return;
+    if (TERMINAL_STATES.has(job.state)) {
+      // The job died while instructions waited — say so rather than post
+      // them into a terminal-state 409.
+      pendingRef.current = [];
+      setPending([]);
+      setMessage(t("agent.pendingDropped"));
+      return;
+    }
+    const [first, ...rest] = queued;
+    if (!first) return;
+    pendingRef.current = rest;
+    setPending(rest);
+    void send(first);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- send is stable
+    // enough here: it posts against whatever job the dock is bound to.
+  }, [job]);
 
   const live = job !== null && LIVE_STATES.has(job.state);
   const retryable = job !== null && job.state === "FAILED_RETRYABLE";
@@ -765,6 +815,24 @@ export function AgentBody({
           ))}
         </div>
       ) : null}
+      {pending.length > 0 ? (
+        <ul className="ask-dock__pending" aria-label={t("agent.pending")}>
+          {pending.map((item, index) => (
+            <li key={`${index}-${item.slice(0, 16)}`}>
+              <span>
+                {t("agent.pending")} {item}
+              </span>
+              <button
+                type="button"
+                aria-label={t("agent.pendingRemove")}
+                onClick={() => removePending(index)}
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {!terminal ? (
         <form
           className="ask-dock__form"
@@ -787,9 +855,9 @@ export function AgentBody({
                 run().catch(() => undefined);
               }
             }}
-            disabled={busy}
+            disabled={busy && !live}
           />
-          <button type="submit" disabled={busy || !goal.trim()}>
+          <button type="submit" disabled={(busy && !live) || !goal.trim()}>
             {t("agent.send")}
           </button>
         </form>
