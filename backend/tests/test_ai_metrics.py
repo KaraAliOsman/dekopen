@@ -147,6 +147,19 @@ def test_record_outcome_writes_deduped_entry(monkeypatch):
         captured["parameters"] = parameters
         return [{"id": str(parameters[1])}]
 
+    # The step must exist in the transcript — outcomes can only be recorded
+    # against steps the run actually proposed.
+    monkeypatch.setattr(
+        jobs,
+        "get_job",
+        lambda **kw: {
+            "transcript": [
+                {"role": "agent", "steps": [
+                    {"kind": "navigate"}, {"kind": "ops"},
+                ]}
+            ]
+        },
+    )
     monkeypatch.setattr(jobs, "rows", fake_rows)
     out = jobs.record_outcome(
         org_id=uuid4(),
@@ -167,6 +180,17 @@ def test_record_outcome_writes_deduped_entry(monkeypatch):
 
 
 def test_record_outcome_dedupe_returns_unrecorded(monkeypatch):
+    monkeypatch.setattr(
+        jobs,
+        "get_job",
+        lambda **kw: {
+            "transcript": [
+                {"role": "agent", "steps": [
+                    {"kind": "navigate"}, {"kind": "ops"},
+                ]}
+            ]
+        },
+    )
     monkeypatch.setattr(jobs, "rows", lambda *a, **k: [])
     out = jobs.record_outcome(
         org_id=uuid4(),
@@ -175,3 +199,41 @@ def test_record_outcome_dedupe_returns_unrecorded(monkeypatch):
         entry={"turn_index": 0, "step_index": 1, "action": "applied", "ops": []},
     )
     assert out["recorded"] is False
+
+
+def test_record_outcome_rejects_fabricated_step(monkeypatch):
+    """An outcome naming a turn/step the transcript never proposed is not
+    telemetry — refuse it instead of counting a phantom click."""
+    monkeypatch.setattr(
+        jobs,
+        "get_job",
+        lambda **kw: {
+            "transcript": [
+                {"role": "agent", "steps": [{"kind": "navigate"}]}
+            ]
+        },
+    )
+    monkeypatch.setattr(jobs, "rows", lambda *a, **k: [{"id": "x"}])
+    assert (
+        jobs.record_outcome(
+            org_id=uuid4(),
+            user_id=uuid4(),
+            job_id=uuid4(),
+            entry={"turn_index": 0, "step_index": 0, "action": "applied"},
+        )
+        is None
+    )  # navigate is not an actionable step
+    monkeypatch.setattr(
+        jobs,
+        "get_job",
+        lambda **kw: {"transcript": [{"role": "agent", "steps": []}]},
+    )
+    assert (
+        jobs.record_outcome(
+            org_id=uuid4(),
+            user_id=uuid4(),
+            job_id=uuid4(),
+            entry={"turn_index": 0, "step_index": 3, "action": "applied"},
+        )
+        is None
+    )

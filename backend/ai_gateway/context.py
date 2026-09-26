@@ -942,12 +942,23 @@ def _work_order(org_id: UUID, refs: dict) -> dict:
 
 def _clients(org_id: UUID) -> dict:
     result = rows(
-        "SELECT name, rut FROM public.clients "
+        "SELECT id, name, rut, email, phone FROM public.clients "
         "WHERE org_id=%s AND is_active ORDER BY name LIMIT %s",
         [org_id, MAX_LIST],
     )
     return {
-        "clients": [{"name": _cut(c["name"]), "rut": _cut(c["rut"])} for c in result],
+        "clients": [
+            {
+                # The id is what drill-down refs need; email/phone let the
+                # comms surface cite real contact data instead of inventing it.
+                "id": str(c["id"]),
+                "name": _cut(c["name"]),
+                "rut": _cut(c["rut"]),
+                "email": _cut(c["email"]),
+                "phone": _cut(c["phone"]),
+            }
+            for c in result
+        ],
         "truncated": len(result) == MAX_LIST,
     }
 
@@ -958,6 +969,15 @@ def _purchasing(org_id: UUID) -> dict:
         "supplier_name FROM public.orders "
         "WHERE org_id=%s AND order_type::text LIKE 'SUPPLIER%%' "
         "ORDER BY created_at DESC LIMIT %s",
+        [org_id, MAX_LIST],
+    )
+    # Real stock, not just the order ledger — a 'what can we buy' answer
+    # without on-hand balances would be guessing. inventory_stock is granted
+    # to documentary_backend already, so the ambient role reads it.
+    stock = rows(
+        "SELECT item_id, sku, name, category, unit, on_hand_qty, reserved_qty"
+        " FROM public.inventory_stock WHERE org_id=%s"
+        " ORDER BY sku LIMIT %s",
         [org_id, MAX_LIST],
     )
     return {
@@ -971,7 +991,19 @@ def _purchasing(org_id: UUID) -> dict:
             }
             for o in orders
         ],
-        "truncated": len(orders) == MAX_LIST,
+        "stock": [
+            {
+                "item_id": str(s["item_id"]),
+                "sku": _cut(s["sku"]),
+                "name": _cut(s["name"]),
+                "category": _cut(s["category"]),
+                "unit": _cut(s["unit"]),
+                "on_hand": str(s["on_hand_qty"]),
+                "reserved": str(s["reserved_qty"]),
+            }
+            for s in stock
+        ],
+        "truncated": len(orders) == MAX_LIST or len(stock) == MAX_LIST,
     }
 
 
@@ -1418,9 +1450,44 @@ def _catalog_compiler(org_id: UUID) -> dict:
 
 
 def _settings(org_id: UUID) -> dict:
-    # The organization block already carries what the settings surface can
-    # answer about; no extra projection needed.
-    return {}
+    # The admin surface's real questions are "what is configured and what is
+    # missing" — project exactly that: team size, white-label presence, and
+    # SII readiness (certificate + CAF coverage per DTE type). Everything is
+    # already readable under the ambient role, so no grant widening.
+    members = rows(
+        "SELECT count(*) AS n FROM public.tenancy_memberships"
+        " WHERE org_id=%s AND is_active",
+        [org_id],
+    )
+    org = rows(
+        "SELECT brand_logo_key IS NOT NULL AS branded"
+        " FROM public.tenancy_organizations WHERE id=%s",
+        [org_id],
+    )
+    cert = rows(
+        "SELECT count(*) AS n FROM public.sii_certificates"
+        " WHERE org_id=%s",
+        [org_id],
+    )
+    cafs = rows(
+        "SELECT dte_type, folio_desde, folio_hasta, folio_actual"
+        " FROM public.sii_cafs WHERE org_id=%s ORDER BY dte_type LIMIT %s",
+        [org_id, MAX_LIST],
+    )
+    return {
+        "members_active": int(members[0]["n"]) if members else 0,
+        "branding_configured": bool(org and org[0]["branded"]),
+        "sii_certificates": int(cert[0]["n"]) if cert else 0,
+        "caf_pools": [
+            {
+                "dte_type": _cut(c["dte_type"]),
+                "from": str(c["folio_desde"]),
+                "to": str(c["folio_hasta"]),
+                "current": str(c["folio_actual"]),
+            }
+            for c in cafs
+        ],
+    }
 
 
 _BUILDERS = {

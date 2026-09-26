@@ -1,15 +1,43 @@
+import { useId } from "react";
 import "./orb.css";
 
-/** DEKOPEN's AI identity: a small graphite orb with luminous eyes. It is the
- * assistant's presence everywhere — launcher, dock header, workspace, job
- * states — so the AI reads as a teammate, not a chat widget. The state maps
- * to the durable job lifecycle: idle / thinking (planning) / working
- * (running) / waiting (needs the user) / ok (succeeded) / error. */
-export type OrbState = "idle" | "thinking" | "working" | "waiting" | "ok" | "error";
+/** DEKOPEN's AI identity: an anthracite sphere with twin casement-slot eyes —
+ * the paired-window face is the fenestration pun that makes the assistant
+ * DEKOPEN's own. Two orthogonal channels carry meaning: the eyes carry life
+ * (breathe, blink, gaze, poses) and a thin outer arc carries job status in
+ * the same hues as the state pills. No mouth, no glow — the eyes and the
+ * ring carry the whole range the product needs. */
+export type OrbState =
+  "idle" | "queued" | "thinking" | "working" | "waiting" | "success" | "error" | "canceled";
+
+/** Durable job lifecycle → orb state. Unknown future states degrade to idle —
+ * never pass the API state through unmapped. */
+export function orbStateFor(jobState?: string): OrbState {
+  switch (jobState) {
+    case "QUEUED":
+      return "queued";
+    case "PLANNING":
+      return "thinking";
+    case "RUNNING":
+      return "working";
+    case "WAITING_FOR_USER":
+    case "WAITING_FOR_APPROVAL":
+      return "waiting";
+    case "SUCCEEDED":
+      return "success";
+    case "FAILED":
+    case "FAILED_RETRYABLE":
+      return "error";
+    case "CANCELED":
+      return "canceled";
+    default:
+      return "idle";
+  }
+}
 
 export function Orb({
   state = "idle",
-  size = 40,
+  size = 28,
   title,
 }: {
   state?: OrbState;
@@ -17,67 +45,83 @@ export function Orb({
   /** Accessible label — omit for decorative use inside a labelled control. */
   title?: string;
 }): JSX.Element {
+  // Gradient ids must be unique per instance — duplicate ids across mounted
+  // orbs would all resolve to the first defs block.
+  const uid = useId();
   return (
     <svg
-      className="orb"
-      data-state={state}
+      className={`orb is-${state}${size < 28 ? " orb--s" : ""}`}
+      viewBox="0 0 48 48"
       width={size}
       height={size}
-      viewBox="0 0 64 64"
       role={title ? "img" : undefined}
-      aria-label={title}
       aria-hidden={title ? undefined : true}
+      aria-label={title}
     >
       <defs>
-        {/* Graphite body — light falls from top-left, so the sphere reads
-            volumetric instead of flat. */}
-        <radialGradient id="orb-body" cx="38%" cy="30%" r="78%">
-          <stop offset="0%" stopColor="#4d5a57" />
-          <stop offset="38%" stopColor="#2c3634" />
-          <stop offset="72%" stopColor="#151b1a" />
-          <stop offset="100%" stopColor="#0b0f0e" />
-        </radialGradient>
-        <linearGradient id="orb-sheen" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.34" />
-          <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
-        </linearGradient>
-        <radialGradient id="orb-glow" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="var(--orb-eye)" stopOpacity="0.55" />
-          <stop offset="100%" stopColor="var(--orb-eye)" stopOpacity="0" />
+        <radialGradient id={`${uid}-body`} cx="38%" cy="28%" r="80%">
+          <stop offset="0%" stopColor="var(--orb-hi)" />
+          <stop offset="55%" stopColor="var(--orb-mid)" />
+          <stop offset="100%" stopColor="var(--orb-lo)" />
         </radialGradient>
       </defs>
 
-      <circle className="orb-halo" cx="32" cy="33" r="29.5" fill="url(#orb-glow)" />
-      <circle className="orb-body" cx="32" cy="33" r="24" fill="url(#orb-body)" />
-      {/* Rim light on the lower edge keeps the orb from sinking into dark
-          surfaces entirely. */}
-      <path
-        className="orb-rim"
-        d="M 14.8 45.5 A 24 24 0 0 0 49.2 45.5"
-        fill="none"
-        stroke="#5a6a67"
-        strokeOpacity="0.5"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-      />
-      <ellipse className="orb-sheen" cx="26" cy="22" rx="10.5" ry="6.5" fill="url(#orb-sheen)" />
+      {/* Semantics channel — the status arc, hidden unless the state needs it. */}
+      <circle className="orb__ring" cx="24" cy="24" r="21.5" />
 
-      <g className="orb-eyes">
-        <g className="orb-eye orb-eye--l">
-          <circle className="orb-eye-glow" cx="25" cy="33" r="5.5" />
-          <ellipse className="orb-eye-dot" cx="25" cy="33" rx="2.6" ry="3.6" />
-          <circle className="orb-eye-spark" cx="24" cy="31.6" r="0.9" />
+      {/* Life channel — everything that tilts, breathes and blinks. */}
+      <g className="orb__tilt">
+        <circle className="orb__body" cx="24" cy="24" r="17" fill={`url(#${uid}-body)`} />
+        <ellipse
+          className="orb__bounce"
+          cx="29"
+          cy="33"
+          rx="6"
+          ry="2.6"
+          transform="rotate(-18 29 33)"
+        />
+        <ellipse
+          className="orb__spec"
+          cx="18"
+          cy="15.5"
+          rx="5.4"
+          ry="3"
+          transform="rotate(-26 18 15.5)"
+        />
+
+        <g className="orb__eyes orb__eyes--open">
+          <rect className="orb__eye" x="15.6" y="20" width="6" height="9.4" rx="3" />
+          <rect className="orb__eye" x="26.4" y="20" width="6" height="9.4" rx="3" />
+          <circle className="orb__glint" cx="17.8" cy="22.4" r="1" />
+          <circle className="orb__glint" cx="28.6" cy="22.4" r="1" />
         </g>
-        <g className="orb-eye orb-eye--r">
-          <circle className="orb-eye-glow" cx="39" cy="33" r="5.5" />
-          <ellipse className="orb-eye-dot" cx="39" cy="33" rx="2.6" ry="3.6" />
-          <circle className="orb-eye-spark" cx="38" cy="31.6" r="0.9" />
+        <g className="orb__eyes orb__eyes--joy">
+          <path d="M15.8 26.6 Q18.6 22.2 21.4 26.6" />
+          <path d="M26.6 26.6 Q29.4 22.2 32.2 26.6" />
+        </g>
+        <g className="orb__eyes orb__eyes--worry">
+          <rect
+            x="15.8"
+            y="23.4"
+            width="5.8"
+            height="3.4"
+            rx="1.7"
+            transform="rotate(-14 18.7 25.1)"
+          />
+          <rect
+            x="26.4"
+            y="23.4"
+            width="5.8"
+            height="3.4"
+            rx="1.7"
+            transform="rotate(14 29.3 25.1)"
+          />
+        </g>
+        <g className="orb__eyes orb__eyes--flat">
+          <rect x="15.8" y="23.9" width="5.8" height="3" rx="1.5" />
+          <rect x="26.4" y="23.9" width="5.8" height="3" rx="1.5" />
         </g>
       </g>
-
-      {/* State ring — waiting (attention) and error carry a colored arc so the
-          state reads at a glance even at 20px. */}
-      <circle className="orb-state-ring" cx="32" cy="33" r="24" />
     </svg>
   );
 }

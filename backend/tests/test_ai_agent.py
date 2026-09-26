@@ -283,7 +283,9 @@ def test_agent_prepare_requires_allowlisted_action(monkeypatch):
     assert result["steps"] == [
         {
             "kind": "prepare",
-            "tool": "generate_document_preview",
+            # The tool name is the action's own — a prepare step labeled
+            # 'generate_document_preview' would lie in the transcript.
+            "tool": "emit_revision",
             "action": "emit_revision",
             "path": f"/projects/{project_id}/pricing",
             "label": "Emitir revisión",

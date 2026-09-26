@@ -8,8 +8,8 @@ import { MOD_K_HINT } from "../platform";
 import { telemetry } from "../telemetry/telemetry";
 import { useTheme } from "../theme/ThemeProvider";
 import { CommandPalette } from "../features/commands/CommandPalette";
+import { AiPresence } from "../features/assistant/AiPresence";
 import { AskDekopen } from "../features/assistant/AskDekopen";
-import { Orb } from "../features/assistant/Orb";
 import { AssistantSurfaceProvider } from "../features/assistant/assistantContext";
 import { AttentionBell } from "./AttentionBell";
 import { OrgSwitcher } from "./OrgSwitcher";
@@ -275,14 +275,18 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
                   <kbd>{MOD_K_HINT}</kbd>
                 </button>
                 <AttentionBell />
-                <button
-                  type="button"
-                  className="topbar-button topbar-ai"
-                  onClick={() => setAssistantRequest((value) => value + 1)}
-                >
-                  <Orb state="idle" size={22} />
-                  {t("shell.aiEntry")}
-                </button>
+                {/* INSTALLER has no AI surface — every ai endpoint is gated to
+                    _AGENT_CALLERS, so the orb would offer a 403 wall. */}
+                {role !== "INSTALLER" ? (
+                  <button
+                    type="button"
+                    className="topbar-button topbar-ai"
+                    onClick={() => setAssistantRequest((value) => value + 1)}
+                  >
+                    <AiPresence organizationId={org?.id ?? null} size={22} />
+                    {t("shell.aiEntry")}
+                  </button>
+                ) : null}
               </div>
             </header>
             <main className="workspace" id="workspace-main" tabIndex={-1}>
@@ -295,11 +299,13 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
             onNavigate={(to) => navigate(to)}
             organizationId={org?.id ?? null}
           />
-          <AskDekopen
-            openRequested={assistantRequest}
-            hideTrigger
-            organizationId={org?.id ?? null}
-          />
+          {role !== "INSTALLER" ? (
+            <AskDekopen
+              openRequested={assistantRequest}
+              hideTrigger
+              organizationId={org?.id ?? null}
+            />
+          ) : null}
         </div>
       </AssistantSurfaceProvider>
     </ShellLeafContext.Provider>

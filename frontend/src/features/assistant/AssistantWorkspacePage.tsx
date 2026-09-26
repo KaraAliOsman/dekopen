@@ -9,17 +9,23 @@ import {
   aiJobCancel,
   aiJobList,
   aiJobMessageCreate,
+  aiJobOutcomeCreate,
   aiJobRetrieve,
+  aiJobRetry,
   projectsList,
 } from "../../api/generated/dekopen";
+import type { AiAgentStep } from "../../api/generated/models/aiAgentStep";
 import type { AiJob } from "../../api/generated/models/aiJob";
 import type { AiJobDetail } from "../../api/generated/models/aiJobDetail";
-import { designAssistProduct } from "../canvas/designOps";
+import type { AiJobLive } from "../../api/generated/models/aiJobLive";
+import type { DesignOp } from "../commands/types";
+import { describeDesignOp, designAssistProduct } from "../canvas/designOps";
 import type { ProductJson } from "../canvas/productEditing";
 import { useDesignOpsBridge } from "./assistantContext";
 import { AiMetricsCard } from "./AiMetricsCard";
 import { ArtifactDetail, type Artifact } from "./ArtifactDetail";
-import { Orb, type OrbState } from "./Orb";
+import { BatchOpsStep } from "./BatchOpsStep";
+import { Orb, orbStateFor } from "./Orb";
 import { jobErrorKey } from "../jobs/jobError";
 import { t } from "../../i18n/es-CL";
 
@@ -118,18 +124,36 @@ const ARTIFACT_KIND_LABELS: Record<string, string> = {
   document_preview: "aiws.artifact.document",
 };
 
+interface TranscriptStep {
+  kind?: string;
+  tool?: string;
+  label?: string;
+  path?: string;
+  action?: string;
+  ops?: { op?: string }[];
+  items?: { position_id?: string }[];
+}
+
 interface TranscriptTurn {
   role?: string;
   text?: string;
   reply?: string;
+  /** Set on replayed turns — the retry endpoint re-runs the original goal,
+   * so the turn is marked rather than rendered as a message retyped. */
+  replay?: boolean;
   plan?: { label?: string }[];
   queries?: { surface?: string; tool?: string; status?: string }[];
   claims?: { text?: string; evidence?: string[] }[];
   references?: string[];
   questions?: string[];
   artifacts?: Artifact[];
-  steps?: { kind?: string; tool?: string; label?: string; path?: string }[];
+  steps?: TranscriptStep[];
   warnings?: string[];
+  /** Ops the validator refused — shown so a silent drop never reads as
+   * the model declining to act. */
+  rejected?: { op?: string; reason?: string }[];
+  /** Present on error turns — the durable failure code. */
+  code?: string;
 }
 
 function stateLabel(state: string): string {
@@ -137,27 +161,37 @@ function stateLabel(state: string): string {
   return key ? t(key as never) : state;
 }
 
-/** The orb mirrors the durable job state so the assistant's presence
- * communicates what it is doing without reading a label. */
-function orbState(state: string | undefined): OrbState {
-  switch (state) {
-    case "QUEUED":
-    case "PLANNING":
-      return "thinking";
-    case "RUNNING":
-      return "working";
-    case "WAITING_FOR_USER":
-    case "WAITING_FOR_APPROVAL":
-      return "waiting";
-    case "SUCCEEDED":
-      return "ok";
-    case "FAILED":
-    case "FAILED_RETRYABLE":
-    case "CANCELED":
-      return "error";
-    default:
-      return "idle";
-  }
+/** A timestamp the rail can show without locale clutter — minutes under an
+ * hour, hours under a day, then the calendar day. */
+function relativeTime(iso: string | undefined): string {
+  if (!iso) return "";
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "";
+  const minutes = Math.floor((Date.now() - then) / 60000);
+  if (minutes < 1) return t("aiws.justNow");
+  if (minutes < 60) return t("aiws.minutesAgo").replace("{n}", String(minutes));
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return t("aiws.hoursAgo").replace("{n}", String(hours));
+  const days = Math.floor(hours / 24);
+  if (days < 7) return t("aiws.daysAgo").replace("{n}", String(days));
+  return new Date(then).toLocaleDateString("es-CL", { day: "numeric", month: "short" });
+}
+
+/** The worker reports numeric checkpoints on the job_runs row; the band
+ * reads as a phase label so a live run shows what it is doing. */
+function livePhase(live: AiJobLive | null | undefined): string {
+  const progress = live && typeof live.progress === "number" ? (live.progress as number) : 0;
+  if (progress < 15) return t("aiws.live.queued");
+  if (progress < 40) return t("aiws.live.context");
+  if (progress < 70) return t("aiws.live.consulting");
+  if (progress < 90) return t("aiws.live.writing");
+  return t("aiws.live.finishing");
+}
+
+function liveProgress(live: AiJobLive | null | undefined): number {
+  return live && typeof live.progress === "number"
+    ? Math.min(99, Math.max(0, live.progress as number))
+    : 0;
 }
 
 const JOBS_PAGE_SIZE = 30;
@@ -203,16 +237,23 @@ function JobRail({
                 className={`aiws-job ${job.id === selected ? "aiws-job--active" : ""}`}
                 onClick={() => onSelect(job.id)}
               >
-                <span className="aiws-job__goal">{job.goal}</span>
-                <span className="aiws-job__meta">
-                  <span
-                    className="aiws-state"
-                    data-state={job.state.toLowerCase().replace(/_/g, "-")}
-                  >
-                    {stateLabel(job.state)}
+                <Orb state={orbStateFor(job.state)} size={20} />
+                <span className="aiws-job__body">
+                  <span className="aiws-job__goal">{job.goal}</span>
+                  <span className="aiws-job__meta">
+                    <span
+                      className="aiws-state"
+                      data-state={job.state.toLowerCase().replace(/_/g, "-")}
+                    >
+                      {stateLabel(job.state)}
+                    </span>
+                    {" · "}
+                    {SURFACE_LABELS[job.surface] ?? job.surface}
+                    {relativeTime(job.updated_at) ? ` · ${relativeTime(job.updated_at)}` : ""}
+                    {job.artifacts?.length
+                      ? ` · ${t("aiws.artifactsCount").replace("{count}", String(job.artifacts.length))}`
+                      : ""}
                   </span>
-                  {" · "}
-                  {SURFACE_LABELS[job.surface] ?? job.surface}
                 </span>
               </button>
             </li>
@@ -233,130 +274,326 @@ function JobRail({
   );
 }
 
-function AgentTurnView({
-  turn,
-  onArtifact,
-}: {
-  turn: TranscriptTurn;
-  onArtifact: (a: Artifact) => void;
-}): JSX.Element {
-  const navigate = useNavigate();
-  const [showWork, setShowWork] = useState(false);
-  const workCount =
-    (turn.queries?.length ?? 0) + (turn.claims?.length ?? 0) + (turn.steps?.length ?? 0);
+/** A durable outcome keyed by (turn, step) — the workspace reads it so an
+ * applied or declined proposal keeps its settled state across reloads
+ * instead of re-offering buttons that would 409. */
+type StepOutcome = { turn_index?: number; step_index?: number; action?: string };
+
+function outcomeFor(
+  outcomes: StepOutcome[],
+  turnIndex: number,
+  stepIndex: number,
+): StepOutcome | null {
   return (
-    <div className="aiws-turn aiws-turn--agent">
-      <Orb state="idle" size={24} />
-      <div className="aiws-turn__body">
-      {turn.plan?.length ? (
-        <ol className="aiws-plan">
-          {turn.plan.map((step, i) => (
-            <li key={i}>{step.label}</li>
-          ))}
-        </ol>
-      ) : null}
-      <p className="aiws-reply">{turn.reply}</p>
-      {turn.questions?.length ? (
-        <div className="aiws-questions">
-          {turn.questions.map((question, i) => (
-            <p key={i}>{question}</p>
-          ))}
-        </div>
-      ) : null}
-      {turn.warnings?.length ? (
-        <ul className="aiws-warnings">
-          {turn.warnings.map((warning, i) => (
-            <li key={i}>{warning}</li>
+    outcomes.find((item) => item.turn_index === turnIndex && item.step_index === stepIndex) ?? null
+  );
+}
+
+/** The workspace mirrors the same actionable steps the dock mounts. Ops
+ * steps bind to a canvas that lives on the position surface — here they
+ * deep-link to the vano, where dock continuity re-offers the apply from
+ * the same job's transcript. */
+function StepView({
+  step,
+  turnIndex,
+  stepIndex,
+  organizationId,
+  job,
+  outcomes,
+  product,
+  onOutcome,
+}: {
+  step: TranscriptStep;
+  turnIndex: number;
+  stepIndex: number;
+  organizationId: string;
+  job: AiJobDetail;
+  outcomes: StepOutcome[];
+  product: { [key: string]: unknown } | null;
+  onOutcome: (entry: {
+    turn_index: number;
+    step_index: number;
+    action: "applied" | "declined" | "apply_failed";
+    ops: string[];
+  }) => void;
+}): JSX.Element | null {
+  const navigate = useNavigate();
+  const decided = outcomeFor(outcomes, turnIndex, stepIndex);
+
+  if (step.kind === "ops") {
+    const ops = (step.ops ?? []).filter((item): item is DesignOp => typeof item.op === "string");
+    if (!ops.length) return null;
+    const positionId = typeof job.refs?.position_id === "string" ? job.refs.position_id : null;
+    const settledAction =
+      decided?.action === "applied"
+        ? t("agent.applied")
+        : decided?.action === "declined"
+          ? t("agent.declined")
+          : null;
+    return (
+      <div className="aiws-step" key={`ops-${stepIndex}`}>
+        <ul className="aiws-step__ops">
+          {ops.map((op, i) => (
+            <li key={i}>
+              {product ? describeDesignOp(op, product as ProductJson, ops.slice(0, i)) : op.op}
+            </li>
           ))}
         </ul>
-      ) : null}
-      {workCount > 0 ? (
-        <>
+        {settledAction ? (
+          <span className="aiws-step__settled">{settledAction}</span>
+        ) : positionId ? (
           <button
             type="button"
-            className="aiws-toggle"
-            aria-expanded={showWork}
-            onClick={() => setShowWork((v) => !v)}
+            className="aiws-action"
+            title={t("aiws.opsReviewHint")}
+            onClick={() => navigate(`/positions/${positionId}`)}
           >
-            {t("aiws.work")} ({workCount})
+            {t("aiws.opsReview").replace("{count}", String(ops.length))}
           </button>
-          {showWork ? (
-            <div className="aiws-work">
-              {turn.queries?.length ? (
-                <ul>
-                  {turn.queries.map((query, i) => (
-                    <li key={i}>
-                      {query.tool ? <code className="aiws-tool">{query.tool}</code> : null}
-                      {query.status === "ok"
-                        ? t("agent.queried").replace(
-                            "{surface}",
-                            SURFACE_LABELS[query.surface ?? ""] ?? query.surface ?? "",
-                          )
-                        : t("agent.queryFailed").replace(
-                            "{surface}",
-                            SURFACE_LABELS[query.surface ?? ""] ?? query.surface ?? "",
-                          )}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              {turn.claims?.length ? (
-                <ul className="aiws-claims">
-                  {turn.claims.map((claim, i) => (
-                    <li key={i}>
-                      {claim.text}
-                      {claim.evidence?.length ? (
-                        <small>
-                          {" "}
-                          · {t("aiws.evidence")}: {claim.evidence.join(", ")}
-                        </small>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              {turn.steps?.length ? (
-                <div className="aiws-steps">
-                  {turn.steps.map((step, i) =>
-                    step.path ? (
-                      <button
-                        key={i}
-                        type="button"
-                        className="aiws-action"
-                        onClick={() => navigate(step.path as string)}
-                      >
-                        {step.kind === "prepare" ? `${t("agent.prepare")} ` : ""}
-                        {step.label}
-                        {step.tool ? <code className="aiws-tool">{step.tool}</code> : null}
-                      </button>
-                    ) : (
-                      <span key={i} className="aiws-action aiws-action--static">
-                        {step.label}
-                        {step.tool ? <code className="aiws-tool">{step.tool}</code> : null}
-                      </span>
-                    ),
-                  )}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-        </>
-      ) : null}
-      {turn.artifacts?.length ? (
-        <div className="aiws-artifacts">
-          {turn.artifacts.map((artifact, i) => (
+        ) : null}
+      </div>
+    );
+  }
+
+  if (step.kind === "batch_ops") {
+    const projectId = typeof job.refs?.project_id === "string" ? job.refs.project_id : null;
+    if (!projectId) return null;
+    return (
+      <BatchOpsStep
+        key={`batch-${stepIndex}`}
+        // The transcript step narrows to batch_ops above — AiAgentStep wants
+        // `kind` non-optional, which narrowing alone doesn't tighten.
+        step={step as AiAgentStep}
+        organizationId={organizationId}
+        projectId={projectId}
+        settled={Boolean(decided)}
+        onSettled={(action, ops) =>
+          onOutcome({
+            turn_index: turnIndex,
+            step_index: stepIndex,
+            action,
+            ops: ops.map((op) => op.op ?? "unknown"),
+          })
+        }
+      />
+    );
+  }
+
+  if (step.path) {
+    return (
+      <button
+        key={`nav-${stepIndex}`}
+        type="button"
+        className="aiws-action"
+        title={step.kind === "prepare" ? t("agent.prepareHint") : undefined}
+        onClick={() => navigate(step.path as string)}
+      >
+        {step.kind === "prepare" ? `${t("agent.prepare")} ` : ""}
+        {step.label}
+        {step.tool ? <code className="aiws-tool">{step.tool}</code> : null}
+      </button>
+    );
+  }
+
+  return (
+    <span key={`static-${stepIndex}`} className="aiws-action aiws-action--static">
+      {step.label}
+      {step.tool ? <code className="aiws-tool">{step.tool}</code> : null}
+    </span>
+  );
+}
+
+/** One agent turn: plan, reply, questions, warnings, the collapsible work
+ * log (queries/claims/navigation), the actionable steps rendered
+ * first-class (ops deep-link, batch ops mount, prepare deep-link), the
+ * rejected ops, and the artifact cards. */
+function AgentTurnView({
+  turn,
+  turnIndex,
+  isLatest,
+  organizationId,
+  job,
+  outcomes,
+  onArtifact,
+  onOutcome,
+}: {
+  turn: TranscriptTurn;
+  turnIndex: number;
+  isLatest: boolean;
+  organizationId: string;
+  job: AiJobDetail;
+  outcomes: StepOutcome[];
+  onArtifact: (a: Artifact) => void;
+  onOutcome: (entry: {
+    turn_index: number;
+    step_index: number;
+    action: "applied" | "declined" | "apply_failed";
+    ops: string[];
+  }) => void;
+}): JSX.Element {
+  const [showWork, setShowWork] = useState(false);
+  // Ops were validated against the position's product at request time; the
+  // job record doesn't persist it, so descriptions fall back to op labels
+  // and the deep-link carries the apply to where the product lives.
+  const product: { [key: string]: unknown } | null = null;
+  const actionable = (turn.steps ?? []).filter((step) =>
+    ["ops", "batch_ops", "prepare", "navigate"].includes(step.kind ?? ""),
+  );
+  const workCount = (turn.queries?.length ?? 0) + (turn.claims?.length ?? 0);
+  return (
+    <div className="aiws-turn aiws-turn--agent">
+      <Orb state={isLatest && LIVE_STATES.has(job.state) ? "working" : "success"} size={28} />
+      <div className="aiws-turn__body">
+        {turn.plan?.length ? (
+          <ol className="aiws-plan">
+            {turn.plan.map((step, i) => (
+              <li key={i}>{step.label}</li>
+            ))}
+          </ol>
+        ) : null}
+        <p className="aiws-reply">{turn.reply}</p>
+        {turn.questions?.length ? (
+          <div className="aiws-questions">
+            {turn.questions.map((question, i) => (
+              <p key={i}>{question}</p>
+            ))}
+          </div>
+        ) : null}
+        {turn.warnings?.length ? (
+          <ul className="aiws-warnings">
+            {turn.warnings.map((warning, i) => (
+              <li key={i}>{warning}</li>
+            ))}
+          </ul>
+        ) : null}
+        {turn.rejected?.length ? (
+          <ul className="aiws-warnings aiws-warnings--rejected">
+            {turn.rejected.map((item, i) => (
+              <li key={i}>
+                {item.op ?? "—"}: {item.reason}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {actionable.length ? (
+          <div className="aiws-steps aiws-steps--live">
+            {actionable.map((step) => (
+              <StepView
+                key={turn.steps!.indexOf(step)}
+                step={step}
+                turnIndex={turnIndex}
+                stepIndex={turn.steps!.indexOf(step)}
+                organizationId={organizationId}
+                job={job}
+                outcomes={outcomes}
+                product={product}
+                onOutcome={onOutcome}
+              />
+            ))}
+          </div>
+        ) : null}
+        {workCount > 0 ? (
+          <>
             <button
-              key={i}
               type="button"
-              className="aiws-artifact"
-              onClick={() => onArtifact(artifact)}
+              className="aiws-toggle"
+              aria-expanded={showWork}
+              onClick={() => setShowWork((v) => !v)}
             >
-              <strong>{artifact.title ?? artifactKindLabel(artifact.kind)}</strong>
-              <small>{artifactKindLabel(artifact.kind)}</small>
+              {t("aiws.work")} ({workCount})
             </button>
-          ))}
-        </div>
-      ) : null}
+            {showWork ? (
+              <div className="aiws-work">
+                {turn.queries?.length ? (
+                  <ul>
+                    {turn.queries.map((query, i) => (
+                      <li key={i}>
+                        {query.tool ? <code className="aiws-tool">{query.tool}</code> : null}
+                        {query.status === "ok"
+                          ? t("agent.queried").replace(
+                              "{surface}",
+                              SURFACE_LABELS[query.surface ?? ""] ?? query.surface ?? "",
+                            )
+                          : t("agent.queryFailed").replace(
+                              "{surface}",
+                              SURFACE_LABELS[query.surface ?? ""] ?? query.surface ?? "",
+                            )}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {turn.claims?.length ? (
+                  <ul className="aiws-claims">
+                    {turn.claims.map((claim, i) => (
+                      <li key={i}>
+                        {claim.text}
+                        {claim.evidence?.length ? (
+                          <small>
+                            {" "}
+                            · {t("aiws.evidence")}: {claim.evidence.join(", ")}
+                          </small>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            ) : null}
+          </>
+        ) : null}
+        {turn.artifacts?.length ? (
+          <div className="aiws-artifacts">
+            {turn.artifacts.map((artifact, i) => (
+              <button
+                key={i}
+                type="button"
+                className="aiws-artifact"
+                onClick={() => onArtifact(artifact)}
+              >
+                <Orb state="idle" size={18} />
+                <strong>{artifact.title ?? artifactKindLabel(artifact.kind)}</strong>
+                <small>{artifactKindLabel(artifact.kind)}</small>
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/** The durable error turn — a failure the job recorded in its transcript,
+ * with the classified code and a retry action when the job is still
+ * retryable. */
+function ErrorTurnView({
+  turn,
+  job,
+  onRetry,
+  retryBusy,
+}: {
+  turn: TranscriptTurn;
+  job: AiJobDetail;
+  onRetry: () => void;
+  retryBusy: boolean;
+}): JSX.Element {
+  return (
+    <div className="aiws-turn aiws-turn--error">
+      <Orb state="error" size={28} />
+      <div className="aiws-turn__body">
+        <p className="aiws-error__text">
+          {turn.code ? t(jobErrorKey(turn.code)) : t("jobs.fail.generic")}
+          {turn.code ? <code className="aiws-tool">{turn.code}</code> : null}
+        </p>
+        {job.state === "FAILED_RETRYABLE" ? (
+          <button
+            type="button"
+            className="ui-button ui-button--small"
+            disabled={retryBusy}
+            onClick={onRetry}
+          >
+            {t("aiws.retry")}
+          </button>
+        ) : null}
       </div>
     </div>
   );
@@ -507,18 +744,35 @@ export function AssistantWorkspacePage(): JSX.Element {
     }
   }
 
+  /** §08 measurement — the workspace's apply/decline decisions feed the
+   * same outcomes telemetry the dock reports; best-effort, never blocking. */
+  function reportOutcome(entry: {
+    turn_index: number;
+    step_index: number;
+    action: "applied" | "declined" | "apply_failed";
+    ops: string[];
+  }): void {
+    if (!job || !orgId) return;
+    void aiJobOutcomeCreate(job.id, entry, headers)
+      .then((response) => {
+        if (response.status === 200) {
+          void queryClient.invalidateQueries({ queryKey: ["ai", "job", job.id] });
+        }
+      })
+      .catch(() => undefined);
+  }
+
   async function retry(): Promise<void> {
     if (!job || !orgId || job.state !== "FAILED_RETRYABLE" || busy) return;
     setBusy(true);
     setError("");
     try {
-      const response = await aiJobMessageCreate(
-        job.id,
-        { message: t("aiws.retryMessage") },
-        { headers: { ...headers.headers, "X-Operation-Key": crypto.randomUUID() } },
-      );
+      // The retry endpoint replays the job's own goal — it marks the
+      // transcript turn as a replay instead of faking a user retype.
+      const response = await aiJobRetry(job.id, headers);
       if (response.status !== 202) throw new ApiError(response.status, response.data);
       await queryClient.invalidateQueries({ queryKey: ["ai", "jobs", orgId] });
+      await queryClient.invalidateQueries({ queryKey: ["ai", "job", job.id] });
     } catch {
       setError(t("agent.error"));
     } finally {
@@ -569,7 +823,7 @@ export function AssistantWorkspacePage(): JSX.Element {
       <div className="aiws-main">
         {job ? (
           <header className="aiws-head">
-            <Orb state={orbState(job.state)} size={40} />
+            <Orb state={orbStateFor(job.state)} size={40} />
             <div>
               <h1>{job.goal}</h1>
               <p className="aiws-head__meta">
@@ -607,6 +861,46 @@ export function AssistantWorkspacePage(): JSX.Element {
             </div>
           </header>
         ) : null}
+        {job && live ? (
+          <div
+            className="aiws-progress"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={liveProgress(job.live)}
+            aria-label={stateLabel(job.state)}
+          >
+            <span
+              className="aiws-progress__bar"
+              style={{ width: `${Math.max(4, liveProgress(job.live))}%` }}
+            />
+            <span className="aiws-progress__label">{livePhase(job.live)}</span>
+          </div>
+        ) : null}
+        {job && WAITING_STATES.has(job.state) ? (
+          <p className="aiws-waiting" role="status">
+            <Orb state="waiting" size={20} />
+            {job.state === "WAITING_FOR_APPROVAL"
+              ? t("aiws.waitingApprovalBanner")
+              : t("aiws.waitingUserBanner")}
+          </p>
+        ) : null}
+        {job && (job.artifacts?.length ?? 0) > 0 ? (
+          <div className="aiws-shelf" aria-label={t("aiws.shelf")}>
+            <span className="aiws-shelf__label">{t("aiws.shelf")}</span>
+            {(job.artifacts as Artifact[]).map((item, i) => (
+              <button
+                key={i}
+                type="button"
+                className="aiws-shelf__item"
+                onClick={() => setArtifact(item)}
+              >
+                <Orb state="idle" size={16} />
+                {item.title ?? artifactKindLabel(item.kind)}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <div className="aiws-transcript">
           {transcript.length === 0 && !job ? (
             <>
@@ -621,16 +915,35 @@ export function AssistantWorkspacePage(): JSX.Element {
               turn.role === "user" ? (
                 <p key={index} className="aiws-turn aiws-turn--user">
                   {turn.text}
+                  {turn.replay ? <span className="aiws-replay">{t("aiws.replayed")}</span> : null}
                 </p>
+              ) : turn.role === "error" ? (
+                <ErrorTurnView
+                  key={index}
+                  turn={turn}
+                  job={job!}
+                  onRetry={() => void retry()}
+                  retryBusy={busy}
+                />
               ) : (
-                <AgentTurnView key={index} turn={turn} onArtifact={setArtifact} />
+                <AgentTurnView
+                  key={index}
+                  turn={turn}
+                  turnIndex={index}
+                  isLatest={index === transcript.length - 1}
+                  organizationId={orgId ?? ""}
+                  job={job!}
+                  outcomes={(job?.outcomes ?? []) as StepOutcome[]}
+                  onArtifact={setArtifact}
+                  onOutcome={reportOutcome}
+                />
               ),
             )
           )}
           {live ? (
             <p className="aiws-live">
-              <Orb state="working" size={22} />
-              {t("agent.thinking")}
+              <Orb state={orbStateFor(job?.state)} size={22} />
+              {job ? livePhase(job.live) : t("agent.thinking")}
             </p>
           ) : null}
           <div ref={transcriptEnd} />

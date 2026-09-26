@@ -20,11 +20,13 @@ from uuid import UUID
 from ai_gateway import jobs, service as gateway
 from ai_gateway.assist import (
     _ALLOWED_PATHS,
+    _OPAQUE_TOKEN_RE,
     _PATH_UUID,
     _context_refs,
     _grounded,
     _grounding_values,
 )
+from projects.design_assist import _BARE_NUMBER_RE, _parse_number
 from ai_gateway.context import (
     REQUIRED_REFS,
     _BUILDERS,
@@ -53,7 +55,7 @@ QUERY_TOOLS = {
     "production": "get_production_state",
     "work_order": "get_work_order",
     "clients": "get_clients",
-    "purchasing": "get_inventory_state",
+    "purchasing": "get_supplier_orders",
     "settings": "get_settings",
     "morning_brief": "get_attention",
     "purchase_plan": "get_purchasing_state",
@@ -64,14 +66,16 @@ QUERY_TOOLS = {
     "customer_comms": "get_project",
 }
 
+# The tool name is the action's own name — a prepare step labeled
+# "generate_document_preview" for a payment would lie in the transcript.
 PREPARE_TOOLS = {
-    "emit_revision": "generate_document_preview",
-    "release_work_order": "prepare_production_plan",
-    "optimize_work_order": "prepare_production_plan",
-    "register_payment": "prepare_payment",
-    "upload_document": "generate_document_preview",
+    "emit_revision": "emit_revision",
+    "release_work_order": "release_work_order",
+    "optimize_work_order": "optimize_work_order",
+    "register_payment": "register_payment",
+    "upload_document": "upload_document",
     "review_catalog": "create_catalog_candidates",
-    "upload_certificate": "generate_document_preview",
+    "upload_certificate": "upload_certificate",
 }
 
 ARTIFACT_TOOLS = {
@@ -92,6 +96,10 @@ MAX_REPLY = 4000
 MAX_STEPS = 8
 MAX_QUERIES = 3
 MAX_ROUNDS = 3  # invokes: goal → up to two observe-and-replan turns
+# A reply that fails numeric grounding gets one corrective provider round
+# before the job fails — conversational enumerations are fixable, invented
+# figures are not.
+MAX_REGROUNDS = 1
 MAX_LABEL = 80
 MAX_WARNINGS = 8
 MAX_WARNING = 240
@@ -151,8 +159,13 @@ Respondes SOLO un JSON:
 {
   "reply": "qué encontraste / qué hiciste / qué falta — breve y concreto en español",
   "steps": [pasos],
-  "warnings": ["alertas reales que el contexto evidencia"]
+  "warnings": ["alertas reales que el contexto evidencia"],
+  "plan": [{"label": "qué harás — solo cuando la meta pida trabajo de varios pasos"}],
+  "questions": ["pregunta concreta al usuario — solo cuando falte un dato que solo la persona tiene"],
+  "claims": [{"text": "afirmación verificable", "evidence": ["ids que el contexto u observaciones mostraron"]}]
 }
+
+"plan", "questions" y "claims" son opcionales pero el trabajo debe verse: si la meta pide varias acciones, emite "plan"; si falta un dato crítico que solo la persona tiene, pregunta en "questions" en vez de adivinar; toda afirmación con números o estados importantes va en "claims" con su evidencia (un claim sin evidencia citable se descarta).
 
 Tipos de paso:
 - {"kind":"query","surface":"projects|project|position|quotation|catalog|production|work_order|clients|purchasing|dashboard|settings|morning_brief|purchase_plan|production_plan|quotation_complete|project_from_documents|catalog_compiler|customer_comms","refs":{...}} — pide los datos de otra superficie; el servidor la ejecuta y el resultado vuelve a ti en la siguiente ronda. Úsalo SIEMPRE que la meta toque datos que el contexto no tiene. refs lleva los ids requeridos (project_id, position_id, work_order_id; system_id para profundizar en un sistema de catálogo) y solo puedes consultar ids que el contexto u observaciones anteriores te mostraron. Máximo 3 por ronda.
@@ -162,6 +175,7 @@ Tipos de paso:
   "module"/"coupling" toman el "ref" (id) de product.modules[]/product.couplings[]; para una unidad creada por add_unit en la misma secuencia usa "added_m1"... ("added_c1"... para uniones nuevas). Las medidas solo pueden citar números de la meta.
 - {"kind":"prepare","action":"emit_revision|release_work_order|optimize_work_order|register_payment|upload_document|review_catalog|upload_certificate","path":"/ruta","label":"..."} — prepara una acción consecuente; la persona la confirma en la superficie real. Nunca la ejecutes tú. El "path" DEBE seguir la plantilla de actions.prepare_routes[action] rellenando {id} con el UUID real de la entidad (uno que el contexto o las observaciones ya mostraron).
 - {"kind":"batch_ops","targets":{...},"ops":[...],"label":"..."} — SOLO en surface="project" con context.editable=true: propone el MISMO set de ops sobre muchas posiciones del proyecto a la vez ("todas las fijas a abatible", "copia el vidrio", "ancho total 1500"). targets: {"typology":"ALL"|tipología exacta del listado de posiciones, "position_ids":[uuid,...] (opcional — solo ids que context.positions u observaciones mostraron)}. ops: mismo contrato que "ops", pero solo ops de ajuste (set_opening, set_glass, set_glass_thickness, set_panel, set_module_width, set_total_width, set_height, equalize_widths, equalize_angles, set_coupling_kind, set_coupling_angle) — nunca agregar/quitar módulos ni uniones. "module" acepta el ref real de esa posición o "*" para TODOS los módulos de cada posición; "coupling" igual. Consulta surface="position" antes para conocer los refs reales; si no tienes refs y la op es por-módulo usa "*". Medidas solo citan números de la meta.
+- {"kind":"artifact","artifact":{"kind":"quote_draft|message|purchase_plan|production_plan|project_draft|catalog_review|comparison|document_preview","title":"...","payload":{...},"references":["ids del contexto"]}} — produce un borrador inspeccionable y reutilizable (no muta nada). Úsalo cuando la meta pida un documento, plan, comparación o resumen que la persona reutilizará fuera del chat — un artefacto perdido en la conversación no sirve. payload solo lleva datos del contexto/observaciones/meta; references lleva los ids que respaldan el contenido.
 
 Reglas duras:
 - Solo citas números (medidas, precios, cantidades, SKUs, ids) que estén literalmente en el contexto, las observaciones o la meta del usuario. Nada inventado.
@@ -186,7 +200,10 @@ Respondes SOLO un JSON:
 {
   "reply": "el brief — líneas priorizadas de lo que necesita atención hoy, de más crítico a menos",
   "steps": [pasos],
-  "warnings": ["alertas reales"]
+  "warnings": ["alertas reales"],
+  "plan": [{"label": "qué harás — solo cuando la meta pida trabajo de varios pasos"}],
+  "questions": ["pregunta concreta al usuario — solo cuando falte un dato que solo la persona tiene"],
+  "claims": [{"text": "afirmación verificable", "evidence": ["ids que el contexto u observaciones mostraron"]}]
 }
 
 Formato del brief:
@@ -215,7 +232,10 @@ Respondes SOLO un JSON:
 {
   "reply": "resumen: cuántas líneas sin cubrir, agrupadas por order_type, y qué falta para poder comprar",
   "steps": [pasos],
-  "warnings": ["alertas reales"]
+  "warnings": ["alertas reales"],
+  "plan": [{"label": "qué harás — solo cuando la meta pida trabajo de varios pasos"}],
+  "questions": ["pregunta concreta al usuario — solo cuando falte un dato que solo la persona tiene"],
+  "claims": [{"text": "afirmación verificable", "evidence": ["ids que el contexto u observaciones mostraron"]}]
 }
 
 Pasos:
@@ -238,7 +258,10 @@ Respondes SOLO un JSON:
 {
   "reply": "propuesta priorizada: qué orden atacar primero y por qué — presión de entrega, material listo, estación que bloquea",
   "steps": [pasos],
-  "warnings": ["alertas reales"]
+  "warnings": ["alertas reales"],
+  "plan": [{"label": "qué harás — solo cuando la meta pida trabajo de varios pasos"}],
+  "questions": ["pregunta concreta al usuario — solo cuando falte un dato que solo la persona tiene"],
+  "claims": [{"text": "afirmación verificable", "evidence": ["ids que el contexto u observaciones mostraron"]}]
 }
 
 Pasos:
@@ -268,7 +291,10 @@ Respondes SOLO un JSON:
 {
   "reply": "diagnóstico: qué está completo, qué falta exactamente, y el siguiente paso concreto",
   "steps": [pasos],
-  "warnings": ["alertas reales"]
+  "warnings": ["alertas reales"],
+  "plan": [{"label": "qué harás — solo cuando la meta pida trabajo de varios pasos"}],
+  "questions": ["pregunta concreta al usuario — solo cuando falte un dato que solo la persona tiene"],
+  "claims": [{"text": "afirmación verificable", "evidence": ["ids que el contexto u observaciones mostraron"]}]
 }
 
 Pasos:
@@ -296,7 +322,10 @@ Respondes SOLO un JSON:
 {
   "reply": "qué propusiste: cuántas posiciones listas, cuántas ambiguas, qué falta",
   "steps": [pasos],
-  "warnings": ["alertas reales"]
+  "warnings": ["alertas reales"],
+  "plan": [{"label": "qué harás — solo cuando la meta pida trabajo de varios pasos"}],
+  "questions": ["pregunta concreta al usuario — solo cuando falte un dato que solo la persona tiene"],
+  "claims": [{"text": "afirmación verificable", "evidence": ["ids que el contexto u observaciones mostraron"]}]
 }
 
 Pasos:
@@ -323,12 +352,15 @@ Respondes SOLO un JSON:
 {
   "reply": "qué encontraste: cuántos listos, cuántos piden revisión, cuántos bloqueados y por qué",
   "steps": [pasos],
-  "warnings": ["alertas reales"]
+  "warnings": ["alertas reales"],
+  "plan": [{"label": "qué harás — solo cuando la meta pida trabajo de varios pasos"}],
+  "questions": ["pregunta concreta al usuario — solo cuando falte un dato que solo la persona tiene"],
+  "claims": [{"text": "afirmación verificable", "evidence": ["ids que el contexto u observaciones mostraron"]}]
 }
 
 Pasos:
 - UN paso {"kind":"artifact","artifact":{"kind":"catalog_review","title":"Revisión de <file_name>","payload":{"import_id":"<id del contexto>","auto":[{"key":"...","sku":"...","role":"...","system_id":"<uuid propio>","why":"por qué no necesita revisión"}],"review":[{"key":"...","reason":"conflicto|baja confianza|rol único|dato faltante","needed":"qué decide la persona"}],"blocked":[{"key":"...","reason":"por qué no puede confirmarse"}]},"references":["ids del contexto"]}} — la cola de revisión que la persona usa en el panel de importaciones.
-- {"kind":"navigate","path":"/catalog","label":"Abrir catálogo"} — la confirmación real ocurre ahí.
+- {"kind":"navigate","path":"/catalogs/systems","label":"Abrir catálogo"} — la confirmación real ocurre ahí.
 - {"kind":"query","surface":"catalog","refs":{"system_id":"<id del contexto>"}} para verificar un sistema destino — máximo 2 por ronda.
 
 Reglas duras:
@@ -357,7 +389,10 @@ Respondes SOLO un JSON:
 {
   "reply": "qué redactaste y sobre qué hechos — breve y concreto",
   "steps": [pasos],
-  "warnings": ["alertas reales"]
+  "warnings": ["alertas reales"],
+  "plan": [{"label": "qué harás — solo cuando la meta pida trabajo de varios pasos"}],
+  "questions": ["pregunta concreta al usuario — solo cuando falte un dato que solo la persona tiene"],
+  "claims": [{"text": "afirmación verificable", "evidence": ["ids que el contexto u observaciones mostraron"]}]
 }
 
 Pasos:
@@ -482,6 +517,21 @@ def _key_grounded(key: Any, grounding: set) -> bool:
             return True
         return _grounded(key, grounding)
     return _payload_grounded(key, grounding)
+
+
+def _ungrounded_numbers(text: str, grounding: set) -> list[str]:
+    """The numbers a reply cites that nothing in context/observations/history
+    can back — reported to the corrective round so the model knows exactly
+    what to drop or rephrase."""
+    scan = _OPAQUE_TOKEN_RE.sub(" ", text)
+    found: list[str] = []
+    for match in _BARE_NUMBER_RE.finditer(scan):
+        number = _parse_number(match.group(0))
+        if number is None:
+            continue
+        if not any(abs(number - value) <= Decimal("0.5") for value in grounding):
+            found.append(str(number))
+    return found[:8]
 
 
 def _payload_grounded(node: Any, grounding: set) -> bool:
@@ -710,7 +760,15 @@ def _act(
     history: list,
     operation_key: str,
     job_id: UUID | None = None,
+    progress: Any = None,
 ) -> dict:
+    def _report(value: float) -> None:
+        # Progress lands on the job_runs row — the only channel a reader can
+        # see while this transaction holds the ai_jobs row uncommitted.
+        if callable(progress):
+            progress(value)
+
+    _report(15)
     context = build_context(org_id, surface, refs)
     contexts = [context]
     seen_queries = {_query_key(surface, refs)}
@@ -727,6 +785,7 @@ def _act(
         # here between provider rounds.
         if job_id is not None and jobs.cancel_requested(job_id=job_id):
             raise JobCanceledError()
+        _report(20 + round_index * 20)
         envelope = gateway.invoke(
             org_id=org_id,
             user_id=user_id,
@@ -780,6 +839,7 @@ def _act(
                 "ai_agent_bad_output",
                 "El agente devolvió una respuesta inválida.",
             )
+        _report(30 + round_index * 20)
         observations, new_observed = _queries(
             org_id=org_id,
             document=document,
@@ -807,9 +867,77 @@ def _act(
             "ai_agent_bad_output",
             "El agente devolvió una respuesta inválida.",
         )
-    grounding = _grounding_values(
-        {"context": context, "observations": all_observations}, goal
+    _report(80)
+    # Multi-turn grounding: numbers the user typed in earlier turns of this
+    # job (and text the agent already produced — its figures were grounded
+    # when emitted) stay citable; only fresh invention is rejected.
+    declared_text = goal + " " + " ".join(
+        str(turn.get("text") or turn.get("content") or turn.get("reply") or "")
+        for turn in (history or [])
+        if isinstance(turn, dict) and turn.get("role") in ("user", "agent")
     )
+    grounding = _grounding_values(
+        {"context": context, "observations": all_observations}, declared_text
+    )
+    regrounded = False
+    for reground in range(MAX_REGROUNDS):
+        if _grounded(reply, grounding):
+            break
+        # One corrective round: the model is told exactly which numbers
+        # aren't citable so it can rephrase instead of the whole job failing
+        # on a conversational enumeration. Channels it omits keep the prior
+        # document's content — the correction replaces, never erases.
+        envelope = gateway.invoke(
+            org_id=org_id,
+            user_id=user_id,
+            capability=CAPABILITY,
+            operation_key=f"{operation_key}:g{reground}",
+            tool_name="agent",
+            provider_options={
+                "system": WORKFLOW_SYSTEM.get(surface, AGENT_SYSTEM),
+                "json_output": True,
+            },
+            input_payload={
+                "goal": goal,
+                "surface": surface,
+                "context": context,
+                "observations": all_observations,
+                "history": history,
+                "correction": {
+                    "reason": "reply_ungrounded",
+                    "uncitable_numbers": _ungrounded_numbers(reply, grounding),
+                    "previous_reply": reply[:400],
+                    "instruction": (
+                        "Reescribe la respuesta citando solo números que "
+                        "existan en context, observations o history. Si un "
+                        "dato no es comprobable, declara la incertidumbre."
+                    ),
+                },
+            },
+        )
+        debited += int(envelope["credits_debited"])
+        audit_id = envelope["audit_id"]
+        model = envelope["model"]
+        try:
+            corrected = json.loads(envelope["output"])
+        except (json.JSONDecodeError, TypeError):
+            break
+        if not isinstance(corrected, dict):
+            break
+        # The corrective doc's "queries" never ran — merging them would list
+        # tool calls that produced no observation. Every other channel still
+        # faces its own downstream validation before it reaches the job.
+        document.update(
+            {
+                k: v
+                for k, v in corrected.items()
+                if k != "queries" and v not in (None, [], {})
+            }
+        )
+        corrected_reply = corrected.get("reply")
+        if isinstance(corrected_reply, str) and corrected_reply.strip():
+            reply = corrected_reply.strip()[:MAX_REPLY]
+            regrounded = True
     if not _grounded(reply, grounding):
         raise contract_error(
             502,
@@ -829,6 +957,11 @@ def _act(
             dropped_ungrounded += 1
             continue
         warnings.append(text)
+    if regrounded:
+        warnings.append(
+            "La respuesta fue reescrita tras citar datos fuera del contexto; "
+            "los números comprobables se conservaron."
+        )
 
     context_refs = frozenset().union(*(_context_refs(c) for c in contexts))
 
@@ -862,6 +995,18 @@ def _act(
             continue  # executed above — `queries` reports them as provenance
         if kind == "ops":
             if summary is None or catalog is None or declared is None:
+                # The surface can't validate ops (no live product, no bound
+                # system) — an ops step that vanishes without a note reads
+                # as a clean answer with work silently missing. Surface the
+                # refusal as a rejection instead.
+                rejected.append(
+                    {
+                        "op": "ops",
+                        "reason": (
+                            "product_absent" if summary is None else "catalog_unavailable"
+                        ),
+                    }
+                )
                 continue
             ops, dropped = design_assist._validate_ops(
                 item.get("ops"), summary, catalog, declared
@@ -1002,6 +1147,8 @@ def act(
     history: list,
     operation_key: str,
     job: dict | None = None,
+    replay: bool = False,
+    progress: Any = None,
 ) -> dict:
     """§07-B — every agent run is a durable job. The transcript carries the
     user's turn plus the model's grounded round; artifacts, claims and
@@ -1013,7 +1160,12 @@ def act(
         org_id=org_id, user_id=user_id, surface=surface, refs=refs, goal=goal
     )
     transcript = list(job.get("transcript") or [])
-    transcript.append({"role": "user", "text": goal[:MAX_GOAL]})
+    turn: dict = {"role": "user", "text": goal[:MAX_GOAL]}
+    if replay:
+        # The retry endpoint re-runs the original goal — mark it so the UI
+        # shows a retry, not a message the user never wrote again.
+        turn["replay"] = True
+    transcript.append(turn)
     result = _act(
         org_id=org_id,
         user_id=user_id,
@@ -1024,6 +1176,7 @@ def act(
         history=history,
         operation_key=operation_key,
         job_id=UUID(job["id"]) if job.get("id") else None,
+        progress=progress,
     )
 
     has_actions = any(
@@ -1046,6 +1199,7 @@ def act(
             "artifacts": result["artifacts"],
             "steps": result["steps"],
             "warnings": result["warnings"],
+            "rejected": result["rejected"],
         }
     )
     # The job's artifact shelf accumulates across rounds — a question-only

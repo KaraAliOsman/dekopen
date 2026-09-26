@@ -165,6 +165,15 @@ class AiAgentView(APIView):
         # the live transcript (and the cancel affordance) instead of
         # blocking a request thread for the whole provider loop.
         with documentary_scope(request, _AGENT_CALLERS) as (token, _, org_id):
+            # An unknown surface must fail here — a typo otherwise lands a
+            # QUEUED job whose context build errors inside the worker,
+            # off-screen from the caller who sent it.
+            if surface not in AGENT_REQUIRED_REFS:
+                raise contract_error(
+                    400,
+                    "ai_surface_unknown",
+                    "La superficie indicada no existe.",
+                )
             missing_refs = [
                 name
                 for name in AGENT_REQUIRED_REFS.get(surface, ())
@@ -177,14 +186,23 @@ class AiAgentView(APIView):
                     f"Esta superficie requiere la referencia '{missing_refs[0]}'.",
                 )
             operation_key = str(data["operation_key"])
-            job = jobs.enqueue_job(
-                org_id=org_id,
-                user_id=token.user_id,
-                surface=surface,
-                refs=refs,
-                goal=str(data["goal"]),
-                operation_key=operation_key,
-            )
+            try:
+                job = jobs.enqueue_job(
+                    org_id=org_id,
+                    user_id=token.user_id,
+                    surface=surface,
+                    refs=refs,
+                    goal=str(data["goal"]),
+                    operation_key=operation_key,
+                )
+            except ValueError as error:
+                # A recycled operation_key carrying a different goal/refs is
+                # a client bug — refuse it instead of silently replaying.
+                raise contract_error(
+                    409,
+                    "ai_operation_key_conflict",
+                    "La clave de operación ya fue usada con otra solicitud.",
+                ) from error
             try:
                 # job_runs is service-owned — the enqueue runs under the same
                 # role switch the ingest path uses, or the request scope's
@@ -330,14 +348,27 @@ class AiJobMessagesView(APIView):
                 history = [
                     {
                         "role": turn.get("role"),
-                        "text": turn.get("text") or turn.get("reply") or "",
+                        "content": turn.get("text") or turn.get("reply") or "",
                     }
                     for turn in job.get("transcript") or []
+                    # Only roles the run serializer accepts; error turns and
+                    # empty entries would otherwise reject the whole
+                    # follow-up as job_payload_invalid.
                     if isinstance(turn, dict)
-                ]
+                    and turn.get("role") in ("user", "agent")
+                    and str(turn.get("text") or turn.get("reply") or "").strip()
+                ][-22:]  # the run serializer caps history at 24 — trim here
+                # so a long-lived job's payload never crosses the bound.
                 operation_key = str(
                     request.headers.get("X-Operation-Key")
                     or f"{job_id}:{len(history)}"
+                )
+                # Flip the row to QUEUED *before* the run becomes claimable —
+                # the worker polls job_runs continuously and would otherwise
+                # claim a run whose ai_job still reads SUCCEEDED, fail the
+                # claim, and leave this job wedged in QUEUED with no live run.
+                jobs.mark_queued(
+                    job_id=job_id, org_id=org_id, user_id=token.user_id
                 )
                 try:
                     with job_service.job_backend():
@@ -377,6 +408,70 @@ class AiJobMessagesView(APIView):
             raise
         except Exception as failure:
             _raise_agent_error(failure)
+
+
+class AiJobRetryView(APIView):
+    """Re-run a retryable failed round. The goal is the job's own stored
+    goal — a retry never retypes a message — and the payload's replay flag
+    makes the transcript turn read as a re-run, not a new message."""
+
+    @extend_schema(
+        operation_id="ai_job_retry",
+        request=None,
+        responses={202: AiJobSerializer, **ERRORS},
+        tags=["ai"],
+    )
+    def post(self, request, job_id):
+        with documentary_scope(request, _AGENT_CALLERS) as (token, _, org_id):
+            job = jobs.get_job(
+                org_id=org_id, user_id=token.user_id, job_id=job_id
+            )
+            if job is None:
+                raise contract_error(
+                    404, "ai_job_not_found", "El trabajo no existe."
+                )
+            if job["state"] != "FAILED_RETRYABLE":
+                raise contract_error(
+                    409,
+                    "ai_job_not_retryable",
+                    "El trabajo no está en un estado reintentable.",
+                )
+            # Idempotent per attempt: mark_queued bumps updated_at, so the
+            # derived key is unique per retry — a double POST of the same
+            # click lands on one worker run.
+            if not jobs.mark_queued(
+                job_id=job_id, org_id=org_id, user_id=token.user_id
+            ):
+                raise contract_error(
+                    409,
+                    "ai_job_running",
+                    "Ya hay una instrucción en curso en este trabajo.",
+                )
+            retry_key = f"retry:{job_id}:{job['updated_at']}"
+            try:
+                with job_service.job_backend():
+                    job_service.enqueue(
+                        org_id=org_id,
+                        job_type="ai.agent.run",
+                        payload={
+                            "ai_job_id": str(job["id"]),
+                            "mode": "resume",
+                            "surface": str(job["surface"]),
+                            "refs": dict(job.get("refs") or {}),
+                            "goal": str(job["goal"]),
+                            "history": [],
+                            "operation_key": retry_key,
+                            "replay": True,
+                        },
+                        idempotency_key=f"ai:{retry_key}",
+                        created_by=token.user_id,
+                    )
+            except job_service.JobServiceError as error:
+                raise contract_error(
+                    409, error.code, "No se pudo reintentar el trabajo."
+                ) from error
+            job["state"] = "QUEUED"
+            return Response(job, status=status.HTTP_202_ACCEPTED)
 
 
 class AiJobOutcomeView(APIView):

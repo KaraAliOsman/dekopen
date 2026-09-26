@@ -1832,7 +1832,9 @@ def test_record_failure_appends_turns(monkeypatch):
     )
     assert result == {"id": "j1"}
     assert "FAILED_RETRYABLE" in written["sql"]
-    assert "CANCELED" in written["sql"]
+    # The failure record only lands while the job still sits in a committed
+    # in-flight state — never over a CANCELED or already-finished row.
+    assert "'PLANNING','RUNNING'" in written["sql"]
 
 
 def test_record_failure_binds_claimed_generation(monkeypatch):
@@ -1928,10 +1930,12 @@ def test_job_message_forwards_live_product(monkeypatch):
         },
     )
     # job_runs sits behind the service-role switch — the DB cursor is outside
-    # this test's contract, so stub the wrapper like enqueue itself.
+    # this test's contract, so stub the wrapper like enqueue itself. The
+    # QUEUED flip is likewise an ai_jobs write under the backend role.
     monkeypatch.setattr(
         job_service, "job_backend", lambda: contextlib.nullcontext()
     )
+    monkeypatch.setattr(jobs, "mark_queued", lambda **kw: True)
     monkeypatch.setattr(
         job_service, "enqueue",
         lambda **kw: seen.update(kw) or ({"id": uuid4()}, True),
@@ -1947,6 +1951,14 @@ def test_job_message_forwards_live_product(monkeypatch):
     assert seen["payload"]["goal"] == "cambia el ancho"
     assert seen["payload"]["mode"] == "resume"
     assert seen["payload"]["ai_job_id"] == str(job_id)
+    # The enqueued payload must satisfy the run serializer the worker
+    # validates against — transcript turns carry {role, text/reply}, the
+    # payload contract is {role, content}; a shape drift here is the
+    # job_payload_invalid 409 the dock surfaced.
+    from ai_gateway.serializers import AiAgentRunSerializer
+
+    run_serializer = AiAgentRunSerializer(data=seen["payload"])
+    assert run_serializer.is_valid(), run_serializer.errors
 
 
 def test_agent_run_handler_records_failure(monkeypatch):
@@ -1969,6 +1981,8 @@ def test_agent_run_handler_records_failure(monkeypatch):
         },
     )
     monkeypatch.setattr(jobs, "resume_job", lambda **kw: {"id": str(job_id)})
+    monkeypatch.setattr(jobs, "mark_running", lambda **kw: True)
+    monkeypatch.setattr(jobs, "job_state", lambda **kw: "RUNNING")
     monkeypatch.setattr(jobs, "cancel_requested", lambda **kw: False)
 
     def boom(**kw):

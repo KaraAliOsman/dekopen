@@ -882,6 +882,82 @@ export const aiJobOutcomeCreate = async (
   });
 };
 
+export type aiJobRetryResponse202 = {
+  data: AiJob;
+  status: 202;
+};
+
+export type aiJobRetryResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type aiJobRetryResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type aiJobRetryResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type aiJobRetryResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type aiJobRetryResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type aiJobRetryResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type aiJobRetryResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type aiJobRetryResponseSuccess = aiJobRetryResponse202 & {
+  headers: Headers;
+};
+export type aiJobRetryResponseError = (
+  | aiJobRetryResponse400
+  | aiJobRetryResponse401
+  | aiJobRetryResponse403
+  | aiJobRetryResponse404
+  | aiJobRetryResponse409
+  | aiJobRetryResponse422
+  | aiJobRetryResponse503
+) & {
+  headers: Headers;
+};
+
+export type aiJobRetryResponse = aiJobRetryResponseSuccess | aiJobRetryResponseError;
+
+export const getAiJobRetryUrl = (jobId: string) => {
+  return `/api/v1/ai/jobs/${jobId}/retry/`;
+};
+
+/**
+ * Re-run a retryable failed round. The goal is the job's own stored
+ * goal — a retry never retypes a message — and the payload's replay flag
+ * makes the transcript turn read as a re-run, not a new message.
+ */
+export const aiJobRetry = async (
+  jobId: string,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<aiJobRetryResponse> => {
+  return apiMutator<aiJobRetryResponse>(getAiJobRetryUrl(jobId), {
+    ...options,
+    method: "POST",
+  });
+};
+
 export type aiMetricsResponse200 = {
   data: AiMetrics;
   status: 200;

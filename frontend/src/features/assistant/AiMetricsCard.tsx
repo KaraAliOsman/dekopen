@@ -48,9 +48,13 @@ export function AiMetricsCard({
   const jobs = data.jobs as {
     total?: number;
     completion_rate?: string | null;
+    avg_seconds?: string | null;
     by_state?: Record<string, number>;
+    by_surface?: Record<string, number>;
     failure_reasons?: { code: string; count: number }[];
   };
+  const approvals = data.approvals as { requested?: number; decided?: number };
+  const artifactsProduced = data.artifacts_produced as number | undefined;
   const commands = data.commands as {
     proposed?: number;
     applied?: number;
@@ -60,6 +64,12 @@ export function AiMetricsCard({
   const cost = data.cost as { points_debited?: number; calls?: number };
   const timeSaved = data.time_saved as { seconds?: number };
   const topFailure = jobs.failure_reasons?.[0];
+  const avgSeconds = Number.parseFloat(jobs.avg_seconds ?? "");
+  const topSurfaces = Object.entries(jobs.by_surface ?? {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4)
+    .map(([surface, count]) => `${surface} ${count}`)
+    .join(" · ");
   return (
     <section className="aiws-metrics" aria-label={t("aiws.metrics.title")}>
       <h2>
@@ -91,6 +101,20 @@ export function AiMetricsCard({
           <dd>{commands.declined ?? 0}</dd>
         </div>
         <div>
+          <dt>{t("aiws.metrics.artifacts")}</dt>
+          <dd>{artifactsProduced ?? 0}</dd>
+        </div>
+        <div>
+          <dt>{t("aiws.metrics.approvals")}</dt>
+          <dd>
+            {approvals.decided ?? 0}/{approvals.requested ?? 0}
+          </dd>
+        </div>
+        <div>
+          <dt>{t("aiws.metrics.avgDuration")}</dt>
+          <dd>{Number.isFinite(avgSeconds) ? minutes(avgSeconds) : "—"}</dd>
+        </div>
+        <div>
           <dt>{t("aiws.metrics.credits")}</dt>
           <dd>{cost.points_debited ?? 0}</dd>
         </div>
@@ -102,6 +126,11 @@ export function AiMetricsCard({
           </dd>
         </div>
       </dl>
+      {topSurfaces ? (
+        <p className="aiws-metrics__failure">
+          {t("aiws.metrics.bySurface").replace("{surfaces}", topSurfaces)}
+        </p>
+      ) : null}
       {topFailure ? (
         <p className="aiws-metrics__failure">
           {t("aiws.metrics.topFailure").replace("{code}", topFailure.code)} ({topFailure.count})

@@ -1,100 +1,187 @@
-/* DEKOPEN orb identity — one component, many presences. The animations are
- * deliberately subtle: a professional assistant breathes, glances and pulses;
- * it never bounces. */
+/* DEKOPEN orb identity — an anthracite sphere with twin casement-slot eyes.
+ * Eyes carry life (pose, blink, gaze), the outer ring carries job status in
+ * the same hues as the state pills. Animations are CSS-only: no timers,
+ * free pause in background tabs, one reduced-motion query. */
 
 .orb {
-  --orb-eye: #63d8cf;
+  /* The sphere is intentionally identical across themes — the identity IS the
+     black orb; only the edge stroke and specular strength adapt. */
+  --orb-hi: #4e5960;
+  --orb-mid: #262e34;
+  --orb-lo: #12171b;
+  --orb-edge: rgba(18, 24, 28, 0.55);
+  --orb-spec-op: 0.5;
+  --orb-eye: #eaf3f1;
   display: inline-block;
   vertical-align: middle;
   flex: none;
 }
-
-.orb-eye-glow {
-  fill: url(#orb-glow);
-  opacity: 0.9;
+[data-theme="dark"] .orb {
+  --orb-hi: #5a666e;
+  --orb-mid: #272f35;
+  --orb-lo: #10151a;
+  --orb-edge: rgba(233, 242, 241, 0.16);
+  --orb-spec-op: 0.32;
 }
-.orb-eye-dot {
+
+.orb__ring {
+  fill: none;
+  stroke-width: 1.8;
+  opacity: 0;
+}
+.orb__body {
+  stroke: var(--orb-edge);
+  stroke-width: 1;
+}
+.orb__spec {
+  fill: #eaf3f1;
+  opacity: var(--orb-spec-op);
+}
+.orb__bounce {
+  fill: var(--theme-accent);
+  opacity: 0.1;
+}
+.orb__eye {
   fill: var(--orb-eye);
 }
-.orb-eye-spark {
-  fill: #eafffb;
-  opacity: 0.95;
+.orb__glint {
+  fill: #fff;
+  opacity: 0.85;
 }
-.orb-state-ring {
+.orb__eyes--joy path {
   fill: none;
-  stroke-width: 0;
-}
-
-/* ————— idle: breathes slowly, blinks occasionally ————— */
-.orb[data-state="idle"] {
-  animation: orb-breathe 5.6s ease-in-out infinite;
-}
-.orb[data-state="idle"] .orb-eyes {
-  animation: orb-blink 6.8s ease-in-out infinite;
-  transform-origin: 32px 33px;
-}
-
-/* ————— thinking: eyes scan ————— */
-.orb[data-state="thinking"] .orb-eyes {
-  animation: orb-scan 2.2s ease-in-out infinite;
-}
-.orb[data-state="thinking"] .orb-sheen {
-  animation: orb-sheen-sweep 2.2s ease-in-out infinite;
-}
-
-/* ————— working: confident pulse + halo ————— */
-.orb[data-state="working"] {
-  animation: orb-pulse 1.6s ease-in-out infinite;
-}
-.orb[data-state="working"] .orb-halo {
-  animation: orb-halo-pulse 1.6s ease-in-out infinite;
-}
-
-/* ————— waiting: looks up at the human, amber attention ring ————— */
-.orb[data-state="waiting"] .orb-eyes {
-  transform: translateY(-2.2px);
-}
-.orb[data-state="waiting"] .orb-state-ring {
-  stroke: var(--theme-warning, #9c5306);
-  stroke-width: 1.6;
-  stroke-dasharray: 6 3;
-  animation: orb-ring-spin 9s linear infinite;
-  transform-origin: 32px 33px;
-}
-
-/* ————— ok: brief teal halo settle ————— */
-.orb[data-state="ok"] .orb-state-ring {
   stroke: var(--orb-eye);
-  stroke-width: 1.4;
+  stroke-width: 1.8;
+  stroke-linecap: round;
 }
-.orb[data-state="ok"] .orb-halo {
-  opacity: 1;
+.orb__eyes--worry rect,
+.orb__eyes--flat rect {
+  fill: var(--orb-eye);
+}
+/* Exactly one eye set per state — open by default. */
+.orb__eyes--joy,
+.orb__eyes--worry,
+.orb__eyes--flat {
+  visibility: hidden;
+}
+.orb.is-success .orb__eyes--joy,
+.orb.is-error .orb__eyes--worry,
+.orb.is-canceled .orb__eyes--flat {
+  visibility: visible;
+}
+.orb.is-success .orb__eyes--open,
+.orb.is-error .orb__eyes--open,
+.orb.is-canceled .orb__eyes--open {
+  visibility: hidden;
 }
 
-/* ————— error: narrowed eyes, danger ring ————— */
-.orb[data-state="error"] .orb-eyes {
-  transform: scaleY(0.55);
-  transform-origin: 32px 33px;
+/* Small silhouettes: drop the micro-details that muddy sub-28px renders. */
+.orb--s .orb__glint,
+.orb--s .orb__bounce {
+  display: none;
 }
-.orb[data-state="error"] .orb-eye-dot {
-  fill: #f0a79b;
+
+.orb__tilt,
+.orb__eyes,
+.orb__ring {
+  transform-box: fill-box;
+  transform-origin: center;
 }
-.orb[data-state="error"] .orb-eye-glow {
-  fill: none;
+
+/* ————— idle: slow breath + occasional blink ————— */
+.orb.is-idle .orb__tilt {
+  animation: orb-breathe 4.6s ease-in-out infinite;
 }
-.orb[data-state="error"] .orb-state-ring {
-  stroke: var(--theme-danger, #b3372f);
-  stroke-width: 1.6;
-  stroke-dasharray: 3 3;
+.orb.is-idle .orb__eyes {
+  animation: orb-blink 5.8s ease-in-out infinite;
+}
+
+/* ————— queued: half-lidded shallow breath ————— */
+.orb.is-queued .orb__tilt {
+  animation: orb-breathe 6.4s ease-in-out infinite;
+}
+.orb.is-queued .orb__eyes {
+  transform: scaleY(0.6);
+  animation: orb-blink-lidded 7s ease-in-out infinite;
+}
+
+/* ————— thinking: gaze pendulum ————— */
+.orb.is-thinking .orb__eyes {
+  animation: orb-scan 1.7s ease-in-out infinite;
+}
+.orb.is-thinking .orb__tilt {
+  animation: orb-breathe 3.4s ease-in-out infinite;
+}
+
+/* ————— working: steady breath + accent arc orbiting ————— */
+.orb.is-working .orb__tilt {
+  animation: orb-breathe 2.6s ease-in-out infinite;
+}
+.orb.is-working .orb__eyes {
+  animation: orb-blink 6s ease-in-out infinite;
+}
+.orb.is-working .orb__ring {
+  opacity: 1;
+  stroke: var(--theme-accent);
+  stroke-dasharray: 34 101;
+  animation: orb-orbit 1.35s linear infinite;
+}
+
+/* ————— waiting: raised eyes toward the human + warning arc pulse ————— */
+.orb.is-waiting .orb__tilt {
+  transform: translateY(-1px) rotate(-2.5deg);
+}
+.orb.is-waiting .orb__eyes {
+  transform: translateY(-2.4px);
+  animation: orb-waitlook 5.4s ease-in-out infinite;
+}
+.orb.is-waiting .orb__ring {
+  opacity: 1;
+  stroke: var(--theme-warning);
+  stroke-dasharray: 30 105;
+  stroke-dashoffset: 15;
+  transform: rotate(-90deg);
+  animation: orb-ringpulse 1.7s ease-in-out infinite;
+}
+
+/* ————— success: joy eyes + static success arc + one-shot settle ————— */
+.orb.is-success .orb__ring {
+  opacity: 1;
+  stroke: var(--theme-success);
+  stroke-dasharray: 30 105;
+  stroke-dashoffset: 15;
+  transform: rotate(-90deg);
+}
+.orb.is-success .orb__tilt {
+  animation:
+    orb-settle 0.55s ease-out,
+    orb-breathe 4.6s ease-in-out 1s infinite;
+}
+
+/* ————— error: worried slits + danger arc + one-shot shake ————— */
+.orb.is-error .orb__ring {
+  opacity: 1;
+  stroke: var(--theme-danger);
+  stroke-dasharray: 30 105;
+  stroke-dashoffset: 15;
+  transform: rotate(-90deg);
+}
+.orb.is-error .orb__tilt {
+  animation: orb-shake 0.38s ease-in-out;
+}
+
+/* ————— canceled: neutral slits, dimmed ————— */
+.orb.is-canceled {
+  opacity: 0.5;
 }
 
 @keyframes orb-breathe {
   0%,
   100% {
-    transform: translateY(0);
+    transform: scale(1);
   }
   50% {
-    transform: translateY(-1.2px);
+    transform: scale(1.028);
   }
 }
 @keyframes orb-blink {
@@ -105,57 +192,83 @@
     transform: scaleY(1);
   }
   94% {
-    transform: scaleY(0.08);
+    transform: scaleY(0.1);
+  }
+}
+@keyframes orb-blink-lidded {
+  0%,
+  86%,
+  93%,
+  100% {
+    transform: scaleY(0.6);
+  }
+  89% {
+    transform: scaleY(0.12);
   }
 }
 @keyframes orb-scan {
   0%,
   100% {
-    transform: translateX(-1.6px);
+    transform: translateX(-2.4px) scaleX(0.86);
   }
   50% {
-    transform: translateX(1.6px);
+    transform: translateX(2.4px) scaleX(0.86);
   }
 }
-@keyframes orb-sheen-sweep {
+@keyframes orb-waitlook {
   0%,
+  74%,
+  92%,
   100% {
-    transform: translateX(-2.4px);
+    transform: translateY(-2.4px) scaleY(1);
   }
-  50% {
-    transform: translateX(2.4px);
+  80%,
+  84% {
+    transform: translateY(-2.4px) scaleY(0.12);
   }
 }
-@keyframes orb-pulse {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.045);
+@keyframes orb-orbit {
+  to {
+    transform: rotate(360deg);
   }
 }
-@keyframes orb-halo-pulse {
+@keyframes orb-ringpulse {
   0%,
   100% {
-    opacity: 0.4;
+    opacity: 0.55;
   }
   50% {
     opacity: 1;
   }
 }
-@keyframes orb-ring-spin {
-  to {
-    transform: rotate(360deg);
+@keyframes orb-settle {
+  0% {
+    transform: scale(0.92);
+  }
+  60% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes orb-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  30% {
+    transform: translateX(-1.6px);
+  }
+  65% {
+    transform: translateX(1.3px);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .orb,
-  .orb .orb-eyes,
-  .orb .orb-sheen,
-  .orb .orb-halo,
-  .orb .orb-state-ring {
+  .orb .orb__tilt,
+  .orb .orb__eyes,
+  .orb .orb__ring {
     animation: none !important;
   }
 }

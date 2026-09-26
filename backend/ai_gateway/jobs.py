@@ -36,6 +36,8 @@ def _ai_backend():
         yield
         return
     with connection.cursor() as cursor:
+        cursor.execute("SELECT current_setting('role', true)")
+        previous = cursor.fetchone()[0]
         cursor.execute("SET LOCAL ROLE ai_backend")
     try:
         yield
@@ -44,12 +46,12 @@ def _ai_backend():
     except BaseException:
         if not connection.needs_rollback:
             with connection.cursor() as cursor:
-                cursor.execute("SET LOCAL ROLE authenticated")
+                cursor.execute("SET LOCAL ROLE %s", [previous])
         raise
     else:
         if not connection.needs_rollback:
             with connection.cursor() as cursor:
-                cursor.execute("SET LOCAL ROLE authenticated")
+                cursor.execute("SET LOCAL ROLE %s", [previous])
 
 MAX_GOAL = 2000
 MAX_ARTIFACT_TITLE = 120
@@ -136,20 +138,68 @@ def enqueue_job(*, org_id: UUID, user_id: UUID, surface: str,
                 " WHERE org_id = %s AND user_id = %s AND operation_key = %s",
                 [str(org_id), str(user_id), operation_key[:200]],
             )
-    return _decode(record[0])
+        existing = _decode(record[0])
+        # The key binds the request itself: a retried POST replays to the
+        # same row, but a different goal or refs under a recycled key is a
+        # collision, not a replay — refusing it keeps one key from quietly
+        # running someone else's goal under an existing job.
+        if (
+            str(existing.get("goal") or "") != goal[:MAX_GOAL]
+            or (existing.get("refs") or {}) != (refs or {})
+        ):
+            raise ValueError("ai_operation_key_conflict")
+    return existing
 
 
 def claim_queued_job(*, job_id: UUID, org_id: UUID, user_id: UUID) -> dict | None:
-    """The worker's atomic claim — only a QUEUED row moves to RUNNING, so a
-    job canceled while waiting in the queue is never executed."""
+    """The worker's atomic claim, committed on its own so the row shows
+    PLANNING while the run's transaction works — mid-run readers then see a
+    real lifecycle instead of the previous round's terminal state. QUEUED is
+    the normal entry; PLANNING/RUNNING re-claim a run stranded by a worker
+    crash (the row lock serializes a live act transaction, so a re-claim
+    waits for it and then fails the state check — it can never run twice)."""
     with _ai_backend():
         record = rows(
-            "UPDATE public.ai_jobs SET state = 'RUNNING', updated_at = NOW()"
-            " WHERE id = %s AND org_id = %s AND user_id = %s AND state = 'QUEUED'"
+            "UPDATE public.ai_jobs SET state = 'PLANNING', updated_at = NOW()"
+            " WHERE id = %s AND org_id = %s AND user_id = %s"
+            " AND state IN ('QUEUED','PLANNING','RUNNING')"
             f" RETURNING {_JOB_COLUMNS}",
             [str(job_id), str(org_id), str(user_id)],
         )
     return _decode(record[0]) if record else None
+
+
+def mark_running(*, job_id: UUID, org_id: UUID, user_id: UUID) -> bool:
+    """Second committed state step — the act loop owns the row now. Keeping
+    this its own commit makes every state honest: QUEUED → PLANNING →
+    RUNNING → terminal is the visible progression while job_runs carries
+    the finer progress inside RUNNING."""
+    with _ai_backend():
+        return bool(
+            rows(
+                "UPDATE public.ai_jobs SET state = 'RUNNING', updated_at = NOW()"
+                " WHERE id = %s AND org_id = %s AND user_id = %s"
+                " AND state = 'PLANNING' RETURNING id",
+                [str(job_id), str(org_id), str(user_id)],
+            )
+        )
+
+
+def job_state(*, job_id: UUID) -> str | None:
+    """Bare state read for the worker's own gap checks — a free-row cancel
+    between the committed marks and the act transaction writes CANCELED
+    directly, and only the state itself tells that story (no signal row)."""
+    if connection.vendor != "postgresql":
+        return None
+    found = rows(
+        "SELECT state FROM public.ai_jobs WHERE id = %s", [str(job_id)]
+    )
+    return str(found[0]["state"]) if found else None
+
+
+# A job that keeps failing its rounds is terminal, not retryable forever —
+# consecutive error turns past this budget flip FAILED_RETRYABLE to FAILED.
+MAX_ERROR_TURNS = 3
 
 
 def fail_queued_job(*, job_id: UUID, goal: str, error_code: str) -> dict | None:
@@ -160,7 +210,8 @@ def fail_queued_job(*, job_id: UUID, goal: str, error_code: str) -> dict | None:
         record = rows(
             "UPDATE public.ai_jobs SET state = 'FAILED_RETRYABLE',"
             " transcript = %s::jsonb, error_code = %s, updated_at = NOW()"
-            " WHERE id = %s AND state = 'QUEUED' RETURNING id",
+            " WHERE id = %s AND state IN ('QUEUED','PLANNING','RUNNING')"
+            " RETURNING id",
             [_dump(_failure_turns(goal, error_code)), error_code[:120],
              str(job_id)],
         )
@@ -243,6 +294,40 @@ def request_cancel(*, job_id: UUID, org_id: UUID, user_id: UUID) -> str:
                 return "signaled"
 
 
+def live_runs(*, org_id: UUID, job_ids: list) -> dict:
+    """Latest worker-run state per ai_job — the only signal visible while a
+    run is in flight, because the run's own ai_jobs writes stay uncommitted
+    until it finishes. job_runs progress updates commit immediately (the
+    worker reports them outside the handler's atomic), so the rail can show
+    real mid-run progress instead of a frozen QUEUED. job_runs is
+    service-owned: the read borrows the same role switch the enqueue path
+    uses."""
+    if connection.vendor != "postgresql" or not job_ids:
+        return {}
+    from jobs import service as job_service  # lazy — avoids the import cycle
+
+    with job_service.job_backend():
+        found = rows(
+            "SELECT payload->>'ai_job_id' AS ai_job_id, state, progress,"
+            " updated_at FROM public.job_runs"
+            " WHERE org_id = %s AND type = 'ai.agent.run'"
+            " AND payload->>'ai_job_id' = ANY(%s::text[])"
+            " ORDER BY created_at DESC",
+            [str(org_id), [str(jid) for jid in job_ids]],
+        )
+    latest: dict = {}
+    for run in found:
+        key = str(run["ai_job_id"])
+        if key in latest:
+            continue
+        latest[key] = {
+            "state": run["state"],
+            "progress": float(run["progress"] or 0),
+            "updated_at": str(run["updated_at"]),
+        }
+    return latest
+
+
 def get_job(*, org_id: UUID, user_id: UUID, job_id: UUID) -> dict | None:
     found = rows(
         "SELECT id, org_id, user_id, surface, refs, goal, state, plan,"
@@ -251,7 +336,11 @@ def get_job(*, org_id: UUID, user_id: UUID, job_id: UUID) -> dict | None:
         " FROM public.ai_jobs WHERE id = %s AND org_id = %s AND user_id = %s",
         [str(job_id), str(org_id), str(user_id)],
     )
-    return _decode(found[0]) if found else None
+    if not found:
+        return None
+    job = _decode(found[0])
+    job["live"] = live_runs(org_id=org_id, job_ids=[job_id]).get(job["id"])
+    return job
 
 
 def list_jobs(
@@ -278,7 +367,7 @@ def list_jobs(
         cursor = " AND created_at < %s"
         params.append(before)
     params.append(limit)
-    return [
+    decoded = [
         _decode(row)
         for row in rows(
             "SELECT id, org_id, user_id, surface, refs, goal, state, plan,"
@@ -290,6 +379,10 @@ def list_jobs(
             params,
         )
     ]
+    live = live_runs(org_id=org_id, job_ids=[row["id"] for row in decoded])
+    for row in decoded:
+        row["live"] = live.get(row["id"])
+    return decoded
 
 
 def finish_job(*, job_id: UUID, state: str, transcript: list, plan: list,
@@ -319,6 +412,23 @@ def finish_job(*, job_id: UUID, state: str, transcript: list, plan: list,
     return {"id": str(record[0]["id"])}
 
 
+def mark_queued(*, job_id: UUID, org_id: UUID, user_id: UUID) -> bool:
+    """A follow-up was accepted and its worker run enqueued — flip the row to
+    QUEUED in the request's own transaction so polls reflect the pending
+    round immediately instead of the settled state until the worker claims
+    (the claim's own state write is invisible until it commits anyway)."""
+    with _ai_backend():
+        return bool(
+            rows(
+                "UPDATE public.ai_jobs SET state = 'QUEUED', updated_at = NOW()"
+                " WHERE id = %s AND org_id = %s AND user_id = %s"
+                " AND state IN ('WAITING_FOR_USER','WAITING_FOR_APPROVAL',"
+                " 'FAILED_RETRYABLE','SUCCEEDED') RETURNING id",
+                [str(job_id), str(org_id), str(user_id)],
+            )
+        )
+
+
 def resume_job(*, job_id: UUID, transcript: list, org_id: UUID, user_id: UUID) -> dict:
     """Claim a settled job for a new round. The UPDATE itself is the lock:
     only WAITING_*/FAILED_RETRYABLE/SUCCEEDED states move to RUNNING, so a
@@ -326,16 +436,20 @@ def resume_job(*, job_id: UUID, transcript: list, org_id: UUID, user_id: UUID) -
     silently writing its stale transcript over the other round's work."""
     with _ai_backend():
         record = rows(
-            "UPDATE public.ai_jobs SET state = 'RUNNING',"
+            "UPDATE public.ai_jobs SET state = 'PLANNING',"
             " transcript = %s::jsonb, result = NULL, error_code = NULL,"
             " completed_at = NULL, updated_at = NOW()"
             " WHERE id = %s AND org_id = %s AND user_id = %s AND state IN"
-            " ('WAITING_FOR_USER','WAITING_FOR_APPROVAL','FAILED_RETRYABLE','SUCCEEDED')"
+            " ('QUEUED','PLANNING','RUNNING','WAITING_FOR_USER','WAITING_FOR_APPROVAL','FAILED_RETRYABLE','SUCCEEDED')"
             " RETURNING id",
             [_dump(transcript), str(job_id), str(org_id), str(user_id)],
         )
     if record:
-        return {"id": str(record[0]["id"])}
+        # act() rebuilds the transcript off the claimed row — carrying the
+        # transcript we just wrote keeps earlier rounds; returning only the
+        # id would make the round start from an empty thread and clobber
+        # the conversation at finish.
+        return {"id": str(record[0]["id"]), "transcript": transcript}
     state = rows(
         "SELECT state FROM public.ai_jobs WHERE id = %s", [str(job_id)]
     )
@@ -383,13 +497,24 @@ def record_failure(*, job_id: UUID, transcript_before: list, goal: str,
     transcript has moved on)."""
     with _ai_backend():
         found = rows(
-        "UPDATE public.ai_jobs SET state = 'FAILED_RETRYABLE',"
+        # Past the retry budget the job goes terminal — the error count is
+        # computed from the transcript being written, so the bound holds
+        # even if older rounds' failures are interleaved with successes.
+        "UPDATE public.ai_jobs SET state ="
+        " CASE WHEN (SELECT count(*) FROM jsonb_array_elements("
+        " transcript || %s::jsonb) e WHERE e->>'role' = 'error') >= %s"
+        " THEN 'FAILED' ELSE 'FAILED_RETRYABLE' END,"
         " transcript = transcript || %s::jsonb, result = NULL, error_code = %s,"
         " updated_at = NOW()"
-        " WHERE id = %s AND state NOT IN ('CANCELED','RUNNING')"
+        # Post-rollback the row shows this round's committed claim mark —
+        # PLANNING or RUNNING, never a settled state (another lifecycle
+        # landing first also rewrote the transcript, so the match fails). A
+        # free-row cancel wrote CANCELED and must not be revived.
+        " WHERE id = %s AND state IN ('PLANNING','RUNNING')"
         " AND transcript = %s::jsonb"
         " RETURNING id",
-        [_dump(_failure_turns(goal, error_code)), error_code[:120],
+        [_dump(_failure_turns(goal, error_code)), MAX_ERROR_TURNS,
+         _dump(_failure_turns(goal, error_code)), error_code[:120],
          str(job_id), _dump(transcript_before)],
     )
     return {"id": str(found[0]["id"])} if found else None
@@ -431,6 +556,26 @@ def record_outcome(
         }
     ]
     with _ai_backend():
+        # The reported step must actually exist in the transcript — a client
+        # may only record outcomes against steps the run proposed, or any
+        # index the UI never showed becomes fabricable telemetry.
+        job = get_job(org_id=org_id, user_id=user_id, job_id=job_id)
+        if job is None:
+            return None
+        transcript = job.get("transcript") or []
+        turn = (
+            transcript[recorded["turn_index"]]
+            if 0 <= recorded["turn_index"] < len(transcript)
+            else None
+        )
+        steps = (turn or {}).get("steps") or []
+        step = (
+            steps[recorded["step_index"]]
+            if 0 <= recorded["step_index"] < len(steps)
+            else None
+        )
+        if step is None or step.get("kind") not in ("ops", "batch_ops", "prepare"):
+            return None
         found = rows(
             "UPDATE public.ai_jobs SET outcomes = outcomes || %s::jsonb,"
             " updated_at = NOW()"

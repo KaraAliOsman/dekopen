@@ -704,6 +704,65 @@ def _context_assist_output(input_payload: dict) -> dict:
     }
 
 
+# Surfaces whose projection needs no entity refs — the only ones the mock can
+# query (the agent payload doesn't carry refs, so ref-requiring surfaces would
+# just produce a rejected observation).
+_QUERYABLE_WITHOUT_REFS = {
+    "dashboard",
+    "projects",
+    "catalog",
+    "production",
+    "clients",
+    "purchasing",
+    "settings",
+    "morning_brief",
+    "purchase_plan",
+    "production_plan",
+    "catalog_compiler",
+}
+
+
+def _agent_output(input_payload: dict) -> dict:
+    """Mock agent round: a contract-valid JSON document built only from the
+    server-built context — so dev/CI can exercise the flagship agent loop
+    (grounding, steps, states) without a real provider. On the first round
+    it emits a plan + a claim so the work-visibility channels render; on
+    later rounds (observations present) it closes without new queries."""
+    context = input_payload.get("context") or {}
+    org = context.get("organization") or {}
+    goal = str(input_payload.get("goal") or "")
+    observations = input_payload.get("observations") or []
+    surface_name = str(input_payload.get("surface") or "dashboard")
+    org_name = str(org.get("name") or "la organización")
+    reply = (
+        f"Revisé el contexto de {org_name} para “{goal[:120]}”. "
+        "Respuesta determinista del proveedor MOCK."
+    )
+    evidence = re.findall(
+        r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+        json.dumps(context, default=str),
+    )[:2]
+    document: dict = {
+        "reply": reply,
+        "steps": [],
+        "warnings": [],
+        "plan": [{"label": "Revisar el contexto del producto"}],
+        "claims": (
+            [{"text": f"La organización activa es {org_name}.", "evidence": evidence}]
+            if evidence
+            else []
+        ),
+        "questions": [],
+    }
+    if not observations and surface_name in _QUERYABLE_WITHOUT_REFS:
+        # Round 1 asks for the same surface's data — the server executes it
+        # and returns observations; round 2 settles with the grounded reply.
+        # Ref-requiring surfaces can't be queried without entity ids (the
+        # payload doesn't carry them), so they settle in one round.
+        document["steps"] = [{"kind": "query", "surface": surface_name, "refs": {}}]
+    return document
+
+
 class MockProvider:
     """Deterministic provider — a real output a test can assert, never I/O."""
 
@@ -732,6 +791,10 @@ class MockProvider:
         elif capability == "context_assist":
             output = json.dumps(
                 _context_assist_output(input_payload), ensure_ascii=False
+            )
+        elif capability == "agent":
+            output = json.dumps(
+                _agent_output(input_payload), ensure_ascii=False
             )
         else:
             output = (

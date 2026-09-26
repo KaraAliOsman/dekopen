@@ -85,11 +85,24 @@ class AiAgentHistorySerializer(serializers.Serializer):
     content = serializers.CharField(min_length=1, max_length=2000)
 
 
+# The live product payload is a design tree — generous but bounded so a
+# bloated document can't push the request body into arbitrary sizes.
+MAX_PRODUCT_BYTES = 262144
+
+
+class _BoundedDictField(serializers.DictField):
+    def to_internal_value(self, data):
+        value = super().to_internal_value(data)
+        if len(json.dumps(value, default=str)) > MAX_PRODUCT_BYTES:
+            raise serializers.ValidationError("too_large")
+        return value
+
+
 class AiAgentRequestSerializer(serializers.Serializer):
     surface = serializers.CharField(min_length=2, max_length=40)
     refs = _RefsDictField(required=False)
     goal = serializers.CharField(min_length=1, max_length=2000)
-    product = serializers.DictField(required=False)
+    product = _BoundedDictField(required=False)
     history = AiAgentHistorySerializer(many=True, required=False, max_length=6)
     operation_key = serializers.CharField(min_length=8, max_length=120)
 
@@ -135,6 +148,9 @@ class AiAgentRunSerializer(serializers.Serializer):
     product = serializers.DictField(required=False, allow_null=True)
     history = AiAgentHistorySerializer(many=True, required=False, max_length=24)
     operation_key = serializers.CharField(min_length=8, max_length=200)
+    # Retry replays the job's original goal — the marker travels so the
+    # transcript turn reads "this was a re-run", not a retyped message.
+    replay = serializers.BooleanField(required=False, default=False)
 
 
 class AiAgentResultSerializer(serializers.Serializer):
@@ -159,7 +175,7 @@ class AiJobMessageSerializer(serializers.Serializer):
     message = serializers.CharField(min_length=1, max_length=2000)
     # Follow-ups carry the position's live product so design ops evaluate
     # the current design — a stored snapshot would go stale between turns.
-    product = serializers.DictField(required=False)
+    product = _BoundedDictField(required=False)
 
 
 class AiJobSerializer(serializers.Serializer):
@@ -175,6 +191,9 @@ class AiJobSerializer(serializers.Serializer):
     result = AiAgentResultSerializer(required=False, allow_null=True)
     error_code = serializers.CharField(required=False, allow_null=True)
     outcomes = serializers.ListField(required=False)
+    # Mid-run signal from the worker's job_runs row — the ai_jobs writes
+    # commit only when the run finishes, so live progress rides this.
+    live = serializers.DictField(required=False, allow_null=True)
     created_at = serializers.DateTimeField()
     updated_at = serializers.DateTimeField()
     completed_at = serializers.DateTimeField(required=False, allow_null=True)

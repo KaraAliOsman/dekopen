@@ -61,6 +61,7 @@ def ai_agent_run(
     ai_job_id = UUID(str(payload["ai_job_id"]))
     mode = str(payload["mode"])
     goal = str(payload["goal"])
+    replay = bool(payload.get("replay"))
     report(5)
 
     with transaction.atomic():
@@ -80,6 +81,13 @@ def ai_agent_run(
 
     transcript_before: list = []
     try:
+        # The claim and the run-marker commit in their own short
+        # transactions so mid-run the row shows PLANNING/RUNNING instead of
+        # the previous round's settled state — the act transaction still
+        # holds only the transcript/result writes it owns. Each commit also
+        # makes crash recovery possible: a run stranded by a worker death
+        # is re-claimable because the claim guards accept PLANNING/RUNNING
+        # and serialize on the row lock a live act still holds.
         with transaction.atomic():
             with connection.cursor() as cursor:
                 _set_claims(cursor, context)
@@ -88,6 +96,11 @@ def ai_agent_run(
                 if prior is None:
                     raise _Unclaimable
                 transcript_before = list(prior.get("transcript") or [])
+                if replay:
+                    # A retry replays the job's original goal — not the
+                    # canned client text — so the run repeats what the
+                    # person actually asked for.
+                    goal = str(prior.get("goal") or goal)
                 try:
                     claimed = jobs.resume_job(
                         job_id=ai_job_id,
@@ -107,6 +120,21 @@ def ai_agent_run(
             # submit and the claim should not still run the provider.
             if jobs.cancel_requested(job_id=ai_job_id):
                 raise JobCanceledError()
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                _set_claims(cursor, context)
+            if not jobs.mark_running(
+                job_id=ai_job_id, org_id=org_id, user_id=user_id
+            ):
+                raise _Unclaimable
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                _set_claims(cursor, context)
+            # A cancel that found the row free between the marker and this
+            # transaction wrote CANCELED directly — no signal row exists for
+            # that path, only the state itself.
+            if jobs.job_state(job_id=ai_job_id) != "RUNNING":
+                raise JobCanceledError()
             act(
                 org_id=org_id,
                 user_id=user_id,
@@ -117,6 +145,8 @@ def ai_agent_run(
                 history=list(payload.get("history") or []),
                 operation_key=str(payload["operation_key"]),
                 job=claimed,
+                replay=bool(payload.get("replay")),
+                progress=report,
             )
         report(95)
     except _Unclaimable:

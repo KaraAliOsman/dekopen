@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { AiAgentResult } from "./aiAgentResult";
+import type { AiJobDetailLive } from "./aiJobDetailLive";
 import type { AiJobDetailRefs } from "./aiJobDetailRefs";
 
 export interface AiJobDetail {
@@ -22,6 +23,8 @@ export interface AiJobDetail {
   /** @nullable */
   error_code?: string | null;
   outcomes?: unknown[];
+  /** @nullable */
+  live?: AiJobDetailLive;
   created_at: string;
   updated_at: string;
   /** @nullable */

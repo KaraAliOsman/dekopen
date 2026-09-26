@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { AiAgentResult } from "./aiAgentResult";
+import type { AiJobLive } from "./aiJobLive";
 import type { AiJobRefs } from "./aiJobRefs";
 
 export interface AiJob {
@@ -22,6 +23,8 @@ export interface AiJob {
   /** @nullable */
   error_code?: string | null;
   outcomes?: unknown[];
+  /** @nullable */
+  live?: AiJobLive;
   created_at: string;
   updated_at: string;
   /** @nullable */

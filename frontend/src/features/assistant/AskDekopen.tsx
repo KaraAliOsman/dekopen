@@ -6,7 +6,7 @@ import { aiAsk } from "../../api/generated/dekopen";
 import type { AiAskResponse } from "../../api/generated/models/aiAskResponse";
 import { t } from "../../i18n/es-CL";
 import { AgentBody, SURFACE_LABELS } from "./AgentBody";
-import { Orb } from "./Orb";
+import { Orb, orbStateFor } from "./Orb";
 import { useAssistantContext } from "./assistantContext";
 import "./assistant.css";
 
@@ -34,6 +34,9 @@ export function AskDekopen({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [thread, setThread] = useState<Thread>([]);
+  /** Agent mode: the bound job's lifecycle drives the header orb so a running
+   * job reads alive even while the ask thread sits idle. */
+  const [agentJobState, setAgentJobState] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   /** One operation key per question — a retried submit replays the committed
    * call instead of debiting twice. */
@@ -115,7 +118,16 @@ export function AskDekopen({
           }}
         >
           <header className="ask-dock__header">
-            <Orb state={busy ? "thinking" : "idle"} size={26} />
+            <Orb
+              state={
+                mode === "agent"
+                  ? orbStateFor(agentJobState ?? undefined)
+                  : busy
+                    ? "thinking"
+                    : "idle"
+              }
+              size={26}
+            />
             <span className="ask-dock__title">{t("assistant.dockTitle")}</span>
             <span className="ask-dock__modes">
               <button
@@ -153,6 +165,7 @@ export function AskDekopen({
               organizationId={orgId}
               surface={surface}
               refs={refs}
+              onJobState={setAgentJobState}
             />
           ) : (
             <>

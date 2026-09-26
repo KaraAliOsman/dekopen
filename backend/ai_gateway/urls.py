@@ -7,6 +7,7 @@ from ai_gateway.views import (
     AiJobCollectionView,
     AiJobMessagesView,
     AiJobOutcomeView,
+    AiJobRetryView,
     AiJobView,
     AiMetricsView,
 )
@@ -21,6 +22,11 @@ urlpatterns = [
         "jobs/<uuid:job_id>/messages/",
         AiJobMessagesView.as_view(),
         name="ai-job-messages",
+    ),
+    path(
+        "jobs/<uuid:job_id>/retry/",
+        AiJobRetryView.as_view(),
+        name="ai-job-retry",
     ),
     path(
         "jobs/<uuid:job_id>/outcome/",

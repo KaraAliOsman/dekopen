@@ -601,6 +601,73 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/ai/jobs/{job_id}/retry/:
+    post:
+      operationId: ai_job_retry
+      description: |-
+        Re-run a retryable failed round. The goal is the job's own stored
+        goal — a retry never retypes a message — and the payload's replay flag
+        makes the transcript turn read as a re-run, not a new message.
+      parameters:
+      - in: path
+        name: job_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - ai
+      security:
+      - SupabaseBearer: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiJob'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/ai/metrics/:
     get:
       operationId: ai_metrics
@@ -14326,6 +14393,10 @@ components:
         outcomes:
           type: array
           items: {}
+        live:
+          type: object
+          additionalProperties: {}
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -14383,6 +14454,10 @@ components:
         outcomes:
           type: array
           items: {}
+        live:
+          type: object
+          additionalProperties: {}
+          nullable: true
         created_at:
           type: string
           format: date-time
