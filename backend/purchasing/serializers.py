@@ -80,19 +80,20 @@ class AllocationResponseSerializer(serializers.Serializer):
     supplier_eligibility_id = serializers.UUIDField()
 
 
+ORDER_STATUSES = [
+    "DRAFT",
+    "SENT",
+    "PARTIALLY_RECEIVED",
+    "FULFILLED",
+    "CANCELLED",
+]
+
+
 class OrderResponseSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     order_code = serializers.CharField()
     order_type = serializers.ChoiceField(choices=ORDER_TYPES)
-    status = serializers.ChoiceField(
-        choices=[
-            "DRAFT",
-            "SENT",
-            "PARTIALLY_RECEIVED",
-            "FULFILLED",
-            "CANCELLED",
-        ]
-    )
+    status = serializers.ChoiceField(choices=ORDER_STATUSES)
     supplier_name = serializers.CharField()
     order_snapshot_hash = serializers.RegexField(r"^[0-9a-f]{64}$")
     confirmed_at = serializers.CharField(required=False, allow_null=True)
@@ -105,3 +106,27 @@ class OrderResponseSerializer(serializers.Serializer):
     lines_preview = serializers.ListField(
         child=serializers.DictField(), required=False
     )
+
+
+class OrderIndexItemSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    order_code = serializers.CharField()
+    order_type = serializers.ChoiceField(choices=ORDER_TYPES)
+    status = serializers.ChoiceField(choices=ORDER_STATUSES)
+    supplier_identity = serializers.CharField(allow_null=True)
+    supplier_name = serializers.CharField(allow_null=True)
+    expected_at = serializers.DateField(allow_null=True)
+    sent_at = serializers.CharField(allow_null=True)
+    created_at = serializers.CharField()
+    project_id = serializers.UUIDField(allow_null=True)
+    project_code = serializers.CharField(allow_null=True)
+    project_version_id = serializers.UUIDField(allow_null=True)
+    revision_code = serializers.CharField(allow_null=True)
+    line_count = serializers.CharField()
+    total_qty = serializers.CharField(allow_null=True)
+    good_qty = serializers.CharField()
+    outstanding_qty = serializers.CharField()
+
+
+class OrderIndexResponseSerializer(serializers.Serializer):
+    orders = OrderIndexItemSerializer(many=True)

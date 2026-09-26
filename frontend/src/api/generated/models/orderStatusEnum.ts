@@ -13,10 +13,9 @@
  * * `FULFILLED` - FULFILLED
  * * `CANCELLED` - CANCELLED
  */
-export type OrderResponseStatusEnum =
-  (typeof OrderResponseStatusEnum)[keyof typeof OrderResponseStatusEnum];
+export type OrderStatusEnum = (typeof OrderStatusEnum)[keyof typeof OrderStatusEnum];
 
-export const OrderResponseStatusEnum = {
+export const OrderStatusEnum = {
   DRAFT: "DRAFT",
   SENT: "SENT",
   PARTIALLY_RECEIVED: "PARTIALLY_RECEIVED",

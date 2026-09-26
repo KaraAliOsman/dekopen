@@ -1405,6 +1405,46 @@ def _doc04(snapshot: dict[str, object]) -> str:
     return body
 
 
+def _doc08(snapshot: dict[str, object]) -> str:
+    order = _object(snapshot.get("order"), "invalid_order_snapshot")
+    revision = _object(snapshot.get("revision"), "invalid_order_snapshot")
+    if order.get("order_type") not in ("SUPPLIER_HARDWARE_PO", "SUPPLIER_PANEL_PO"):
+        raise DocumentaryError("document_scope_mismatch")
+    lines = [_object(item, "invalid_order_line")
+             for item in _array(snapshot.get("lines"), "invalid_order_snapshot")]
+    pseudo_revision = {
+        "project": {"code": order.get("project_code")},
+        "revision": revision.get("revision_code"),
+        "sealed_at": order.get("confirmed_at"),
+        "bom_hash": revision.get("bom_hash"),
+        "organization": snapshot.get("organization"),
+    }
+    body, _ = _revision_header(pseudo_revision, "Orden de compra", "DOC-08", workshop=True)
+    body += (
+        f"<p><strong>Orden:</strong> {escape(_value(order.get('order_code')))} · "
+        f"<strong>Proveedor:</strong> {escape(_value(order.get('supplier_name')))}</p>"
+        + _table(
+            ["Requisito", "Categoría", "SKU taller", "SKU compra",
+             "Cantidad", "Unidad", "Detalle", "Trazabilidad"],
+            [[_value(line.get("requirement_key")),
+              _CATEGORY_ES.get(_value(line.get("category")), line.get("category")),
+              ", ".join(_value(item) for item in _array(line.get("technical_skus"), "invalid_order_line")),
+              line.get("purchasing_sku"),
+              line.get("quantity"), line.get("unit"),
+              "; ".join(
+                  f"{key}={_value(value)}"
+                  for key, value in sorted(
+                      _object(line.get("specification"), "invalid_order_line").items()
+                  )
+              ),
+              ", ".join(_value(item) for item in _array(line.get("source_trace"), "invalid_order_line"))]
+             for line in lines], ["hash", "", "", "", "dimension", "", "", ""],
+        )
+        + "</main>"
+    )
+    return body
+
+
 def render_pdf_document(
     document_type: str, snapshot: dict[str, object], *, pdf_identifier: str
 ) -> tuple[bytes, str]:
@@ -1422,6 +1462,8 @@ def render_pdf_document(
         body = _doc06(snapshot)
     elif document_type == "DOC-07":
         body = _doc07(snapshot)
+    elif document_type == "DOC-08":
+        body = _doc08(snapshot)
     else:
         raise DocumentaryError("pdf_document_type_invalid")
     # Order-scoped payloads (DOC-02/DOC-04/DOC-07) carry `order`, not

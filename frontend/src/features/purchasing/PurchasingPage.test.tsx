@@ -82,6 +82,51 @@ function mockState(overrides: Record<string, unknown> = {}) {
   vi.mocked(apiMutator).mockImplementation((url) => {
     if (String(url).endsWith("purchasing/versions/"))
       return Promise.resolve({ data: { versions: [versionItem] } });
+    if (String(url).endsWith("purchasing/orders/"))
+      return Promise.resolve({
+        data: {
+          orders: [
+            {
+              id: "order-idx-1",
+              order_code: "OC-HW-7",
+              order_type: "SUPPLIER_HARDWARE_PO",
+              status: "SENT",
+              supplier_identity: "76.1-2",
+              supplier_name: "Vorne SPA",
+              expected_at: "2026-10-01",
+              sent_at: null,
+              created_at: "2026-09-01T00:00:00Z",
+              project_id: "project-a",
+              project_code: "P-002",
+              project_version_id: versionItem.id,
+              revision_code: "REV-A",
+              line_count: "3",
+              total_qty: "10",
+              good_qty: "2",
+              outstanding_qty: "8",
+            },
+            {
+              id: "order-idx-2",
+              order_code: "OC-GL-2",
+              order_type: "SUPPLIER_GLASS_PO",
+              status: "DRAFT",
+              supplier_identity: null,
+              supplier_name: "Vidrios SPA",
+              expected_at: null,
+              sent_at: null,
+              created_at: "2026-09-02T00:00:00Z",
+              project_id: "project-a",
+              project_code: "P-002",
+              project_version_id: versionItem.id,
+              revision_code: "REV-A",
+              line_count: "1",
+              total_qty: "4",
+              good_qty: "0",
+              outstanding_qty: "4",
+            },
+          ],
+        },
+      });
     if (String(url).includes(`purchasing/versions/${versionItem.id}/`))
       return Promise.resolve(state(overrides));
     return Promise.resolve({ data: {} });
@@ -350,4 +395,18 @@ it("maps backend blocker codes to actionable labels", async () => {
       exact: false,
     }),
   ).toBeInTheDocument();
+});
+
+it("lists org-wide orders with supplier, expected date and outstanding, filtered by status", async () => {
+  mockState();
+  renderPage();
+  const index = (await screen.findByText(t("purchasing.indexTitle"))).closest("section")!;
+  expect(within(index).getByText("OC-HW-7")).toBeInTheDocument();
+  expect(within(index).getByText("OC-GL-2")).toBeInTheDocument();
+  expect(within(index).getByText("Vorne SPA")).toBeInTheDocument();
+  expect(within(index).getByText("2026-10-01")).toBeInTheDocument();
+  expect(within(index).getByText("8")).toBeInTheDocument();
+  fireEvent.click(within(index).getByRole("button", { name: t("purchasing.sent") }));
+  expect(within(index).getByText("OC-HW-7")).toBeInTheDocument();
+  expect(within(index).queryByText("OC-GL-2")).not.toBeInTheDocument();
 });

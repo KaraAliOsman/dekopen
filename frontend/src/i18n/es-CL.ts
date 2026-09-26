@@ -1230,6 +1230,14 @@ export const messages = {
   "purchasing.cancelBody":
     "La orden queda cerrada y su material vuelve a figurar como por comprar. Solo se puede cancelar mientras no lleguen mercaderías.",
   "purchasing.cancelConfirm": "Cancelar orden",
+  "purchasing.indexTitle": "Todas las órdenes",
+  "purchasing.indexFilter": "Filtrar por estado",
+  "purchasing.indexFilterAll": "Todas",
+  "purchasing.indexOrder": "Orden",
+  "purchasing.indexType": "Tipo",
+  "purchasing.indexSupplier": "Proveedor",
+  "purchasing.indexStatus": "Estado",
+  "purchasing.indexOutstanding": "Pendiente",
   "purchasing.blockerEligibilityRequired":
     "Se requiere un proveedor elegible para este tipo de pedido",
   "purchasing.blockerAllocationRequired": "Requisitos sin proveedor asignado",
@@ -1352,6 +1360,8 @@ export const messages = {
   "purchasing.doc03": "DOC-03 · Matriz de ensamble (PDF)",
   "purchasing.doc04Pdf": "DOC-04 · Pedido de perfiles (PDF)",
   "purchasing.doc04Xlsx": "DOC-04 · Pedido de perfiles (XLSX)",
+  "purchasing.doc08Pdf": "Orden de compra (PDF)",
+  "purchasing.doc08Xlsx": "Orden de compra (XLSX)",
   "purchasing.doc05": "DOC-05 · Plan de corte (PDF)",
   "purchasing.doc06": "DOC-06 · Checklist QC en blanco (PDF)",
   "purchasing.doc07": "DOC-07 · Informe de costos (PDF)",

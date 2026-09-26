@@ -248,7 +248,7 @@ class FreezeResponseSerializer(serializers.Serializer):
 
 class ArtifactRequestSerializer(StrictSerializer):
     document_type = serializers.ChoiceField(
-        choices=["DOC-01", "DOC-02", "DOC-03", "DOC-04", "DOC-05", "DOC-06", "DOC-07"]
+        choices=["DOC-01", "DOC-02", "DOC-03", "DOC-04", "DOC-05", "DOC-06", "DOC-07", "DOC-08"]
     )
     format = serializers.ChoiceField(choices=["PDF", "XLSX"])
     project_version_id = serializers.UUIDField()

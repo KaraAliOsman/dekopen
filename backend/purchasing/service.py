@@ -594,3 +594,50 @@ def cancel_order(
             [actor_id, cancelled_at, cancelled_at, order_id, org_id],
         )
         return _public(updated)
+
+
+def orders_index(org_id: UUID, status: str | None = None) -> dict[str, object]:
+    """Org-wide purchase-order index — the purchaser's day view: every order
+    with its project, revision, expected date, and how much is still to arrive."""
+    params: list[object] = [org_id]
+    status_filter = ""
+    if status:
+        status_filter = " AND o.status=%s"
+        params.append(status)
+    with documentary_backend():
+        orders = rows(
+            "SELECT o.id,o.order_code,o.order_type::text,o.status::text,o.supplier_identity,"
+            "o.supplier_name,o.expected_at,o.sent_at,o.created_at,"
+            "v.revision_code,v.id AS project_version_id,"
+            "p.id AS project_id,p.code AS project_code,"
+            "COALESCE(l.line_count,0) AS line_count,l.total_qty,"
+            "COALESCE(r.good_qty,0) AS good_qty "
+            "FROM public.orders o "
+            "LEFT JOIN public.project_versions v "
+            "ON v.id=o.project_version_id AND v.org_id=o.org_id "
+            "LEFT JOIN public.projects p ON p.id=o.project_id AND p.org_id=o.org_id "
+            "LEFT JOIN ("
+            "SELECT order_id, COUNT(*) AS line_count, SUM(quantity) AS total_qty "
+            "FROM public.order_requirement_lines WHERE org_id=%s GROUP BY order_id"
+            ") l ON l.order_id=o.id "
+            "LEFT JOIN ("
+            "SELECT o2.id AS order_id,"
+            " SUM(rl.received_qty - rl.damaged_qty) AS good_qty "
+            "FROM public.order_receipt_lines rl "
+            "JOIN public.order_receipts rc ON rc.id=rl.receipt_id AND rc.org_id=rl.org_id "
+            "JOIN public.orders o2 ON o2.id=rc.order_id AND o2.org_id=rc.org_id "
+            "WHERE rl.org_id=%s GROUP BY o2.id"
+            ") r ON r.order_id=o.id "
+            "WHERE o.org_id=%s" + status_filter + " "
+            "ORDER BY CASE WHEN o.expected_at IS NULL THEN 1 ELSE 0 END,"
+            "o.expected_at,o.created_at DESC,o.id",
+            [org_id, org_id] + params,
+        )
+        result = []
+        for item in orders:
+            item = dict(item)
+            total = Decimal(str(item.get("total_qty") or 0))
+            good = Decimal(str(item.get("good_qty") or 0))
+            item["outstanding_qty"] = total - good
+            result.append(_public(item))
+        return {"orders": result}

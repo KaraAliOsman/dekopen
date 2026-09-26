@@ -154,6 +154,7 @@ def test_openapi_contains_only_authorized_shot_11_paths_and_bearer_security() ->
         "/api/v1/purchasing/requirements/{requirement_id}/allocation/",
         "/api/v1/purchasing/orders/{order_id}/send/",
         "/api/v1/purchasing/orders/{order_id}/cancel/",
+        "/api/v1/purchasing/orders/",
     }
     bearer = schema["components"]["securitySchemes"]["SupabaseBearer"]
     assert bearer == {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}

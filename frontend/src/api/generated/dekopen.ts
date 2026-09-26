@@ -126,6 +126,7 @@ import type {
   KitWriteRequest,
   OperationalSummary,
   OpsExport,
+  OrderIndexResponse,
   OrderReceiptRequestRequest,
   OrderReceiving,
   OrderResponse,
@@ -13967,6 +13968,77 @@ export const projectPaymentIntegrationSave = async (
     method: "PUT",
     headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
     body: JSON.stringify(paymentIntegrationRequest),
+  });
+};
+
+export type purchasingOrdersIndexResponse200 = {
+  data: OrderIndexResponse;
+  status: 200;
+};
+
+export type purchasingOrdersIndexResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type purchasingOrdersIndexResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type purchasingOrdersIndexResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type purchasingOrdersIndexResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type purchasingOrdersIndexResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type purchasingOrdersIndexResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type purchasingOrdersIndexResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type purchasingOrdersIndexResponseSuccess = purchasingOrdersIndexResponse200 & {
+  headers: Headers;
+};
+export type purchasingOrdersIndexResponseError = (
+  | purchasingOrdersIndexResponse400
+  | purchasingOrdersIndexResponse401
+  | purchasingOrdersIndexResponse403
+  | purchasingOrdersIndexResponse404
+  | purchasingOrdersIndexResponse409
+  | purchasingOrdersIndexResponse422
+  | purchasingOrdersIndexResponse503
+) & {
+  headers: Headers;
+};
+
+export type purchasingOrdersIndexResponse =
+  purchasingOrdersIndexResponseSuccess | purchasingOrdersIndexResponseError;
+
+export const getPurchasingOrdersIndexUrl = () => {
+  return `/api/v1/purchasing/orders/`;
+};
+
+export const purchasingOrdersIndex = async (
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<purchasingOrdersIndexResponse> => {
+  return apiMutator<purchasingOrdersIndexResponse>(getPurchasingOrdersIndexUrl(), {
+    ...options,
+    method: "GET",
   });
 };
 

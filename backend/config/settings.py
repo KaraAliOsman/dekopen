@@ -147,6 +147,13 @@ SPECTACULAR_SETTINGS = {
             "TILT_TURN_LEFT", "TILT_TURN_RIGHT", "TURN_LEFT", "TURN_RIGHT",
         ],
         "SiiEnvioStatusEnum": ["PENDING", "ACCEPTED", "REJECTED"],
+        "OrderStatusEnum": [
+            "DRAFT",
+            "SENT",
+            "PARTIALLY_RECEIVED",
+            "FULFILLED",
+            "CANCELLED",
+        ],
         "StockKindEnum": ["BAR", "SHEET"],
         "WorkCenterKindEnum": ["CUT", "ASSEMBLY", "GLAZING", "QC", "PACK"],
     },

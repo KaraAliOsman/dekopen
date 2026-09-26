@@ -511,3 +511,35 @@ def test_cancel_order_idempotent_replay() -> None:
             org_id=org_id, actor_id=uuid4(), order_id=order_id, confirmed=True
         )
     assert output["status"] == "CANCELLED"
+
+
+def test_orders_index_projects_orders_with_received_totals() -> None:
+    from purchasing import service as purchasing_service
+
+    org_id = uuid4()
+    order_id = uuid4()
+    row = {
+        "id": order_id,
+        "order_code": "OC-GLASS-1",
+        "order_type": "SUPPLIER_GLASS_PO",
+        "status": "PARTIALLY_RECEIVED",
+        "supplier_identity": "76.111-2",
+        "supplier_name": "Vendor",
+        "expected_at": None,
+        "sent_at": None,
+        "created_at": None,
+        "revision_code": "REV-A",
+        "project_version_id": uuid4(),
+        "project_id": uuid4(),
+        "project_code": "P-01",
+        "line_count": 2,
+        "total_qty": Decimal("10"),
+        "good_qty": Decimal("4"),
+    }
+    with patch("purchasing.service.rows", return_value=[row]) as query, patch(
+        "purchasing.service.documentary_backend", return_value=_atomic()
+    ):
+        output = purchasing_service.orders_index(org_id)
+    assert output["orders"][0]["outstanding_qty"] == "6"
+    assert output["orders"][0]["project_code"] == "P-01"
+    assert query.call_args[0][0].count("%s") == 3

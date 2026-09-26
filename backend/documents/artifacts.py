@@ -22,7 +22,7 @@ from documents.xlsx import render_order_xlsx
 logger = logging.getLogger(__name__)
 
 _REVISION_DOCUMENTS = {"DOC-01", "DOC-03", "DOC-05", "DOC-06", "DOC-07"}
-_ORDER_DOCUMENTS = {"DOC-02", "DOC-04"}
+_ORDER_DOCUMENTS = {"DOC-02", "DOC-04", "DOC-08"}
 _DOCUMENT_ROLES = {
     "DOC-01": {"OWNER", "ESTIMATOR"},
     "DOC-02": {"OWNER", "WORKSHOP_MANAGER"},
@@ -31,6 +31,7 @@ _DOCUMENT_ROLES = {
     "DOC-05": {"OWNER", "WORKSHOP_MANAGER"},
     "DOC-06": {"OWNER", "WORKSHOP_MANAGER"},
     "DOC-07": {"OWNER"},
+    "DOC-08": {"OWNER", "WORKSHOP_MANAGER"},
 }
 
 
@@ -106,7 +107,7 @@ def generate_artifact(
     elif document_type in _ORDER_DOCUMENTS:
         if order_id is None or (document_type == "DOC-02" and file_format != "XLSX"):
             raise DocumentaryError("document_scope_mismatch")
-        if document_type == "DOC-04" and file_format not in ("PDF", "XLSX"):
+        if document_type in ("DOC-04", "DOC-08") and file_format not in ("PDF", "XLSX"):
             raise DocumentaryError("document_scope_mismatch")
         scope = "ORDER"
         scope_id = order_id
@@ -126,7 +127,7 @@ def generate_artifact(
             # Authority and binding are validated before any slot reuse: an
             # occupied slot never authorizes the request.
             version, frozen_revision = _revision_snapshot(project_version_id, org_id)
-            if document_type in ("DOC-02", "DOC-03", "DOC-04", "DOC-05", "DOC-06"):
+            if document_type in ("DOC-02", "DOC-03", "DOC-04", "DOC-05", "DOC-06", "DOC-08"):
                 if version.get("production_allowed") is not True:
                     raise DocumentaryError("production_document_blocked")
                 if version.get("documentary_complete") is not True:

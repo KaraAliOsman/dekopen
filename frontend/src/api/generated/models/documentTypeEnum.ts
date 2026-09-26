@@ -14,6 +14,7 @@
  * * `DOC-05` - DOC-05
  * * `DOC-06` - DOC-06
  * * `DOC-07` - DOC-07
+ * * `DOC-08` - DOC-08
  */
 export type DocumentTypeEnum = (typeof DocumentTypeEnum)[keyof typeof DocumentTypeEnum];
 
@@ -25,4 +26,5 @@ export const DocumentTypeEnum = {
   "DOC-05": "DOC-05",
   "DOC-06": "DOC-06",
   "DOC-07": "DOC-07",
+  "DOC-08": "DOC-08",
 } as const;

@@ -12742,6 +12742,70 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/purchasing/orders/:
+    get:
+      operationId: purchasing_orders_index
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - purchasing
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderIndexResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/purchasing/orders/{order_id}/cancel/:
     post:
       operationId: purchasing_cancel_order
@@ -16353,6 +16417,7 @@ components:
       - DOC-05
       - DOC-06
       - DOC-07
+      - DOC-08
       type: string
       description: |-
         * `DOC-01` - DOC-01
@@ -16362,6 +16427,7 @@ components:
         * `DOC-05` - DOC-05
         * `DOC-06` - DOC-06
         * `DOC-07` - DOC-07
+        * `DOC-08` - DOC-08
     DocumentaryInputsRequest:
       type: object
       properties:
@@ -18609,6 +18675,83 @@ components:
       - operation_count
       - order_code
       - order_id
+    OrderIndexItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        order_code:
+          type: string
+        order_type:
+          $ref: '#/components/schemas/OrderTypeEnum'
+        status:
+          $ref: '#/components/schemas/OrderStatusEnum'
+        supplier_identity:
+          type: string
+          nullable: true
+        supplier_name:
+          type: string
+          nullable: true
+        expected_at:
+          type: string
+          format: date
+          nullable: true
+        sent_at:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+        project_id:
+          type: string
+          format: uuid
+          nullable: true
+        project_code:
+          type: string
+          nullable: true
+        project_version_id:
+          type: string
+          format: uuid
+          nullable: true
+        revision_code:
+          type: string
+          nullable: true
+        line_count:
+          type: string
+        total_qty:
+          type: string
+          nullable: true
+        good_qty:
+          type: string
+        outstanding_qty:
+          type: string
+      required:
+      - created_at
+      - expected_at
+      - good_qty
+      - id
+      - line_count
+      - order_code
+      - order_type
+      - outstanding_qty
+      - project_code
+      - project_id
+      - project_version_id
+      - revision_code
+      - sent_at
+      - status
+      - supplier_identity
+      - supplier_name
+      - total_qty
+    OrderIndexResponse:
+      type: object
+      properties:
+        orders:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderIndexItem'
+      required:
+      - orders
     OrderReceipt:
       type: object
       properties:
@@ -18725,7 +18868,7 @@ components:
         order_type:
           $ref: '#/components/schemas/OrderTypeEnum'
         status:
-          $ref: '#/components/schemas/OrderResponseStatusEnum'
+          $ref: '#/components/schemas/OrderStatusEnum'
         supplier_name:
           type: string
         order_snapshot_hash:
@@ -18766,7 +18909,7 @@ components:
       - order_type
       - status
       - supplier_name
-    OrderResponseStatusEnum:
+    OrderStatusEnum:
       enum:
       - DRAFT
       - SENT

@@ -86,7 +86,12 @@ def render_order_xlsx(document_type: str, snapshot: dict[str, object]) -> tuple[
         raise DocumentaryError("document_scope_mismatch")
     if document_type == "DOC-04" and order.get("order_type") != "SUPPLIER_PROFILE_PO":
         raise DocumentaryError("document_scope_mismatch")
-    if document_type not in ("DOC-02", "DOC-04"):
+    if document_type == "DOC-08" and order.get("order_type") not in (
+        "SUPPLIER_HARDWARE_PO",
+        "SUPPLIER_PANEL_PO",
+    ):
+        raise DocumentaryError("document_scope_mismatch")
+    if document_type not in ("DOC-02", "DOC-04", "DOC-08"):
         raise DocumentaryError("xlsx_document_type_invalid")
 
     if document_type == "DOC-02":
@@ -133,6 +138,33 @@ def render_order_xlsx(document_type: str, snapshot: dict[str, object]) -> tuple[
             "TOTAL", "—", "—", "—", "—", "—", "—", "—", "—", "—", "—",
             format(total_area.normalize(), "f"),
         ])
+    elif document_type == "DOC-08":
+        sheet_name = "Orden de compra"
+        headers = [
+            "Requisito", "Categoría", "SKU taller", "SKU compra", "Cantidad",
+            "Unidad", "Detalle", "Trazabilidad",
+        ]
+        data = []
+        for line in lines:
+            specification = _object(line.get("specification"), "invalid_order_line")
+            detail = "; ".join(
+                f"{key}={_text(value)}"
+                for key, value in sorted(specification.items())
+            )
+            data.append([
+                _text(line.get("requirement_key")),
+                _text(line.get("category")),
+                ", ".join(_text(item) for item in _array(
+                    line.get("technical_skus"), "invalid_order_line"
+                )),
+                _text(line.get("purchasing_sku")),
+                int(line["quantity"]),
+                _text(line.get("unit")),
+                detail,
+                ", ".join(_text(item) for item in _array(
+                    line.get("source_trace"), "invalid_order_line"
+                )),
+            ])
     else:
         sheet_name = "Pedido de perfiles"
         headers = [

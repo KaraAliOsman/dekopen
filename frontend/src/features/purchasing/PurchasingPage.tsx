@@ -4,6 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { apiMutator, ApiError } from "../../api/apiMutator";
 import { useConfirm } from "../../ui";
 import { documentaryArtifactAccess } from "../../api/generated/dekopen";
+import type { OrderIndexItem } from "../../api/generated/models";
 import { InventorySection } from "./InventorySection";
 import { runJob } from "../jobs/runJob";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
@@ -99,6 +100,13 @@ type Order = {
   total_qty?: string | null;
   lines_preview?: OrderLinePreview[];
 };
+const ORDER_STATUSES: OrderStatus[] = [
+  "DRAFT",
+  "SENT",
+  "PARTIALLY_RECEIVED",
+  "FULFILLED",
+  "CANCELLED",
+];
 const orderStatusLabels: Record<OrderStatus, Parameters<typeof t>[0]> = {
   DRAFT: "purchasing.draft",
   SENT: "purchasing.sent",
@@ -252,6 +260,7 @@ const DOCUMENT_ROLES: Record<string, string[]> = {
   "DOC-05": ["OWNER", "WORKSHOP_MANAGER"],
   "DOC-06": ["OWNER", "WORKSHOP_MANAGER"],
   "DOC-07": ["OWNER"],
+  "DOC-08": ["OWNER", "WORKSHOP_MANAGER"],
 };
 
 type DocumentAction = { type: string; format: string; label: Parameters<typeof t>[0] };
@@ -264,6 +273,14 @@ function orderDocuments(order: Order, role: string): DocumentAction[] {
     docs = [
       { type: "DOC-04", format: "PDF", label: "purchasing.doc04Pdf" },
       { type: "DOC-04", format: "XLSX", label: "purchasing.doc04Xlsx" },
+    ];
+  else if (
+    order.order_type === "SUPPLIER_HARDWARE_PO" ||
+    order.order_type === "SUPPLIER_PANEL_PO"
+  )
+    docs = [
+      { type: "DOC-08", format: "PDF", label: "purchasing.doc08Pdf" },
+      { type: "DOC-08", format: "XLSX", label: "purchasing.doc08Xlsx" },
     ];
   return docs.filter((doc) => DOCUMENT_ROLES[doc.type]?.includes(role) === true);
 }
@@ -291,6 +308,8 @@ function PurchasingWorkspace({
 }): JSX.Element {
   const { request } = usePurchasingRequest(orgId);
   const [versions, setVersions] = useState<VersionItem[]>([]);
+  const [ordersIndex, setOrdersIndex] = useState<OrderIndexItem[]>([]);
+  const [indexStatus, setIndexStatus] = useState<string>("");
   const [versionId, setVersionId] = useState(initialVersionId);
   const [state, setState] = useState<PurchasingState | null>(null);
   const [stock, setStock] = useState<StockItem[]>([]);
@@ -311,6 +330,13 @@ function PurchasingWorkspace({
     setMessage("");
     void request<{ versions?: VersionItem[] }>("purchasing/versions/")
       .then((data) => {
+        void request<{ orders?: OrderIndexItem[] }>("purchasing/orders/")
+          .then((indexData) => {
+            if (current) setOrdersIndex(indexData.orders ?? []);
+          })
+          .catch(() => {
+            if (current) setOrdersIndex([]);
+          });
         void request<{ items?: StockItem[] }>("inventory/stock/")
           .then((stockData) => {
             if (current) setStock(stockData.items ?? []);
@@ -442,6 +468,14 @@ function PurchasingWorkspace({
       {message && <p role="alert">{message}</p>}
       {busy && <p role="status">{t("purchasing.loading")}</p>}
       {!busy && versions.length === 0 && <p>{t("purchasing.empty")}</p>}
+      <OrdersIndex
+        orders={ordersIndex}
+        status={indexStatus}
+        onStatus={setIndexStatus}
+        onOpen={(order) => {
+          if (order.project_version_id) setVersionId(order.project_version_id);
+        }}
+      />
       {versions.length > 0 && (
         <label>
           {t("purchasing.chooseVersion")}
@@ -1065,6 +1099,79 @@ function OrderCard({
         <ReceivingPanel order={order} busy={busy} request={request} action={action} />
       )}
     </article>
+  );
+}
+
+function OrdersIndex({
+  orders,
+  status,
+  onStatus,
+  onOpen,
+}: {
+  orders: OrderIndexItem[];
+  status: string;
+  onStatus: (status: string) => void;
+  onOpen: (order: OrderIndexItem) => void;
+}): JSX.Element | null {
+  const visible = status ? orders.filter((order) => order.status === status) : orders;
+  if (orders.length === 0) return null;
+  return (
+    <section className="purchasing-index" aria-label={t("purchasing.indexTitle")}>
+      <h2>{t("purchasing.indexTitle")}</h2>
+      <div
+        className="purchasing-index-filters"
+        role="group"
+        aria-label={t("purchasing.indexFilter")}
+      >
+        <button
+          type="button"
+          className={status === "" ? "is-active" : ""}
+          onClick={() => onStatus("")}
+        >
+          {t("purchasing.indexFilterAll")}
+        </button>
+        {ORDER_STATUSES.map((value) => (
+          <button
+            key={value}
+            type="button"
+            className={status === value ? "is-active" : ""}
+            onClick={() => onStatus(value)}
+          >
+            {t(orderStatusLabels[value])}
+          </button>
+        ))}
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>{t("purchasing.indexOrder")}</th>
+            <th>{t("purchasing.project")}</th>
+            <th>{t("purchasing.indexType")}</th>
+            <th>{t("purchasing.indexSupplier")}</th>
+            <th>{t("purchasing.indexStatus")}</th>
+            <th>{t("purchasing.expectedAt")}</th>
+            <th>{t("purchasing.indexOutstanding")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {visible.map((order) => (
+            <tr key={order.id} className="purchasing-index-row" onClick={() => onOpen(order)}>
+              <td>{order.order_code}</td>
+              <td>
+                {order.project_code ?? "—"} · {formatRevision(order.revision_code ?? "")}
+              </td>
+              <td>{t(orderTypeLabels[order.order_type as OrderType] ?? "purchasing.indexType")}</td>
+              <td>{order.supplier_name ?? "—"}</td>
+              <td>
+                {t(orderStatusLabels[order.status as OrderStatus] ?? "purchasing.indexStatus")}
+              </td>
+              <td>{order.expected_at ?? "—"}</td>
+              <td>{order.status === "CANCELLED" ? "—" : order.outstanding_qty}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
   );
 }
 

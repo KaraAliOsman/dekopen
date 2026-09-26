@@ -1,6 +1,7 @@
 from django.urls import path
 
 from purchasing.views import (
+    PurchasingOrdersIndexView,
     CancelOrderView,
     ConfirmBatchView,
     PurchasingVersionsView,
@@ -41,5 +42,10 @@ urlpatterns = [
         "orders/<uuid:order_id>/cancel/",
         CancelOrderView.as_view(),
         name="purchasing-cancel",
+    ),
+    path(
+        "orders/",
+        PurchasingOrdersIndexView.as_view(),
+        name="purchasing-orders-index",
     ),
 ]

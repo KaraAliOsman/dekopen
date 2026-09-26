@@ -444,6 +444,24 @@ def test_xlsx_is_deterministic_exact_text_and_no_formula_authority(
         profile_workbook.close()
 
 
+def test_doc08_generic_order_covers_hardware_and_panel_only() -> None:
+    hardware, media = render_order_xlsx("DOC-08", order_snapshot("SUPPLIER_HARDWARE_PO"))
+    assert media.endswith("sheet")
+    workbook = load_workbook(BytesIO(hardware), read_only=True)
+    try:
+        sheet = workbook["Orden de compra"]
+        assert sheet["B8"].value == "HARDWARE" or sheet["B8"].value == "PROFILE"
+        assert sheet["E8"].value == 2
+    finally:
+        workbook.close()
+    panel, _ = render_order_xlsx("DOC-08", order_snapshot("SUPPLIER_PANEL_PO"))
+    assert panel[:2] == b"PK"
+    for wrong in ("SUPPLIER_GLASS_PO", "SUPPLIER_PROFILE_PO"):
+        with pytest.raises(DocumentaryError) as error:
+            render_order_xlsx("DOC-08", order_snapshot(wrong))
+        assert error.value.code == "document_scope_mismatch"
+
+
 def test_xlsx_formula_like_text_stays_literal_never_a_formula() -> None:
     snapshot = order_snapshot("SUPPLIER_GLASS_PO")
     snapshot["order"]["supplier_name"] = "=1+1"  # type: ignore[index]

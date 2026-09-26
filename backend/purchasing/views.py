@@ -14,6 +14,7 @@ from purchasing.serializers import (
     ConfirmBatchRequestSerializer,
     EligibilityRequestSerializer,
     EligibilityResponseSerializer,
+    OrderIndexResponseSerializer,
     OrderResponseSerializer,
     PurchasingStateSerializer,
     SendOrderRequestSerializer,
@@ -23,6 +24,7 @@ from purchasing.service import (
     cancel_order,
     confirm_order_type_batch,
     create_eligibility,
+    orders_index,
     purchasing_state,
     send_order,
 )
@@ -155,4 +157,18 @@ class CancelOrderView(APIView):
                 order_id=order_id,
                 confirmed=data["confirmed"],
             )
+        return Response(output)
+
+
+class PurchasingOrdersIndexView(APIView):
+    @extend_schema(
+        operation_id="purchasing_orders_index",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        responses={200: OrderIndexResponseSerializer, **ERRORS},
+        tags=["purchasing"],
+    )
+    def get(self, request):
+        with documentary_scope(request, _READERS) as (_, _, org_id):
+            status = request.query_params.get("status") or None
+            output = orders_index(org_id, status=status)
         return Response(output)

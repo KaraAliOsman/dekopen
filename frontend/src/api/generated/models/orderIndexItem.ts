@@ -5,31 +5,34 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
-import type { OrderResponseLinesPreviewItem } from "./orderResponseLinesPreviewItem";
 import type { OrderStatusEnum } from "./orderStatusEnum";
 import type { OrderTypeEnum } from "./orderTypeEnum";
 
-export interface OrderResponse {
+export interface OrderIndexItem {
   id: string;
   order_code: string;
   order_type: OrderTypeEnum;
   status: OrderStatusEnum;
-  supplier_name: string;
-  /** @pattern ^[0-9a-f]{64}$ */
-  order_snapshot_hash: string;
   /** @nullable */
-  confirmed_at?: string | null;
+  supplier_identity: string | null;
   /** @nullable */
-  sent_at?: string | null;
+  supplier_name: string | null;
   /** @nullable */
-  expected_at?: string | null;
+  expected_at: string | null;
   /** @nullable */
-  cancelled_by?: string | null;
+  sent_at: string | null;
+  created_at: string;
   /** @nullable */
-  cancelled_at?: string | null;
+  project_id: string | null;
   /** @nullable */
-  line_count?: string | null;
+  project_code: string | null;
   /** @nullable */
-  total_qty?: string | null;
-  lines_preview?: OrderResponseLinesPreviewItem[];
+  project_version_id: string | null;
+  /** @nullable */
+  revision_code: string | null;
+  line_count: string;
+  /** @nullable */
+  total_qty: string | null;
+  good_qty: string;
+  outstanding_qty: string;
 }
