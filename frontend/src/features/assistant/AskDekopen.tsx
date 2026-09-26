@@ -12,6 +12,12 @@ import "./assistant.css";
 
 type Thread = { question: string; answer: AiAskResponse }[];
 
+/** Ask threads keyed by `${surface}:${refs}` — module scope because the dock
+ * mounts inside the per-route shell and remounts on every navigation; a
+ * component-level map would lose the conversation the route switch was
+ * itself answering. */
+const dockThreads = new Map<string, Thread>();
+
 /** Contextual "Preguntar a DEKOPEN": a docked panel that answers questions
  * inside a typed server-side projection of the current surface. The provider
  * can suggest navigation; it can never execute a mutation. */
@@ -34,8 +40,12 @@ export function AskDekopen({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   /** Threads live per surface — following the answer's own navigate action
-   * to another surface must not delete the conversation that produced it. */
-  const [threads, setThreads] = useState<Map<string, Thread>>(new Map());
+   * to another surface must not delete the conversation that produced it.
+   * The store is module-level: the dock mounts inside the per-route shell,
+   * so component state dies on every navigation while this map survives. */
+  const [threads, setThreads] = useState<Map<string, Thread>>(
+    () => new Map(dockThreads),
+  );
   /** Agent mode: the bound job's lifecycle drives the header orb so a running
    * job reads alive even while the ask thread sits idle. */
   const [agentJobState, setAgentJobState] = useState<string | null>(null);
@@ -98,6 +108,8 @@ export function AskDekopen({
           ...(next.get(threadKey) ?? []),
           { question: trimmed, answer: response.data },
         ]);
+        dockThreads.clear();
+        for (const [key, value] of next) dockThreads.set(key, value);
         return next;
       });
       setQuestion("");
