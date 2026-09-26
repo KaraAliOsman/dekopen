@@ -8,23 +8,36 @@ import { WhiteColorEnum } from "../../api/generated/models";
 import type { PositionDesign } from "../../api/generated/models";
 import { t, TranslationKey } from "../../i18n/es-CL";
 import { formatRevision } from "../../format";
-import { PositionThumb } from "../projects/PositionThumb";
+import { PositionThumb, THUMB_MEMBERS } from "../projects/PositionThumb";
+import { reSkinMembers, type MemberGeometry } from "../canvas/members";
 import "./portal.css";
-import { formatDate } from "../money";
+import { formatDate, formatMoney } from "../money";
 
-function money(raw: string | null, currency: string): string {
-  if (raw == null) return "—";
-  const value = Number(raw);
-  if (!Number.isFinite(value)) return raw;
-  try {
-    return new Intl.NumberFormat("es-CL", {
-      style: "currency",
-      currency: currency || "CLP",
-      maximumFractionDigits: 0,
-    }).format(value);
-  } catch {
-    return `${value.toFixed(0)} ${currency}`;
+const money = formatMoney;
+
+/** Sealed finish text → the closest renderable member surface — a Nogal foil
+ * quote must not draw a white PVC window beside "Terminación: Nogal". */
+const FINISH_SURFACES: [RegExp, string][] = [
+  [/madera|nogal|roble|caoba|wengue|cedro|sapeli|rovere|nuss|wood|foil/i, "PVC_FOIL"],
+  [/antracit|grafito|negro|dark|black|bronce|bronze/i, "ALUMINIUM_ANTHRACITE"],
+  [/aluminio|aluminum|anodiz|natural/i, "ALUMINIUM"],
+];
+
+function positionMembers(position: PortalPosition): MemberGeometry {
+  const text = `${position.color_interior ?? ""} ${position.color_exterior ?? ""} ${position.finish ?? ""}`
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "");
+  for (const [pattern, material] of FINISH_SURFACES) {
+    if (pattern.test(text)) return reSkinMembers(THUMB_MEMBERS, material);
   }
+  return THUMB_MEMBERS;
+}
+
+/** The contract error body carries a precise public detail for portal codes
+ * (revoked / expired / superseded) — prefer it over a generic fallback. */
+function errorDetail(payload: unknown): string | null {
+  const detail = (payload as { error?: { detail?: unknown } } | null)?.error?.detail;
+  return typeof detail === "string" && detail !== "" ? detail : null;
 }
 
 function positionDesign(position: PortalPosition): PositionDesign {
@@ -135,6 +148,8 @@ function PositionGroupCard({
   const [variant, setVariant] = useState<"studio" | "elevation">("studio");
   const specs = position.glass_specs ?? [];
   const finished = position.finish ?? null;
+  const members = positionMembers(position);
+  const hasPrice = position.price_net != null;
   const locations =
     group.locations.length > 0
       ? compactList(group.locations)
@@ -142,7 +157,7 @@ function PositionGroupCard({
   return (
     <article className="portal-position">
       <div className="portal-position__thumb">
-        <PositionThumb design={positionDesign(position)} variant={variant} />
+        <PositionThumb design={positionDesign(position)} variant={variant} members={members} />
         <div className="portal-position__views" role="group" aria-label={t("portal.views")}>
           <button
             type="button"
@@ -201,13 +216,13 @@ function PositionGroupCard({
           ) : null}
         </dl>
         <p className="portal-position__price">
-          {group.quantity > 1 && (
+          {hasPrice && group.quantity > 1 && (
             <span className="portal-position__unit">
               {t("portal.unitNet")} {money(String(group.totalNet / group.quantity), currency)}
             </span>
           )}
           <span>{t("portal.lineNet")}</span>
-          <strong>{money(String(group.totalNet), currency)}</strong>
+          <strong>{hasPrice ? money(String(group.totalNet), currency) : "—"}</strong>
         </p>
       </div>
     </article>
@@ -222,6 +237,7 @@ export function PortalQuotePage(): JSX.Element {
   const [rut, setRut] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const [decideError, setDecideError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -230,7 +246,13 @@ export function PortalQuotePage(): JSX.Element {
         const response = await portalQuoteRetrieve(token);
         if (!active) return;
         if (response.status !== 200) {
-          setError(response.status === 404 ? t("portal.notFound") : t("portal.loadError"));
+          // Revoked/expired/superseded links carry a precise public detail —
+          // a generic "check the link" would blame the customer's URL.
+          setError(
+            response.status === 404
+              ? t("portal.notFound")
+              : (errorDetail(response.data) ?? t("portal.loadError")),
+          );
           return;
         }
         setQuote(response.data);
@@ -258,8 +280,20 @@ export function PortalQuotePage(): JSX.Element {
         throw new ApiError(response.status, response.data);
       }
       setQuote(response.data);
-    } catch {
-      setError(t("portal.decideError"));
+      setDecideError(null);
+    } catch (error) {
+      // A failed decision must not erase the proposal — show the reason over
+      // the still-visible quote; a stale link re-fetches into the banner.
+      if (error instanceof ApiError && error.status === 409) {
+        void portalQuoteRetrieve(token).then((fresh) => {
+          if (fresh.status === 200) setQuote(fresh.data);
+        });
+      }
+      setDecideError(
+        error instanceof ApiError
+          ? (errorDetail(error.payload) ?? t("portal.decideError"))
+          : t("portal.decideError"),
+      );
     } finally {
       setBusy(false);
     }
@@ -401,6 +435,11 @@ export function PortalQuotePage(): JSX.Element {
                 </div>
               </dl>
             ) : null}
+            {quote.payment_url ? (
+              <a className="portal-pay" href={quote.payment_url}>
+                {t("portal.payNow")}
+              </a>
+            ) : null}
           </section>
         )}
 
@@ -419,9 +458,7 @@ export function PortalQuotePage(): JSX.Element {
           <p className="portal-decided" role="status">
             {quote.approval_status === "APPROVED"
               ? t("portal.wasApproved")
-              : t("portal.wasDeclined")}{" "}
-            {quote.decided_by ? `· ${quote.decided_by}` : ""}
-            {quote.decided_note ? ` — ${quote.decided_note}` : ""}
+              : t("portal.wasDeclined")}
           </p>
         ) : quote.superseded ? (
           <p className="portal-decided" role="status">
@@ -468,6 +505,11 @@ export function PortalQuotePage(): JSX.Element {
               disabled={busy}
               placeholder={t("portal.notePlaceholder")}
             />
+            {decideError !== null ? (
+              <p role="alert" className="portal-decision__error">
+                {decideError}
+              </p>
+            ) : null}
             <div className="projects-actions">
               <button className="primary-action" disabled={busy || !name.trim()}>
                 {t("portal.approve")}

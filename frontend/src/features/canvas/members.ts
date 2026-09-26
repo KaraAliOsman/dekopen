@@ -126,3 +126,21 @@ export function resolveMembers(options: DesignOptions | undefined): MemberGeomet
     signature,
   };
 }
+
+/** Same resolved geometry, different declared material — surfaces that only
+ * know the sealed finish (portal thumbnails) re-skin the neutral member set
+ * instead of drawing every window as white PVC. */
+export function reSkinMembers(base: MemberGeometry, material: string): MemberGeometry {
+  const spec = (item: MemberSpec | null): MemberSpec | null =>
+    item ? { ...item, material } : item;
+  return {
+    ...base,
+    frame: { ...base.frame, material },
+    sash: { ...base.sash, material },
+    mullionV: spec(base.mullionV),
+    mullionH: spec(base.mullionH),
+    threshold: spec(base.threshold),
+    beadSpecFor: (glassThicknessMm) => spec(base.beadSpecFor(glassThicknessMm)),
+    couplerFor: (sku) => spec(base.couplerFor(sku)),
+  };
+}

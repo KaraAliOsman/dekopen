@@ -78,6 +78,10 @@ const PortalQuotePage = lazy(async () => {
   const module = await import("./features/portal/PortalQuotePage");
   return { default: module.PortalQuotePage };
 });
+const PaymentReturnPage = lazy(async () => {
+  const module = await import("./features/portal/PaymentReturnPage");
+  return { default: module.PaymentReturnPage };
+});
 const BenchmarkPage = lazy(async () => {
   const module = await import("./features/benchmark/BenchmarkPage");
   return { default: module.BenchmarkPage };
@@ -184,6 +188,14 @@ export function AppRoutes(): JSX.Element {
         element={
           <Suspense fallback={<p role="status">{t("portal.loading")}</p>}>
             <PortalQuotePage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/pago/retorno"
+        element={
+          <Suspense fallback={<p role="status" />}>
+            <PaymentReturnPage />
           </Suspense>
         }
       />

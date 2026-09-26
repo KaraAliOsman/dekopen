@@ -83,6 +83,33 @@
   text-decoration: underline;
 }
 
+.portal-pay {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--theme-accent-strong);
+  color: var(--theme-surface-panel);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.portal-pay:hover {
+  background: var(--theme-accent);
+  text-decoration: none;
+}
+
+.portal-decision__error {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--theme-danger-soft);
+  color: var(--theme-danger);
+  font-size: var(--text-s);
+}
+
 .portal-decided {
   margin: 0;
   padding: var(--space-3) var(--space-4);

@@ -20205,6 +20205,7 @@ components:
           nullable: true
         price_net:
           type: string
+          nullable: true
         discount_pct:
           type: string
           nullable: true
@@ -20268,6 +20269,9 @@ components:
           allOf:
           - $ref: '#/components/schemas/PortalPayment'
           nullable: true
+        payment_url:
+          type: string
+          nullable: true
         valid_until:
           type: string
           nullable: true
@@ -20306,6 +20310,7 @@ components:
       - organization
       - payment
       - payment_terms
+      - payment_url
       - positions
       - project_code
       - project_name

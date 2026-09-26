@@ -3,7 +3,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { PositionDesign, ProductIssue } from "../../api/generated/models";
 import { t } from "../../i18n/es-CL";
 import type { IntentNode } from "../canvas/intentEditing";
-import { resolveMembers } from "../canvas/members";
+import { resolveMembers, type MemberGeometry } from "../canvas/members";
 import { isProductModel, wrapTreeAsProduct, type ProductJson } from "../canvas/productEditing";
 import { frontLayout, ProductFrontContent } from "../canvas/ProductFrontSvg";
 import { webglAvailable } from "../canvas/webglAvailable";
@@ -19,7 +19,7 @@ const NOOP = () => {};
 
 /** Neutral PVC-60 member geometry — the thumbnail shows real bay layout and
  * opening glyphs; catalog face widths only exist inside the editor. */
-const THUMB_MEMBERS = resolveMembers(undefined);
+export const THUMB_MEMBERS = resolveMembers(undefined);
 
 function designProduct(design: PositionDesign): ProductJson {
   const tree = design.parametric_tree;
@@ -60,12 +60,16 @@ function useVisible<T extends HTMLElement>(): [React.RefObject<T>, boolean] {
 export function PositionThumb({
   design,
   variant = "elevation",
+  members = THUMB_MEMBERS,
 }: {
   design: PositionDesign;
   /** "studio" renders the §05 commercial view — the premium visual for
    * project cards; "elevation" keeps the technical line drawing used
    * where changes are compared side by side. */
   variant?: "elevation" | "studio";
+  /** Member geometry+material override — callers that know the sealed finish
+   * (portal) pass a re-skinned set so the render matches the quoted color. */
+  members?: MemberGeometry;
 }): JSX.Element {
   const product = useMemo(() => designProduct(design), [design]);
   const [hostRef, visible] = useVisible<HTMLDivElement>();
@@ -86,7 +90,7 @@ export function PositionThumb({
     >
       <ProductFrontContent
         product={product}
-        members={THUMB_MEMBERS}
+        members={members}
         selectedId={null}
         issues={NO_ISSUES}
         disabled
@@ -106,7 +110,7 @@ export function PositionThumb({
           <Suspense fallback={elevation}>
             <LazyStudioImage
               product={product}
-              members={THUMB_MEMBERS}
+              members={members}
               options={{ width: 360, height: 300 }}
               alt={t("projects.positionThumb")}
               className="position-thumb"

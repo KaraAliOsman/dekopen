@@ -932,7 +932,7 @@ export function ProjectQuotationPanel({
     }
   }
 
-  async function openEvidence(versionId: string): Promise<void> {
+  async function openEvidence(versionId: string, revisionCode: string): Promise<void> {
     const current = ++generation.current;
     setBusy(true);
     setMessage("");
@@ -963,7 +963,7 @@ export function ProjectQuotationPanel({
         const objectUrl = URL.createObjectURL(blob);
         const anchor = document.createElement("a");
         anchor.href = objectUrl;
-        anchor.download = `DOC-01-${versionId}.pdf`;
+        anchor.download = `COT-${project.code}-${revisionCode}.pdf`;
         anchor.click();
         URL.revokeObjectURL(objectUrl);
       }
@@ -1901,7 +1901,10 @@ export function ProjectQuotationPanel({
                       : "quotation.quoteOnlyChip",
                   )}
                 </span>
-                <button disabled={busy} onClick={() => void openEvidence(version.id)}>
+                <button
+                  disabled={busy}
+                  onClick={() => void openEvidence(version.id, version.revision_code)}
+                >
                   {t("quotation.openEvidence")}
                 </button>
                 {canRelease ? (

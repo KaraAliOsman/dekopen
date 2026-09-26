@@ -25,7 +25,8 @@ export interface PortalPosition {
   glass_specs: string[];
   /** @nullable */
   finish: string | null;
-  price_net: string;
+  /** @nullable */
+  price_net: string | null;
   /** @nullable */
   discount_pct: string | null;
   parametric_tree: unknown | null;

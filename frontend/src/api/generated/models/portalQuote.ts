@@ -31,6 +31,8 @@ export interface PortalQuote {
   positions: PortalPosition[];
   payment: PortalPayment | null;
   /** @nullable */
+  payment_url: string | null;
+  /** @nullable */
   valid_until: string | null;
   validity_expired: boolean;
   superseded: boolean;

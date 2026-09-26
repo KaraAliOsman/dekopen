@@ -7,6 +7,9 @@ import { t } from "../../i18n/es-CL";
 import { CommercialPricingPage, PricingPage } from "./PricingPage";
 import { formatMoney } from "../money";
 
+/** Pages under test render router Links (e.g. the demo-design shortcut). */
+const page = (ui: JSX.Element): JSX.Element => <MemoryRouter>{ui}</MemoryRouter>;
+
 vi.mock("../../api/generated/dekopen", () => ({
   projectsList: vi.fn().mockResolvedValue({
     status: 200,
@@ -49,7 +52,7 @@ it.each(["ESTIMATOR", "WORKSHOP_MANAGER", "INSTALLER"])(
   "denies S09 to %s without fetching costs",
   (role) => {
     identity.role = role;
-    render(<PricingPage />);
+    render(page(<PricingPage />));
     expect(screen.getByRole("alert")).toHaveTextContent(t("pricing.ownerOnly"));
     expect(apiMutator).not.toHaveBeenCalled();
   },
@@ -57,18 +60,22 @@ it.each(["ESTIMATOR", "WORKSHOP_MANAGER", "INSTALLER"])(
 
 it("keeps the current request alive after StrictMode cleanup and aborts on tenant switch", async () => {
   const view = render(
-    <StrictMode>
-      <PricingPage />
-    </StrictMode>,
+    page(
+      <StrictMode>
+        <PricingPage />
+      </StrictMode>,
+    ),
   );
   await waitFor(() => expect(apiMutator).toHaveBeenCalledTimes(2));
   const previous = vi.mocked(apiMutator).mock.calls.at(-1)?.[1].signal;
   expect(previous?.aborted).toBe(false);
   identity.id = "tenant-b";
   view.rerender(
-    <StrictMode>
-      <PricingPage />
-    </StrictMode>,
+    page(
+      <StrictMode>
+        <PricingPage />
+      </StrictMode>,
+    ),
   );
   expect(previous?.aborted).toBe(true);
   await waitFor(() =>
@@ -83,7 +90,7 @@ it("keeps the current request alive after StrictMode cleanup and aborts on tenan
 
 it("lets an estimator calculate without requesting confidential administration", async () => {
   identity.role = "ESTIMATOR";
-  render(<CommercialPricingPage />);
+  render(page(<CommercialPricingPage />));
   expect(screen.getByText(t("pricing.calculate"))).toBeInTheDocument();
   await waitFor(() => expect(apiMutator).toHaveBeenCalledTimes(1));
   expect(apiMutator).toHaveBeenLastCalledWith("/api/v1/pricing/operations/", expect.any(Object));
@@ -99,7 +106,7 @@ it("does not apply a late preview after its financial input changes", async () =
         resolve = done;
       }),
   );
-  render(<CommercialPricingPage />);
+  render(page(<CommercialPricingPage />));
   const submit = screen.getByRole("button", { name: t("pricing.preview") });
   fireEvent.submit(submit.closest("form")!);
   fireEvent.change(screen.getByLabelText(t("pricing.discount")), { target: { value: "0.05" } });
@@ -147,7 +154,7 @@ it("allows an owner to review and reject a saved pending request", async () => {
   vi.mocked(apiMutator)
     .mockResolvedValueOnce({ data: [pending] })
     .mockResolvedValueOnce({ data: { ...pending, state: "REJECTED" } });
-  render(<CommercialPricingPage />);
+  render(page(<CommercialPricingPage />));
   fireEvent.click(screen.getByRole("button", { name: t("pricing.reload") }));
   fireEvent.click(await screen.findByRole("button", { name: t("pricing.review") }));
   fireEvent.change(screen.getByLabelText(t("pricing.reason")), {
@@ -219,7 +226,7 @@ it.each([false, true])(
       .mockResolvedValueOnce({ data: [] })
       .mockImplementationOnce(() => a.promise)
       .mockImplementationOnce(() => b.promise);
-    render(<CommercialPricingPage />);
+    render(page(<CommercialPricingPage />));
     submitPreview();
     changeFinancialInput();
     expect(previewButton()).toBeEnabled();
@@ -241,7 +248,7 @@ it("preview B alone wins when B completes before A", async () => {
     .mockResolvedValueOnce({ data: [] })
     .mockImplementationOnce(() => a.promise)
     .mockImplementationOnce(() => b.promise);
-  render(<CommercialPricingPage />);
+  render(page(<CommercialPricingPage />));
   submitPreview();
   changeFinancialInput();
   submitPreview();
@@ -255,7 +262,7 @@ it("preview B alone wins when B completes before A", async () => {
 it("current preview failure remains visible and releases its busy authority", async () => {
   const task = deferred();
   vi.mocked(apiMutator).mockImplementationOnce(() => task.promise);
-  render(<CommercialPricingPage />);
+  render(page(<CommercialPricingPage />));
   submitPreview();
   expect(previewButton()).toBeDisabled();
   await settle(task, null, true);
@@ -276,7 +283,7 @@ it.each(["apply", "reject"] as const)(
       .mockImplementationOnce(() => mutation.promise)
       .mockImplementationOnce(() => next.promise)
       .mockResolvedValueOnce({ data: [persisted] });
-    render(<CommercialPricingPage />);
+    render(page(<CommercialPricingPage />));
     submitPreview();
     await screen.findByText("Proyecto: P-A · Cliente A · Casa A");
     fireEvent.change(screen.getByLabelText(t("pricing.reason")), { target: { value: "Reviewed" } });
@@ -315,7 +322,7 @@ it.each(["apply", "reject"] as const)(
       .mockResolvedValueOnce({ data: result("A", action === "reject" ? "PENDING" : "PREVIEW") })
       .mockImplementationOnce(() => mutation.promise)
       .mockImplementationOnce(() => next.promise);
-    render(<CommercialPricingPage />);
+    render(page(<CommercialPricingPage />));
     submitPreview();
     await screen.findByText("Proyecto: P-A · Cliente A · Casa A");
     fireEvent.change(screen.getByLabelText(t("pricing.reason")), { target: { value: "Reviewed" } });
@@ -341,7 +348,7 @@ it.each([false, true])(
     vi.mocked(apiMutator)
       .mockImplementationOnce(() => a.promise)
       .mockImplementationOnce(() => b.promise);
-    render(<CommercialPricingPage />);
+    render(page(<CommercialPricingPage />));
     fireEvent.click(screen.getByRole("button", { name: t("pricing.reload") }));
     changeFinancialInput();
     fireEvent.click(screen.getByRole("button", { name: t("pricing.reload") }));
@@ -361,7 +368,7 @@ it("reload B remains authoritative after late reload A", async () => {
   vi.mocked(apiMutator)
     .mockImplementationOnce(() => a.promise)
     .mockImplementationOnce(() => b.promise);
-  render(<CommercialPricingPage />);
+  render(page(<CommercialPricingPage />));
   fireEvent.click(screen.getByRole("button", { name: t("pricing.reload") }));
   changeFinancialInput();
   fireEvent.click(screen.getByRole("button", { name: t("pricing.reload") }));
@@ -382,17 +389,21 @@ it.each([false, true])(
       .mockImplementationOnce(() => a.promise)
       .mockImplementationOnce(() => b.promise);
     const view = render(
-      <StrictMode>
-        <CommercialPricingPage />
-      </StrictMode>,
+      page(
+        <StrictMode>
+          <CommercialPricingPage />
+        </StrictMode>,
+      ),
     );
     submitPreview();
     const signal = vi.mocked(apiMutator).mock.calls[0]?.[1].signal;
     identity.id = "tenant-b";
     view.rerender(
-      <StrictMode>
-        <CommercialPricingPage />
-      </StrictMode>,
+      page(
+        <StrictMode>
+          <CommercialPricingPage />
+        </StrictMode>,
+      ),
     );
     expect(signal?.aborted).toBe(true);
     submitPreview();
@@ -409,7 +420,7 @@ it.each([false, true])(
 it("unmount settles a rejected request without unhandled publication", async () => {
   const task = deferred();
   vi.mocked(apiMutator).mockImplementationOnce(() => task.promise);
-  const view = render(<CommercialPricingPage />);
+  const view = render(page(<CommercialPricingPage />));
   submitPreview();
   view.unmount();
   await settle(task, null, true);
@@ -426,7 +437,7 @@ it.each(["reload", "apply", "reject"] as const)(
         data: result("A", action === "reject" ? "PENDING" : "PREVIEW"),
       });
     vi.mocked(apiMutator).mockImplementationOnce(() => task.promise);
-    render(<CommercialPricingPage />);
+    render(page(<CommercialPricingPage />));
     if (action !== "reload") {
       submitPreview();
       await screen.findByText("Proyecto: P-A · Cliente A · Casa A");
@@ -480,7 +491,7 @@ it("a material request change voids the owner's discount attestation", async () 
   vi.mocked(apiMutator)
     .mockImplementationOnce(() => first.promise)
     .mockImplementationOnce(() => second.promise);
-  render(<CommercialPricingPage />);
+  render(page(<CommercialPricingPage />));
   fireEvent.change(screen.getByLabelText(t("pricing.discount")), {
     target: { value: "0.25" },
   });
@@ -500,7 +511,7 @@ it("a material request change voids the owner's discount attestation", async () 
 });
 
 it("changing the project voids the owner's discount attestation", () => {
-  render(<CommercialPricingPage />);
+  render(page(<CommercialPricingPage />));
   fireEvent.click(confirmCheckbox());
   expect(confirmCheckbox()).toBeChecked();
   fireEvent.change(screen.getByLabelText(t("pricing.projectId")), {
@@ -516,7 +527,7 @@ it("selecting a different persisted operation from history voids the attestation
       data: [{ ...result("A"), discount_pct: "0.25" }],
     })
     .mockImplementationOnce(() => applyTask.promise);
-  render(<CommercialPricingPage />);
+  render(page(<CommercialPricingPage />));
   fireEvent.click(confirmCheckbox());
   expect(confirmCheckbox()).toBeChecked();
   fireEvent.click(screen.getByRole("button", { name: t("pricing.reload") }));
@@ -531,7 +542,7 @@ it("selecting a different persisted operation from history voids the attestation
 });
 
 it("editing only the audit reason preserves the owner's attestation", () => {
-  render(<CommercialPricingPage />);
+  render(page(<CommercialPricingPage />));
   fireEvent.click(confirmCheckbox());
   fireEvent.change(screen.getByLabelText(t("pricing.reason")), {
     target: { value: "Motivo aclarado" },
@@ -548,7 +559,7 @@ it.each(["apply", "reject"] as const)(
       .mockResolvedValueOnce({ data: result("A", action === "reject" ? "PENDING" : "PREVIEW") })
       .mockImplementationOnce(() => task.promise)
       .mockResolvedValueOnce({ data: result("B") });
-    render(<CommercialPricingPage />);
+    render(page(<CommercialPricingPage />));
     submitPreview();
     await screen.findByText("Proyecto: P-A · Cliente A · Casa A");
     fireEvent.change(screen.getByLabelText(t("pricing.reason")), { target: { value: "Reviewed" } });
@@ -644,7 +655,7 @@ it.each([false, true])(
   async (failure) => {
     const a = deferred();
     mockImportRequests([a]);
-    render(<PricingPage />);
+    render(page(<PricingPage />));
     await fillImportForm();
     submitImport();
     expect(importPreviewButton()).toBeDisabled();
@@ -661,7 +672,7 @@ it("superseded import preview A cannot publish or release B's busy authority", a
   const a = deferred(),
     b = deferred();
   mockImportRequests([a, b]);
-  render(<PricingPage />);
+  render(page(<PricingPage />));
   await fillImportForm();
   submitImport();
   submitImport();
@@ -679,7 +690,7 @@ it.each([false, true])(
     const a = deferred(),
       b = deferred();
     mockImportRequests([a, b]);
-    render(<PricingPage />);
+    render(page(<PricingPage />));
     await fillImportForm();
     submitImport();
     submitImport();
@@ -700,7 +711,7 @@ it("import preview B remains authoritative after late A completes", async () => 
     b = deferred(),
     applied = deferred();
   mockImportRequests([a, b, applied]);
-  render(<PricingPage />);
+  render(page(<PricingPage />));
   await fillImportForm();
   submitImport();
   submitImport();
@@ -721,7 +732,7 @@ it.each([false, true])(
     const previewTask = deferred(),
       applyTask = deferred();
     mockImportRequests([previewTask, applyTask]);
-    render(<PricingPage />);
+    render(page(<PricingPage />));
     await fillImportForm();
     submitImport();
     await settle(previewTask, { items: [importRow("SKU-P")] });
@@ -755,7 +766,7 @@ it.each([false, true])(
   async (failure) => {
     const task = deferred();
     mockImportRequests([task]);
-    const view = render(<PricingPage />);
+    const view = render(page(<PricingPage />));
     await fillImportForm();
     submitImport();
     expect(importCalls()).toHaveLength(1);
@@ -773,9 +784,11 @@ it.each([false, true])(
       applyTask = deferred();
     mockImportRequests([previewTask, applyTask]);
     const view = render(
-      <StrictMode>
-        <PricingPage />
-      </StrictMode>,
+      page(
+        <StrictMode>
+          <PricingPage />
+        </StrictMode>,
+      ),
     );
     await fillImportForm();
     submitImport();
@@ -784,9 +797,11 @@ it.each([false, true])(
     const signal = applyCalls()[0]?.[1]?.signal;
     identity.id = "tenant-b";
     view.rerender(
-      <StrictMode>
-        <PricingPage />
-      </StrictMode>,
+      page(
+        <StrictMode>
+          <PricingPage />
+        </StrictMode>,
+      ),
     );
     expect(signal?.aborted).toBe(true);
     await waitFor(() => expect(tenantCalls("tenant-b").length).toBeGreaterThan(0));
@@ -801,7 +816,7 @@ it.each([false, true])(
 );
 
 it("lists human project identities before any pricing operation and submits only the internal ID", async () => {
-  render(<CommercialPricingPage />);
+  render(page(<CommercialPricingPage />));
   const option = await screen.findByRole("option", { name: "P-001 \u00b7 Cliente \u00b7 Casa" });
   expect(option).toHaveValue("project-a");
   expect(screen.queryByRole("option", { name: "project-a" })).not.toBeInTheDocument();

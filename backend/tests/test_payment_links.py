@@ -55,7 +55,7 @@ def _integration(**over):
         "api_url": "https://sandbox.flow.cl/api",
         "api_key": "AB12CD34EF56",
         "secret_key": "S3CR3T-KEY-0987",
-        "payer_return_url": None,
+        "payer_return_url": "https://app.test/pago/retorno",
         "enabled": True,
         "created_at": "2026-09-23T10:00:00+00:00",
         "updated_at": "2026-09-23T10:00:00+00:00",

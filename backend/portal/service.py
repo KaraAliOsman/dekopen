@@ -267,7 +267,11 @@ def _sealed_positions(version: dict[str, object]) -> list[dict[str, object]]:
             "color_exterior": value.get("color_exterior"),
             "glass_specs": glass_specs,
             "finish": finish or None,
-            "price_net": str(value.get("price_net") or "0"),
+            # Unpriced legacy lines stay null — a "$0" reads as free, never as
+            # "not priced".
+            "price_net": (
+                str(value["price_net"]) if value.get("price_net") is not None else None
+            ),
             "discount_pct": str(value.get("discount_pct") or "0"),
             "parametric_tree": value.get("parametric_tree"),
         })
@@ -301,9 +305,13 @@ def _sealed_organization(version: dict[str, object]) -> dict[str, object]:
 
 
 def _payment_state(
-    *, org_id: object, project_id: object, gross: Decimal
+    *, org_id: object, project_id: object, gross: Decimal, superseded: bool
 ) -> dict[str, object] | None:
     """The customer's own payment state on the proposal link."""
+    # A superseded link's sealed gross belongs to a dead revision — mixing it
+    # with live payments shows crossed-era numbers under the banner.
+    if superseded:
+        return None
     payments = rows(
         "SELECT amount,voided_at FROM public.project_payments "
         "WHERE org_id=%s AND project_id=%s",
@@ -351,6 +359,19 @@ def portal_quote(token: str) -> dict[str, object]:
             else None
         )
         gross = Decimal(str(sealed.get("total_price_gross") or "0"))
+        superseded = str(project["current_revision"]) != str(version["revision_code"])
+        # A live Flow link the estimator already minted is the proposal's next
+        # step — only for CLP deals (the provider charges CLP).
+        payment_url = None
+        if str(sealed.get("currency") or "CLP") == "CLP":
+            live_link = rows(
+                "SELECT url FROM public.project_payment_links "
+                "WHERE org_id=%s AND project_id=%s AND status='PENDING' AND url IS NOT NULL "
+                "ORDER BY created_at DESC LIMIT 1",
+                [org_id, approval["project_id"]],
+            )
+            if live_link:
+                payment_url = live_link[0]["url"]
         # Totals absent from the sealed snapshot stay null — a $0 total on a
         # public proposal reads as a pricing error, never as "not priced".
         price_net = sealed.get("total_price_net")
@@ -372,22 +393,28 @@ def portal_quote(token: str) -> dict[str, object]:
             "total_price_gross": str(price_gross) if price_gross is not None else None,
             "positions": _sealed_positions(version),
             "payment": _payment_state(
-                org_id=org_id, project_id=approval["project_id"], gross=gross
+                org_id=org_id,
+                project_id=approval["project_id"],
+                gross=gross,
+                superseded=superseded,
             ),
+            "payment_url": payment_url,
             "valid_until": sealed.get("quotation_valid_until"),
             "validity_expired": bool(
                 sealed.get("quotation_valid_until")
                 and date.fromisoformat(str(sealed["quotation_valid_until"]))
                 < datetime.now(timezone.utc).date()
             ),
-            "superseded": str(project["current_revision"]) != str(version["revision_code"]),
+            "superseded": superseded,
             "expires_at": approval["expires_at"].isoformat(),
             "approval_status": approval["status"],
-            "decided_by": approval["decided_by"],
+            # The decider's name and decline note stay internal — a forwarded
+            # link must not leak them to whoever holds the URL.
+            "decided_by": None,
             "decided_at": (
                 approval["decided_at"].isoformat() if approval["decided_at"] else None
             ),
-            "decided_note": approval["decided_note"],
+            "decided_note": None,
             "quote_pdf_url": signed_url,
         }
 

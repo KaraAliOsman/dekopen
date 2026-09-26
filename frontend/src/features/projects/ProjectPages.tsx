@@ -411,7 +411,9 @@ function commercialSteps(
   // older revision must not mark "sent" done for a revision never shared.
   const currentApprovals = approvals.filter((a) => a.revision_code === project.current_revision);
   const rank = projectRank(project.status);
-  const sent = currentApprovals.length > 0;
+  // A fully revoked batch never reached the client's hands — REVOKED links
+  // alone must not mark "sent" done.
+  const sent = currentApprovals.some((a) => a.status !== "REVOKED");
   const approvedRecord = currentApprovals.some((a) => a.status === "APPROVED");
   // A PENDING link past its expires_at is dead — the portal refuses it — so
   // the project is not "waiting on the client"; it needs a fresh link.

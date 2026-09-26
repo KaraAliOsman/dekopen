@@ -171,6 +171,15 @@ def create_link(*, org_id: UUID, project_id: UUID, actor_id: UUID, data: dict) -
             "payment_requires_sealed_deal",
             "Emite una revisión de cotización antes de crear un cobro.",
         )
+    # Flow charges CLP — a USD deal would collect the USD number in pesos and
+    # write the result into the currency-less payments ledger, corrupting the
+    # balance the comprobante and the portal then report.
+    if deal["currency"] != "CLP":
+        raise contract_error(
+            422,
+            "payment_currency_unsupported",
+            "El cobro online solo está disponible en pesos (CLP); registra el pago manual en Cobranza.",
+        )
     with documentary_backend():
         collected = rows(
             "SELECT COALESCE(SUM(amount), 0) AS collected FROM public.project_payments "
@@ -197,6 +206,19 @@ def create_link(*, org_id: UUID, project_id: UUID, actor_id: UUID, data: dict) -
                 422,
                 "flow_not_configured",
                 "Configura la integración Flow en Ajustes primero.",
+            )
+        return_url = integration[0]["payer_return_url"] or (
+            settings.BILLING_FRONTEND_ORIGIN.rstrip("/") + "/pago/retorno"
+            if settings.BILLING_FRONTEND_ORIGIN
+            else ""
+        )
+        if not return_url:
+            # A relative return URL handed to Flow leaves the link stuck
+            # UNCERTAIN forever — fail before the dispatch claim commits.
+            raise contract_error(
+                422,
+                "payer_return_not_configured",
+                "Configura la URL de retorno del pagador (BILLING_FRONTEND_ORIGIN o la integración Flow) antes de crear cobros online.",
             )
         existing = rows(
             "SELECT * FROM public.project_payment_links WHERE org_id=%s AND operation_key=%s",
@@ -236,9 +258,6 @@ def create_link(*, org_id: UUID, project_id: UUID, actor_id: UUID, data: dict) -
     # marks the link UNCERTAIN; recovery is a GET, never a second POST.
     client = _client(integration)
     callback_origin = settings.BILLING_CALLBACK_ORIGIN.rstrip("/")
-    return_url = integration["payer_return_url"] or (
-        settings.BILLING_FRONTEND_ORIGIN.rstrip("/") + "/pago/retorno"
-    )
     try:
         created = client.create_payment(
             order=str(data["operation_key"]),

@@ -31,7 +31,7 @@ class PortalPositionSerializer(serializers.Serializer):
     color_exterior = serializers.CharField(allow_null=True, allow_blank=True)
     glass_specs = serializers.ListField(child=serializers.CharField())
     finish = serializers.CharField(allow_null=True, allow_blank=True)
-    price_net = serializers.CharField()
+    price_net = serializers.CharField(allow_null=True)
     discount_pct = serializers.CharField(allow_null=True, allow_blank=True)
     parametric_tree = serializers.JSONField(allow_null=True)
 
@@ -58,6 +58,7 @@ class PortalQuoteSerializer(serializers.Serializer):
     total_price_gross = serializers.CharField(allow_null=True)
     positions = PortalPositionSerializer(many=True)
     payment = PortalPaymentSerializer(allow_null=True)
+    payment_url = serializers.CharField(allow_null=True)
     valid_until = serializers.CharField(allow_null=True)
     validity_expired = serializers.BooleanField()
     superseded = serializers.BooleanField()

@@ -147,7 +147,9 @@ export function ProjectPaymentsPanel({
         {
           operation_key: operationKey,
           kind,
-          amount: amount.replace(",", "."),
+          // es-CL groups thousands with "." — "1.500.000" is 1500000, and
+          // CLP is integer-only so a dot can only ever be grouping.
+          amount: amount.replace(/\./g, ""),
           method,
           ...(reference.trim() ? { reference: reference.trim() } : {}),
           ...(note.trim() ? { note: note.trim() } : {}),
@@ -577,7 +579,8 @@ export function ProjectPaymentsPanel({
             <input
               required
               inputMode="decimal"
-              pattern="[0-9]+([.,][0-9]{1,2})?"
+              pattern="[0-9]{1,3}(\\.[0-9]{3})+|[0-9]+"
+              title={t("projects.paymentAmountHint")}
               value={amount}
               onChange={(event) => setAmount(event.target.value)}
               placeholder="500000"

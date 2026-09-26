@@ -1810,7 +1810,7 @@ function CommercialDraft({
   if (!inputs.systemId)
     return (
       <p>
-        <a href="/projects/demo/positions/g1/edit">{t("pricing.prepareDesign")}</a>
+        <Link to="/projects/demo/positions/g1/edit">{t("pricing.prepareDesign")}</Link>
       </p>
     );
   return (
