@@ -289,7 +289,12 @@ class SiiCafUploadSerializer(serializers.Serializer):
     giro_emis = serializers.CharField(max_length=80, required=False, allow_blank=True)
     dir_origen = serializers.CharField(max_length=70, required=False, allow_blank=True)
     cmna_origen = serializers.CharField(max_length=20, required=False, allow_blank=True)
-    acteco = serializers.IntegerField(required=False, allow_null=True)
+    # ActECO is the 6-digit economic-activity code the SII validates against the
+    # emisor's registered activity; the CAF does not carry it, so it is
+    # operator-typed — a format bound is the only honest local check.
+    acteco = serializers.IntegerField(
+        required=False, allow_null=True, min_value=100000, max_value=999999
+    )
 
 
 class SiiCertificateSerializer(serializers.Serializer):
