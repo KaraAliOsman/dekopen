@@ -1,5 +1,6 @@
 """AI gateway invoke: entitlement prechecks, white-label responses, audit binding."""
 
+import contextlib
 import json
 from contextlib import contextmanager
 from uuid import uuid4
@@ -1925,6 +1926,11 @@ def test_job_message_forwards_live_product(monkeypatch):
             "id": str(job_id), "surface": "position", "state": "SUCCEEDED",
             "refs": {"position_id": "p1"}, "transcript": transcript,
         },
+    )
+    # job_runs sits behind the service-role switch — the DB cursor is outside
+    # this test's contract, so stub the wrapper like enqueue itself.
+    monkeypatch.setattr(
+        job_service, "job_backend", lambda: contextlib.nullcontext()
     )
     monkeypatch.setattr(
         job_service, "enqueue",

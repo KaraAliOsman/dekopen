@@ -186,22 +186,26 @@ class AiAgentView(APIView):
                 operation_key=operation_key,
             )
             try:
-                job_service.enqueue(
-                    org_id=org_id,
-                    job_type="ai.agent.run",
-                    payload={
-                        "ai_job_id": job["id"],
-                        "mode": "new",
-                        "surface": surface,
-                        "refs": refs,
-                        "goal": str(data["goal"]),
-                        "product": data.get("product"),
-                        "history": list(data.get("history") or []),
-                        "operation_key": operation_key,
-                    },
-                    idempotency_key=f"ai:{operation_key}",
-                    created_by=token.user_id,
-                )
+                # job_runs is service-owned — the enqueue runs under the same
+                # role switch the ingest path uses, or the request scope's
+                # documentary_backend role is refused with 42501.
+                with job_service.job_backend():
+                    job_service.enqueue(
+                        org_id=org_id,
+                        job_type="ai.agent.run",
+                        payload={
+                            "ai_job_id": job["id"],
+                            "mode": "new",
+                            "surface": surface,
+                            "refs": refs,
+                            "goal": str(data["goal"]),
+                            "product": data.get("product"),
+                            "history": list(data.get("history") or []),
+                            "operation_key": operation_key,
+                        },
+                        idempotency_key=f"ai:{operation_key}",
+                        created_by=token.user_id,
+                    )
             except job_service.JobServiceError as error:
                 raise contract_error(
                     409, error.code, "No se pudo encolar la tarea del agente."
@@ -336,26 +340,28 @@ class AiJobMessagesView(APIView):
                     or f"{job_id}:{len(history)}"
                 )
                 try:
-                    job_service.enqueue(
-                        org_id=org_id,
-                        job_type="ai.agent.run",
-                        payload={
-                            "ai_job_id": str(job["id"]),
-                            "mode": "resume",
-                            "surface": str(job["surface"]),
-                            "refs": dict(job.get("refs") or {}),
-                            "goal": str(data["message"]),
-                            # The product rides with each message — the client
-                            # sends the position's live representation, so
-                            # design ops evaluate the current design, never a
-                            # snapshot stored at job creation.
-                            "product": data.get("product"),
-                            "history": history,
-                            "operation_key": operation_key,
-                        },
-                        idempotency_key=f"ai:{operation_key}",
-                        created_by=token.user_id,
-                    )
+                    with job_service.job_backend():
+                        job_service.enqueue(
+                            org_id=org_id,
+                            job_type="ai.agent.run",
+                            payload={
+                                "ai_job_id": str(job["id"]),
+                                "mode": "resume",
+                                "surface": str(job["surface"]),
+                                "refs": dict(job.get("refs") or {}),
+                                "goal": str(data["message"]),
+                                # The product rides with each message — the
+                                # client sends the position's live
+                                # representation, so design ops evaluate the
+                                # current design, never a snapshot stored at
+                                # job creation.
+                                "product": data.get("product"),
+                                "history": history,
+                                "operation_key": operation_key,
+                            },
+                            idempotency_key=f"ai:{operation_key}",
+                            created_by=token.user_id,
+                        )
                 except job_service.JobServiceError as error:
                     raise contract_error(
                         409, error.code,
