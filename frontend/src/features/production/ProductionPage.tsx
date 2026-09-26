@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import {
@@ -362,6 +362,30 @@ export function ProductionPage(): JSX.Element {
     void loadTrace();
   }, [selectedId, loadDetail, loadTrace]);
 
+  // piece_id → printed workshop code (M-xx/R-xx/I-xx) from the trace's
+  // sealed plan — the same codes the emitted packs carry, so screen and
+  // paper name the same piece identically.
+  const pieceCodes = useMemo(() => {
+    const codes: Record<string, string> = {};
+    const plan = trace?.plan as
+      | {
+          bars?: { cuts?: { piece_id?: string; code?: string }[] }[];
+          sheets?: { pieces?: { piece_id?: string; code?: string }[] }[];
+        }
+      | undefined;
+    for (const bar of plan?.bars ?? []) {
+      for (const cut of bar.cuts ?? []) {
+        if (cut.piece_id && cut.code) codes[cut.piece_id] = cut.code;
+      }
+    }
+    for (const sheet of plan?.sheets ?? []) {
+      for (const piece of sheet.pieces ?? []) {
+        if (piece.piece_id && piece.code) codes[piece.piece_id] = piece.code;
+      }
+    }
+    return codes;
+  }, [trace]);
+
   const lookupPiece = useCallback(async () => {
     const query = pieceQuery.trim();
     if (!query) return;
@@ -396,7 +420,13 @@ export function ProductionPage(): JSX.Element {
   }
 
   function transition(stepId: string, stepAction: StepAction, orderId: string): void {
-    if (stepAction === "NOTE" && !note.trim()) {
+    // BLOCK and QC_FAIL must carry a reason — the step can't be understood or
+    // remediated without it. NOTE is the reason by definition.
+    if (
+      (stepAction === "NOTE" || stepAction === "BLOCK" || stepAction === "QC_FAIL") &&
+      !note.trim()
+    ) {
+      setMessage(t("production.stepNoteRequired"));
       return;
     }
     const noteValue =
@@ -1087,6 +1117,52 @@ export function ProductionPage(): JSX.Element {
                 ) : null}
               </header>
               {(() => {
+                // Remake provenance, both directions: the remake names the
+                // order it replaces; the replaced order names its remakes.
+                const remakeOf = detail.payload?.remake_of;
+                const source = remakeOf
+                  ? orders.find((order) => order.id === String(remakeOf))
+                  : undefined;
+                const remakes = orders.filter(
+                  (order) => String(order.payload?.remake_of ?? "") === detail.id,
+                );
+                if (!source && !remakes.length) return null;
+                return (
+                  <p className="production-remake-provenance">
+                    {source ? (
+                      <>
+                        {t("production.remakeOf")} <strong>{source.order_code}</strong>
+                        {remakes.length ? " · " : ""}
+                      </>
+                    ) : null}
+                    {remakes.length ? (
+                      <>
+                        {t("production.remadeBy")}{" "}
+                        <strong>{remakes.map((order) => order.order_code).join(", ")}</strong>
+                      </>
+                    ) : null}
+                  </p>
+                );
+              })()}
+              {(() => {
+                const blockers = detail.payload?.blockers;
+                if (!Array.isArray(blockers) || !blockers.length) return null;
+                return (
+                  <ul className="production-blockers" role="alert">
+                    {blockers.map((blocker) => (
+                      <li key={String(blocker)}>
+                        {String(blocker).startsWith("work_center_inactive:")
+                          ? t("production.blockerWorkCenterInactive").replace(
+                              "{kind}",
+                              String(blocker).split(":").at(-1) ?? "",
+                            )
+                          : String(blocker)}
+                      </li>
+                    ))}
+                  </ul>
+                );
+              })()}
+              {(() => {
                 const materials = detail.payload?.materials as WorkOrderMaterials | undefined;
                 if (!materials) return null;
                 return (
@@ -1132,6 +1208,13 @@ export function ProductionPage(): JSX.Element {
                 const layouts = optimization?.sheets ?? [];
                 const unnested = optimization?.unnested ?? [];
                 const sheetPurchases = optimization?.sheet_purchases ?? [];
+                // remnant_id → rack tag from the plan's consumed ledger, so a
+                // bar row can name the physical drop it was cut from.
+                const consumedLocations = new Map<string, string>(
+                  (optimization?.remnants?.consumed ?? [])
+                    .filter((entry) => entry.rack_location)
+                    .map((entry) => [String(entry.id), String(entry.rack_location)]),
+                );
                 return (
                   <section
                     className="production-optimize"
@@ -1292,14 +1375,23 @@ export function ProductionPage(): JSX.Element {
                       <p className="production-optimize-empty">{t("production.optimizeEmpty")}</p>
                     ) : (
                       <>
-                        {cutPlan.length || layouts.length ? (
+                        {optimization.invalidated ? (
+                          <p className="production-invalidated" role="alert">
+                            {t("production.planInvalidated")}
+                            {optimization.invalidated_by ? (
+                              <code>{String(optimization.invalidated_by).slice(0, 8)}</code>
+                            ) : null}
+                          </p>
+                        ) : null}
+                        {!optimization.invalidated && (cutPlan.length || layouts.length) ? (
                           <CutPlanView
                             key={optimization.optimized_at ?? "optimization"}
                             optimization={optimization}
                             labels={(trace?.labels as Record<string, string> | undefined) ?? {}}
+                            pieceCodes={pieceCodes}
                           />
                         ) : null}
-                        {cutPlan.length ? (
+                        {!optimization.invalidated && cutPlan.length ? (
                           <table className="production-plan">
                             <thead>
                               <tr>
@@ -1321,6 +1413,12 @@ export function ProductionPage(): JSX.Element {
                                       <span className="production-remnant-tag">
                                         {" "}
                                         {t("production.optimizeRemnantBar")}
+                                        {bar.remnant_id
+                                          ? ` · REM-${String(bar.remnant_id).slice(0, 8)}`
+                                          : ""}
+                                        {consumedLocations.get(String(bar.remnant_id ?? ""))
+                                          ? ` · ${consumedLocations.get(String(bar.remnant_id ?? ""))}`
+                                          : ""}
                                       </span>
                                     ) : null}
                                   </td>
@@ -1520,7 +1618,13 @@ export function ProductionPage(): JSX.Element {
                                   <td>
                                     {layout.source === "REMNANT" ? (
                                       <span className="production-remnant-tag">
-                                        {t("production.optimizeRemnantBar")}{" "}
+                                        {t("production.optimizeRemnantBar")}
+                                        {layout.remnant_id
+                                          ? ` · REM-${String(layout.remnant_id).slice(0, 8)}`
+                                          : ""}
+                                        {consumedLocations.get(String(layout.remnant_id ?? ""))
+                                          ? ` · ${consumedLocations.get(String(layout.remnant_id ?? ""))}`
+                                          : ""}{" "}
                                       </span>
                                     ) : null}
                                     {layout.placements
@@ -1602,18 +1706,23 @@ export function ProductionPage(): JSX.Element {
                               {t("production.labelsPieces")}: {label.pieces}
                             </span>
                             <span className="production-label-parts">
-                              {(
-                                [
-                                  ["M", label.profiles],
-                                  ["R", label.reinforcements],
-                                  ["V", label.glasses],
-                                  ["P", label.panels],
-                                  ["H", label.hardware],
-                                ] as Array<[string, number]>
-                              )
-                                .filter(([, count]) => count > 0)
-                                .map(([kind, count]) => `${kind}×${count}`)
-                                .join(" · ")}
+                              {
+                                // Non-colliding glyphs — M-xx/V-xx/H-xx mean
+                                // member/bay/leaf everywhere else, so the
+                                // count letters can't reuse them.
+                                (
+                                  [
+                                    ["PER", label.profiles],
+                                    ["REF", label.reinforcements],
+                                    ["VID", label.glasses],
+                                    ["PAN", label.panels],
+                                    ["HER", label.hardware],
+                                  ] as Array<[string, number]>
+                                )
+                                  .filter(([, count]) => count > 0)
+                                  .map(([kind, count]) => `${kind}×${count}`)
+                                  .join(" · ")
+                              }
                             </span>
                           </li>
                         ))}
@@ -2105,16 +2214,24 @@ export function ProductionPage(): JSX.Element {
                           detail.status !== "DISPATCHED" &&
                           detail.status !== "INSTALLED" ? (
                             <div className="production-step-actions">
-                              {stepActions(step).map((stepAction) => (
-                                <button
-                                  key={stepAction}
-                                  type="button"
-                                  disabled={busy}
-                                  onClick={() => transition(step.id, stepAction, detail.id)}
-                                >
-                                  {t(actionLabel[stepAction])}
-                                </button>
-                              ))}
+                              {stepActions(step)
+                                // START only exists on the earliest open step —
+                                // the backend sequence gate rejects every other
+                                // one with a guaranteed 422.
+                                .filter(
+                                  (stepAction) =>
+                                    stepAction !== "START" || step.id === nextStep?.id,
+                                )
+                                .map((stepAction) => (
+                                  <button
+                                    key={stepAction}
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() => transition(step.id, stepAction, detail.id)}
+                                  >
+                                    {t(actionLabel[stepAction])}
+                                  </button>
+                                ))}
                             </div>
                           ) : null}
                         </li>
@@ -2180,12 +2297,18 @@ export function ProductionPage(): JSX.Element {
               <section className="production-events" aria-label={t("production.events")}>
                 <h3>{t("production.events")}</h3>
                 <ol>
-                  {detail.events.map((event) => (
-                    <li key={event.id}>
-                      <time dateTime={event.created_at}>{formatDateTime(event.created_at)}</time>
-                      <span>{t(eventKey[event.event] ?? "production.eventNote")}</span>
-                    </li>
-                  ))}
+                  {detail.events.map((event) => {
+                    const eventNote = (event.payload as { note?: unknown } | undefined)?.note;
+                    return (
+                      <li key={event.id}>
+                        <time dateTime={event.created_at}>{formatDateTime(event.created_at)}</time>
+                        <span>{t(eventKey[event.event] ?? "production.eventNote")}</span>
+                        {typeof eventNote === "string" && eventNote.trim() ? (
+                          <em className="production-event-note">{eventNote}</em>
+                        ) : null}
+                      </li>
+                    );
+                  })}
                 </ol>
               </section>
             </>

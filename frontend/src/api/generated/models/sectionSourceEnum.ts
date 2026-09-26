@@ -10,9 +10,9 @@
  * * `POLYGON` - POLYGON
  * * `DXF_REFERENCE` - DXF_REFERENCE
  */
-export type SourceEnum = (typeof SourceEnum)[keyof typeof SourceEnum];
+export type SectionSourceEnum = (typeof SectionSourceEnum)[keyof typeof SectionSourceEnum];
 
-export const SourceEnum = {
+export const SectionSourceEnum = {
   POLYGON: "POLYGON",
   DXF_REFERENCE: "DXF_REFERENCE",
 } as const;

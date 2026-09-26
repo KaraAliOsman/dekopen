@@ -333,6 +333,46 @@
   font-size: 0.85rem;
   margin: 0.5rem 0 0;
 }
+.production-invalidated {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--theme-danger);
+  border-radius: var(--radius-md);
+  background: var(--theme-danger-soft, #fbe9e7);
+  color: var(--theme-danger);
+  font-weight: 600;
+}
+.production-invalidated code {
+  margin-left: var(--space-2);
+  font-weight: 400;
+}
+.production-blockers {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-left: 3px solid var(--theme-warning, #b7791f);
+  background: var(--theme-warning-soft, #fdf3e0);
+  color: var(--theme-text);
+  font-size: 0.85rem;
+}
+.production-blockers li + li {
+  margin-top: var(--space-1);
+}
+.production-event-note {
+  display: block;
+  color: var(--theme-text-secondary);
+  font-style: normal;
+  font-size: 0.82rem;
+  margin-top: 0.125rem;
+}
+.production-remake-provenance {
+  margin: 0 0 var(--space-3);
+  color: var(--theme-text-secondary);
+  font-size: 0.85rem;
+}
+.production-remake-provenance strong {
+  color: var(--theme-text-primary);
+}
 .production-plan {
   width: 100%;
   border-collapse: collapse;
@@ -541,6 +581,31 @@
   display: block;
   width: 100%;
   height: auto;
+}
+.cutplan-piece-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  font-size: 0.75rem;
+}
+.cutplan-piece-legend button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--theme-text-secondary);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.cutplan-piece-legend button:hover {
+  color: var(--theme-text-primary);
+}
+.cutplan-piece-legend button.is-selected {
+  color: var(--theme-accent);
+  font-weight: 600;
 }
 .cutplan-sheets {
   display: flex;

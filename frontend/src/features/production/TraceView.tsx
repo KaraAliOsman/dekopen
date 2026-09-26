@@ -48,6 +48,7 @@ type TraceRemnant = {
   height_mm?: string;
   sheet_workshop_sku?: string;
   origin?: string;
+  rack_location?: string;
 };
 
 type PieceMatch = {
@@ -56,7 +57,13 @@ type PieceMatch = {
     kind?: string;
     bar_index?: number;
     sheet_index?: number;
-    piece?: { role?: string; length_mm?: string; bay_id?: string; leaf_id?: string };
+    piece?: {
+      role?: string;
+      length_mm?: string;
+      bay_id?: string;
+      leaf_id?: string;
+      code?: string;
+    };
   };
   steps?: Array<{ sequence?: number; code?: string; label?: string; status?: string }>;
 };
@@ -161,6 +168,7 @@ export function TraceStock({ stock }: { stock: ProductionOrderTraceStock }) {
         <ul className="production-trace-remnants">
           {remnants.map((remnant) => (
             <li key={remnant.id}>
+              {remnant.rack_location ? <strong>{remnant.rack_location} · </strong> : null}
               {stockKindLabel(remnant.kind)} · {remnantStatusLabel(remnant.status)}
               {remnant.length_mm ? ` · ${fmtMm(remnant.length_mm)} mm` : ""}
               {remnant.width_mm ? ` × ${fmtMm(remnant.width_mm)}` : ""}
@@ -189,6 +197,7 @@ export function TracePieceMatches({ report }: { report: ProductionPieceTrace }) 
           {match.location?.kind === "BAR"
             ? ` · ${t("production.traceBar")} ${match.location.bar_index ?? "—"}`
             : ` · ${t("production.traceSheet")} ${match.location?.sheet_index ?? "—"}`}
+          {match.location?.piece?.code ? ` · ${match.location.piece.code}` : ""}
           {match.location?.piece?.role ? ` · ${match.location.piece.role}` : ""}
           {match.location?.piece?.length_mm ? ` · ${fmtMm(match.location.piece.length_mm)} mm` : ""}
           {match.steps?.length

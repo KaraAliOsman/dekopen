@@ -39,6 +39,14 @@ type Movement = {
 
 type StockIdentity = { item_id: string; sku: string; name: string };
 
+type BarAuthority = {
+  id: string;
+  commercial_sku: string;
+  physical_stock_identity: string | null;
+  stock_color: string | null;
+  source: "PROFILE" | "REINFORCEMENT";
+};
+
 const REMNANT_STATUS: ReadonlySet<string> = new Set([
   "AVAILABLE",
   "RESERVED",
@@ -115,7 +123,10 @@ export function InventorySection({
     note: "",
   });
   const [form, setForm] = useState({
+    kind: "SHEET" as "BAR" | "SHEET",
+    stock_authority_id: "",
     sheet_workshop_sku: "",
+    length_mm: "",
     width_mm: "",
     height_mm: "",
     rack_location: "",
@@ -123,6 +134,7 @@ export function InventorySection({
     color: "",
     notes: "",
   });
+  const [authorities, setAuthorities] = useState<BarAuthority[]>([]);
 
   const load = useCallback(() => {
     void request<{ remnants?: Remnant[] }>("inventory/remnants/")
@@ -131,6 +143,9 @@ export function InventorySection({
     void request<{ movements?: Movement[] }>("inventory/movements/")
       .then((data) => setMovements(data.movements ?? []))
       .catch(() => setMovements([]));
+    void request<{ authorities?: BarAuthority[] }>("inventory/bar-authorities/")
+      .then((data) => setAuthorities(data.authorities ?? []))
+      .catch(() => setAuthorities([]));
   }, [request]);
 
   useEffect(load, [load]);
@@ -155,21 +170,32 @@ export function InventorySection({
   }
 
   const itemNames = new Map(stockItems.map((s) => [s.item_id, `${s.sku} · ${s.name}`]));
+  const authorityNames = new Map(
+    authorities.map((a) => [
+      a.id,
+      `${a.commercial_sku}${a.stock_color ? ` · ${a.stock_color}` : ""}`,
+    ]),
+  );
   const visible = remnants.filter((r) => r.status === statusFilter);
   const counts = new Map<string, number>();
   for (const r of remnants) counts.set(r.status, (counts.get(r.status) ?? 0) + 1);
 
   function createRemnant(event: FormEvent): void {
     event.preventDefault();
+    const authority = authorities.find((a) => a.id === form.stock_authority_id);
     void run(
       request("inventory/remnants/create/", "POST", {
-        kind: "SHEET",
-        sheet_workshop_sku: form.sheet_workshop_sku.trim(),
-        width_mm: form.width_mm,
-        height_mm: form.height_mm,
+        kind: form.kind,
+        stock_authority_id: form.kind === "BAR" ? form.stock_authority_id : null,
+        physical_stock_identity:
+          form.kind === "BAR" ? (authority?.physical_stock_identity ?? null) : null,
+        sheet_workshop_sku: form.kind === "SHEET" ? form.sheet_workshop_sku.trim() : null,
+        length_mm: form.kind === "BAR" ? form.length_mm : null,
+        width_mm: form.kind === "SHEET" ? form.width_mm : null,
+        height_mm: form.kind === "SHEET" ? form.height_mm : null,
         rack_location: form.rack_location.trim() || null,
         material: form.material.trim() || null,
-        color: form.color.trim() || null,
+        color: form.kind === "SHEET" ? form.color.trim() || null : null,
         notes: form.notes.trim() || null,
       }),
       "inventory.remnantCreateError",
@@ -289,54 +315,101 @@ export function InventorySection({
       </div>
       {showCreate ? (
         <form className="inventory-remnant-form" onSubmit={createRemnant}>
-          <p className="purchasing-hint">{t("inventory.remnantSheetOnly")}</p>
           <label>
-            {t("inventory.sheetSku")}
-            <input
-              required
-              value={form.sheet_workshop_sku}
-              onChange={(e) => setForm((f) => ({ ...f, sheet_workshop_sku: e.target.value }))}
-            />
+            {t("inventory.remnantKind")}
+            <select
+              value={form.kind}
+              onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value as "BAR" | "SHEET" }))}
+            >
+              <option value="SHEET">{t("inventory.remnantKind.SHEET")}</option>
+              <option value="BAR">{t("inventory.remnantKind.BAR")}</option>
+            </select>
           </label>
-          <label>
-            {t("inventory.widthMm")}
-            <input
-              required
-              type="number"
-              min="1"
-              value={form.width_mm}
-              onChange={(e) => setForm((f) => ({ ...f, width_mm: e.target.value }))}
-            />
-          </label>
-          <label>
-            {t("inventory.heightMm")}
-            <input
-              required
-              type="number"
-              min="1"
-              value={form.height_mm}
-              onChange={(e) => setForm((f) => ({ ...f, height_mm: e.target.value }))}
-            />
-          </label>
+          {form.kind === "BAR" ? (
+            <>
+              <label>
+                {t("inventory.stockAuthority")}
+                <select
+                  required
+                  value={form.stock_authority_id}
+                  onChange={(e) => setForm((f) => ({ ...f, stock_authority_id: e.target.value }))}
+                >
+                  <option value="" disabled>
+                    {t("inventory.stockAuthorityPick")}
+                  </option>
+                  {authorities.map((authority) => (
+                    <option key={authority.id} value={authority.id}>
+                      {authority.commercial_sku}
+                      {authority.stock_color ? ` · ${authority.stock_color}` : ""}
+                      {authority.source === "REINFORCEMENT"
+                        ? ` · ${t("inventory.authorityReinforcement")}`
+                        : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                {t("inventory.lengthMm")}
+                <input
+                  required
+                  type="number"
+                  min="1"
+                  value={form.length_mm}
+                  onChange={(e) => setForm((f) => ({ ...f, length_mm: e.target.value }))}
+                />
+              </label>
+            </>
+          ) : (
+            <>
+              <label>
+                {t("inventory.sheetSku")}
+                <input
+                  required
+                  value={form.sheet_workshop_sku}
+                  onChange={(e) => setForm((f) => ({ ...f, sheet_workshop_sku: e.target.value }))}
+                />
+              </label>
+              <label>
+                {t("inventory.widthMm")}
+                <input
+                  required
+                  type="number"
+                  min="1"
+                  value={form.width_mm}
+                  onChange={(e) => setForm((f) => ({ ...f, width_mm: e.target.value }))}
+                />
+              </label>
+              <label>
+                {t("inventory.heightMm")}
+                <input
+                  required
+                  type="number"
+                  min="1"
+                  value={form.height_mm}
+                  onChange={(e) => setForm((f) => ({ ...f, height_mm: e.target.value }))}
+                />
+              </label>
+              <label>
+                {t("inventory.material")}
+                <input
+                  value={form.material}
+                  onChange={(e) => setForm((f) => ({ ...f, material: e.target.value }))}
+                />
+              </label>
+              <label>
+                {t("inventory.color")}
+                <input
+                  value={form.color}
+                  onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
+                />
+              </label>
+            </>
+          )}
           <label>
             {t("inventory.rack")}
             <input
               value={form.rack_location}
               onChange={(e) => setForm((f) => ({ ...f, rack_location: e.target.value }))}
-            />
-          </label>
-          <label>
-            {t("inventory.material")}
-            <input
-              value={form.material}
-              onChange={(e) => setForm((f) => ({ ...f, material: e.target.value }))}
-            />
-          </label>
-          <label>
-            {t("inventory.color")}
-            <input
-              value={form.color}
-              onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
             />
           </label>
           <button type="submit" disabled={busy}>
@@ -364,7 +437,8 @@ export function InventorySection({
                 <td>
                   {r.kind === "SHEET"
                     ? (r.sheet_workshop_sku ?? "—")
-                    : `${[r.material, r.color].filter(Boolean).join(" · ") || "—"}`}
+                    : (authorityNames.get(r.stock_authority_id ?? "") ??
+                      ([r.material, r.color].filter(Boolean).join(" · ") || "—"))}
                   {r.notes ? <span className="purchasing-hint"> — {r.notes}</span> : null}
                 </td>
                 <td>{remnantDims(r)}</td>

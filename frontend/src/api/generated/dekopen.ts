@@ -32,6 +32,7 @@ import type {
   ArtifactRequestRequest,
   ArtifactResponse,
   AuthMeResponse,
+  BarAuthorityList,
   BeadList,
   BeadResponse,
   BeadWriteRequest,
@@ -5722,6 +5723,77 @@ export const engineSystems = async (
   options?: Parameters<typeof apiMutator>[1],
 ): Promise<engineSystemsResponse> => {
   return apiMutator<engineSystemsResponse>(getEngineSystemsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export type inventoryBarAuthoritiesResponse200 = {
+  data: BarAuthorityList;
+  status: 200;
+};
+
+export type inventoryBarAuthoritiesResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type inventoryBarAuthoritiesResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type inventoryBarAuthoritiesResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type inventoryBarAuthoritiesResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type inventoryBarAuthoritiesResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type inventoryBarAuthoritiesResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type inventoryBarAuthoritiesResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type inventoryBarAuthoritiesResponseSuccess = inventoryBarAuthoritiesResponse200 & {
+  headers: Headers;
+};
+export type inventoryBarAuthoritiesResponseError = (
+  | inventoryBarAuthoritiesResponse400
+  | inventoryBarAuthoritiesResponse401
+  | inventoryBarAuthoritiesResponse403
+  | inventoryBarAuthoritiesResponse404
+  | inventoryBarAuthoritiesResponse409
+  | inventoryBarAuthoritiesResponse422
+  | inventoryBarAuthoritiesResponse503
+) & {
+  headers: Headers;
+};
+
+export type inventoryBarAuthoritiesResponse =
+  inventoryBarAuthoritiesResponseSuccess | inventoryBarAuthoritiesResponseError;
+
+export const getInventoryBarAuthoritiesUrl = () => {
+  return `/api/v1/inventory/bar-authorities/`;
+};
+
+export const inventoryBarAuthorities = async (
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<inventoryBarAuthoritiesResponse> => {
+  return apiMutator<inventoryBarAuthoritiesResponse>(getInventoryBarAuthoritiesUrl(), {
     ...options,
     method: "GET",
   });

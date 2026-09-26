@@ -1097,7 +1097,8 @@ export const messages = {
   "portal.collected": "Abonado",
   "portal.balance": "Saldo",
   "paymentReturn.title": "Pago recibido",
-  "paymentReturn.body": "Recibimos la confirmación de tu pago. El taller emitirá tu comprobante y lo enviará al correo que usaste para pagar.",
+  "paymentReturn.body":
+    "Recibimos la confirmación de tu pago. El taller emitirá tu comprobante y lo enviará al correo que usaste para pagar.",
   "paymentReturn.close": "Ya puedes cerrar esta ventana.",
   "portal.brand": "Generado con DEKOPEN",
   "portal.wasApproved": "Cotización aprobada",
@@ -1296,6 +1297,8 @@ export const messages = {
   "purchasing.receiveOutstanding": "Pendiente",
   "purchasing.receiveNow": "Recibir ahora",
   "purchasing.receiveDamaged": "Con daño",
+  "purchasing.receiveDamageExceeds":
+    "El daño no puede superar lo recibido — si todo llegó dañado, ingresa la misma cantidad en ambos campos.",
   "purchasing.receiveNote": "Nota de recepción (opcional)",
   "purchasing.receiveSubmit": "Registrar recepción",
   "purchasing.receiveHistory": "Recepciones registradas",
@@ -1312,7 +1315,11 @@ export const messages = {
   "inventory.remnantCreate": "Registrar retazo",
   "inventory.remnantSheetOnly":
     "Solo planchas: los retazos de barra los genera producción automáticamente.",
+  "inventory.stockAuthority": "Artículo de barra",
+  "inventory.stockAuthorityPick": "Elige el artículo…",
+  "inventory.authorityReinforcement": "refuerzo",
   "inventory.sheetSku": "SKU de plancha",
+  "inventory.lengthMm": "Largo (mm)",
   "inventory.widthMm": "Ancho (mm)",
   "inventory.heightMm": "Alto (mm)",
   "inventory.rack": "Ubicación en rack",
@@ -1372,6 +1379,9 @@ export const messages = {
   "purchasing.doc06": "DOC-06 · Checklist QC en blanco (PDF)",
   "purchasing.doc07": "DOC-07 · Informe de costos (PDF)",
   "purchasing.loadError": "No se pudieron cargar las compras. Reintenta con Recargar.",
+  "purchasing.sectionLoadError": "No se pudo cargar esta sección — recarga la página.",
+  "purchasing.suppliersLoadError":
+    "No se pudo cargar el directorio de proveedores — puedes ingresar los datos a mano o recargar.",
   "purchasing.actionError":
     "La operación fue rechazada; recarga y revisa elegibilidad, asignaciones y confirmaciones.",
   "purchasing.documentError": "No se pudo generar o abrir el documento.",
@@ -1449,6 +1459,14 @@ export const messages = {
   "production.opsOperationsCount": "operaciones",
   "production.optimizeTitle": "Plan de corte",
   "production.optimizeEmpty": "Aún no hay plan de corte. Optimiza para calcular barras y planchas.",
+  "production.planInvalidated":
+    "Plan invalidado — un remanente reservado ya no existe. Optimiza de nuevo antes de cortar. Remanente:",
+  "production.blockerWorkCenterInactive":
+    "Centro de trabajo inactivo: {kind} — actívalo en Producción o reasigna el paso.",
+  "production.stepNoteRequired":
+    "Bloquear o rechazar requiere un motivo — escribe la nota primero.",
+  "production.remakeOf": "Reposición de",
+  "production.remadeBy": "Reemplazada por",
   "production.optimizeColor": "Color de perfil",
   "production.optimizeColorSealed": "Color sellado en la orden — no editable",
   "production.optimizeColorPlaceholder": "WHITE / FOILED",

@@ -79,6 +79,17 @@
   --shadow-raise: 0 2px 10px rgb(22 28 31 / 0.1);
   --shadow-pop: 0 12px 32px rgb(22 28 31 / 0.18);
   --shadow-modal: 0 12px 40px rgba(15, 25, 24, 0.22);
+
+  /* DEKOPEN orb identity — the sphere is intentionally identical across
+   * themes (the identity IS the black orb); only the edge stroke and
+   * specular strength adapt to the dark theme. */
+  --orb-hi: #4e5960;
+  --orb-mid: #262e34;
+  --orb-lo: #12171b;
+  --orb-edge: rgba(18, 24, 28, 0.55);
+  --orb-spec-op: 0.5;
+  --orb-eye: #eaf3f1;
+  --orb-glint: #fff;
 }
 
 :root[data-theme="dark"] {
@@ -141,6 +152,12 @@
   --shadow-raise: 0 2px 10px rgba(0, 0, 0, 0.45);
   --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.55);
   --shadow-modal: 0 12px 44px rgba(0, 0, 0, 0.6);
+
+  --orb-hi: #5a666e;
+  --orb-mid: #272f35;
+  --orb-lo: #10151a;
+  --orb-edge: rgba(233, 242, 241, 0.16);
+  --orb-spec-op: 0.32;
 }
 
 :root {
@@ -206,9 +223,14 @@
   --ok: var(--theme-success);
   --warn: var(--theme-warning);
   --danger: var(--theme-danger);
+  --ink: var(--theme-text-primary);
   --ink-muted: var(--theme-text-muted);
   --ink-3: var(--theme-text-secondary);
   --ink-faint: var(--theme-text-muted);
+  --text-dim: var(--theme-text-secondary);
+  --warning: var(--theme-warning);
+  --warning-soft: var(--theme-warning-soft);
+  --line-soft: var(--theme-border-subtle);
   --line: var(--theme-border-subtle);
   --line-strong: var(--theme-border-strong);
   --border: var(--theme-border-subtle);

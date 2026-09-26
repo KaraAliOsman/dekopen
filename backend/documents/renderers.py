@@ -1139,21 +1139,16 @@ def _join_codes(codes: list[str]) -> str:
     return f"{unique[0]} · +{len(unique) - 1}"
 
 
-def _cut_member_map(
-    snapshot: dict[str, object], labels: dict[str, dict[object, str]]
-) -> dict[tuple[str, ...], str]:
-    """Cut-spec → member/reinforcement codes for saw output.
-
-    A bar cut's piece_id is a sha256 of the cut spec, never the frozen member
-    identity, so cut artifacts used to print hash prefixes. The join runs on
-    the deterministic spec tuple. Identical members share one spec — the
-    printed code lists every member the piece serves, which stays honest
-    because those pieces are physically interchangeable.
-    """
+def _cut_spec_index(
+    snapshot: dict[str, object],
+) -> dict[tuple[str, ...], list[object]]:
+    """Cut-spec tuple → frozen member/reinforcement ids. The id-level index
+    behind ``_cut_member_map`` — also used by traceability to resolve a
+    printed M-xx/R-xx code back to the pieces that serve it."""
     manufacturing = snapshot.get("manufacturing")
     if not isinstance(manufacturing, list):
         return {}
-    spec: dict[tuple[str, ...], list[str]] = {}
+    spec: dict[tuple[str, ...], list[object]] = {}
     for fact in manufacturing:
         if not isinstance(fact, dict):
             continue
@@ -1175,11 +1170,7 @@ def _cut_member_map(
                 str(identity.get("position_id") or ""),
                 _norm_dec(item.get("sagitta_mm")),
             )
-            spec.setdefault(key, []).append(
-                labels["member"].get(
-                    item.get("member_id"), str(item.get("member_id") or "")[:10]
-                )
-            )
+            spec.setdefault(key, []).append(item.get("member_id"))
         for item in _array(fact.get("reinforcements"), "invalid_manufacturing_fact"):
             parent = members.get(str(item.get("parent_member_id")))
             if parent is None:
@@ -1197,13 +1188,37 @@ def _cut_member_map(
                 str(identity.get("position_id") or ""),
                 "",
             )
-            spec.setdefault(key, []).append(
-                labels["reinforcement"].get(
-                    item.get("reinforcement_id"),
-                    str(item.get("reinforcement_id") or "")[:10],
+            spec.setdefault(key, []).append(item.get("reinforcement_id"))
+    return spec
+
+
+def _cut_member_map(
+    snapshot: dict[str, object], labels: dict[str, dict[object, str]]
+) -> dict[tuple[str, ...], str]:
+    """Cut-spec → member/reinforcement codes for saw output.
+
+    A bar cut's piece_id is a sha256 of the cut spec, never the frozen member
+    identity, so cut artifacts used to print hash prefixes. The join runs on
+    the deterministic spec tuple. Identical members share one spec — the
+    printed code lists every member the piece serves, which stays honest
+    because those pieces are physically interchangeable.
+    """
+    index = _cut_spec_index(snapshot)
+    if not index:
+        return {}
+    return {
+        key: _join_codes(
+            [
+                (
+                    labels["member" if key[0] == "PROFILE" else "reinforcement"].get(
+                        entity_id, str(entity_id or "")[:10]
+                    )
                 )
-            )
-    return {key: _join_codes(codes) for key, codes in spec.items()}
+                for entity_id in ids
+            ]
+        )
+        for key, ids in index.items()
+    }
 
 
 def _cut_key(cut: dict[str, object]) -> tuple[str, ...]:
@@ -1222,16 +1237,16 @@ def _cut_key(cut: dict[str, object]) -> tuple[str, ...]:
     )
 
 
-def _infill_code_map(
-    snapshot: dict[str, object], labels: dict[str, dict[object, str]]
-) -> dict[tuple[str, str, str], str]:
-    """(position, bay, leaf) → infill codes, so sheet/nested pieces print the
-    I-xx identity the assembly map and glazing table already use instead of a
-    sheet-local V-xx counter that collides with bay codes."""
+def _infill_spec_index(
+    snapshot: dict[str, object],
+) -> dict[tuple[str, str, str], list[object]]:
+    """(position, bay, leaf) → frozen infill ids — the id-level index behind
+    ``_infill_code_map``, used by traceability to resolve a printed I-xx code
+    back to the sheet pieces that serve it."""
     manufacturing = snapshot.get("manufacturing")
     if not isinstance(manufacturing, list):
         return {}
-    spec: dict[tuple[str, str, str], list[str]] = {}
+    spec: dict[tuple[str, str, str], list[object]] = {}
     for fact in manufacturing:
         if not isinstance(fact, dict):
             continue
@@ -1241,12 +1256,26 @@ def _infill_code_map(
                 str(item.get("bay_id") or ""),
                 str(item.get("leaf_id") or ""),
             )
-            spec.setdefault(key, []).append(
-                labels["infill"].get(
-                    item.get("infill_id"), str(item.get("infill_id") or "")[:10]
-                )
-            )
-    return {key: _join_codes(codes) for key, codes in spec.items()}
+            spec.setdefault(key, []).append(item.get("infill_id"))
+    return spec
+
+
+def _infill_code_map(
+    snapshot: dict[str, object], labels: dict[str, dict[object, str]]
+) -> dict[tuple[str, str, str], str]:
+    """(position, bay, leaf) → infill codes, so sheet/nested pieces print the
+    I-xx identity the assembly map and glazing table already use instead of a
+    sheet-local V-xx counter that collides with bay codes."""
+    index = _infill_spec_index(snapshot)
+    return {
+        key: _join_codes(
+            [
+                labels["infill"].get(infill_id, str(infill_id or "")[:10])
+                for infill_id in ids
+            ]
+        )
+        for key, ids in index.items()
+    }
 
 
 def _infill_key(piece: dict[str, object]) -> tuple[str, str, str]:

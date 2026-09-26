@@ -720,3 +720,67 @@ def test_suppliers_index_and_upsert_roundtrip() -> None:
         )
     assert output["tax_id"] == "76.111-2"
     assert "ON CONFLICT(org_id,tax_id)" in mock_one.call_args[0][0]
+
+
+def test_list_bar_authorities_merges_profiles_and_reinforcement() -> None:
+    from inventory import remnants
+
+    org_id = uuid4()
+    profile_row = {
+        "id": str(uuid4()),
+        "commercial_sku": "KOMM-MARCO",
+        "physical_stock_identity": str(uuid4()),
+        "stock_color": "Blanco",
+    }
+    reinforce_row = {
+        "id": str(uuid4()),
+        "commercial_sku": "ACERO-REF-32",
+        "physical_stock_identity": None,
+        "stock_color": None,
+    }
+
+    def fake_rows(query, params=()):
+        assert params == [str(org_id)]
+        if "profile_purchase_mappings" in query:
+            assert "org_id IS NULL" in query and "is_active" in query
+            return [profile_row]
+        if "reinforcement_articles" in query:
+            return [reinforce_row]
+        raise AssertionError(query)
+
+    with patch("inventory.remnants.rows", side_effect=fake_rows):
+        output = remnants.list_bar_authorities(org_id=org_id)
+
+    assert output["authorities"] == [
+        {
+            "id": profile_row["id"],
+            "commercial_sku": "KOMM-MARCO",
+            "physical_stock_identity": profile_row["physical_stock_identity"],
+            "stock_color": "Blanco",
+            "source": "PROFILE",
+        },
+        {
+            "id": reinforce_row["id"],
+            "commercial_sku": "ACERO-REF-32",
+            "physical_stock_identity": None,
+            "stock_color": None,
+            "source": "REINFORCEMENT",
+        },
+    ]
+
+
+def test_bar_authorities_view_uses_inventory_readers(monkeypatch) -> None:
+    client, _, org_id = _client_with_scope(monkeypatch, "ESTIMATOR")
+    seen = {}
+
+    def fake_list(*, org_id):
+        seen["org_id"] = org_id
+        return {"authorities": [{"commercial_sku": "KOMM-MARCO"}]}
+
+    monkeypatch.setattr(
+        "inventory.views.remnants_service.list_bar_authorities", fake_list
+    )
+    response = client.get("/api/v1/inventory/bar-authorities/")
+    assert response.status_code == 200
+    assert response.data == {"authorities": [{"commercial_sku": "KOMM-MARCO"}]}
+    assert seen["org_id"] == org_id

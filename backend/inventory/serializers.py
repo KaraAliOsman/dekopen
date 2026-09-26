@@ -148,6 +148,18 @@ class RemnantListSerializer(serializers.Serializer):
     remnants = RemnantSerializer(many=True)
 
 
+class BarAuthoritySerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    commercial_sku = serializers.CharField()
+    physical_stock_identity = serializers.UUIDField(allow_null=True)
+    stock_color = serializers.CharField(allow_null=True)
+    source = serializers.ChoiceField(choices=("PROFILE", "REINFORCEMENT"))
+
+
+class BarAuthorityListSerializer(serializers.Serializer):
+    authorities = BarAuthoritySerializer(many=True)
+
+
 class RemnantListQuerySerializer(StrictSerializer):
     kind = serializers.ChoiceField(choices=("BAR", "SHEET"), required=False)
     status = serializers.ChoiceField(

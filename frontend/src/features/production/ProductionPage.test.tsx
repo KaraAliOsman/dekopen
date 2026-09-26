@@ -94,7 +94,8 @@ describe("ProductionPage", () => {
     fireEvent.click(orderButton);
     await waitFor(() => expect(screen.getAllByText("Corte").length).toBeGreaterThan(0));
     expect(screen.getByText("Armado")).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: t("production.actionStart") })).toHaveLength(3); // 2 steps + next-step callout
+    // Only the next actionable step shows START (backend rejects the rest) + callout.
+    expect(screen.getAllByRole("button", { name: t("production.actionStart") })).toHaveLength(2);
   });
 
   it("starts a step through the transition endpoint", async () => {

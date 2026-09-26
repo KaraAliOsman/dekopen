@@ -1,5 +1,6 @@
 import type { Session } from "@supabase/supabase-js";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "../api/apiMutator";
@@ -78,7 +79,11 @@ function DraftSurface(): JSX.Element {
     <>
       <span data-testid="status">{auth.status}</span>
       <button onClick={() => void auth.selectOrganization("org-B")}>Select draft B</button>
-      {auth.status === "ready" ? <CommercialPricingPage /> : null}
+      {auth.status === "ready" ? (
+        <MemoryRouter>
+          <CommercialPricingPage />
+        </MemoryRouter>
+      ) : null}
     </>
   );
 }

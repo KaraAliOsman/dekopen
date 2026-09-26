@@ -24,9 +24,10 @@ const FINISH_SURFACES: [RegExp, string][] = [
 ];
 
 function positionMembers(position: PortalPosition): MemberGeometry {
-  const text = `${position.color_interior ?? ""} ${position.color_exterior ?? ""} ${position.finish ?? ""}`
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "");
+  const text =
+    `${position.color_interior ?? ""} ${position.color_exterior ?? ""} ${position.finish ?? ""}`
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "");
   for (const [pattern, material] of FINISH_SURFACES) {
     if (pattern.test(text)) return reSkinMembers(THUMB_MEMBERS, material);
   }

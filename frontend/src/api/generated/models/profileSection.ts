@@ -9,14 +9,14 @@ import type { LocalOriginEnum } from "./localOriginEnum";
 import type { OrientationEnum } from "./orientationEnum";
 import type { SectionAxis } from "./sectionAxis";
 import type { SectionPoint } from "./sectionPoint";
-import type { SourceEnum } from "./sourceEnum";
+import type { SectionSourceEnum } from "./sectionSourceEnum";
 
 /**
  * Simplified technical cross-section; POLYGON is declared, DXF_REFERENCE
  * carries the manufacturer-drawing provenance in `drawing_ref`.
  */
 export interface ProfileSection {
-  source: SourceEnum;
+  source: SectionSourceEnum;
   polygon: SectionPoint[];
   /** @pattern ^-?\d{0,8}(?:\.\d{0,2})?$ */
   depth_mm: string;

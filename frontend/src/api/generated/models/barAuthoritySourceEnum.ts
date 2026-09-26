@@ -10,9 +10,10 @@
  * * `PROFILE` - PROFILE
  * * `REINFORCEMENT` - REINFORCEMENT
  */
-export type SourceKindEnum = (typeof SourceKindEnum)[keyof typeof SourceKindEnum];
+export type BarAuthoritySourceEnum =
+  (typeof BarAuthoritySourceEnum)[keyof typeof BarAuthoritySourceEnum];
 
-export const SourceKindEnum = {
+export const BarAuthoritySourceEnum = {
   PROFILE: "PROFILE",
   REINFORCEMENT: "REINFORCEMENT",
 } as const;

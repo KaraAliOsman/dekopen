@@ -4,24 +4,12 @@
  * free pause in background tabs, one reduced-motion query. */
 
 .orb {
-  /* The sphere is intentionally identical across themes — the identity IS the
-     black orb; only the edge stroke and specular strength adapt. */
-  --orb-hi: #4e5960;
-  --orb-mid: #262e34;
-  --orb-lo: #12171b;
-  --orb-edge: rgba(18, 24, 28, 0.55);
-  --orb-spec-op: 0.5;
-  --orb-eye: #eaf3f1;
+  /* Sphere palette tokens live in styles/tokens.css — the identity IS the
+     black orb, identical across themes; only edge stroke and specular
+     strength adapt to the dark theme there. */
   display: inline-block;
   vertical-align: middle;
   flex: none;
-}
-[data-theme="dark"] .orb {
-  --orb-hi: #5a666e;
-  --orb-mid: #272f35;
-  --orb-lo: #10151a;
-  --orb-edge: rgba(233, 242, 241, 0.16);
-  --orb-spec-op: 0.32;
 }
 
 .orb__ring {
@@ -34,7 +22,7 @@
   stroke-width: 1;
 }
 .orb__spec {
-  fill: #eaf3f1;
+  fill: var(--orb-eye);
   opacity: var(--orb-spec-op);
 }
 .orb__bounce {
@@ -45,7 +33,7 @@
   fill: var(--orb-eye);
 }
 .orb__glint {
-  fill: #fff;
+  fill: var(--orb-glint);
   opacity: 0.85;
 }
 .orb__eyes--joy path {

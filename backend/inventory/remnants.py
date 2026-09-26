@@ -94,6 +94,46 @@ def list_remnants(
     return {"remnants": [_remnant_row(r) for r in items]}
 
 
+def list_bar_authorities(*, org_id: UUID) -> dict[str, object]:
+    """Active BAR stock authorities the operator can register a drop against —
+    profiles and reinforcements merged into one pick list, same scope the
+    optimizer feeds from (org rows plus global ones)."""
+    profile = rows(
+        """
+        SELECT id::text AS id, commercial_sku,
+               physical_stock_identity::text AS physical_stock_identity,
+               stock_color
+        FROM public.profile_purchase_mappings
+        WHERE (org_id = %s OR org_id IS NULL) AND is_active
+        ORDER BY commercial_sku
+        """,
+        [str(org_id)],
+    )
+    reinforcement = rows(
+        """
+        SELECT id::text AS id, commercial_sku,
+               physical_stock_identity::text AS physical_stock_identity,
+               stock_color
+        FROM public.reinforcement_articles
+        WHERE (org_id = %s OR org_id IS NULL) AND is_active
+        ORDER BY commercial_sku
+        """,
+        [str(org_id)],
+    )
+    authorities = [
+        {
+            "id": row["id"],
+            "commercial_sku": row["commercial_sku"],
+            "physical_stock_identity": row["physical_stock_identity"],
+            "stock_color": row["stock_color"],
+            "source": source,
+        }
+        for source, found in (("PROFILE", profile), ("REINFORCEMENT", reinforcement))
+        for row in found
+    ]
+    return {"authorities": authorities}
+
+
 def create_remnant(
     *,
     org_id: UUID,
@@ -364,6 +404,9 @@ def _evict_remnant_claim(
     # refuses until a fresh optimize re-reserves — and drop the machine
     # exports rendered from the old plan, whose fingerprints are now stale.
     optimization["invalidated"] = True
+    # The UI names the offending drop in the alert banner — the raw id is the
+    # only identity left (the remnant row is already scrapped/released).
+    optimization["invalidated_by"] = str(remnant_id)
     for export_key in ("cnc_export", "dxf_export", "operations_export"):
         payload.pop(export_key, None)
     remnant_key = str(remnant_id)

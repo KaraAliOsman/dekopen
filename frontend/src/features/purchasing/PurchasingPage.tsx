@@ -323,6 +323,16 @@ function PurchasingWorkspace({
   const [busy, setBusy] = useState(true);
   const [message, setMessage] = useState("");
   const [revision, setRevision] = useState(0);
+  // Independent side-loads fail per-section, not into a fake empty state.
+  const [failedSections, setFailedSections] = useState<ReadonlySet<string>>(new Set());
+  function markSection(section: string, failed: boolean): void {
+    setFailedSections((previous) => {
+      const next = new Set(previous);
+      if (failed) next.add(section);
+      else next.delete(section);
+      return next;
+    });
+  }
   const mounted = useRef(false);
   useEffect(() => {
     mounted.current = true;
@@ -339,24 +349,42 @@ function PurchasingWorkspace({
       .then((data) => {
         void request<{ orders?: OrderIndexItem[] }>("purchasing/orders/")
           .then((indexData) => {
-            if (current) setOrdersIndex(indexData.orders ?? []);
+            if (current) {
+              setOrdersIndex(indexData.orders ?? []);
+              markSection("orders", false);
+            }
           })
           .catch(() => {
-            if (current) setOrdersIndex([]);
+            if (current) {
+              setOrdersIndex([]);
+              markSection("orders", true);
+            }
           });
         void request<{ suppliers?: Supplier[] }>("purchasing/suppliers/")
           .then((supplierData) => {
-            if (current) setSuppliers(supplierData.suppliers ?? []);
+            if (current) {
+              setSuppliers(supplierData.suppliers ?? []);
+              markSection("suppliers", false);
+            }
           })
           .catch(() => {
-            if (current) setSuppliers([]);
+            if (current) {
+              setSuppliers([]);
+              markSection("suppliers", true);
+            }
           });
         void request<{ items?: StockItem[] }>("inventory/stock/")
           .then((stockData) => {
-            if (current) setStock(stockData.items ?? []);
+            if (current) {
+              setStock(stockData.items ?? []);
+              markSection("stock", false);
+            }
           })
           .catch(() => {
-            if (current) setStock([]);
+            if (current) {
+              setStock([]);
+              markSection("stock", true);
+            }
           });
         if (!current) return;
         const list = data.versions ?? [];
@@ -484,6 +512,7 @@ function PurchasingWorkspace({
       {!busy && versions.length === 0 && <p>{t("purchasing.empty")}</p>}
       <OrdersIndex
         orders={ordersIndex}
+        loadFailed={failedSections.has("orders")}
         status={indexStatus}
         onStatus={setIndexStatus}
         onOpen={(order) => {
@@ -618,6 +647,7 @@ function PurchasingWorkspace({
             request={request}
             action={action}
             suppliers={suppliers}
+            suppliersFailed={failedSections.has("suppliers")}
           />
         ))}
       {state?.version && (
@@ -637,9 +667,12 @@ function PurchasingWorkspace({
           ))}
         </section>
       )}
-      {stock.length > 0 && (
+      {(stock.length > 0 || failedSections.has("stock")) && (
         <section className="purchasing-stock">
           <h2>{t("purchasing.stockTitle")}</h2>
+          {failedSections.has("stock") ? (
+            <p role="alert">{t("purchasing.sectionLoadError")}</p>
+          ) : null}
           <table>
             <thead>
               <tr>
@@ -709,6 +742,7 @@ function RequirementSection({
   request,
   action,
   suppliers,
+  suppliersFailed,
 }: {
   orderType: OrderType;
   requirements: Requirement[];
@@ -720,6 +754,7 @@ function RequirementSection({
   request: RequestFn;
   action: (task: Promise<unknown>) => Promise<boolean>;
   suppliers: Supplier[];
+  suppliersFailed?: boolean;
 }): JSX.Element {
   const [attested, setAttested] = useState(false);
   const allocatedIds = new Set(allocations.map((item) => item.requirement_line_id));
@@ -773,6 +808,7 @@ function RequirementSection({
             request={request}
             action={action}
             suppliers={suppliers}
+            suppliersFailed={suppliersFailed}
           />
           {requirements.length > 0 && (
             <form
@@ -924,6 +960,7 @@ function EligibilityForm({
   request,
   action,
   suppliers,
+  suppliersFailed,
 }: {
   orderType: OrderType;
   requirements: Requirement[];
@@ -933,6 +970,7 @@ function EligibilityForm({
   request: RequestFn;
   action: (task: Promise<unknown>) => Promise<boolean>;
   suppliers: Supplier[];
+  suppliersFailed?: boolean;
 }): JSX.Element {
   const nextVersion = Math.max(0, ...eligibilities.map((item) => item.version)) + 1;
   return (
@@ -983,6 +1021,7 @@ function EligibilityForm({
           }}
         >
           <h3>{t("purchasing.newEligibility")}</h3>
+          {suppliersFailed ? <p role="alert">{t("purchasing.suppliersLoadError")}</p> : null}
           <label>
             {t("purchasing.supplierIdentity")}
             <input
@@ -1170,17 +1209,20 @@ function OrdersIndex({
   status,
   onStatus,
   onOpen,
+  loadFailed,
 }: {
   orders: OrderIndexItem[];
   status: string;
   onStatus: (status: string) => void;
   onOpen: (order: OrderIndexItem) => void;
+  loadFailed?: boolean;
 }): JSX.Element | null {
   const visible = status ? orders.filter((order) => order.status === status) : orders;
-  if (orders.length === 0) return null;
+  if (orders.length === 0 && !loadFailed) return null;
   return (
     <section className="purchasing-index" aria-label={t("purchasing.indexTitle")}>
       <h2>{t("purchasing.indexTitle")}</h2>
+      {loadFailed ? <p role="alert">{t("purchasing.sectionLoadError")}</p> : null}
       <div
         className="purchasing-index-filters"
         role="group"
@@ -1285,6 +1327,7 @@ function ReceivingPanel({
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<ReceivingState | null>(null);
   const [note, setNote] = useState("");
+  const [formError, setFormError] = useState("");
   const [quantities, setQuantities] = useState<Quantities>({});
   const [receiptKey, setReceiptKey] = useState(
     () => `${order.order_code}-${crypto.randomUUID().slice(0, 8)}`,
@@ -1319,6 +1362,7 @@ function ReceivingPanel({
   function submit(event: FormEvent): void {
     event.preventDefault();
     if (!state) return;
+    setFormError("");
     const lines = state.lines
       .map((line) => {
         const entry = quantities[line.id] ?? {
@@ -1335,8 +1379,16 @@ function ReceivingPanel({
           rack_location: entry.rack_location || null,
         };
       })
-      .filter((line) => Number(line.received_qty) > 0);
+      // damaged is a subset of received — a fully-damaged arrival posts
+      // received = damaged, so either field alone keeps the line.
+      .filter((line) => Number(line.received_qty) > 0 || Number(line.damaged_qty) > 0);
     if (lines.length === 0) return;
+    if (lines.some((line) => Number(line.damaged_qty) > Number(line.received_qty))) {
+      // received=0 with damaged>0 would otherwise vanish silently — the
+      // damaged field is a subset of what arrived, not a second quantity.
+      setFormError(t("purchasing.receiveDamageExceeds"));
+      return;
+    }
     void action(
       request(`inventory/orders/${order.id}/receipts/`, "POST", {
         receipt_key: receiptKey,
@@ -1367,6 +1419,7 @@ function ReceivingPanel({
         {t("purchasing.receiving")}
       </summary>
       {open && !state && <p>{t("purchasing.receivingLoading")}</p>}
+      {formError ? <p role="alert">{formError}</p> : null}
       {open && state && (
         <form onSubmit={submit}>
           <table>

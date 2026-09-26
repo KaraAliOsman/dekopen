@@ -19,6 +19,7 @@ from documents.views import DOCUMENTARY_ERROR_DETAILS, ERRORS, documentary_scope
 from inventory import service
 from inventory import remnants as remnants_service
 from inventory.serializers import (
+    BarAuthorityListSerializer,
     InventoryMovementRequestSerializer,
     InventoryMovementSerializer,
     InventoryMovementsSerializer,
@@ -158,6 +159,21 @@ class OrderReceiptCreateView(APIView):
                     lines=data["lines"],
                 )
         return Response(output, status=201 if created else 200)
+
+
+class BarAuthorityListView(APIView):
+    @extend_schema(
+        operation_id="inventory_bar_authorities",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={200: BarAuthorityListSerializer, **ERRORS},
+        tags=["inventory"],
+    )
+    def get(self, request):
+        with public_inventory_errors():
+            with documentary_scope(request, _READERS) as (_, _, org_id):
+                output = remnants_service.list_bar_authorities(org_id=org_id)
+        return Response(output)
 
 
 class RemnantListView(APIView):

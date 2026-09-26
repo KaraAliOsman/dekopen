@@ -13,6 +13,7 @@ artifacts already carry (``piece_id`` hashes, position/bay/leaf uuids,
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 from uuid import UUID
 
@@ -22,7 +23,15 @@ from documents.repository import (
     one,
     rows,
 )
-from documents.renderers import _piece_labels
+from documents.renderers import (
+    _cut_key,
+    _cut_member_map,
+    _cut_spec_index,
+    _infill_code_map,
+    _infill_key,
+    _infill_spec_index,
+    _piece_labels,
+)
 
 from dekopen_engine.cutting import CutBar
 from dekopen_engine.manufacturing import ManufacturingFactsV1
@@ -41,11 +50,14 @@ def _decoded(raw: Any) -> dict[str, Any]:
     return {}
 
 
-def _trace_piece(cut: dict[str, Any]) -> dict[str, Any]:
+def _trace_piece(cut: dict[str, Any], code: str | None = None) -> dict[str, Any]:
     """The stable identity of one cut piece — everything needed to walk
-    backward from the physical label to its origin member."""
+    backward from the physical label to its origin member. ``code`` is the
+    shop-facing code (M-xx/R-xx/I-xx) the printed packs carry, so screen and
+    paper name the same piece identically."""
     return {
         "piece_id": cut.get("piece_id"),
+        "code": code,
         "sequence": cut.get("sequence"),
         "role": cut.get("role"),
         "length_mm": cut.get("length_mm"),
@@ -68,7 +80,10 @@ def _trace_piece(cut: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _plan_bars(optimization: dict[str, Any]) -> list[dict[str, Any]]:
+def _plan_bars(
+    optimization: dict[str, Any],
+    cut_map: dict[tuple[str, ...], str] | None = None,
+) -> list[dict[str, Any]]:
     bars = (optimization.get("bars") or {}).get("workshop_cut_plan") or []
     plan = []
     for bar in bars:
@@ -82,12 +97,18 @@ def _plan_bars(optimization: dict[str, Any]) -> list[dict[str, Any]]:
             "stock_length_mm": bar.get("stock_length_mm"),
             "remainder_mm": bar.get("remainder_mm"),
             "yield_pct": bar.get("yield_pct"),
-            "cuts": [_trace_piece(cut) for cut in bar.get("cuts") or []],
+            "cuts": [
+                _trace_piece(cut, (cut_map or {}).get(_cut_key(cut)))
+                for cut in bar.get("cuts") or []
+            ],
         })
     return plan
 
 
-def _plan_sheets(optimization: dict[str, Any]) -> list[dict[str, Any]]:
+def _plan_sheets(
+    optimization: dict[str, Any],
+    infill_map: dict[tuple[str, str, str], str] | None = None,
+) -> list[dict[str, Any]]:
     sheets = optimization.get("sheets") or []
     plan = []
     for sheet in sheets:
@@ -101,7 +122,10 @@ def _plan_sheets(optimization: dict[str, Any]) -> list[dict[str, Any]]:
             "remnant_id": sheet.get("remnant_id"),
             "yield_pct": sheet.get("yield_pct"),
             "source": sheet.get("source"),
-            "pieces": [_trace_piece(piece) for piece in sheet.get("placements") or []],
+            "pieces": [
+                _trace_piece(piece, (infill_map or {}).get(_infill_key(piece)))
+                for piece in sheet.get("placements") or []
+            ],
         })
     return plan
 
@@ -216,13 +240,21 @@ def trace_work_order(*, org_id: UUID, order_id: UUID) -> dict[str, Any]:
     # Shop-facing piece/location codes (M-xx/R-xx/I-xx/V-xx/H-xx) — the same
     # codes the printed packs emit, so web and paper reconcile.
     piece_label_map: dict[str, str] = {}
+    labels: dict[str, dict[object, str]] = {}
+    cut_map: dict[tuple[str, ...], str] = {}
+    infill_map: dict[tuple[str, str, str], str] = {}
     if version_snapshot:
         try:
-            for group in _piece_labels(version_snapshot).values():
+            labels = _piece_labels(version_snapshot)
+            for group in labels.values():
                 for key, code in group.items():
                     piece_label_map[str(key)] = code
+            cut_map = _cut_member_map(version_snapshot, labels)
+            infill_map = _infill_code_map(version_snapshot, labels)
         except DocumentaryError:
             piece_label_map = {}
+            cut_map = {}
+            infill_map = {}
     return {
         "work_order": {
             "id": order["id"],
@@ -241,8 +273,8 @@ def trace_work_order(*, org_id: UUID, order_id: UUID) -> dict[str, Any]:
             "strategy": optimization.get("strategy"),
             "color": optimization.get("color"),
             "units": optimization.get("units"),
-            "bars": _plan_bars(optimization),
-            "sheets": _plan_sheets(optimization),
+            "bars": _plan_bars(optimization, cut_map),
+            "sheets": _plan_sheets(optimization, infill_map),
             "unnested": optimization.get("unnested") or [],
         },
         "stock": {
@@ -322,23 +354,61 @@ def _trace_operations(
     }
 
 
-def _piece_hits(order_row: dict[str, Any], piece_id: str) -> list[dict[str, Any]]:
-    """Locate ``piece_id`` inside one order's sealed plan."""
+def _piece_hits(
+    order_row: dict[str, Any],
+    piece_id: str,
+    *,
+    spec_keys: set[tuple[str, ...]] | None = None,
+    infill_keys: set[tuple[str, str, str]] | None = None,
+    bay_ids: set[str] | None = None,
+    leaf_ids: set[str] | None = None,
+    position_ids: set[str] | None = None,
+    unit_index: int | None = None,
+    cut_map: dict[tuple[str, ...], str] | None = None,
+    infill_map: dict[tuple[str, str, str], str] | None = None,
+) -> list[dict[str, Any]]:
+    """Locate ``piece_id`` inside one order's sealed plan — directly by piece
+    hash, or indirectly through a resolved printed code: ``spec_keys`` are the
+    member/reinforcement spec tuples a scanned M-xx/R-xx resolves to,
+    ``infill_keys`` the (position, bay, leaf) tuples an I-xx resolves to, and
+    the plain id sets cover location (V-xx/H-xx/P-nn) and unit (-Unn) codes."""
     payload = _decoded(order_row["payload_json"])
     optimization = _decoded(payload.get("optimization")) or {}
     hits: list[dict[str, Any]] = []
-    for bar in _plan_bars(optimization):
+    for bar in _plan_bars(optimization, cut_map):
         for cut in bar["cuts"]:
-            if cut["piece_id"] == piece_id:
+            matched = cut["piece_id"] == piece_id
+            if not matched and spec_keys is not None:
+                matched = _cut_key(cut) in spec_keys
+            if not matched and bay_ids is not None:
+                matched = str(cut.get("bay_id") or "") in bay_ids
+            if not matched and leaf_ids is not None:
+                matched = str(cut.get("leaf_id") or "") in leaf_ids
+            if not matched and position_ids is not None:
+                matched = str(cut.get("source_position_id") or "") in position_ids
+            if not matched and unit_index is not None:
+                matched = cut.get("unit_index") == unit_index
+            if matched:
                 hits.append({
                     "kind": "BAR",
                     "bar_index": bar["bar_index"],
                     "commercial_sku": bar["commercial_sku"],
                     "piece": cut,
                 })
-    for sheet in _plan_sheets(optimization):
+    for sheet in _plan_sheets(optimization, infill_map):
         for piece in sheet["pieces"]:
-            if piece["piece_id"] == piece_id:
+            matched = piece["piece_id"] == piece_id
+            if not matched and infill_keys is not None:
+                matched = _infill_key(piece) in infill_keys
+            if not matched and bay_ids is not None:
+                matched = str(piece.get("bay_id") or "") in bay_ids
+            if not matched and leaf_ids is not None:
+                matched = str(piece.get("leaf_id") or "") in leaf_ids
+            if not matched and position_ids is not None:
+                matched = str(piece.get("source_position_id") or "") in position_ids
+            if not matched and unit_index is not None:
+                matched = piece.get("unit_index") == unit_index
+            if matched:
                 hits.append({
                     "kind": "SHEET",
                     "sheet_index": sheet["sheet_index"],
@@ -348,24 +418,127 @@ def _piece_hits(order_row: dict[str, Any], piece_id: str) -> list[dict[str, Any]
     return hits
 
 
+_CODE_RE = re.compile(r"^(MAN|M|R|I|V|H)-?(\d+)$|^P-?(\d+)$|^-?U(\d+)$", re.IGNORECASE)
+
+
+def _resolve_code(
+    version_snapshot: dict[str, Any], query: str
+) -> dict[str, Any]:
+    """Resolve a printed code to the frozen identities it names — member,
+    reinforcement, infill, bay, leaf and position ids — so a scanned
+    M-03/I-02/-U01 hits the same pieces the paper label does. Returns the
+    label maps plus the resolved id sets (empty dict when nothing resolves)."""
+    match = _CODE_RE.match(query.strip().upper())
+    if not match:
+        return {}
+    try:
+        labels = _piece_labels(version_snapshot)
+    except DocumentaryError:
+        return {}
+    resolved: dict[str, Any] = {
+        "spec_keys": set(),
+        "infill_keys": set(),
+        "bay_ids": set(),
+        "leaf_ids": set(),
+        "position_ids": set(),
+        "unit_index": None,
+        "cut_map": _cut_member_map(version_snapshot, labels),
+        "infill_map": _infill_code_map(version_snapshot, labels),
+    }
+    prefix, member_digits, position_digits, unit_digits = match.groups()
+    if unit_digits is not None:
+        resolved["unit_index"] = int(unit_digits)
+        return resolved
+    if position_digits is not None:
+        for position_id, code in labels["position"].items():
+            if str(code) == f"P{position_digits}":
+                resolved["position_ids"].add(str(position_id))
+        return resolved
+    group = {
+        "M": "member",
+        "R": "reinforcement",
+        "I": "infill",
+        "V": "bay",
+        "H": "leaf",
+        "MAN": "handle",
+    }[prefix]
+    canonical = f"{prefix}-{member_digits}"
+    resolved_ids = {
+        entity_id
+        for entity_id, code in labels[group].items()
+        if str(code) == canonical
+    }
+    if not resolved_ids:
+        return {}
+    if group in ("member", "reinforcement"):
+        spec_index = _cut_spec_index(version_snapshot)
+        kind_tag = "PROFILE" if group == "member" else "REINFORCEMENT"
+        for key, ids in spec_index.items():
+            if key[0] == kind_tag and any(entity_id in resolved_ids for entity_id in ids):
+                resolved["spec_keys"].add(key)
+    elif group == "infill":
+        infill_index = _infill_spec_index(version_snapshot)
+        for key, ids in infill_index.items():
+            if any(entity_id in resolved_ids for entity_id in ids):
+                resolved["infill_keys"].add(key)
+    elif group == "bay":
+        resolved["bay_ids"] = {str(entity_id) for entity_id in resolved_ids}
+    elif group == "leaf":
+        resolved["leaf_ids"] = {str(entity_id) for entity_id in resolved_ids}
+    return resolved
+
+
 def trace_piece(*, org_id: UUID, piece_id: str) -> dict[str, Any]:
     """Backward lookup: which work order(s) and plan location carry a
     physical piece — walk from the piece back to order → version → project."""
     if not piece_id or len(piece_id) > 128:
         raise DocumentaryError("work_order_piece_invalid")
+    code_query = bool(_CODE_RE.match(piece_id.strip().upper()))
+    # A printed code never appears inside payload_json, so the LIKE prefilter
+    # only applies to raw piece_id scans — code lookups scan every order in
+    # the org (bounded; an operator scan is a rare call).
     orders = rows(
         """
         SELECT id::text, order_code, status::text,
                project_id::text, project_version_id::text, payload_json::text
         FROM public.orders
-        WHERE org_id = %s AND payload_json::text LIKE %s
-        ORDER BY created_at
-        """,
-        [str(org_id), f"%{piece_id}%"],
+        WHERE org_id = %s
+        """
+        + ("" if code_query else "AND payload_json::text LIKE %s")
+        + " ORDER BY created_at",
+        [str(org_id)] if code_query else [str(org_id), f"%{piece_id}%"],
     )
     matches: list[dict[str, Any]] = []
+    snapshots: dict[str, dict[str, Any]] = {}
     for order in orders:
-        hits = _piece_hits(order, piece_id)
+        resolved: dict[str, Any] = {}
+        if code_query and order["project_version_id"]:
+            version_id = str(order["project_version_id"])
+            if version_id not in snapshots:
+                with documentary_backend():
+                    snapshot_row = one(
+                        """
+                        SELECT snapshot_json::text
+                        FROM public.project_versions
+                        WHERE id = %s AND org_id = %s
+                        """,
+                        [version_id, str(org_id)],
+                        "work_order_not_found",
+                    )
+                snapshots[version_id] = _decoded(snapshot_row["snapshot_json"])
+            resolved = _resolve_code(snapshots[version_id], piece_id)
+        hits = _piece_hits(
+            order,
+            piece_id,
+            spec_keys=resolved.get("spec_keys") or None,
+            infill_keys=resolved.get("infill_keys") or None,
+            bay_ids=resolved.get("bay_ids") or None,
+            leaf_ids=resolved.get("leaf_ids") or None,
+            position_ids=resolved.get("position_ids") or None,
+            unit_index=resolved.get("unit_index"),
+            cut_map=resolved.get("cut_map"),
+            infill_map=resolved.get("infill_map"),
+        )
         if not hits:
             continue
         steps = rows(

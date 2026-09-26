@@ -155,6 +155,8 @@ SPECTACULAR_SETTINGS = {
             "CANCELLED",
         ],
         "StockKindEnum": ["BAR", "SHEET"],
+        "SectionSourceEnum": ["POLYGON", "DXF_REFERENCE"],
+        "BarAuthoritySourceEnum": ["PROFILE", "REINFORCEMENT"],
         "WorkCenterKindEnum": ["CUT", "ASSEMBLY", "GLAZING", "QC", "PACK"],
     },
     "TITLE": "Dekopen API",

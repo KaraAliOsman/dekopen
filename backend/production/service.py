@@ -2924,6 +2924,20 @@ def optimize_work_order(
             for sheet in sheets
             if sheet.get("source") == "REMNANT" and sheet.get("remnant_id")
         ]
+        # The plan names each physical drop it claims — the operator matches
+        # the printed remnant id to the rack tag without opening the ledger.
+        consumed_ids = [entry["id"] for entry in consumed_bars + consumed_sheets]
+        if consumed_ids:
+            consumed_locations = {
+                str(r["id"]): r["rack_location"]
+                for r in rows(
+                    "SELECT id, rack_location FROM public.inventory_remnants"
+                    " WHERE org_id = %s AND id = ANY(%s::uuid[])",
+                    [str(org_id), consumed_ids],
+                )
+            }
+            for entry in consumed_bars + consumed_sheets:
+                entry["rack_location"] = consumed_locations.get(entry["id"])
         produced_bars = [
             {
                 "stock_authority_id": bar["stock_authority_id"],

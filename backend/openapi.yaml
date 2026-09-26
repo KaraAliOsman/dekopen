@@ -4996,6 +4996,70 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/inventory/bar-authorities/:
+    get:
+      operationId: inventory_bar_authorities
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - inventory
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BarAuthorityList'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/inventory/movements/:
     get:
       operationId: inventory_movements
@@ -14984,6 +15048,46 @@ components:
       - half
       - one_third
       - two_thirds
+    BarAuthority:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        commercial_sku:
+          type: string
+        physical_stock_identity:
+          type: string
+          format: uuid
+          nullable: true
+        stock_color:
+          type: string
+          nullable: true
+        source:
+          $ref: '#/components/schemas/BarAuthoritySourceEnum'
+      required:
+      - commercial_sku
+      - id
+      - physical_stock_identity
+      - source
+      - stock_color
+    BarAuthorityList:
+      type: object
+      properties:
+        authorities:
+          type: array
+          items:
+            $ref: '#/components/schemas/BarAuthority'
+      required:
+      - authorities
+    BarAuthoritySourceEnum:
+      enum:
+      - PROFILE
+      - REINFORCEMENT
+      type: string
+      description: |-
+        * `PROFILE` - PROFILE
+        * `REINFORCEMENT` - REINFORCEMENT
     BeadList:
       type: object
       properties:
@@ -15916,7 +16020,7 @@ components:
         piece_id:
           type: string
         source_kind:
-          $ref: '#/components/schemas/SourceKindEnum'
+          $ref: '#/components/schemas/BarAuthoritySourceEnum'
         workshop_sku:
           type: string
         material:
@@ -21296,7 +21400,7 @@ components:
         carries the manufacturer-drawing provenance in `drawing_ref`.
       properties:
         source:
-          $ref: '#/components/schemas/SourceEnum'
+          $ref: '#/components/schemas/SectionSourceEnum'
         polygon:
           type: array
           items:
@@ -21332,7 +21436,7 @@ components:
         carries the manufacturer-drawing provenance in `drawing_ref`.
       properties:
         source:
-          $ref: '#/components/schemas/SourceEnum'
+          $ref: '#/components/schemas/SectionSourceEnum'
         polygon:
           type: array
           items:
@@ -22685,6 +22789,14 @@ components:
       required:
       - x_mm
       - y_mm
+    SectionSourceEnum:
+      enum:
+      - POLYGON
+      - DXF_REFERENCE
+      type: string
+      description: |-
+        * `POLYGON` - POLYGON
+        * `DXF_REFERENCE` - DXF_REFERENCE
     SegmentEnum:
       enum:
       - RETAIL
@@ -22989,22 +23101,6 @@ components:
       description: |-
         * `MOVING` - MOVING
         * `FIXED` - FIXED
-    SourceEnum:
-      enum:
-      - POLYGON
-      - DXF_REFERENCE
-      type: string
-      description: |-
-        * `POLYGON` - POLYGON
-        * `DXF_REFERENCE` - DXF_REFERENCE
-    SourceKindEnum:
-      enum:
-      - PROFILE
-      - REINFORCEMENT
-      type: string
-      description: |-
-        * `PROFILE` - PROFILE
-        * `REINFORCEMENT` - REINFORCEMENT
     StepTransition:
       type: object
       properties:

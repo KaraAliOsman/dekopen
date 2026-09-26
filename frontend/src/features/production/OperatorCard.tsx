@@ -62,6 +62,7 @@ type CutPiece = {
   leaf_id?: string;
   sagitta_mm?: string;
   piece_id?: string;
+  code?: string;
 };
 
 type SheetPiece = {
@@ -72,6 +73,8 @@ type SheetPiece = {
   bay_id?: string;
   leaf_id?: string;
   unit_index?: number;
+  workshop_sku?: string;
+  code?: string;
 };
 
 /** Stock kinds each routing step physically consumes — mirrors the backend's
@@ -332,7 +335,8 @@ export function OperatorStepCard({
                           <tr key={op.operation_id}>
                             <td>{opKindLabel(op.kind)}</td>
                             <td title={op.host ?? ""}>
-                              {String(op.detail?.role ?? op.host ?? "—")}
+                              {(op.host && labels[op.host]) ??
+                                String(op.detail?.role ?? op.host ?? "—")}
                             </td>
                             <td>
                               {op.x_mm ?? "—"} / {op.y_mm ?? "—"}
@@ -364,7 +368,10 @@ export function OperatorStepCard({
                   <tbody>
                     {cutPieces.map((piece) => (
                       <tr key={piece.piece_id ?? `${piece.barIndex}-${piece.sequence}`}>
-                        <td>{piece.sequence ?? "—"}</td>
+                        <td>
+                          {piece.code ? <strong>{piece.code} · </strong> : null}
+                          {piece.sequence ?? "—"}
+                        </td>
                         <td>{piece.workshop_sku ?? "—"}</td>
                         <td>{piece.role ?? "—"}</td>
                         <td>
@@ -395,6 +402,7 @@ export function OperatorStepCard({
               <table className="production-plan operator-pieces">
                 <thead>
                   <tr>
+                    <th>{t("production.cutplanPiece")}</th>
                     <th>{t("production.operatorRole")}</th>
                     <th>{t("production.optimizeSize")}</th>
                     <th>{t("production.operatorOrigin")}</th>
@@ -403,6 +411,10 @@ export function OperatorStepCard({
                 <tbody>
                   {sheetPieces.map((piece, index) => (
                     <tr key={piece.piece_id ?? index}>
+                      <td>
+                        {piece.code ?? "—"}
+                        {piece.workshop_sku ? ` · ${piece.workshop_sku}` : ""}
+                      </td>
                       <td>{piece.role ?? "—"}</td>
                       <td>
                         {piece.width_mm ?? "—"} × {piece.height_mm ?? "—"}
