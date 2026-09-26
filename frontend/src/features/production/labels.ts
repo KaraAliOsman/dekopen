@@ -59,6 +59,8 @@ export function stockKindLabel(kind: string | null | undefined): string {
 
 const CENTER_KINDS: ReadonlySet<string> = new Set([
   "CUT",
+  "PROFILE_CUT",
+  "REINFORCEMENT_CUT",
   "MACHINING",
   "WELDING",
   "CRIMP",

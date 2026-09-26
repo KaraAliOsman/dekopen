@@ -871,11 +871,12 @@ export function SystemWorkspaceView({
             </div>
           </div>
         )}
-        {(centers && centers.length > 0) || canEdit ? (
+        {centers !== null ? (
           <div className="ws-centers">
             <h4>{wst("centers")}</h4>
+            {centers.length === 0 && <p className="ws-empty">{wst("noCenters")}</p>}
             <ul className="ws-stations">
-              {(centers ?? []).map((center) => (
+              {centers.map((center) => (
                 <li key={center.id}>
                   <strong>{center.name}</strong>
                   <small>
