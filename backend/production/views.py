@@ -47,6 +47,7 @@ from production.serializers import (
     DispatchNoteDteAccessSerializer,
     DispatchNoteDteEmitSerializer,
     DispatchNoteDteSerializer,
+    DispatchNoteVoidSerializer,
     DispatchRequestSerializer,
     InstallationRequestSerializer,
     PackingLabelsSerializer,
@@ -475,6 +476,27 @@ class ProductionOrderDispatchView(APIView):
                     order_id=order_id,
                     actor_id=token.user_id,
                     note=data.get("note"),
+                )
+        return Response(output)
+
+
+class ProductionOrderDispatchNoteVoidView(APIView):
+    @extend_schema(
+        operation_id="production_order_dispatch_note_void",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=DispatchNoteVoidSerializer,
+        responses={200: ProductionOrderDetailSerializer, **ERRORS},
+        tags=["production"],
+    )
+    def post(self, request, order_id: UUID):
+        data = validate(DispatchNoteVoidSerializer, request.data)
+        with public_production_errors():
+            with documentary_scope(request, _WRITERS) as (token, _, org_id):
+                output = service.void_dispatch_note(
+                    org_id=org_id,
+                    order_id=order_id,
+                    actor_id=token.user_id,
+                    reason=data.get("reason"),
                 )
         return Response(output)
 

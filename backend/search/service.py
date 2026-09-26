@@ -193,7 +193,7 @@ def search(org_id: UUID, query: str, role: str = "OWNER") -> dict:
     for row in org(
         "SELECT d.id, d.note_code, o.order_code"
         " FROM public.dispatch_notes d JOIN public.orders o ON o.id = d.work_order_id"
-        " WHERE d.org_id=%s AND o.org_id=%s AND (__WHERE__)"
+        " WHERE d.org_id=%s AND d.voided_at IS NULL AND o.org_id=%s AND (__WHERE__)"
         f" ORDER BY d.created_at DESC LIMIT {GROUP_LIMIT}",
         "d.note_code",
         org_params=2,

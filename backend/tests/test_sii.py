@@ -1005,7 +1005,7 @@ def test_emit_dispatch_note_dte_stamps_and_replays(monkeypatch):
     assert "<MntTotal>1190000</MntTotal>" in text
     assert "<QtyItem>2</QtyItem>" in text
     assert (
-        "<NroLinRef>1</NroLinRef><TpoDocRef>OT</TpoDocRef>"
+        "<NroLinRef>1</NroLinRef><TpoDocRef>802</TpoDocRef>"
         "<FolioRef>OT-0042</FolioRef><FchRef>2026-10-04</FchRef>" in text
     )
     assert "<DirRecep>Av. Los Robles 123, Concepción</DirRecep>" in text

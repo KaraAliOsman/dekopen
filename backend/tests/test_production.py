@@ -2390,6 +2390,111 @@ def test_dispatch_requires_completed_and_is_idempotent(monkeypatch) -> None:
     assert out2["order"]["status"] == "DISPATCHED"
 
 
+def test_dispatch_note_void_reverts_order_and_records_event(monkeypatch) -> None:
+    org_id, order_id = uuid4(), uuid4()
+    captured_status: dict[str, dict] = {"row": {"status": "DISPATCHED"}}
+    calls: list[tuple[str, list]] = []
+
+    def fake_one(sql_text: str, params: list, code: str = "not_found") -> dict:
+        lowered = " ".join(sql_text.lower().split())
+        if "for update" in lowered:
+            return {
+                "id": str(order_id),
+                "order_code": "OT-1",
+                "status": captured_status["row"]["status"],
+                "payload_json": {},
+                "project_id": str(uuid4()),
+            }
+        return {
+            "id": str(uuid4()),
+            "note_code": "GD-0001",
+        }
+
+    def fake_rows(sql_text: str, params: list) -> list:
+        lowered = " ".join(sql_text.lower().split())
+        if "from public.deliveries" in lowered or "from public.project_dtes" in lowered:
+            return []
+        if "update public.orders set status" in lowered:
+            captured_status["row"]["status"] = "COMPLETED"
+        if "insert into public.production_step_events" in lowered:
+            calls.append((lowered, list(params)))
+        return [{"id": "ok"}]
+
+    monkeypatch.setattr("production.service.one", fake_one)
+    monkeypatch.setattr("production.service.rows", fake_rows)
+    monkeypatch.setattr(
+        "production.service.get_work_order",
+        lambda **kw: {"order": {"status": captured_status["row"]["status"]}},
+    )
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ):
+        with pytest.raises(DocumentaryError, match="dispatch_note_void_reason_required"):
+            service.void_dispatch_note(
+                org_id=org_id, order_id=order_id, actor_id=uuid4(), reason=" "
+            )
+        out = service.void_dispatch_note(
+            org_id=org_id,
+            order_id=order_id,
+            actor_id=uuid4(),
+            reason="Dirección equivocada",
+        )
+    assert captured_status["row"]["status"] == "COMPLETED"
+    assert out["order"]["status"] == "COMPLETED"
+    assert "'wo_dispatch_voided'" in calls[0][0]
+    payload = json.loads(calls[0][1][3])
+    assert payload["note_code"] == "GD-0001"
+    assert payload["reason"] == "Dirección equivocada"
+
+
+def test_dispatch_note_void_refuses_stamped_or_delivered(monkeypatch) -> None:
+    org_id, order_id = uuid4(), uuid4()
+    guard: dict[str, bool] = {"delivery": True, "dte": False}
+
+    def fake_one(sql_text: str, params: list, code: str = "not_found") -> dict:
+        lowered = " ".join(sql_text.lower().split())
+        if "for update" in lowered:
+            return {
+                "id": str(order_id),
+                "order_code": "OT-1",
+                "status": "DISPATCHED",
+                "payload_json": {},
+            }
+        return {"id": str(uuid4()), "note_code": "GD-0001"}
+
+    def fake_rows(sql_text: str, params: list) -> list:
+        lowered = " ".join(sql_text.lower().split())
+        if "from public.deliveries" in lowered:
+            return [{"id": "d1"}] if guard["delivery"] else []
+        if "from public.project_dtes" in lowered:
+            return [{"id": "t1"}] if guard["dte"] else []
+        return [{"id": "ok"}]
+
+    monkeypatch.setattr("production.service.one", fake_one)
+    monkeypatch.setattr("production.service.rows", fake_rows)
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ):
+        with pytest.raises(
+            DocumentaryError, match="dispatch_note_void_delivery_exists"
+        ):
+            service.void_dispatch_note(
+                org_id=org_id,
+                order_id=order_id,
+                actor_id=uuid4(),
+                reason="Anular",
+            )
+        guard["delivery"] = False
+        guard["dte"] = True
+        with pytest.raises(DocumentaryError, match="dispatch_note_void_stamped"):
+            service.void_dispatch_note(
+                org_id=org_id,
+                order_id=order_id,
+                actor_id=uuid4(),
+                reason="Anular",
+            )
+
+
 def test_remake_code_embeds_id_fragment_for_long_sources(monkeypatch) -> None:
     org_id, order_id = uuid4(), uuid4()
     source_code = "OT-" + "A" * 47  # exactly 50 chars

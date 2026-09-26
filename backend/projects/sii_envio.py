@@ -1008,7 +1008,7 @@ def send_dispatch_note_envio(
         )
         note = one(
             "SELECT id FROM public.dispatch_notes "
-            "WHERE work_order_id=%s AND org_id=%s",
+            "WHERE work_order_id=%s AND org_id=%s AND voided_at IS NULL",
             [order_id_s, org_id_s],
             "dispatch_note_missing",
         )

@@ -75,6 +75,7 @@ import type {
   DispatchNoteDte,
   DispatchNoteDteAccess,
   DispatchNoteDteEmitRequest,
+  DispatchNoteVoidRequest,
   DispatchRequestRequest,
   DocumentaryInputsRequest,
   DocumentaryInputsResponse,
@@ -157,6 +158,7 @@ import type {
   PriceRequestRequest,
   PriceResponse,
   ProcessProfileOptionList,
+  ProductionOrder,
   ProductionOrderDetail,
   ProductionOrderList,
   ProductionOrderTrace,
@@ -9091,6 +9093,93 @@ export const productionOrderDispatchNote = async (
     {
       ...options,
       method: "GET",
+    },
+  );
+};
+
+export type productionOrderDispatchNoteVoidResponse200 = {
+  data: ProductionOrder;
+  status: 200;
+};
+
+export type productionOrderDispatchNoteVoidResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type productionOrderDispatchNoteVoidResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type productionOrderDispatchNoteVoidResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type productionOrderDispatchNoteVoidResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type productionOrderDispatchNoteVoidResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type productionOrderDispatchNoteVoidResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type productionOrderDispatchNoteVoidResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type productionOrderDispatchNoteVoidResponseSuccess =
+  productionOrderDispatchNoteVoidResponse200 & {
+    headers: Headers;
+  };
+export type productionOrderDispatchNoteVoidResponseError = (
+  | productionOrderDispatchNoteVoidResponse400
+  | productionOrderDispatchNoteVoidResponse401
+  | productionOrderDispatchNoteVoidResponse403
+  | productionOrderDispatchNoteVoidResponse404
+  | productionOrderDispatchNoteVoidResponse409
+  | productionOrderDispatchNoteVoidResponse422
+  | productionOrderDispatchNoteVoidResponse503
+) & {
+  headers: Headers;
+};
+
+export type productionOrderDispatchNoteVoidResponse =
+  productionOrderDispatchNoteVoidResponseSuccess | productionOrderDispatchNoteVoidResponseError;
+
+export const getProductionOrderDispatchNoteVoidUrl = (orderId: string) => {
+  return `/api/v1/production/orders/${orderId}/dispatch-note-void/`;
+};
+
+export const productionOrderDispatchNoteVoid = async (
+  orderId: string,
+  dispatchNoteVoidRequest?: DispatchNoteVoidRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<productionOrderDispatchNoteVoidResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<productionOrderDispatchNoteVoidResponse>(
+    getProductionOrderDispatchNoteVoidUrl(orderId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+      body: JSON.stringify(dispatchNoteVoidRequest),
     },
   );
 };

@@ -11,6 +11,10 @@ export interface DispatchNoteAccess {
   note_code: string;
   work_order_id: string;
   created_at: string;
+  /** @nullable */
+  voided_at: string | null;
+  /** @nullable */
+  voided_reason: string | null;
   signed_url: string;
   /** @nullable */
   tributario_signed_url: string | null;

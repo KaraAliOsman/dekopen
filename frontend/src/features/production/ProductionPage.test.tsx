@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { apiMutator } from "../../api/apiMutator";
 import { t } from "../../i18n/es-CL";
 import { ProductionPage } from "./ProductionPage";
+import { ConfirmProvider } from "../../ui";
 
 const identity = vi.hoisted(() => ({ id: "tenant-a", role: "WORKSHOP_MANAGER" }));
 vi.mock("../../auth/AuthSessionProvider", () => ({
@@ -84,7 +85,9 @@ describe("ProductionPage", () => {
   it("lists work orders and opens the detail with steps", async () => {
     render(
       <MemoryRouter initialEntries={["/production"]}>
-        <ProductionPage />
+        <ConfirmProvider>
+          <ProductionPage />
+        </ConfirmProvider>
       </MemoryRouter>,
     );
     const orderButton = await screen.findByRole("button", { name: /OT-REV-A-01/ });
@@ -97,7 +100,9 @@ describe("ProductionPage", () => {
   it("starts a step through the transition endpoint", async () => {
     render(
       <MemoryRouter initialEntries={[`/production?order=${order.id}`]}>
-        <ProductionPage />
+        <ConfirmProvider>
+          <ProductionPage />
+        </ConfirmProvider>
       </MemoryRouter>,
     );
     const start = (await screen.findAllByRole("button", { name: t("production.actionStart") }))[0];
@@ -115,7 +120,9 @@ describe("ProductionPage", () => {
     identity.role = "ESTIMATOR";
     render(
       <MemoryRouter initialEntries={["/production"]}>
-        <ProductionPage />
+        <ConfirmProvider>
+          <ProductionPage />
+        </ConfirmProvider>
       </MemoryRouter>,
     );
     await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());

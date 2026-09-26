@@ -1287,10 +1287,10 @@ def _dte_xml_dispatch_note(
     fch_ref = note_issued.astimezone(_SII_TZ).date().isoformat()
     referencia = (
         f"<Referencia><NroLinRef>1</NroLinRef>"
-        f"<TpoDocRef>OT</TpoDocRef>"
+        f"<TpoDocRef>802</TpoDocRef>"
         f"<FolioRef>{escape(order_code[:18])}</FolioRef>"
         f"<FchRef>{fch_ref}</FchRef>"
-        f"<RazonRef>Orden de trabajo</RazonRef></Referencia>"
+        f"<RazonRef>Orden de trabajo {escape(order_code)}</RazonRef></Referencia>"
     )
     return _render_dte(
         tipo=DTE_GUIA,
@@ -1332,7 +1332,7 @@ def emit_dispatch_note_dte(
             )
             note = rows(
                 "SELECT * FROM public.dispatch_notes "
-                "WHERE work_order_id=%s AND org_id=%s",
+                "WHERE work_order_id=%s AND org_id=%s AND voided_at IS NULL",
                 [order_id_s, org_id_s],
             )
             if not note:

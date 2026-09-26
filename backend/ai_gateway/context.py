@@ -214,7 +214,8 @@ def _brief(org_id: UUID) -> dict:
                AND o.status = 'COMPLETED' AND o.payload_json ? 'packing'
                AND NOT EXISTS (
                    SELECT 1 FROM public.dispatch_notes dn
-                   WHERE dn.org_id = o.org_id AND dn.work_order_id = o.id))
+                   WHERE dn.org_id = o.org_id AND dn.work_order_id = o.id
+                     AND dn.voided_at IS NULL))
                 AS dispatch_ready
         """,
         {"o": str(org_id)},

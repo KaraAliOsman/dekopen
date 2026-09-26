@@ -824,6 +824,7 @@ def release_production(*, org_id: UUID, version_id: UUID, actor_id: UUID) -> dic
                     ORDER BY s2.sequence LIMIT 1) AS next_step_code,
                    EXISTS(SELECT 1 FROM public.dispatch_notes dn
                           WHERE dn.org_id = o.org_id AND dn.work_order_id = o.id
+                            AND dn.voided_at IS NULL
                          ) AS has_dispatch_note
             FROM public.orders o
             LEFT JOIN public.production_steps s ON s.order_id = o.id
@@ -852,6 +853,7 @@ def list_production_orders(*, org_id: UUID) -> dict[str, object]:
                 ORDER BY s2.sequence LIMIT 1) AS next_step_code,
                EXISTS(SELECT 1 FROM public.dispatch_notes dn
                       WHERE dn.org_id = o.org_id AND dn.work_order_id = o.id
+                        AND dn.voided_at IS NULL
                      ) AS has_dispatch_note
         FROM public.orders o
         LEFT JOIN public.production_steps s ON s.order_id = o.id
@@ -979,6 +981,7 @@ def get_work_order(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
                 ORDER BY s2.sequence LIMIT 1) AS next_step_code,
                EXISTS(SELECT 1 FROM public.dispatch_notes dn
                       WHERE dn.org_id = o.org_id AND dn.work_order_id = o.id
+                        AND dn.voided_at IS NULL
                      ) AS has_dispatch_note
         FROM public.orders o
         LEFT JOIN public.production_steps s ON s.order_id = o.id
@@ -1008,20 +1011,23 @@ def get_work_order(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
         [str(order_id), str(org_id)],
     )
     dispatch_note = rows(
-        "SELECT id, note_code FROM public.dispatch_notes "
-        "WHERE org_id=%s AND work_order_id=%s",
+        "SELECT id, note_code, voided_at FROM public.dispatch_notes "
+        "WHERE org_id=%s AND work_order_id=%s "
+        "ORDER BY created_at DESC",
         [str(org_id), str(order_id)],
     )
+    live_note = next((row for row in dispatch_note if row.get("voided_at") is None), None)
     output = _public_order(order, include_payload=True)
     output["dispatch_note_code"] = (
         dispatch_note[0]["note_code"] if dispatch_note else None
     )
-    if dispatch_note:
+    output["dispatch_note_voided"] = bool(dispatch_note) and live_note is None
+    if live_note:
         dte = rows(
             "SELECT d.id, d.dte_type, d.folio, d.issued_at "
             "FROM public.project_dtes d "
             "WHERE d.org_id=%s AND d.dispatch_note_id=%s",
-            [str(org_id), str(dispatch_note[0]["id"])],
+            [str(org_id), str(live_note["id"])],
         )
         envios = sii_envio.envios_by_dispatch_note(org_id=org_id)
         output["dispatch_note_dte"] = (
@@ -1029,7 +1035,7 @@ def get_work_order(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
                 "dte_type": int(dte[0]["dte_type"]),
                 "folio": int(dte[0]["folio"]),
                 "issued_at": dte[0]["issued_at"],
-                "envio": envios.get(str(dispatch_note[0]["id"])),
+                "envio": envios.get(str(live_note["id"])),
             }
             if dte
             else None
@@ -2237,6 +2243,18 @@ def dxf_file_content(
     return f"{order['order_code']}-{filename}", content
 
 
+def _label_code(order_code: str, unit: int) -> str:
+    """Printed label identity — ``<order_code>-U<nn>``. An over-length order
+    code is shortened with a stable digest infix so the printed code stays
+    unique instead of silently colliding with a different order's prefix."""
+    suffix = f"-U{unit:02d}"
+    budget = 50 - len(suffix)
+    if len(order_code) <= budget:
+        return f"{order_code}{suffix}"
+    digest = hashlib.sha256(order_code.encode("utf-8")).hexdigest()[:8].upper()
+    return f"{order_code[: budget - 9]}-{digest}{suffix}"
+
+
 def generate_packing_manifest(
     *, org_id: UUID, order_id: UUID, actor_id: UUID
 ) -> dict[str, object]:
@@ -2283,7 +2301,7 @@ def generate_packing_manifest(
         units = [
             {
                 "unit_index": unit,
-                "label_code": f"{str(order['order_code'])[: 50 - len(f'-U{unit:02d}')]}-U{unit:02d}",
+                "label_code": _label_code(str(order["order_code"]), unit),
                 "position_id": payload.get("position_id"),
                 **kind_counts,
             }
@@ -2438,6 +2456,86 @@ def dispatch_work_order(
                     "order_code": order["order_code"],
                     "note": (note or "").strip() or None,
                     "dispatch_note": note_row["note_code"],
+                }),
+            ],
+        )
+        return get_work_order(org_id=org_id, order_id=order_id)
+
+
+def void_dispatch_note(
+    *, org_id: UUID, order_id: UUID, actor_id: UUID, reason: str | None = None
+) -> dict[str, object]:
+    """Void a mis-emitted guía before it becomes fiscal evidence and return
+    the order to COMPLETED so it can be re-dispatched. Only while the order
+    is still DISPATCHED: a scheduled delivery means a truck was booked
+    against this document, and a stamped DTE-52 means the folio can only be
+    annulled at the SII — both refuse the void."""
+    org_id_s, order_id_s = str(org_id), str(order_id)
+    reason_text = (reason or "").strip()
+    if not reason_text:
+        raise DocumentaryError("dispatch_note_void_reason_required")
+    with transaction.atomic(), documentary_backend():
+        order = one(
+            """
+            SELECT id, order_code, status::text, payload_json, project_id
+            FROM public.orders
+            WHERE id = %s AND org_id = %s AND order_type = 'WORKSHOP_OT'
+            FOR UPDATE
+            """,
+            [order_id_s, org_id_s],
+            "work_order_not_found",
+        )
+        if str(order["status"]) != "DISPATCHED":
+            raise DocumentaryError("dispatch_note_void_requires_dispatched")
+        note = one(
+            """
+            SELECT id, note_code FROM public.dispatch_notes
+            WHERE org_id=%s AND work_order_id=%s AND voided_at IS NULL
+            """,
+            [org_id_s, order_id_s],
+            "dispatch_note_not_found",
+        )
+        if rows(
+            "SELECT id FROM public.deliveries WHERE org_id=%s AND order_id=%s",
+            [org_id_s, order_id_s],
+        ):
+            raise DocumentaryError("dispatch_note_void_delivery_exists")
+        if rows(
+            "SELECT id FROM public.project_dtes "
+            "WHERE org_id=%s AND dispatch_note_id=%s",
+            [org_id_s, str(note["id"])],
+        ):
+            raise DocumentaryError("dispatch_note_void_stamped")
+        now = datetime.now(timezone.utc)
+        one(
+            """
+            UPDATE public.dispatch_notes
+            SET voided_at=%s, voided_by=%s, voided_reason=%s
+            WHERE id=%s RETURNING id
+            """,
+            [now, str(actor_id), reason_text[:500], str(note["id"])],
+        )
+        rows(
+            """
+            UPDATE public.orders SET status = 'COMPLETED', updated_at = %s
+            WHERE id = %s AND org_id = %s RETURNING id
+            """,
+            [now, order_id_s, org_id_s],
+        )
+        rows(
+            """
+            INSERT INTO public.production_step_events(org_id, order_id, event, actor_id, payload)
+            VALUES (%s, %s, 'WO_DISPATCH_VOIDED', %s, %s::jsonb)
+            RETURNING id
+            """,
+            [
+                org_id_s,
+                order_id_s,
+                str(actor_id),
+                json.dumps({
+                    "order_code": order["order_code"],
+                    "note_code": note["note_code"],
+                    "reason": reason_text[:500],
                 }),
             ],
         )

@@ -158,6 +158,7 @@ export * from "./dispatchNoteAccess";
 export * from "./dispatchNoteDte";
 export * from "./dispatchNoteDteAccess";
 export * from "./dispatchNoteDteEmitRequest";
+export * from "./dispatchNoteVoidRequest";
 export * from "./dispatchRequestRequest";
 export * from "./documentaryInputsRequest";
 export * from "./documentaryInputsResponse";

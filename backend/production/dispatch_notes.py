@@ -41,6 +41,12 @@ def _note_public(row) -> dict:
         "created_at": row["created_at"].isoformat()
         if hasattr(row["created_at"], "isoformat")
         else row["created_at"],
+        "voided_at": (
+            row["voided_at"].isoformat()
+            if row.get("voided_at") is not None
+            else None
+        ),
+        "voided_reason": row.get("voided_reason"),
     }
 
 
@@ -78,7 +84,8 @@ def issue_dispatch_note(
     satisfy UNIQUE (org_id, note_code) across every project."""
     org_id_s, order_id_s = str(org_id), str(order["id"])
     existing = rows(
-        "SELECT * FROM public.dispatch_notes WHERE work_order_id=%s AND org_id=%s",
+        "SELECT * FROM public.dispatch_notes "
+        "WHERE work_order_id=%s AND org_id=%s AND voided_at IS NULL",
         [order_id_s, org_id_s],
     )
     if existing:
@@ -172,7 +179,8 @@ def dispatch_note_access(*, org_id: UUID, order_id: UUID) -> dict:
     with documentary_backend():
         note = rows(
             "SELECT * FROM public.dispatch_notes "
-            "WHERE org_id=%s AND work_order_id=%s",
+            "WHERE org_id=%s AND work_order_id=%s "
+            "ORDER BY created_at DESC",
             [str(org_id), str(order_id)],
         )
         if not note:

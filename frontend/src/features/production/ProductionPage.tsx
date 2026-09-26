@@ -14,6 +14,7 @@ import {
   productionOrderDispatchNote,
   productionOrderDispatchNoteDte,
   productionOrderDispatchNoteDteEmit,
+  productionOrderDispatchNoteVoid,
   productionOrderDispatchNoteDteEnvio,
   productionOrderDispatchNoteDteEnvioSend,
   productionOrderDxfExport,
@@ -46,7 +47,7 @@ import type {
 import { ApiError, apiFetchBlob } from "../../api/apiMutator";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
 import { formatDateTime } from "../../format";
-import { DeniedState } from "../../ui";
+import { DeniedState, usePrompt } from "../../ui";
 import { fmtMm } from "../../format";
 import { formatDate } from "../money";
 import { t } from "../../i18n/es-CL";
@@ -128,6 +129,7 @@ const eventKey: Record<string, Parameters<typeof t>[0]> = {
   WO_DXF_EXPORTED: "production.eventDxfExported",
   WO_PACKED: "production.eventPacked",
   WO_DISPATCHED: "production.eventDispatched",
+  WO_DISPATCH_VOIDED: "production.eventDispatchVoided",
   WO_INSTALLED: "production.eventInstalled",
   WO_DELIVERY_SCHEDULED: "production.eventDeliveryScheduled",
   WO_DELIVERY_ON_ROUTE: "production.eventDeliveryOnRoute",
@@ -211,6 +213,7 @@ export function ProductionPage(): JSX.Element {
     detail ? "work_order" : null,
     detail ? { work_order_id: detail.id } : undefined,
   );
+  const prompt = usePrompt();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [note, setNote] = useState("");
@@ -546,6 +549,22 @@ export function ProductionPage(): JSX.Element {
 
   function dispatch(orderId: string): void {
     void action(productionOrderDispatch(orderId, { note: note || undefined }), orderId);
+  }
+
+  async function voidNote(orderId: string): Promise<void> {
+    const reason = await prompt({
+      title: t("production.voidNoteTitle"),
+      body: t("production.voidNoteBody"),
+      input: { label: t("production.voidNoteReasonLabel") },
+      confirmLabel: t("production.voidNoteConfirm"),
+      danger: true,
+    });
+    if (reason === null) return;
+    if (!reason) {
+      setMessage(t("production.voidNoteReasonRequired"));
+      return;
+    }
+    void action(productionOrderDispatchNoteVoid(orderId, { reason }), orderId);
   }
 
   function install(orderId: string): void {
@@ -970,10 +989,30 @@ export function ProductionPage(): JSX.Element {
                 {detail.dispatch_note_code ? (
                   <button
                     type="button"
-                    className="production-dispatch production-note"
+                    className={`production-dispatch production-note${
+                      detail.dispatch_note_voided ? " is-voided" : ""
+                    }`}
+                    title={
+                      detail.dispatch_note_voided ? t("production.dispatchNoteVoided") : undefined
+                    }
                     onClick={() => void openDispatchNote(detail.id)}
                   >
                     {detail.dispatch_note_code}
+                    {detail.dispatch_note_voided ? ` · ${t("production.dispatchNoteVoided")}` : ""}
+                  </button>
+                ) : null}
+                {canWrite &&
+                detail.status === "DISPATCHED" &&
+                !detail.dispatch_note_dte &&
+                detail.dispatch_note_code &&
+                !detail.dispatch_note_voided ? (
+                  <button
+                    type="button"
+                    className="production-dispatch production-void"
+                    disabled={busy}
+                    onClick={() => void voidNote(detail.id)}
+                  >
+                    {t("production.voidNoteButton")}
                   </button>
                 ) : null}
                 {detail.dispatch_note_dte ? (

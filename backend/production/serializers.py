@@ -149,6 +149,8 @@ class DispatchNoteSerializer(serializers.Serializer):
     note_code = serializers.CharField()
     work_order_id = serializers.UUIDField()
     created_at = serializers.DateTimeField()
+    voided_at = serializers.DateTimeField(allow_null=True)
+    voided_reason = serializers.CharField(allow_null=True)
 
 
 class DispatchNoteAccessSerializer(DispatchNoteSerializer):
@@ -174,6 +176,10 @@ class DispatchNoteDteAccessSerializer(DispatchNoteDteSerializer):
     signed_url = serializers.CharField()
     tributario_signed_url = serializers.CharField(allow_null=True)
     expires_in = serializers.IntegerField()
+
+
+class DispatchNoteVoidSerializer(StrictSerializer):
+    reason = serializers.CharField(required=True, allow_blank=False, max_length=500)
 
 
 class RemakeRequestSerializer(StrictSerializer):

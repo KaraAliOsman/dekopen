@@ -372,6 +372,19 @@
   color: #fff;
 }
 
+.production-dispatch.production-void {
+  background: transparent;
+  color: var(--theme-danger, #b3261e);
+  border-color: var(--theme-danger, #b3261e);
+}
+
+.production-dispatch.is-voided {
+  background: transparent;
+  color: var(--theme-text-muted, #7d8794);
+  border-color: var(--theme-border-subtle, #c8ced6);
+  text-decoration: line-through;
+}
+
 .production-packing {
   margin-block: var(--space-4, 16px);
 }

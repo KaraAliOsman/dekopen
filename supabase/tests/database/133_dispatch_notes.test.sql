@@ -1,7 +1,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
 SET LOCAL search_path = public, private, auth, extensions, pg_temp;
-SELECT plan(10);
+SELECT plan(13);
 
 -- Tenants read but never write.
 SELECT ok(
@@ -26,9 +26,15 @@ SELECT has_column(
     'public', 'dispatch_notes', 'payload_json',
     'sealed payload column exists'
 );
-SELECT col_is_unique(
-    'public', 'dispatch_notes', 'work_order_id',
-    'one guía de despacho per work order'
+SELECT ok(
+    EXISTS (
+        SELECT 1 FROM pg_indexes
+        WHERE schemaname = 'public' AND tablename = 'dispatch_notes'
+          AND indexname = 'uk_dispatch_note_live'
+          AND indexdef ILIKE '%UNIQUE%work_order_id%'
+          AND indexdef ILIKE '%voided_at IS NULL%'
+    ),
+    'one live guía de despacho per work order — voided rows excluded'
 );
 SELECT col_is_unique(
     'public', 'dispatch_notes', ARRAY['org_id', 'note_code'],
@@ -51,6 +57,24 @@ SELECT ok(
     (SELECT relrowsecurity FROM pg_class
      WHERE oid = 'public.dispatch_notes'::regclass),
     'row level security is enabled'
+);
+
+-- Void lifecycle: columns exist, only the void fields are writable by the
+-- backend role, and uniqueness survives on live notes.
+SELECT has_column(
+    'public', 'dispatch_notes', 'voided_at',
+    'voided_at column exists'
+);
+SELECT has_column(
+    'public', 'dispatch_notes', 'voided_reason',
+    'voided_reason column exists'
+);
+SELECT ok(
+    has_column_privilege(
+        'documentary_backend', 'public.dispatch_notes', 'voided_at', 'UPDATE')
+    AND NOT has_table_privilege(
+        'documentary_backend', 'public.dispatch_notes', 'DELETE'),
+    'backend role may only write the void columns, never delete a sealed note'
 );
 
 SELECT * FROM finish();

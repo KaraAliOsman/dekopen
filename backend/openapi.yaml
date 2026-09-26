@@ -8144,6 +8144,81 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/production/orders/{order_id}/dispatch-note-void/:
+    post:
+      operationId: production_order_dispatch_note_void
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: order_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - production
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DispatchNoteVoidRequest'
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductionOrder'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/production/orders/{order_id}/dispatch-note-dte/:
     get:
       operationId: production_order_dispatch_note_dte
@@ -16082,6 +16157,13 @@ components:
         created_at:
           type: string
           format: date-time
+        voided_at:
+          type: string
+          format: date-time
+          nullable: true
+        voided_reason:
+          type: string
+          nullable: true
         signed_url:
           type: string
         tributario_signed_url:
@@ -16096,6 +16178,8 @@ components:
       - note_code
       - signed_url
       - tributario_signed_url
+      - voided_at
+      - voided_reason
       - work_order_id
     DispatchNoteDte:
       type: object
@@ -16156,6 +16240,15 @@ components:
           allOf:
           - $ref: '#/components/schemas/IndTrasladoEnum'
           default: 1
+    DispatchNoteVoidRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+      required:
+      - reason
     DispatchRequestRequest:
       type: object
       properties:
@@ -20395,12 +20488,15 @@ components:
         dispatch_note_code:
           type: string
           nullable: true
+        dispatch_note_voided:
+          type: boolean
         dispatch_note_dte:
           type: object
           additionalProperties: {}
           nullable: true
       required:
       - created_at
+      - dispatch_note_voided
       - dispatch_ready
       - events
       - id

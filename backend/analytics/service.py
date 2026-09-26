@@ -94,7 +94,8 @@ def _summary(org_id: UUID) -> dict[str, Any]:
                AND o.status = 'COMPLETED' AND o.payload_json ? 'packing'
                AND NOT EXISTS (
                    SELECT 1 FROM public.dispatch_notes dn
-                   WHERE dn.org_id = o.org_id AND dn.work_order_id = o.id))
+                   WHERE dn.org_id = o.org_id AND dn.work_order_id = o.id
+                     AND dn.voided_at IS NULL))
                 AS dispatch_ready,
             (SELECT count(*) FROM public.profile_systems s
              WHERE s.org_id = %s

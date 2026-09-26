@@ -34,6 +34,7 @@ export interface ProductionOrderDetail {
   events: ProductionStepEvent[];
   /** @nullable */
   dispatch_note_code?: string | null;
+  dispatch_note_voided: boolean;
   /** @nullable */
   dispatch_note_dte?: ProductionOrderDetailDispatchNoteDte;
 }
