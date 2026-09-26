@@ -7,7 +7,9 @@ export function webglAvailable(): boolean {
   try {
     const canvas = document.createElement("canvas");
     probed = Boolean(
-      canvas.getContext("webgl2") || canvas.getContext("webgl") || canvas.getContext("experimental-webgl"),
+      canvas.getContext("webgl2") ||
+      canvas.getContext("webgl") ||
+      canvas.getContext("experimental-webgl"),
     );
   } catch {
     probed = false;

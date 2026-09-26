@@ -2,12 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  aiAgent,
-  aiAsk,
-  aiJobOutcomeCreate,
-  aiJobRetrieve,
-} from "../../api/generated/dekopen";
+import { aiAgent, aiAsk, aiJobOutcomeCreate, aiJobRetrieve } from "../../api/generated/dekopen";
 import { AskDekopen } from "./AskDekopen";
 import {
   AssistantSurfaceProvider,

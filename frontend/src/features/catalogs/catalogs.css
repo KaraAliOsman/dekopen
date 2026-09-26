@@ -303,6 +303,17 @@
   border-radius: 99px;
   background: var(--theme-surface-2, rgba(0, 0, 0, 0.06));
 }
+.ws-chip--off {
+  border: 1px solid var(--theme-warning, #b26a00);
+  color: var(--theme-warning, #b26a00);
+  background: transparent;
+}
+.ws-centers {
+  margin-top: 0.9rem;
+}
+.ws-centers h4 {
+  margin: 0 0 0.3rem;
+}
 .ws-badge {
   font-size: 0.72rem;
   padding: 0.15rem 0.55rem;

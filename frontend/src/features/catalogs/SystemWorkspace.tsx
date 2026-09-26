@@ -6,10 +6,12 @@ import type {
   PurchaseMappingRow,
   ReinforcementRow,
   SystemWorkspace,
+  WorkCenter,
+  WorkCenterRequestRequest,
 } from "../../api/generated/models";
 import { t } from "../../i18n/es-CL";
 import { fmtMm } from "../../format";
-import { opKindLabel, stationCodeLabel } from "../production/labels";
+import { centerKindLabel, opKindLabel, stationCodeLabel } from "../production/labels";
 import { SectionPreviewSvg } from "../canvas/SectionPreviewSvg";
 import type { Resource, Row, catalogApi } from "./catalogModel";
 
@@ -267,6 +269,7 @@ export function SystemWorkspaceView({
   reloadKey,
 }: WorkspaceProps): JSX.Element {
   const [workspace, setWorkspace] = useState<SystemWorkspace | null>(null);
+  const [centers, setCenters] = useState<WorkCenter[] | null>(null);
   const [error, setError] = useState(false);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
 
@@ -276,6 +279,7 @@ export function SystemWorkspaceView({
     let alive = true;
     const controller = new AbortController();
     setWorkspace(null);
+    setCenters(null);
     setError(false);
     void api
       .workspace(systemId, controller.signal)
@@ -285,11 +289,33 @@ export function SystemWorkspaceView({
       .catch(() => {
         if (alive && !controller.signal.aborted) setError(true);
       });
+    void api
+      .workCenters(controller.signal)
+      .then((result) => {
+        if (alive) setCenters(result);
+      })
+      .catch(() => {
+        if (alive) setCenters([]);
+      });
     return () => {
       alive = false;
       controller.abort();
     };
   }, [api, systemId, reloadKey]);
+
+  const reactivateCenter = async (center: WorkCenter) => {
+    try {
+      await api.upsertWorkCenter({
+        code: center.code,
+        name: center.name,
+        kind: center.kind as WorkCenterRequestRequest["kind"],
+        display_order: center.display_order,
+      });
+      setCenters(await api.workCenters());
+    } catch {
+      /* the centers list keeps its last state; the readiness ladder still shows the blocker */
+    }
+  };
 
   if (error) return <p role="alert">{ct("errorNetwork")}</p>;
   if (!workspace) return <p role="status">{ct("loading")}</p>;
@@ -807,6 +833,40 @@ export function SystemWorkspaceView({
                 </ul>
               </div>
             </div>
+          </div>
+        )}
+        {centers && centers.length > 0 && (
+          <div className="ws-centers">
+            <h4>{wst("centers")}</h4>
+            <ul className="ws-stations">
+              {centers.map((center) => (
+                <li key={center.id}>
+                  <strong>{center.name}</strong>
+                  <small>
+                    {" "}
+                    · <code>{center.code}</code> · {centerKindLabel(center.kind)}
+                  </small>
+                  {!center.active && (
+                    <>
+                      {" "}
+                      <span className="ws-chip ws-chip--off">{wst("centerInactive")}</span>
+                      {canEdit && (
+                        <>
+                          {" "}
+                          <button
+                            type="button"
+                            className="link-button"
+                            onClick={() => void reactivateCenter(center)}
+                          >
+                            {wst("centerActivate")}
+                          </button>
+                        </>
+                      )}
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </section>

@@ -695,3 +695,10 @@
   font-size: 11px;
   color: var(--theme-danger, #b3372f);
 }
+
+.aiws-head__actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.5rem;
+  margin-left: auto;
+}

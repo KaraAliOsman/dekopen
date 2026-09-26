@@ -5,6 +5,8 @@ import type {
   SystemWriteRequest,
   SystemWorkspace,
   ProcessProfileOption,
+  WorkCenter,
+  WorkCenterRequestRequest,
   ArticleWriteRequest,
   BeadWriteRequest,
   KitWriteRequest,
@@ -513,6 +515,19 @@ export function catalogApi(orgId: string) {
       const response = await client.catalogProcessProfileList({ ...options, signal });
       if (response.status !== 200) throw new Error("catalog_read_failed");
       return response.data.items;
+    },
+    async workCenters(signal?: AbortSignal): Promise<WorkCenter[]> {
+      const response = await client.productionWorkCenters({ ...options, signal });
+      if (response.status !== 200) throw new Error("work_centers_read_failed");
+      return response.data.centers;
+    },
+    async upsertWorkCenter(body: WorkCenterRequestRequest): Promise<WorkCenter> {
+      const response = await client.productionWorkCentersCreate(body, options);
+      if (response.status !== 200 && response.status !== 201) {
+        const detail = (response.data as ErrorResponse).error;
+        throw new Error(detail?.code ?? "work_center_write_failed");
+      }
+      return response.data;
     },
     async review<R extends Resource>(resource: R, row: Row<R>): Promise<Row<R>> {
       // If-Match is required by the API: a review must approve the revision

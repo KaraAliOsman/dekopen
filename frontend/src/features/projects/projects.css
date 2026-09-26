@@ -815,6 +815,12 @@
   .project-desk[data-facts-open] {
     grid-template-columns: minmax(26rem, 34vw) minmax(0, 1fr) minmax(13rem, 17rem);
   }
+
+  /* Emission is a form-heavy workflow — the rail gets the workspace width
+   * while it is open, the positions grid shrinks to a reference column. */
+  .project-desk[data-facts-open="quote"] {
+    grid-template-columns: minmax(38rem, 55vw) minmax(0, 1fr) minmax(11rem, 14rem);
+  }
 }
 
 .project-facts {

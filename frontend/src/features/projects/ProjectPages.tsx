@@ -1383,6 +1383,18 @@ function ProjectWorkspace({
                         ? "projects.lockedPriced"
                         : "projects.lockedQuoted",
                     )}
+                    {project.status === "DRAFT" && (
+                      <button
+                        className="link-button"
+                        onClick={() => {
+                          setFactsCollapsed(false);
+                          setOpenSection("quote");
+                        }}
+                        type="button"
+                      >
+                        {t("projects.goToQuote")}
+                      </button>
+                    )}
                   </p>
                 )}
                 <dl className="project-metadata project-facts__list">
@@ -1431,8 +1443,12 @@ function ProjectWorkspace({
                 <details
                   className="project-facts__section"
                   onToggle={(event) => {
-                    if (event.currentTarget.open) setOpenSection("quote");
-                    else if (openSection === "quote") setOpenSection(null);
+                    if (event.currentTarget.open) {
+                      setOpenSection("quote");
+                      event.currentTarget.scrollIntoView({ block: "start" });
+                    } else if (openSection === "quote") {
+                      setOpenSection(null);
+                    }
                   }}
                   open={openSection === "quote"}
                 >
@@ -1507,12 +1523,6 @@ function ProjectWorkspace({
                   {t("projects.addPosition")}
                 </Link>
               )}
-              {canWrite &&
-                project.status === "DRAFT" &&
-                !project.pricing_current &&
-                project.position_count > 0 && (
-                  <Link to={`/projects/${project.id}/pricing`}>{t("projects.priceProject")}</Link>
-                )}
             </div>
             {project.position_count === 0 && <p>{t("projects.noPositions")}</p>}
             <div className="position-grid" role="listbox" aria-label={t("projects.positions")}>

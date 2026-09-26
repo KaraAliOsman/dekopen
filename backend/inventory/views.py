@@ -15,7 +15,7 @@ from rest_framework.views import APIView
 from authentication.errors import contract_error
 from authentication.serializers import ACTIVE_ORGANIZATION_HEADER
 from documents.repository import DocumentaryError
-from documents.views import ERRORS, documentary_scope, validate
+from documents.views import DOCUMENTARY_ERROR_DETAILS, ERRORS, documentary_scope, validate
 from inventory import service
 from inventory import remnants as remnants_service
 from inventory.serializers import (
@@ -48,6 +48,7 @@ def public_inventory_errors():
             status_code,
             error.code,
             error.public_detail
+            or DOCUMENTARY_ERROR_DETAILS.get(error.code)
             or "La operación de inventario fue rechazada; revisa el pedido y las cantidades.",
             error_extra=error.extra or None,
         ) from error

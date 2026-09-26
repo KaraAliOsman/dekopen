@@ -28,6 +28,7 @@ import { t } from "../../i18n/es-CL";
 /* ------------------------------------------------------------------ */
 
 const LIVE_STATES = new Set(["QUEUED", "PLANNING", "RUNNING"]);
+const WAITING_STATES = new Set(["WAITING_FOR_USER", "WAITING_FOR_APPROVAL"]);
 
 const STATE_LABELS: Record<string, string> = {
   QUEUED: "aiws.state.queued",
@@ -486,6 +487,25 @@ export function AssistantWorkspacePage(): JSX.Element {
     }
   }
 
+  async function retry(): Promise<void> {
+    if (!job || !orgId || job.state !== "FAILED_RETRYABLE" || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const response = await aiJobMessageCreate(
+        job.id,
+        { message: t("aiws.retryMessage") },
+        { headers: { ...headers.headers, "X-Operation-Key": crypto.randomUUID() } },
+      );
+      if (response.status !== 202) throw new ApiError(response.status, response.data);
+      await queryClient.invalidateQueries({ queryKey: ["ai", "jobs", orgId] });
+    } catch {
+      setError(t("agent.error"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const firstJobs = useMemo(() => jobsQuery.data ?? [], [jobsQuery.data]);
   const jobs = useMemo(() => {
     const seen = new Set(firstJobs.map((j) => j.id));
@@ -543,15 +563,27 @@ export function AssistantWorkspacePage(): JSX.Element {
                 {job.error_code ? ` · ${t(jobErrorKey(job.error_code))}` : ""}
               </p>
             </div>
-            {live ? (
-              <button
-                type="button"
-                className="ui-button ui-button--small ui-button--danger"
-                onClick={() => void cancel()}
-              >
-                {t("aiws.cancel")}
-              </button>
-            ) : null}
+            <div className="aiws-head__actions">
+              {job.state === "FAILED_RETRYABLE" ? (
+                <button
+                  type="button"
+                  className="ui-button ui-button--small"
+                  disabled={busy}
+                  onClick={() => void retry()}
+                >
+                  {t("aiws.retry")}
+                </button>
+              ) : null}
+              {live || WAITING_STATES.has(job.state) ? (
+                <button
+                  type="button"
+                  className="ui-button ui-button--small ui-button--danger"
+                  onClick={() => void cancel()}
+                >
+                  {t("aiws.cancel")}
+                </button>
+              ) : null}
+            </div>
           </header>
         ) : null}
         <div className="aiws-transcript">

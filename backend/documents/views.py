@@ -53,6 +53,58 @@ ERRORS = {
 }
 
 
+# Contract codes raised without a public_detail get a Spanish action-oriented
+# message here — the generic fallback reads like a crash, not a diagnosis.
+DOCUMENTARY_ERROR_DETAILS = {
+    "version_not_releasable": "La versión no está lista para liberar a producción.",
+    "version_superseded": "La versión fue reemplazada por una revisión más reciente.",
+    "production_process_unresolved": (
+        "No hay autoridad de proceso para esta orden: vincula un perfil de proceso al sistema."
+    ),
+    "step_action_unknown": "La acción solicitada no existe para este paso.",
+    "step_note_required": "Esta acción requiere una nota.",
+    "step_transition_invalid": "El paso no puede ejecutar esa acción en su estado actual.",
+    "step_sequence_blocked": "Hay pasos anteriores sin completar en esta orden.",
+    "work_center_unassigned": "El paso no tiene un centro de trabajo asignado.",
+    "work_center_kind_unknown": "El centro de trabajo tiene un tipo no reconocido.",
+    "work_order_installed": "La orden ya fue marcada como instalada.",
+    "work_order_dispatched": "La orden ya fue despachada; no puede modificarse.",
+    "work_order_completed": "La orden ya está completada.",
+    "work_order_remnant_released": "Los retazos de esta orden ya fueron liberados al inventario.",
+    "work_order_replan_after_consumption": (
+        "No se puede reoptimizar: ya hay pasos completados que consumieron material."
+    ),
+    "work_order_replan_step_in_progress": (
+        "No se puede optimizar con un paso en curso: bloquéalo o complétalo primero."
+    ),
+    "work_order_missing_system": "La orden no tiene un sistema de catálogo resoluble.",
+    "remake_requires_hold": "Solo una orden bloqueada o con falla de QC admite una re-fabricación.",
+    "optimize_color_required": "La optimización requiere el color a cortar.",
+    "optimize_color_mismatch": "El color no coincide con el sellado de la orden.",
+    "cnc_incomplete_cut_angles": "Hay piezas sin ángulos de corte completos; revisa el plan.",
+    "cnc_requires_optimization": "La orden no tiene un plan de corte: optimízala primero.",
+    "operations_requires_optimization": "La orden no tiene un plan de corte: optimízala primero.",
+    "dxf_requires_optimization": "La orden no tiene un plan de corte: optimízala primero.",
+    "labels_requires_optimization": "La orden no tiene un plan de corte: optimízala primero.",
+    "plan_invalidated": "El plan de corte quedó invalidado por una replanificación: reoptimiza.",
+    "packing_required": "La orden requiere su packing antes de despachar.",
+    "dispatch_requires_completed": "Solo una orden completada puede despacharse.",
+    "dispatch_requires_packing_manifest": "Falta el packing manifest para despachar la orden.",
+    "installation_requires_dispatched": "La orden debe estar despachada para confirmar instalación.",
+    "installation_requires_delivered": "La orden debe estar entregada para confirmar instalación.",
+    "installation_requires_confirmation": "Se requiere el comprobante de entrega para instalar.",
+    "delivery_window_invalid": "La ventana horaria de entrega es inválida.",
+    "delivery_address_required": "La entrega requiere una dirección.",
+    "delivery_date_invalid": "La fecha de entrega es inválida.",
+    "delivery_requires_completed": "La orden debe estar completada para programar entrega.",
+    "delivery_already_delivered": "La entrega ya fue confirmada como entregada.",
+    "delivery_already_on_route": "La entrega ya está en ruta.",
+    "delivery_transition_invalid": "La entrega no puede ejecutar esa acción en su estado actual.",
+    "delivery_requires_dispatched": "La orden debe estar despachada para esta acción.",
+    "order_already_installed": "La orden ya fue confirmada como instalada.",
+}
+
+
 def validate(serializer_type, data):
     serializer = serializer_type(data=data)
     if not serializer.is_valid():
@@ -87,6 +139,7 @@ def public_documentary_errors():
             status_code,
             error.code,
             error.public_detail
+            or DOCUMENTARY_ERROR_DETAILS.get(error.code)
             or "La evidencia documental no pudo guardarse; revisa el proyecto, sus autoridades y su estado.",
             error_extra=error.extra or None,
         ) from error

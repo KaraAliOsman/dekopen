@@ -20,7 +20,7 @@ from authentication.errors import contract_error
 from authentication.serializers import ACTIVE_ORGANIZATION_HEADER
 from dekopen_engine.cutting import InvalidCutContract
 from documents.repository import DocumentaryError
-from documents.views import ERRORS, documentary_scope, validate
+from documents.views import DOCUMENTARY_ERROR_DETAILS, ERRORS, documentary_scope, validate
 from engine_api.repository import SystemNotFound
 from production import service
 from production.trace import trace_piece, trace_version, trace_work_order
@@ -84,6 +84,7 @@ def public_production_errors():
             status_code,
             error.code,
             error.public_detail
+            or DOCUMENTARY_ERROR_DETAILS.get(error.code)
             or "La operación de producción fue rechazada; revisa la orden y el paso.",
             error_extra=error.extra or None,
         ) from error

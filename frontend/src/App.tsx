@@ -95,10 +95,7 @@ function HomeRedirect(): JSX.Element {
   if (auth.status === "ready") {
     // An installer's work lives on the production floor — the commercial
     // dashboard would deny both of its queries and greet them with errors.
-    const home =
-      auth.me?.active_organization?.role === "INSTALLER"
-        ? "/production"
-        : "/dashboard";
+    const home = auth.me?.active_organization?.role === "INSTALLER" ? "/production" : "/dashboard";
     return <Navigate to={home} replace />;
   }
   return <Navigate to="/login" replace />;
