@@ -17818,7 +17818,13 @@ components:
         handle_domain_slot:
           type: string
         host_member_side:
-          $ref: '#/components/schemas/HostMemberSideEnum'
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/HostMemberSideEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        requires_handedness:
+          type: boolean
+          default: false
         outer_height_mm:
           type: string
           format: decimal

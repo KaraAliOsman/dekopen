@@ -716,6 +716,11 @@ def _append_leaf(
             leaf_id=leaf_id,
             leaf_slot=leaf_slot,
             opening_type=node.opening_type,
+            door_handedness=(
+                node.door_handedness
+                if node.opening_type is BayOpeningType.DOOR_ENTRY
+                else None
+            ),
             placement_domain=placement_domain,
             reference_rect=_trace_rect(reference_rect),
             finished_width_mm=sash.finished_width_mm,

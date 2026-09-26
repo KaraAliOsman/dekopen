@@ -1137,11 +1137,13 @@ export function setModuleOpening(
   function withOpening(node: IntentNode): IntentNode {
     if (node.type === "BAY") {
       // Panels are only an engine input for DOOR_ENTRY; a stale panel sku on a
-      // non-door bay would linger invisibly after switching back.
+      // non-door bay would linger invisibly after switching back. Doors carry
+      // declared handedness (DIN: hinges LEFT unless stated) — a stale value
+      // on a non-door bay is likewise cleared.
       const cleared =
         opening === "DOOR_ENTRY"
-          ? { ...node, opening_type: opening }
-          : { ...node, opening_type: opening, panel_article_sku: null };
+          ? { ...node, opening_type: opening, door_handedness: node.door_handedness ?? "LEFT" }
+          : { ...node, opening_type: opening, panel_article_sku: null, door_handedness: null };
       // The opening picker selects presets — a stale declared layout would
       // keep winning over the new preset. "SLIDING" alone needs a layout to
       // evaluate, so it seeds the 2-leaf topology the user then edits.

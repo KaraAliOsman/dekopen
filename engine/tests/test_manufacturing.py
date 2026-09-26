@@ -234,3 +234,73 @@ def test_legacy_handle_height_needs_explicit_confirmation(
         project(core_node("G6"), demo_60_params, legacy=True)
     _, facts = project(core_node("G6"), demo_60_params, legacy=True, confirmed=True)
     assert facts.handles[0].requested_height_mm == D("300.00")
+
+
+def door_policy() -> HandleRequirementPolicyV1:
+    rule: dict[str, object] = {
+        "opening_type": BayOpeningType.DOOR_ENTRY,
+        "handle_domain_slot": "PRIMARY",
+        "horizontal_reference": "HOST_MEMBER_AXIS",
+        "permitted_vertical_references": [VerticalReference.LEAF_TOP],
+        "mounting_min_from_leaf_top_mm": D("100.00"),
+        "mounting_max_from_leaf_top_mm": D("1900.00"),
+    }
+    return HandleRequirementPolicyV1.model_validate(
+        {
+            "policy_id": "HANDLE-DOOR-V1",
+            "version": 1,
+            "slots": [
+                {
+                    **rule,
+                    "leaf_handedness": "LEFT",
+                    "host_member_side": MemberSide.RIGHT,
+                    "horizontal_offset_mm": D("-10.00"),
+                },
+                {
+                    **rule,
+                    "leaf_handedness": "RIGHT",
+                    "host_member_side": MemberSide.LEFT,
+                    "horizontal_offset_mm": D("10.00"),
+                },
+            ],
+        }
+    )
+
+
+def door_handle_host(facts: ManufacturingFactsV1) -> str:
+    host = next(
+        member for member in facts.members if member.member_id == facts.handles[0].host_member_id
+    )
+    return host.identity.physical_member_slot
+
+
+def test_door_handedness_pins_handle_to_free_stile(
+    demo_60_params: SystemParams,
+) -> None:
+    # DIN naming: a LEFT door hinges left, so the handle lives on the
+    # right stile — and a RIGHT door mirrors it. Handedness is declared on
+    # the leaf; the policy only chooses the matching rule.
+    door = core_node("G7")
+    _, facts = project(
+        door.model_copy(update={"door_handedness": "LEFT"}),
+        demo_60_params,
+        handle_policy=door_policy(),
+    )
+    assert door_handle_host(facts) == "RIGHT"
+    _, facts = project(
+        door.model_copy(update={"door_handedness": "RIGHT"}),
+        demo_60_params,
+        handle_policy=door_policy(),
+    )
+    assert door_handle_host(facts) == "LEFT"
+
+
+def test_undeclared_door_fails_closed_with_pinned_rules(
+    demo_60_params: SystemParams,
+) -> None:
+    with pytest.raises(ManufacturingAuthorityError, match="handedness"):
+        project(
+            core_node("G7"),
+            demo_60_params,
+            handle_policy=door_policy(),
+        )

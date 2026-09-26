@@ -91,6 +91,10 @@ export type IntentNode = {
   panel_article_sku?: string | null;
   hardware_set_sku?: string | null;
   handle_height_mm?: string | null;
+  /** Declared hinge side of a DOOR_ENTRY leaf (DIN: LEFT = hinges left).
+   * Doors carry no side in their opening_type, so handedness is declared
+   * intent — manufacturing refuses an undeclared door rather than assume. */
+  door_handedness?: "LEFT" | "RIGHT" | null;
 };
 
 export function walkIntent(tree: IntentNode): IntentNode[] {
@@ -170,8 +174,16 @@ export function changeOpening(tree: IntentNode, bayId: string, opening: Opening)
     throw new Error("door_requires_top_bay");
   }
 
-  // Preserve explicit catalog choices. Engine validates their compatibility.
-  return requestTree(replaceNode(tree, bayId, { ...bay, opening_type: opening }));
+  // Preserve explicit catalog choices. Engine validates their
+  // compatibility. Doors declare handedness; the default mirrors the
+  // manufacturing policy's DIN convention (hinges left unless stated).
+  const replacement: IntentNode = { ...bay, opening_type: opening };
+  if (opening === "DOOR_ENTRY") {
+    replacement.door_handedness = bay.door_handedness ?? "LEFT";
+  } else {
+    delete replacement.door_handedness;
+  }
+  return requestTree(replaceNode(tree, bayId, replacement));
 }
 
 export function splitBay(
@@ -277,6 +289,7 @@ const BAY_SPEC_KEYS = [
   "panel_article_sku",
   "hardware_set_sku",
   "handle_height_mm",
+  "door_handedness",
 ] as const;
 
 /** The transferable spec of a leaf bay (opening, infill, hardware). Every

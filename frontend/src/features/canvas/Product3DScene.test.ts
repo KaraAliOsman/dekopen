@@ -656,7 +656,7 @@ describe("buildScene3D", () => {
       const scene = buildScene3D(product, members);
       const solids = scene.modules[0]!.solids;
       expect(solids.filter((solid) => solid.surface === "hinge").length).toBe(2);
-      expect(solids.filter((solid) => solid.surface === "handle").length).toBe(2);
+      expect(solids.filter((solid) => solid.surface === "handle").length).toBe(3);
     });
 
     it("emits one rail per declared sliding track", () => {

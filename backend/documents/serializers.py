@@ -152,7 +152,12 @@ class HandleRequirementSerializer(serializers.Serializer):
     leaf_label = serializers.CharField()
     opening_type = serializers.CharField()
     handle_domain_slot = serializers.CharField()
-    host_member_side = serializers.ChoiceField(choices=["LEFT", "RIGHT"])
+    # Null on door rows whose leaf hasn't declared handedness yet — there
+    # is no host stile to name until the product says which edge hinges.
+    host_member_side = serializers.ChoiceField(
+        choices=["LEFT", "RIGHT"], allow_null=True
+    )
+    requires_handedness = serializers.BooleanField(default=False)
     outer_height_mm = DecimalStringField(max_digits=14, decimal_places=4)
     mounting_min_from_leaf_top_mm = DecimalStringField(
         max_digits=14, decimal_places=4

@@ -57,6 +57,10 @@ class SemanticLeafTraceV1(EngineModel):
     leaf_id: str | None
     leaf_slot: str
     opening_type: BayOpeningType
+    # Declared hinge side for door leaves — handle slot rules can pin
+    # themselves to a handedness so a mirrored door mounts its handle on
+    # the correct free stile.
+    door_handedness: Literal["LEFT", "RIGHT"] | None = None
     placement_domain: Literal[PlacementDomain.DIRECT, PlacementDomain.SLIDING_LEAF]
     reference_rect: TraceRectV1
     finished_width_mm: Decimal = Field(gt=Decimal("0"))

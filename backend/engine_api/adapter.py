@@ -60,6 +60,7 @@ _NODE_FIELDS = {
     "panel_article_sku",
     "hardware_set_sku",
     "handle_height_mm",
+    "door_handedness",
     "sliding_layout",
 }
 _DECIMAL_NODE_FIELDS = {
@@ -120,6 +121,11 @@ def parse_parametric_node(payload: object) -> ParametricNode:
 
     if "sliding_layout" in raw and raw["sliding_layout"] is not None:
         values["sliding_layout"] = _parse_sliding_layout(raw["sliding_layout"])
+
+    if "door_handedness" in raw and raw["door_handedness"] is not None:
+        if raw["door_handedness"] not in ("LEFT", "RIGHT"):
+            raise InvalidEngineRequest("door_handedness must be LEFT or RIGHT")
+        values["door_handedness"] = raw["door_handedness"]
 
     children = raw.get("children", [])
     if not isinstance(children, list):

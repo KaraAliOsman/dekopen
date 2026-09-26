@@ -39,7 +39,7 @@ from dekopen_engine.manufacturing_trace import (
     PlacementDomain,
     SemanticLeafTraceV1,
 )
-from dekopen_engine.models import EngineResult
+from dekopen_engine.models import BayOpeningType, EngineResult
 from dekopen_engine.product import (
     contour_module_computation,
     frameless_module_computation,
@@ -178,6 +178,30 @@ def _module_scoped(
     return scoped
 
 
+def _handle_rules_for_leaf(
+    slots: list,
+    leaf,
+) -> list:
+    """Mirror of the engine's handle-rule matching (policy slot → leaf):
+    opening_type + leaf_slot filter, then the door-handedness pin — a rule
+    carrying leaf_handedness applies only to leaves whose declared
+    handedness matches, and pinned rules win over wildcards when both
+    match. Keeping the predicate in one place keeps the preparation UI and
+    the freeze-time projection agreeing on which intents are required."""
+    matching = [
+        rule
+        for rule in slots
+        if rule.opening_type is leaf.opening_type
+        and (rule.leaf_slot is None or rule.leaf_slot == leaf.leaf_slot)
+        and (rule.leaf_handedness is None or rule.leaf_handedness == leaf.door_handedness)
+    ]
+    if leaf.door_handedness is not None and any(
+        rule.leaf_handedness == leaf.door_handedness for rule in matching
+    ):
+        matching = [rule for rule in matching if rule.leaf_handedness is not None]
+    return matching
+
+
 def _missing_handle_intents(
     trace: GeometryManufacturingTraceV1,
     handle_policy: HandleRequirementPolicyV1,
@@ -186,12 +210,20 @@ def _missing_handle_intents(
     available = {
         (item.bay_id, item.leaf_id, item.handle_domain_slot) for item in intents
     }
+    door_rules_exist = any(
+        rule.opening_type is BayOpeningType.DOOR_ENTRY for rule in handle_policy.slots
+    )
     for leaf in trace.leaves:
-        for rule in handle_policy.slots:
-            if rule.opening_type is not leaf.opening_type or (
-                rule.leaf_slot is not None and rule.leaf_slot != leaf.leaf_slot
-            ):
-                continue
+        if (
+            door_rules_exist
+            and leaf.opening_type is BayOpeningType.DOOR_ENTRY
+            and leaf.door_handedness is None
+        ):
+            # A door without declared handedness is incomplete — the
+            # policy cannot legally mount its handle (pinned rules don't
+            # match, and there is no wildcard to guess with).
+            return True
+        for rule in _handle_rules_for_leaf(handle_policy.slots, leaf):
             if (
                 leaf.bay_id,
                 leaf.leaf_id,
@@ -242,13 +274,48 @@ def _handle_policy_requirements(
     the editor needs to know which (bay, leaf) pairs need an intent and the
     policy bounds that govern it before a position can freeze completely."""
     requirements: list[dict[str, object]] = []
+    door_rules = [
+        rule for rule in handle_policy.slots if rule.opening_type is BayOpeningType.DOOR_ENTRY
+    ]
     for item in trace_leaves:
         leaf = item["leaf"]
-        for rule in handle_policy.slots:
-            if rule.opening_type is not leaf.opening_type or (
-                rule.leaf_slot is not None and rule.leaf_slot != leaf.leaf_slot
-            ):
-                continue
+        if (
+            door_rules
+            and leaf.opening_type is BayOpeningType.DOOR_ENTRY
+            and leaf.door_handedness is None
+        ):
+            # The door leaf needs handedness before any height intent can
+            # land — surface that as an explicit row (no host side) instead
+            # of letting the leaf look requirement-free and then failing
+            # at freeze.
+            requirements.append(
+                {
+                    "bay_id": item["bay_id"],
+                    "leaf_id": item["leaf_id"],
+                    "leaf_label": item["leaf_label"],
+                    "opening_type": leaf.opening_type.value,
+                    "handle_domain_slot": door_rules[0].handle_domain_slot,
+                    "host_member_side": None,
+                    "requires_handedness": True,
+                    "outer_height_mm": str(item["nominal_height_mm"]),
+                    "mounting_min_from_leaf_top_mm": str(
+                        min(rule.mounting_min_from_leaf_top_mm for rule in door_rules)
+                    ),
+                    "mounting_max_from_leaf_top_mm": str(
+                        max(rule.mounting_max_from_leaf_top_mm for rule in door_rules)
+                    ),
+                    "permitted_vertical_references": sorted(
+                        {
+                            reference.value
+                            for rule in door_rules
+                            for reference in rule.permitted_vertical_references
+                        }
+                    ),
+                    "leaf_rects": _leaf_rects(leaf, placement_authorities),
+                }
+            )
+            continue
+        for rule in _handle_rules_for_leaf(handle_policy.slots, leaf):
             requirements.append(
                 {
                     "bay_id": item["bay_id"],
@@ -257,6 +324,7 @@ def _handle_policy_requirements(
                     "opening_type": leaf.opening_type.value,
                     "handle_domain_slot": rule.handle_domain_slot,
                     "host_member_side": rule.host_member_side.value,
+                    "requires_handedness": False,
                     "outer_height_mm": str(item["nominal_height_mm"]),
                     "mounting_min_from_leaf_top_mm": str(
                         rule.mounting_min_from_leaf_top_mm

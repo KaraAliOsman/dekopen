@@ -833,11 +833,13 @@ function BayInspector({
   function pickOpening(next: Opening): void {
     if (next === "DOOR_ENTRY" && !isTopBay) return;
     // Mirrors setModuleOpening's normalization at leaf scope: a sliding pick
-    // seeds the 2-leaf preset, a non-door bay never keeps a panel sku.
+    // seeds the 2-leaf preset, a non-door bay never keeps a panel sku, and a
+    // door always carries declared handedness (manufacture refuses to guess).
     patchBay({
       opening_type: next,
       sliding_layout: next === "SLIDING" ? structuredClone(SLIDING_PRESETS.SLIDING_2L!) : null,
       panel_article_sku: next === "DOOR_ENTRY" ? (bay.panel_article_sku ?? null) : null,
+      door_handedness: next === "DOOR_ENTRY" ? (bay.door_handedness ?? "LEFT") : null,
     });
   }
 
@@ -893,6 +895,22 @@ function BayInspector({
             );
           })}
         </div>
+        {isDoor && (
+          <label className="assembly-field">
+            <span>{t("assembly.hingeSide")}</span>
+            <select
+              aria-label={t("assembly.hingeSide")}
+              disabled={busy}
+              value={bay.door_handedness ?? "LEFT"}
+              onChange={(event) =>
+                patchBay({ door_handedness: event.target.value as "LEFT" | "RIGHT" })
+              }
+            >
+              <option value="LEFT">{t("assembly.hingeLeft")}</option>
+              <option value="RIGHT">{t("assembly.hingeRight")}</option>
+            </select>
+          </label>
+        )}
         {isDoor && !isTopBay && <p className="assembly-hint">{t("assembly.doorTopOnly")}</p>}
       </details>
       {slidingLayout && (
@@ -2450,6 +2468,12 @@ export function AssemblyEditor({
                         string,
                         string,
                       ],
+                      [
+                        t("assembly.hingeSide"),
+                        selectedBayNode.door_handedness === "RIGHT"
+                          ? t("assembly.hingeRight")
+                          : t("assembly.hingeLeft"),
+                      ] as [string, string],
                     ]
                   : []),
               ]}

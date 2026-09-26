@@ -105,24 +105,30 @@ function ClipSetup(): null {
 function LeafGroup({
   motion,
   open,
+  tiltPose,
   explode,
   depth,
   children,
 }: {
   motion: LeafMotion;
   open: boolean;
+  /** Abatir pose — tilt_turn leaves tip the top in on their bottom pivot
+   * while other leaves keep their open pose. Presentation only. */
+  tiltPose: boolean;
   /** Despiece pose: leaves lift toward the room side (+z) — reads the
    * frame↔sash↔glass layering apart without touching geometry. */
   explode: boolean;
   depth: number;
   children: React.ReactNode;
 }): JSX.Element {
-  const outer = useRef<THREE.Group>(null);
+  const tiltGroup = useRef<THREE.Group>(null);
+  const swingGroup = useRef<THREE.Group>(null);
   const inner = useRef<THREE.Group>(null);
   const progress = useRef(0);
   const explodeProgress = useRef(0);
   const invalidate = useThree((state) => state.invalidate);
-  const target = open ? 1 : 0;
+  // Abatir poses only tilt_turn leaves — other kinds keep obeying Abrir.
+  const target = (motion.kind === "tilt_turn" ? open || tiltPose : open) ? 1 : 0;
   const explodeTarget = explode ? 1 : 0;
   useFrame((_, delta) => {
     const moving = progress.current !== target;
@@ -139,26 +145,47 @@ function LeafGroup({
     }
     const pose = progress.current;
     const lift = explodeProgress.current * Math.max(depth * 1.35, 60);
-    const outerGroup = outer.current;
+    const tiltGroupEl = tiltGroup.current;
+    const swingGroupEl = swingGroup.current;
     const innerGroup = inner.current;
-    if (!outerGroup || !innerGroup) return;
+    if (!tiltGroupEl || !swingGroupEl || !innerGroup) return;
+    // Chained pivots: outer rotates about the leaf's tilt edge (Rx, the
+    // bottom rail for tilt_turn / top rail for awning), mid about the
+    // hinge edge (Ry) — at most one carries an angle per pose. Mid's
+    // position re-expresses the hinge pivot inside the tilted frame.
+    const tiltPivot = motion.tiltPivot ?? 0;
     if (motion.kind === "swing") {
-      outerGroup.position.set(motion.pivot, 0, 0);
+      tiltGroupEl.position.set(0, 0, 0);
+      tiltGroupEl.rotation.x = 0;
+      swingGroupEl.position.set(motion.pivot, 0, 0);
+      swingGroupEl.rotation.y = motion.dir * pose * SWING_RAD;
       innerGroup.position.set(-motion.pivot, 0, lift);
-      innerGroup.rotation.y = motion.dir * pose * SWING_RAD;
     } else if (motion.kind === "tilt") {
-      outerGroup.position.set(0, motion.pivot, 0);
-      innerGroup.position.set(0, -motion.pivot, lift);
-      innerGroup.rotation.x = motion.dir * pose * TILT_RAD;
+      tiltGroupEl.position.set(0, motion.pivot, 0);
+      tiltGroupEl.rotation.x = motion.dir * pose * TILT_RAD;
+      swingGroupEl.position.set(0, -motion.pivot, 0);
+      swingGroupEl.rotation.y = 0;
+      innerGroup.position.set(0, 0, lift);
+    } else if (motion.kind === "tilt_turn") {
+      tiltGroupEl.position.set(0, tiltPivot, 0);
+      tiltGroupEl.rotation.x = tiltPose ? pose * TILT_RAD : 0;
+      swingGroupEl.position.set(motion.pivot, -tiltPivot, 0);
+      swingGroupEl.rotation.y = tiltPose ? 0 : motion.dir * pose * SWING_RAD;
+      innerGroup.position.set(-motion.pivot, 0, lift);
     } else {
-      outerGroup.position.set(motion.dir * pose * motion.travel, 0, 0);
+      tiltGroupEl.position.set(motion.dir * pose * motion.travel, 0, 0);
+      tiltGroupEl.rotation.x = 0;
+      swingGroupEl.position.set(0, 0, 0);
+      swingGroupEl.rotation.y = 0;
       innerGroup.position.set(0, 0, lift);
     }
     invalidate();
   });
   return (
-    <group ref={outer}>
-      <group ref={inner}>{children}</group>
+    <group ref={tiltGroup}>
+      <group ref={swingGroup}>
+        <group ref={inner}>{children}</group>
+      </group>
     </group>
   );
 }
@@ -310,6 +337,7 @@ function SceneContent({
   open,
   clip,
   explode,
+  tiltPose,
   onPick,
 }: {
   scene: Scene3D;
@@ -320,6 +348,7 @@ function SceneContent({
   open: boolean;
   clip: boolean;
   explode: boolean;
+  tiltPose: boolean;
   onPick(owner: string): void;
 }): JSX.Element {
   // Corte: a vertical section through the scene center keeps the left
@@ -369,6 +398,7 @@ function SceneContent({
                   key={motion.leafId}
                   motion={motion}
                   open={open}
+                  tiltPose={tiltPose}
                   explode={explode}
                   depth={module.depth}
                 >
@@ -421,11 +451,16 @@ export default function Model3DView({
   const [mode, setMode] = useState<MaterialMode>("commercial");
   const [inside, setInside] = useState(false);
   const [open, setOpen] = useState(false);
+  const [tiltPose, setTiltPose] = useState(false);
   const [clip, setClip] = useState(false);
   const [explode, setExplode] = useState(false);
   const scene = useMemo(() => buildScene3D(product, members, plan), [product, members, plan]);
   const hasLeaves = useMemo(
     () => scene.modules.some((module) => module.leaves.length > 0),
+    [scene],
+  );
+  const hasTiltTurn = useMemo(
+    () => scene.modules.some((module) => module.leaves.some((leaf) => leaf.kind === "tilt_turn")),
     [scene],
   );
   const moduleIds = useMemo(
@@ -481,6 +516,15 @@ export default function Model3DView({
             {open ? t("assembly.view3dClose") : t("assembly.view3dOpen")}
           </button>
         )}
+        {hasTiltTurn && (
+          <button
+            type="button"
+            className={tiltPose ? "is-active" : ""}
+            onClick={() => setTiltPose((value) => !value)}
+          >
+            {t("assembly.view3dTilt")}
+          </button>
+        )}
         <button
           type="button"
           className={clip ? "is-active" : ""}
@@ -518,6 +562,7 @@ export default function Model3DView({
           open={open}
           clip={clip}
           explode={explode}
+          tiltPose={tiltPose}
           onPick={pick}
         />
       </Canvas>

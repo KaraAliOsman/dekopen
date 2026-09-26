@@ -374,6 +374,11 @@ class ParametricNode(EngineModel):
     panel_article_sku: str | None = None
     hardware_set_sku: str | None = None
     handle_height_mm: Decimal | None = None
+    # Declared hinge side of a DOOR_ENTRY leaf (DIN convention: LEFT =
+    # hinges on the left, handle on the right). Doors carry no side in
+    # their opening_type, so handedness must be declared — manufacturing
+    # refuses to mount a handle on an undeclared door rather than assume.
+    door_handedness: Literal["LEFT", "RIGHT"] | None = None
     # Sliding panel topology (mandate §12). Present on a sliding BAY it
     # fully defines the unit — slots, moving/fixed kind, rail assignment.
     # Absent, the SLIDING_*L presets map to canonical layouts.

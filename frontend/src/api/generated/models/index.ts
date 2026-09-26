@@ -219,6 +219,7 @@ export * from "./handleIntentRequest";
 export * from "./handleLeafRect";
 export * from "./handlePolicyRequirements";
 export * from "./handleRequirement";
+export * from "./handleRequirementHostMemberSide";
 export * from "./hardwareComponent";
 export * from "./hardwareItem";
 export * from "./hostMemberSideEnum";

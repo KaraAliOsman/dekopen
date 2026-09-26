@@ -1345,9 +1345,11 @@ export function ProjectQuotationPanel({
                         <div className="handle-leaf">
                           <strong>{requirement.leaf_label}</strong>
                           <span>
-                            {requirement.host_member_side === "LEFT"
-                              ? t("quotation.sideLeft")
-                              : t("quotation.sideRight")}
+                            {requirement.requires_handedness
+                              ? t("quotation.handednessRequired")
+                              : requirement.host_member_side === "LEFT"
+                                ? t("quotation.sideLeft")
+                                : t("quotation.sideRight")}
                             {requirement.handle_domain_slot !== "PRIMARY" &&
                               ` · ${requirement.handle_domain_slot}`}
                           </span>

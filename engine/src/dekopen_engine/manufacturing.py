@@ -67,6 +67,12 @@ class HandleSlotRuleV1(EngineModel):
     opening_type: BayOpeningType
     leaf_slot: str | None = None
     handle_domain_slot: str
+    # Optional handedness pin: a rule carrying LEFT/RIGHT applies only to
+    # leaves whose declared handedness (door hinge side) matches it, so a
+    # mirrored door mounts its handle on the opposite free stile. A rule
+    # with no handedness is a wildcard; declared-handedness rules win over
+    # it when both would match.
+    leaf_handedness: Literal["LEFT", "RIGHT"] | None = None
     host_member_side: Literal[MemberSide.LEFT, MemberSide.RIGHT]
     horizontal_reference: Literal["HOST_MEMBER_AXIS"] = "HOST_MEMBER_AXIS"
     horizontal_offset_mm: Decimal
@@ -161,6 +167,8 @@ class LeafAssemblyFactV1(EngineModel):
     leaf_id: str | None
     leaf_slot: str
     opening_type: BayOpeningType
+    # Declared door hinge side, when the leaf carries one.
+    door_handedness: Literal["LEFT", "RIGHT"] | None = None
     rect: TraceRectV1
 
 
@@ -373,6 +381,7 @@ def project_manufacturing_facts_v1(
             leaf_id=leaf.leaf_id,
             leaf_slot=leaf.leaf_slot,
             opening_type=leaf.opening_type,
+            door_handedness=leaf.door_handedness,
             rect=rect,
         ))
 
@@ -541,8 +550,31 @@ def project_manufacturing_facts_v1(
             slot_rule for slot_rule in handle_policy.slots
             if slot_rule.opening_type is leaf.opening_type
             and (slot_rule.leaf_slot is None or slot_rule.leaf_slot == leaf.leaf_slot)
+            and (
+                slot_rule.leaf_handedness is None
+                or slot_rule.leaf_handedness == leaf.door_handedness
+            )
         ]
+        # A declared-handedness leaf prefers rules pinned to that
+        # handedness over wildcard rules for the same domain slot.
+        if leaf.door_handedness is not None and any(
+            slot_rule.leaf_handedness == leaf.door_handedness
+            for slot_rule in handle_rules
+        ):
+            handle_rules = [
+                slot_rule
+                for slot_rule in handle_rules
+                if slot_rule.leaf_handedness is not None
+            ]
         if not handle_rules:
+            if leaf.opening_type is BayOpeningType.DOOR_ENTRY and any(
+                slot_rule.opening_type is BayOpeningType.DOOR_ENTRY
+                and slot_rule.leaf_handedness is not None
+                for slot_rule in handle_policy.slots
+            ):
+                raise ManufacturingAuthorityError(
+                    "Door leaf handedness is undeclared"
+                )
             raise ManufacturingAuthorityError("Handle requirement policy has no rule for a physical leaf")
         rules_by_slot: dict[str, int] = {}
         for slot_rule in handle_rules:

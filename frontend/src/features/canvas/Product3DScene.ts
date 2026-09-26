@@ -119,10 +119,13 @@ export type Solid3D = BoxSolid | ShapeSolid | PrismSolid | ProfileSolid;
  * `travel`. */
 export interface LeafMotion {
   leafId: string;
-  kind: "swing" | "tilt" | "slide";
+  kind: "swing" | "tilt" | "slide" | "tilt_turn";
   pivot: number;
   dir: number;
   travel: number;
+  /** TILT_TURN only: the bottom-edge y the leaf tips about in the TILT
+   * pose — `pivot` stays the side hinge for the TURN pose. */
+  tiltPivot?: number;
 }
 
 export interface ModuleScene {
@@ -533,10 +536,82 @@ function thinRing(
   );
 }
 
-/** Operable-leaf hardware: hinges on the side the leaf opens toward,
- * a lever handle opposite them at the declared handle height (or the
- * conventional 1050 mm when undeclared — a presentation convention, the
- * declared value wins when known). */
+/** DIN hinge side per leaf: the opening name carries it for windows;
+ * a door carries it as declared `door_handedness` (hinge side — the
+ * handle mounts opposite). Undeclared doors default to LEFT, the same
+ * convention the intent layer seeds, so editor 3D never silently mirrors
+ * a product the freeze path would refuse. */
+function leafHingeSide(bay: IntentNode): "LEFT" | "RIGHT" | null {
+  const opening = bay.opening_type;
+  if (opening === "TURN_LEFT" || opening === "TILT_TURN_LEFT") return "LEFT";
+  if (opening === "TURN_RIGHT" || opening === "TILT_TURN_RIGHT") return "RIGHT";
+  if (opening === "DOOR_ENTRY") return bay.door_handedness === "RIGHT" ? "RIGHT" : "LEFT";
+  return null;
+}
+
+/** A lever handle on the leaf's free stile: escutcheon rose standing
+ * proud of the interior sash face, spindle block, lever ~120 mm pointing
+ * toward the hinge side. `faceZ` is the leaf's interior face; every piece
+ * protrudes +z (room side) from it. */
+function leverHandle(
+  solids: Solid3D[],
+  owner: string,
+  x: number,
+  y: number,
+  faceZ: number,
+  leverToward: "LEFT" | "RIGHT",
+  cylinder: boolean,
+): void {
+  const roseW = 26;
+  const roseH = 56;
+  const leverLen = 120;
+  const leverH = 16;
+  solids.push(
+    box(owner, "handle", "STEEL", x, y - roseH / 2, faceZ + 2, roseW, roseH, 10),
+    box(
+      owner,
+      "handle",
+      "STEEL",
+      x + (roseW - 20) / 2,
+      y - 10,
+      faceZ + 12,
+      20,
+      20,
+      22,
+    ),
+    box(
+      owner,
+      "handle",
+      "STEEL",
+      leverToward === "RIGHT" ? x + roseW / 2 : x + roseW / 2 - leverLen,
+      y - leverH / 2,
+      faceZ + 30,
+      leverLen,
+      leverH,
+      leverH,
+    ),
+  );
+  if (cylinder) {
+    solids.push(
+      box(
+        owner,
+        "handle",
+        "STEEL",
+        x + (roseW - 14) / 2,
+        y - roseH / 2 - 46,
+        faceZ + 2,
+        14,
+        36,
+        9,
+      ),
+    );
+  }
+}
+
+/** Operable-leaf hardware: hinge barrels on the hinge edge (subtle —
+ * closed casement hinges hide behind the rebate), a lever handle opposite
+ * them at the declared handle height (the conventional 1050 mm when
+ * undeclared — a presentation convention; the declared value wins). */
 function hardwareSolids(
   solids: Solid3D[],
   owner: string,
@@ -547,6 +622,8 @@ function hardwareSolids(
 ): void {
   const opening = bay.opening_type;
   if (opening === "AWNING") {
+    // Top-hung: two hinge barrels along the head plus a centre handle at
+    // the bottom stile (the leaf's free edge).
     for (const frac of [0.2, 0.8]) {
       solids.push(
         box(
@@ -577,12 +654,13 @@ function hardwareSolids(
     );
     return;
   }
-  const hingeLeft = opening === "TURN_LEFT" || opening === "TILT_TURN_LEFT";
-  const hingeRight = opening === "TURN_RIGHT" || opening === "TILT_TURN_RIGHT";
+  const hinge = leafHingeSide(bay);
+  if (!hinge) return;
   const door = opening === "DOOR_ENTRY";
-  if (!hingeLeft && !hingeRight && !door) return;
-  const hingeX = hingeLeft || door ? region.x + 2 : region.x + region.w - HINGE_MM - 2;
-  for (const frac of [0.12, 0.88]) {
+  const tiltTurn = opening === "TILT_TURN_LEFT" || opening === "TILT_TURN_RIGHT";
+  const hingeX = hinge === "LEFT" ? region.x + 2 : region.x + region.w - HINGE_MM - 2;
+  const hingeFracs = door ? [0.15, 0.5, 0.85] : [0.12, 0.88];
+  for (const frac of hingeFracs) {
     solids.push(
       box(
         owner,
@@ -592,8 +670,25 @@ function hardwareSolids(
         region.y + region.h * frac,
         zInterior - 6,
         HINGE_MM,
-        Math.min(region.h * 0.1, 110),
+        Math.min(region.h * 0.1, door ? 130 : 110),
         10,
+      ),
+    );
+  }
+  if (tiltTurn) {
+    // The top scissor stay runs from the hinge-side corner across the head
+    // — the fitting a tilt-turn physically needs on top of its hinges.
+    solids.push(
+      box(
+        owner,
+        "hinge",
+        "STEEL",
+        hinge === "LEFT" ? region.x + 2 : region.x + region.w - Math.min(region.w * 0.42, 340),
+        region.y + region.h - 16,
+        zInterior - 4,
+        Math.min(region.w * 0.42, 340),
+        10,
+        8,
       ),
     );
   }
@@ -604,17 +699,12 @@ function hardwareSolids(
       Number.isFinite(declaredHandle) && declaredHandle > 0 ? declaredHandle : HANDLE_HEIGHT_MM,
       region.h - 40,
     );
-  const handleX =
-    hingeLeft || door ? region.x + region.w - HANDLE_OFFSET_MM - 30 : region.x + HANDLE_OFFSET_MM;
-  // The rose/lever must stand proud of the leaf face — flush at zInterior
-  // they z-fought the sash front and read invisible (review M5). A ~130 mm
-  // lever pointing into the leaf reads at real handle proportion.
-  const plateX = handleX + 8;
-  const leverX = hingeRight ? plateX + 18 : plateX - 130;
-  solids.push(
-    box(owner, "handle", "STEEL", plateX, handleY - 30, zInterior + 2, 18, 60, 10),
-    box(owner, "handle", "STEEL", leverX, handleY - 6, zInterior + 10, 130, 12, 40),
-  );
+  // The handle mounts on the stile OPPOSITE the hinges, offset inward.
+  const roseX =
+    hinge === "LEFT"
+      ? region.x + region.w - HANDLE_OFFSET_MM - 26
+      : region.x + HANDLE_OFFSET_MM;
+  leverHandle(solids, owner, roseX, handleY, zInterior, hinge, door);
 }
 
 /** Split walk that emits both divider bars and leaf bays — the same layout
@@ -821,6 +911,28 @@ function leafSolids(
         members.beadSpecFor(bay.glass_thickness_mm ?? null),
       );
       tagLeaf(solids, leafFrom, leafId);
+      // Pull on the meeting stile — the same convention the handle policy
+      // seeds for manufacturing (L1 right, every later leaf left). It sits
+      // proud of the leaf's interior face at handle height.
+      const pullX =
+        index === 0
+          ? leafX + leafW - sashW + 6
+          : leafX + sashW - 22;
+      const pullH = Math.min(360, Math.max(region.h * 0.4, 140));
+      const pullY =
+        region.y +
+        Math.min(
+          Number.isFinite(Number(bay.handle_height_mm)) && Number(bay.handle_height_mm) > 0
+            ? Number(bay.handle_height_mm)
+            : HANDLE_HEIGHT_MM,
+          region.h - pullH / 2,
+        ) -
+        pullH / 2;
+      solids.push(
+        // The pull protrudes +z beyond the leaf's glass face — recessed
+        // flush with the sash it would hide behind its own glazing.
+        box(owner, "handle", "STEEL", pullX, pullY, z0 + 2, 16, pullH, glassT + 12),
+      );
       // Presentation only: adjacent leaves fan apart — the direction is a
       // readability convention since the product declares no leaf travel.
       leaves.push({
@@ -964,15 +1076,21 @@ function leafSolids(
         travel: 0,
       });
     } else if (opening === "TILT_TURN_LEFT" || opening === "TILT_TURN_RIGHT") {
+      // Both motions exist on the same leaf: TURN swings on the side
+      // hinge, TILT tips the top in on the bottom pivot. The view poses
+      // the leaf — CLOSED/TURN/TILT are presentation states only.
+      const hinge = leafHingeSide(bay);
       leaves.push({
         leafId,
-        kind: "tilt",
-        pivot: region.y,
-        dir: 1,
+        kind: "tilt_turn",
+        pivot: hinge === "RIGHT" ? region.x + region.w : region.x,
+        dir: hinge === "RIGHT" ? 1 : -1,
         travel: 0,
+        tiltPivot: region.y,
       });
     } else {
-      const hingeLeft = opening === "TURN_LEFT" || opening === "DOOR_ENTRY";
+      const hinge = leafHingeSide(bay);
+      const hingeLeft = hinge !== "RIGHT";
       leaves.push({
         leafId,
         kind: "swing",

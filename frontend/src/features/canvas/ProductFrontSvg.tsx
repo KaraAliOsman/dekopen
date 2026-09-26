@@ -643,11 +643,18 @@ function Bay({
     ? { x: glass.x + bead, y: glass.y + bead, w: glass.w - bead * 2, h: glass.h - bead * 2 }
     : glass;
   const isPanel = Boolean(node.panel_article_sku);
+  // DIN: the opening name is the hinge side; the handle sits opposite. A
+  // door carries no side in its opening type — the declared
+  // `door_handedness` (hinge side) decides, defaulting to hinge-left.
   const handleSide = opening.includes("LEFT")
     ? "right"
-    : opening.includes("RIGHT") || isDoor
+    : opening.includes("RIGHT")
       ? "left"
-      : null;
+      : isDoor
+        ? node.door_handedness === "RIGHT"
+          ? "left"
+          : "right"
+        : null;
 
   return (
     <g

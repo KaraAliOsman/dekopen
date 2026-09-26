@@ -118,8 +118,18 @@ function resolveDefaults(
       node.opening_type === "DOOR_ENTRY" &&
       !node.panel_article_sku &&
       panelSku !== undefined;
+    // A door without declared handedness cannot freeze — manufacturing
+    // refuses to guess the hinge side, so autofill declares the default.
+    const missingHandedness =
+      node.type === "BAY" &&
+      node.opening_type === "DOOR_ENTRY" &&
+      node.door_handedness == null;
     return (
-      missingMullion || missingGlass || missingPanel || (node.children?.some(needsFill) ?? false)
+      missingMullion ||
+      missingGlass ||
+      missingPanel ||
+      missingHandedness ||
+      (node.children?.some(needsFill) ?? false)
     );
   };
   const fill = (node: IntentNode): IntentNode => {
@@ -138,6 +148,9 @@ function resolveDefaults(
     }
     if (updated.type === "BAY" && updated.opening_type === "DOOR_ENTRY" && panelSku !== undefined) {
       if (!updated.panel_article_sku) updated = { ...updated, panel_article_sku: panelSku };
+    }
+    if (updated.type === "BAY" && updated.opening_type === "DOOR_ENTRY" && updated.door_handedness == null) {
+      updated = { ...updated, door_handedness: "LEFT" };
     }
     return { ...updated, children: node.children?.map(fill) };
   };
