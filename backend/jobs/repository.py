@@ -156,7 +156,14 @@ def list_jobs(
         for record in rows(
             f"""
             SELECT id, type, state, progress, result, error, attempt,
-                   max_attempts, created_at, started_at, completed_at
+                   max_attempts, created_at, started_at, completed_at,
+                   /* The AI run's own job id lets the jobs list deep-link to
+                    * the assistant workspace — expose just the id, not the
+                    * service-owned payload. */
+                   CASE WHEN type = 'ai.agent.run'
+                        THEN payload->>'ai_job_id'
+                        ELSE NULL
+                   END AS ai_job_id
             FROM public.job_runs
             WHERE {" AND ".join(clauses)}
             ORDER BY created_at DESC, id DESC

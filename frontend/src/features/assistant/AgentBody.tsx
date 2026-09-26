@@ -20,6 +20,7 @@ import { describeDesignOp, designAssistProduct } from "../canvas/designOps";
 import type { ProductJson } from "../canvas/productEditing";
 import { useDesignOpsBridge } from "./assistantContext";
 import { BatchOpsStep } from "./BatchOpsStep";
+import { SURFACE_LABELS } from "./surfaces";
 
 /** The durable worker can leave the job running far longer than a request
  * timeout — the dock polls the job record and renders the stored result
@@ -34,6 +35,8 @@ const STATE_LABEL: Record<string, string> = {
   WAITING_FOR_APPROVAL: "agent.state.waiting_for_approval",
 } as const;
 const POLL_MS = 1500;
+const POLL_BACKOFF_MAX_MS = 15_000;
+const POLL_FAIL_BANNER_AT = 3;
 
 /** One turn in the dock thread — rebuilt from the job's durable transcript
  * so a reopened dock (or a job started elsewhere) shows the same work. */
@@ -141,19 +144,7 @@ function asDesignOps(step: AiAgentStep): DesignOp[] {
   return (step.ops ?? []).filter((item): item is DesignOp => typeof item.op === "string");
 }
 
-export const SURFACE_LABELS: Record<string, string> = {
-  dashboard: "panel",
-  projects: "proyectos",
-  project: "proyecto",
-  position: "vano",
-  quotation: "cotización",
-  catalog: "catálogo",
-  production: "producción",
-  work_order: "orden de trabajo",
-  clients: "clientes",
-  purchasing: "compras",
-  settings: "configuración",
-};
+export { SURFACE_LABELS };
 
 /** §08-WG — communication workflows are goals on the project/quotation
  * surface: the dock already binds the project refs, so a preset turns the
@@ -216,6 +207,10 @@ export function AgentBody({
   const operationKey = useRef<{ key: string; goal: string } | null>(null);
   const requestSeq = useRef(0);
   const pollTimer = useRef<number | null>(null);
+  const pollFailures = useRef(0);
+  /** Persistent poll loss — the live run is probably still working, the dock
+   * just can't see it right now. */
+  const [offline, setOffline] = useState(false);
   const headers = { headers: { "X-Organization-ID": organizationId } };
 
   const refsKey = JSON.stringify(refs);
@@ -249,6 +244,8 @@ export function AgentBody({
         }
         const next = detail.data;
         setJob(next);
+        pollFailures.current = 0;
+        setOffline(false);
         const built = threadFromJob(next);
         if (product) {
           for (const turn of built) {
@@ -266,8 +263,13 @@ export function AgentBody({
           // after this render commits, even if one queued mid-settle.
         }
       } catch {
-        // A transient poll failure is not a job failure — keep watching.
-        pollTimer.current = window.setTimeout(() => void tick(), POLL_MS * 2);
+        // A transient poll failure is not a job failure — back off
+        // exponentially (2× to a 15s cap) and surface the offline state
+        // once it is clearly persistent, not a single blip.
+        pollFailures.current += 1;
+        if (pollFailures.current >= POLL_FAIL_BANNER_AT) setOffline(true);
+        const delay = Math.min(POLL_BACKOFF_MAX_MS, POLL_MS * 2 ** pollFailures.current);
+        pollTimer.current = window.setTimeout(() => void tick(), delay);
       }
     };
     void tick();
@@ -741,13 +743,23 @@ export function AgentBody({
                     <div className="ask-dock__artifacts">
                       {turn.result.artifacts.map((item, i) => {
                         const artifact = item as { kind?: string; title?: string };
+                        // Deep-link to THIS artifact on the job's flat shelf —
+                        // chips before it in earlier turns offset the index.
+                        const shelfIndex =
+                          thread
+                            .slice(0, turnIndex)
+                            .reduce((sum, t) => sum + (t.result?.artifacts?.length ?? 0), 0) + i;
                         return (
                           <button
                             key={i}
                             type="button"
                             className="ask-dock__artifact"
                             title={t("aiws.openWorkspace")}
-                            onClick={() => (job ? navigate(`/assistant?job=${job.id}`) : undefined)}
+                            onClick={() =>
+                              job
+                                ? navigate(`/assistant?job=${job.id}&art=${shelfIndex}`)
+                                : undefined
+                            }
                           >
                             {artifact.title ?? artifact.kind ?? t("aiws.inspector")}
                           </button>
@@ -788,6 +800,11 @@ export function AgentBody({
           </p>
         ) : null}
       </div>
+      {offline ? (
+        <p className="ask-dock__offline" role="status">
+          {t("agent.offline")}
+        </p>
+      ) : null}
       {message ? <p className="ask-dock__error">{message}</p> : null}
       {terminal ? (
         <p className="ask-dock__error">

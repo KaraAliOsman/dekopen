@@ -1,7 +1,6 @@
 .catalog {
   color: var(--theme-text-primary);
   background: var(--theme-bg-canvas);
-  padding: 1rem;
   font-size: 0.875rem;
 }
 

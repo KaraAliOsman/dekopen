@@ -1180,7 +1180,8 @@ def act(
     )
 
     has_actions = any(
-        step.get("kind") in ("prepare", "ops") for step in result["steps"]
+        step.get("kind") in ("prepare", "ops", "batch_ops")
+        for step in result["steps"]
     )
     state = (
         "WAITING_FOR_USER"

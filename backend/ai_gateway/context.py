@@ -43,6 +43,12 @@ REQUIRED_REFS: dict[str, tuple[str, ...]] = {
     "project_from_documents": ("project_id",),
     "catalog_compiler": (),
     "customer_comms": ("project_id",),
+    # Route surfaces whose work is org-level — they reuse the dashboard
+    # projection but keep their own surface name so a job started on the
+    # jobs list or the assistant workspace reads truthfully.
+    "assistant": (),
+    "jobs": (),
+    "onboarding": (),
 }
 
 
@@ -1509,6 +1515,9 @@ _BUILDERS = {
     "project_from_documents": _project_docs,
     "catalog_compiler": _catalog_compiler,
     "customer_comms": _customer_comms,
+    "assistant": _dashboard,
+    "jobs": _dashboard,
+    "onboarding": _dashboard,
 }
 
 _REF_BUILDERS = {

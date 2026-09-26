@@ -18423,6 +18423,10 @@ components:
           type: string
           format: date-time
           nullable: true
+        ai_job_id:
+          type: string
+          format: uuid
+          nullable: true
       required:
       - attempt
       - completed_at

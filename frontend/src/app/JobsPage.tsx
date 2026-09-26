@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { ApiError } from "../api/apiMutator";
 import { jobsList, jobsRetry } from "../api/generated/dekopen";
@@ -160,6 +160,14 @@ export function JobsPage(): JSX.Element {
                   <span className="status-chip" data-status={job.state.toLowerCase()}>
                     {t(STATE_KEYS[job.state] ?? "jobs.state.QUEUED")}
                   </span>
+                  {job.ai_job_id ? (
+                    <Link
+                      className="ui-button ui-button--small ui-button--ghost"
+                      to={`/assistant?job=${job.ai_job_id}`}
+                    >
+                      {t("jobs.openAssistant")}
+                    </Link>
+                  ) : null}
                 </div>
                 <div className="job-row-meta">
                   <span>

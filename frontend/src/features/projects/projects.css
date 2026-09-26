@@ -3,7 +3,6 @@
    * side of a 1920 viewport while master-detail panes could use them. */
   max-width: 120rem;
   margin-inline: auto;
-  padding: 1.5rem;
   color: var(--theme-text-primary);
   font-size: 0.875rem;
 }

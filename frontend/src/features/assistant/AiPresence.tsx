@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { aiJobList } from "../../api/generated/dekopen";
@@ -19,9 +20,12 @@ const PRIORITY: Record<string, number> = {
 export function AiPresence({
   organizationId,
   size = 22,
+  onActiveJob,
 }: {
   organizationId: string | null;
   size?: number;
+  /** The job the orb currently advertises — the click target must reach it. */
+  onActiveJob?: (job: AiJob | null) => void;
 }): JSX.Element {
   const query = useQuery({
     queryKey: ["ai", "presence", organizationId],
@@ -41,5 +45,8 @@ export function AiPresence({
   const active = jobs
     .filter((job) => job.state in PRIORITY)
     .sort((a, b) => (PRIORITY[a.state] ?? 9) - (PRIORITY[b.state] ?? 9))[0];
+  useEffect(() => {
+    onActiveJob?.(active ?? null);
+  }, [active, onActiveJob]);
   return <Orb state={orbStateFor(active?.state)} size={size} />;
 }

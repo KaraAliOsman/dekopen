@@ -1,4 +1,4 @@
-import { type PropsWithChildren, useCallback, useEffect, useMemo, useState } from "react";
+import { type PropsWithChildren, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { t, type TranslationKey } from "../i18n/es-CL";
@@ -71,6 +71,7 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
   const leafContext = useMemo(() => ({ leaf, setLeaf }), [leaf, setLeaf]);
   const [paletteRequest, setPaletteRequest] = useState(0);
   const [assistantRequest, setAssistantRequest] = useState(0);
+  const presenceJob = useRef<string | null>(null);
   const [railOpen, setRailOpen] = useState(false);
 
   // Close the drawer nav on route change and on Escape — the drawer only
@@ -281,9 +282,23 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
                   <button
                     type="button"
                     className="topbar-button topbar-ai"
-                    onClick={() => setAssistantRequest((value) => value + 1)}
+                    onClick={() => {
+                      // The orb advertises the most-pressing job — click
+                      // reaches that job, not a blank dock on this surface.
+                      if (presenceJob.current) {
+                        navigate(`/assistant?job=${presenceJob.current}`);
+                      } else {
+                        setAssistantRequest((value) => value + 1);
+                      }
+                    }}
                   >
-                    <AiPresence organizationId={org?.id ?? null} size={22} />
+                    <AiPresence
+                      organizationId={org?.id ?? null}
+                      size={22}
+                      onActiveJob={(job) => {
+                        presenceJob.current = job?.id ?? null;
+                      }}
+                    />
                     {t("shell.aiEntry")}
                   </button>
                 ) : null}

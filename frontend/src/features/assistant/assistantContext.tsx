@@ -68,6 +68,11 @@ const SURFACE_ROUTES: {
   // Org-level commercial config surfaces answer through the organization
   // projection — no dedicated pricing surface exists server-side.
   { pattern: "/pricing/*", surface: "settings", refs: () => ({}) },
+  // The assistant workspace is its own surface — jobs started there carry
+  // "assistant", not a pretend "dashboard".
+  { pattern: "/assistant/*", surface: "assistant", refs: () => ({}) },
+  { pattern: "/jobs", surface: "jobs", refs: () => ({}) },
+  { pattern: "/onboarding", surface: "onboarding", refs: () => ({}) },
   { pattern: "/dashboard", surface: "dashboard", refs: () => ({}) },
   { pattern: "/", surface: "dashboard", refs: () => ({}) },
 ];

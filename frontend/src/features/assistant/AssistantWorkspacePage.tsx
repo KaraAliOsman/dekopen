@@ -26,6 +26,7 @@ import { AiMetricsCard } from "./AiMetricsCard";
 import { ArtifactDetail, type Artifact } from "./ArtifactDetail";
 import { BatchOpsStep } from "./BatchOpsStep";
 import { Orb, orbStateFor } from "./Orb";
+import { SURFACE_LABELS } from "./surfaces";
 import { jobErrorKey } from "../jobs/jobError";
 import { t } from "../../i18n/es-CL";
 
@@ -48,27 +49,6 @@ const STATE_LABELS: Record<string, string> = {
   FAILED: "aiws.state.failed",
   SUCCEEDED: "aiws.state.succeeded",
   CANCELED: "aiws.state.canceled",
-};
-
-const SURFACE_LABELS: Record<string, string> = {
-  morning_brief: "brief del día",
-  purchase_plan: "plan de compras",
-  production_plan: "plan de producción",
-  quotation_complete: "completar cotización",
-  project_from_documents: "proyecto desde documentos",
-  catalog_compiler: "compilador de catálogo",
-  customer_comms: "comunicación al cliente",
-  dashboard: "panel",
-  projects: "proyectos",
-  project: "proyecto",
-  position: "vano",
-  quotation: "cotización",
-  catalog: "catálogo",
-  production: "producción",
-  work_order: "orden",
-  clients: "clientes",
-  purchasing: "compras",
-  settings: "configuración",
 };
 
 const NEW_JOB_SURFACES = [
@@ -186,12 +166,6 @@ function livePhase(live: AiJobLive | null | undefined): string {
   if (progress < 70) return t("aiws.live.consulting");
   if (progress < 90) return t("aiws.live.writing");
   return t("aiws.live.finishing");
-}
-
-function liveProgress(live: AiJobLive | null | undefined): number {
-  return live && typeof live.progress === "number"
-    ? Math.min(99, Math.max(0, live.progress as number))
-    : 0;
 }
 
 const JOBS_PAGE_SIZE = 30;
@@ -606,6 +580,7 @@ export function AssistantWorkspacePage(): JSX.Element {
   const [searchParams, setSearchParams] = useSearchParams();
   const orgId = auth.me?.active_organization?.id ?? null;
   const selectedId = searchParams.get("job");
+  const artParam = searchParams.get("art");
   const [draft, setDraft] = useState("");
   const [newSurface, setNewSurface] = useState("dashboard");
   const [error, setError] = useState("");
@@ -660,18 +635,43 @@ export function AssistantWorkspacePage(): JSX.Element {
   const transcript = (job?.transcript ?? []) as TranscriptTurn[];
   const live = job !== null && LIVE_STATES.has(job.state);
 
+  // Elapsed clock while a run is live — honest signal, not a percentage the
+  // worker can't guarantee. Ticks only while a live job is on screen.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!live) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [live]);
+  const liveSince =
+    (job?.live && typeof job.live.updated_at === "string"
+      ? (job.live.updated_at as string)
+      : undefined) ?? job?.updated_at;
+  const elapsedSec = liveSince
+    ? Math.max(0, Math.floor((now - new Date(liveSince).getTime()) / 1000))
+    : null;
+
   useEffect(() => {
     transcriptEnd.current?.scrollIntoView({ block: "end" });
   }, [job?.id, transcript.length]);
 
   // A finished job's newest artifact surfaces in the inspector without a
-  // click — the pane only stays empty when the user picked nothing yet.
+  // click — the pane only stays empty when the user picked nothing yet. A
+  // ?art=<index> deep link opens that shelf item instead of the newest one.
   useEffect(() => {
     if (artifact !== null) return;
+    if (artParam !== null) {
+      const shelf = (job?.artifacts as Artifact[] | undefined) ?? [];
+      const target = shelf[Number(artParam)];
+      if (target) {
+        setArtifact(target);
+        return;
+      }
+    }
     const latest = [...transcript].reverse().find((turn) => turn.artifacts?.length);
     const first = latest?.artifacts?.[0];
     if (first) setArtifact(first);
-  }, [transcript, artifact]);
+  }, [transcript, artifact, artParam, job?.artifacts]);
 
   async function send(): Promise<void> {
     const message = draft.trim();
@@ -756,7 +756,9 @@ export function AssistantWorkspacePage(): JSX.Element {
     void aiJobOutcomeCreate(job.id, entry, headers)
       .then((response) => {
         if (response.status === 200) {
-          void queryClient.invalidateQueries({ queryKey: ["ai", "job", job.id] });
+          // The detail query lives at ["ai","jobs",orgId,jobId] — the prefix
+          // invalidates both the list and this job's detail.
+          void queryClient.invalidateQueries({ queryKey: ["ai", "jobs", orgId] });
         }
       })
       .catch(() => undefined);
@@ -772,7 +774,6 @@ export function AssistantWorkspacePage(): JSX.Element {
       const response = await aiJobRetry(job.id, headers);
       if (response.status !== 202) throw new ApiError(response.status, response.data);
       await queryClient.invalidateQueries({ queryKey: ["ai", "jobs", orgId] });
-      await queryClient.invalidateQueries({ queryKey: ["ai", "job", job.id] });
     } catch {
       setError(t("agent.error"));
     } finally {
@@ -862,20 +863,14 @@ export function AssistantWorkspacePage(): JSX.Element {
           </header>
         ) : null}
         {job && live ? (
-          <div
-            className="aiws-progress"
-            role="progressbar"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={liveProgress(job.live)}
-            aria-label={stateLabel(job.state)}
-          >
-            <span
-              className="aiws-progress__bar"
-              style={{ width: `${Math.max(4, liveProgress(job.live))}%` }}
-            />
-            <span className="aiws-progress__label">{livePhase(job.live)}</span>
-          </div>
+          <p className="aiws-progress" role="status">
+            <span className="aiws-progress__label">
+              {livePhase(job.live)}
+              {elapsedSec !== null
+                ? ` · ${t("aiws.live.elapsed").replace("{s}", String(elapsedSec))}`
+                : ""}
+            </span>
+          </p>
         ) : null}
         {job && WAITING_STATES.has(job.state) ? (
           <p className="aiws-waiting" role="status">

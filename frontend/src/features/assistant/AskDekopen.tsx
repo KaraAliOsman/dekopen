@@ -33,7 +33,9 @@ export function AskDekopen({
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const [thread, setThread] = useState<Thread>([]);
+  /** Threads live per surface — following the answer's own navigate action
+   * to another surface must not delete the conversation that produced it. */
+  const [threads, setThreads] = useState<Map<string, Thread>>(new Map());
   /** Agent mode: the bound job's lifecycle drives the header orb so a running
    * job reads alive even while the ask thread sits idle. */
   const [agentJobState, setAgentJobState] = useState<string | null>(null);
@@ -53,14 +55,14 @@ export function AskDekopen({
 
   // A surface switch invalidates in-flight requests — the answer belonged to
   // the previous context and must never surface under a different one. The
-  // effect keys on the serialized refs (the object identity is unstable).
+  // stored thread survives: returning to the surface restores it.
   const refsKey = JSON.stringify(refs);
+  const threadKey = `${surface}:${refsKey}`;
+  const thread = threads.get(threadKey) ?? [];
   useEffect(() => {
     requestSeq.current += 1;
     setBusy(false);
     setMessage("");
-    setThread([]);
-    setMode("ask");
     operationKey.current = null;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refsKey is the
     // stable serialization of refs.
@@ -90,7 +92,14 @@ export function AskDekopen({
       );
       if (response.status !== 200) throw new ApiError(response.status, response.data);
       if (seq !== requestSeq.current) return;
-      setThread((prev) => [...prev, { question: trimmed, answer: response.data }]);
+      setThreads((prev) => {
+        const next = new Map(prev);
+        next.set(threadKey, [
+          ...(next.get(threadKey) ?? []),
+          { question: trimmed, answer: response.data },
+        ]);
+        return next;
+      });
       setQuestion("");
       operationKey.current = null;
     } catch (error) {
@@ -108,7 +117,11 @@ export function AskDekopen({
   }
 
   return (
-    <div className={`ask-dock${open ? " ask-dock--open" : ""}`}>
+    <div
+      className={`ask-dock${open ? " ask-dock--open" : ""}${
+        surface === "position" ? " ask-dock--canvas" : ""
+      }`}
+    >
       {open ? (
         <section
           className="ask-dock__panel"

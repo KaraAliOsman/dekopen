@@ -63,10 +63,15 @@
   visibility: hidden;
 }
 
-/* Small silhouettes: drop the micro-details that muddy sub-28px renders. */
+/* Small silhouettes: drop the micro-details that muddy sub-28px renders,
+ * and push the open eyes larger — at 22px the natural slots fall under
+ * 3px wide and the face stops reading. */
 .orb--s .orb__glint,
 .orb--s .orb__bounce {
   display: none;
+}
+.orb--s .orb__eyes--open {
+  transform: scale(1.28);
 }
 
 .orb__tilt,

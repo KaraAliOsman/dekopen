@@ -589,6 +589,28 @@ def record_outcome(
                 _dump(dedupe),
             ],
         )
+        if found and job.get("state") == "WAITING_FOR_APPROVAL":
+            # The wait is resolvable: once every gated step the transcript
+            # proposed has at least one recorded outcome, the job succeeded —
+            # decisions on later rounds can't reopen a resolved approval.
+            pending = [
+                (turn_index, step_index)
+                for turn_index, turn_row in enumerate(transcript)
+                for step_index, step_row in enumerate(turn_row.get("steps") or [])
+                if step_row.get("kind") in ("ops", "batch_ops", "prepare")
+            ]
+            resolved = {
+                (outcome["turn_index"], outcome["step_index"])
+                for outcome in (job.get("outcomes") or [])
+            }
+            resolved.add((recorded["turn_index"], recorded["step_index"]))
+            if pending and all(pair in resolved for pair in pending):
+                rows(
+                    "UPDATE public.ai_jobs SET state = 'SUCCEEDED',"
+                    " updated_at = NOW()"
+                    " WHERE id = %s AND state = 'WAITING_FOR_APPROVAL'",
+                    [str(job_id)],
+                )
     return {"id": str(found[0]["id"]), "recorded": True} if found else {"id": str(job_id), "recorded": False}
 
 

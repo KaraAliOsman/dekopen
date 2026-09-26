@@ -835,7 +835,9 @@ a:focus-visible {
 .workspace {
   background: var(--theme-bg-canvas);
   flex: 1;
-  padding: 1rem;
+  /* The single outer gutter for every surface — pages inside do not add
+   * their own, so all routes read at the same distance from the edge. */
+  padding: 1.5rem;
 }
 
 .workspace:focus-visible {
