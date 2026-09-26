@@ -190,7 +190,9 @@ it("sends a draft order only after explicit attestation", async () => {
   await waitFor(() =>
     expect(apiMutator).toHaveBeenCalledWith(
       "/api/v1/purchasing/orders/order-1/send/",
-      expect.objectContaining({ body: JSON.stringify({ confirmed: true }) }),
+      expect.objectContaining({
+        body: JSON.stringify({ confirmed: true, expected_at: null }),
+      }),
     ),
   );
 });

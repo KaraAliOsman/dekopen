@@ -54,6 +54,7 @@ class ConfirmBatchRequestSerializer(StrictSerializer):
 
 class SendOrderRequestSerializer(StrictSerializer):
     confirmed = serializers.BooleanField()
+    expected_at = serializers.DateField(required=False, allow_null=True, default=None)
 
 
 class PurchasingStateSerializer(serializers.Serializer):

@@ -292,6 +292,7 @@ export * from "./orderReceiptRequestRequest";
 export * from "./orderReceiving";
 export * from "./orderReceivingLine";
 export * from "./orderResponse";
+export * from "./orderResponseLinesPreviewItem";
 export * from "./orderResponseStatusEnum";
 export * from "./orderTypeEnum";
 export * from "./organizationBrandingLogoUploadBody";

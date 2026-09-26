@@ -6,8 +6,4 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export interface SendOrderRequestRequest {
-  confirmed: boolean;
-  /** @nullable */
-  expected_at?: string | null;
-}
+export type OrderResponseLinesPreviewItem = { [key: string]: unknown };

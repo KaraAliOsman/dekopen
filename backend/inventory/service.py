@@ -113,8 +113,10 @@ def order_receiving(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
     public_lines = []
     for line in lines:
         snapshot = _decode_snapshot(line["line_snapshot"])
+        # Damaged units are not fulfilment — the buyer still owes the line
+        # their replacement, so outstanding counts usable receipts only.
         outstanding = max(
-            line["quantity"] - line["received_qty"],
+            line["quantity"] - (line["received_qty"] - line["damaged_qty"]),
             type(line["quantity"])(0),
         )
         public_lines.append(
@@ -148,10 +150,12 @@ def _next_order_status(*, org_id: UUID, order_id: UUID) -> str:
         """
         SELECT COALESCE(bool_and(complete), FALSE) AS fulfilled
         FROM (
-            SELECT COALESCE(r.received_qty, 0) >= l.quantity AS complete
+            SELECT COALESCE(r.received_qty, 0) - COALESCE(r.damaged_qty, 0)
+                   >= l.quantity AS complete
             FROM public.order_requirement_lines l
             LEFT JOIN (
-                SELECT order_line_id, SUM(received_qty) AS received_qty
+                SELECT order_line_id, SUM(received_qty) AS received_qty,
+                       SUM(damaged_qty) AS damaged_qty
                 FROM public.order_receipt_lines
                 GROUP BY order_line_id
             ) r ON r.order_line_id = l.id

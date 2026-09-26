@@ -85,6 +85,7 @@ type Allocation = {
   order_type: OrderType;
 };
 type OrderStatus = "DRAFT" | "SENT" | "PARTIALLY_RECEIVED" | "FULFILLED" | "CANCELLED";
+type OrderLinePreview = { sku: string | null; qty: string; unit: string | null };
 type Order = {
   id: string;
   order_code: string;
@@ -92,6 +93,10 @@ type Order = {
   status: OrderStatus;
   supplier_name: string;
   order_snapshot_hash: string;
+  expected_at?: string | null;
+  line_count?: string | null;
+  total_qty?: string | null;
+  lines_preview?: OrderLinePreview[];
 };
 const orderStatusLabels: Record<OrderStatus, Parameters<typeof t>[0]> = {
   DRAFT: "purchasing.draft",
@@ -110,10 +115,19 @@ type ReceivingLine = {
   damaged_qty: string;
   outstanding_qty: string;
 };
+type Quantities = Record<
+  string,
+  { received: string; damaged: string; lot_code: string; rack_location: string }
+>;
 type ReceivingState = {
   order: { id: string; status: OrderStatus };
   lines: ReceivingLine[];
-  receipts: Array<{ id: string; receipt_key: string; received_at: string }>;
+  receipts: Array<{
+    id: string;
+    receipt_key: string;
+    created_at: string;
+    note: string | null;
+  }>;
 };
 type StockItem = {
   item_id: string;
@@ -351,8 +365,18 @@ function PurchasingWorkspace({
     try {
       await task;
       return true;
-    } catch {
-      if (mounted.current) setMessage(t("purchasing.actionError"));
+    } catch (error) {
+      if (mounted.current) {
+        const detail =
+          error instanceof ApiError && typeof error.payload === "object" && error.payload !== null
+            ? (error.payload as { error?: { detail?: unknown; code?: unknown } }).error
+            : undefined;
+        setMessage(
+          typeof detail?.detail === "string" && detail.detail
+            ? detail.detail
+            : t("purchasing.actionError"),
+        );
+      }
       return false;
     } finally {
       if (mounted.current) {
@@ -960,6 +984,7 @@ function OrderCard({
   onDocument: (type: string, format: string) => void;
 }): JSX.Element {
   const [attested, setAttested] = useState(false);
+  const [expectedAt, setExpectedAt] = useState("");
   return (
     <article className={`purchasing-order purchasing-order-${order.status.toLowerCase()}`}>
       <header>
@@ -969,15 +994,46 @@ function OrderCard({
           {t(orderStatusLabels[order.status])}
         </span>
       </header>
+      {order.lines_preview && order.lines_preview.length > 0 && (
+        <ul className="purchasing-order-lines">
+          {order.lines_preview.slice(0, 4).map((line, index) => (
+            <li key={index}>
+              {line.sku} × {line.qty} {line.unit}
+            </li>
+          ))}
+          {Number(order.line_count) > 4 && (
+            <li>
+              +{Number(order.line_count) - 4} {t("purchasing.moreLines")}
+            </li>
+          )}
+        </ul>
+      )}
+      {order.expected_at && (
+        <p className="purchasing-order-expected">
+          {t("purchasing.expectedAt")}: {order.expected_at}
+        </p>
+      )}
       {order.status === "DRAFT" && (
         <form
           onSubmit={(event) => {
             event.preventDefault();
             void action(
-              request(`purchasing/orders/${order.id}/send/`, "POST", { confirmed: true }),
+              request(`purchasing/orders/${order.id}/send/`, "POST", {
+                confirmed: true,
+                expected_at: expectedAt || null,
+              }),
             );
           }}
         >
+          <label>
+            {t("purchasing.expectedAt")}
+            <input
+              type="date"
+              value={expectedAt}
+              disabled={busy}
+              onChange={(event) => setExpectedAt(event.target.value)}
+            />
+          </label>
           <label>
             <input
               type="checkbox"
@@ -1022,9 +1078,7 @@ function ReceivingPanel({
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<ReceivingState | null>(null);
   const [note, setNote] = useState("");
-  const [quantities, setQuantities] = useState<
-    Record<string, { received: string; damaged: string }>
-  >({});
+  const [quantities, setQuantities] = useState<Quantities>({});
   const [receiptKey, setReceiptKey] = useState(
     () => `${order.order_code}-${crypto.randomUUID().slice(0, 8)}`,
   );
@@ -1038,8 +1092,11 @@ function ReceivingPanel({
         setState(data);
         setQuantities((previous) => {
           const next = { ...previous };
+          // Receiving starts empty — an unedited submit used to mark the
+          // whole order received in one click (review PU13). "Receive all"
+          // is the explicit shortcut for that intent.
           for (const line of data.lines) {
-            next[line.id] ??= { received: line.outstanding_qty, damaged: "0" };
+            next[line.id] ??= { received: "0", damaged: "0", lot_code: "", rack_location: "" };
           }
           return next;
         });
@@ -1057,11 +1114,18 @@ function ReceivingPanel({
     if (!state) return;
     const lines = state.lines
       .map((line) => {
-        const entry = quantities[line.id] ?? { received: "0", damaged: "0" };
+        const entry = quantities[line.id] ?? {
+          received: "0",
+          damaged: "0",
+          lot_code: "",
+          rack_location: "",
+        };
         return {
           order_line_id: line.id,
           received_qty: entry.received,
           damaged_qty: entry.damaged,
+          lot_code: entry.lot_code || null,
+          rack_location: entry.rack_location || null,
         };
       })
       .filter((line) => Number(line.received_qty) > 0);
@@ -1107,6 +1171,8 @@ function ReceivingPanel({
                 <th>{t("purchasing.receiveOutstanding")}</th>
                 <th>{t("purchasing.receiveNow")}</th>
                 <th>{t("purchasing.receiveDamaged")}</th>
+                <th>{t("purchasing.receiveLot")}</th>
+                <th>{t("purchasing.receiveRack")}</th>
               </tr>
             </thead>
             <tbody>
@@ -1130,6 +1196,10 @@ function ReceivingPanel({
                         setQuantities((previous) => ({
                           ...previous,
                           [line.id]: {
+                            ...(previous[line.id] ?? {
+                              lot_code: "",
+                              rack_location: "",
+                            }),
                             received: event.target.value,
                             damaged: previous[line.id]?.damaged ?? "0",
                           },
@@ -1149,8 +1219,56 @@ function ReceivingPanel({
                         setQuantities((previous) => ({
                           ...previous,
                           [line.id]: {
+                            ...(previous[line.id] ?? {
+                              lot_code: "",
+                              rack_location: "",
+                            }),
                             received: previous[line.id]?.received ?? "0",
                             damaged: event.target.value,
+                          },
+                        }))
+                      }
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      aria-label={`${t("purchasing.receiveLot")} · ${line.purchasing_sku ?? line.category}`}
+                      disabled={busy || Number(line.outstanding_qty) <= 0}
+                      placeholder={t("purchasing.receiveLot")}
+                      value={quantities[line.id]?.lot_code ?? ""}
+                      onChange={(event) =>
+                        setQuantities((previous) => ({
+                          ...previous,
+                          [line.id]: {
+                            ...(previous[line.id] ?? {
+                              received: "0",
+                              damaged: "0",
+                              rack_location: "",
+                            }),
+                            lot_code: event.target.value,
+                          },
+                        }))
+                      }
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      aria-label={`${t("purchasing.receiveRack")} · ${line.purchasing_sku ?? line.category}`}
+                      disabled={busy || Number(line.outstanding_qty) <= 0}
+                      placeholder={t("purchasing.receiveRack")}
+                      value={quantities[line.id]?.rack_location ?? ""}
+                      onChange={(event) =>
+                        setQuantities((previous) => ({
+                          ...previous,
+                          [line.id]: {
+                            ...(previous[line.id] ?? {
+                              received: "0",
+                              damaged: "0",
+                              lot_code: "",
+                            }),
+                            rack_location: event.target.value,
                           },
                         }))
                       }
@@ -1170,16 +1288,51 @@ function ReceivingPanel({
             />
           </label>
           <button
+            type="button"
+            disabled={busy}
+            onClick={() =>
+              setQuantities(() => {
+                const next: Quantities = {};
+                for (const line of state.lines) {
+                  next[line.id] = {
+                    received: line.outstanding_qty,
+                    damaged: "0",
+                    lot_code: "",
+                    rack_location: "",
+                  };
+                }
+                return next;
+              })
+            }
+          >
+            {t("purchasing.receiveAll")}
+          </button>
+          <button
             type="submit"
             disabled={busy || state.lines.every((line) => Number(line.outstanding_qty) <= 0)}
           >
             {t("purchasing.receiveSubmit")}
           </button>
           {state.receipts.length > 0 && (
-            <p>
-              {t("purchasing.receiveHistory")}:{" "}
-              {state.receipts.map((receipt) => receipt.receipt_key).join(" · ")}
-            </p>
+            <table className="purchasing-receipts">
+              <caption>{t("purchasing.receiveHistory")}</caption>
+              <thead>
+                <tr>
+                  <th>{t("purchasing.receiptKey")}</th>
+                  <th>{t("purchasing.receiptDate")}</th>
+                  <th>{t("purchasing.receiptNote")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {state.receipts.map((receipt) => (
+                  <tr key={receipt.id}>
+                    <td>{receipt.receipt_key}</td>
+                    <td>{formatDateTime(receipt.created_at)}</td>
+                    <td>{receipt.note || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </form>
       )}

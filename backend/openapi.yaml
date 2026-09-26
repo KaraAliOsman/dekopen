@@ -18642,6 +18642,26 @@ components:
         order_snapshot_hash:
           type: string
           pattern: ^[0-9a-f]{64}$
+        confirmed_at:
+          type: string
+          nullable: true
+        sent_at:
+          type: string
+          nullable: true
+        expected_at:
+          type: string
+          format: date
+          nullable: true
+        line_count:
+          type: string
+          nullable: true
+        total_qty:
+          type: string
+          nullable: true
+        lines_preview:
+          type: array
+          items:
+            type: object
       required:
       - id
       - order_code
@@ -22215,6 +22235,10 @@ components:
       properties:
         confirmed:
           type: boolean
+        expected_at:
+          type: string
+          format: date
+          nullable: true
       required:
       - confirmed
     ShareQuoteResponse:

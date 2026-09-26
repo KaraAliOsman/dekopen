@@ -554,6 +554,10 @@ def coverage_for_version(org_id: UUID, version_id: UUID) -> dict[str, Any]:
 
     coverage: list[dict[str, Any]] = []
     shortages = 0
+    # Stock is allocated against lines sequentially — two requirement lines
+    # sharing a SKU must not both draw on the same on-hand units, or the
+    # suggested purchase understates the real need (review PU3).
+    allocated: dict[tuple[str, str], Decimal] = {}
     for line in lines:
         sku = str(line["purchasing_sku"])
         psi = line.get("physical_stock_identity") or ""
@@ -561,15 +565,22 @@ def coverage_for_version(org_id: UUID, version_id: UUID) -> dict[str, Any]:
         stock_row = stock.get((sku, str(psi)))
         on_hand = _dec(stock_row["on_hand_qty"]) if stock_row else Decimal("0")
         reserved = _dec(stock_row["reserved_qty"]) if stock_row else Decimal("0")
-        available = on_hand - reserved
+        pool = allocated.get((sku, str(psi)))
+        if pool is None:
+            pool = max(on_hand - reserved, Decimal("0"))
+        covered = min(required, max(pool, Decimal("0")))
+        allocated[(sku, str(psi))] = pool - covered
+        available = pool
         bought = ordered.get(str(line["id"]), Decimal("0"))
         arrived = received.get(str(line["id"]), Decimal("0"))
         open_ordered = max(bought - arrived, Decimal("0"))
-        shortage = max(required - available, Decimal("0"))
+        shortage = max(required - covered, Decimal("0"))
         # Recommended purchase covers what stock cannot, less what is already
         # on its way — ordering more would double-buy.
         recommended = max(shortage - open_ordered, Decimal("0"))
-        if shortage > 0:
+        # The headline counter answers the buyer's question — how many lines
+        # still need purchasing action — not how many lack stock on hand.
+        if recommended > 0:
             shortages += 1
         remnant: dict[str, Any] | None = None
         if str(line["unit"]) == "BAR" and psi:

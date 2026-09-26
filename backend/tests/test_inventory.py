@@ -66,7 +66,9 @@ def test_order_receiving_computes_outstanding() -> None:
         "inventory.service.documentary_backend", return_value=_atomic()
     ):
         output = service.order_receiving(org_id=org_id, order_id=order_id)
-    assert output["lines"][0]["outstanding_qty"] == Decimal("6")
+    # Damaged goods never fulfill: 4 arrived, 1 of them damaged → 3 good,
+    # still owed 7 of the ordered 10.
+    assert output["lines"][0]["outstanding_qty"] == Decimal("7")
     assert output["lines"][0]["purchasing_sku"] == "SKU-1"
 
 

@@ -1943,7 +1943,6 @@ def test_job_message_forwards_live_product(monkeypatch):
     assert seen["payload"]["ai_job_id"] == str(job_id)
 
 
-@pytest.mark.django_db
 def test_agent_run_handler_records_failure(monkeypatch):
     """A contract error raised by the agent mid-run is a failed round: after
     the worker's transaction rolls back, the job lands FAILED_RETRYABLE bound
@@ -1986,6 +1985,22 @@ def test_agent_run_handler_records_failure(monkeypatch):
         handlers, "_claims", lambda ctx: "{}"
     )
     monkeypatch.setattr(handlers, "_set_claims", lambda cursor, ctx: None)
+
+    class _Atomic:
+        def __call__(self, *args, **kwargs):
+            return self
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        handlers, "transaction", SimpleNamespace(atomic=_Atomic())
+    )
 
     class _Cur:
         def execute(self, *a, **k):

@@ -27,6 +27,9 @@ from purchasing.service import (
 )
 
 _ALLOWED = ("OWNER", "WORKSHOP_MANAGER")
+# The estimator who priced the job needs to see coverage, blockers and what
+# is already ordered — read scope is wider than mutation scope (review PU16).
+_READERS = _ALLOWED + ("ESTIMATOR",)
 
 
 class PurchasingVersionsView(APIView):
@@ -37,7 +40,7 @@ class PurchasingVersionsView(APIView):
         tags=["purchasing"],
     )
     def get(self, request):
-        with documentary_scope(request, _ALLOWED) as (_, _, org_id):
+        with documentary_scope(request, _READERS) as (_, _, org_id):
             output = purchasing_state(org_id)
         return Response(output)
 
@@ -50,7 +53,7 @@ class PurchasingVersionView(APIView):
         tags=["purchasing"],
     )
     def get(self, request, version_id: UUID):
-        with documentary_scope(request, _ALLOWED) as (_, _, org_id):
+        with documentary_scope(request, _READERS) as (_, _, org_id):
             output = purchasing_state(org_id, version_id)
         return Response(output)
 
@@ -129,5 +132,6 @@ class SendOrderView(APIView):
                 actor_id=token.user_id,
                 order_id=order_id,
                 confirmed=data["confirmed"],
+                expected_at=data.get("expected_at"),
             )
         return Response(output)

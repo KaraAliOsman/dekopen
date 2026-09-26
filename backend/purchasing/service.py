@@ -163,10 +163,18 @@ def purchasing_state(org_id: UUID, version_id: UUID | None = None) -> dict[str, 
             [version_id, org_id],
         )
         orders = rows(
-            "SELECT id,order_code,order_type::text,status::text,supplier_identity,supplier_name,"
-            "order_snapshot_hash,confirmed_at,sent_at FROM public.orders "
-            "WHERE project_version_id=%s AND org_id=%s ORDER BY order_type,supplier_name,id",
-            [version_id, org_id],
+            "SELECT o.id,o.order_code,o.order_type::text,o.status::text,o.supplier_identity,"
+            "o.supplier_name,o.order_snapshot_hash,o.confirmed_at,o.sent_at,o.expected_at,"
+            "l.line_count,l.total_qty,l.lines_preview::text AS lines_preview "
+            "FROM public.orders o LEFT JOIN ("
+            "SELECT order_id, COUNT(*) AS line_count, SUM(quantity) AS total_qty,"
+            " jsonb_agg(jsonb_build_object('sku',line_snapshot->>'purchasing_sku',"
+            " 'qty',quantity,'unit',line_snapshot->>'unit') ORDER BY id) AS lines_preview"
+            " FROM public.order_requirement_lines WHERE org_id=%s GROUP BY order_id"
+            ") l ON l.order_id=o.id "
+            "WHERE o.project_version_id=%s AND o.org_id=%s "
+            "ORDER BY o.order_type,o.supplier_name,o.id",
+            [org_id, version_id, org_id],
         )
         artifacts = rows(
             "SELECT id,artifact_scope,artifact_scope_id,document_type,format,bom_hash,file_sha256,"
@@ -213,7 +221,15 @@ def purchasing_state(org_id: UUID, version_id: UUID | None = None) -> dict[str, 
                 for item in eligibilities
             ],
             "allocations": _public(allocations),
-            "orders": _public(orders),
+            "orders": [
+                {
+                    **_public(item),
+                    "lines_preview": decoded(item["lines_preview"])
+                    if item.get("lines_preview")
+                    else [],
+                }
+                for item in orders
+            ],
             "artifacts": _public(artifacts),
             "blockers": blockers,
             # §10 coverage: required vs on-hand/reserved/open-ordered vs the
@@ -227,6 +243,9 @@ def create_eligibility(
 ) -> dict[str, object]:
     if data.get("confirmed") is not True:
         raise DocumentaryError("supplier_eligibility_confirmation_required")
+    valid_until = (data.get("evidence") or {}).get("valid_until")
+    if valid_until is not None and valid_until < datetime.now(timezone.utc).date():
+        raise DocumentaryError("supplier_eligibility_expired")
     order_type = str(data["order_type"])
     keys = data["eligible_requirement_keys"]
     if (
@@ -337,8 +356,7 @@ def confirm_order_type_batch(
                 [existing_batch[0]["id"]],
             )
             return (
-                [{key: str(value) for key, value in item.items()}
-                 for item in existing_orders],
+                [_public(item) for item in existing_orders],
                 False,
             )
         requirement_rows = _requirements(version_id, org_id, order_type)
@@ -375,6 +393,10 @@ def confirm_order_type_batch(
             )
             if str(requirement["requirement_key"]) not in keys:
                 raise DocumentaryError("supplier_eligibility_requirement_mismatch")
+            evidence = _object(allocation["evidence"], "invalid_supplier_eligibility")
+            expiry = evidence.get("valid_until")
+            if expiry and str(expiry) < datetime.now(timezone.utc).date().isoformat():
+                raise DocumentaryError("supplier_eligibility_expired")
             supplier_identity = str(allocation["supplier_identity"])
             eligibility_id = str(allocation["supplier_eligibility_id"])
             prior = supplier_eligibility.get(supplier_identity)
@@ -510,7 +532,8 @@ def confirm_order_type_batch(
 
 
 def send_order(
-    *, org_id: UUID, actor_id: UUID, order_id: UUID, confirmed: bool
+    *, org_id: UUID, actor_id: UUID, order_id: UUID, confirmed: bool,
+    expected_at=None,
 ) -> dict[str, object]:
     if not confirmed:
         raise DocumentaryError("order_send_confirmation_required")
@@ -529,9 +552,10 @@ def send_order(
             raise DocumentaryError("order_state_invalid")
         sent_at = datetime.now(timezone.utc)
         updated = one(
-            "UPDATE public.orders SET status='SENT',sent_by=%s,sent_at=%s,updated_at=%s "
+            "UPDATE public.orders SET status='SENT',sent_by=%s,sent_at=%s,"
+            "expected_at=%s,updated_at=%s "
             "WHERE id=%s AND org_id=%s RETURNING id,order_code,order_type::text,status::text,"
-            "supplier_name,order_snapshot_hash",
-            [actor_id, sent_at, sent_at, order_id, org_id],
+            "supplier_name,order_snapshot_hash,expected_at",
+            [actor_id, sent_at, expected_at, sent_at, order_id, org_id],
         )
-        return {key: str(value) for key, value in updated.items()}
+        return _public(updated)

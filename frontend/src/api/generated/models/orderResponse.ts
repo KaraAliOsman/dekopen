@@ -5,6 +5,7 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { OrderResponseLinesPreviewItem } from "./orderResponseLinesPreviewItem";
 import type { OrderResponseStatusEnum } from "./orderResponseStatusEnum";
 import type { OrderTypeEnum } from "./orderTypeEnum";
 
@@ -16,4 +17,15 @@ export interface OrderResponse {
   supplier_name: string;
   /** @pattern ^[0-9a-f]{64}$ */
   order_snapshot_hash: string;
+  /** @nullable */
+  confirmed_at?: string | null;
+  /** @nullable */
+  sent_at?: string | null;
+  /** @nullable */
+  expected_at?: string | null;
+  /** @nullable */
+  line_count?: string | null;
+  /** @nullable */
+  total_qty?: string | null;
+  lines_preview?: OrderResponseLinesPreviewItem[];
 }

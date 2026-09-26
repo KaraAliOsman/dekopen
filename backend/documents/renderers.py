@@ -1424,9 +1424,15 @@ def render_pdf_document(
         body = _doc07(snapshot)
     else:
         raise DocumentaryError("pdf_document_type_invalid")
-    title = escape(
-        f"{document_type} {_value(_object(snapshot.get('project'), 'invalid_frozen_revision_snapshot').get('code'))}"
-    )
+    # Order-scoped payloads (DOC-02/DOC-04/DOC-07) carry `order`, not
+    # `project` — resolve the code from whichever envelope the snapshot is.
+    project_obj = snapshot.get("project")
+    if isinstance(project_obj, dict):
+        title_code = project_obj.get("code")
+    else:
+        order_obj = snapshot.get("order")
+        title_code = order_obj.get("project_code") if isinstance(order_obj, dict) else None
+    title = escape(f"{document_type} {_value(title_code)}")
     html = (
         "<!doctype html><html lang=\"es-CL\"><head><meta charset=\"utf-8\">"
         f"<title>{title}</title>"
