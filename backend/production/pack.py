@@ -882,7 +882,7 @@ def _pack_html(
                 f"{unit.get('reinforcements') or 0} · vidrios "
                 f"{unit.get('glasses') or 0} · paneles "
                 f"{unit.get('panels') or 0} · herrajes "
-                f"{unit.get('hardware') or 0} · herrajes cristal "
+                f"{unit.get('hardware') or 0} · accesorios cristal "
                 f"{unit.get('fittings') or 0}</p></div>"
             )
         body += "</div>"

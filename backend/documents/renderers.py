@@ -134,7 +134,7 @@ def _value(value: object) -> str:
     if isinstance(value, bool):
         return "Sí" if value else "No"
     if isinstance(value, Decimal):
-        return format(value, "f")
+        return format(value.normalize(), "f")
     if isinstance(value, (str, int)):
         return str(value)
     if isinstance(value, float):
