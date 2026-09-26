@@ -88,6 +88,7 @@ class ProductionOrderDetailSerializer(ProductionOrderSerializer):
     steps = ProductionStepSerializer(many=True)
     events = ProductionStepEventSerializer(many=True)
     dispatch_note_code = serializers.CharField(allow_null=True, required=False)
+    dispatch_note_voided = serializers.BooleanField()
     dispatch_note_dte = serializers.DictField(allow_null=True, required=False)
 
 

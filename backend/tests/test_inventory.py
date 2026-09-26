@@ -453,3 +453,61 @@ def test_unreserve_remnant_refuses_moved_reservation() -> None:
             org_id=org_id, remnant_id=remnant_id, actor_id=uuid4()
         )
     assert error.value.code == "remnant_reservation_moved"
+
+
+def test_cancel_order_requires_attestation() -> None:
+    from purchasing import service as purchasing_service
+
+    with pytest.raises(DocumentaryError) as error:
+        purchasing_service.cancel_order(
+            org_id=uuid4(), actor_id=uuid4(), order_id=uuid4(), confirmed=False
+        )
+    assert error.value.code == "order_cancel_confirmation_required"
+
+
+def test_cancel_order_rejects_orders_with_arrivals() -> None:
+    from purchasing import service as purchasing_service
+
+    org_id, order_id = uuid4(), uuid4()
+    with patch(
+        "purchasing.service.one",
+        return_value={
+            "id": order_id,
+            "order_code": "PO-1",
+            "order_type": "SUPPLIER_GLASS_PO",
+            "status": "PARTIALLY_RECEIVED",
+            "supplier_name": "Vendor",
+            "order_snapshot_hash": "a" * 64,
+        },
+    ), patch(
+        "purchasing.service.documentary_backend", return_value=_atomic()
+    ):
+        with pytest.raises(DocumentaryError) as error:
+            purchasing_service.cancel_order(
+                org_id=org_id, actor_id=uuid4(), order_id=order_id, confirmed=True
+            )
+    assert error.value.code == "order_state_invalid"
+
+
+def test_cancel_order_idempotent_replay() -> None:
+    from purchasing import service as purchasing_service
+
+    org_id, order_id = uuid4(), uuid4()
+    row = {
+        "id": order_id,
+        "order_code": "PO-1",
+        "order_type": "SUPPLIER_GLASS_PO",
+        "status": "CANCELLED",
+        "supplier_name": "Vendor",
+        "order_snapshot_hash": "a" * 64,
+        "cancelled_by": uuid4(),
+        "cancelled_at": None,
+        "expected_at": None,
+    }
+    with patch("purchasing.service.one", return_value=row), patch(
+        "purchasing.service.documentary_backend", return_value=_atomic()
+    ):
+        output = purchasing_service.cancel_order(
+            org_id=org_id, actor_id=uuid4(), order_id=order_id, confirmed=True
+        )
+    assert output["status"] == "CANCELLED"

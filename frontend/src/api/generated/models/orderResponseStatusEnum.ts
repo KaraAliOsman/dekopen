@@ -9,6 +9,9 @@
 /**
  * * `DRAFT` - DRAFT
  * * `SENT` - SENT
+ * * `PARTIALLY_RECEIVED` - PARTIALLY_RECEIVED
+ * * `FULFILLED` - FULFILLED
+ * * `CANCELLED` - CANCELLED
  */
 export type OrderResponseStatusEnum =
   (typeof OrderResponseStatusEnum)[keyof typeof OrderResponseStatusEnum];
@@ -16,4 +19,7 @@ export type OrderResponseStatusEnum =
 export const OrderResponseStatusEnum = {
   DRAFT: "DRAFT",
   SENT: "SENT",
+  PARTIALLY_RECEIVED: "PARTIALLY_RECEIVED",
+  FULFILLED: "FULFILLED",
+  CANCELLED: "CANCELLED",
 } as const;

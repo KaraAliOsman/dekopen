@@ -1225,6 +1225,11 @@ export const messages = {
   "purchasing.receiptKey": "Clave de recepción",
   "purchasing.receiptDate": "Fecha",
   "purchasing.receiptNote": "Nota",
+  "purchasing.cancelOrder": "Cancelar orden",
+  "purchasing.cancelTitle": "Cancelar esta orden",
+  "purchasing.cancelBody":
+    "La orden queda cerrada y su material vuelve a figurar como por comprar. Solo se puede cancelar mientras no lleguen mercaderías.",
+  "purchasing.cancelConfirm": "Cancelar orden",
   "purchasing.blockerEligibilityRequired":
     "Se requiere un proveedor elegible para este tipo de pedido",
   "purchasing.blockerAllocationRequired": "Requisitos sin proveedor asignado",

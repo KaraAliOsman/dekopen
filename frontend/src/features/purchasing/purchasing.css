@@ -43,6 +43,13 @@
   cursor: wait;
   opacity: 0.6;
 }
+.purchasing-page .purchasing-cancel {
+  border: 1px solid var(--theme-danger, #b3261e);
+  color: var(--theme-danger, #b3261e);
+  background: transparent;
+  border-radius: 0.4rem;
+  font-weight: 500;
+}
 .purchasing-blockers {
   border: 1px solid var(--theme-danger);
   border-radius: 0.5rem;

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { Link, useSearchParams } from "react-router-dom";
 
 import { apiMutator, ApiError } from "../../api/apiMutator";
+import { useConfirm } from "../../ui";
 import { documentaryArtifactAccess } from "../../api/generated/dekopen";
 import { InventorySection } from "./InventorySection";
 import { runJob } from "../jobs/runJob";
@@ -1057,10 +1058,46 @@ function OrderCard({
           </li>
         ))}
       </ul>
+      {(order.status === "DRAFT" || order.status === "SENT") && (
+        <CancelOrderButton order={order} busy={busy} request={request} action={action} />
+      )}
       {(order.status === "SENT" || order.status === "PARTIALLY_RECEIVED") && (
         <ReceivingPanel order={order} busy={busy} request={request} action={action} />
       )}
     </article>
+  );
+}
+
+function CancelOrderButton({
+  order,
+  busy,
+  request,
+  action,
+}: {
+  order: Order;
+  busy: boolean;
+  request: <T>(path: string, method?: string, body?: unknown) => Promise<T>;
+  action: (task: Promise<unknown>) => Promise<boolean>;
+}): JSX.Element {
+  const confirm = useConfirm();
+  return (
+    <button
+      type="button"
+      className="purchasing-cancel"
+      disabled={busy}
+      onClick={async () => {
+        const ok = await confirm({
+          title: t("purchasing.cancelTitle"),
+          body: t("purchasing.cancelBody"),
+          confirmLabel: t("purchasing.cancelConfirm"),
+          danger: true,
+        });
+        if (!ok) return;
+        void action(request(`purchasing/orders/${order.id}/cancel/`, "POST", { confirmed: true }));
+      }}
+    >
+      {t("purchasing.cancelOrder")}
+    </button>
   );
 }
 

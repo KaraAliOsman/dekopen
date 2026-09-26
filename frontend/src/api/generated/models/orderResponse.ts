@@ -24,6 +24,10 @@ export interface OrderResponse {
   /** @nullable */
   expected_at?: string | null;
   /** @nullable */
+  cancelled_by?: string | null;
+  /** @nullable */
+  cancelled_at?: string | null;
+  /** @nullable */
   line_count?: string | null;
   /** @nullable */
   total_qty?: string | null;

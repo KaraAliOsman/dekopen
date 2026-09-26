@@ -3,6 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { apiMutator } from "../../api/apiMutator";
 import { t } from "../../i18n/es-CL";
+import { ConfirmProvider } from "../../ui";
 import { PurchasingPage } from "./PurchasingPage";
 
 const identity = vi.hoisted(() => ({ id: "tenant-a", role: "WORKSHOP_MANAGER" }));
@@ -90,7 +91,9 @@ function mockState(overrides: Record<string, unknown> = {}) {
 function renderPage() {
   return render(
     <MemoryRouter>
-      <PurchasingPage />
+      <ConfirmProvider>
+        <PurchasingPage />
+      </ConfirmProvider>
     </MemoryRouter>,
   );
 }

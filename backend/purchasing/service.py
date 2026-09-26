@@ -559,3 +559,38 @@ def send_order(
             [actor_id, sent_at, expected_at, sent_at, order_id, org_id],
         )
         return _public(updated)
+
+
+def cancel_order(
+    *, org_id: UUID, actor_id: UUID, order_id: UUID, confirmed: bool
+) -> dict[str, object]:
+    """Cancel an order while no goods arrived. Cancellation is a human,
+    consequential decision — it always requires the explicit attestation —
+    and it is honest only for DRAFT/SENT orders: the moment a receipt exists
+    the order is evidence of physical events and can never be cancelled."""
+    if not confirmed:
+        raise DocumentaryError("order_cancel_confirmation_required")
+    with documentary_backend():
+        order = one(
+            "SELECT id,order_code,order_type::text,status::text,supplier_name,"
+            "order_snapshot_hash,cancelled_by,cancelled_at,expected_at "
+            "FROM public.orders WHERE id=%s AND org_id=%s FOR UPDATE",
+            [order_id, org_id],
+            "order_not_found",
+        )
+        if order["order_type"] not in ORDER_TYPES:
+            raise DocumentaryError("supplier_order_type_required")
+        if order["status"] == "CANCELLED":
+            return _public(order)
+        if order["status"] not in ("DRAFT", "SENT"):
+            raise DocumentaryError("order_state_invalid")
+        cancelled_at = datetime.now(timezone.utc)
+        updated = one(
+            "UPDATE public.orders SET status='CANCELLED',cancelled_by=%s,"
+            "cancelled_at=%s,updated_at=%s "
+            "WHERE id=%s AND org_id=%s RETURNING id,order_code,order_type::text,"
+            "status::text,supplier_name,order_snapshot_hash,cancelled_by,"
+            "cancelled_at,expected_at",
+            [actor_id, cancelled_at, cancelled_at, order_id, org_id],
+        )
+        return _public(updated)

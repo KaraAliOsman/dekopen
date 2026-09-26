@@ -1,7 +1,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET LOCAL search_path=public,extensions;
-SELECT plan(78);
+SELECT plan(85);
 SELECT ok(relrowsecurity,relname||' has RLS') FROM pg_class
  WHERE relnamespace='public'::regnamespace AND relname IN
  ('manufacturing_placement_policies','handle_requirement_policies','reinforcement_cut_policies',
@@ -110,6 +110,14 @@ SELECT col_is_null('public','orders','expected_at','promised delivery date is op
 SELECT throws_ok($$UPDATE orders SET expected_at='2027-01-15' WHERE id='88710000-0000-4000-8000-000000000001'$$,'42501','order_evidence_immutable','promised date is immutable once sent');
 SELECT throws_ok($$UPDATE orders SET order_code='PO-S09-X' WHERE id='88710000-0000-4000-8000-000000000001'$$,'42501','order_evidence_immutable','confirmed order payload is immutable');
 SELECT throws_ok($$DELETE FROM orders WHERE id='88710000-0000-4000-8000-000000000001'$$,'42501','order_evidence_immutable','supplier order cannot be deleted');
+SELECT lives_ok($$UPDATE orders SET status='PARTIALLY_RECEIVED',updated_at=now() WHERE id='88710000-0000-4000-8000-000000000001'$$,'a sent order advances to partially received when goods arrive');
+SELECT throws_ok($$UPDATE orders SET status='CANCELLED',cancelled_by='88610000-0000-4000-8000-000000000003',cancelled_at=now(),updated_at=now() WHERE id='88710000-0000-4000-8000-000000000001'$$,'42501','order_evidence_immutable','an order with arrivals can never be cancelled');
+SELECT lives_ok($$UPDATE orders SET status='FULFILLED',updated_at=now() WHERE id='88710000-0000-4000-8000-000000000001'$$,'a partially received order advances to fulfilled');
+SELECT lives_ok($$INSERT INTO orders(id,org_id,project_id,order_type,order_code,status,supplier_name,payload_json,project_version_id,allocation_batch_id,supplier_eligibility_id,bom_hash,revision_snapshot_sha256,purchase_projection_hash,allocation_identity,order_snapshot_hash,supplier_identity,supplier_details,confirmed_by,confirmed_at)
+ VALUES('88740000-0000-4000-8000-000000000001','88600000-0000-4000-8000-000000000001','88620000-0000-4000-8000-000000000001','SUPPLIER_GLASS_PO','PO-S09-3','DRAFT','Proveedor 2','{}','88650000-0000-4000-8000-000000000001','88700000-0000-4000-8000-000000000001','88680000-0000-4000-8000-000000000001','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','2222222222222222222222222222222222222222222222222222222222222222','3333333333333333333333333333333333333333333333333333333333333333','9999999999999999999999999999999999999999999999999999999999999999','SUP-2','{}','88610000-0000-4000-8000-000000000003',now())$$,'a second draft order exists for cancellation');
+SELECT throws_ok($$UPDATE orders SET status='CANCELLED',updated_at=now() WHERE id='88740000-0000-4000-8000-000000000001'$$,'42501','order_evidence_immutable','cancel requires operator identity and timestamp');
+SELECT lives_ok($$UPDATE orders SET status='CANCELLED',cancelled_by='88610000-0000-4000-8000-000000000003',cancelled_at=now(),updated_at=now() WHERE id='88740000-0000-4000-8000-000000000001'$$,'a draft order can be cancelled with operator evidence');
+SELECT throws_ok($$UPDATE orders SET status='SENT',sent_by='88610000-0000-4000-8000-000000000003',sent_at=now(),updated_at=now() WHERE id='88740000-0000-4000-8000-000000000001'$$,'42501','order_evidence_immutable','a cancelled order cannot be sent');
 SELECT lives_ok($$INSERT INTO order_requirement_lines(id,order_id,requirement_line_id,project_id,project_version_id,org_id,order_type,bom_hash,revision_snapshot_sha256,quantity,line_snapshot,line_hash)
  VALUES('88720000-0000-4000-8000-000000000001','88710000-0000-4000-8000-000000000001','88670000-0000-4000-8000-000000000001','88620000-0000-4000-8000-000000000001','88650000-0000-4000-8000-000000000001','88600000-0000-4000-8000-000000000001','SUPPLIER_GLASS_PO','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',2,'{}','9999999999999999999999999999999999999999999999999999999999999999')$$,'order line binds the exact order and requirement');
 SELECT lives_ok($$INSERT INTO orders(org_id,project_id,order_type,order_code,payload_json)

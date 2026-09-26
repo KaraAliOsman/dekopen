@@ -8144,81 +8144,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
-  /api/v1/production/orders/{order_id}/dispatch-note-void/:
-    post:
-      operationId: production_order_dispatch_note_void
-      parameters:
-      - in: header
-        name: X-Organization-ID
-        schema:
-          type: string
-          format: uuid
-        description: Active organization; validated against the JWT user's active
-          memberships.
-      - in: path
-        name: order_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - production
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DispatchNoteVoidRequest'
-      security:
-      - SupabaseBearer: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProductionOrder'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: ''
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: ''
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: ''
-        '503':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: ''
   /api/v1/production/orders/{order_id}/dispatch-note-dte/:
     get:
       operationId: production_order_dispatch_note_dte
@@ -8476,6 +8401,88 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SiiEnvio'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/production/orders/{order_id}/dispatch-note-void/:
+    post:
+      operationId: production_order_dispatch_note_void
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: order_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - production
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DispatchNoteVoidRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DispatchNoteVoidRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DispatchNoteVoidRequest'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductionOrderDetail'
           description: ''
         '400':
           content:
@@ -12692,6 +12699,88 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaymentIntegrationStatus'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/purchasing/orders/{order_id}/cancel/:
+    post:
+      operationId: purchasing_cancel_order
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: order_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - purchasing
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendOrderRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SendOrderRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SendOrderRequestRequest'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
           description: ''
         '400':
           content:
@@ -18652,6 +18741,13 @@ components:
           type: string
           format: date
           nullable: true
+        cancelled_by:
+          type: string
+          format: uuid
+          nullable: true
+        cancelled_at:
+          type: string
+          nullable: true
         line_count:
           type: string
           nullable: true
@@ -18662,6 +18758,7 @@ components:
           type: array
           items:
             type: object
+            additionalProperties: {}
       required:
       - id
       - order_code
@@ -18673,10 +18770,16 @@ components:
       enum:
       - DRAFT
       - SENT
+      - PARTIALLY_RECEIVED
+      - FULFILLED
+      - CANCELLED
       type: string
       description: |-
         * `DRAFT` - DRAFT
         * `SENT` - SENT
+        * `PARTIALLY_RECEIVED` - PARTIALLY_RECEIVED
+        * `FULFILLED` - FULFILLED
+        * `CANCELLED` - CANCELLED
     OrderTypeEnum:
       enum:
       - SUPPLIER_PROFILE_PO
@@ -22335,6 +22438,8 @@ components:
           maxLength: 20
         acteco:
           type: integer
+          maximum: 999999
+          minimum: 100000
           nullable: true
       required:
       - caf_xml

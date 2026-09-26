@@ -84,6 +84,24 @@ class OrderResponseSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     order_code = serializers.CharField()
     order_type = serializers.ChoiceField(choices=ORDER_TYPES)
-    status = serializers.ChoiceField(choices=["DRAFT", "SENT"])
+    status = serializers.ChoiceField(
+        choices=[
+            "DRAFT",
+            "SENT",
+            "PARTIALLY_RECEIVED",
+            "FULFILLED",
+            "CANCELLED",
+        ]
+    )
     supplier_name = serializers.CharField()
     order_snapshot_hash = serializers.RegexField(r"^[0-9a-f]{64}$")
+    confirmed_at = serializers.CharField(required=False, allow_null=True)
+    sent_at = serializers.CharField(required=False, allow_null=True)
+    expected_at = serializers.DateField(required=False, allow_null=True)
+    cancelled_by = serializers.UUIDField(required=False, allow_null=True)
+    cancelled_at = serializers.CharField(required=False, allow_null=True)
+    line_count = serializers.CharField(required=False, allow_null=True)
+    total_qty = serializers.CharField(required=False, allow_null=True)
+    lines_preview = serializers.ListField(
+        child=serializers.DictField(), required=False
+    )

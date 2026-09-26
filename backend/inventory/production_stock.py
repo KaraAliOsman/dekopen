@@ -474,10 +474,15 @@ def coverage_for_version(org_id: UUID, version_id: UUID) -> dict[str, Any]:
         str(row["requirement_line_id"]): _dec(row["qty"])
         for row in rows(
             """
-            SELECT requirement_line_id::text, SUM(quantity) AS qty
-            FROM public.order_requirement_lines
-            WHERE org_id = %s AND requirement_line_id = ANY(%s::uuid[])
-            GROUP BY requirement_line_id
+            SELECT lines.requirement_line_id::text, SUM(lines.quantity) AS qty
+            FROM public.order_requirement_lines lines
+            JOIN public.orders o ON o.id = lines.order_id
+            WHERE lines.org_id = %s AND lines.requirement_line_id = ANY(%s::uuid[])
+              -- Only committed orders are inbound supply: a DRAFT may never
+              -- be sent and a CANCELLED one never arrives — counting either
+              -- would suppress purchases the workshop still needs.
+              AND o.status IN ('SENT', 'PARTIALLY_RECEIVED', 'FULFILLED')
+            GROUP BY lines.requirement_line_id
             """,
             [str(org_id), line_ids],
         )

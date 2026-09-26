@@ -20,6 +20,7 @@ from purchasing.serializers import (
 )
 from purchasing.service import (
     allocate_requirement,
+    cancel_order,
     confirm_order_type_batch,
     create_eligibility,
     purchasing_state,
@@ -133,5 +134,25 @@ class SendOrderView(APIView):
                 order_id=order_id,
                 confirmed=data["confirmed"],
                 expected_at=data.get("expected_at"),
+            )
+        return Response(output)
+
+
+class CancelOrderView(APIView):
+    @extend_schema(
+        operation_id="purchasing_cancel_order",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=SendOrderRequestSerializer,
+        responses={200: OrderResponseSerializer, **ERRORS},
+        tags=["purchasing"],
+    )
+    def post(self, request, order_id: UUID):
+        data = validate(SendOrderRequestSerializer, request.data)
+        with documentary_scope(request, _ALLOWED) as (token, _, org_id):
+            output = cancel_order(
+                org_id=org_id,
+                actor_id=token.user_id,
+                order_id=order_id,
+                confirmed=data["confirmed"],
             )
         return Response(output)
