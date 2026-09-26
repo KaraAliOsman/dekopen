@@ -9,6 +9,7 @@ import { telemetry } from "../telemetry/telemetry";
 import { useTheme } from "../theme/ThemeProvider";
 import { CommandPalette } from "../features/commands/CommandPalette";
 import { AskDekopen } from "../features/assistant/AskDekopen";
+import { Orb } from "../features/assistant/Orb";
 import { AssistantSurfaceProvider } from "../features/assistant/assistantContext";
 import { AttentionBell } from "./AttentionBell";
 import { OrgSwitcher } from "./OrgSwitcher";
@@ -279,6 +280,7 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
                   className="topbar-button topbar-ai"
                   onClick={() => setAssistantRequest((value) => value + 1)}
                 >
+                  <Orb state="idle" size={22} />
                   {t("shell.aiEntry")}
                 </button>
               </div>

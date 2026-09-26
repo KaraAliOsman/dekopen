@@ -18,6 +18,8 @@ import { designAssistProduct } from "../canvas/designOps";
 import type { ProductJson } from "../canvas/productEditing";
 import { useDesignOpsBridge } from "./assistantContext";
 import { AiMetricsCard } from "./AiMetricsCard";
+import { ArtifactDetail, type Artifact } from "./ArtifactDetail";
+import { Orb, type OrbState } from "./Orb";
 import { jobErrorKey } from "../jobs/jobError";
 import { t } from "../../i18n/es-CL";
 
@@ -130,17 +132,32 @@ interface TranscriptTurn {
   warnings?: string[];
 }
 
-interface Artifact {
-  kind?: string;
-  tool?: string;
-  title?: string;
-  payload?: unknown;
-  references?: string[];
-}
-
 function stateLabel(state: string): string {
   const key = STATE_LABELS[state];
   return key ? t(key as never) : state;
+}
+
+/** The orb mirrors the durable job state so the assistant's presence
+ * communicates what it is doing without reading a label. */
+function orbState(state: string | undefined): OrbState {
+  switch (state) {
+    case "QUEUED":
+    case "PLANNING":
+      return "thinking";
+    case "RUNNING":
+      return "working";
+    case "WAITING_FOR_USER":
+    case "WAITING_FOR_APPROVAL":
+      return "waiting";
+    case "SUCCEEDED":
+      return "ok";
+    case "FAILED":
+    case "FAILED_RETRYABLE":
+    case "CANCELED":
+      return "error";
+    default:
+      return "idle";
+  }
 }
 
 const JOBS_PAGE_SIZE = 30;
@@ -229,6 +246,8 @@ function AgentTurnView({
     (turn.queries?.length ?? 0) + (turn.claims?.length ?? 0) + (turn.steps?.length ?? 0);
   return (
     <div className="aiws-turn aiws-turn--agent">
+      <Orb state="idle" size={24} />
+      <div className="aiws-turn__body">
       {turn.plan?.length ? (
         <ol className="aiws-plan">
           {turn.plan.map((step, i) => (
@@ -338,6 +357,7 @@ function AgentTurnView({
           ))}
         </div>
       ) : null}
+      </div>
     </div>
   );
 }
@@ -549,6 +569,7 @@ export function AssistantWorkspacePage(): JSX.Element {
       <div className="aiws-main">
         {job ? (
           <header className="aiws-head">
+            <Orb state={orbState(job.state)} size={40} />
             <div>
               <h1>{job.goal}</h1>
               <p className="aiws-head__meta">
@@ -589,7 +610,10 @@ export function AssistantWorkspacePage(): JSX.Element {
         <div className="aiws-transcript">
           {transcript.length === 0 && !job ? (
             <>
-              <AiMetricsCard organizationId={orgId ?? ""} />
+              <div className="aiws-hero">
+                <Orb state="idle" size={64} />
+                <AiMetricsCard organizationId={orgId ?? ""} />
+              </div>
               <p className="aiws-empty">{t("aiws.hint")}</p>
             </>
           ) : (
@@ -603,7 +627,12 @@ export function AssistantWorkspacePage(): JSX.Element {
               ),
             )
           )}
-          {live ? <p className="aiws-live">{t("agent.thinking")}</p> : null}
+          {live ? (
+            <p className="aiws-live">
+              <Orb state="working" size={22} />
+              {t("agent.thinking")}
+            </p>
+          ) : null}
           <div ref={transcriptEnd} />
         </div>
         {error ? (
@@ -695,7 +724,7 @@ export function AssistantWorkspacePage(): JSX.Element {
                 {t("aiws.evidence")}: {artifact.references.join(", ")}
               </p>
             ) : null}
-            <pre className="aiws-payload">{JSON.stringify(artifact.payload ?? {}, null, 2)}</pre>
+            <ArtifactDetail artifact={artifact} />
           </div>
         ) : (
           <p className="aiws-empty">{t("aiws.inspectorEmpty")}</p>

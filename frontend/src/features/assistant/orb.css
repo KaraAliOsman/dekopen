@@ -1,0 +1,161 @@
+/* DEKOPEN orb identity — one component, many presences. The animations are
+ * deliberately subtle: a professional assistant breathes, glances and pulses;
+ * it never bounces. */
+
+.orb {
+  --orb-eye: #63d8cf;
+  display: inline-block;
+  vertical-align: middle;
+  flex: none;
+}
+
+.orb-eye-glow {
+  fill: url(#orb-glow);
+  opacity: 0.9;
+}
+.orb-eye-dot {
+  fill: var(--orb-eye);
+}
+.orb-eye-spark {
+  fill: #eafffb;
+  opacity: 0.95;
+}
+.orb-state-ring {
+  fill: none;
+  stroke-width: 0;
+}
+
+/* ————— idle: breathes slowly, blinks occasionally ————— */
+.orb[data-state="idle"] {
+  animation: orb-breathe 5.6s ease-in-out infinite;
+}
+.orb[data-state="idle"] .orb-eyes {
+  animation: orb-blink 6.8s ease-in-out infinite;
+  transform-origin: 32px 33px;
+}
+
+/* ————— thinking: eyes scan ————— */
+.orb[data-state="thinking"] .orb-eyes {
+  animation: orb-scan 2.2s ease-in-out infinite;
+}
+.orb[data-state="thinking"] .orb-sheen {
+  animation: orb-sheen-sweep 2.2s ease-in-out infinite;
+}
+
+/* ————— working: confident pulse + halo ————— */
+.orb[data-state="working"] {
+  animation: orb-pulse 1.6s ease-in-out infinite;
+}
+.orb[data-state="working"] .orb-halo {
+  animation: orb-halo-pulse 1.6s ease-in-out infinite;
+}
+
+/* ————— waiting: looks up at the human, amber attention ring ————— */
+.orb[data-state="waiting"] .orb-eyes {
+  transform: translateY(-2.2px);
+}
+.orb[data-state="waiting"] .orb-state-ring {
+  stroke: var(--theme-warning, #9c5306);
+  stroke-width: 1.6;
+  stroke-dasharray: 6 3;
+  animation: orb-ring-spin 9s linear infinite;
+  transform-origin: 32px 33px;
+}
+
+/* ————— ok: brief teal halo settle ————— */
+.orb[data-state="ok"] .orb-state-ring {
+  stroke: var(--orb-eye);
+  stroke-width: 1.4;
+}
+.orb[data-state="ok"] .orb-halo {
+  opacity: 1;
+}
+
+/* ————— error: narrowed eyes, danger ring ————— */
+.orb[data-state="error"] .orb-eyes {
+  transform: scaleY(0.55);
+  transform-origin: 32px 33px;
+}
+.orb[data-state="error"] .orb-eye-dot {
+  fill: #f0a79b;
+}
+.orb[data-state="error"] .orb-eye-glow {
+  fill: none;
+}
+.orb[data-state="error"] .orb-state-ring {
+  stroke: var(--theme-danger, #b3372f);
+  stroke-width: 1.6;
+  stroke-dasharray: 3 3;
+}
+
+@keyframes orb-breathe {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-1.2px);
+  }
+}
+@keyframes orb-blink {
+  0%,
+  91%,
+  97%,
+  100% {
+    transform: scaleY(1);
+  }
+  94% {
+    transform: scaleY(0.08);
+  }
+}
+@keyframes orb-scan {
+  0%,
+  100% {
+    transform: translateX(-1.6px);
+  }
+  50% {
+    transform: translateX(1.6px);
+  }
+}
+@keyframes orb-sheen-sweep {
+  0%,
+  100% {
+    transform: translateX(-2.4px);
+  }
+  50% {
+    transform: translateX(2.4px);
+  }
+}
+@keyframes orb-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.045);
+  }
+}
+@keyframes orb-halo-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes orb-ring-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orb,
+  .orb .orb-eyes,
+  .orb .orb-sheen,
+  .orb .orb-halo,
+  .orb .orb-state-ring {
+    animation: none !important;
+  }
+}

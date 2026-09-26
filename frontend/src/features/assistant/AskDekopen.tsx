@@ -6,6 +6,7 @@ import { aiAsk } from "../../api/generated/dekopen";
 import type { AiAskResponse } from "../../api/generated/models/aiAskResponse";
 import { t } from "../../i18n/es-CL";
 import { AgentBody, SURFACE_LABELS } from "./AgentBody";
+import { Orb } from "./Orb";
 import { useAssistantContext } from "./assistantContext";
 import "./assistant.css";
 
@@ -114,6 +115,7 @@ export function AskDekopen({
           }}
         >
           <header className="ask-dock__header">
+            <Orb state={busy ? "thinking" : "idle"} size={26} />
             <span className="ask-dock__title">{t("assistant.dockTitle")}</span>
             <span className="ask-dock__modes">
               <button
@@ -189,7 +191,12 @@ export function AskDekopen({
                     </div>
                   ))
                 )}
-                {busy ? <p className="ask-dock__busy">{t("ask.thinking")}</p> : null}
+                {busy ? (
+                  <p className="ask-dock__busy">
+                    <Orb state="thinking" size={20} />
+                    {t("ask.thinking")}
+                  </p>
+                ) : null}
               </div>
               {message ? <p className="ask-dock__error">{message}</p> : null}
               <form
@@ -224,7 +231,7 @@ export function AskDekopen({
           aria-label={t("ask.open")}
           title={t("ask.open")}
         >
-          ◈
+          <Orb state={busy ? "working" : "idle"} size={38} />
         </button>
       )}
     </div>

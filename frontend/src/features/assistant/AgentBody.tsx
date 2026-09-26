@@ -405,6 +405,24 @@ export function AgentBody({
                   })}
                 </div>
               ) : null}
+              {turn.answer.artifacts?.length ? (
+                <div className="ask-dock__artifacts">
+                  {turn.answer.artifacts.map((item, i) => {
+                    const artifact = item as { kind?: string; title?: string };
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        className="ask-dock__artifact"
+                        title={t("aiws.openWorkspace")}
+                        onClick={() => navigate(`/assistant?job=${turn.answer.job_id}`)}
+                      >
+                        {artifact.title ?? artifact.kind ?? t("aiws.inspector")}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
               <p className="ask-dock__meta">
                 {turn.answer.model} · {turn.answer.credits_debited} {t("assistant.credits")}
                 {turn.answer.job_id ? (
