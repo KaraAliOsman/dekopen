@@ -314,6 +314,37 @@
 .ws-centers h4 {
   margin: 0 0 0.3rem;
 }
+.ws-center-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.55rem;
+}
+.ws-center-form input {
+  background: var(--theme-surface);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-sm, 8px);
+  padding: 0.42rem 0.6rem;
+  font: inherit;
+  min-width: 8rem;
+}
+.ws-center-form input:first-of-type {
+  min-width: 5rem;
+  width: 7rem;
+  text-transform: uppercase;
+}
+.ws-center-form select {
+  background: var(--theme-surface);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-sm, 8px);
+  padding: 0.42rem 0.5rem;
+  font: inherit;
+}
+.ws-center-form [role="alert"] {
+  color: var(--theme-danger, #b3261e);
+  font-size: 0.82rem;
+}
 .ws-badge {
   font-size: 0.72rem;
   padding: 0.15rem 0.55rem;

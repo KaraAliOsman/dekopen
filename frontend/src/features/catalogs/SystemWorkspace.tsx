@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { WorkCenterRequestKindEnum } from "../../api/generated/models";
 import type {
   ArticleResponse,
   BeadResponse,
@@ -303,6 +304,14 @@ export function SystemWorkspaceView({
     };
   }, [api, systemId, reloadKey]);
 
+  const [centerForm, setCenterForm] = useState<{
+    code: string;
+    name: string;
+    kind: WorkCenterRequestRequest["kind"];
+  } | null>(null);
+  const [centerSaving, setCenterSaving] = useState(false);
+  const [centerError, setCenterError] = useState<string | null>(null);
+
   const reactivateCenter = async (center: WorkCenter) => {
     try {
       await api.upsertWorkCenter({
@@ -314,6 +323,33 @@ export function SystemWorkspaceView({
       setCenters(await api.workCenters());
     } catch {
       /* the centers list keeps its last state; the readiness ladder still shows the blocker */
+    }
+  };
+
+  /** A readiness blocker that says 'missing work centers' resolves here —
+   * the upsert endpoint creates or revives the row the routing needs. */
+  const createCenter = async () => {
+    if (!centerForm) return;
+    const code = centerForm.code.trim().toUpperCase();
+    const name = centerForm.name.trim();
+    if (!code || !name) return;
+    setCenterSaving(true);
+    setCenterError(null);
+    try {
+      await api.upsertWorkCenter({
+        code,
+        name,
+        kind: centerForm.kind,
+        display_order: (centers?.length ?? 0) + 1,
+      });
+      setCenters(await api.workCenters());
+      setCenterForm(null);
+    } catch (createError) {
+      setCenterError(
+        createError instanceof Error ? createError.message : "work_center_write_failed",
+      );
+    } finally {
+      setCenterSaving(false);
     }
   };
 
@@ -835,11 +871,11 @@ export function SystemWorkspaceView({
             </div>
           </div>
         )}
-        {centers && centers.length > 0 && (
+        {(centers && centers.length > 0) || canEdit ? (
           <div className="ws-centers">
             <h4>{wst("centers")}</h4>
             <ul className="ws-stations">
-              {centers.map((center) => (
+              {(centers ?? []).map((center) => (
                 <li key={center.id}>
                   <strong>{center.name}</strong>
                   <small>
@@ -867,8 +903,75 @@ export function SystemWorkspaceView({
                 </li>
               ))}
             </ul>
+            {canEdit &&
+              (centerForm ? (
+                <form
+                  className="ws-center-form"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void createCenter();
+                  }}
+                >
+                  <input
+                    value={centerForm.code}
+                    placeholder={wst("centerCode")}
+                    maxLength={50}
+                    aria-label={wst("centerCode")}
+                    onChange={(event) => setCenterForm({ ...centerForm, code: event.target.value })}
+                  />
+                  <input
+                    value={centerForm.name}
+                    placeholder={wst("centerName")}
+                    maxLength={200}
+                    aria-label={wst("centerName")}
+                    onChange={(event) => setCenterForm({ ...centerForm, name: event.target.value })}
+                  />
+                  <select
+                    value={centerForm.kind}
+                    aria-label={wst("centerKind")}
+                    onChange={(event) =>
+                      setCenterForm({
+                        ...centerForm,
+                        kind: event.target.value as WorkCenterRequestRequest["kind"],
+                      })
+                    }
+                  >
+                    {Object.values(WorkCenterRequestKindEnum).map((kind) => (
+                      <option key={kind} value={kind}>
+                        {centerKindLabel(kind)}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="submit"
+                    className="ui-button ui-button--small"
+                    disabled={centerSaving || !centerForm.code.trim() || !centerForm.name.trim()}
+                  >
+                    {wst("centerCreate")}
+                  </button>
+                  <button
+                    type="button"
+                    className="link-button"
+                    onClick={() => {
+                      setCenterForm(null);
+                      setCenterError(null);
+                    }}
+                  >
+                    {t("projects.cancel")}
+                  </button>
+                  {centerError ? <span role="alert">{centerError}</span> : null}
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  className="ui-button ui-button--small"
+                  onClick={() => setCenterForm({ code: "", name: "", kind: "CUT" })}
+                >
+                  {wst("newCenter")}
+                </button>
+              ))}
           </div>
-        )}
+        ) : null}
       </section>
 
       {canEdit && (
