@@ -83,8 +83,11 @@ def enqueue(
     if not serializer.is_valid():
         raise JobServiceError("job_payload_invalid")
     validated = dict(serializer.validated_data)
-    if spec.authorize is not None and role is not None and not spec.authorize(validated, role):
-        raise JobServiceError("job_permission_denied")
+    if spec.authorize is not None:
+        # An authorize callback is a role contract — skipping it on role=None
+        # would let a future internal enqueue bypass the check silently.
+        if role is None or not spec.authorize(validated, role):
+            raise JobServiceError("job_permission_denied")
     job, created = repository.insert_job(
         org_id=org_id,
         job_type=job_type,

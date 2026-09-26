@@ -72,6 +72,10 @@ logger = logging.getLogger(__name__)
 
 _READERS = ("OWNER", "ESTIMATOR", "WORKSHOP_MANAGER", "INSTALLER")
 _STEP_ACTORS = ("OWNER", "WORKSHOP_MANAGER", "INSTALLER")
+# Station steps are workshop authority — INSTALLER's field role ends at
+# delivery/installation confirmation, not at weld/glaze/QC sign-off.
+_WORKSHOP_STEP_ACTORS = ("OWNER", "WORKSHOP_MANAGER")
+_LEDGER_WRITERS = ("OWNER", "ESTIMATOR")
 _WRITERS = ("OWNER", "WORKSHOP_MANAGER")
 
 
@@ -187,7 +191,7 @@ class ProductionStepTransitionView(APIView):
     def post(self, request, step_id: UUID):
         data = validate(StepTransitionRequestSerializer, request.data)
         with public_production_errors():
-            with documentary_scope(request, _STEP_ACTORS) as (token, _, org_id):
+            with documentary_scope(request, _WORKSHOP_STEP_ACTORS) as (token, _, org_id):
                 output = service.transition_step(
                     org_id=org_id,
                     step_id=step_id,
@@ -695,7 +699,15 @@ class ProductionOrderDeliveryConfirmView(APIView):
     def post(self, request, order_id: UUID):
         data = validate(DeliveryConfirmRequestSerializer, request.data)
         with public_production_errors():
-            with documentary_scope(request, _STEP_ACTORS) as (token, _, org_id):
+            with documentary_scope(request, _READERS) as (token, tenant, org_id):
+                # A cobro en terreno writes the money ledger + a sealed
+                # comprobante — field crews sign PODs, they don't collect.
+                if data.get("payment") and tenant.active_organization.role not in _LEDGER_WRITERS:
+                    raise contract_error(
+                        403,
+                        "payment_role_denied",
+                        "Registrar un cobro requiere el rol Estimador u Owner.",
+                    )
                 confirmation = confirm_delivery(
                     org_id=org_id,
                     order_id=order_id,

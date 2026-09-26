@@ -958,8 +958,71 @@ def test_orders_list_allows_installer(monkeypatch) -> None:
     assert response.status_code == 200
 
 
+def test_step_transition_denies_installer(monkeypatch) -> None:
+    org_id = uuid4()
+    token = SimpleNamespace(user_id=uuid4(), claims={}, aal="aal1")
+
+    @contextmanager
+    def fake_scope(request, allowed):
+        from authentication.errors import contract_error
+
+        if "INSTALLER" in allowed:
+            yield token, _tenant("INSTALLER", org_id), org_id
+        else:
+            raise contract_error(403, "documentary_permission_denied", "denied")
+            yield
+
+    monkeypatch.setattr(production_views, "documentary_scope", fake_scope)
+    client = APIClient()
+    client.force_authenticate(user=SimpleNamespace(is_authenticated=True), token=object())
+    response = client.post(
+        f"/api/v1/production/steps/{uuid4()}/transition/",
+        {"action": "START"},
+        format="json",
+    )
+    assert response.status_code == 403
+
+
+def test_delivery_confirm_payment_denies_installer(monkeypatch) -> None:
+    client, _, _ = _client_with_scope(monkeypatch, "INSTALLER")
+    response = client.post(
+        f"/api/v1/production/orders/{uuid4()}/delivery/confirm/",
+        {
+            "receiver_name": "Cliente",
+            "signature_png": "aGVsbG8=",
+            "payment": {"amount": "1500000", "method": "CASH"},
+        },
+        format="json",
+    )
+    assert response.status_code == 403
+
+
+def test_delivery_confirm_payment_allows_estimator(monkeypatch) -> None:
+    client, token, _ = _client_with_scope(monkeypatch, "ESTIMATOR")
+
+    def fake_confirm(**kwargs):
+        return {"id": uuid4()}
+
+    monkeypatch.setattr(
+        "production.views.confirm_delivery", fake_confirm
+    )
+    monkeypatch.setattr(
+        service, "get_delivery", lambda *, org_id, order_id: {"delivery": {}}
+    )
+    response = client.post(
+        f"/api/v1/production/orders/{uuid4()}/delivery/confirm/",
+        {
+            "receiver_name": "Cliente",
+            "signature_png": "aGVsbG8=",
+            "payment": {"amount": "1500000", "method": "CASH"},
+        },
+        format="json",
+    )
+    assert response.status_code == 201
+
+
 def test_step_transition_forwards_action(monkeypatch) -> None:
-    client, token, _ = _client_with_scope(monkeypatch, "INSTALLER")
+    client, token, _ = _client_with_scope(monkeypatch, "WORKSHOP_MANAGER")
     seen = {}
 
     def fake_transition(**kwargs):

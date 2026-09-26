@@ -350,6 +350,26 @@ def _settle(*, org_id: UUID, link_id: UUID, verified: dict, client: FlowClient) 
             return {"link": _public_link(link)}
         # status 2 — settled. The ledger's UNIQUE (org_id, operation_key) is the
         # dedup boundary: webhook retries and recoveries converge on one row.
+        # The project row lock serializes against a manual payment landing
+        # between link mint and provider settle — the mint-time balance cap is
+        # stale by then. The money did arrive (provider-verified) so the ledger
+        # must record it; if the balance shrank under the link amount the
+        # receipt documents the excess instead of silently over-collecting.
+        project = project_row(org_id, link["project_id"], lock=True)
+        live_deal = _deal(org_id, link["project_id"], project)
+        over = Decimal("0")
+        if live_deal is not None:
+            collected = rows(
+                "SELECT COALESCE(SUM(amount), 0) AS collected FROM public.project_payments "
+                "WHERE org_id=%s AND project_id=%s AND voided_at IS NULL",
+                [str(org_id), str(link["project_id"])],
+            )[0]["collected"]
+            over = Decimal(str(link["amount"])) - (
+                Decimal(str(live_deal["total"])) - Decimal(str(collected))
+            )
+        note = f"Cobro en línea — link {link['id']}"
+        if over > 0:
+            note += f" — excede el saldo por {over} (conciliar devolución)"
         payment = rows(
             """
             INSERT INTO public.project_payments(
@@ -366,7 +386,7 @@ def _settle(*, org_id: UUID, link_id: UUID, verified: dict, client: FlowClient) 
                 str(link["kind"]),
                 str(Decimal(str(link["amount"]))),
                 f"FLOW {verified['flowOrder']}",
-                f"Cobro en línea — link {link['id']}",
+                note,
                 None,
                 timezone.now(),
             ],
@@ -382,9 +402,7 @@ def _settle(*, org_id: UUID, link_id: UUID, verified: dict, client: FlowClient) 
         # authority: the comprobante always reflects the total the link
         # presented to the payer — the deal frozen at creation — then the
         # live deal for links minted before the freeze, else an empty
-        # snapshot.
-        project = project_row(org_id, link["project_id"])
-        live_deal = _deal(org_id, link["project_id"], project)
+        # snapshot. (project/live_deal resolved above, inside the row lock.)
         if link.get("deal_total") is not None:
             deal = {
                 "total": Decimal(str(link["deal_total"])),

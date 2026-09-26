@@ -372,7 +372,7 @@ class AiJobMessagesView(APIView):
                 )
                 try:
                     with job_service.job_backend():
-                        job_service.enqueue(
+                        queued, created = job_service.enqueue(
                             org_id=org_id,
                             job_type="ai.agent.run",
                             payload={
@@ -398,6 +398,20 @@ class AiJobMessagesView(APIView):
                         409, error.code,
                         "No se pudo encolar la instrucción del agente.",
                     ) from error
+                # The key is the dedupe boundary for RETRIES of one message —
+                # reusing it with different text must not silently replay the
+                # stored instruction while claiming the new one is queued.
+                stored = queued.get("payload") or {}
+                if (
+                    not created
+                    and queued.get("state") not in ("FAILED", "CANCELED")
+                    and str(stored.get("goal") or "") != str(data["message"])
+                ):
+                    raise contract_error(
+                        409,
+                        "operation_conflict",
+                        "Esta clave de operación ya fue usada con una instrucción distinta.",
+                    )
                 return Response(
                     {"job_id": str(job["id"]), "state": "QUEUED"},
                     status=status.HTTP_202_ACCEPTED,
