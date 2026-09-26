@@ -32,6 +32,7 @@ const glassRequirement = {
   quantity: "4",
   specification: {},
   source_trace: ["5".repeat(64), "6".repeat(64)],
+  source_trace_labels: ["I-01", null],
 };
 const profileRequirement = {
   id: "req-profile",
@@ -245,15 +246,14 @@ it("sends a draft order only after explicit attestation", async () => {
   );
 });
 
-it("renders string source traces as complete identities, not characters", async () => {
+it("renders trace labels with a short digest fallback for unlabelled ids", async () => {
   mockState();
   renderPage();
   const cell = (await screen.findByText("4 unidades")).closest("tr")!;
-  const trace = "5".repeat(64);
-  // Old behavior enumerated characters via Object.entries on the string,
-  // producing "0=5 · 1=5 · ..." rows and never the complete identity.
-  expect(within(cell).getByText(trace)).toBeInTheDocument();
-  expect(within(cell).getByText("6".repeat(64))).toBeInTheDocument();
+  // "5".repeat(64) carries the I-01 label; "6".repeat(64) has none and renders
+  // as a truncated digest — never char-by-char enumeration.
+  expect(within(cell).getByText("I-01")).toBeInTheDocument();
+  expect(within(cell).getByText(`${"6".repeat(12)}…`)).toBeInTheDocument();
   expect(within(cell).queryByText(/^0=/)).not.toBeInTheDocument();
 });
 

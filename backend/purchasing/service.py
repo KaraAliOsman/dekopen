@@ -16,6 +16,7 @@ from dekopen_engine.documentary_canonical import (
     documentary_sha256_v1,
 )
 
+from documents.renderers import _piece_labels
 from documents.repository import DocumentaryError, decoded, documentary_backend, json_text, one, rows
 from inventory.production_stock import coverage_for_version
 from projects import org_branding
@@ -64,7 +65,27 @@ def _version(version_id: UUID, org_id: UUID) -> dict[str, object]:
     return version
 
 
-def _line_snapshot(row: dict[str, object]) -> dict[str, object]:
+def _trace_labels(version_id: UUID, org_id: UUID) -> dict[str, str]:
+    """Human-facing codes for trace ids (M-01 members, V-01 bays, I-01 glass) so
+    a purchaser reads where each requirement comes from instead of raw hashes.
+    Same sequential codes the workshop documents print — one identity space."""
+    row = one(
+        "SELECT snapshot_json::text AS snapshot_json FROM public.project_versions "
+        "WHERE id=%s AND org_id=%s",
+        [version_id, org_id],
+        "project_version_not_found",
+    )
+    snapshot = _object(row["snapshot_json"], "invalid_frozen_revision_snapshot")
+    merged: dict[str, str] = {}
+    for kind_map in _piece_labels(snapshot).values():
+        for key, label in kind_map.items():
+            if key is not None:
+                merged.setdefault(str(key), label)
+    return merged
+
+
+def _line_snapshot(row: dict[str, object],
+                   labels: dict[str, str] | None = None) -> dict[str, object]:
     technical = _object(row["technical_identity"], "invalid_purchase_requirement")
     specification = _object(row["specification"], "invalid_purchase_requirement")
     source_trace = _array(row["source_trace"], "invalid_purchase_requirement")
@@ -103,6 +124,10 @@ def _line_snapshot(row: dict[str, object]) -> dict[str, object]:
         "quantity": int(quantity),
         "specification": specification,
         "source_trace": source_trace,
+        "source_trace_labels": [
+            labels.get(entry) if labels is not None else None
+            for entry in source_trace
+        ],
     }
 
 
@@ -147,7 +172,10 @@ def purchasing_state(org_id: UUID, version_id: UUID | None = None) -> dict[str, 
             )
             return {"versions": _public(versions)}
         version = _version(version_id, org_id)
-        requirements = [_line_snapshot(item) for item in _requirements(version_id, org_id)]
+        labels = _trace_labels(version_id, org_id)
+        requirements = [
+            _line_snapshot(item, labels) for item in _requirements(version_id, org_id)
+        ]
         eligibilities = rows(
             "SELECT id,order_type::text,supplier_identity,supplier_name,supplier_details::text,"
             "eligible_requirement_keys::text,evidence::text,version,content_hash,created_at "
@@ -339,6 +367,7 @@ def confirm_order_type_batch(
         raise DocumentaryError("order_batch_confirmation_required")
     with documentary_backend():
         version = _version(version_id, org_id)
+        labels = _trace_labels(version_id, org_id)
         with connection.cursor() as cursor:
             cursor.execute(
                 "SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",
@@ -435,7 +464,7 @@ def confirm_order_type_batch(
         for eligibility_id in sorted(grouped):
             values = grouped[eligibility_id]
             eligibility = values[0][1]
-            line_snapshots = [_line_snapshot(item) for item, _ in values]
+            line_snapshots = [_line_snapshot(item, labels) for item, _ in values]
             order_id = uuid5(
                 NAMESPACE_URL,
                 f"https://dekopen.local/order/{batch_id}/{eligibility_id}",

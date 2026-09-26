@@ -71,6 +71,7 @@ type Requirement = {
   quantity: string;
   specification: Record<string, unknown>;
   source_trace: Array<string | Record<string, unknown>>;
+  source_trace_labels?: Array<string | null>;
 };
 type Eligibility = {
   id: string;
@@ -274,10 +275,7 @@ function orderDocuments(order: Order, role: string): DocumentAction[] {
       { type: "DOC-04", format: "PDF", label: "purchasing.doc04Pdf" },
       { type: "DOC-04", format: "XLSX", label: "purchasing.doc04Xlsx" },
     ];
-  else if (
-    order.order_type === "SUPPLIER_HARDWARE_PO" ||
-    order.order_type === "SUPPLIER_PANEL_PO"
-  )
+  else if (order.order_type === "SUPPLIER_HARDWARE_PO" || order.order_type === "SUPPLIER_PANEL_PO")
     docs = [
       { type: "DOC-08", format: "PDF", label: "purchasing.doc08Pdf" },
       { type: "DOC-08", format: "XLSX", label: "purchasing.doc08Xlsx" },
@@ -878,9 +876,16 @@ function RequirementRow({
           <summary>{t("purchasing.trace")}</summary>
           {requirement.source_trace.length === 0 && <p>{t("purchasing.noTrace")}</p>}
           <ul>
-            {requirement.source_trace.map((entry, index) => (
-              <li key={index}>{typeof entry === "string" ? entry : traceLine(entry)}</li>
-            ))}
+            {requirement.source_trace.map((entry, index) => {
+              const raw = typeof entry === "string" ? entry : traceLine(entry);
+              const label = requirement.source_trace_labels?.[index];
+              const shown = label ?? (raw.length > 20 ? `${raw.slice(0, 12)}…` : raw);
+              return (
+                <li key={index} title={shown === raw ? undefined : raw}>
+                  {shown}
+                </li>
+              );
+            })}
           </ul>
         </details>
       </td>
