@@ -183,6 +183,12 @@ def purchasing_state(org_id: UUID, version_id: UUID | None = None) -> dict[str, 
             "ORDER BY order_type,supplier_name,supplier_identity,version",
             [version_id, org_id],
         )
+        today = datetime.now(timezone.utc).date().isoformat()
+        for eligibility in eligibilities:
+            expiry = _object(
+                eligibility["evidence"], "invalid_supplier_eligibility"
+            ).get("valid_until")
+            eligibility["expired"] = bool(expiry) and str(expiry) < today
         allocations = rows(
             "SELECT allocation.id,allocation.requirement_line_id,allocation.supplier_eligibility_id,"
             "allocation.order_type::text,allocation.allocated_at "
@@ -214,6 +220,7 @@ def purchasing_state(org_id: UUID, version_id: UUID | None = None) -> dict[str, 
         covered_keys = {
             (str(item["order_type"]), str(key))
             for item in eligibilities
+            if not item["expired"]
             for key in _array(
                 item["eligible_requirement_keys"], "invalid_supplier_eligibility"
             )
@@ -317,6 +324,12 @@ def create_eligibility(
              data["supplier_name"], json_text(data["supplier_details"]), json_text(keys),
              json_text(data["evidence"]), data["version"], content_hash, actor_id],
         )
+        _upsert_supplier(
+            org_id=org_id, actor_id=actor_id,
+            tax_id=str(data["supplier_identity"]),
+            name=str(data["supplier_name"]),
+            details=data.get("supplier_details") or {},
+        )
         return {"id": str(eligibility["id"]), "content_hash": eligibility["content_hash"]}
 
 
@@ -332,11 +345,16 @@ def allocate_requirement(
         )
         eligibility = one(
             "SELECT id,project_id,project_version_id,org_id,order_type::text,"
-            "eligible_requirement_keys::text FROM public.supplier_eligibility_versions "
+            "eligible_requirement_keys::text,evidence::text FROM public.supplier_eligibility_versions "
             "WHERE id=%s AND org_id=%s",
             [eligibility_id, org_id],
             "supplier_eligibility_not_found",
         )
+        expiry = _object(eligibility["evidence"], "invalid_supplier_eligibility").get(
+            "valid_until"
+        )
+        if expiry and str(expiry) < datetime.now(timezone.utc).date().isoformat():
+            raise DocumentaryError("supplier_eligibility_expired")
         binding = ("project_id", "project_version_id", "org_id", "order_type")
         if any(str(requirement[key]) != str(eligibility[key]) for key in binding):
             raise DocumentaryError("supplier_eligibility_requirement_mismatch")
@@ -670,3 +688,57 @@ def orders_index(org_id: UUID, status: str | None = None) -> dict[str, object]:
             item["outstanding_qty"] = total - good
             result.append(_public(item))
         return {"orders": result}
+
+
+
+def _upsert_supplier(
+    *, org_id: UUID, actor_id: UUID, tax_id: str, name: str, details: object
+) -> dict[str, object]:
+    tax_id = tax_id.strip()
+    name = name.strip()
+    if not tax_id or not name:
+        raise DocumentaryError("invalid_supplier")
+    if not isinstance(details, dict):
+        raise DocumentaryError("invalid_supplier")
+    row = one(
+        "INSERT INTO public.suppliers(org_id,tax_id,name,details,created_by) "
+        "VALUES(%s,%s,%s,%s::jsonb,%s) "
+        "ON CONFLICT(org_id,tax_id) DO UPDATE SET "
+        "name=EXCLUDED.name,details=EXCLUDED.details,updated_at=now() "
+        "RETURNING id,tax_id,name,details::text AS details,updated_at",
+        [org_id, tax_id, name, json_text(details), actor_id],
+    )
+    return {
+        "id": str(row["id"]),
+        "tax_id": str(row["tax_id"]),
+        "name": str(row["name"]),
+        "details": _object(row["details"], "invalid_supplier"),
+        "updated_at": str(row["updated_at"]),
+    }
+
+
+def create_supplier(*, org_id: UUID, actor_id: UUID, data: dict[str, object]) -> dict[str, object]:
+    if data.get("confirmed") is not True:
+        raise DocumentaryError("supplier_confirmation_required")
+    with documentary_backend():
+        return _upsert_supplier(
+            org_id=org_id, actor_id=actor_id,
+            tax_id=str(data.get("tax_id") or ""),
+            name=str(data.get("name") or ""),
+            details=data.get("details") or {},
+        )
+
+
+def suppliers_index(org_id: UUID) -> dict[str, object]:
+    with documentary_backend():
+        entries = rows(
+            "SELECT id,tax_id,name,details::text AS details,updated_at "
+            "FROM public.suppliers WHERE org_id=%s ORDER BY name,tax_id",
+            [org_id],
+        )
+        return {
+            "suppliers": [
+                {**_public(item), "details": _object(item["details"], "invalid_supplier")}
+                for item in entries
+            ]
+        }

@@ -13052,6 +13052,145 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/purchasing/suppliers/:
+    get:
+      operationId: purchasing_suppliers_index
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - purchasing
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuppliersIndexResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+    post:
+      operationId: purchasing_upsert_supplier
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - purchasing
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupplierUpsertRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SupplierUpsertRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SupplierUpsertRequest'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Supplier'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/purchasing/versions/:
     get:
       operationId: purchasing_versions
@@ -22899,6 +23038,27 @@ components:
       required:
       - confirmed
       - expected_current_revision
+    Supplier:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tax_id:
+          type: string
+        name:
+          type: string
+        details:
+          type: object
+          additionalProperties: {}
+        updated_at:
+          type: string
+      required:
+      - details
+      - id
+      - name
+      - tax_id
+      - updated_at
     SupplierDetailsRequest:
       type: object
       properties:
@@ -22921,6 +23081,34 @@ components:
           type: string
           default: ''
           maxLength: 1000
+    SupplierUpsertRequest:
+      type: object
+      properties:
+        tax_id:
+          type: string
+          minLength: 1
+          maxLength: 100
+        name:
+          type: string
+          minLength: 1
+          maxLength: 300
+        details:
+          $ref: '#/components/schemas/SupplierDetailsRequest'
+        confirmed:
+          type: boolean
+      required:
+      - confirmed
+      - name
+      - tax_id
+    SuppliersIndexResponse:
+      type: object
+      properties:
+        suppliers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Supplier'
+      required:
+      - suppliers
     SystemList:
       type: object
       properties:

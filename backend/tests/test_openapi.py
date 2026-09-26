@@ -155,6 +155,7 @@ def test_openapi_contains_only_authorized_shot_11_paths_and_bearer_security() ->
         "/api/v1/purchasing/orders/{order_id}/send/",
         "/api/v1/purchasing/orders/{order_id}/cancel/",
         "/api/v1/purchasing/orders/",
+        "/api/v1/purchasing/suppliers/",
     }
     bearer = schema["components"]["securitySchemes"]["SupabaseBearer"]
     assert bearer == {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}
@@ -220,6 +221,9 @@ def test_openapi_documents_active_org_and_mfa_selection_errors() -> None:
         ("/api/v1/purchasing/requirements/{requirement_id}/allocation/", "put"),
         ("/api/v1/purchasing/orders/{order_id}/send/", "post"),
         ("/api/v1/purchasing/orders/{order_id}/cancel/", "post"),
+        ("/api/v1/purchasing/orders/", "get"),
+        ("/api/v1/purchasing/suppliers/", "get"),
+        ("/api/v1/purchasing/suppliers/", "post"),
     ):
         header = next(p for p in schema["paths"][path][method]["parameters"] if p["name"] == "X-Organization-ID")
         assert header["in"] == "header"

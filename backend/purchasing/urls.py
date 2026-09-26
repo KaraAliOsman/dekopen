@@ -2,6 +2,7 @@ from django.urls import path
 
 from purchasing.views import (
     PurchasingOrdersIndexView,
+    PurchasingSuppliersView,
     CancelOrderView,
     ConfirmBatchView,
     PurchasingVersionsView,
@@ -47,5 +48,10 @@ urlpatterns = [
         "orders/",
         PurchasingOrdersIndexView.as_view(),
         name="purchasing-orders-index",
+    ),
+    path(
+        "suppliers/",
+        PurchasingSuppliersView.as_view(),
+        name="purchasing-suppliers",
     ),
 ]

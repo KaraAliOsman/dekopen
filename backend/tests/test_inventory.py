@@ -594,3 +594,129 @@ def test_line_snapshot_aligns_trace_labels_with_entries() -> None:
     }
     output = purchasing_service._line_snapshot(row, {"m" * 64: "I-01"})
     assert output["source_trace_labels"] == ["I-01", None]
+
+
+def test_allocate_requirement_rejects_expired_eligibility() -> None:
+    import json
+
+    from purchasing import service as purchasing_service
+
+    org_id, requirement_id, eligibility_id = uuid4(), uuid4(), uuid4()
+    requirement = {
+        "id": requirement_id,
+        "requirement_key": "a" * 64,
+        "project_id": uuid4(),
+        "project_version_id": uuid4(),
+        "org_id": org_id,
+        "order_type": "SUPPLIER_GLASS_PO",
+    }
+    eligibility = {
+        "id": eligibility_id,
+        "project_id": requirement["project_id"],
+        "project_version_id": requirement["project_version_id"],
+        "org_id": org_id,
+        "order_type": "SUPPLIER_GLASS_PO",
+        "eligible_requirement_keys": json.dumps(["a" * 64]),
+        "evidence": json.dumps({"valid_until": "2000-01-01"}),
+    }
+    with patch(
+        "purchasing.service.one", side_effect=[requirement, eligibility]
+    ), patch(
+        "purchasing.service.documentary_backend", return_value=_atomic()
+    ):
+        with pytest.raises(DocumentaryError) as error:
+            purchasing_service.allocate_requirement(
+                org_id=org_id,
+                actor_id=uuid4(),
+                requirement_id=requirement_id,
+                eligibility_id=eligibility_id,
+            )
+    assert error.value.code == "supplier_eligibility_expired"
+
+
+def test_create_eligibility_writes_directory_entry() -> None:
+
+    from purchasing import service as purchasing_service
+
+    org_id, version_id = uuid4(), uuid4()
+    version = {
+        "id": version_id,
+        "project_id": uuid4(),
+        "org_id": org_id,
+        "revision_code": "REV-A",
+        "authority_version": "SHOT09_V1",
+        "bom_hash": "b" * 64,
+        "snapshot_sha256": "c" * 64,
+        "production_allowed": False,
+        "documentary_complete": True,
+        "emitted_at": None,
+        "project_code": "P-01",
+    }
+    requirement = {"requirement_key": "a" * 64}
+    eligibility_row = {"id": uuid4(), "content_hash": "d" * 64}
+    supplier_row = {
+        "id": uuid4(),
+        "tax_id": "76.111-2",
+        "name": "Vidrios SPA",
+        "details": "{}",
+        "updated_at": "2026-09-25",
+    }
+    data = {
+        "order_type": "SUPPLIER_GLASS_PO",
+        "supplier_identity": "76.111-2",
+        "supplier_name": "Vidrios SPA",
+        "supplier_details": {},
+        "eligible_requirement_keys": ["a" * 64],
+        "evidence": {},
+        "version": 1,
+        "confirmed": True,
+    }
+    with patch("purchasing.service._version", return_value=version), patch(
+        "purchasing.service._requirements", return_value=[requirement]
+    ), patch(
+        "purchasing.service.one", side_effect=[eligibility_row, supplier_row]
+    ) as mock_one, patch(
+        "purchasing.service.documentary_backend", return_value=_atomic()
+    ):
+        output = purchasing_service.create_eligibility(
+            org_id=org_id, actor_id=uuid4(), version_id=version_id, data=data
+        )
+    assert output["content_hash"] == "d" * 64
+    supplier_sql = mock_one.call_args_list[1][0][0]
+    assert "public.suppliers" in supplier_sql
+    assert "ON CONFLICT(org_id,tax_id)" in supplier_sql
+    assert mock_one.call_args_list[1][0][1][1] == "76.111-2"
+
+
+def test_suppliers_index_and_upsert_roundtrip() -> None:
+    import json
+
+    from purchasing import service as purchasing_service
+
+    org_id = uuid4()
+    row = {
+        "id": uuid4(),
+        "tax_id": "76.111-2",
+        "name": "Vidrios SPA",
+        "details": json.dumps({"email": "v@spa.cl"}),
+        "updated_at": "2026-09-25T00:00:00+00:00",
+    }
+    with patch("purchasing.service.rows", return_value=[row]), patch(
+        "purchasing.service.documentary_backend", return_value=_atomic()
+    ):
+        index = purchasing_service.suppliers_index(org_id)
+    assert index["suppliers"][0]["tax_id"] == "76.111-2"
+    assert index["suppliers"][0]["details"]["email"] == "v@spa.cl"
+
+    upsert_row = dict(row)
+    with patch("purchasing.service.one", return_value=upsert_row) as mock_one, patch(
+        "purchasing.service.documentary_backend", return_value=_atomic()
+    ):
+        output = purchasing_service.create_supplier(
+            org_id=org_id,
+            actor_id=uuid4(),
+            data={"tax_id": "76.111-2", "name": "Vidrios SPA",
+                  "details": {"email": "v@spa.cl"}, "confirmed": True},
+        )
+    assert output["tax_id"] == "76.111-2"
+    assert "ON CONFLICT(org_id,tax_id)" in mock_one.call_args[0][0]

@@ -271,3 +271,9 @@
 .purchasing-index-row:hover {
   background: var(--theme-hover, #f4f7fb);
 }
+
+.purchasing-badge--expired {
+  background: var(--theme-danger-soft);
+  color: var(--theme-danger);
+  border-color: var(--theme-danger);
+}

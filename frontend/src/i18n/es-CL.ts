@@ -1257,6 +1257,7 @@ export const messages = {
   "purchasing.noEligibility": "Sin proveedores elegibles para este tipo",
   "purchasing.eligibilities": "Proveedores elegibles",
   "purchasing.newEligibility": "Declarar proveedor elegible",
+  "purchasing.supplierExpired": "Vencida",
   "purchasing.supplierIdentity": "Identidad del proveedor",
   "purchasing.supplierName": "Nombre comercial",
   "purchasing.taxId": "RUT / ID tributario",

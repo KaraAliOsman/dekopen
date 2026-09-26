@@ -130,3 +130,22 @@ class OrderIndexItemSerializer(serializers.Serializer):
 
 class OrderIndexResponseSerializer(serializers.Serializer):
     orders = OrderIndexItemSerializer(many=True)
+
+
+class SupplierUpsertSerializer(StrictSerializer):
+    tax_id = serializers.CharField(max_length=100, allow_blank=False, trim_whitespace=True)
+    name = serializers.CharField(max_length=300, allow_blank=False, trim_whitespace=True)
+    details = SupplierDetailsSerializer(required=False, default=dict)
+    confirmed = serializers.BooleanField()
+
+
+class SupplierSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    tax_id = serializers.CharField()
+    name = serializers.CharField()
+    details = serializers.DictField()
+    updated_at = serializers.CharField()
+
+
+class SuppliersIndexResponseSerializer(serializers.Serializer):
+    suppliers = SupplierSerializer(many=True)

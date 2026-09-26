@@ -18,15 +18,20 @@ from purchasing.serializers import (
     OrderResponseSerializer,
     PurchasingStateSerializer,
     SendOrderRequestSerializer,
+    SupplierSerializer,
+    SuppliersIndexResponseSerializer,
+    SupplierUpsertSerializer,
 )
 from purchasing.service import (
     allocate_requirement,
     cancel_order,
     confirm_order_type_batch,
     create_eligibility,
+    create_supplier,
     orders_index,
     purchasing_state,
     send_order,
+    suppliers_index,
 )
 
 _ALLOWED = ("OWNER", "WORKSHOP_MANAGER")
@@ -172,3 +177,29 @@ class PurchasingOrdersIndexView(APIView):
             status = request.query_params.get("status") or None
             output = orders_index(org_id, status=status)
         return Response(output)
+
+
+class PurchasingSuppliersView(APIView):
+    @extend_schema(
+        operation_id="purchasing_suppliers_index",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        responses={200: SuppliersIndexResponseSerializer, **ERRORS},
+        tags=["purchasing"],
+    )
+    def get(self, request):
+        with documentary_scope(request, _READERS) as (_, _, org_id):
+            output = suppliers_index(org_id)
+        return Response(output)
+
+    @extend_schema(
+        operation_id="purchasing_upsert_supplier",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=SupplierUpsertSerializer,
+        responses={201: SupplierSerializer, **ERRORS},
+        tags=["purchasing"],
+    )
+    def post(self, request):
+        data = validate(SupplierUpsertSerializer, request.data)
+        with documentary_scope(request, _ALLOWED) as (token, _, org_id):
+            output = create_supplier(org_id=org_id, actor_id=token.user_id, data=data)
+        return Response(output, status=201)

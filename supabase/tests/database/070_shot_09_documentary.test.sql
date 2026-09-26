@@ -1,14 +1,14 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET LOCAL search_path=public,extensions;
-SELECT plan(90);
+SELECT plan(96);
 SELECT ok(relrowsecurity,relname||' has RLS') FROM pg_class
  WHERE relnamespace='public'::regnamespace AND relname IN
  ('manufacturing_placement_policies','handle_requirement_policies','reinforcement_cut_policies',
   'glass_purchase_mappings','hardware_purchase_mappings','panel_purchase_authorities',
   'project_documentary_inputs','position_documentary_inputs','purchase_projections',
   'purchase_requirement_lines','supplier_eligibility_versions','purchase_allocations',
-  'order_allocation_batches','order_requirement_lines','document_artifacts') ORDER BY relname;
+  'order_allocation_batches','order_requirement_lines','document_artifacts','suppliers') ORDER BY relname;
 SELECT ok(EXISTS(SELECT 1 FROM pg_roles WHERE rolname='documentary_backend'
    AND NOT rolsuper AND NOT rolbypassrls AND NOT rolcanlogin),
   'documentary_backend has no login or RLS bypass');
@@ -187,5 +187,10 @@ SELECT lives_ok($$INSERT INTO document_artifacts(id,org_id,project_id,project_ve
  VALUES('88760000-0000-4000-8000-000000000001','88600000-0000-4000-8000-000000000001','88620000-0000-4000-8000-000000000001','88650000-0000-4000-8000-000000000001','ORDER','88750000-0000-4000-8000-000000000001','DOC-08','PDF','88750000-0000-4000-8000-000000000001','SUPPLIER_HARDWARE_PO','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','documents','org_88600000-0000-4000-8000-000000000001/projects/88620000-0000-4000-8000-000000000001/REV-A/doc08.pdf','5959595959595959595959595959595959595959595959595959595959595959','application/pdf',1024,'88610000-0000-4000-8000-000000000001')$$,'DOC-08 binds the hardware order slot');
 SELECT throws_ok($$INSERT INTO document_artifacts(org_id,project_id,project_version_id,artifact_scope,artifact_scope_id,document_type,format,order_id,order_type,bom_hash,revision_snapshot_sha256,storage_bucket,storage_object_key,file_sha256,media_type,byte_size,created_by)
  VALUES('88600000-0000-4000-8000-000000000001','88620000-0000-4000-8000-000000000001','88650000-0000-4000-8000-000000000001','ORDER','88710000-0000-4000-8000-000000000001','DOC-08','PDF','88710000-0000-4000-8000-000000000001','SUPPLIER_GLASS_PO','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','documents','org_88600000-0000-4000-8000-000000000001/projects/88620000-0000-4000-8000-000000000001/REV-A/doc08g.pdf','6060606060606060606060606060606060606060606060606060606060606060','application/pdf',1024,'88610000-0000-4000-8000-000000000001')$$,'23514',NULL,'DOC-08 cannot claim a glass order');
+SELECT lives_ok($$INSERT INTO suppliers(org_id,tax_id,name) VALUES('88600000-0000-4000-8000-000000000001','76.111-2','Vorne SPA')$$,'org supplier entry binds a tax id');
+SELECT lives_ok($$INSERT INTO suppliers(org_id,tax_id,name) VALUES('88600000-0000-4000-8000-000000000001','76.111-3','Seguridad Alu')$$,'a second supplier coexists');
+SELECT throws_ok($$INSERT INTO suppliers(org_id,tax_id,name) VALUES('88600000-0000-4000-8000-000000000001','76.111-2','Otra Vidrieria')$$,'23505',NULL,'one supplier per org tax id');
+SELECT lives_ok($$INSERT INTO suppliers(org_id,tax_id,name) VALUES('88600000-0000-4000-8000-000000000002','76.111-2','Otra Org')$$,'same tax id may exist for another org');
+SELECT throws_ok($$INSERT INTO suppliers(org_id,tax_id,name) VALUES('88600000-0000-4000-8000-000000000001','','Sin nombre')$$,'23514',NULL,'empty tax id rejected');
 SELECT * FROM finish();
 ROLLBACK;

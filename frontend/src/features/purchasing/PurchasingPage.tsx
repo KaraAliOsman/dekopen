@@ -80,6 +80,14 @@ type Eligibility = {
   supplier_name: string;
   eligible_requirement_keys: string[];
   version: number;
+  expired?: boolean;
+};
+type Supplier = {
+  id: string;
+  tax_id: string;
+  name: string;
+  details?: Record<string, string>;
+  updated_at?: string;
 };
 type Allocation = {
   id: string;
@@ -308,6 +316,7 @@ function PurchasingWorkspace({
   const [versions, setVersions] = useState<VersionItem[]>([]);
   const [ordersIndex, setOrdersIndex] = useState<OrderIndexItem[]>([]);
   const [indexStatus, setIndexStatus] = useState<string>("");
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [versionId, setVersionId] = useState(initialVersionId);
   const [state, setState] = useState<PurchasingState | null>(null);
   const [stock, setStock] = useState<StockItem[]>([]);
@@ -334,6 +343,13 @@ function PurchasingWorkspace({
           })
           .catch(() => {
             if (current) setOrdersIndex([]);
+          });
+        void request<{ suppliers?: Supplier[] }>("purchasing/suppliers/")
+          .then((supplierData) => {
+            if (current) setSuppliers(supplierData.suppliers ?? []);
+          })
+          .catch(() => {
+            if (current) setSuppliers([]);
           });
         void request<{ items?: StockItem[] }>("inventory/stock/")
           .then((stockData) => {
@@ -601,6 +617,7 @@ function PurchasingWorkspace({
             versionId={state.version!.id}
             request={request}
             action={action}
+            suppliers={suppliers}
           />
         ))}
       {state?.version && (
@@ -691,6 +708,7 @@ function RequirementSection({
   versionId,
   request,
   action,
+  suppliers,
 }: {
   orderType: OrderType;
   requirements: Requirement[];
@@ -701,6 +719,7 @@ function RequirementSection({
   versionId: string;
   request: RequestFn;
   action: (task: Promise<unknown>) => Promise<boolean>;
+  suppliers: Supplier[];
 }): JSX.Element {
   const [attested, setAttested] = useState(false);
   const allocatedIds = new Set(allocations.map((item) => item.requirement_line_id));
@@ -753,6 +772,7 @@ function RequirementSection({
             versionId={versionId}
             request={request}
             action={action}
+            suppliers={suppliers}
           />
           {requirements.length > 0 && (
             <form
@@ -853,15 +873,17 @@ function RequirementRow({
             {eligibilities
               // A supplier re-declared at a newer version supersedes the
               // older rows — offering both would allocate against stale data.
+              // Expired evidence is unallocatable by the backend too.
               .filter(
                 (item) =>
+                  !item.expired &&
                   item.version ===
-                  Math.max(
-                    0,
-                    ...eligibilities
-                      .filter((o) => o.supplier_identity === item.supplier_identity)
-                      .map((o) => o.version),
-                  ),
+                    Math.max(
+                      0,
+                      ...eligibilities
+                        .filter((o) => o.supplier_identity === item.supplier_identity)
+                        .map((o) => o.version),
+                    ),
               )
               .map((item) => (
                 <option key={item.id} value={item.id}>
@@ -901,6 +923,7 @@ function EligibilityForm({
   versionId,
   request,
   action,
+  suppliers,
 }: {
   orderType: OrderType;
   requirements: Requirement[];
@@ -909,6 +932,7 @@ function EligibilityForm({
   versionId: string;
   request: RequestFn;
   action: (task: Promise<unknown>) => Promise<boolean>;
+  suppliers: Supplier[];
 }): JSX.Element {
   const nextVersion = Math.max(0, ...eligibilities.map((item) => item.version)) + 1;
   return (
@@ -918,6 +942,12 @@ function EligibilityForm({
         <p key={item.id}>
           {item.supplier_name} · v{item.version} · {item.eligible_requirement_keys.length}{" "}
           {t("purchasing.requirements")}
+          {item.expired && (
+            <span className="purchasing-badge purchasing-badge--expired">
+              {" "}
+              {t("purchasing.supplierExpired")}
+            </span>
+          )}
         </p>
       ))}
       {requirements.length > 0 && (
@@ -955,7 +985,35 @@ function EligibilityForm({
           <h3>{t("purchasing.newEligibility")}</h3>
           <label>
             {t("purchasing.supplierIdentity")}
-            <input name="supplier_identity" required maxLength={200} disabled={busy} />
+            <input
+              name="supplier_identity"
+              required
+              maxLength={200}
+              disabled={busy}
+              list="purchasing-suppliers"
+              onChange={(event) => {
+                const entry = suppliers.find((item) => item.tax_id === event.target.value);
+                if (!entry) return;
+                const form = event.target.form;
+                if (!form) return;
+                const fill = (key: string, value: string) => {
+                  const input = form.elements.namedItem(key) as HTMLInputElement | null;
+                  if (input) input.value = value;
+                };
+                fill("supplier_name", entry.name);
+                fill("tax_id", entry.details?.tax_id ?? "");
+                fill("email", entry.details?.email ?? "");
+                fill("phone", entry.details?.phone ?? "");
+                fill("address", entry.details?.address ?? "");
+              }}
+            />
+            <datalist id="purchasing-suppliers">
+              {suppliers.map((item) => (
+                <option key={item.id} value={item.tax_id}>
+                  {item.name}
+                </option>
+              ))}
+            </datalist>
           </label>
           <label>
             {t("purchasing.supplierName")}

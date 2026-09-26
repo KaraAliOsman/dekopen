@@ -200,6 +200,9 @@ import type {
   StepTransition,
   StepTransitionRequestRequest,
   SuccessorRequestRequest,
+  Supplier,
+  SupplierUpsertRequest,
+  SuppliersIndexResponse,
   SystemList,
   SystemResponse,
   SystemWorkspace,
@@ -14293,6 +14296,159 @@ export const purchasingAllocateRequirement = async (
       body: JSON.stringify(allocationRequestRequest),
     },
   );
+};
+
+export type purchasingSuppliersIndexResponse200 = {
+  data: SuppliersIndexResponse;
+  status: 200;
+};
+
+export type purchasingSuppliersIndexResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type purchasingSuppliersIndexResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type purchasingSuppliersIndexResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type purchasingSuppliersIndexResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type purchasingSuppliersIndexResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type purchasingSuppliersIndexResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type purchasingSuppliersIndexResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type purchasingSuppliersIndexResponseSuccess = purchasingSuppliersIndexResponse200 & {
+  headers: Headers;
+};
+export type purchasingSuppliersIndexResponseError = (
+  | purchasingSuppliersIndexResponse400
+  | purchasingSuppliersIndexResponse401
+  | purchasingSuppliersIndexResponse403
+  | purchasingSuppliersIndexResponse404
+  | purchasingSuppliersIndexResponse409
+  | purchasingSuppliersIndexResponse422
+  | purchasingSuppliersIndexResponse503
+) & {
+  headers: Headers;
+};
+
+export type purchasingSuppliersIndexResponse =
+  purchasingSuppliersIndexResponseSuccess | purchasingSuppliersIndexResponseError;
+
+export const getPurchasingSuppliersIndexUrl = () => {
+  return `/api/v1/purchasing/suppliers/`;
+};
+
+export const purchasingSuppliersIndex = async (
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<purchasingSuppliersIndexResponse> => {
+  return apiMutator<purchasingSuppliersIndexResponse>(getPurchasingSuppliersIndexUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export type purchasingUpsertSupplierResponse201 = {
+  data: Supplier;
+  status: 201;
+};
+
+export type purchasingUpsertSupplierResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type purchasingUpsertSupplierResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type purchasingUpsertSupplierResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type purchasingUpsertSupplierResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type purchasingUpsertSupplierResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type purchasingUpsertSupplierResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type purchasingUpsertSupplierResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type purchasingUpsertSupplierResponseSuccess = purchasingUpsertSupplierResponse201 & {
+  headers: Headers;
+};
+export type purchasingUpsertSupplierResponseError = (
+  | purchasingUpsertSupplierResponse400
+  | purchasingUpsertSupplierResponse401
+  | purchasingUpsertSupplierResponse403
+  | purchasingUpsertSupplierResponse404
+  | purchasingUpsertSupplierResponse409
+  | purchasingUpsertSupplierResponse422
+  | purchasingUpsertSupplierResponse503
+) & {
+  headers: Headers;
+};
+
+export type purchasingUpsertSupplierResponse =
+  purchasingUpsertSupplierResponseSuccess | purchasingUpsertSupplierResponseError;
+
+export const getPurchasingUpsertSupplierUrl = () => {
+  return `/api/v1/purchasing/suppliers/`;
+};
+
+export const purchasingUpsertSupplier = async (
+  supplierUpsertRequest: SupplierUpsertRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<purchasingUpsertSupplierResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<purchasingUpsertSupplierResponse>(getPurchasingUpsertSupplierUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+    body: JSON.stringify(supplierUpsertRequest),
+  });
 };
 
 export type purchasingVersionsResponse200 = {
