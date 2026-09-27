@@ -937,11 +937,13 @@ def _position_rows(project_id: UUID, org_id: UUID) -> list[dict[str, object]]:
         "input.reinforcement_cut_policy_id,input.workshop_annotations::text,"
         "input.structural_inputs::text,input.glass_polishing::text,"
         "input.handle_intents::text,input.accessory_schedule::text,"
-        "input.legacy_handle_migration_confirmed,input.calculation_hash AS documentary_calculation_hash "
+        "input.legacy_handle_migration_confirmed,input.calculation_hash AS documentary_calculation_hash,"
+        "system.name AS system_name "
         "FROM public.project_positions position "
         "JOIN public.position_documentary_inputs input "
         "ON input.position_id=position.id AND input.project_id=position.project_id "
         "AND input.org_id=position.org_id "
+        "JOIN public.profile_systems system ON system.id=position.system_id "
         "WHERE position.project_id=%s AND position.org_id=%s "
         "ORDER BY position.position_index",
         [project_id, org_id],
@@ -1394,6 +1396,7 @@ def freeze_revision_a(
                 "color_interior": str(position["color_interior"]),
                 "color_exterior": str(position["color_exterior"]),
                 "location_tag": location_tag,
+                "system_name": str(position["system_name"]),
                 "price_net": D(str(position["price_net"])),
                 "discount_pct": str(position["discount_pct"]),
                 "parametric_tree": tree,

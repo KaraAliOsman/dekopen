@@ -280,7 +280,9 @@ def test_client_quote_includes_deterministic_opening_drawings() -> None:
         "glass_spec": "4-12-4 Float Incoloro", "children": [],
     }
     sliding_html = _doc01(sliding)
-    assert sliding_html.count('marker-end="url(#arrow-1)"') == 2
+    # Card-scoped marker ids (the hero re-draws the same position) — each
+    # sliding panel still emits exactly one arrow in its product card.
+    assert sliding_html.count('marker-end="url(#arrow-1-c1)"') == 2
     assert _doc01(sliding) == sliding_html
 
 

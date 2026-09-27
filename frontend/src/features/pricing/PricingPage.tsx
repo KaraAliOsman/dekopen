@@ -1091,13 +1091,35 @@ function OperationDecision({
   );
   // A delta is only meaningful when both sides share a currency — a
   // historical operation in another currency shows its own totals instead.
+  const sameCurrency = boundProject?.currency === operation.currency;
   const diff =
     isBoundProject &&
     boundProject?.pricing_current &&
     boundProject.total_price_gross &&
-    boundProject.currency === operation.currency
+    sameCurrency
       ? Number(operation.project_gross) - Number(boundProject.total_price_gross)
       : null;
+  const diffPct =
+    diff !== null && Number(boundProject?.total_price_gross) > 0
+      ? (diff / Number(boundProject?.total_price_gross)) * 100
+      : null;
+  // Per-position delta: the live price_net of the bound revision vs the
+  // proposed line_net — same position index, same currency, never a guess.
+  const canLineDelta = isBoundProject && sameCurrency;
+  // Category rollup: every cost component across all positions aggregated by
+  // kind — the 'why' behind the total, in exact cents (no float artifacts).
+  const kindTotals = new Map<string, bigint>();
+  for (const entry of operation.positions_breakdown ?? []) {
+    for (const component of entry.composition ?? []) {
+      const cents = moneyCents(component.cost ?? "0");
+      if (cents === null) continue;
+      const kind = component.kind ?? "OTHER";
+      kindTotals.set(kind, (kindTotals.get(kind) ?? 0n) + cents);
+    }
+  }
+  const kindRows = [...kindTotals.entries()].sort((a, b) =>
+    a[1] > b[1] ? -1 : a[1] < b[1] ? 1 : 0,
+  );
   const discount = Number(operation.discount_pct ?? 0);
   // finish_lines applies the discount per line, so net/(1−d) reproduces the
   // pre-discount list price exactly — no second authority needed.
@@ -1139,6 +1161,39 @@ function OperationDecision({
         </span>
         {stale && <p className="operation-decision__stale">{t("pricing.staleHint")}</p>}
       </header>
+
+      {diff !== null && boundProject?.total_price_gross ? (
+        <div className="operation-compare">
+          <div className="operation-compare__cell">
+            <span>{t("pricing.currentTotal")}</span>
+            <strong>{formatMoney(boundProject.total_price_gross, operation.currency)}</strong>
+          </div>
+          <span className="operation-compare__arrow" aria-hidden>
+            →
+          </span>
+          <div className="operation-compare__cell">
+            <span>{t("pricing.proposedTotal")}</span>
+            <strong>{formatMoney(operation.project_gross, operation.currency)}</strong>
+          </div>
+          <div
+            className="operation-compare__cell operation-compare__delta"
+            data-negative={diff < 0 || undefined}
+          >
+            <span>{t("pricing.deltaLabel")}</span>
+            <strong>
+              {diff > 0 ? "+" : ""}
+              {formatMoney(String(diff), operation.currency)}
+              {diffPct !== null && (
+                <small>
+                  {" "}
+                  ({diffPct > 0 ? "+" : ""}
+                  {diffPct.toFixed(1)}%)
+                </small>
+              )}
+            </strong>
+          </div>
+        </div>
+      ) : null}
 
       <div className="operation-totals">
         <div className="operation-total">
@@ -1193,6 +1248,7 @@ function OperationDecision({
             <th scope="col">{t("pricing.lineCost")}</th>
             <th scope="col">{t("pricing.net")}</th>
             <th scope="col">{t("pricing.marginNet")}</th>
+            {canLineDelta && <th scope="col">{t("pricing.lineDelta")}</th>}
           </tr>
         </thead>
         <tbody>
@@ -1231,10 +1287,27 @@ function OperationDecision({
                       operation.currency,
                     )}
                   </td>
+                  {canLineDelta && (
+                    <td className="operation-lines__delta">
+                      {position?.price_net != null
+                        ? (() => {
+                            const lineDelta = Number(line.line_net) - Number(position.price_net);
+                            return lineDelta !== 0 ? (
+                              <span data-negative={lineDelta < 0 || undefined}>
+                                {lineDelta > 0 ? "+" : ""}
+                                {formatMoney(String(lineDelta), operation.currency)}
+                              </span>
+                            ) : (
+                              "—"
+                            );
+                          })()
+                        : "—"}
+                    </td>
+                  )}
                 </tr>
                 {breakdown && (
                   <tr className="operation-lines__detail">
-                    <td colSpan={6}>
+                    <td colSpan={canLineDelta ? 7 : 6}>
                       <details>
                         <summary>{t("pricing.costComposition")}</summary>
                         <CostComposition
@@ -1252,6 +1325,27 @@ function OperationDecision({
           })}
         </tbody>
       </table>
+
+      {kindRows.length > 0 && (
+        <details className="operation-authorities">
+          <summary>{t("pricing.costByKind")}</summary>
+          <table className="cost-composition__table">
+            <tbody>
+              {kindRows.map(([kind, cents]) => (
+                <tr key={kind}>
+                  <td>{optionLabel(kind)}</td>
+                  <td>
+                    {formatMoney(
+                      `${cents / 100n}.${`${cents % 100n}`.padStart(2, "0")}`,
+                      operation.currency,
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
+      )}
 
       <p className="operation-decision__audit">
         {t("pricing.auditReason")}: {operation.reason || "—"} · {t("pricing.auditBy")}{" "}

@@ -327,6 +327,13 @@ export function PortalQuotePage(): JSX.Element {
     [org?.brand_address, org?.brand_phone, org?.brand_email]
       .filter((part) => part != null && part !== "")
       .join(" · ") || "";
+  const groups = groupPositions(quote.positions);
+  // The hero is the customer's own largest glazed unit — rendered, not stock.
+  const hero = groups.reduce<ReturnType<typeof groupPositions>[number] | null>((best, group) => {
+    const area = Number(group.position.width_mm) * Number(group.position.height_mm);
+    const bestArea = best ? Number(best.position.width_mm) * Number(best.position.height_mm) : -1;
+    return area > bestArea ? group : best;
+  }, null);
 
   return (
     <main className="portal-page">
@@ -348,8 +355,28 @@ export function PortalQuotePage(): JSX.Element {
               {quote.project_code} · {formatRevision(quote.revision_code)} ·{" "}
               <time dateTime={quote.emitted_at}>{formatDate(quote.emitted_at)}</time>
             </p>
+            {quote.valid_until ? (
+              <p className="portal-proposal__ref">
+                {t("portal.validUntil")}{" "}
+                <time dateTime={quote.valid_until}>{formatDate(quote.valid_until)}</time>
+              </p>
+            ) : null}
           </div>
         </header>
+
+        {hero !== null ? (
+          <figure className="portal-proposal__hero">
+            <PositionThumb
+              design={positionDesign(hero.position)}
+              variant="studio"
+              members={positionMembers(hero.position)}
+            />
+            <figcaption>
+              {typologyLabel(hero.position.typology)} · {Math.round(Number(hero.position.width_mm))}{" "}
+              × {Math.round(Number(hero.position.height_mm))} mm
+            </figcaption>
+          </figure>
+        ) : null}
 
         <section className="portal-proposal__summary">
           <dl className="portal-facts">
@@ -386,7 +413,7 @@ export function PortalQuotePage(): JSX.Element {
           <section className="portal-proposal__positions">
             <h2>{t("portal.positions")}</h2>
             <div className="portal-positions">
-              {groupPositions(quote.positions).map((group) => (
+              {groups.map((group) => (
                 <PositionGroupCard key={group.key} group={group} currency={quote.currency} />
               ))}
             </div>
@@ -456,11 +483,18 @@ export function PortalQuotePage(): JSX.Element {
         ) : null}
 
         {decided ? (
-          <p className="portal-decided" role="status">
-            {quote.approval_status === "APPROVED"
-              ? t("portal.wasApproved")
-              : t("portal.wasDeclined")}
-          </p>
+          <div className="portal-decided" role="status">
+            <p className="portal-decided__state">
+              {quote.approval_status === "APPROVED"
+                ? t("portal.wasApproved")
+                : t("portal.wasDeclined")}
+            </p>
+            <p>
+              {quote.approval_status === "APPROVED"
+                ? t("portal.wasApprovedDetail")
+                : t("portal.wasDeclinedDetail")}
+            </p>
+          </div>
         ) : quote.superseded ? (
           <p className="portal-decided" role="status">
             {t("portal.superseded")}
@@ -477,6 +511,30 @@ export function PortalQuotePage(): JSX.Element {
               void decide("APPROVED");
             }}
           >
+            <h2>{t("portal.decisionTitle")}</h2>
+            <div className="portal-decision__recap">
+              <dl>
+                <div>
+                  <dt>{t("portal.decisionTotal")}</dt>
+                  <dd>{money(quote.total_price_gross, quote.currency)}</dd>
+                </div>
+                <div>
+                  <dt>{t("portal.project")}</dt>
+                  <dd>
+                    {quote.project_code} · {formatRevision(quote.revision_code)}
+                  </dd>
+                </div>
+                {quote.valid_until ? (
+                  <div>
+                    <dt>{t("portal.validUntil")}</dt>
+                    <dd>
+                      <time dateTime={quote.valid_until}>{formatDate(quote.valid_until)}</time>
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
+              <p className="portal-decision__hint">{t("portal.approveHint")}</p>
+            </div>
             <label htmlFor="portal-name">{t("portal.nameLabel")}</label>
             <input
               id="portal-name"

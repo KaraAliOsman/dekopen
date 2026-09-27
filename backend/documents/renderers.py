@@ -113,6 +113,77 @@ svg:not(.miter) { max-width: 100%; height: auto; display: block; } svg text { fo
 .figures .figpos { color: #161C1F; font-weight: 600; }
 .figures .figdim { font-family: 'IBM Plex Mono', monospace; font-size: 7.5pt; }
 .workshop-figure svg { max-height: 170mm; }
+
+/* ── Commercial proposal language (DOC-01) ───────────────────────────
+   Same type family and tokens, different composition: a real cover, a
+   stat-level summary, product cards instead of a data table, and a
+   dedicated investment block. Nothing here styles workshop docs. */
+.commercial h1 { font-size: 19pt; letter-spacing: -0.3pt; }
+.commercial h2 { font-size: 12.5pt; border-bottom: none; margin: 7mm 0 3mm; break-after: avoid; break-inside: avoid; }
+.commercial h2::after { content: ""; display: block; width: 14mm; height: 1.4mm; background: #E56A32; margin-top: 1.6mm; }
+.kicker { font-size: 7.5pt; font-weight: 600; text-transform: uppercase; letter-spacing: 1.6pt; color: #0B7770; margin: 0 0 2mm; }
+.cover { break-after: page; }
+.cover-top { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1.5pt solid #075F5A; padding-bottom: 5mm; }
+.cover-top .brand { font-size: 15pt; }
+.cover-top .brand-logo { max-height: 16mm; max-width: 62mm; }
+.cover-doc { text-align: right; font: 8pt 'IBM Plex Mono', monospace; color: #465158; line-height: 1.7; }
+.cover-doc strong { display: block; font: 600 11pt 'IBM Plex Sans', sans-serif; color: #161C1F; letter-spacing: 0.2pt; }
+.cover-main { display: flex; gap: 10mm; align-items: center; margin: 32mm 0 14mm; }
+.cover-left { flex: 1; }
+.cover-client { font-size: 24pt; font-weight: 600; letter-spacing: -0.4pt; margin: 0 0 2.5mm; }
+.cover-project { font-size: 11pt; color: #252D31; margin: 0 0 1mm; }
+.cover-meta { color: #727D82; font-size: 8.5pt; line-height: 1.75; margin-top: 4mm; }
+.cover-figure { width: 82mm; flex: 0 0 82mm; background: #F5F7F7; border: 0.25pt solid #E2E7E7; padding: 4mm 4mm 2mm; }
+.cover-figure svg { max-height: 105mm; display: block; margin: 0 auto; }
+.cover-figure .figcap { font: 7pt 'IBM Plex Sans', sans-serif; color: #727D82; text-align: center; margin-top: 2mm; }
+.cover-invest { display: flex; border: 1pt solid #075F5A; padding: 4mm 0; }
+.inv-cell { flex: 1; padding: 0 5mm; border-left: 0.5pt solid #CDD5D6; }
+.inv-cell:first-child { border-left: none; }
+.inv-cell span { display: block; font-size: 6.5pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.7pt; color: #727D82; margin-bottom: 1.2mm; }
+.inv-cell strong { font-size: 10.5pt; font-weight: 600; color: #161C1F; }
+.inv-cell.inv-total strong { font-size: 15pt; color: #075F5A; }
+.cover-foot { margin-top: 5mm; font-size: 7.5pt; color: #727D82; line-height: 1.6; }
+.stat-strip { display: flex; border: 0.5pt solid #CDD5D6; border-left: 2pt solid #075F5A; margin: 0 0 5mm; }
+.stat-cell { flex: 1; padding: 2.6mm 4mm; border-left: 0.5pt solid #CDD5D6; }
+.stat-cell:first-child { border-left: none; }
+.stat-cell .stat-n { display: block; font: 600 13pt 'IBM Plex Sans', sans-serif; color: #161C1F; }
+.stat-cell .stat-k { display: block; font-size: 6.5pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6pt; color: #727D82; margin-top: 0.8mm; }
+.chips { margin: 2mm 0 0; }
+.chips span { display: inline-block; border: 0.5pt solid #CDD5D6; border-radius: 2pt; padding: 0.8mm 2.4mm; margin: 0 1.5mm 1.5mm 0; font-size: 7.5pt; color: #465158; }
+/* block layout (not flex-wrap) so WeasyPrint can paginate between cards */
+.pcards { display: block; margin: 2mm 0 4mm; }
+.pcard { display: flex; width: 100%; border: 0.75pt solid #CDD5D6; margin: 0 0 5mm; break-inside: avoid; }
+.pcard-fig { flex: 0 0 62mm; padding: 5mm 4mm; border-right: 0.5pt solid #CDD5D6; background: #F2F5F4; display: flex; align-items: center; justify-content: center; }
+.pcard-fig svg { max-height: 62mm; max-width: 54mm; }
+.pcard-body { flex: 1; padding: 4mm 5mm; }
+.pcard-body h3 { margin: 0 0 1mm; font-size: 12pt; }
+.pcard-dims { font: 500 10pt 'IBM Plex Mono', monospace; color: #075F5A; margin: 0 0 2.5mm; }
+.pcard-specs { margin: 0; padding: 0; list-style: none; font-size: 8pt; color: #465158; line-height: 1.7; }
+.pcard-specs li { margin: 0; }
+.pcard-specs .plabel { color: #727D82; font-size: 6.5pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5pt; }
+.pcard-price { flex: 0 0 40mm; padding: 4mm 5mm; text-align: right; background: #F5F7F6; }
+.pcard-price .plabel { display: block; font-size: 6.5pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5pt; color: #727D82; margin: 2mm 0 0.5mm; }
+.pcard-price .plabel:first-child { margin-top: 0; }
+.pcard-price strong { font-size: 10.5pt; }
+.pcard-price strong.line { display: block; font-size: 13pt; color: #075F5A; }
+.pcard-price .off { display: inline-block; background: #E56A32; color: #FCFDFC; font-size: 6.5pt; font-weight: 600; letter-spacing: 0.5pt; padding: 0.6mm 2mm; border-radius: 2pt; }
+.pcards.compact .pcard { margin-bottom: 4mm; }
+.pcards.compact .pcard-fig { flex: 0 0 50mm; padding: 3mm; }
+.pcards.compact .pcard-fig svg { max-height: 34mm; max-width: 44mm; }
+.pcards.compact .pcard-body { padding: 3mm 4mm; }
+.pcards.compact .pcard-body h3 { font-size: 10.5pt; }
+.pcards.compact .pcard-price { flex: 0 0 36mm; padding: 3mm 4mm; }
+.invest { display: flex; gap: 8mm; align-items: stretch; margin: 2mm 0 4mm; }
+.invest-panel { flex: 0 0 74mm; background: #075F5A; color: #FCFDFC; padding: 5mm 6mm; break-inside: avoid; }
+.invest-panel .inv-row { display: flex; justify-content: space-between; font-size: 8.5pt; padding: 1.4mm 0; border-bottom: 0.5pt solid #0B7770; }
+.invest-panel .inv-total-row { font-size: 13pt; font-weight: 600; border-bottom: none; padding-top: 2.5mm; }
+.invest-note { flex: 1; font-size: 8.5pt; color: #465158; line-height: 1.7; }
+.invest-note p { margin: 0 0 1.5mm; }
+.terms { border-left: 2pt solid #CDD5D6; padding-left: 5mm; }
+.terms p { margin: 1.2mm 0; }
+.terms .tlabel { color: #727D82; font-size: 6.5pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5pt; }
+.accept { break-inside: avoid; margin-top: 6mm; }
+.accept-recap { font-size: 8.5pt; color: #465158; margin-bottom: 4mm; }
 """
 
 
@@ -293,9 +364,94 @@ def _pt(value: Decimal) -> str:
     return format(value.normalize(), "f")
 
 
+# Drawing palettes — the technical elevation (workshop/docs) keeps the
+# flat teal-on-paper look; the commercial figure renders the same sealed
+# geometry with product materials: finish-colored profiles, tinted glass
+# with a sheen, and real hardware marks (hinges on the hinge edge, lever
+# on the free edge). Presentation only — geometry and authority unchanged.
+_PAL_TECH = {
+    "frame_fill": "none", "frame_edge": _TEAL_800,
+    "bay_fill": _TEAL_50, "bay_edge": _TEAL_800,
+    "split": _G_700, "glyph": _TEAL_800, "accent": _MARK,
+    "sheen": None, "hardware": None, "label": _G_500,
+}
+
+
+def _commercial_palette(position: dict[str, object]) -> dict[str, str | None]:
+    """Profile finish → rendered face color. The position stores only a
+    finish label (WHITE/FOILED + org-entered names), so map the common
+    material words and stay neutral-grey on anything unrecognized — never
+    invent a wood grain or anthracite that wasn't declared."""
+    color = str(position.get("color_exterior") or "").upper()
+    if color == "FOILED" or "FOIL" in color or "WOOD" in color or "MADERA" in color or "ROBLE" in color:
+        fill, edge = "#7B5A3B", "#4E3A24"
+    elif "ANTRAC" in color or "GRIS" in color or "GREY" in color or "NEGRO" in color or "BLACK" in color:
+        fill, edge = "#3B4045", "#20242A"
+    else:
+        fill, edge = "#EEF0ED", "#98A2A5"
+    return {
+        "frame_fill": fill, "frame_edge": edge,
+        "bay_fill": "#DCEBEE", "bay_edge": edge,
+        "split": edge, "glyph": "#4A7B78", "accent": _MARK,
+        "sheen": "#FFFFFF", "hardware": "#3C4346", "label": _G_500,
+    }
+
+
+def _hardware_marks(opening: str, handedness: str, ix: Decimal, iy: Decimal,
+                    iw: Decimal, ih: Decimal, out: list[str],
+                    pal: dict[str, str | None]) -> None:
+    """Lever + hinge marks on the leaf — commercial figures only. Hinge
+    side follows the same DIN convention as the 3D scene: the opening name
+    (or declared door handedness) is the hinge edge; the lever sits on the
+    free edge at handle height."""
+    hw = pal.get("hardware")
+    if not hw:
+        return
+    hinge_left: bool | None = None
+    if opening in ("TURN_LEFT", "TILT_TURN_LEFT"):
+        hinge_left = True
+    elif opening in ("TURN_RIGHT", "TILT_TURN_RIGHT"):
+        hinge_left = False
+    elif opening == "DOOR_ENTRY":
+        hinge_left = handedness != "RIGHT"
+    w_tick = max(iw * Decimal("0.022"), Decimal("0.9"))
+    lever_w = max(iw * Decimal("0.03"), Decimal("1.1"))
+    lever_h = ih * Decimal("0.085")
+    lever_y = iy + ih * Decimal("0.52")
+    if opening == "DOOR_DOUBLE":
+        # Meeting stiles: a lever on each leaf's inner edge.
+        for cx in (ix + iw / 2 - lever_w * Decimal("1.4"), ix + iw / 2 + lever_w * Decimal("0.4")):
+            out.append(
+                f'<rect x="{_pt(cx)}" y="{_pt(lever_y)}" width="{_pt(lever_w)}" '
+                f'height="{_pt(lever_h)}" rx="{_pt(lever_w / 2)}" fill="{hw}"/>'
+            )
+    elif hinge_left is not None:
+        hx = ix if hinge_left else ix + iw - w_tick
+        for frac in (Decimal("0.16"), Decimal("0.84")):
+            hy = iy + ih * frac - ih * Decimal("0.045")
+            out.append(
+                f'<rect x="{_pt(hx)}" y="{_pt(hy)}" width="{_pt(w_tick)}" '
+                f'height="{_pt(ih * Decimal("0.09"))}" fill="{hw}"/>'
+            )
+        lx = ix + iw - lever_w * Decimal("1.6") if hinge_left else ix + lever_w * Decimal("0.6")
+        out.append(
+            f'<rect x="{_pt(lx)}" y="{_pt(lever_y)}" width="{_pt(lever_w)}" '
+            f'height="{_pt(lever_h)}" rx="{_pt(lever_w / 2)}" fill="{hw}"/>'
+        )
+    elif opening == "AWNING":
+        out.append(
+            f'<rect x="{_pt(ix + iw / 2 - lever_w / 2)}" y="{_pt(iy + ih - lever_h * Decimal("1.5"))}" '
+            f'width="{_pt(lever_w)}" height="{_pt(lever_h)}" '
+            f'rx="{_pt(lever_w / 2)}" fill="{hw}"/>'
+        )
+
+
 def _svg_elements(node: dict[str, object], x: Decimal, y: Decimal,
                   width: Decimal, height: Decimal, out: list[str],
-                  marker: str, glyph_only: bool = False) -> None:
+                  marker: str, glyph_only: bool = False,
+                  pal: dict[str, str | None] | None = None) -> None:
+    if pal is None:
+        pal = _PAL_TECH
     node_type = str(node.get("type"))
     children = node.get("children")
     if children is None:
@@ -318,19 +474,19 @@ def _svg_elements(node: dict[str, object], x: Decimal, y: Decimal,
         if node_type == "SPLIT_V":
             out.append(
                 f'<line x1="{_pt(x + split)}" y1="{_pt(y)}" x2="{_pt(x + split)}" '
-                f'y2="{_pt(y + height)}" stroke="#465158" stroke-width="'
+                f'y2="{_pt(y + height)}" stroke="{pal["split"]}" stroke-width="'
                 f'{_pt(height / Decimal("60"))}"/>'
             )
-            _svg_elements(first, x, y, split, height, out, marker, glyph_only)
-            _svg_elements(second, x + split, y, width - split, height, out, marker, glyph_only)
+            _svg_elements(first, x, y, split, height, out, marker, glyph_only, pal)
+            _svg_elements(second, x + split, y, width - split, height, out, marker, glyph_only, pal)
         else:
             out.append(
                 f'<line x1="{_pt(x)}" y1="{_pt(y + split)}" x2="{_pt(x + width)}" '
-                f'y2="{_pt(y + split)}" stroke="#465158" stroke-width="'
+                f'y2="{_pt(y + split)}" stroke="{pal["split"]}" stroke-width="'
                 f'{_pt(width / Decimal("60"))}"/>'
             )
-            _svg_elements(first, x, y, width, split, out, marker, glyph_only)
-            _svg_elements(second, x, y + split, width, height - split, out, marker, glyph_only)
+            _svg_elements(first, x, y, width, split, out, marker, glyph_only, pal)
+            _svg_elements(second, x, y + split, width, height - split, out, marker, glyph_only, pal)
         return
     if node_type != "BAY":
         raise DocumentaryError("invalid_frozen_parametric_tree")
@@ -342,36 +498,43 @@ def _svg_elements(node: dict[str, object], x: Decimal, y: Decimal,
     if not glyph_only:
         out.append(
             f'<rect x="{_pt(x)}" y="{_pt(y)}" width="{_pt(width)}" height="{_pt(height)}" '
-            'fill="none" stroke="#075F5A" stroke-width="' + _pt(min(width, height) / Decimal("40"))
+            f'fill="{pal["frame_fill"]}" stroke="{pal["frame_edge"]}" stroke-width="' + _pt(min(width, height) / Decimal("40"))
             + '"/>'
         )
         out.append(
             f'<rect x="{_pt(ix)}" y="{_pt(iy)}" width="{_pt(iw)}" height="{_pt(ih)}" '
-            f'fill="#E6F4F2" stroke="#075F5A" stroke-width="{stroke}"/>'
+            f'fill="{pal["bay_fill"]}" stroke="{pal["bay_edge"]}" stroke-width="{stroke}"/>'
         )
+        if pal.get("sheen"):
+            # Soft diagonal highlight — reads as glazing, not a grey box.
+            out.append(
+                f'<polygon points="{_pt(ix)},{_pt(iy)} {_pt(ix + iw * Decimal("0.38"))},{_pt(iy)} '
+                f'{_pt(ix)},{_pt(iy + ih * Decimal("0.72"))}" fill="{pal["sheen"]}" '
+                'fill-opacity="0.45"/>'
+            )
     opening = node.get("opening_type")
     mx, my = ix + iw / 2, iy + ih / 2
     if opening in ("TURN_LEFT", "TILT_TURN_LEFT"):
         out.append(
             f'<polygon points="{_pt(ix)},{_pt(iy)} {_pt(ix)},{_pt(iy + ih)} '
-            f'{_pt(ix + iw)},{_pt(my)}" fill="none" stroke="#075F5A" '
+            f'{_pt(ix + iw)},{_pt(my)}" fill="none" stroke="{pal["glyph"]}" '
             f'stroke-width="{stroke}"/>'
         )
     elif opening in ("TURN_RIGHT", "TILT_TURN_RIGHT"):
         out.append(
             f'<polygon points="{_pt(ix + iw)},{_pt(iy)} {_pt(ix + iw)},{_pt(iy + ih)} '
-            f'{_pt(ix)},{_pt(my)}" fill="none" stroke="#075F5A" '
+            f'{_pt(ix)},{_pt(my)}" fill="none" stroke="{pal["glyph"]}" '
             f'stroke-width="{stroke}"/>'
         )
     if opening in ("TILT_TURN_LEFT", "TILT_TURN_RIGHT"):
         out.append(
             f'<polygon points="{_pt(ix)},{_pt(iy + ih)} {_pt(ix + iw)},{_pt(iy + ih)} '
-            f'{_pt(mx)},{_pt(iy)}" fill="none" stroke="#075F5A" stroke-width="{stroke}"/>'
+            f'{_pt(mx)},{_pt(iy)}" fill="none" stroke="{pal["glyph"]}" stroke-width="{stroke}"/>'
         )
     elif opening == "AWNING":
         out.append(
             f'<polygon points="{_pt(ix)},{_pt(iy)} {_pt(ix + iw)},{_pt(iy)} '
-            f'{_pt(mx)},{_pt(iy + ih)}" fill="none" stroke="#075F5A" '
+            f'{_pt(mx)},{_pt(iy + ih)}" fill="none" stroke="{pal["glyph"]}" '
             f'stroke-width="{stroke}"/>'
         )
     elif opening in ("SLIDING_2L", "SLIDING_3L", "SLIDING_4L", "SLIDING"):
@@ -391,37 +554,67 @@ def _svg_elements(node: dict[str, object], x: Decimal, y: Decimal,
             lx = ix + leaf_w * index
             out.append(
                 f'<rect x="{_pt(lx)}" y="{_pt(iy)}" width="{_pt(leaf_w)}" '
-                f'height="{_pt(ih)}" fill="none" stroke="#075F5A" '
+                f'height="{_pt(ih)}" fill="none" stroke="{pal["bay_edge"]}" '
                 f'stroke-width="{stroke}"/>'
             )
             if not isinstance(panel, dict) or panel.get("kind") == "MOVING":
                 out.append(
                     f'<line x1="{_pt(lx + leaf_w / 4)}" y1="{_pt(my)}" '
-                    f'x2="{_pt(lx + leaf_w * 3 / 4)}" y2="{_pt(my)}" stroke="#075F5A" '
+                    f'x2="{_pt(lx + leaf_w * 3 / 4)}" y2="{_pt(my)}" stroke="{pal["glyph"]}" '
                     f'stroke-width="{stroke}" marker-end="url(#{marker})"/>'
                 )
+                if pal.get("hardware"):
+                    # Pull on the meeting-stile edge: panels on the left
+                    # half pull right, on the right half pull left.
+                    pull_w = max(leaf_w * Decimal("0.05"), Decimal("1.1"))
+                    pull_h = ih * Decimal("0.16")
+                    inner = index * 2 < len(layout_panels)
+                    px = (
+                        lx + leaf_w - pull_w * Decimal("1.5")
+                        if inner
+                        else lx + pull_w * Decimal("0.5")
+                    )
+                    out.append(
+                        f'<rect x="{_pt(px)}" y="{_pt(my - pull_h / 2)}" '
+                        f'width="{_pt(pull_w)}" height="{_pt(pull_h)}" '
+                        f'rx="{_pt(pull_w / 2)}" fill="{pal["hardware"]}"/>'
+                    )
     elif opening in ("DOOR_ENTRY", "DOOR_DOUBLE"):
         out.append(
             f'<line x1="{_pt(ix)}" y1="{_pt(iy + ih)}" x2="{_pt(ix + iw)}" '
-            f'y2="{_pt(iy + ih)}" stroke="#E56A32" stroke-width="{stroke}"/>'
+            f'y2="{_pt(iy + ih)}" stroke="{pal["accent"]}" stroke-width="{stroke}"/>'
         )
         if opening == "DOOR_DOUBLE":
             out.append(
                 f'<line x1="{_pt(mx)}" y1="{_pt(iy)}" x2="{_pt(mx)}" '
-                f'y2="{_pt(iy + ih)}" stroke="#075F5A" stroke-width="{stroke}"/>'
+                f'y2="{_pt(iy + ih)}" stroke="{pal["glyph"]}" stroke-width="{stroke}"/>'
             )
+    if pal.get("hardware"):
+        _hardware_marks(
+            str(opening), str(node.get("door_handedness") or ""),
+            ix, iy, iw, ih, out, pal,
+        )
 
 
 def _frameless_pane(frameless: dict[str, object], x: Decimal, y: Decimal,
-                    width: Decimal, height: Decimal, out: list[str]) -> None:
+                    width: Decimal, height: Decimal, out: list[str],
+                    pal: dict[str, str | None] | None = None) -> None:
     """Glass-only module figure: the pane itself plus its DECLARED edge
     supports — no fake frame, no invented fitting positions."""
+    if pal is None:
+        pal = _PAL_TECH
     stroke = _pt(min(width, height) / Decimal("140"))
     support_stroke = _pt(min(width, height) / Decimal("30"))
     out.append(
         f'<rect x="{_pt(x)}" y="{_pt(y)}" width="{_pt(width)}" height="{_pt(height)}" '
-        f'fill="#E6F4F2" stroke="#075F5A" stroke-width="{stroke}"/>'
+        f'fill="{pal["bay_fill"]}" stroke="{pal["bay_edge"]}" stroke-width="{stroke}"/>'
     )
+    if pal.get("sheen"):
+        out.append(
+            f'<polygon points="{_pt(x)},{_pt(y)} {_pt(x + width * Decimal("0.38"))},{_pt(y)} '
+            f'{_pt(x)},{_pt(y + height * Decimal("0.72"))}" fill="{pal["sheen"]}" '
+            'fill-opacity="0.45"/>'
+        )
     segments = {
         "top": (x, y, x + width, y),
         "bottom": (x, y + height, x + width, y + height),
@@ -440,7 +633,7 @@ def _frameless_pane(frameless: dict[str, object], x: Decimal, y: Decimal,
         my2 = y2 - (y2 - y1) / Decimal("4")
         out.append(
             f'<line x1="{_pt(mx1)}" y1="{_pt(my1)}" x2="{_pt(mx2)}" '
-            f'y2="{_pt(my2)}" stroke="#E56A32" stroke-width="{support_stroke}"/>'
+            f'y2="{_pt(my2)}" stroke="{pal["accent"]}" stroke-width="{support_stroke}"/>'
         )
     fittings = _array(frameless.get("fittings"), "invalid_frozen_parametric_tree")
     if fittings:
@@ -492,12 +685,18 @@ def _contour_svg_path(
     return " ".join(commands) + " Z", top, bottom, left, right
 
 
-def _position_svg(position: dict[str, object]) -> str:
+def _position_svg(
+    position: dict[str, object], *, commercial: bool = False, marker_key: str = ""
+) -> str:
     tree = _object(position.get("parametric_tree"), "invalid_frozen_parametric_tree")
-    marker = f"arrow-{escape(_value(position.get('position_index')))}"
+    pal = _commercial_palette(position) if commercial else _PAL_TECH
+    # The same position can be drawn twice on a page (hero + card): the
+    # marker id must stay unique or the second SVG's arrows mis-resolve.
+    marker = f"arrow-{escape(_value(position.get('position_index')))}-{escape(marker_key) or 'x'}"
     elements: list[str] = [
         f'<defs><marker id="{marker}" markerWidth="8" markerHeight="8" refX="6" refY="3" '
-        'orient="auto"><path d="M0,0 L6,3 L0,6" fill="none" stroke="#075F5A" '
+        'orient="auto"><path d="M0,0 L6,3 L0,6" fill="none" '
+        f'stroke="{pal["glyph"]}" '
         'stroke-width="1"/></marker></defs>'
     ]
     if tree.get("version") == "product-v2":
@@ -570,17 +769,18 @@ def _position_svg(position: dict[str, object]) -> str:
                 _svg_elements(
                     _object(module.get("tree"), "invalid_frozen_parametric_tree"),
                     x, baseline, module_width, module_height, elements, marker,
-                    glyph_only=True,
+                    glyph_only=True, pal=pal,
                 )
             elif frameless is not None:
                 _frameless_pane(
                     _object(frameless, "invalid_frozen_parametric_tree"),
-                    x, baseline, module_width, module_height, elements,
+                    x, baseline, module_width, module_height, elements, pal,
                 )
             else:
                 _svg_elements(
                     _object(module.get("tree"), "invalid_frozen_parametric_tree"),
                     x, baseline, module_width, module_height, elements, marker,
+                    pal=pal,
                 )
             # Module-id labels drop on sliver modules — squeezed text
             # colliding with the next unit's label reads worse than none.
@@ -626,7 +826,7 @@ def _position_svg(position: dict[str, object]) -> str:
         height = _num(position.get("height_mm"))
         if width <= 0 or height <= 0:
             raise DocumentaryError("svg_dimension_invalid")
-        _svg_elements(tree, Decimal("0"), Decimal("0"), width, height, elements, marker)
+        _svg_elements(tree, Decimal("0"), Decimal("0"), width, height, elements, marker, pal=pal)
     return (
         f'<svg viewBox="0 0 {_pt(width)} {_pt(height)}" '
         'xmlns="http://www.w3.org/2000/svg" role="img" '
@@ -739,17 +939,26 @@ def _revision_header(
 
 
 def _doc01(snapshot: dict[str, object]) -> str:
+    """Commercial proposal (DOC-01): a sales document, not a table dump.
+
+    Structure — cover (brand + client + hero unit + investment strip),
+    project summary, a compact positions overview, product cards with the
+    commercial render beside its spec, the investment block, terms, and
+    the acceptance block. Sections with no data are simply not rendered."""
     project = _object(snapshot.get("project"), "invalid_frozen_revision_snapshot")
     currency = project.get("currency")
     positions = [_object(item, "invalid_frozen_position")
                  for item in _array(snapshot.get("positions"), "invalid_frozen_revision_snapshot")]
-    # Identical openings collapse into one row; location lists stay honest.
+    org_raw = snapshot.get("organization")
+    organization = org_raw if isinstance(org_raw, dict) else None
+    org = organization if organization is not None else {}
+
+    # Identical openings collapse into one group; the sealed tree signature
+    # keeps mirrored/handedness pairs apart so the rendered figure never
+    # lies about which product the customer is buying.
     groups: dict[tuple[object, ...], dict[str, object]] = {}
     for position in positions:
         specs = ", ".join(_position_glass_specs(position)) or "Panel declarado"
-        # The sealed tree is the design signature — mirrored pairs (TURN_LEFT
-        # vs TURN_RIGHT) and any leaf/panel difference must NOT group, or the
-        # one rendered figure would lie about handedness.
         tree_sig = json.dumps(
             position.get("parametric_tree"), sort_keys=True, default=str
         )
@@ -772,104 +981,267 @@ def _doc01(snapshot: dict[str, object]) -> str:
             bucket["locations"].append(location)
         bucket["quantity"] += _num(position.get("quantity"))
         if position.get("price_net") is None:
-            # Revisions frozen before line pricing carry no per-position net.
             bucket["priced"] = False
         else:
             bucket["price_net"] += _num(position.get("price_net"))
-    opening_rows = []
+
+    def _list(values: list[str]) -> str:
+        if not values:
+            return "—"
+        if len(values) <= 6:
+            return ", ".join(values)
+        return f"{values[0]} … {values[-1]} ({len(values)})"
+
+    def _figure(position: dict[str, object], key_suffix: str = "") -> str:
+        return _position_svg(position, commercial=True, marker_key=key_suffix)
+
+    # ── Cover ──────────────────────────────────────────────────────────
+    quote_folio = f"COT-{_value(project.get('code'))}-{_value(snapshot.get('revision'))}"
+    titleblock = (
+        '<div class="titleblock">'
+        f'<div class="tb-cell"><span class="tb-label">Proyecto</span>'
+        f'<span class="tb-value">{escape(_value(project.get("code")))}</span></div>'
+        f'<div class="tb-cell"><span class="tb-label">Documento</span>'
+        f'<span class="tb-value">{escape(quote_folio)}</span></div>'
+        f'<div class="tb-cell"><span class="tb-label">Rev.</span>'
+        f'<span class="tb-value">{escape(_value(snapshot.get("revision")))}</span></div>'
+        f'<div class="tb-cell"><span class="tb-label">Fecha</span>'
+        f'<span class="tb-value">{escape(_cldate(snapshot.get("sealed_at")))}</span></div>'
+        '<div class="tb-cell"><span class="tb-label">Página</span>'
+        '<span class="tb-value"><span class="pg"></span></span></div>'
+        "</div>"
+    )
+    body = f'<main class="commercial">{titleblock}'
+
+    # Hero: the largest glazed unit — the product the customer actually
+    # bought, generated from its sealed geometry, not stock imagery.
+    hero_bucket = None
+    hero_area = Decimal("-1")
+    for bucket in groups.values():
+        ref = bucket["ref_position"]
+        try:
+            area = _num(ref.get("width_mm")) * _num(ref.get("height_mm"))
+        except DocumentaryError:
+            area = Decimal("0")
+        if area > hero_area:
+            hero_area, hero_bucket = area, bucket
+    hero_figure = ""
+    if hero_bucket is not None:
+        ref = hero_bucket["ref_position"]
+        hero_figure = (
+            '<div class="cover-figure">'
+            + _position_svg(ref, commercial=True, marker_key="hero")
+            + '<div class="figcap">'
+            + escape(_TYPOLOGY_ES.get(_value(ref.get("typology")), _value(ref.get("typology"))))
+            + " · "
+            + escape(_value(ref.get("width_mm")))
+            + " × "
+            + escape(_value(ref.get("height_mm")))
+            + " mm</div></div>"
+        )
+
+    client_meta = []
+    for label, field in (("RUT", "client_rut"), ("Giro", "client_giro"),
+                         ("Comuna", "client_comuna"), ("Dirección", "client_address"),
+                         ("Contacto", "client_email"), ("Teléfono", "client_phone"),
+                         ("Entrega", "delivery_address")):
+        value = _value(project.get(field))
+        if value and value != "—":
+            client_meta.append(f"<strong>{escape(label)}</strong> {escape(value)}<br>")
+    valid_until = _value(project.get("quotation_valid_until"))
+    # Pre-pricing snapshots carry no totals — the proposal omits every money
+    # cell rather than printing a phantom zero.
+    totals_priced = project.get("total_price_gross") is not None
+    cover_invest_cells = []
+    if totals_priced:
+        cover_invest_cells.append(
+            '<div class="inv-cell inv-total"><span>Total</span>'
+            f'<strong>{escape(_money(project.get("total_price_gross"), currency))}</strong></div>'
+        )
+    if _value(project.get("payment_terms")) not in ("", "—"):
+        cover_invest_cells.append(
+            '<div class="inv-cell"><span>Pago</span>'
+            f'<strong>{escape(_value(project.get("payment_terms")))}</strong></div>'
+        )
+    if valid_until and valid_until != "—":
+        cover_invest_cells.append(
+            '<div class="inv-cell"><span>Válida hasta</span>'
+            f'<strong>{escape(_cldate(valid_until))}</strong></div>'
+        )
+    issuer_line = " · ".join(
+        part
+        for part in (
+            _value(org.get("name")),
+            f"RUT {_value(org.get('tax_id'))}" if _value(org.get("tax_id")) != "—" else "",
+            _value(org.get("brand_address")),
+            _value(org.get("brand_phone")),
+            _value(org.get("brand_email")),
+        )
+        if part and part != "—"
+    )
+    body += (
+        '<div class="cover">'
+        '<div class="cover-top">'
+        f'{_brand_block(organization)}'
+        '<div class="cover-doc">'
+        "<strong>Propuesta comercial</strong>"
+        f"{escape(quote_folio)}<br>"
+        f"Revisión {escape(_value(snapshot.get('revision')))} · "
+        f"{escape(_cldate(snapshot.get('sealed_at')))}"
+        "</div></div>"
+        '<div class="cover-main"><div class="cover-left">'
+        '<p class="kicker">Preparado para</p>'
+        f'<h1 class="cover-client">{escape(_value(project.get("client_name")))}</h1>'
+        f'<p class="cover-project">{escape(_value(project.get("name")))} · '
+        f'{escape(_value(project.get("code")))}</p>'
+        f'<p class="cover-meta">{"".join(client_meta)}</p>'
+        "</div>"
+        f"{hero_figure}"
+        "</div>"
+        + (
+            f'<div class="cover-invest">{"".join(cover_invest_cells)}</div>'
+            if cover_invest_cells
+            else ""
+        )
+        + (
+            f'<div class="cover-foot">{escape(issuer_line)}</div>' if issuer_line else ""
+        )
+        + "</div>"
+    )
+
+    # ── Project summary ────────────────────────────────────────────────
+    if positions:
+        total_units = sum(bucket["quantity"] for bucket in groups.values())
+        doors = sum(
+            bucket["quantity"]
+            for key, bucket in groups.items()
+            if str(key[0]).startswith("DOOR")
+        )
+        windows = total_units - doors
+        systems = sorted({
+            _value(bucket["ref_position"].get("system_name"))
+            for bucket in groups.values()
+            if _value(bucket["ref_position"].get("system_name")) not in ("", "—")
+        })
+        finishes = sorted({
+            _finish(key[4], key[5]) for key in groups if key[4] or key[5]
+        })
+        glass = sorted({bucket["specs"] for bucket in groups.values()})
+        stat_cells = [
+            f'<div class="stat-cell"><span class="stat-n">{escape(str(total_units))}</span>'
+            '<span class="stat-k">Unidades</span></div>',
+            f'<div class="stat-cell"><span class="stat-n">{escape(str(windows))}</span>'
+            '<span class="stat-k">Ventanas</span></div>',
+            f'<div class="stat-cell"><span class="stat-n">{escape(str(doors))}</span>'
+            '<span class="stat-k">Puertas</span></div>',
+            f'<div class="stat-cell"><span class="stat-n">{len(groups)}</span>'
+            '<span class="stat-k">Configuraciones</span></div>',
+        ]
+        body += '<h2>Resumen del proyecto</h2>' + (
+            f'<div class="stat-strip">{"".join(stat_cells)}</div>'
+        )
+        chip_rows = []
+        if systems:
+            chip_rows.append(
+                '<p><span class="tlabel">Sistemas</span></p><div class="chips">'
+                + "".join(f"<span>{escape(name)}</span>" for name in systems)
+                + "</div>"
+            )
+        if finishes:
+            chip_rows.append(
+                '<p><span class="tlabel">Acabados</span></p><div class="chips">'
+                + "".join(f"<span>{escape(name)}</span>" for name in finishes)
+                + "</div>"
+            )
+        if glass:
+            chip_rows.append(
+                '<p><span class="tlabel">Acristalamiento</span></p><div class="chips">'
+                + "".join(f"<span>{escape(name)}</span>" for name in glass)
+                + "</div>"
+            )
+        body += "".join(chip_rows)
+
+        # Positions overview — the scannable index before the detail.
+        if len(groups) > 1:
+            overview_rows = [
+                [
+                    _list(bucket["indexes"]),
+                    _list(bucket["locations"]),
+                    _TYPOLOGY_ES.get(key[0], key[0]),
+                    bucket["quantity"],
+                    _money(bucket["price_net"], currency) if bucket["priced"] else "—",
+                ]
+                for key, bucket in groups.items()
+            ]
+            body += (
+                '<table><colgroup><col style="width:8%"><col style="width:32%">'
+                '<col style="width:28%"><col style="width:10%"><col style="width:22%"></colgroup>'
+                "<thead><tr><th>Pos.</th><th>Ubicación</th><th>Producto</th>"
+                "<th>Cant.</th><th>Neto</th></tr></thead><tbody>"
+                + "".join(
+                    _row(row, ["", "", "", "dimension", "dimension"])
+                    for row in overview_rows
+                )
+                + "</tbody></table>"
+            )
+
+    # ── Products ───────────────────────────────────────────────────────
+    body += "<h2>Productos</h2>"
+    body += f'<div class="pcards{" compact" if len(groups) > 6 else ""}">'
     for key, bucket in groups.items():
         typology, width_mm, height_mm, specs, ci, ce = key[:6]
         discount_pct = key[7]
-        indexes = bucket["indexes"]
-        # Long grouped index lists wrap horribly — compact to first…last + n.
-        index_cell = (
-            ", ".join(indexes)
-            if len(indexes) <= 6
-            else f"{indexes[0]} … {indexes[-1]} ({len(indexes)})"
-        )
-        table_locations = bucket["locations"]
-        opening_rows.append([
-            index_cell,
-            (", ".join(table_locations)
-             if len(table_locations) <= 6
-             else f"{table_locations[0]} … {table_locations[-1]} ({len(table_locations)})")
-            or "—",
-            _TYPOLOGY_ES.get(typology, typology),
-            f"{width_mm}\u00a0×\u00a0{height_mm}",
-            bucket["quantity"], specs, _finish(ci, ce),
-            (
-                f"{format(_num(discount_pct).normalize(), 'f')}%"
-                if discount_pct not in ("0", "0.00", "0.0000", "—", "")
-                else "—"
-            ),
-            _money(bucket["price_net"] / bucket["quantity"], currency)
-            if bucket["priced"] and bucket["quantity"]
-            else "—",
-            _money(bucket["price_net"], currency) if bucket["priced"] else "—",
-        ])
-    quote_folio = f"COT-{_value(project.get('code'))}-{_value(snapshot.get('revision'))}"
-    body, _ = _revision_header(snapshot, "Cotización comercial", quote_folio)
-    client_lines = []
-    for label, field in (("RUT", "client_rut"), ("Giro", "client_giro"),
-                         ("Comuna", "client_comuna"), ("Dirección", "client_address"),
-                         ("Contacto", "client_email"), ("Teléfono", "client_phone")):
-        value = _value(project.get(field))
-        if value and value != "—":
-            client_lines.append(f"<p><strong>{label}:</strong> {escape(value)}</p>")
-    delivery = _value(project.get("delivery_address"))
-    if delivery and delivery != "—":
-        client_lines.append(f"<p><strong>Entrega:</strong> {escape(delivery)}</p>")
-    body += (
-        '<section class="hero"><p>Preparado para</p>'
-        f"<h2>{escape(_value(project.get('client_name')))}</h2>"
-        + "".join(client_lines)
-        + f'<p class="total">Total: {escape(_money(project.get("total_price_gross"), currency))}</p>'
-        "</section>"
-        "<h2>Solución propuesta</h2>"
-        '<table class="sol-table"><colgroup>'
-        '<col style="width:4%"><col style="width:16%"><col style="width:13%">'
-        '<col style="width:11%"><col style="width:5%"><col style="width:15%">'
-        '<col style="width:9%"><col style="width:5%"><col style="width:10%">'
-        '<col style="width:12%">'
-        "</colgroup><thead><tr>"
-        "<th>Pos.</th><th>Ubicación</th><th>Tipología</th>"
-        "<th>Dimensiones (mm)</th><th>Cant.</th><th>Vidrio / relleno</th>"
-        "<th>Acabado</th><th>Dcto.</th><th>P. unit.</th><th>Neto</th></tr></thead><tbody>"
-        + "".join(
-            _row(row, ["", "", "", "nowrap", "dimension", "", "", "", "dimension", "dimension"])
-            for row in opening_rows
-        )
-        + "</tbody></table>"
-    )
-    # One figure per opening group — identical units share a drawing and the
-    # caption lists every position it covers, keeping long quotes compact.
-    # The flex grid can't fragment mid-page in WeasyPrint, so it sits between
-    # the totals and the commercial close — conditions and the signature block
-    # keep flowing on the same page instead of orphaning a final page.
-    figures = '<h2>Vistas de los productos</h2><div class="figures">'
-    for bucket in groups.values():
         ref = bucket["ref_position"]
-        location_list = bucket["locations"]
-        locations = (
-            ", ".join(location_list)
-            if len(location_list) <= 6
-            else f"{location_list[0]} … {location_list[-1]} ({len(location_list)})"
-        ) or "—"
-        index_list = bucket["indexes"]
-        indexes = (
-            ", ".join(index_list)
-            if len(index_list) <= 6
-            else f"{index_list[0]} … {index_list[-1]} ({len(index_list)})"
+        system_name = _value(ref.get("system_name"))
+        spec_items = [
+            f'<li><span class="plabel">Pos.</span> {escape(_list(bucket["indexes"]))}'
+            + (f' · {escape(_list(bucket["locations"]))}'
+               if bucket["locations"] else "")
+            + "</li>"
+        ]
+        if system_name not in ("", "—"):
+            spec_items.append(
+                f'<li><span class="plabel">Sistema</span> {escape(system_name)}</li>'
+            )
+        spec_items.append(
+            f'<li><span class="plabel">Vidrio / relleno</span> {escape(specs)}</li>'
         )
-        figures += (
-            f'<figure>{_position_svg(ref)}'
-            f'<figcaption><span class="figpos">Pos. '
-            f'{escape(indexes)}</span> · {escape(locations)}<br/>'
-            f'<span class="figdim">{escape(_value(ref.get("width_mm")))} × '
-            f'{escape(_value(ref.get("height_mm")))} mm</span> · Cant. '
-            f'{escape(_value(bucket["quantity"]))}</figcaption></figure>'
+        finish = _finish(ci, ce)
+        if finish and finish != "—":
+            spec_items.append(
+                f'<li><span class="plabel">Acabado</span> {escape(finish)}</li>'
+            )
+        price_block = ""
+        if bucket["priced"]:
+            discount_badge = (
+                f'<span class="off">-{format(_num(discount_pct).normalize(), "f")}%</span>'
+                if discount_pct not in ("0", "0.00", "0.0000", "—", "")
+                else ""
+            )
+            price_block = (
+                '<div class="pcard-price">'
+                + discount_badge
+                + '<span class="plabel">Precio unitario</span>'
+                f'<strong>{escape(_money(bucket["price_net"] / bucket["quantity"], currency))}</strong>'
+                '<span class="plabel">Total posición</span>'
+                f'<strong class="line">{escape(_money(bucket["price_net"], currency))}</strong>'
+                "</div>"
+            )
+        body += (
+            '<figure class="pcard">'
+            f'<div class="pcard-fig">{_figure(ref, "c" + bucket["indexes"][0])}</div>'
+            '<div class="pcard-body">'
+            f'<h3>{escape(_TYPOLOGY_ES.get(typology, typology))}</h3>'
+            f'<p class="pcard-dims">{escape(width_mm)} × {escape(height_mm)} mm</p>'
+            f'<p style="margin:0 0 2mm"><strong>Cantidad:</strong> '
+            f'{escape(_value(bucket["quantity"]))}</p>'
+            f'<ul class="pcard-specs">{"".join(spec_items)}</ul>'
+            "</div>"
+            f"{price_block}</figure>"
         )
-    figures += "</div>"
+    body += "</div>"
+
+    # ── Investment ─────────────────────────────────────────────────────
     granted_discounts = sorted(
         {
             key[7]
@@ -879,36 +1251,92 @@ def _doc01(snapshot: dict[str, object]) -> str:
         key=lambda item: _num(item),
     )
     discount_note = (
-        "<p class=\"muted\">Precios incluyen descuento del "
+        "Precios incluyen descuento del "
         + " / ".join(
             f"{format(_num(pct).normalize(), 'f')}%" for pct in granted_discounts
         )
-        + ".</p>"
+        + "."
         if granted_discounts
         else ""
     )
+    invest_note = [
+        f'<p><span class="tlabel">Moneda</span> {escape(_value(currency))} — '
+        "valores netos más impuesto.</p>",
+    ]
+    if valid_until and valid_until != "—":
+        invest_note.append(
+            f'<p><span class="tlabel">Vigencia</span> Esta propuesta es válida '
+            f'hasta el {escape(_cldate(valid_until))}.</p>'
+        )
+    if discount_note:
+        invest_note.append(f"<p>{escape(discount_note)}</p>")
+    if totals_priced:
+        body += (
+            "<h2>Inversión</h2>"
+            '<div class="invest"><div class="invest-panel">'
+            '<div class="inv-row"><span>Neto</span>'
+            f'<strong>{escape(_money(project.get("total_price_net"), currency))}</strong></div>'
+            '<div class="inv-row"><span>Impuesto</span>'
+            f'<strong>{escape(_money(project.get("total_price_tax"), currency))}</strong></div>'
+            '<div class="inv-row inv-total-row"><span>Total</span>'
+            f'<strong>{escape(_money(project.get("total_price_gross"), currency))}</strong></div>'
+            "</div>"
+            f'<div class="invest-note">{"".join(invest_note)}</div>'
+            "</div>"
+        )
+
+    # ── Terms ──────────────────────────────────────────────────────────
+    terms = []
+    if _value(project.get("payment_terms")) not in ("", "—"):
+        terms.append(
+            '<p><span class="tlabel">Forma de pago</span><br>'
+            f'{escape(_value(project.get("payment_terms")))}</p>'
+        )
+    if valid_until and valid_until != "—":
+        terms.append(
+            '<p><span class="tlabel">Validez de la oferta</span><br>'
+            f'Hasta el {escape(_cldate(valid_until))}.</p>'
+        )
+    if _value(project.get("delivery_address")) not in ("", "—"):
+        terms.append(
+            '<p><span class="tlabel">Entrega</span><br>'
+            f'{escape(_value(project.get("delivery_address")))}</p>'
+        )
+    notes = _value(project.get("notes_commercial"))
+    if notes and notes != "—":
+        terms.append(
+            '<p><span class="tlabel">Condiciones</span><br>'
+            f"{escape(notes)}</p>"
+        )
+    if terms:
+        body += "<h2>Condiciones comerciales</h2>" + (
+            f'<div class="terms">{"".join(terms)}</div>'
+        )
+
+    # ── Acceptance ─────────────────────────────────────────────────────
     body += (
-        "<h2>Resumen comercial</h2>"
-        + _table(["Neto", "Impuesto", "Total"], [[
-            _money(project.get("total_price_net"), currency),
-            _money(project.get("total_price_tax"), currency),
-            _money(project.get("total_price_gross"), currency),
-        ]], ["dimension", "dimension", "dimension"])
-        + discount_note
-        + figures
-        + '<div class="keep">'
-        + f"<h2>Condiciones</h2><p><strong>Pago:</strong> {escape(_value(project.get('payment_terms')))}</p>"
-        + "<p><strong>Oferta válida hasta:</strong> "
-        + escape(_cldate(project.get("quotation_valid_until"))) + "</p>"
-        + f"<p>{escape(_value(project.get('notes_commercial')))}</p>"
-        + '<div class="signoff"><div class="sign-row">'
+        '<div class="accept"><h2>Aceptación</h2>'
+        '<p class="accept-recap">'
+        f"{escape(quote_folio)} · Revisión {escape(_value(snapshot.get('revision')))}"
+        + (
+            f" · Total {escape(_money(project.get('total_price_gross'), currency))}"
+            if totals_priced
+            else ""
+        )
+        + (
+            f" · válida hasta {escape(_cldate(valid_until))}"
+            if valid_until and valid_until != "—"
+            else ""
+        )
+        + "</p>"
+        '<div class="sign-row">'
         '<div class="sign-cell"><span class="sign-label">Nombre</span></div>'
         '<div class="sign-cell"><span class="sign-label">RUT</span></div>'
         '<div class="sign-cell"><span class="sign-label">Firma</span></div>'
         '<div class="sign-cell sign-date"><span class="sign-label">Fecha</span></div>'
         "</div>"
-        '<p class="muted">Aceptación del cliente — la firma confirma la '
-        "aceptación de esta cotización.</p></div></div></main>"
+        '<p class="muted">La firma confirma la aceptación de esta propuesta '
+        "en la revisión indicada.</p></div></main>"
     )
     return body
 
@@ -1756,6 +2184,10 @@ _TYPOLOGY_ES = {
     "TURN": "Abatible",
     "TILT": "Oscilante",
     "TILT_TURN": "Oscilobatiente",
+    "TURN_LEFT": "Abatible izquierda",
+    "TURN_RIGHT": "Abatible derecha",
+    "TILT_TURN_LEFT": "Oscilobatiente izquierda",
+    "TILT_TURN_RIGHT": "Oscilobatiente derecha",
     "SLIDING_2L": "Corredera 2 hojas",
     "SLIDING_3L": "Corredera 3 hojas",
     "SLIDING_4L": "Corredera 4 hojas",
