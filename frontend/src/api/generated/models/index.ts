@@ -369,6 +369,7 @@ export * from "./productionOrderDetail";
 export * from "./productionOrderDetailDispatchNoteDte";
 export * from "./productionOrderDetailPayload";
 export * from "./productionOrderList";
+export * from "./productionOrderMaking";
 export * from "./productionOrderPayload";
 export * from "./productionOrderTrace";
 export * from "./productionOrderTraceLabels";

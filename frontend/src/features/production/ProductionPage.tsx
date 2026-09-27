@@ -52,7 +52,7 @@ import { formatDateTime } from "../../format";
 import { DeniedState, usePrompt } from "../../ui";
 import { fmtMm } from "../../format";
 import { formatDate } from "../money";
-import { t } from "../../i18n/es-CL";
+import { t, tDynamic } from "../../i18n/es-CL";
 import { useAssistantSurface } from "../assistant/assistantContext";
 import { cutRoleLabel } from "./labels";
 import { CutPlanView, type WorkOrderOptimization } from "./CutPlanView";
@@ -1146,6 +1146,46 @@ export function ProductionPage(): JSX.Element {
                   </button>
                 ) : null}
               </header>
+              {(() => {
+                // §10: the operator's first answer — what physical product
+                // this order is, from the sealed revision (never CRM text).
+                const making = detail.making;
+                if (!making) return null;
+                const typology = making.typology
+                  ? tDynamic(
+                      "typology",
+                      making.typology
+                        .toLowerCase()
+                        .replace(/_([a-z])/g, (_, c: string) => c.toUpperCase()),
+                    )
+                  : null;
+                const colors = [
+                  making.color_interior,
+                  making.color_exterior && making.color_exterior !== making.color_interior
+                    ? making.color_exterior
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" / ");
+                const dims =
+                  making.width_mm && making.height_mm
+                    ? `${fmtMm(making.width_mm)} × ${fmtMm(making.height_mm)} mm`
+                    : null;
+                return (
+                  <p className="production-making" aria-label={t("production.makingTitle")}>
+                    <strong>{making.code ?? `P-${making.position_index ?? "?"}`}</strong>
+                    {typology ? <span>{typology}</span> : null}
+                    {dims ? <span>{dims}</span> : null}
+                    {colors ? <span>{colors}</span> : null}
+                    {making.quantity && making.quantity > 1 ? (
+                      <span>×{making.quantity}</span>
+                    ) : null}
+                    {making.location_tag ? (
+                      <span className="production-making-location">{making.location_tag}</span>
+                    ) : null}
+                  </p>
+                );
+              })()}
               {(() => {
                 // Remake provenance, both directions: the remake names the
                 // order it replaces; the replaced order names its remakes.

@@ -84,9 +84,22 @@ class ProductionStepEventSerializer(serializers.Serializer):
     created_at = serializers.DateTimeField()
 
 
+class ProductionOrderMakingSerializer(serializers.Serializer):
+    position_index = serializers.IntegerField(required=False, allow_null=True)
+    code = serializers.CharField(required=False, allow_null=True)
+    typology = serializers.CharField(required=False, allow_null=True)
+    quantity = serializers.IntegerField(required=False, allow_null=True)
+    width_mm = serializers.CharField(required=False, allow_null=True)
+    height_mm = serializers.CharField(required=False, allow_null=True)
+    color_interior = serializers.CharField(required=False, allow_null=True)
+    color_exterior = serializers.CharField(required=False, allow_null=True)
+    location_tag = serializers.CharField(required=False, allow_null=True)
+
+
 class ProductionOrderDetailSerializer(ProductionOrderSerializer):
     steps = ProductionStepSerializer(many=True)
     events = ProductionStepEventSerializer(many=True)
+    making = ProductionOrderMakingSerializer(allow_null=True, required=False)
     dispatch_note_code = serializers.CharField(allow_null=True, required=False)
     dispatch_note_voided = serializers.BooleanField()
     dispatch_note_dte = serializers.DictField(allow_null=True, required=False)

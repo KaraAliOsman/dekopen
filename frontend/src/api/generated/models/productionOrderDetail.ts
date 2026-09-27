@@ -8,6 +8,7 @@
 import type { ProductionNextStep } from "./productionNextStep";
 import type { ProductionOrderDetailDispatchNoteDte } from "./productionOrderDetailDispatchNoteDte";
 import type { ProductionOrderDetailPayload } from "./productionOrderDetailPayload";
+import type { ProductionOrderMaking } from "./productionOrderMaking";
 import type { ProductionStep } from "./productionStep";
 import type { ProductionStepEvent } from "./productionStepEvent";
 
@@ -32,6 +33,7 @@ export interface ProductionOrderDetail {
   payload?: ProductionOrderDetailPayload;
   steps: ProductionStep[];
   events: ProductionStepEvent[];
+  making?: ProductionOrderMaking | null;
   /** @nullable */
   dispatch_note_code?: string | null;
   dispatch_note_voided: boolean;

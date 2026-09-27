@@ -1505,6 +1505,7 @@ export const messages = {
   "production.optimizeStatsPurchases": "Compras",
   "production.optimizeStatsRemnants": "Retazos (usa/produce)",
   "production.optimizeStatsRuntime": "Tiempo",
+  "production.makingTitle": "Qué se fabrica",
   "production.eventRemade": "Orden rehecha",
   "production.eventCncExported": "Plan de corte (CSV) exportado",
   "production.eventOpsExported": "Operaciones de fabricación exportadas",

@@ -1047,6 +1047,40 @@ def get_work_order(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
         )
     else:
         output["dispatch_note_dte"] = None
+    # §10 "what are we making": the sealed position's physical identity —
+    # typology/dimensions/finish/location — projected out of the frozen
+    # snapshot. Only workshop fields cross; commercial data never leaves
+    # the documentary context.
+    output["making"] = None
+    if order["project_version_id"]:
+        position_id = _decoded(order["payload_json"]).get("position_id")
+        with documentary_backend():
+            snapshot = one(
+                """
+                SELECT snapshot_json::text FROM public.project_versions
+                WHERE id = %s AND org_id = %s
+                """,
+                [str(order["project_version_id"]), str(org_id)],
+                "work_order_not_found",
+            )
+        sealed_positions = _decoded(snapshot.get("snapshot_json")).get("positions") or []
+        sealed = next(
+            (
+                pos
+                for pos in sealed_positions
+                if isinstance(pos, dict) and str(pos.get("id")) == str(position_id)
+            ),
+            None,
+        )
+        if sealed:
+            output["making"] = {
+                key: sealed.get(key)
+                for key in (
+                    "position_index", "code", "typology", "quantity",
+                    "width_mm", "height_mm", "color_interior",
+                    "color_exterior", "location_tag",
+                )
+            }
     output["steps"] = [_public_step(step) for step in steps]
     output["events"] = [
         {

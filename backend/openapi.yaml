@@ -21286,6 +21286,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ProductionStepEvent'
+        making:
+          allOf:
+          - $ref: '#/components/schemas/ProductionOrderMaking'
+          nullable: true
         dispatch_note_code:
           type: string
           nullable: true
@@ -21321,6 +21325,36 @@ components:
             $ref: '#/components/schemas/ProductionOrder'
       required:
       - orders
+    ProductionOrderMaking:
+      type: object
+      properties:
+        position_index:
+          type: integer
+          nullable: true
+        code:
+          type: string
+          nullable: true
+        typology:
+          type: string
+          nullable: true
+        quantity:
+          type: integer
+          nullable: true
+        width_mm:
+          type: string
+          nullable: true
+        height_mm:
+          type: string
+          nullable: true
+        color_interior:
+          type: string
+          nullable: true
+        color_exterior:
+          type: string
+          nullable: true
+        location_tag:
+          type: string
+          nullable: true
     ProductionOrderTrace:
       type: object
       properties:

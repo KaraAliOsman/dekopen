@@ -1025,3 +1025,20 @@
 .production-compare-table .production-compare-best {
   background: color-mix(in srgb, var(--theme-success, #1a7f4b) 10%, transparent);
 }
+
+.production-making {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: baseline;
+  font-size: 0.95rem;
+  margin: 0.25rem 0 0.5rem;
+  color: var(--theme-text-secondary);
+}
+.production-making strong {
+  color: var(--theme-text);
+  font-size: 1.05rem;
+}
+.production-making-location {
+  color: var(--theme-accent);
+}
