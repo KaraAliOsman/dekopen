@@ -708,12 +708,15 @@ function PositionWorkspace({
         >
           {t("projects.save")}
         </button>
-        {loaded && (busy || assemblyUnsaveable || result === null) && (
-          <span className="handle-pending">
-            {busy ? t("projects.savingBusy") : (saveBlockReason ?? t("projects.saveBlocked"))}
-          </span>
-        )}
       </header>
+      {/* The blocked hint lives BELOW the header row — inside the flex it
+       * pushed Deshacer/Guardar left whenever it appeared, and a click aimed
+       * at Guardar landed on Deshacer (silent undo). */}
+      {loaded && (busy || assemblyUnsaveable || result === null) && (
+        <p className="handle-pending" role="status">
+          {busy ? t("projects.savingBusy") : (saveBlockReason ?? t("projects.saveBlocked"))}
+        </p>
+      )}
       {message && <p role="status">{message}</p>}
       {pendingDraft !== null && (
         <div className="draft-banner" role="status">

@@ -2341,7 +2341,9 @@ export const messages = {
   "assembly.calculating": "Calculando el conjunto…",
   "assembly.noPlan": "Aún no hay geometría de planta.",
   "assembly.calculateError": "No pudimos calcular el conjunto. Revisa los datos.",
-  "assembly.statusValid": "Geometría válida — conjunto completo",
+  // VALID means the geometry evaluated — inputs may still be "Sin definir".
+  // Claiming "conjunto completo" contradicted the provenance chips.
+  "assembly.statusValid": "Geometría válida",
   "assembly.statusIncomplete": "Geometría válida — fabricación incompleta",
   "assembly.statusInvalid": "Geometría inválida",
   "assembly.issue.couplingsCountMismatch":
@@ -2368,6 +2370,12 @@ export const messages = {
     "La unión {target} toca un módulo con contorno — las juntas sobre bordes curvos o inclinados aún no se fabrican",
   "assembly.issue.memberBending":
     "El miembro {edge} de {target} necesita curvado (flecha {sagitta_mm} mm) — sin regla de curvado declarada",
+  "assembly.issue.hardwareKitIncompatible":
+    "La hoja de {leaf_width_mm}×{leaf_height_mm} mm en {target} queda fuera del herraje — esta apertura admite {kit_min_width_mm}–{kit_max_width_mm} mm de ancho y {kit_min_height_mm}–{kit_max_height_mm} mm de alto.",
+  "assembly.issue.hardwareKitOverweight":
+    "La hoja en {target} pesa {leaf_weight_kg} kg y supera el herraje — esta apertura admite hasta {kit_max_weight_kg} kg.",
+  "assembly.issue.hardwareUndecidable":
+    "No se puede verificar el herraje en {target} — el peso de la hoja es desconocido.",
   "assembly.issue.couplerWidthMismatch":
     "El acoplador horizontal en {target} une módulos de {below_mm} y {above_mm} mm de ancho.",
   "assembly.issue.couplerModuleUnknown":
@@ -2473,7 +2481,15 @@ export const messages = {
   "assembly.reason.policyPlacement": "el relleno necesita la política de montaje y su hoja padre",
   "assembly.reason.beadOffsets":
     "la política de montaje necesita los cuatro desplazamientos del junquillo",
+  "assembly.reason.noHardwareKit":
+    "ningún herraje declarado sirve para esta hoja — revisa sus medidas",
+  "assembly.reason.hardwareUndecidable":
+    "no se puede verificar el herraje: el peso de la hoja es desconocido",
+  "assembly.reason.ambiguousHardware":
+    "hay más de un herraje compatible — declara el SKU del herraje",
   "assembly.reason.generic": "revisa los parámetros del elemento en el inspector",
+  "assembly.fieldRejected": "Valor fuera de rango — no se aplicó.",
+  "assembly.fieldAngleRange": "El ángulo debe estar entre −90° y 90° — no se aplicó.",
   "assembly.addUnitLeft": "Agregar unidad a la izquierda",
   "assembly.addUnitRight": "Agregar unidad a la derecha",
   "assembly.removeUnit": "Eliminar unidad",

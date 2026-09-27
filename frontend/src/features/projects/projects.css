@@ -471,6 +471,16 @@
   background: var(--theme-warning-soft);
   white-space: nowrap;
 }
+
+/* Block-band variant: the save-blocked reason sits under the header as a
+ * status line — it must never share a flex row with the action buttons. */
+p.handle-pending {
+  border-radius: var(--radius-sm);
+  display: block;
+  margin: 0.4rem 0 0;
+  padding: 0.3rem 0.6rem;
+  white-space: normal;
+}
 .handle-suggested {
   align-self: center;
   padding: 0.125rem 0.5rem;

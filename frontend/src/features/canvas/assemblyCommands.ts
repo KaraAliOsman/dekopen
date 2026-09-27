@@ -715,7 +715,9 @@ export const ASSEMBLY_COMMANDS: CommandSpec[] = [
   {
     id: "coupling.insert-module",
     title: "cmd.insertModule",
-    keywords: ["insertar", "unidad", "entre", "dividir unión", "agregar"],
+    // No "dividir" keyword: this inserts a whole new unit — under a divide
+    // search it impersonates the in-place bay split (designer report P1-7).
+    keywords: ["insertar", "unidad", "entre", "agregar"],
     applicable: (ctx) => {
       const coupling = selectedCoupling(ctx);
       return coupling !== null && (coupling.kind ?? "INLINE") === "INLINE";

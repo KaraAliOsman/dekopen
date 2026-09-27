@@ -125,6 +125,9 @@ const ISSUE_KEYS: Record<string, TranslationKey> = {
   frameless_opening_unsupported: "assembly.issue.framelessOpening",
   frameless_panel_unsupported: "assembly.issue.framelessPanel",
   frameless_article_unknown: "assembly.issue.framelessArticleUnknown",
+  hardware_kit_incompatible: "assembly.issue.hardwareKitIncompatible",
+  hardware_kit_overweight: "assembly.issue.hardwareKitOverweight",
+  hardware_undecidable: "assembly.issue.hardwareUndecidable",
 };
 
 /** Engine failure reasons arrive as `str(error)` — member ids and field
@@ -155,6 +158,9 @@ export const REASON_KEYS: [RegExp, TranslationKey][] = [
   [/polishing authority/i, "assembly.reason.polishingAuthority"],
   [/requires policy placement/i, "assembly.reason.policyPlacement"],
   [/requires all four bead offsets/i, "assembly.reason.beadOffsets"],
+  [/no compatible hardware kit/i, "assembly.reason.noHardwareKit"],
+  [/hardware compatibility undecidable|leaf mass unknown/i, "assembly.reason.hardwareUndecidable"],
+  [/ambiguous hardware kits/i, "assembly.reason.ambiguousHardware"],
 ];
 
 export function issueText(
@@ -168,7 +174,12 @@ export function issueText(
   let text = key ? t(key) : issue.code.toLowerCase().replace(/_/g, " ");
   for (const [name, value] of Object.entries(issue.params)) {
     if (name === "reason") continue;
-    text = text.replace(`{${name}}`, value);
+    // Engine params arrive as str(Decimal) — "345.00" reads as technical
+    // noise in a sentence; trim to the human form.
+    const human = /^-?\d+\.\d+0*$/.test(value)
+      ? value.replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "")
+      : value;
+    text = text.replace(`{${name}}`, human);
   }
   const [kind, id] = issue.target.split(":", 2);
   const ordinal =
@@ -223,6 +234,9 @@ type DraftFieldProps = {
   disabled: boolean;
   onCommit(value: string): void;
   normalize(candidate: string): string | null;
+  /** Constraint shown when Enter rejects the value (e.g. the ±90° band on
+   * coupling angles) — a silent revert reads as the field ignoring input. */
+  rejectHint?: string;
 };
 
 function DraftField({
@@ -232,30 +246,57 @@ function DraftField({
   disabled,
   onCommit,
   normalize,
+  rejectHint,
 }: DraftFieldProps): JSX.Element {
   const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value]);
+  const [invalid, setInvalid] = useState(false);
+  useEffect(() => {
+    setDraft(value);
+    setInvalid(false);
+  }, [value]);
   return (
-    <label className="assembly-field">
+    <label className={`assembly-field${invalid ? " is-invalid" : ""}`}>
       {label ? <span>{label}</span> : null}
       <span className="assembly-input-wrap">
         <input
           value={draft}
           disabled={disabled}
           inputMode="decimal"
-          onChange={(event) => setDraft(event.target.value)}
+          aria-invalid={invalid || undefined}
+          onFocus={(event) => event.currentTarget.select()}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            setInvalid(false);
+          }}
           onBlur={() => {
             const normalized = normalize(draft);
             if (normalized === null) setDraft(value);
             else if (normalized !== value) onCommit(normalized);
+            setInvalid(false);
           }}
           onKeyDown={(event) => {
-            if (event.key === "Enter") event.currentTarget.blur();
-            if (event.key === "Escape") setDraft(value);
+            // Enter on an unparseable value keeps the field open and flags
+            // it — reverting silently reads as the input being ignored.
+            if (event.key === "Enter") {
+              if (normalize(draft) === null) {
+                setInvalid(true);
+              } else {
+                event.currentTarget.blur();
+              }
+            }
+            if (event.key === "Escape") {
+              setInvalid(false);
+              setDraft(value);
+            }
           }}
         />
         <span className="assembly-unit">{unit}</span>
       </span>
+      {invalid ? (
+        <span className="assembly-field-error" role="alert">
+          {rejectHint ?? t("assembly.fieldRejected")}
+        </span>
+      ) : null}
     </label>
   );
 }
@@ -1674,6 +1715,7 @@ function CouplingInspector({
         unit="°"
         disabled={busy}
         normalize={normalizeAngle}
+        rejectHint={t("assembly.fieldAngleRange")}
         onCommit={(value) => commit(setCouplingAngle(product, coupling.id, value))}
       />
       <label className="assembly-field">

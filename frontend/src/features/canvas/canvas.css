@@ -452,6 +452,26 @@
   position: relative;
 }
 
+/* Short viewports (1366×768 laptops): the fixed min-heights reserve more
+ * than the screen can give — the canvas ends up clipped below the fold and
+ * the product shrinks to a strip. Relax the floor so the grid actually
+ * fills the available column. */
+@media (max-height: 52.5rem) {
+  .assembly-editor {
+    height: calc(100dvh - 9.5rem);
+    min-height: 20rem;
+  }
+
+  .canvas-viewport {
+    min-height: 18rem;
+  }
+
+  .plan-inset {
+    height: 7.5rem;
+    width: 10.5rem;
+  }
+}
+
 .assembly-editor--tree-closed {
   grid-template-columns: 3rem minmax(0, 1fr) minmax(250px, 300px);
   grid-template-areas:
@@ -573,6 +593,18 @@
   right: 0.75rem;
   width: 13rem;
   z-index: 2;
+  /* The card floats over the canvas; its empty area must not become a dead
+   * zone that swallows clicks meant for the product behind it. Interactive
+   * children (header, module/coupling shapes, angle handles) re-enable. */
+  pointer-events: none;
+}
+
+.plan-inset__header,
+.plan-inset .plan-module,
+.plan-inset .plan-coupling,
+.plan-inset .plan-angle,
+.plan-inset .plan-issue-flag {
+  pointer-events: auto;
 }
 
 .plan-inset__header {
@@ -744,6 +776,18 @@
 }
 
 /* Status bar — compact persistent state */
+.assembly-field-error {
+  color: var(--theme-danger);
+  display: block;
+  font-size: 0.72rem;
+  margin-top: 0.2rem;
+}
+
+.assembly-field.is-invalid input,
+.canvas-dim-input.is-invalid {
+  border-color: var(--theme-danger) !important;
+}
+
 .assembly-statusbar {
   align-items: center;
   background: var(--theme-surface-panel);
@@ -1223,12 +1267,33 @@
 }
 
 .canvas-dim {
-  cursor: pointer;
   fill: var(--theme-text-secondary);
   font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
   font-variant-numeric: tabular-nums;
 }
 
+.canvas-dim-wrap {
+  cursor: pointer;
+}
+
+/* Padded hit pill — invisible at rest, surfaces on hover/focus so editable
+ * dims read as controls, not decoration. */
+.canvas-dim-hit {
+  fill: var(--theme-surface-panel);
+  opacity: 0;
+  stroke: var(--theme-border-subtle);
+  stroke-width: 1.5;
+  transition: opacity 0.12s ease;
+  vector-effect: non-scaling-stroke;
+}
+
+.canvas-dim-wrap:hover .canvas-dim-hit,
+.canvas-dim-wrap:focus-visible .canvas-dim-hit,
+.canvas-dim-wrap.is-active .canvas-dim-hit {
+  opacity: 0.92;
+}
+
+.canvas-dim-wrap:hover .canvas-dim,
 .canvas-dim:hover {
   fill: var(--theme-accent);
 }
@@ -1573,7 +1638,10 @@
 /* --- Direct manipulation: divider grips, seam grips, divide preview --- */
 
 .divider-grip {
-  fill: transparent;
+  /* Faint resting fill — the divider reads as a drag zone, not a dead strip;
+   * full accent arrives on hover/active. */
+  fill: var(--theme-text-muted);
+  fill-opacity: 0.07;
   outline: none;
   pointer-events: all;
   touch-action: none;
@@ -1598,7 +1666,8 @@
 
 .seam-grip {
   cursor: ew-resize;
-  fill: transparent;
+  fill: var(--theme-text-muted);
+  fill-opacity: 0.06;
   pointer-events: all;
   touch-action: none;
 }

@@ -919,6 +919,8 @@ def _append_leaf(
             candidates,
             opening=node.opening_type,
             explicit_sku=node.hardware_set_sku,
+            leaf_width_mm=sash.finished_width_mm,
+            leaf_height_mm=sash.finished_height_mm,
         )
     except NoCompatibleHardwareKit:
         if not accumulator.diagnostic:

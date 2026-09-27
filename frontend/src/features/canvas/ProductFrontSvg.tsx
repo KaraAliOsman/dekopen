@@ -64,19 +64,23 @@ function SvgDim({
 }): JSX.Element {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
+  const [invalid, setInvalid] = useState(false);
   useEffect(() => {
-    if (!editing) setDraft(value);
+    if (!editing) {
+      setDraft(value);
+      setInvalid(false);
+    }
   }, [value, editing]);
   const fontSize = 34;
   if (!editing || disabled) {
+    // Click target: an invisible padded pill around the glyphs — the text
+    // alone is a few px at fit zoom, so most clicks used to miss and hit the
+    // bay behind instead. Hover/focus shows the pill as an edit affordance.
+    const hitWidth = Math.max(fmtMm(value).length * fontSize * 0.62 + 36, 96);
+    const hitHeight = fontSize + 22;
     return (
-      <text
-        className={`canvas-dim${active ? " is-active" : ""}`}
-        x={x}
-        y={y}
-        fontSize={fontSize}
-        textAnchor="middle"
-        dominantBaseline="central"
+      <g
+        className={`canvas-dim-wrap${active ? " is-active" : ""}`}
         role="button"
         aria-label={label}
         tabIndex={disabled ? -1 : 0}
@@ -88,19 +92,41 @@ function SvgDim({
           }
         }}
       >
-        {fmtMm(value)}
-      </text>
+        <rect
+          className="canvas-dim-hit"
+          x={x - hitWidth / 2}
+          y={y - hitHeight / 2}
+          width={hitWidth}
+          height={hitHeight}
+          rx={10}
+        />
+        <text
+          className="canvas-dim"
+          x={x}
+          y={y}
+          fontSize={fontSize}
+          textAnchor="middle"
+          dominantBaseline="central"
+          pointerEvents="none"
+        >
+          {fmtMm(value)}
+        </text>
+      </g>
     );
   }
   return (
     <foreignObject x={x - 70} y={y - fontSize} width={140} height={fontSize + 26}>
       <input
-        className="canvas-dim-input"
+        className={`canvas-dim-input${invalid ? " is-invalid" : ""}`}
         aria-label={label}
+        aria-invalid={invalid || undefined}
         autoFocus
         inputMode="decimal"
         value={draft}
-        onChange={(event) => setDraft(event.target.value)}
+        onChange={(event) => {
+          setDraft(event.target.value);
+          setInvalid(false);
+        }}
         onFocus={(event) => event.target.select()}
         onBlur={() => {
           const normalized = normalizeDimension(draft);
@@ -108,7 +134,15 @@ function SvgDim({
           setEditing(false);
         }}
         onKeyDown={(event) => {
-          if (event.key === "Enter") event.currentTarget.blur();
+          // Enter on an unparseable value keeps the editor open and flags
+          // it — reverting silently reads as the input being ignored.
+          if (event.key === "Enter") {
+            if (normalizeDimension(draft) === null) {
+              setInvalid(true);
+            } else {
+              event.currentTarget.blur();
+            }
+          }
           if (event.key === "Escape") {
             setDraft(value);
             event.currentTarget.blur();
@@ -1669,7 +1703,10 @@ export function ProductFrontContent({
     if (!rects.some((item) => item.module.id === moduleId)) return;
     if (hovered) {
       onCommitDivide(moduleId, hovered.bayId, hovered.mm.toFixed(2));
-    } else {
+    } else if (clientX === undefined && clientY === undefined) {
+      // Only a keyboard commit (no pointer position) may fall back to
+      // centering the primary bay — a pointer click that landed on frame,
+      // coupler or empty canvas must not guess a bay.
       onCommitDivide(moduleId, null);
     }
   };
