@@ -154,7 +154,8 @@
   animation: orb-orbit 1.35s linear infinite;
 }
 
-/* ————— waiting: raised eyes toward the human + warning arc pulse ————— */
+/* ————— waiting: raised eyes toward the human + accent arc pulse — the
+ * ball is in the user's court; informational, not consequential ————— */
 .orb.is-waiting .orb__tilt {
   transform: translateY(-1px) rotate(-2.5deg);
 }
@@ -164,11 +165,29 @@
 }
 .orb.is-waiting .orb__ring {
   opacity: 1;
+  stroke: var(--theme-accent);
+  stroke-dasharray: 30 105;
+  stroke-dashoffset: 15;
+  transform: rotate(-90deg);
+  animation: orb-ringpulse 2.2s ease-in-out infinite;
+}
+
+/* ————— approval: same raised look, warning arc, slower insistent pulse —
+ * a consequential change is staged and nothing applies without the human ————— */
+.orb.is-approval .orb__tilt {
+  transform: translateY(-1px) rotate(-2.5deg);
+}
+.orb.is-approval .orb__eyes {
+  transform: translateY(-2.4px);
+  animation: orb-waitlook 5.4s ease-in-out infinite;
+}
+.orb.is-approval .orb__ring {
+  opacity: 1;
   stroke: var(--theme-warning);
   stroke-dasharray: 30 105;
   stroke-dashoffset: 15;
   transform: rotate(-90deg);
-  animation: orb-ringpulse 1.7s ease-in-out infinite;
+  animation: orb-ringpulse 1.4s ease-in-out infinite;
 }
 
 /* ————— success: joy eyes + static success arc + one-shot settle ————— */

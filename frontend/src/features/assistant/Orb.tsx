@@ -14,6 +14,7 @@ export type OrbState =
   | "thinking"
   | "working"
   | "waiting"
+  | "approval"
   | "success"
   | "error"
   | "canceled";
@@ -29,8 +30,9 @@ export function orbStateFor(jobState?: string): OrbState {
     case "RUNNING":
       return "working";
     case "WAITING_FOR_USER":
-    case "WAITING_FOR_APPROVAL":
       return "waiting";
+    case "WAITING_FOR_APPROVAL":
+      return "approval";
     case "SUCCEEDED":
       return "success";
     case "FAILED":
