@@ -1701,6 +1701,36 @@ def _cut_spec_index(
     return spec
 
 
+def _member_op_marks(
+    snapshot: dict[str, object],
+) -> dict[str, str]:
+    """member_id → op signature mark. Two cut-identical members that differ
+    in machining are NOT interchangeable downstream — the saw label must say
+    which stick carries the prep (operator review #6). Members with member
+    ops mark ``(mec.)``; the plain join stays for truly interchangeable
+    groups."""
+    manufacturing = snapshot.get("manufacturing")
+    if not isinstance(manufacturing, list) or not manufacturing:
+        return {}
+    try:
+        from dekopen_engine.manufacturing import ManufacturingFactsV1
+        from dekopen_engine.operations import operations_from_plan
+
+        fact_units = [
+            ManufacturingFactsV1.model_validate_json(json.dumps(fact))
+            for fact in manufacturing
+            if isinstance(fact, dict)
+        ]
+        ops = operations_from_plan(bars=[], fact_units=fact_units)
+    except Exception:
+        return {}
+    marks: dict[str, str] = {}
+    for op in ops:
+        if op.host_kind == "MEMBER":
+            marks[op.host] = "mec"
+    return marks
+
+
 def _cut_member_map(
     snapshot: dict[str, object], labels: dict[str, dict[object, str]]
 ) -> dict[tuple[str, ...], str]:
@@ -1710,24 +1740,30 @@ def _cut_member_map(
     identity, so cut artifacts used to print hash prefixes. The join runs on
     the deterministic spec tuple. Identical members share one spec — the
     printed code lists every member the piece serves, which stays honest
-    because those pieces are physically interchangeable.
+    because those pieces are physically interchangeable. When members in
+    one spec diverge in machining, each machined instance prints ``(mec.)``
+    so the operator knows which stick to pull for the prep.
     """
     index = _cut_spec_index(snapshot)
     if not index:
         return {}
-    return {
-        key: _join_codes(
+    op_marks = _member_op_marks(snapshot)
+    out: dict[tuple[str, ...], str] = {}
+    for key, ids in index.items():
+        marks = {str(entity_id or ""): op_marks.get(str(entity_id or "")) for entity_id in ids}
+        divergent = len(set(marks.values())) > 1
+        out[key] = _join_codes(
             [
                 (
                     labels["member" if key[0] == "PROFILE" else "reinforcement"].get(
                         entity_id, str(entity_id or "")[:10]
                     )
+                    + (" (mec.)" if divergent and marks[str(entity_id or "")] else "")
                 )
                 for entity_id in ids
             ]
         )
-        for key, ids in index.items()
-    }
+    return out
 
 
 def _cut_key(cut: dict[str, object]) -> tuple[str, ...]:

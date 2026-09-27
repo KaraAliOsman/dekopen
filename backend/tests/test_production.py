@@ -185,6 +185,34 @@ def test_routing_follows_the_declared_profile_stations() -> None:
     ]
 
 
+def test_routing_keeps_the_station_an_emitting_op_is_mapped_to() -> None:
+    """Manager #7: the op map and the materials heuristic are two
+    authorities for 'does this station have work'. A bare handle-bearing
+    door with HANDLE_PREP routed to HARDWARE and no hardware_items must
+    still land the HARDWARE step — else the op is unclaimed at the floor."""
+    profile = _profile("ALU_DOOR", [
+        {"code": "CUT", "when": "auto"},
+        {"code": "MACHINING", "when": "auto"},
+        {"code": "HARDWARE", "when": "auto"},
+        {"code": "GLAZE", "when": "auto"},
+        {"code": "QC", "when": "required"},
+        {"code": "PACK", "when": "required"},
+    ], operation_station_map={"HANDLE_PREP": "HARDWARE"})
+    engine = {
+        "profile_cuts": [{"sku": "x", "role": "SASH"}],
+        "glasses": [{"a": 1}],
+        "panels": [],
+        "reinforcements": [],
+        "hardware_items": [],
+        "fittings": [],
+    }
+    routing = service._routing(engine, profile=profile, has_handles=True)
+    assert "HARDWARE" in routing
+    # And no ghost station when nothing emits to it either.
+    routing = service._routing(engine, profile=profile, has_handles=False)
+    assert "HARDWARE" not in routing
+
+
 def test_frameless_profile_never_acquires_joining_stations() -> None:
     """The pane is the product: FRAMELESS_GLASS has no WELD/CRIMP in its
     template regardless of the associated system's material family."""

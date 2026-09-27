@@ -414,6 +414,7 @@ def _station_has_work(
     end_milling_overlap_mm: object = None,
     has_handles: bool = False,
     handle_station: str = "MACHINING",
+    mapped_emitting: set[str] | None = None,
 ) -> bool:
     """'auto' stations land only when the sealed result carries work."""
     cuts = engine_result.get("profile_cuts") or []
@@ -421,6 +422,13 @@ def _station_has_work(
     # A handle op exists wherever the profile sends HANDLE_PREP — frameless
     # and mixed profiles route it to HARDWARE, never assume the mill.
     if has_handles and code == handle_station:
+        return True
+    # Reconcile the two authority sources (manager review #7): an op kind
+    # the operation_station_map routes to this station and that the sealed
+    # facts will emit claims the station — regardless of what the
+    # materials-based heuristic says. A mapped station must never be
+    # pruned under an op it owns.
+    if code in (mapped_emitting or set()):
         return True
     if code == "CUT":
         return bool(cuts or engine_result.get("reinforcements"))
@@ -443,6 +451,27 @@ def _station_has_work(
     return True
 
 
+def _emitting_kinds(
+    *,
+    end_milling_overlap_mm: object = None,
+    has_handles: bool = False,
+) -> set[str]:
+    """The member op kinds the sealed facts will emit — kept in lockstep
+    with ``operations_from_plan``'s authority checks so routing and ops
+    can't diverge on what work exists."""
+    kinds = {"SAW_CUT"}
+    if has_handles:
+        kinds.add("HANDLE_PREP")
+    try:
+        if end_milling_overlap_mm is not None and Decimal(
+            str(end_milling_overlap_mm)
+        ) > 0:
+            kinds.add("END_MACHINING")
+    except ArithmeticError:
+        pass
+    return kinds
+
+
 def _routing(
     engine_result: dict[str, object],
     *,
@@ -463,10 +492,19 @@ def _routing(
             {"code": "QC", "when": "required"},
             {"code": "PACK", "when": "required"},
         ]
-    handle_station = str(
-        ((profile or {}).get("operation_station_map") or {}).get("HANDLE_PREP")
-        or "MACHINING"
+    operation_map = (profile or {}).get("operation_station_map") or {}
+    handle_station = str(operation_map.get("HANDLE_PREP") or "MACHINING")
+    emitting = _emitting_kinds(
+        end_milling_overlap_mm=end_milling_overlap_mm,
+        has_handles=has_handles,
     )
+    # Stations that own a kind the sealed facts will emit — claimed here so
+    # _station_has_work can't prune the station its op is mapped to.
+    mapped_emitting = {
+        str(station)
+        for kind, station in operation_map.items()
+        if str(kind) in emitting
+    }
     routing: list[str] = []
     for station in stations:
         if not isinstance(station, dict):
@@ -480,6 +518,7 @@ def _routing(
             end_milling_overlap_mm=end_milling_overlap_mm,
             has_handles=has_handles,
             handle_station=handle_station,
+            mapped_emitting=mapped_emitting,
         ):
             routing.append(code)
     return routing
