@@ -88,6 +88,19 @@ export function CommandPalette({
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         setOpen((previous) => !previous);
+      } else if (event.key === "/" && !open) {
+        // Chrome owns Ctrl+K while the omnibox has focus — "/" stays reachable.
+        const target = event.target as HTMLElement | null;
+        const inField =
+          target instanceof HTMLElement &&
+          (target.tagName === "INPUT" ||
+            target.tagName === "TEXTAREA" ||
+            target.tagName === "SELECT" ||
+            target.isContentEditable);
+        if (!inField) {
+          event.preventDefault();
+          setOpen(true);
+        }
       } else if (event.key === "Escape" && open) {
         event.preventDefault();
         if (pending) {
@@ -298,6 +311,7 @@ export function CommandPalette({
             onKeyDown={onInputKeyDown}
           />
           <kbd>{MOD_K_HINT}</kbd>
+          <kbd>/</kbd>
         </div>
         {pending && currentParam ? (
           <ul className="command-palette-list" role="listbox" id="command-palette-results">

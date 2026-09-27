@@ -26,6 +26,7 @@ import { AiMetricsCard } from "./AiMetricsCard";
 import { ArtifactDetail, type Artifact } from "./ArtifactDetail";
 import { BatchOpsStep } from "./BatchOpsStep";
 import { Orb, orbStateFor } from "./Orb";
+import { STATE_LABELS } from "./states";
 import { SURFACE_LABELS } from "./surfaces";
 import { jobErrorKey } from "../jobs/jobError";
 import { t } from "../../i18n/es-CL";
@@ -38,18 +39,6 @@ import { t } from "../../i18n/es-CL";
 
 const LIVE_STATES = new Set(["QUEUED", "PLANNING", "RUNNING"]);
 const WAITING_STATES = new Set(["WAITING_FOR_USER", "WAITING_FOR_APPROVAL"]);
-
-const STATE_LABELS: Record<string, string> = {
-  QUEUED: "aiws.state.queued",
-  PLANNING: "aiws.state.planning",
-  RUNNING: "aiws.state.running",
-  WAITING_FOR_USER: "aiws.state.waitingUser",
-  WAITING_FOR_APPROVAL: "aiws.state.waitingApproval",
-  FAILED_RETRYABLE: "aiws.state.failedRetryable",
-  FAILED: "aiws.state.failed",
-  SUCCEEDED: "aiws.state.succeeded",
-  CANCELED: "aiws.state.canceled",
-};
 
 const NEW_JOB_SURFACES = [
   "morning_brief",
@@ -125,6 +114,9 @@ interface TranscriptTurn {
   queries?: { surface?: string; tool?: string; status?: string }[];
   claims?: { text?: string; evidence?: string[] }[];
   references?: string[];
+  /** UUID → human label the backend resolved from context/observations —
+   * the transcript stores ids, the UI renders the entity behind each one. */
+  evidence_labels?: Record<string, string>;
   questions?: string[];
   artifacts?: Artifact[];
   steps?: TranscriptStep[];
@@ -192,6 +184,13 @@ function JobRail({
   loadingMore: boolean;
   onLoadMore: () => void;
 }): JSX.Element {
+  // relativeTime computes once per render — without a tick a mounted rail
+  // shows "hace 1 min" for an hour. Thirty seconds is enough granularity.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setTick((value) => value + 1), 30_000);
+    return () => clearInterval(timer);
+  }, []);
   return (
     <aside className="aiws-rail" aria-label={t("aiws.jobs")}>
       <div className="aiws-rail__head">
@@ -505,7 +504,10 @@ function AgentTurnView({
                         {claim.evidence?.length ? (
                           <small>
                             {" "}
-                            · {t("aiws.evidence")}: {claim.evidence.join(", ")}
+                            · {t("aiws.evidence")}:{" "}
+                            {claim.evidence
+                              .map((ref) => turn.evidence_labels?.[ref] ?? `${ref.slice(0, 8)}…`)
+                              .join(", ")}
                           </small>
                         ) : null}
                       </li>
@@ -635,6 +637,16 @@ export function AssistantWorkspacePage(): JSX.Element {
   });
   const transcript = (job?.transcript ?? []) as TranscriptTurn[];
   const live = job !== null && LIVE_STATES.has(job.state);
+
+  // UUID → entity name across every turn — claims and artifact references
+  // cite ids; the workspace renders the entity behind each one.
+  const evidenceLabels = useMemo(() => {
+    const labels: Record<string, string> = {};
+    for (const turn of transcript) {
+      Object.assign(labels, turn.evidence_labels ?? {});
+    }
+    return labels;
+  }, [transcript]);
 
   // Elapsed clock while a run is live — honest signal, not a percentage the
   // worker can't guarantee. Ticks only while a live job is on screen.
@@ -1049,7 +1061,10 @@ export function AssistantWorkspacePage(): JSX.Element {
             </header>
             {artifact.references?.length ? (
               <p className="aiws-evidence">
-                {t("aiws.evidence")}: {artifact.references.join(", ")}
+                {t("aiws.evidence")}:{" "}
+                {artifact.references
+                  .map((ref) => evidenceLabels[ref] ?? `${ref.slice(0, 8)}…`)
+                  .join(", ")}
               </p>
             ) : null}
             <ArtifactDetail artifact={artifact} />

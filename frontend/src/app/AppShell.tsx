@@ -1,4 +1,4 @@
-import { type PropsWithChildren, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type PropsWithChildren, useCallback, useEffect, useMemo, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { t, type TranslationKey } from "../i18n/es-CL";
@@ -9,8 +9,10 @@ import { useProject } from "../features/projects/useProject";
 import { telemetry } from "../telemetry/telemetry";
 import { useTheme } from "../theme/ThemeProvider";
 import { CommandPalette } from "../features/commands/CommandPalette";
+import type { AiJob } from "../api/generated/models/aiJob";
 import { AiPresence } from "../features/assistant/AiPresence";
 import { AskDekopen } from "../features/assistant/AskDekopen";
+import { STATE_LABELS } from "../features/assistant/states";
 import { AssistantSurfaceProvider } from "../features/assistant/assistantContext";
 import { AttentionBell } from "./AttentionBell";
 import { OrgSwitcher } from "./OrgSwitcher";
@@ -72,7 +74,14 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
   const leafContext = useMemo(() => ({ leaf, setLeaf }), [leaf, setLeaf]);
   const [paletteRequest, setPaletteRequest] = useState(0);
   const [assistantRequest, setAssistantRequest] = useState(0);
-  const presenceJob = useRef<string | null>(null);
+  const [presenceJob, setPresenceJob] = useState<AiJob | null>(null);
+  const onActiveJob = useCallback(
+    (job: AiJob | null) =>
+      setPresenceJob((previous) =>
+        previous?.id === job?.id && previous?.state === job?.state ? previous : job,
+      ),
+    [],
+  );
   const [railOpen, setRailOpen] = useState(false);
 
   // Close the drawer nav on route change and on Escape — the drawer only
@@ -308,33 +317,39 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
                   </svg>
                   <span>{t("shell.searchHint")}</span>
                   <kbd>{MOD_K_HINT}</kbd>
+                  <kbd>/</kbd>
                 </button>
                 <AttentionBell />
                 {/* INSTALLER has no AI surface — every ai endpoint is gated to
                     _AGENT_CALLERS, so the orb would offer a 403 wall. */}
                 {role !== "INSTALLER" ? (
-                  <button
-                    type="button"
-                    className="topbar-button topbar-ai"
-                    onClick={() => {
-                      // The orb advertises the most-pressing job — click
-                      // reaches that job, not a blank dock on this surface.
-                      if (presenceJob.current) {
-                        navigate(`/assistant?job=${presenceJob.current}`);
-                      } else {
-                        setAssistantRequest((value) => value + 1);
-                      }
-                    }}
-                  >
-                    <AiPresence
-                      organizationId={org?.id ?? null}
-                      size={22}
-                      onActiveJob={(job) => {
-                        presenceJob.current = job?.id ?? null;
-                      }}
-                    />
-                    {t("shell.aiEntry")}
-                  </button>
+                  <>
+                    {/* The orb always opens the dock — a pressing job gets its
+                        own chip so an unlucky FAILED_RETRYABLE can never make
+                        the dock unreachable (AI review P1-1). */}
+                    <button
+                      type="button"
+                      className="topbar-button topbar-ai"
+                      onClick={() => setAssistantRequest((value) => value + 1)}
+                    >
+                      <AiPresence
+                        organizationId={org?.id ?? null}
+                        size={22}
+                        onActiveJob={onActiveJob}
+                      />
+                      {t("shell.aiEntry")}
+                    </button>
+                    {presenceJob ? (
+                      <button
+                        type="button"
+                        className="topbar-button topbar-ai-job"
+                        title={t("aiws.presenceOpen")}
+                        onClick={() => navigate(`/assistant?job=${presenceJob.id}`)}
+                      >
+                        {t(STATE_LABELS[presenceJob.state] ?? "aiws.jobs")}
+                      </button>
+                    ) : null}
+                  </>
                 ) : null}
               </div>
             </header>

@@ -621,8 +621,31 @@ function PurchasingWorkspace({
           <ul>
             {blockers.map((blocker, index) => (
               <li key={index} role="alert">
-                {t(orderTypeLabels[blocker.order_type])} ·{" "}
-                {t(blockerLabels[blocker.code] ?? "purchasing.blockers")}
+                <button
+                  type="button"
+                  className="purchasing-blocker-link"
+                  onClick={() => {
+                    // SUPPLIER_ELIGIBILITY_REQUIRED resolves in the eligibility
+                    // form for that order type; ALLOCATION_REQUIRED resolves in
+                    // the requirement table. Open/scroll to the right surface.
+                    const details =
+                      blocker.code === "SUPPLIER_ELIGIBILITY_REQUIRED"
+                        ? document.getElementById(`purchasing-eligibility-${blocker.order_type}`)
+                        : null;
+                    if (details instanceof HTMLDetailsElement) {
+                      details.open = true;
+                    }
+                    (
+                      details ?? document.getElementById(`purchasing-type-${blocker.order_type}`)
+                    )?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }}
+                >
+                  {t(orderTypeLabels[blocker.order_type])} ·{" "}
+                  {t(blockerLabels[blocker.code] ?? "purchasing.blockers")}
+                  {blocker.requirement_keys?.length
+                    ? ` · ${blocker.requirement_keys.length} ${t("purchasing.requirements")}`
+                    : ""}
+                </button>
               </li>
             ))}
           </ul>
@@ -846,7 +869,7 @@ function RequirementSection({
   const pending = requirements.filter((item) => item.claimed !== true);
   const allAllocated = pending.length > 0 && pending.every((item) => allocatedIds.has(item.id));
   return (
-    <section className="purchasing-type">
+    <section className="purchasing-type" id={`purchasing-type-${orderType}`}>
       <h2>
         {t(orderTypeLabels[orderType])}
         {confirmed && <span className="purchasing-badge">{t("purchasing.confirmedBadge")}</span>}
@@ -1059,7 +1082,7 @@ function EligibilityForm({
 }): JSX.Element {
   const nextVersion = Math.max(0, ...eligibilities.map((item) => item.version)) + 1;
   return (
-    <details className="purchasing-eligibility">
+    <details className="purchasing-eligibility" id={`purchasing-eligibility-${orderType}`}>
       <summary>{t("purchasing.eligibilities")}</summary>
       {eligibilities.map((item) => (
         <p key={item.id}>

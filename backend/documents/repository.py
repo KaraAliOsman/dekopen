@@ -10,6 +10,8 @@ import json
 from uuid import UUID
 
 from django.db import connection, DatabaseError
+
+from authentication.rls import tx_aborted
 from psycopg import sql
 
 from dekopen_engine.cutting import CutMaterial, CuttingProfile
@@ -115,31 +117,27 @@ def documentary_backend() -> Iterator[None]:
     """Switch to the documentary role, restoring the caller's role on exit.
 
     Nested contexts are safe: the previous role is captured rather than
-    hard-resetting to ``authenticated`` (an unset role restores to
-    ``authenticated``, matching the request context every caller starts in)."""
+    hard-resetting to ``authenticated``; an unset role restores to ``none``
+    (the session user), which is what request and worker callers start in."""
     with connection.cursor() as cursor:
-        cursor.execute("SELECT current_setting('role')")
-        previous = str(cursor.fetchone()[0])
-        if previous == "none":
-            previous = "authenticated"
+        cursor.execute("SELECT current_setting('role', true)")
+        previous = str(cursor.fetchone()[0] or "none")
         cursor.execute("SET LOCAL ROLE documentary_backend")
     try:
         yield
     except DatabaseError:
         raise
     except BaseException:
-        if not connection.needs_rollback:
+        if not tx_aborted():
             with connection.cursor() as cursor:
-                cursor.execute(
-                    sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(previous))
-                )
+                # set_config accepts 'none' (session user) where SET ROLE
+                # "none" would fail looking for a literal role name.
+                cursor.execute("SELECT set_config('role', %s, true)", [previous])
         raise
     else:
-        if not connection.needs_rollback:
+        if not tx_aborted():
             with connection.cursor() as cursor:
-                cursor.execute(
-                    sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(previous))
-                )
+                cursor.execute("SELECT set_config('role', %s, true)", [previous])
 
 
 def effective_scope(

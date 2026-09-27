@@ -426,7 +426,9 @@ export function OperatorStepCard({
                         className={_isShort(row.short) ? "operator-row-short" : ""}
                       >
                         <td>
-                          {row.name ?? row.sku ?? "—"} · {row.sku ?? ""} {row.unit ?? ""}
+                          {row.name ?? row.sku ?? "—"}
+                          {row.sku && row.sku !== row.name ? ` · ${row.sku}` : ""}
+                          {row.unit ? ` · ${row.unit}` : ""}
                         </td>
                         <td>{row.needed ?? "0"}</td>
                         <td>{row.reserved ?? "0"}</td>

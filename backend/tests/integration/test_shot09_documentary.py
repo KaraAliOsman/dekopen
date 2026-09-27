@@ -436,8 +436,13 @@ def test_historical_render_uses_frozen_snapshot_after_catalog_change(documentary
         _, snapshot = revision_snapshot(UUID(frozen["id"]), org)
     before = _doc01(snapshot)
     with connection.cursor() as cursor:
+        # Referenced catalog rows are frozen by guard_referenced_catalog —
+        # the only post-freeze mutation the catalog permits is the
+        # provenance/review triple, which is exactly the surface this test
+        # must prove cannot shift a frozen snapshot.
         cursor.execute(
-            "UPDATE public.profile_articles SET name='LATER CATALOG CHANGE' WHERE sku='MARCO'"
+            "UPDATE public.profile_articles SET data_provenance='LEGACY_UNVERIFIED' "
+            "WHERE sku='MARCO'"
         )
     with as_user(users["OWNER"]):
         _, loaded = revision_snapshot(UUID(frozen["id"]), org)

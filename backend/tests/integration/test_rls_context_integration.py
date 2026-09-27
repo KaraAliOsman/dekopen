@@ -12,7 +12,7 @@ import base64
 from uuid import UUID, uuid4
 
 from django.conf import settings
-from django.db import connection
+from django.db import connection, transaction
 import httpx
 import pytest
 from pytest_django.plugin import DjangoDbBlocker
@@ -217,6 +217,43 @@ def test_rollback_clears_claims_and_role(real_rows: RLSFixtures) -> None:
         with authenticated_rls_context(real_rows.tokens["both"].claims):
             raise RuntimeError("force rollback")
     assert_no_context()
+
+
+def test_nested_context_restores_outer_role_and_claims(real_rows: RLSFixtures) -> None:
+    """SET LOCAL ROLE is transaction-scoped, not savepoint-scoped: without an
+    explicit restore, exiting the inner context leaves the outer transaction
+    running as `authenticated` — a job worker's own writes (job_runs UPDATE)
+    then get permission-denied. Pin the restore inside a live outer tx."""
+    with transaction.atomic():
+        with authenticated_rls_context(real_rows.tokens["A"].claims):
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT current_setting('role', true)")
+                assert cursor.fetchone()[0] == "authenticated"
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT current_setting('role', true), "
+                "current_setting('request.jwt.claims', true)"
+            )
+            role, claims = cursor.fetchone()
+        assert role == "none"
+        assert claims in (None, "")
+
+
+def test_documentary_backend_restores_authenticated_on_exit(real_rows: RLSFixtures) -> None:
+    """Nested backend-role context must hand the request's `authenticated`
+    role back, not strand the caller on documentary_backend or none."""
+    from documents.repository import documentary_backend
+
+    with transaction.atomic():
+        with authenticated_rls_context(real_rows.tokens["A"].claims):
+            with documentary_backend():
+                with connection.cursor() as cursor:
+                    cursor.execute("SELECT current_setting('role', true)")
+                    assert cursor.fetchone()[0] == "documentary_backend"
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT current_setting('role', true)")
+                assert cursor.fetchone()[0] == "authenticated"
+        assert_no_context()
 
 
 def test_no_leak_between_open_connections_or_successive_requests(real_rows: RLSFixtures) -> None:

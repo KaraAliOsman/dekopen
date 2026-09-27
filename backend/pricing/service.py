@@ -8,6 +8,7 @@ import json
 from django.db import connection, DatabaseError
 
 from authentication.errors import contract_error
+from authentication.rls import tx_aborted
 from dekopen_engine.commercial import (
     CommercialLine, PricingError, PricingMode, direct_cost, discount_state,
     finish_lines, target_project, unit_price, validate_segment,
@@ -147,12 +148,12 @@ def position_cost(repo, position, rules):
     except DatabaseError:
         raise
     except BaseException:
-        if not connection.needs_rollback:
+        if not tx_aborted():
             with connection.cursor() as cursor:
                 cursor.execute('SET LOCAL ROLE pricing_backend')
         raise
     else:
-        if not connection.needs_rollback:
+        if not tx_aborted():
             with connection.cursor() as cursor:
                 cursor.execute('SET LOCAL ROLE pricing_backend')
     tree = decoded(position['parametric_tree'])

@@ -48,6 +48,16 @@ _CALLERS = _AGENT_CALLERS
 _MEMBER_CAPABILITIES = frozenset({"nlp_command", "discount_suggest"})
 
 
+def _provider_message(code: str) -> str:
+    """Honest failure language per diagnosis — a spent quota and an
+    unreachable provider are not the same problem and shouldn't read alike."""
+    return {
+        "ai_provider_quota": "El proveedor de IA llegó a su límite de uso. Avisa a un administrador para revisar la cuenta.",
+        "ai_provider_auth": "La credencial del proveedor de IA fue rechazada. Avisa a un administrador para revisar la configuración.",
+        "ai_provider_rejected": "El proveedor de IA rechazó la solicitud. Avisa a un administrador para revisar la configuración del modelo.",
+    }.get(code, "El proveedor de IA no está disponible en este momento.")
+
+
 def _raise_agent_error(error: Exception):
     if isinstance(error, _ContextError):
         if error.code == "ai_context_ref_invalid":
@@ -65,7 +75,7 @@ def _raise_agent_error(error: Exception):
         raise contract_error(
             503,
             error.code,
-            "El proveedor de IA no está disponible en este momento.",
+            _provider_message(error.code),
         ) from None
     if isinstance(error, ValueError) and str(error) == "ai_job_terminal":
         raise contract_error(
@@ -108,7 +118,7 @@ class AiInvokeView(APIView):
                 raise contract_error(
                     503,
                     error.code,
-                    "El proveedor de IA no está disponible en este momento.",
+                    _provider_message(error.code),
                 ) from None
 
 
@@ -142,7 +152,7 @@ class AiAskView(APIView):
                 raise contract_error(
                     503,
                     error.code,
-                    "El proveedor de IA no está disponible en este momento.",
+                    _provider_message(error.code),
                 ) from None
 
     @extend_schema(

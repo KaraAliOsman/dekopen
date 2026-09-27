@@ -727,7 +727,7 @@ export function SettingsPage(): JSX.Element {
               <div className="settings-row">
                 <dt>{t("settings.shortcutPalette")}</dt>
                 <dd>
-                  <kbd>{MOD_K_HINT}</kbd>
+                  <kbd>{MOD_K_HINT}</kbd> / <kbd>/</kbd>
                 </dd>
               </div>
               <div className="settings-row">

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 
 import type { OptimizeStrategyStats } from "../../api/generated/models";
 import { cutRoleLabel } from "./labels";
-import { fmtMm } from "../../format";
+import { fmtMm, fmtPct } from "../../format";
 import { t, tOptional } from "../../i18n/es-CL";
 
 // Full engine payload contract (backend/production/service.py →
@@ -530,8 +530,8 @@ export function CutPlanView({
                 {t("production.optimizeBar")} #{bar.bar_index}
               </strong>{" "}
               {bar.commercial_sku} · {fmtMm(bar.stock_length_mm)} mm ·{" "}
-              {t("production.cutplanYield")} {bar.yield_pct}% · {t("production.cutplanRemainder")}{" "}
-              {fmtMm(bar.remainder_mm)} mm
+              {t("production.cutplanYield")} {fmtPct(bar.yield_pct)}% ·{" "}
+              {t("production.cutplanRemainder")} {fmtMm(bar.remainder_mm)} mm
             </figcaption>
             <CutPlanBarSvg
               bar={bar}
@@ -552,7 +552,7 @@ export function CutPlanView({
                   </strong>{" "}
                   {layout.purchasing_sku} · {fmtMm(layout.sheet_width_mm)}×
                   {fmtMm(layout.sheet_height_mm)} mm · {t("production.cutplanYield")}{" "}
-                  {layout.yield_pct}%
+                  {fmtPct(layout.yield_pct)}%
                 </figcaption>
                 <CutPlanSheetSvg
                   layout={layout}

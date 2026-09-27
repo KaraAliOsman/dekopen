@@ -10,6 +10,7 @@ from uuid import UUID
 from django.db import connection
 from psycopg import sql
 
+from authentication.rls import tx_aborted
 from jobs import registry, repository
 
 
@@ -28,7 +29,7 @@ def job_backend() -> Iterator[None]:
     try:
         yield
     finally:
-        if not connection.needs_rollback:
+        if not tx_aborted():
             with connection.cursor() as cursor:
                 cursor.execute(sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(previous)))
 
@@ -49,7 +50,7 @@ def job_owner() -> Iterator[None]:
     try:
         yield
     finally:
-        if not connection.needs_rollback:
+        if not tx_aborted():
             with connection.cursor() as cursor:
                 if previous == "none":
                     cursor.execute("RESET ROLE")

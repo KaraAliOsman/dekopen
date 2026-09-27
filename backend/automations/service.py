@@ -20,6 +20,8 @@ from uuid import UUID
 
 from django.db import connection, transaction
 
+from authentication.rls import tx_aborted
+
 logger = logging.getLogger(__name__)
 
 
@@ -40,7 +42,7 @@ def _service_claims() -> Iterator[None]:
     try:
         yield
     finally:
-        if not connection.needs_rollback:
+        if not tx_aborted():
             with connection.cursor() as cursor:
                 cursor.execute(
                     "SELECT set_config('request.jwt.claims', %s, true)",

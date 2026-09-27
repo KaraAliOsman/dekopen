@@ -103,23 +103,28 @@ def list_stock(*, org_id: UUID) -> dict[str, object]:
     # psi-or-spec-hash (stock_variant_key), which SQL cannot express without
     # duplicating the canonical hash.
     incoming: dict[tuple[str, str], object] = {}
-    for line in rows(
-        """
-        SELECT l.line_snapshot,
-               l.quantity - COALESCE(r.received_qty, 0) AS open_qty
-        FROM public.order_requirement_lines l
-        JOIN public.orders o
-            ON o.id = l.order_id AND o.org_id = l.org_id
-            AND o.status IN ('SENT', 'PARTIALLY_RECEIVED')
-        LEFT JOIN (
-            SELECT order_line_id, SUM(received_qty) AS received_qty
-            FROM public.order_receipt_lines
-            GROUP BY order_line_id
-        ) r ON r.order_line_id = l.id
-        WHERE l.org_id = %s AND l.released_at IS NULL
-        """,
-        [str(org_id)],
-    ):
+    # order_requirement_lines / purchase_allocations are documentary-backend
+    # tables — no SELECT grant to `authenticated`. The incoming read crosses
+    # roles explicitly; RLS still applies via request.jwt.claims.
+    with documentary_backend():
+        open_lines = rows(
+            """
+            SELECT l.line_snapshot,
+                   l.quantity - COALESCE(r.received_qty, 0) AS open_qty
+            FROM public.order_requirement_lines l
+            JOIN public.orders o
+                ON o.id = l.order_id AND o.org_id = l.org_id
+                AND o.status IN ('SENT', 'PARTIALLY_RECEIVED')
+            LEFT JOIN (
+                SELECT order_line_id, SUM(received_qty) AS received_qty
+                FROM public.order_receipt_lines
+                GROUP BY order_line_id
+            ) r ON r.order_line_id = l.id
+            WHERE l.org_id = %s AND l.released_at IS NULL
+            """,
+            [str(org_id)],
+        )
+    for line in open_lines:
         if Decimal(str(line["open_qty"])) <= 0:
             continue
         snapshot = _decode_snapshot(line["line_snapshot"])

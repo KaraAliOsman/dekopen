@@ -9,6 +9,13 @@ export function jobErrorKey(code: string): TranslationKey {
   if (code.includes("permission") || code.includes("access_denied")) return "jobs.fail.permission";
   if (code.startsWith("document_storage_")) return "jobs.fail.storage";
   if (code.includes("hash_mismatch") || code.includes("stale")) return "jobs.fail.stale";
+  if (code === "ai_provider_quota") return "jobs.fail.providerQuota";
+  if (code === "ai_provider_auth" || code === "ai_provider_rejected")
+    return "jobs.fail.providerConfig";
+  // Generic internal job failures (ai_job_failed, ingest handlers…) are ours,
+  // not the provider's — saying "the provider didn't answer" sends users and
+  // support chasing an outage that doesn't exist.
+  if (code === "ai_job_failed" || code === "ai_context_error") return "jobs.fail.generic";
   if (
     code.startsWith("ai_") ||
     code.includes("provider") ||

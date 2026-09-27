@@ -349,6 +349,25 @@ class HttpProvider:
                 raise TypeError("provider token usage is outside the audit range")
         except ProviderError:
             raise
+        except httpx.HTTPStatusError as error:
+            # The provider answered — the status class is the diagnosis an
+            # operator needs (bad key vs bad model vs spent quota), and the
+            # effective model identifies which pin/override was actually sent.
+            status = error.response.status_code
+            logger.warning(
+                "AI provider %s answered %s (model=%s capability=%s)",
+                self.provider,
+                status,
+                requested_model,
+                capability,
+            )
+            if status in (401, 403):
+                raise ProviderError("ai_provider_auth") from error
+            if status == 429:
+                raise ProviderError("ai_provider_quota") from error
+            if 400 <= status < 500:
+                raise ProviderError("ai_provider_rejected") from error
+            raise ProviderError("ai_provider_error") from error
         except (httpx.HTTPError, TypeError, ValueError) as error:
             raise ProviderError("ai_provider_error") from error
         response_model = parsed.get("model")
@@ -719,6 +738,18 @@ def _context_assist_output(input_payload: dict) -> dict:
     }
 
 
+# Ops `_design_assist_output` can emit that are legal in a batch proposal —
+# mirrors agent.BATCH_OPS minus the structural set_module_count (batch only
+# accepts adjust ops). Providers must not import agent.py, so the subset
+# lives here.
+_MOCK_BATCH_OPS = {
+    "set_opening",
+    "set_total_width",
+    "set_height",
+    "equalize_widths",
+    "set_coupling_angle",
+}
+
 # Surfaces whose projection needs no entity refs — the only ones the mock can
 # query (the agent payload doesn't carry refs, so ref-requiring surfaces would
 # just produce a rejected observation).
@@ -775,6 +806,48 @@ def _agent_output(input_payload: dict) -> dict:
         # Ref-requiring surfaces can't be queried without entity ids (the
         # payload doesn't carry them), so they settle in one round.
         document["steps"] = [{"kind": "query", "surface": surface_name, "refs": {}}]
+    if not observations and surface_name == "position" and context.get("product"):
+        # A mutation-looking goal on the position surface produces a real
+        # design-ops proposal — the ops card → apply → Guardar path stays
+        # exercisable under mock. The service validates each op through the
+        # same contract a live provider hits.
+        design = _design_assist_output(
+            {"prompt": goal, "product": context.get("product") or {}}
+        )
+        if design["ops"]:
+            document["steps"].append(
+                {"kind": "ops", "ops": design["ops"], "label": design["notes"]}
+            )
+    elif not observations and surface_name == "project" and context.get("editable"):
+        # Same exercise for the batch card: "todas las fijas a abatible" on a
+        # project drafts one op set against the positions the context shows.
+        # Batch ops never carry a positional module index — refs differ per
+        # position, so module-bound ops use the "*" wildcard the server
+        # expands against each position's real summary.
+        design = _design_assist_output({"prompt": goal, "product": {}})
+        batch_ops = [
+            {**op, "module": "*"} if "module" in op else op
+            for op in design["ops"]
+            if op.get("op") in _MOCK_BATCH_OPS
+        ]
+        # No product lives in the batch payload — the opening-keyboard loop
+        # iterates modules, so scan the goal for an opening keyword directly.
+        if not batch_ops:
+            for pattern, opening in _OPENING_KEYWORDS:
+                if pattern.search(goal.lower()):
+                    batch_ops.append(
+                        {"op": "set_opening", "module": "*", "opening": opening}
+                    )
+                    break
+        if batch_ops and context.get("positions"):
+            document["steps"].append(
+                {
+                    "kind": "batch_ops",
+                    "targets": {"typology": "ALL"},
+                    "ops": batch_ops,
+                    "label": design["notes"],
+                }
+            )
     return document
 
 

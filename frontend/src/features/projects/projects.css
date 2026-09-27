@@ -1324,3 +1324,17 @@
   color: var(--theme-text-primary);
   font-size: inherit;
 }
+
+/* Pre-emit verdict: states what the revision will allow before Emitir runs
+   (quote-only vs production-ready) — no silent downgrades. */
+.emit-outcome {
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  margin: 0.75rem 0 0;
+  padding: 0.5rem 0.875rem;
+}
+
+.emit-outcome--warn {
+  background: var(--theme-warning-soft, rgba(217, 119, 6, 0.1));
+  border: 1px solid var(--theme-warning);
+}

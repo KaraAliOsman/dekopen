@@ -7,6 +7,8 @@ import json
 from uuid import UUID
 
 from django.db import connection, DatabaseError
+
+from authentication.rls import tx_aborted
 from psycopg import sql
 
 from dekopen_engine.commercial import PricingError, convert_cost
@@ -64,12 +66,12 @@ def commercial_backend():
         # has not marked needs_rollback yet. Do not mask it with SET ROLE.
         raise
     except BaseException:
-        if not connection.needs_rollback:
+        if not tx_aborted():
             with connection.cursor() as cursor:
                 cursor.execute('SET LOCAL ROLE authenticated')
         raise
     else:
-        if not connection.needs_rollback:
+        if not tx_aborted():
             with connection.cursor() as cursor:
                 cursor.execute('SET LOCAL ROLE authenticated')
 

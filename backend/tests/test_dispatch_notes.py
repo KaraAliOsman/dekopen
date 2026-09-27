@@ -167,7 +167,7 @@ def test_issue_dispatch_note_payload_seals_manifest_and_destination(monkeypatch)
     )
     payload = json.loads(insert[4])
     assert payload["note_code"] == "GD-0001"
-    assert payload["project"]["delivery_address"] == "Av. Providencia 1234"
+    assert payload["delivery"]["address"] == "Av. Providencia 1234"
     assert payload["order"]["code"] == "OT-P-1-REV-A-01"
     assert len(payload["units"]) == 2
     assert payload["units"][0]["label_code"] == "OT-P-1-REV-A-01-U01"

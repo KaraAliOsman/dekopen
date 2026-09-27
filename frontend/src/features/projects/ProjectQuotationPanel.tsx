@@ -275,7 +275,7 @@ function CsvMmField({
   disabled: boolean;
   onCommit(value: string[] | null): void;
 }): JSX.Element {
-  const canonical = values?.join(", ") ?? "";
+  const canonical = (values ?? []).map(fmtMm).join(", ");
   const [draft, setDraft] = useState(canonical);
   useEffect(() => setDraft(canonical), [canonical]);
   return (
@@ -292,7 +292,7 @@ function CsvMmField({
           const parsed = parseMmList(draft);
           if (parsed === null) {
             setDraft(canonical);
-          } else if (parsed.join(",") !== (values ?? []).join(",")) {
+          } else if (parsed.join(",") !== (values ?? []).map(fmtMm).join(",")) {
             onCommit(parsed.length > 0 ? parsed : null);
           }
         }}
@@ -304,6 +304,35 @@ function CsvMmField({
       <span className="workshop-unit">mm</span>
     </label>
   );
+}
+
+/** Stored decimals arrive as "300.0000" — the workshop inputs are edited by
+ * people, so display strings normalize to business precision once at load
+ * (fmtMm trims trailing zeros; the field stays editable). */
+function normalizePreparationMm(
+  position: DocumentaryPreparationPosition,
+): DocumentaryPreparationPosition {
+  const annotations = position.workshop_annotations.map((annotation) => ({
+    ...annotation,
+    bottom_drain_holes_mm: annotation.bottom_drain_holes_mm?.map(fmtMm) ?? null,
+    closing_points_perimeter_mm: annotation.closing_points_perimeter_mm?.map(fmtMm) ?? null,
+    continuous_width_mm:
+      annotation.continuous_width_mm == null ? null : fmtMm(annotation.continuous_width_mm),
+  }));
+  const structural = position.structural_inputs.map((input) => ({
+    ...input,
+    required_ix_cm4: input.required_ix_cm4 == null ? null : fmtMm(input.required_ix_cm4),
+  }));
+  const intents = position.handle_intents.map((intent) => ({
+    ...intent,
+    requested_height_mm: intent.requested_height_mm === "" ? "" : fmtMm(intent.requested_height_mm),
+  }));
+  return {
+    ...position,
+    workshop_annotations: annotations,
+    structural_inputs: structural,
+    handle_intents: intents,
+  };
 }
 
 /** Valid input range for the entered height under its vertical reference.
@@ -665,7 +694,7 @@ export function ProjectQuotationPanel({
           positions: response.data.positions.map((position) => {
             const seeded = seedHandleIntents(mergePreparationSuggestions(position));
             seededIntentKeys.current.set(String(position.position_id), new Set(seeded.seededKeys));
-            return seeded.position;
+            return normalizePreparationMm(seeded.position);
           }),
         });
       }
@@ -1335,6 +1364,9 @@ export function ProjectQuotationPanel({
             <fieldset key={position.position_id} disabled={busy}>
               <legend>
                 {t("quotation.position")} {index + 1} · {position.system_name}
+                {!position.production_ready && (
+                  <span className="handle-pending">{t("quotation.quoteOnlyChip")}</span>
+                )}
               </legend>
               <label htmlFor={`position-location-${position.position_id}`}>
                 {t("projects.location")}
@@ -1916,6 +1948,19 @@ export function ProjectQuotationPanel({
               </ul>
             </div>
           )}
+          {preparation.positions.length > 0 &&
+            (preparation.positions.every((position) => position.production_ready) ? (
+              <p className="emit-outcome">{t("quotation.emitOutcomeReady")}</p>
+            ) : (
+              <p className="emit-outcome emit-outcome--warn" role="note">
+                {t("quotation.emitOutcomeQuoteOnly")}{" "}
+                {preparation.positions
+                  .map((position, index) => ({ position, index }))
+                  .filter(({ position }) => !position.production_ready)
+                  .map(({ index }) => `${t("quotation.position")} ${index + 1}`)
+                  .join(" · ")}
+              </p>
+            ))}
           <label className="quotation-confirm">
             <input
               id="quotation-confirm"

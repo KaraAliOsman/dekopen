@@ -223,6 +223,10 @@ class DocumentaryPreparationPositionSerializer(PositionDocumentaryInputSerialize
     workshop_targets = WorkshopTargetsSerializer()
     workshop_suggestions = WorkshopAnnotationSerializer(many=True)
     polishing_suggestions = GlassPolishingSerializer(many=True)
+    # Pre-emit preview: same inspector the freeze runs, so the UI can state
+    # "Sólo cotización" before the estimator clicks Emitir.
+    production_ready = serializers.BooleanField()
+    documentary_ready = serializers.BooleanField()
 
 
 class DocumentaryPreparationResponseSerializer(serializers.Serializer):

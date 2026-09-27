@@ -21,6 +21,7 @@ from uuid import UUID
 
 from django.db import DatabaseError, connection, transaction
 
+from authentication.rls import tx_aborted
 from pricing.repository import rows, write
 
 
@@ -44,12 +45,12 @@ def _ai_backend():
     except DatabaseError:
         raise
     except BaseException:
-        if not connection.needs_rollback:
+        if not tx_aborted():
             with connection.cursor() as cursor:
                 cursor.execute("SET LOCAL ROLE %s", [previous])
         raise
     else:
-        if not connection.needs_rollback:
+        if not tx_aborted():
             with connection.cursor() as cursor:
                 cursor.execute("SET LOCAL ROLE %s", [previous])
 

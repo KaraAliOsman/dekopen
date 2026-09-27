@@ -18460,9 +18460,14 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/GlassPolishing'
+        production_ready:
+          type: boolean
+        documentary_ready:
+          type: boolean
       required:
       - accessory_schedule
       - calculation_hash
+      - documentary_ready
       - glass_polishing
       - handle_intents
       - handle_options
@@ -18473,6 +18478,7 @@ components:
       - placement_options
       - polishing_suggestions
       - position_id
+      - production_ready
       - reinforcement_cut_policy_id
       - reinforcement_options
       - structural_inputs

@@ -1050,16 +1050,17 @@ export function ProductionPage(): JSX.Element {
                       {version.project_code} · {version.revision_code} · {version.positions}{" "}
                       {t("production.prepPositions")}
                     </span>
-                    {canWrite ? (
-                      <button
-                        type="button"
-                        className="production-prep-release"
-                        disabled={busy}
-                        onClick={() => release(version.version_id)}
-                      >
-                        {t("production.prepRelease")}
-                      </button>
-                    ) : null}
+                    {/* Non-writers get the same action disabled with a reason —
+                        an invisible gate hides work they should be able to request. */}
+                    <button
+                      type="button"
+                      className="production-prep-release"
+                      disabled={busy || !canWrite}
+                      title={canWrite ? undefined : t("production.writeHint")}
+                      onClick={() => release(version.version_id)}
+                    >
+                      {t("production.prepRelease")}
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -1280,15 +1281,21 @@ export function ProductionPage(): JSX.Element {
                   </span>
                 ) : null}
                 {detail.version_shortage > detail.shortage ? (
-                  <span
+                  <button
+                    type="button"
                     className="production-chip is-warn"
                     title={t("production.versionShortageTitle")}
+                    onClick={() => {
+                      const next = new URLSearchParams(params);
+                      next.set("shortage", "1");
+                      setParams(next);
+                    }}
                   >
                     {t("production.versionShortageChip").replace(
                       "{count}",
                       String(detail.version_shortage - detail.shortage),
                     )}
-                  </span>
+                  </button>
                 ) : null}
                 {detail.dispatch_ready ? (
                   <span className="production-chip is-ready">

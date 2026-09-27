@@ -1700,6 +1700,81 @@ def test_act_persists_job_and_grounds_claims(monkeypatch):
     assert calls["transcript"][1]["role"] == "agent"
 
 
+def test_mock_agent_emits_design_ops_on_position_surface():
+    """P1-2: the mock must exercise the ops card → apply path — a mutation
+    goal on a position with a live product produces a real ops step."""
+    from ai_gateway.providers import _agent_output
+
+    out = _agent_output(
+        {
+            "goal": "haz todas las hojas oscilobatientes",
+            "surface": "position",
+            "context": {
+                "organization": {"name": "Org"},
+                "product": {"modules": [{"id": "m1"}, {"id": "m2"}], "couplings": []},
+            },
+            "observations": [],
+        }
+    )
+    ops_steps = [step for step in out["steps"] if step["kind"] == "ops"]
+    assert ops_steps and ops_steps[0]["ops"]
+    assert all(op["op"] == "set_opening" for op in ops_steps[0]["ops"])
+
+
+def test_mock_agent_emits_batch_ops_on_editable_project():
+    """The batch card must stay exercisable under mock too — an edit goal
+    on an editable project drafts a batch_ops step targeting all positions."""
+    from ai_gateway.providers import _MOCK_BATCH_OPS, _agent_output
+
+    out = _agent_output(
+        {
+            "goal": "todas las fijas a oscilobatiente",
+            "surface": "project",
+            "context": {
+                "editable": True,
+                "positions": [{"id": str(uuid4())}],
+            },
+            "observations": [],
+        }
+    )
+    batch = [step for step in out["steps"] if step["kind"] == "batch_ops"]
+    assert batch and batch[0]["targets"]["typology"] == "ALL"
+    assert all(op["op"] in _MOCK_BATCH_OPS for op in batch[0]["ops"])
+
+
+def test_act_records_evidence_labels_for_cited_ids(monkeypatch):
+    """Claim evidence renders as entity names in the workspace — the turn
+    carries the UUID → label map the context supplied."""
+    from ai_gateway import agent
+
+    job_id = uuid4()
+    calls, entity_id = _agent_env(
+        monkeypatch, _agent_document("placeholder"), job_id
+    )
+    import ai_gateway.service as service_module
+    document = _agent_document(entity_id)
+    monkeypatch.setattr(
+        service_module, "invoke",
+        lambda **kw: {
+            "output": json.dumps(document),
+            "credits_debited": 1, "audit_id": str(uuid4()), "model": "m",
+        },
+    )
+    monkeypatch.setattr(
+        agent, "build_context",
+        lambda *a, **k: {
+            "surface": "dashboard",
+            "entity": {"id": entity_id, "code": "PRJ-77"},
+        },
+    )
+    out = agent.act(
+        org_id=uuid4(), user_id=uuid4(), surface="dashboard", refs={},
+        goal="resume", product=None, history=[], operation_key="k",
+    )
+    assert out["evidence_labels"][entity_id] == "PRJ-77"
+    assert calls["transcript"][1]["evidence_labels"][entity_id] == "PRJ-77"
+
+
 def test_act_questions_wait_for_user(monkeypatch):
     from ai_gateway import agent
 

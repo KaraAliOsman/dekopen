@@ -636,6 +636,19 @@ a:focus-visible {
   color: var(--theme-accent-ink);
 }
 
+/* The job chip sits beside the orb: the orb always opens the dock, this
+   reaches the most-pressing job directly. */
+.topbar-ai-job {
+  border-color: var(--theme-warning);
+  color: var(--theme-warning);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.topbar-ai-job:hover {
+  background: var(--theme-warning-soft);
+}
+
 /* ——— floating shell menus (switchers + notifications) ——— */
 .org-switcher,
 .project-switcher,
@@ -1268,6 +1281,18 @@ p[role="alert"]:only-child::before {
   font-weight: 600;
   line-height: 1.5;
   padding: 0.125rem 0.625rem;
+}
+
+/* Chips that act (e.g. filter the list) reset button chrome and invite the
+   click they promise. */
+button.production-chip {
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+button.production-chip:hover {
+  filter: brightness(0.95);
 }
 
 /* Production chips share the pill language; tones come from the same

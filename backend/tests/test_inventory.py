@@ -36,7 +36,9 @@ def test_list_stock_returns_view_rows() -> None:
             return []
         return [stock_row]
 
-    with patch("inventory.service.rows", side_effect=fake_rows):
+    with patch("inventory.service.rows", side_effect=fake_rows), patch(
+        "inventory.service.documentary_backend", return_value=_atomic()
+    ):
         output = service.list_stock(org_id=org_id)
     assert output["items"][0]["available_qty"] == Decimal("800.00")
     assert output["items"][0]["incoming_qty"] == Decimal(0)
@@ -74,7 +76,7 @@ def test_list_stock_incoming_keys_by_spec_variant() -> None:
 
     with patch("inventory.service.rows", side_effect=fake_rows), patch(
         "inventory.service.stock_variant_key", return_value="SPEC:deadbeef"
-    ):
+    ), patch("inventory.service.documentary_backend", return_value=_atomic()):
         output = service.list_stock(org_id=org_id)
     assert output["items"][0]["incoming_qty"] == Decimal(2)
 

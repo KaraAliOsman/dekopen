@@ -58,7 +58,7 @@ from engine_api.adapter import (
     parse_product_model,
 )
 from engine_api.cutting_repository import CuttingRepository
-from engine_api.inspection_repository import InspectorRepository
+from engine_api.inspection_repository import InspectorAuthorities, InspectorRepository
 from engine_api.repository import SystemParamsRepository
 from pricing.repository import commercial_backend
 from production.service import process_facts_snapshot
@@ -1736,7 +1736,10 @@ def prepare_documentary_inputs(
         return options[0]["id"] if len(options) == 1 else None
 
     prepared = []
-    inspector_configs: dict[str, InspectorConfig] = {}
+    # Full load (config + chamber clearance) is cached per system so the
+    # readiness preview runs the same inspector the freeze will run.
+    inspector_authorities: dict[str, InspectorAuthorities] = {}
+    stock_repository = CuttingRepository()
     for position in positions:
         identity = str(position["id"])
         existing = position_inputs.get(identity)
@@ -1851,15 +1854,62 @@ def prepare_documentary_inputs(
             and (item.get("bay_id"), item.get("leaf_id")) in valid_leaves
         ]
 
-        inspector_config = inspector_configs.setdefault(
-            system_id, InspectorRepository().load(system_id_uuid, org_id).config
+        inspector_authority = inspector_authorities.setdefault(
+            system_id, InspectorRepository().load(system_id_uuid, org_id)
         )
+        inspector_config = inspector_authority.config
         # Suggestions stay a separate channel: prepare returns what the
         # estimator actually stored, plus advisory defaults the emit form can
         # prefill. Absence is never synthesized into stored authority — what
         # the user sees and saves is what exists.
         workshop_suggestions = _seed_workshop_defaults(calculations, [], inspector_config)
         polishing_suggestions = _seed_polishing_defaults(valid_glass, [])
+
+        # Readiness preview: the emit button must state what the revision
+        # will allow BEFORE it runs — same inspector, same saved inputs the
+        # freeze consumes, so "Sólo cotización" is never a surprise.
+        preview_annotations = workshop_annotations(workshop)
+        preview_structural = structural_inputs(structural)
+        production_ready = True
+        documentary_ready = True
+        for module_id, computation, _module_tree in calculations:
+            inertias: dict[str, Decimal | None] = {}
+            for span in computation.spans:
+                try:
+                    _, inertia = stock_repository.reinforcement_stock(
+                        system_id_uuid, org_id, span.parent_profile_sku, None, color
+                    )
+                except MissingStockAuthority:
+                    inertia = None
+                inertias[span.target_id] = inertia
+            try:
+                preview = inspect(
+                    InspectorInput(
+                        computation=computation,
+                        chamber_clearance_mm=inspector_authority.chamber_clearance_mm,
+                        annotations=_module_scoped(
+                            preview_annotations, module_id, "bay_id", "leaf_id"
+                        ),
+                        structural_inputs=_module_scoped(
+                            preview_structural, module_id, "target_id"
+                        ),
+                        reinforcement_ix_by_target=inertias,
+                        mode=InspectionMode.DESIGN,
+                        source_calculation_hash=str(identity_hash),
+                    ),
+                    inspector_config,
+                )
+            except ValueError:
+                # A hard inspector failure is previewed as "not ready"; the
+                # freeze surfaces the named rule if the estimator emits anyway.
+                production_ready = False
+                documentary_ready = False
+                continue
+            production_ready = production_ready and preview.production_allowed
+            documentary_ready = documentary_ready and not any(
+                evaluation.status is RuleEvaluationStatus.MISSING_INPUT
+                for evaluation in preview.evaluations
+            )
 
         prepared.append(
             {
@@ -1910,6 +1960,8 @@ def prepare_documentary_inputs(
                 "legacy_handle_migration_confirmed": bool(
                     existing and existing["legacy_handle_migration_confirmed"]
                 ),
+                "production_ready": production_ready,
+                "documentary_ready": documentary_ready,
             }
         )
     values = project_inputs[0] if project_inputs else {}

@@ -534,6 +534,50 @@ def _ungrounded_numbers(text: str, grounding: set) -> list[str]:
     return found[:8]
 
 
+_LABEL_KEYS = (
+    "code",
+    "name",
+    "order_code",
+    "location_tag",
+    "sku",
+    "project_code",
+    "title",
+    "label",
+    "public_name",
+)
+
+
+def _evidence_labels(*roots: Any) -> dict[str, str]:
+    """Map each UUID the context/observations exposed to the human name in
+    the same record — the transcript cites ids, the UI renders "OT-42" and
+    "Casa Dormitorios" instead of raw UUIDs."""
+    labels: dict[str, str] = {}
+
+    def visit(node: Any) -> None:
+        if isinstance(node, dict):
+            name = next(
+                (
+                    str(node[key]).strip()
+                    for key in _LABEL_KEYS
+                    if isinstance(node.get(key), str) and str(node[key]).strip()
+                ),
+                None,
+            )
+            if name:
+                for value in node.values():
+                    if isinstance(value, str) and _PATH_UUID.fullmatch(value):
+                        labels.setdefault(value, name)
+            for value in node.values():
+                visit(value)
+        elif isinstance(node, list):
+            for value in node:
+                visit(value)
+
+    for root in roots:
+        visit(root)
+    return labels
+
+
 def _payload_grounded(node: Any, grounding: set, refs: frozenset[str]) -> bool:
     """An artifact payload is durable output — invented numbers inside a
     quote or purchase plan render as fact, and an invented entity id would
@@ -1143,6 +1187,9 @@ def _act(
         ],
         "warnings": warnings,
         "rejected": rejected,
+        # Human names for the ids claims/reference may cite — the transcript
+        # stores ids; the workspace renders the entity behind each one.
+        "evidence_labels": _evidence_labels(context, all_observations),
     }
 
 
@@ -1232,6 +1279,7 @@ def act(
             "steps": result["steps"],
             "warnings": result["warnings"],
             "rejected": result["rejected"],
+            "evidence_labels": result["evidence_labels"],
         }
     )
     # The job's artifact shelf accumulates across rounds — a question-only

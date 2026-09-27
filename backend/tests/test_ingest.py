@@ -339,7 +339,7 @@ def test_terminal_failure_marks_import_failed(monkeypatch):
     import ingest.handlers as handlers
 
     calls = []
-    monkeypatch.setattr(handlers, "transaction", _NullAtomic())
+    monkeypatch.setattr(handlers, "worker_claims", lambda claims: _backend())
     monkeypatch.setattr(handlers, "connection", _FakeConnection())
     monkeypatch.setattr(
         "ingest.service.extract_for_import",
@@ -372,7 +372,7 @@ def test_non_terminal_failure_leaves_import_pending(monkeypatch):
     import ingest.handlers as handlers
 
     calls = []
-    monkeypatch.setattr(handlers, "transaction", _NullAtomic())
+    monkeypatch.setattr(handlers, "worker_claims", lambda claims: _backend())
     monkeypatch.setattr(handlers, "connection", _FakeConnection())
     monkeypatch.setattr(
         "ingest.service.extract_for_import",
@@ -851,7 +851,7 @@ def test_extract_membership_revoked_marks_import_failed(monkeypatch):
 
             return _Cursor()
 
-    monkeypatch.setattr(handlers, "transaction", _NullAtomic())
+    monkeypatch.setattr(handlers, "worker_claims", lambda claims: _backend())
     monkeypatch.setattr(handlers, "connection", _NoMembership())
     monkeypatch.setattr(
         "ingest.service.extract_for_import",

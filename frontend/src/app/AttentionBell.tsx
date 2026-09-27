@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { ApiError } from "../api/apiMutator";
@@ -15,6 +15,10 @@ export function AttentionBell(): JSX.Element | null {
   const org = useAuthSession().me?.active_organization;
   const [open, setOpen] = useState(false);
   const rootRef = useDismiss<HTMLDivElement>(open, () => setOpen(false));
+  // "Read" = seen at last open, per org. The badge counts only entries that
+  // are new or grew since then; opening the list acknowledges them.
+  const seenKey = org ? `attention-seen:${org.id}` : null;
+  const [seen, setSeen] = useState<Record<string, number>>({});
 
   const query = useQuery({
     queryKey: ["shell", "attention", org?.id],
@@ -31,8 +35,18 @@ export function AttentionBell(): JSX.Element | null {
     },
   });
 
+  // Hydrate the per-org seen snapshot when the org resolves / switches.
+  useEffect(() => {
+    if (!seenKey) return;
+    try {
+      setSeen(JSON.parse(localStorage.getItem(seenKey) ?? "{}"));
+    } catch {
+      setSeen({});
+    }
+  }, [seenKey]);
+
   if (!org) return null;
-  const count = query.data?.length ?? 0;
+  const unread = (query.data ?? []).filter((entry) => entry.count > (seen[entry.key] ?? 0)).length;
   return (
     <div className="attention-bell" ref={rootRef}>
       <button
@@ -42,7 +56,21 @@ export function AttentionBell(): JSX.Element | null {
         aria-expanded={open || undefined}
         aria-label={t("shell.notifications")}
         title={t("shell.notifications")}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          const next = !open;
+          setOpen(next);
+          if (next && query.data && seenKey) {
+            const snapshot = Object.fromEntries(
+              query.data.map((entry) => [entry.key, entry.count]),
+            );
+            setSeen(snapshot);
+            try {
+              localStorage.setItem(seenKey, JSON.stringify(snapshot));
+            } catch {
+              // Storage quota/denied — badge still works for this session.
+            }
+          }
+        }}
       >
         <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden>
           <path
@@ -58,7 +86,7 @@ export function AttentionBell(): JSX.Element | null {
             strokeLinecap="round"
           />
         </svg>
-        {count > 0 && <span className="attention-bell__badge">{count}</span>}
+        {unread > 0 && <span className="attention-bell__badge">{unread}</span>}
       </button>
       {open && (
         <div className="shell-menu shell-menu--right" aria-label={t("shell.notifications")}>

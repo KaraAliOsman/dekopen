@@ -441,6 +441,12 @@ function commercialSteps(
   const approved = rank >= 2 || approvedRecord;
   const collected = Number(payments?.collected ?? "0");
   const paid = payments?.status === "PAID";
+  // The deposit step must name the anticipo amount, not the running total —
+  // once the saldo lands, `collected` IS the whole quote and the row reads
+  // as "the anticipo was the full price" (hostile P1-5).
+  const anticipoTotal = (payments?.payments ?? [])
+    .filter((payment) => payment.kind === "ANTICIPO" && payment.voided_at == null)
+    .reduce((sum, payment) => sum + Number(payment.amount), 0);
   const released = rank >= 3;
   const latestApproval = [...currentApprovals].sort((a, b) =>
     b.created_at.localeCompare(a.created_at),
@@ -492,11 +498,13 @@ function commercialSteps(
       labelKey: "projects.step.deposit",
       state: collected > 0 ? "done" : approved ? "current" : "pending",
       detail:
-        collected > 0 && payments
-          ? formatMoney(payments.collected, payments.currency)
-          : approved && collected === 0
-            ? t("projects.stepBlockedDeposit")
-            : undefined,
+        anticipoTotal > 0 && payments
+          ? formatMoney(String(anticipoTotal), payments.currency)
+          : collected > 0 && payments
+            ? formatMoney(payments.collected, payments.currency)
+            : approved && collected === 0
+              ? t("projects.stepBlockedDeposit")
+              : undefined,
     },
     {
       key: "balance",

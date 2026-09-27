@@ -14,6 +14,7 @@ from uuid import UUID
 from django.db import DatabaseError, connection, transaction
 from psycopg import sql
 
+from authentication.rls import tx_aborted
 from documents.artifacts import SupabaseDocumentStorage, generate_artifact
 from documents.renderers import finish_label, frozen_glass_specs
 from documents.repository import (
@@ -47,14 +48,14 @@ def portal_backend() -> Iterator[None]:
     except DatabaseError:
         raise
     except BaseException:
-        if not connection.needs_rollback:
+        if not tx_aborted():
             with connection.cursor() as cursor:
                 cursor.execute(
                     sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(previous))
                 )
         raise
     else:
-        if not connection.needs_rollback:
+        if not tx_aborted():
             with connection.cursor() as cursor:
                 cursor.execute(
                     sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(previous))

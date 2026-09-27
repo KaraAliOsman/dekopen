@@ -440,6 +440,9 @@ export const messages = {
   "quotation.emitNeedsPolicies":
     "Cada posición necesita sus reglas de fabricación (montaje, herrajes, refuerzo)",
   "quotation.emitted": "Cotización emitida",
+  "quotation.emitOutcomeReady": "Al emitir, esta revisión quedará apta para producción.",
+  "quotation.emitOutcomeQuoteOnly":
+    "Se emitirá sólo como cotización — completa los datos de taller marcados en:",
   "quotation.quoteOnlyNotice":
     "quedó sólo como cotización — el inspector marcó bloqueantes de producción",
   "quotation.productionReady": "Apta para producción",
@@ -530,7 +533,7 @@ export const messages = {
   "pricing.rejected": "Rechazada",
   "pricing.review": "Revisar operación",
   "pricing.reject": "Rechazar solicitud",
-  "pricing.prepareDesign": "Preparar diseño en el editor antes de crear un borrador comercial",
+  "pricing.prepareDesign": "Abre un proyecto y diseña el vano antes de crear un borrador comercial",
   "pricing.createDraft": "Crear borrador desde el diseño actual",
   "pricing.projectCode": "Código de proyecto",
   "pricing.projectName": "Nombre del proyecto",
@@ -1087,6 +1090,10 @@ export const messages = {
     "El almacenamiento de documentos falló. Reintenta; si persiste, revisa la configuración.",
   "jobs.fail.stale": "El contenido cambió desde que se encoló el trabajo. Vuelve a encolarlo.",
   "jobs.fail.provider": "El proveedor externo no respondió. Reintenta en unos minutos.",
+  "jobs.fail.providerQuota":
+    "El proveedor de IA llegó a su límite de uso. Avisa a un administrador para revisar la cuenta.",
+  "jobs.fail.providerConfig":
+    "El proveedor de IA rechazó la solicitud (credencial o modelo). Avisa a un administrador.",
   "jobs.fail.invalid":
     "Los datos del trabajo no son válidos — revisa la configuración antes de reintentar.",
   "jobs.fail.generic": "Error técnico. Reintenta; si persiste, reporta el código al soporte.",
@@ -1508,13 +1515,14 @@ export const messages = {
   "production.stepsShort": "pasos",
   "production.prepTitle": "Listo para producción",
   "production.prepRelease": "Liberar",
+  "production.writeHint": "Esta acción la realiza el jefe de taller o el dueño.",
   "production.prepPositions": "posiciones",
   "production.shortageChip": "Falta material ({count})",
   "production.materialShortageToast":
     "Paso bloqueado por falta de material — revisa los faltantes de la orden.",
-  "production.versionShortageChip": "Versión: {count} datos pendientes",
+  "production.versionShortageChip": "Versión: {count} faltantes más",
   "production.versionShortageTitle":
-    "El faltante corresponde a la versión completa, no solo a esta orden",
+    "Otras órdenes de la misma versión tienen faltantes de material adicionales",
   "production.dispatchReadyChip": "Guía pendiente",
   "production.units": "unidades",
   "production.unitsOne": "unidad",
@@ -1576,7 +1584,7 @@ export const messages = {
   "production.optimizeStatsWaste": "Desperdicio",
   "production.optimizeStatsRemnantReusable": "retazo reutilizable",
   "production.optimizeStatsSheets": "Planchas",
-  "production.optimizeStatsUnnested": "Sin ubicar",
+  "production.optimizeStatsUnnested": "Piezas sin ubicar",
   "production.optimizeStatsPurchases": "Compras",
   "production.optimizeStatsRemnants": "Retazos (usa/produce)",
   "production.optimizeStatsRuntime": "Tiempo",
@@ -2770,6 +2778,7 @@ export const messages = {
   "aiws.evidence": "evidencia",
   "aiws.inspector": "Inspector",
   "aiws.inspectorEmpty": "Elige un artefacto de la conversación para inspeccionarlo.",
+  "aiws.presenceOpen": "Ver el trabajo del asistente",
   "aiws.state.queued": "En cola",
   "aiws.state.planning": "Planificando",
   "aiws.state.running": "En ejecución",

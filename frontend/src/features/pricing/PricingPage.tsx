@@ -2091,7 +2091,7 @@ function CommercialDraft({
   if (!inputs.systemId)
     return (
       <p>
-        <Link to="/projects/demo/positions/g1/edit">{t("pricing.prepareDesign")}</Link>
+        <Link to="/projects">{t("pricing.prepareDesign")}</Link>
       </p>
     );
   return (
