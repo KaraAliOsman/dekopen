@@ -968,7 +968,7 @@ export function ProjectQuotationPanel({
   }
 
   async function resetPricing(): Promise<void> {
-    const reason = await prompt({ title: t("quotation.resetReason") });
+    const reason = await prompt({ title: t("quotation.resetReason"), input: { required: true } });
     if (!reason?.trim() || !project.current_pricing_operation_id) return;
     setBusy(true);
     setMessage("");

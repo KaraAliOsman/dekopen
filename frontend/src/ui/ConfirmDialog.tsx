@@ -18,7 +18,7 @@ export type ConfirmRequest = {
   confirmLabel?: string;
   danger?: boolean;
   /** When set, the surface asks for a text value instead of a yes/no. */
-  input?: { label?: string; placeholder?: string };
+  input?: { label?: string; placeholder?: string; required?: boolean };
 };
 
 type ConfirmFn = (request: ConfirmRequest) => Promise<boolean>;
@@ -114,7 +114,7 @@ export function ConfirmProvider({ children }: PropsWithChildren): JSX.Element {
                 <button
                   className={request.danger ? "ui-button--danger" : "ui-button--primary"}
                   data-primary
-                  disabled={Boolean(request.input) && !draft.trim()}
+                  disabled={Boolean(request.input?.required) && !draft.trim()}
                   onClick={() => settle(true)}
                   type="button"
                 >
@@ -141,7 +141,8 @@ export function ConfirmProvider({ children }: PropsWithChildren): JSX.Element {
                     // Dialog's document-level Enter handler also clicks the
                     // primary button — settle via one path only.
                     if (event.key === "Enter") event.stopPropagation();
-                    if (event.key === "Enter" && draft.trim()) settle(true);
+                    if (event.key === "Enter" && (!request.input?.required || draft.trim()))
+                      settle(true);
                   }}
                   placeholder={request.input.placeholder}
                   value={draft}

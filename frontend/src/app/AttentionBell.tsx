@@ -25,6 +25,7 @@ export function AttentionBell(): JSX.Element | null {
     enabled:
       org !== undefined && ["OWNER", "ESTIMATOR", "WORKSHOP_MANAGER"].includes(org?.role ?? ""),
     staleTime: 60_000,
+    refetchOnWindowFocus: "always",
     queryFn: async ({ signal }) => {
       const ops = await analyticsOperationalSummary({
         signal,
@@ -58,6 +59,10 @@ export function AttentionBell(): JSX.Element | null {
         title={t("shell.notifications")}
         onClick={() => {
           const next = !open;
+          // Refresh on open so the panel shows live counts; the seen snapshot
+          // records what was last displayed, so entries arriving during the
+          // open panel still badge on close.
+          if (next) void query.refetch();
           setOpen(next);
           if (next && query.data && seenKey) {
             const snapshot = Object.fromEntries(

@@ -31,6 +31,7 @@ type OnboardingState = {
   dataChoice?: "demo" | "real" | null;
   clientId?: string | null;
   clientName?: string;
+  clientExtra?: { rut: string; email: string; phone: string };
   projectId?: string | null;
   projectName?: string;
 };
@@ -100,32 +101,62 @@ export function OnboardingPage(): JSX.Element {
   const [clientName, setClientName] = useState("");
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projectName, setProjectName] = useState("");
-  const restoredRef = useRef(false);
+  // Org-scoped draft: `restoredOrgRef` marks the org whose draft was already
+  // loaded so switching orgs restores that org's own saved state instead of
+  // carrying the previous org's records. `restoredFor` gates persistence — the
+  // write effect skips until the new org's draft is actually in state, so a
+  // switch can never overwrite B's entry with A's values.
+  const restoredOrgRef = useRef("");
+  const [restoredFor, setRestoredFor] = useState("");
   const [moreClient, setMoreClient] = useState(false);
   const [clientExtra, setClientExtra] = useState({ rut: "", email: "", phone: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!orgId || restoredRef.current) return;
-    restoredRef.current = true;
+    if (!orgId || restoredOrgRef.current === orgId) return;
+    restoredOrgRef.current = orgId;
     const saved = readState(orgId);
-    if (saved.step !== undefined) setStep(saved.step);
-    if (saved.systemId !== undefined) setSystemId(saved.systemId);
-    if (saved.dataChoice !== undefined) setDataChoice(saved.dataChoice);
-    if (saved.clientId !== undefined) setClientId(saved.clientId);
-    if (saved.clientName !== undefined) setClientName(saved.clientName);
-    if (saved.projectId !== undefined) setProjectId(saved.projectId);
-    if (saved.projectName !== undefined) setProjectName(saved.projectName);
+    setStep(saved.step ?? 0);
+    setSystemId(saved.systemId ?? null);
+    setDataChoice(saved.dataChoice ?? null);
+    setClientId(saved.clientId ?? null);
+    setClientName(saved.clientName ?? "");
+    setClientExtra(saved.clientExtra ?? { rut: "", email: "", phone: "" });
+    setProjectId(saved.projectId ?? null);
+    setProjectName(saved.projectName ?? "");
+    setMoreClient(false);
+    setError(null);
+    setRestoredFor(orgId);
   }, [orgId]);
 
   useEffect(() => {
-    if (!orgId || !restoredRef.current) return;
+    if (!orgId || restoredFor !== orgId) return;
     sessionStorage.setItem(
       storageKey(orgId),
-      JSON.stringify({ step, systemId, dataChoice, clientId, clientName, projectId, projectName }),
+      JSON.stringify({
+        step,
+        systemId,
+        dataChoice,
+        clientId,
+        clientName,
+        clientExtra,
+        projectId,
+        projectName,
+      }),
     );
-  }, [orgId, step, systemId, dataChoice, clientId, clientName, projectId, projectName]);
+  }, [
+    orgId,
+    restoredFor,
+    step,
+    systemId,
+    dataChoice,
+    clientId,
+    clientName,
+    clientExtra,
+    projectId,
+    projectName,
+  ]);
 
   function finish(destination: string): void {
     if (orgId) sessionStorage.removeItem(storageKey(orgId));
@@ -152,40 +183,46 @@ export function OnboardingPage(): JSX.Element {
   const options = useMemo(() => ({ headers: { "X-Organization-ID": orgId } }), [orgId]);
 
   // Creates carry no idempotency key: when the response is lost after a
-  // server-side commit, reconcile before letting the user submit again — but
-  // names are not unique, so only a record fresh enough to BE this attempt
-  // (same name, updated within the attempt window, and for projects the same
-  // client) may be adopted. Anything older is an unrelated record.
+  // server-side commit, reconcile before letting the user submit again. A
+  // record may only be adopted when it is indistinguishable from this
+  // attempt — same name AND every submitted field, fresh within the attempt
+  // window, and the unique match. Anything ambiguous stays an error instead
+  // of linking an unrelated record.
   async function adoptIfCreated(
     kind: "client" | "project",
     name: string,
     attemptStart: number,
     clientName?: string,
+    fields?: { rut: string; email: string; phone: string },
   ): Promise<string | null> {
     const wanted = name.trim().toLowerCase();
     const fresh = (updated: string): boolean =>
       Math.abs(Date.parse(updated) - attemptStart) <= 60_000;
+    const norm = (value: string | undefined): string => (value ?? "").trim().toLowerCase();
     try {
       if (kind === "client") {
         const response = await clientsList(options);
         if (response.status !== 200) return null;
-        return (
-          response.data.items.find(
-            (entry) => entry.name.trim().toLowerCase() === wanted && fresh(entry.updated_at),
-          )?.id ?? null
+        const matches = response.data.items.filter(
+          (entry) =>
+            entry.name.trim().toLowerCase() === wanted &&
+            fresh(entry.updated_at) &&
+            norm(entry.rut) === norm(fields?.rut) &&
+            norm(entry.email) === norm(fields?.email) &&
+            norm(entry.phone) === norm(fields?.phone),
         );
+        return matches.length === 1 ? (matches[0]!.id as string) : null;
       }
       const wantedClient = clientName?.trim().toLowerCase() ?? null;
       const response = await projectsList(options);
       if (response.status !== 200) return null;
-      return (
-        response.data.items.find(
-          (entry) =>
-            entry.name.trim().toLowerCase() === wanted &&
-            fresh(entry.updated_at) &&
-            (wantedClient === null || entry.client_name.trim().toLowerCase() === wantedClient),
-        )?.id ?? null
+      const matches = response.data.items.filter(
+        (entry) =>
+          entry.name.trim().toLowerCase() === wanted &&
+          fresh(entry.updated_at) &&
+          (wantedClient === null || entry.client_name.trim().toLowerCase() === wantedClient),
       );
+      return matches.length === 1 ? (matches[0]!.id as string) : null;
     } catch {
       return null;
     }
@@ -214,7 +251,11 @@ export function OnboardingPage(): JSX.Element {
       if (caught instanceof ApiError && caught.status < 500) {
         setError(t(caught.status === 422 ? "projects.invalid" : "onboarding.saveError"));
       } else {
-        const adopted = await adoptIfCreated("client", clientName, attemptStart);
+        const adopted = await adoptIfCreated("client", clientName, attemptStart, undefined, {
+          rut: clientExtra.rut,
+          email: clientExtra.email,
+          phone: clientExtra.phone,
+        });
         if (adopted) {
           setClientId(adopted);
           setStep(4);
