@@ -1739,6 +1739,7 @@ export function AssemblyEditor({
   onEvaluationChange,
   positionId,
   positionPanel,
+  contentEpoch = 0,
   optionsReady = options !== undefined,
 }: {
   organizationId: string;
@@ -1751,6 +1752,9 @@ export function AssemblyEditor({
   onEvaluationChange(evaluation: EngineAssemblyCalculateResponse | null): void;
   positionId: string | null;
   positionPanel?: JSX.Element;
+  /** Bumped when the product is replaced wholesale (starter pick) so the
+   * canvas viewport re-fits even after the user took manual pan/zoom control. */
+  contentEpoch?: number;
   /** The system's design options have hydrated (or errored) — paid AI
    * generation must not start on an empty catalog signature. Defaults to
    * the options value's presence for callers without a loading state. */
@@ -2174,7 +2178,12 @@ export function AssemblyEditor({
           }
         }}
       >
-        <CanvasViewport contentBox={frontBox} selectionBox={selectionBox} status={statusText}>
+        <CanvasViewport
+          contentBox={frontBox}
+          selectionBox={selectionBox}
+          status={statusText}
+          contentEpoch={contentEpoch}
+        >
           <ProductFrontContent
             product={product}
             members={members}

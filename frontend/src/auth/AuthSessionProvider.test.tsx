@@ -286,6 +286,37 @@ describe("authoritative session and active-organization boundary", () => {
     expect(canvasSnapshot()).toEqual(before);
   });
 
+  it("never leaves ready while a same-user token refresh re-resolves", async () => {
+    // The mid-session "resolving" dip unmounted every guarded route and
+    // wiped in-flight editor drafts (designer review P0-2).
+    const seen: string[] = [];
+    function StatusSpy(): null {
+      seen.push(useAuthSession().status);
+      return null;
+    }
+    mount(<StatusSpy />);
+    await waitFor(() => expect(seen).toContain("ready"));
+    seen.length = 0;
+    vi.mocked(authMe).mockResolvedValueOnce(result("org-A"));
+    act(() => fake.callback?.("TOKEN_REFRESHED", sessionFor("unit-user", "refreshed-token")));
+    await waitFor(() => expect(authMe).toHaveBeenCalledTimes(2));
+    expect(seen).not.toContain("resolving");
+    expect(seen[seen.length - 1]).toBe("ready");
+  });
+
+  it("retains the resolved context when a same-user refresh fetch fails", async () => {
+    mount();
+    await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent("ready"));
+    vi.mocked(authMe).mockRejectedValueOnce(new Error("network down"));
+    await act(async () => {
+      fake.callback?.("TOKEN_REFRESHED", sessionFor("unit-user", "refreshed-token"));
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(authMe).toHaveBeenCalledTimes(2));
+    expect(screen.getByTestId("status")).toHaveTextContent("ready");
+    expect(screen.getByTestId("active-org")).toHaveTextContent("org-A");
+  });
+
   it("cannot expose tenant A design through CommercialDraft after selecting tenant B", async () => {
     mount(<DraftSurface />);
     await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent("ready"));

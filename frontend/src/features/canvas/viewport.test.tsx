@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, it } from "vitest";
 
 import { CanvasViewport } from "./CanvasViewport";
-import { FIT_PADDING, fitTransform, panBy, unionBox, zoomAt } from "./viewport";
+import { FIT_PADDING, fitTransform, panBy, shouldRefitView, unionBox, zoomAt } from "./viewport";
 
 const BOX = { x: -170, y: -150, w: 2100, h: 1670 };
 
@@ -33,6 +33,38 @@ it("zoom clamps at the bounds and pan translates", () => {
   expect(zoomAt(view, 0, 0, 1e-6).scale).toBeGreaterThanOrEqual(0.03);
   const moved = panBy(view, 10, -20);
   expect(moved).toMatchObject({ tx: 10, ty: -20 });
+});
+
+it("a content epoch bump refits even after manual pan/zoom", () => {
+  expect(
+    shouldRefitView({
+      contentEpochChanged: true,
+      boxChanged: true,
+      containerResized: false,
+      userInteracted: true,
+    }),
+  ).toBe(true);
+});
+
+it("auto-fit follows box/container changes only while the view is automatic", () => {
+  // Once the user pans or zooms, a contentBox change must NOT jump the view
+  // back — the async plan arriving later must not steal the camera.
+  expect(
+    shouldRefitView({
+      contentEpochChanged: false,
+      boxChanged: true,
+      containerResized: false,
+      userInteracted: true,
+    }),
+  ).toBe(false);
+  expect(
+    shouldRefitView({
+      contentEpochChanged: false,
+      boxChanged: true,
+      containerResized: true,
+      userInteracted: false,
+    }),
+  ).toBe(true);
 });
 
 it("unionBox wraps both boxes", () => {

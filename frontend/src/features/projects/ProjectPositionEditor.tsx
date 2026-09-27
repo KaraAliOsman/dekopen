@@ -305,6 +305,9 @@ function PositionWorkspace({
   const [uncertainCreate, setUncertainCreate] = useState(false);
   const [assemblyEval, setAssemblyEval] = useState<EngineAssemblyCalculateResponse | null>(null);
   const [createdId, setCreatedId] = useState<string | null>(null);
+  // Bump when a starter replaces the product — the canvas re-fits even if
+  // the user had panned/zoomed the previous drawing away.
+  const [viewEpoch, setViewEpoch] = useState(0);
   // New positions open on the design library (the start point); saved ones go
   // straight to the canvas — picking a starter collapses it.
   const [libraryOpen, setLibraryOpen] = useState(!positionId && !copyId);
@@ -585,6 +588,7 @@ function PositionWorkspace({
     // Coupled starters mint fresh module ids — a stale selection would leave
     // the inspector pointed at a module that no longer exists.
     store.select(nextProduct.assembly.modules[0]?.id ?? null);
+    setViewEpoch((epoch) => epoch + 1);
     setLibraryOpen(false);
     onAssemblyChanged();
   };
@@ -765,6 +769,7 @@ function PositionWorkspace({
             onEvaluationChange={onAssemblyEvaluation}
             positionId={saved?.id ?? null}
             positionPanel={positionPanel}
+            contentEpoch={viewEpoch}
           />
         </div>
       </div>

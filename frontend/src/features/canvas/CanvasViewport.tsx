@@ -17,6 +17,7 @@ import {
   IDENTITY,
   panBy,
   SCALE_100,
+  shouldRefitView,
   type ViewTransform,
   zoomAt,
 } from "./viewport";
@@ -42,11 +43,16 @@ export function CanvasViewport({
   contentBox,
   selectionBox,
   status,
+  contentEpoch = 0,
   children,
 }: {
   contentBox: Box;
   selectionBox: Box | null;
   status: string;
+  /** Bumped by the caller when the content is REPLACED wholesale (starter
+   * pick, another design loaded) — a manual pan/zoom latch must not leave
+   * the new product rendered off-viewport. */
+  contentEpoch?: number;
   children: ReactNode;
 }): JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -69,6 +75,7 @@ export function CanvasViewport({
   const userInteractedRef = useRef(false);
   const lastFitBoxRef = useRef<Box | null>(null);
   const lastFitSizeRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
+  const lastEpochRef = useRef(0);
 
   const fit = useCallback(() => {
     lastFitBoxRef.current = contentBox;
@@ -100,21 +107,37 @@ export function CanvasViewport({
       fit();
       return;
     }
+    // A wholesale content replacement breaks the manual-view latch: the new
+    // product would render wherever the old pan/zoom left it — potentially
+    // fully off-screen ("blank canvas" on a starter pick).
+    const epochChanged = contentEpoch !== lastEpochRef.current;
+    if (epochChanged) {
+      lastEpochRef.current = contentEpoch;
+      userInteractedRef.current = false;
+    }
     // Sheet grew (e.g. the plan arrived after the first fit) or the container
     // itself resized (the /new page collapses once a starter applies — a stale
     // transform would clip the drawing off the viewport): refit in both cases,
     // only while the user has not taken manual control of the view. Compared
     // by value — contentBox is rebuilt each render.
     const last = lastFitBoxRef.current;
-    const sameBox =
-      last !== null &&
-      last.x === contentBox.x &&
-      last.y === contentBox.y &&
-      last.w === contentBox.w &&
-      last.h === contentBox.h;
+    const boxChanged =
+      last === null ||
+      last.x !== contentBox.x ||
+      last.y !== contentBox.y ||
+      last.w !== contentBox.w ||
+      last.h !== contentBox.h;
     const resized = lastFitSizeRef.current.w !== size.w || lastFitSizeRef.current.h !== size.h;
-    if ((!sameBox || resized) && !userInteractedRef.current) fit();
-  }, [fit, size, contentBox]);
+    if (
+      shouldRefitView({
+        contentEpochChanged: epochChanged,
+        boxChanged,
+        containerResized: resized,
+        userInteracted: userInteractedRef.current,
+      })
+    )
+      fit();
+  }, [fit, size, contentBox, contentEpoch]);
 
   // Space held → pan mode. Listen on window so it works wherever focus sits.
   useEffect(() => {

@@ -60,6 +60,21 @@ export function panBy(view: ViewTransform, dx: number, dy: number): ViewTransfor
   return { ...view, tx: view.tx + dx, ty: view.ty + dy };
 }
 
+/** Auto-fit policy: whether the viewport should re-fit the content box.
+ * A wholesale content replacement (epoch bump — e.g. a starter pick) always
+ * refits, even after the user took manual pan/zoom control; otherwise refit
+ * tracks box/container changes only while the view is still automatic. */
+export function shouldRefitView(args: {
+  contentEpochChanged: boolean;
+  boxChanged: boolean;
+  containerResized: boolean;
+  userInteracted: boolean;
+}): boolean {
+  if (args.contentEpochChanged) return true;
+  if (args.userInteracted) return false;
+  return args.boxChanged || args.containerResized;
+}
+
 export function unionBox(a: Box, b: Box | null): Box {
   if (!b) return a;
   const x = Math.min(a.x, b.x);

@@ -81,6 +81,14 @@ export function AuthSessionProvider({ children }: PropsWithChildren): JSX.Elemen
   const requestGeneration = useRef(0);
   const mounted = useRef(true);
   const canvasIdentity = useRef<{ userId: string; organizationId: string | null } | null>(null);
+  // Latest resolved context — a same-user re-resolution (token refresh,
+  // tab-focus revalidation) must retain it: dropping `me` mid-session
+  // unmounts the whole route tree and destroys in-flight editor state.
+  const meRef = useRef<AuthMeResponse | null>(null);
+
+  useEffect(() => {
+    meRef.current = me;
+  }, [me]);
 
   const transitionCanvasIdentity = useCallback(
     (userId: string | null, organizationId: string | null): void => {
@@ -121,9 +129,13 @@ export function AuthSessionProvider({ children }: PropsWithChildren): JSX.Elemen
       setStatus("anonymous");
       return;
     }
-    setStatus("resolving");
-    setMe(null);
-    setMemberships([]);
+    const retained = meRef.current;
+    const refreshing = retained !== null && retained.user.id === current.user.id;
+    if (!refreshing) {
+      setStatus("resolving");
+      setMe(null);
+      setMemberships([]);
+    }
     setError(null);
     // One bounded retry without a revoked/stale persisted selection.
     for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -165,6 +177,10 @@ export function AuthSessionProvider({ children }: PropsWithChildren): JSX.Elemen
           window.localStorage.removeItem(organizationStorageKey(current.user.id));
           organizationRef.current = null;
           setStatus("no_membership");
+        } else if (refreshing) {
+          // A transient failure while refreshing a live session (network
+          // blip, backend hiccup) must not tear the app down — keep the last
+          // resolved context; a real sign-out or denial still transitions.
         } else {
           setError(t("auth.contextError"));
           setStatus("error");
@@ -208,6 +224,11 @@ export function AuthSessionProvider({ children }: PropsWithChildren): JSX.Elemen
         setStatus("anonymous");
         return;
       }
+      // A session event for the same user (TOKEN_REFRESHED, USER_UPDATED,
+      // a duplicate SIGNED_IN) is a refresh, not a re-auth: keep the resolved
+      // context — going through "resolving" unmounts every guarded route and
+      // silently destroys unsaved work mid-edit.
+      const sameUser = meRef.current !== null && meRef.current.user.id === nextSession.user.id;
       organizationRef.current = window.localStorage.getItem(
         organizationStorageKey(nextSession.user.id),
       );
@@ -234,7 +255,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren): JSX.Elemen
           `${window.location.pathname}${window.location.search}${rest ? `#${rest}` : ""}`,
         );
       }
-      setStatus("resolving");
+      if (!sameUser) setStatus("resolving");
       // Supabase listeners are synchronous: do not acquire Auth's lock from inside one.
       const timer = window.setTimeout(() => {
         scheduled.delete(timer);
