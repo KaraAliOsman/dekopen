@@ -150,6 +150,11 @@ export const REASON_KEYS: [RegExp, TranslationKey][] = [
   [/adjacent fixed panels/i, "assembly.reason.slidingFixedAdjacent"],
   [/cannot share a track/i, "assembly.reason.slidingSameTrack"],
   [/at least one moving panel/i, "assembly.reason.slidingNoMoving"],
+  [/frame inset collapsed the glass pocket/i, "assembly.reason.glassPocketCollapsed"],
+  [/handle height requires explicit/i, "assembly.reason.handleHeightMigration"],
+  [/polishing authority/i, "assembly.reason.polishingAuthority"],
+  [/requires policy placement/i, "assembly.reason.policyPlacement"],
+  [/requires all four bead offsets/i, "assembly.reason.beadOffsets"],
 ];
 
 export function issueText(
@@ -233,22 +238,24 @@ function DraftField({
   return (
     <label className="assembly-field">
       {label ? <span>{label}</span> : null}
-      <input
-        value={draft}
-        disabled={disabled}
-        inputMode="decimal"
-        onChange={(event) => setDraft(event.target.value)}
-        onBlur={() => {
-          const normalized = normalize(draft);
-          if (normalized === null) setDraft(value);
-          else if (normalized !== value) onCommit(normalized);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") event.currentTarget.blur();
-          if (event.key === "Escape") setDraft(value);
-        }}
-      />
-      <span className="assembly-unit">{unit}</span>
+      <span className="assembly-input-wrap">
+        <input
+          value={draft}
+          disabled={disabled}
+          inputMode="decimal"
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={() => {
+            const normalized = normalize(draft);
+            if (normalized === null) setDraft(value);
+            else if (normalized !== value) onCommit(normalized);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.currentTarget.blur();
+            if (event.key === "Escape") setDraft(value);
+          }}
+        />
+        <span className="assembly-unit">{unit}</span>
+      </span>
     </label>
   );
 }

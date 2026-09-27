@@ -258,9 +258,24 @@
   width: 5.5rem;
 }
 
+/* Unit rides inside the input's right edge — in the column-stacked
+ * .position-panel layout a loose unit span would wrap under the field. */
+.assembly-input-wrap {
+  align-items: center;
+  display: inline-flex;
+  position: relative;
+}
+
+.assembly-input-wrap input {
+  padding-right: 1.5rem;
+}
+
 .assembly-unit {
   color: var(--theme-text-muted);
   font-size: 0.8rem;
+  pointer-events: none;
+  position: absolute;
+  right: 0.45rem;
 }
 
 .assembly-field--inline {
@@ -851,9 +866,21 @@
   background: var(--theme-surface-hover);
 }
 
-.tree-label.is-selected {
+/* Selection is a row band (with a leading accent bar), so "this row IS
+ * selected" can never be confused with a tinted disclosure that merely
+ * CONTAINS the selection on an ancestor row. */
+.tree-row.is-selected {
   background: var(--theme-accent-soft);
+  border-radius: var(--radius-sm);
+  box-shadow: inset 2px 0 0 var(--theme-accent);
+}
+
+.tree-row.is-selected .tree-label {
   color: var(--theme-accent-ink);
+}
+
+.tree-row.in-path .tree-disclosure {
+  color: var(--theme-accent);
 }
 
 .tree-label.is-static {

@@ -2455,7 +2455,15 @@ export const messages = {
   "assembly.reason.contourDegenerate": "un borde del contorno no tiene largo",
   "assembly.reason.contourSagitta": "la flecha supera la mitad de la cuerda",
   "assembly.reason.contourSelfIntersect": "los bordes del contorno se cruzan",
-  "assembly.reason.generic": "revisa los parámetros del elemento",
+  "assembly.reason.glassPocketCollapsed":
+    "el perfil no deja espacio para el vidrio — revisa el sistema o la inserción",
+  "assembly.reason.handleHeightMigration":
+    "la altura de manilla heredada necesita confirmación explícita",
+  "assembly.reason.polishingAuthority": "cada vidrio necesita una fuente de pulido declarada",
+  "assembly.reason.policyPlacement": "el relleno necesita la política de montaje y su hoja padre",
+  "assembly.reason.beadOffsets":
+    "la política de montaje necesita los cuatro desplazamientos del junquillo",
+  "assembly.reason.generic": "revisa los parámetros del elemento en el inspector",
   "assembly.addUnitLeft": "Agregar unidad a la izquierda",
   "assembly.addUnitRight": "Agregar unidad a la derecha",
   "assembly.removeUnit": "Eliminar unidad",

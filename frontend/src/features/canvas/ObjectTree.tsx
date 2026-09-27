@@ -3,6 +3,16 @@ import { useState, type JSX } from "react";
 import { t } from "../../i18n/es-CL";
 import type { TreeNode } from "./objectTree";
 
+/** Does any descendant row own the current selection? Used to mark the
+ * disclosure path — "contains the selection" is a rail accent, never the
+ * selection band itself. */
+function subtreeContainsSelection(node: TreeNode, selection: string | null): boolean {
+  if (selection === null) return false;
+  return node.children.some(
+    (child) => child.selectId === selection || subtreeContainsSelection(child, selection),
+  );
+}
+
 function TreeRow({
   node,
   depth,
@@ -17,10 +27,11 @@ function TreeRow({
   const [open, setOpen] = useState(true);
   const selected = node.selectId !== null && node.selectId === selection;
   const expandable = node.children.length > 0;
+  const inPath = !selected && subtreeContainsSelection(node, selection);
   return (
     <li role="treeitem" aria-expanded={expandable ? open : undefined} aria-selected={selected}>
       <div
-        className={`tree-row tree-row--${node.kind}`}
+        className={`tree-row tree-row--${node.kind}${selected ? " is-selected" : ""}${inPath ? " in-path" : ""}`}
         style={{ paddingLeft: `${6 + depth * 14}px` }}
       >
         {expandable ? (
@@ -39,7 +50,7 @@ function TreeRow({
         )}
         <button
           type="button"
-          className={`tree-label${selected ? " is-selected" : ""}${node.selectId === null ? " is-static" : ""}`}
+          className={`tree-label${node.selectId === null ? " is-static" : ""}`}
           aria-label={node.ariaLabel}
           onClick={() => {
             if (node.selectId !== null) onSelect(node.selectId);

@@ -358,6 +358,15 @@
   gap: 0.15rem;
 }
 
+.position-panel .assembly-input-wrap {
+  display: flex;
+  width: 100%;
+}
+
+.position-panel .assembly-input-wrap input {
+  flex: 1;
+}
+
 .position-panel .assembly-field > span {
   color: var(--theme-text-secondary);
   font-size: 0.78rem;
