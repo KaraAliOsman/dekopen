@@ -13,6 +13,7 @@ from django.db.backends.utils import CursorWrapper
 import pytest
 from rest_framework.test import APIClient
 
+from authentication.errors import ContractAPIException
 from authentication.rls import authenticated_rls_context
 from authentication.tenancy import MembershipRepository
 from authentication.types import Membership, SupabaseUser, TenantContext, VerifiedSupabaseToken
@@ -315,8 +316,10 @@ def test_composite_pricing_requires_exact_typology_configuration(commercial_rows
                 project,users['OWNER'],'TARGET_GROSS_MARGIN_PROJECT'))['state']=='PREVIEW'
             for mode in ('PRICE_PER_M2_BY_TYPOLOGY','FIXED_PRICE_MATRIX_DIMENSIONAL',
                          'COMMERCIAL_LIST_WITH_DISCOUNTS'):
-                with pytest.raises(PricingError,match='pricing_configuration_not_found'):
+                with pytest.raises(ContractAPIException) as caught:
                     preview(org,tenant(org,'OWNER'),price_request(project,users['OWNER'],mode))
+                assert caught.value.contract_code=='pricing_configuration_not_found'
+                assert 'Fachada' in caught.value.public_detail
         for mode in ('PRICE_PER_M2_BY_TYPOLOGY','FIXED_PRICE_MATRIX_DIMENSIONAL',
                      'COMMERCIAL_LIST_WITH_DISCOUNTS'):
             config_values={'context_code':'DEFAULT','typology':'COMPOSITE','pricing_mode':mode,
@@ -607,7 +610,8 @@ def test_pricing_http_valid_preview_remains_successful(committed_commercial_rows
                       'project_net','project_tax','project_gross','cost_lines','total_cost',
                       'project_code','project_name','client_name','pricing_mode','segment',
                       'positions_breakdown','authorities','rules','requested_by_email',
-                      'reason','requested_by','approved_by','approved_at','created_at'}
+                      'reason','requested_by','approved_by','approved_at','created_at',
+                      'extras','extras_net'}
     assert body['approved_by'] is None and body['approved_at'] is None
     assert body['state']=='PREVIEW'
     assert body['project_id']==str(project)
@@ -962,7 +966,7 @@ def test_preview_retry_refreshes_membership_authorization(
         resume.set()
         response = request.result(timeout=15)
     assert_public_error(response,403,'pricing_permission_denied',
-                        'La operación comercial requiere revisar sus permisos, datos o configuración.')
+                        'Tu rol no permite esta operación comercial.')
     assert sqlstates==['40001']
     assert calls==['OWNER','INSTALLER']
     assert pricing_operation_evidence(org,project)==([],[])

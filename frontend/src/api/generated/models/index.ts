@@ -527,7 +527,6 @@ export * from "./unitEnum";
 export * from "./user";
 export * from "./verticalReferenceEnum";
 export * from "./wallet";
-export * from "./whiteColorEnum";
 export * from "./withdrawRequest";
 export * from "./workCenter";
 export * from "./workCenterList";

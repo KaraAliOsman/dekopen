@@ -27,6 +27,7 @@ from dekopen_engine.operations import (
     OperationKind,
     Tool,
     ToolKind,
+    member_meta_map,
     member_program,
     operations_from_plan,
     validate_operations,
@@ -36,6 +37,7 @@ from documents.repository import (
     documentary_backend,
     one,
     rows,
+    write,
 )
 from documents.renderers import (
     _cut_key,
@@ -43,6 +45,7 @@ from documents.renderers import (
     _piece_labels,
 )
 from production.service import (
+    _declared_intent_gaps,
     _decoded,
     _operations_fact_units,
     _ops_source_fingerprint,
@@ -90,6 +93,16 @@ def _public_tool(row: dict[str, object]) -> dict[str, object]:
     }
 
 
+def _jsonb_value(value: object) -> object:
+    # rows() returns jsonb columns as raw text; decode before domain use.
+    return json.loads(value) if isinstance(value, str) else value
+
+
+def _jsonb_list(value: object) -> list[object]:
+    decoded = _jsonb_value(value)
+    return decoded if isinstance(decoded, list) else []
+
+
 def _public_machine(row: dict[str, object]) -> dict[str, object]:
     return {
         "id": str(row["id"]),
@@ -103,7 +116,7 @@ def _public_machine(row: dict[str, object]) -> dict[str, object]:
         "supported_faces": row["supported_faces"],
         "max_member_length_mm": row["max_member_length_mm"],
         "safe_margin_mm": row["safe_margin_mm"],
-        "clamp_zones": row["clamp_zones"],
+        "clamp_zones": _jsonb_value(row["clamp_zones"]),
         "tool_ids": [str(tool_id) for tool_id in row["tool_ids"]],
         "postprocessor_id": row["postprocessor_id"],
         "postprocessor_version": row["postprocessor_version"],
@@ -225,6 +238,7 @@ def list_machines(*, org_id: UUID) -> list[dict[str, object]]:
 
 
 def _clamp_zones(value: object) -> list[dict[str, object]]:
+    value = _jsonb_value(value)
     if value is None:
         return []
     if not isinstance(value, list):
@@ -444,11 +458,7 @@ def _machine_profile(
                 end_mm=Decimal(str(zone["end_mm"])),
                 label=str(zone.get("label") or ""),
             )
-            for zone in (
-                machine_row["clamp_zones"]
-                if isinstance(machine_row.get("clamp_zones"), list)
-                else []
-            )
+            for zone in _jsonb_list(machine_row.get("clamp_zones"))
             if isinstance(zone, dict)
         ],
         postprocessor_id=str(machine_row["postprocessor_id"]),
@@ -497,6 +507,13 @@ def _order_ops(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
     ops_issues: list[dict[str, object]] = []
     ops = operations_from_plan(
         bars=bars, fact_units=fact_units, issues=ops_issues
+    )
+    ops_issues.extend(
+        _declared_intent_gaps(
+            version_snapshot,
+            str(payload.get("position_id") or "") or None,
+            {op.kind.value for op in ops},
+        )
     )
     labels = _piece_labels(version_snapshot)
     member_labels = {
@@ -591,9 +608,11 @@ def cnc_readiness(
     machine_profiles = [
         _machine_profile(row, tools_by_id) for row in machine_rows
     ]
+    member_meta = member_meta_map(bundle["fact_units"])
     members: list[dict[str, object]] = []
     for member_id in member_ids:
         label = bundle["member_labels"].get(member_id) or member_id[:8]
+        meta = member_meta.get(member_id) or {}
         ops = member_ops[member_id]
         op_ids = {op.operation_id for op in ops}
         machine_results: list[dict[str, object]] = []
@@ -630,6 +649,11 @@ def cnc_readiness(
             {
                 "member_id": member_id,
                 "member_label": label,
+                "workshop_sku": meta.get("workshop_sku"),
+                "role": meta.get("role"),
+                "bay_id": meta.get("bay_id"),
+                "leaf_id": meta.get("leaf_id"),
+                "position_index": meta.get("position_index"),
                 "length_mm": str(bundle["member_lengths"].get(member_id) or ""),
                 "operation_count": len(ops),
                 "kinds": sorted({op.kind.value for op in ops}),
@@ -663,6 +687,11 @@ def cnc_readiness(
         "order_code": bundle["order"]["order_code"],
         "members": members,
         "issues": bundle["ops_issues"],
+        # The op tool_ids a magazine must bind literally — without this list
+        # a programmer has to guess that code "drill"/"end_mill" is required.
+        "required_tool_ids": sorted(
+            {op.tool_id for op in bundle["ops"] if op.tool_id}
+        ),
         "machines": [_public_machine(row) for row in machine_rows],
         "programs": list_programs(org_id=org_id, order_id=order_id),
     }
@@ -750,11 +779,22 @@ def generate_program(
         {
             "schema": "dekopen_ops_v1",
             "order_code": bundle["identity"]["order_code"],
+            "project_code": bundle["identity"]["project_code"],
+            "revision_code": bundle["identity"]["revision_code"],
             "plan_seed": bundle["identity"]["plan_seed"],
             "machine": profile.model_dump(mode="json"),
             "operation_count": document["operation_count"],
             "counts_by_kind": document["counts_by_kind"],
-            "unemitted_kinds": [],
+            # The member file must admit the same coverage gap the order
+            # document reports — never claim nothing was unemitted.
+            "unemitted_kinds": sorted(
+                _OP_KINDS - {op.kind.value for op in bundle["ops"]}
+            ),
+            "declared_intent_gaps": [
+                issue["kind"]
+                for issue in bundle["ops_issues"]
+                if issue.get("code") == "declared_intent_not_emitted"
+            ],
             "issues": document["issues"],
             "members": (
                 {
@@ -800,7 +840,7 @@ def generate_program(
         "cnc_program_invalid",
     )
     with transaction.atomic(), documentary_backend():
-        rows(
+        write(
             """
             UPDATE public.cnc_programs SET status = 'SUPERSEDED'
             WHERE org_id = %s AND work_order_id = %s AND machine_id = %s
@@ -939,7 +979,7 @@ def program_file(
         # The plan moved under the program — flip it so downloads stop
         # pretending this file is current.
         with documentary_backend():
-            rows(
+            write(
                 """
                 UPDATE public.cnc_programs SET status = 'SUPERSEDED'
                 WHERE id = %s AND org_id = %s

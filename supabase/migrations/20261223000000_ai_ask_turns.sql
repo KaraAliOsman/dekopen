@@ -39,6 +39,9 @@ CREATE POLICY ai_ask_turns_insert ON public.ai_ask_turns
 GRANT SELECT ON public.ai_ask_turns TO authenticated;
 GRANT INSERT ON public.ai_ask_turns TO ai_backend;
 REVOKE UPDATE, DELETE ON public.ai_ask_turns FROM authenticated, ai_backend;
+-- Supabase default privileges mint INSERT on new tables for the caller roles;
+-- an ask turn is committed evidence, so only ai_backend may write it.
+REVOKE INSERT ON public.ai_ask_turns FROM anon, authenticated, service_role;
 
 CREATE INDEX ai_ask_turns_thread_idx
     ON public.ai_ask_turns (org_id, user_id, surface, created_at);

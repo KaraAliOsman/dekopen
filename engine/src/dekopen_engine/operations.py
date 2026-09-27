@@ -502,6 +502,9 @@ def _member_ops(
                 y_mm=handle.point.y_mm,
                 u_mm=handle_u,
                 reference="member_start",
+                # Handle prep drills the sash's interior groove face — the
+                # face the handle spindle and screws physically mount to.
+                face=MemberFace.INSIDE_FACE,
                 tool_id="drill",
                 basis=(
                     f"handle_requirement_policy:{handle.policy_id}"

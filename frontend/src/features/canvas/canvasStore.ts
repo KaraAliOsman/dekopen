@@ -18,7 +18,9 @@ export type CanvasDesignInputs = {
   systemId: string | null;
   nominalWidthMm: string;
   nominalHeightMm: string;
-  color: "WHITE" | "FOILED";
+  /** Finish code — the series' declared finishes drive the picker; a stored
+   * finish the catalog stopped offering still displays but can't save. */
+  color: string;
   parametricTree: IntentNode;
   /** Compositional product (product-v2). null = classic single unit. */
   product: ProductJson | null;

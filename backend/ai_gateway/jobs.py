@@ -21,7 +21,7 @@ from uuid import UUID
 
 from django.db import DatabaseError, connection, transaction
 
-from pricing.repository import rows
+from pricing.repository import rows, write
 
 
 @contextmanager
@@ -641,7 +641,7 @@ def record_outcome(
             }
             resolved.add((recorded["turn_index"], recorded["step_index"]))
             if pending and all(pair in resolved for pair in pending):
-                rows(
+                write(
                     "UPDATE public.ai_jobs SET state = 'SUCCEEDED',"
                     " updated_at = NOW()"
                     " WHERE id = %s AND state = 'WAITING_FOR_APPROVAL'",

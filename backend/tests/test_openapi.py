@@ -183,25 +183,32 @@ def test_engine_response_includes_shot06_and_excludes_inspector() -> None:
     }
 
 
-def test_persisted_quotation_color_is_white_without_narrowing_generic_engine_schema() -> None:
+def test_position_color_is_a_declared_finish_string_and_finish_domain_is_bounded() -> None:
     schema = yaml.safe_load(OPENAPI.read_text(encoding="utf-8"))["components"]["schemas"]
-    assert schema["WhiteColorEnum"]["enum"] == ["WHITE"]
     assert schema["ColorEnum"]["enum"] == ["WHITE", "FOILED"]
-    assert schema["PositionDesignRequest"]["properties"]["color"] == {
-        "$ref": "#/components/schemas/WhiteColorEnum"
-    }
+    # Position colors are declared-finish strings — the system's `finishes`
+    # list (not a hardcoded enum) is the membership authority.
+    for name in ("PositionDesignRequest", "DraftPositionRequest"):
+        assert schema[name]["properties"]["color"] == {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50,
+        }, name
     assert schema["PositionDesign"]["properties"]["color"] == {
-        "$ref": "#/components/schemas/WhiteColorEnum"
+        "type": "string",
+        "maxLength": 50,
     }
     assert schema["PositionResponse"]["properties"]["design"] == {
         "$ref": "#/components/schemas/PositionDesign"
     }
-    assert schema["DraftPositionRequest"]["properties"]["color"] == {
-        "$ref": "#/components/schemas/WhiteColorEnum"
-    }
+    # The workshop machining finish domain stays WHITE|FOILED.
     finish = schema["WorkshopAnnotationRequest"]["properties"]["finish_class"]
     assert {item.get("$ref") for item in finish["oneOf"]} >= {
-        "#/components/schemas/WhiteColorEnum"
+        "#/components/schemas/ColorEnum"
+    }
+    assert schema["SystemWriteRequest"]["properties"]["finishes"] == {
+        "type": "array",
+        "items": {"type": "string", "minLength": 1, "maxLength": 50},
     }
     assert schema["EngineCalculateRequestRequest"]["properties"]["color"]["type"] == "string"
 

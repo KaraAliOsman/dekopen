@@ -158,6 +158,10 @@ def _install_fakes(monkeypatch, approval, version=None, live=None, calls=None):
             return [{"id": approval["project_id"]}]
         return []
 
+    def fake_write(sql_text, params=()):
+        calls.append(" ".join(sql_text.lower().split()))
+        return 1
+
     def fake_one(sql_text, params, code="not_found"):
         lowered = " ".join(sql_text.lower().split())
         calls.append(lowered)
@@ -169,6 +173,7 @@ def _install_fakes(monkeypatch, approval, version=None, live=None, calls=None):
 
     monkeypatch.setattr("portal.service.rows", fake_rows)
     monkeypatch.setattr("portal.service.one", fake_one)
+    monkeypatch.setattr("portal.service.write", fake_write)
     return calls
 
 
@@ -270,6 +275,7 @@ def test_portal_quote_carries_positions_issuer_and_payment_state(monkeypatch) ->
 
     monkeypatch.setattr("portal.service.rows", fake_rows)
     monkeypatch.setattr("portal.service.one", fake_one)
+    monkeypatch.setattr("portal.service.write", lambda *a, **k: 1)
     with patch("portal.service.SupabaseDocumentStorage"):
         out = service.portal_quote("tok")
 
@@ -522,8 +528,13 @@ def test_approve_internal_mints_decided_row_and_transitions(monkeypatch) -> None
             return [{"id": project_id}]
         return []
 
+    def fake_write(sql_text, params=()):
+        calls.append(" ".join(sql_text.lower().split()))
+        return 1
+
     monkeypatch.setattr("portal.service.one", fake_one)
     monkeypatch.setattr("portal.service.rows", fake_rows)
+    monkeypatch.setattr("portal.service.write", fake_write)
     monkeypatch.setattr(
         "portal.service.connection",
         SimpleNamespace(cursor=lambda: _FakeCursor()),

@@ -153,13 +153,34 @@ function readInspectorFailures(payload: unknown): InspectorFailure[] {
 }
 
 /** The server's human detail ("Vano 3 · Dormitorio: no hay precio…") beats
- * the generic toast copy whenever the API supplies one. */
+ * the generic toast copy whenever the API supplies one. Plain DRF 400s have
+ * no contract envelope — dig out the first field error with its field name
+ * so a rejected Emitir names what to fix instead of the generic toast. */
 function apiDetail(payload: unknown): string | null {
   if (typeof payload !== "object" || payload === null) return null;
   const error = (payload as { error?: unknown }).error;
   const detail =
     typeof error === "object" && error !== null ? (error as { detail?: unknown }).detail : null;
-  return typeof detail === "string" && detail.trim() ? detail : null;
+  if (typeof detail === "string" && detail.trim()) return detail;
+
+  const fieldError = (node: unknown, path: string): string | null => {
+    if (typeof node === "string" && node.trim()) return path ? `${path}: ${node}` : node;
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        const hit = fieldError(item, path);
+        if (hit) return hit;
+      }
+      return null;
+    }
+    if (typeof node === "object" && node !== null) {
+      for (const [key, value] of Object.entries(node)) {
+        const hit = fieldError(value, path ? `${path}.${key}` : key);
+        if (hit) return hit;
+      }
+    }
+    return null;
+  };
+  return fieldError(payload, "");
 }
 
 function GlassPolishingRow({

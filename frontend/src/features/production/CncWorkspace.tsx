@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 
 import {
   productionCncMachineCreate,
+  productionCncMachineUpdate,
   productionCncToolCreate,
+  productionCncToolUpdate,
   productionCncWorkspace,
 } from "../../api/generated/dekopen";
 import { ApiError } from "../../api/apiMutator";
@@ -152,18 +154,23 @@ export function CncWorkspace() {
   async function saveTool() {
     if (!toolForm) return;
     setBusy(true);
+    const body = {
+      code: String(toolForm.code ?? ""),
+      name: String(toolForm.name ?? ""),
+      kind: String(toolForm.kind ?? "DRILL_BIT"),
+      diameter_mm: String(toolForm.diameter_mm || "") || null,
+      working_length_mm: String(toolForm.working_length_mm || "") || null,
+      max_depth_mm: String(toolForm.max_depth_mm || "") || null,
+      compatible_kinds: (toolForm.compatible_kinds as string[] | undefined)?.length
+        ? (toolForm.compatible_kinds as string[])
+        : null,
+    };
     try {
-      await productionCncToolCreate({
-        code: String(toolForm.code ?? ""),
-        name: String(toolForm.name ?? ""),
-        kind: String(toolForm.kind ?? "DRILL_BIT"),
-        diameter_mm: String(toolForm.diameter_mm || "") || null,
-        working_length_mm: String(toolForm.working_length_mm || "") || null,
-        max_depth_mm: String(toolForm.max_depth_mm || "") || null,
-        compatible_kinds: (toolForm.compatible_kinds as string[] | undefined)?.length
-          ? (toolForm.compatible_kinds as string[])
-          : null,
-      });
+      if (toolForm.id) {
+        await productionCncToolUpdate(String(toolForm.id), body);
+      } else {
+        await productionCncToolCreate(body);
+      }
       setToolForm(null);
       await load();
     } catch (err) {
@@ -176,22 +183,27 @@ export function CncWorkspace() {
   async function saveMachine() {
     if (!machineForm) return;
     setBusy(true);
+    const body = {
+      code: String(machineForm.code ?? ""),
+      name: String(machineForm.name ?? ""),
+      manufacturer: String(machineForm.manufacturer ?? ""),
+      model: String(machineForm.model ?? ""),
+      max_member_length_mm: String(machineForm.max_member_length_mm || "") || null,
+      safe_margin_mm: String(machineForm.safe_margin_mm || "") || null,
+      supported_kinds: (machineForm.supported_kinds as string[] | undefined)?.length
+        ? (machineForm.supported_kinds as string[])
+        : null,
+      supported_faces: (machineForm.supported_faces as string[] | undefined)?.length
+        ? (machineForm.supported_faces as string[])
+        : null,
+      tool_ids: (machineForm.tool_ids as string[] | undefined) ?? [],
+    };
     try {
-      await productionCncMachineCreate({
-        code: String(machineForm.code ?? ""),
-        name: String(machineForm.name ?? ""),
-        manufacturer: String(machineForm.manufacturer ?? ""),
-        model: String(machineForm.model ?? ""),
-        max_member_length_mm: String(machineForm.max_member_length_mm || "") || null,
-        safe_margin_mm: String(machineForm.safe_margin_mm || "") || null,
-        supported_kinds: (machineForm.supported_kinds as string[] | undefined)?.length
-          ? (machineForm.supported_kinds as string[])
-          : null,
-        supported_faces: (machineForm.supported_faces as string[] | undefined)?.length
-          ? (machineForm.supported_faces as string[])
-          : null,
-        tool_ids: (machineForm.tool_ids as string[] | undefined) ?? [],
-      });
+      if (machineForm.id) {
+        await productionCncMachineUpdate(String(machineForm.id), body);
+      } else {
+        await productionCncMachineCreate(body);
+      }
       setMachineForm(null);
       await load();
     } catch (err) {
@@ -275,6 +287,7 @@ export function CncWorkspace() {
                         <th>{t("production.cncMachineKinds")}</th>
                         <th>{t("production.cncMachineFaces")}</th>
                         <th>{t("production.cncMachineMagazine")}</th>
+                        {canWrite ? <th /> : null}
                       </tr>
                     </thead>
                     <tbody>
@@ -303,6 +316,30 @@ export function CncWorkspace() {
                               : t("production.cncAllFaces")}
                           </td>
                           <td>{machine.tool_ids.length}</td>
+                          {canWrite ? (
+                            <td>
+                              <button
+                                type="button"
+                                className="cnc-add"
+                                onClick={() =>
+                                  setMachineForm({
+                                    id: machine.id,
+                                    code: machine.code,
+                                    name: machine.name,
+                                    manufacturer: machine.manufacturer,
+                                    model: machine.model,
+                                    max_member_length_mm: machine.max_member_length_mm ?? "",
+                                    safe_margin_mm: machine.safe_margin_mm ?? "",
+                                    supported_kinds: machine.supported_kinds ?? [],
+                                    supported_faces: machine.supported_faces ?? [],
+                                    tool_ids: machine.tool_ids,
+                                  })
+                                }
+                              >
+                                {t("ui.edit")}
+                              </button>
+                            </td>
+                          ) : null}
                         </tr>
                       ))}
                     </tbody>
@@ -499,6 +536,7 @@ export function CncWorkspace() {
                     </button>
                   ) : null}
                 </div>
+                <p className="cnc-hint">{t("production.cncToolCodeHint")}</p>
                 {data.tools.length === 0 ? (
                   <p className="cnc-empty">{t("production.cncToolsEmpty")}</p>
                 ) : (
@@ -511,6 +549,7 @@ export function CncWorkspace() {
                         <th>⌀ mm</th>
                         <th>{t("production.cncToolDepth")}</th>
                         <th>{t("production.cncToolKinds")}</th>
+                        {canWrite ? <th /> : null}
                       </tr>
                     </thead>
                     <tbody>
@@ -528,6 +567,28 @@ export function CncWorkspace() {
                               ? tool.compatible_kinds.map(kindLabel).join(", ")
                               : t("production.cncAllKinds")}
                           </td>
+                          {canWrite ? (
+                            <td>
+                              <button
+                                type="button"
+                                className="cnc-add"
+                                onClick={() =>
+                                  setToolForm({
+                                    id: tool.id,
+                                    code: tool.code,
+                                    name: tool.name,
+                                    kind: tool.kind,
+                                    diameter_mm: tool.diameter_mm ?? "",
+                                    working_length_mm: tool.working_length_mm ?? "",
+                                    max_depth_mm: tool.max_depth_mm ?? "",
+                                    compatible_kinds: tool.compatible_kinds ?? [],
+                                  })
+                                }
+                              >
+                                {t("ui.edit")}
+                              </button>
+                            </td>
+                          ) : null}
                         </tr>
                       ))}
                     </tbody>

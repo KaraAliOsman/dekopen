@@ -57,14 +57,34 @@ function LeafGroup({
   const progress = useRef(0);
   const explodeProgress = useRef(0);
   const invalidate = useThree((state) => state.invalidate);
+  // A tilt_turn leaf owns two pivots — swing (side hinge) and tilt (bottom
+  // rail). `activePivot` records which one `progress` currently expresses;
+  // switching poses closes the leaf first, then reopens on the other pivot
+  // — a real leaf cannot teleport between the two (review: Abatir dead
+  // after Abrir).
+  const activePivot = useRef<"swing" | "tilt">("swing");
   // Abatir poses only tilt_turn leaves — other kinds keep obeying Abrir.
-  const target = (motion.kind === "tilt_turn" ? open || tiltPose : open) ? 1 : 0;
+  const wantOpen = motion.kind === "tilt_turn" ? open || tiltPose : open;
+  const target = wantOpen ? 1 : 0;
   const explodeTarget = explode ? 1 : 0;
   useFrame((_, delta) => {
+    const step = Math.min(1, delta * 5.5);
+    const wantPivot = tiltPose ? "tilt" : "swing";
+    let switching = motion.kind === "tilt_turn" && wantPivot !== activePivot.current;
+    if (switching && progress.current > 0) {
+      // Close on the current pivot before switching to the other.
+      const next = progress.current - progress.current * step;
+      progress.current = Math.abs(next) < 0.004 ? 0 : Math.max(0, next);
+    } else if (switching) {
+      activePivot.current = wantPivot;
+      switching = false;
+    }
     const moving = progress.current !== target;
     const exploding = explodeProgress.current !== explodeTarget;
-    if (!moving && !exploding) return;
-    const step = Math.min(1, delta * 5.5);
+    if (!moving && !exploding && !switching) {
+      // A flipped pivot still owes one write so the groups re-pose.
+      if (activePivot.current === wantPivot && progress.current === 0) return;
+    }
     if (moving) {
       const next = progress.current + (target - progress.current) * step;
       progress.current = Math.abs(next - target) < 0.004 ? target : next;
@@ -74,6 +94,7 @@ function LeafGroup({
       explodeProgress.current = Math.abs(next - explodeTarget) < 0.004 ? explodeTarget : next;
     }
     const pose = progress.current;
+    const tilted = motion.kind === "tilt_turn" && activePivot.current === "tilt";
     const lift = explodeProgress.current * Math.max(depth * 1.35, 60);
     const tiltGroupEl = tiltGroup.current;
     const swingGroupEl = swingGroup.current;
@@ -98,9 +119,9 @@ function LeafGroup({
       innerGroup.position.set(0, 0, lift);
     } else if (motion.kind === "tilt_turn") {
       tiltGroupEl.position.set(0, tiltPivot, 0);
-      tiltGroupEl.rotation.x = tiltPose ? pose * TILT_RAD : 0;
+      tiltGroupEl.rotation.x = tilted ? pose * TILT_RAD : 0;
       swingGroupEl.position.set(motion.pivot, -tiltPivot, 0);
-      swingGroupEl.rotation.y = tiltPose ? 0 : motion.dir * pose * SWING_RAD;
+      swingGroupEl.rotation.y = tilted ? 0 : motion.dir * pose * SWING_RAD;
       innerGroup.position.set(-motion.pivot, 0, lift);
     } else {
       tiltGroupEl.position.set(motion.dir * pose * motion.travel, 0, 0);

@@ -5,6 +5,6 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
-import { WhiteColorEnum } from "./whiteColorEnum";
+import { ColorEnum } from "./colorEnum";
 
-export const WorkshopAnnotationRequestFinishClass = { ...WhiteColorEnum } as const;
+export const WorkshopAnnotationRequestFinishClass = { ...ColorEnum } as const;

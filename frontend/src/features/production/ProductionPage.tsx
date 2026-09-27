@@ -159,6 +159,7 @@ const eventKey: Record<string, Parameters<typeof t>[0]> = {
   WO_REMNANTS_SETTLED: "production.eventRemnantsSettled",
   WO_OPS_EXPORTED: "production.eventOpsExported",
   WO_CNC_PROGRAM: "production.eventCncProgram",
+  WO_STOCK_CONSUMED: "production.eventStockConsumed",
 };
 
 const deliveryStatusKey: Record<string, Parameters<typeof t>[0]> = {
@@ -201,6 +202,14 @@ function actionErrorDetail(error: unknown): string {
     }
   }
   return t("production.actionError");
+}
+
+/** Same contract for non-throwing response paths (DTE emit / envío send):
+ * a 4xx body carries {error:{detail}} — surface it instead of the generic
+ * failure toast. */
+function responseErrorDetail(data: unknown, fallback: string): string {
+  const detail = (data as { error?: { detail?: unknown } } | null)?.error?.detail;
+  return typeof detail === "string" && detail.trim() ? detail : fallback;
 }
 
 function stepActions(step: ProductionStep): StepAction[] {
@@ -323,7 +332,7 @@ export function ProductionPage(): JSX.Element {
     (order) =>
       (statusFilter === "" || order.status === statusFilter) &&
       (!blockedOnly || order.status === "HOLD") &&
-      (!shortageOnly || order.shortage > 0) &&
+      (!shortageOnly || order.shortage > 0 || order.version_shortage > 0) &&
       (!dispatchReadyOnly || order.dispatch_ready),
   );
   const listFiltered = statusFilter !== "" || shortageOnly || dispatchReadyOnly || blockedOnly;
@@ -344,16 +353,21 @@ export function ProductionPage(): JSX.Element {
   }, [selectedId, filteredOrders[0]?.id]);
 
   const loadOrders = useCallback(async () => {
+    // Independent feeds: a 500 on the station queue (or prep) must not blank
+    // the order list — each call settles on its own.
     const [response, prepResponse, queueResponse] = await Promise.all([
       productionOrders(),
-      productionPrep(),
-      productionStationQueue(),
+      productionPrep().catch(() => null),
+      productionStationQueue().catch(() => null),
     ]);
+    if (prepResponse === null || queueResponse === null) {
+      setMessage(t("production.loadError"));
+    }
     if (response.status === 200) setOrders(response.data.orders);
     // §8: versions approved for production but not yet released surface here
     // — the workshop sees the approved work without waiting for a reminder.
-    if (prepResponse.status === 200) setPrepVersions(prepResponse.data.versions);
-    if (queueResponse.status === 200) {
+    if (prepResponse?.status === 200) setPrepVersions(prepResponse.data.versions);
+    if (queueResponse?.status === 200) {
       setStationQueue(
         ((queueResponse.data.stations ?? []) as StationQueueGroup[]).filter(
           (group) => (group.entries ?? []).length > 0,
@@ -874,7 +888,7 @@ export function ProductionPage(): JSX.Element {
       if (response.status === 201) {
         await loadDetail(orderId);
       } else {
-        setMessage(t("production.dteEmitError"));
+        setMessage(responseErrorDetail(response.data, t("production.dteEmitError")));
       }
     } catch {
       setMessage(t("production.dteEmitError"));
@@ -910,7 +924,7 @@ export function ProductionPage(): JSX.Element {
       if (response.status === 201) {
         await loadDetail(orderId);
       } else {
-        setMessage(t("production.envioSendError"));
+        setMessage(responseErrorDetail(response.data, t("production.envioSendError")));
       }
     } catch {
       setMessage(t("production.envioSendError"));
@@ -997,8 +1011,14 @@ export function ProductionPage(): JSX.Element {
 
   // INSTALLER is a field role — it confirms deliveries and installations,
   // never station steps or work-order transitions (server enforces).
+  // ESTIMATOR gets a read-only view — the attention queue deep-links them
+  // here to see blockers and shortages; the backend readers include them.
   const canAct =
-    role === "OWNER" || role === "WORKSHOP_MANAGER" || role === "INSTALLER" || role === "OPERATOR";
+    role === "OWNER" ||
+    role === "WORKSHOP_MANAGER" ||
+    role === "INSTALLER" ||
+    role === "OPERATOR" ||
+    role === "ESTIMATOR";
   const canWrite = role === "OWNER" || role === "WORKSHOP_MANAGER";
   const canStep = canWrite || role === "OPERATOR";
   if (!canAct) {
@@ -1140,7 +1160,11 @@ export function ProductionPage(): JSX.Element {
                                 entry.status ?? "",
                               ).toLowerCase()}`}
                             >
-                              {t(stepStatusKey[entry.status ?? ""] ?? "production.stepPending")}
+                              {t(
+                                entry.status === "READY" && !entry.is_next
+                                  ? "production.stepPending"
+                                  : (stepStatusKey[entry.status ?? ""] ?? "production.stepPending"),
+                              )}
                             </span>
                           </button>
                         </li>
@@ -1631,7 +1655,10 @@ export function ProductionPage(): JSX.Element {
                           {t("production.optimizeStatsCuts")}: <strong>{stats.cuts_total}</strong>
                           {" · "}
                           {t("production.optimizeStatsWaste")}:{" "}
-                          <strong>{fmtMm(stats.waste_mm)} mm</strong>
+                          <strong>{fmtMm(stats.process_waste_mm ?? stats.waste_mm)} mm</strong>
+                          {stats.reusable_remnant_mm && stats.reusable_remnant_mm !== "0"
+                            ? ` · ${t("production.optimizeStatsRemnantReusable")}: ${fmtMm(stats.reusable_remnant_mm)} mm`
+                            : ""}
                           {stats.sheets_total
                             ? ` · ${t("production.optimizeStatsSheets")}: ${stats.sheets_total}`
                             : ""}
@@ -1651,7 +1678,9 @@ export function ProductionPage(): JSX.Element {
                     {strategyCompare
                       ? (() => {
                           const bestWaste = Math.min(
-                            ...strategyCompare.strategies.map((row) => Number(row.waste_mm)),
+                            ...strategyCompare.strategies.map((row) =>
+                              Number(row.process_waste_mm ?? row.waste_mm),
+                            ),
                           );
                           return (
                             <table className="production-plan production-compare-table">
@@ -1671,7 +1700,7 @@ export function ProductionPage(): JSX.Element {
                                   <tr
                                     key={row.strategy}
                                     className={
-                                      Number(row.waste_mm) === bestWaste
+                                      Number(row.process_waste_mm ?? row.waste_mm) === bestWaste
                                         ? "production-compare-best"
                                         : ""
                                     }
@@ -1690,7 +1719,7 @@ export function ProductionPage(): JSX.Element {
                                         : ""}
                                     </td>
                                     <td>{row.cuts_total}</td>
-                                    <td>{fmtMm(row.waste_mm)} mm</td>
+                                    <td>{fmtMm(row.process_waste_mm ?? row.waste_mm)} mm</td>
                                     <td>{row.purchase_bars + row.purchase_sheets}</td>
                                     <td>
                                       {row.remnants_consumed}↓ {row.remnants_produced}↑
@@ -1912,7 +1941,7 @@ export function ProductionPage(): JSX.Element {
                         ) : null}
                         {purchases.length || sheetPurchases.length ? (
                           <p className="production-optimize-purchases">
-                            {t("production.optimizePurchases")}:{" "}
+                            {t("production.optimizeStockNew")}:{" "}
                             {purchases
                               .map(
                                 (line) =>
@@ -1927,6 +1956,36 @@ export function ProductionPage(): JSX.Element {
                               .join(" · ")}
                           </p>
                         ) : null}
+                        {(() => {
+                          // Real "what to buy": only the skus whose stock
+                          // reservation came back short, or with no stock
+                          // authority at all — the plan's NEW-bar list is
+                          // consumption, not shortage.
+                          const shortRows = (optimization?.stock_reservations ?? []).filter(
+                            (row) =>
+                              row.short !== undefined &&
+                              row.short !== null &&
+                              row.short !== "0" &&
+                              row.short !== "0.00",
+                          );
+                          const unmapped = optimization?.unmapped_stock_skus ?? [];
+                          if (!shortRows.length && !unmapped.length) return null;
+                          return (
+                            <p className="production-optimize-purchases production-stock-short">
+                              {t("production.optimizeBuy")}:{" "}
+                              {shortRows
+                                .map((row) =>
+                                  `${row.sku ?? row.name ?? "?"} × ${row.short} ${row.unit ?? ""}`.trim(),
+                                )
+                                .concat(
+                                  unmapped.map(
+                                    (sku) => `${sku} (${t("production.optimizeUnmapped")})`,
+                                  ),
+                                )
+                                .join(" · ")}
+                            </p>
+                          );
+                        })()}
                         {(() => {
                           const reservations = optimization?.stock_reservations ?? [];
                           const unmappedSkus = optimization?.unmapped_stock_skus ?? [];
@@ -2635,43 +2694,45 @@ export function ProductionPage(): JSX.Element {
                         ? ` · ${nextStep.work_center_name ?? nextStep.work_center_code}`
                         : ""}
                     </span>
-                    <span className="production-step-actions">
-                      {nextStep.code === "QC" && stepActions(nextStep).includes("QC_FAIL") ? (
-                        <select
-                          className="production-qc-item"
-                          aria-label={t("production.qcItem")}
-                          value={qcFailItem}
-                          onChange={(event) => setQcFailItem(event.target.value)}
-                        >
-                          <option value="">{t("production.qcItemAny")}</option>
-                          {qcItemOptions.map((code) => (
-                            <option key={code} value={code}>
-                              {code}
-                            </option>
-                          ))}
-                        </select>
-                      ) : null}
-                      {stepActions(nextStep).map((stepAction) =>
-                        stepAction === "START" && stepNeedsPlan(nextStep, detail) ? (
-                          <span className="production-step-hint" key={stepAction}>
-                            {t(
-                              canWrite
-                                ? "production.stepNeedsPlan"
-                                : "production.stepNeedsPlanWait",
-                            )}
-                          </span>
-                        ) : (
-                          <button
-                            key={stepAction}
-                            type="button"
-                            disabled={busy}
-                            onClick={() => void transition(nextStep.id, stepAction, detail.id)}
+                    {canStep ? (
+                      <span className="production-step-actions">
+                        {nextStep.code === "QC" && stepActions(nextStep).includes("QC_FAIL") ? (
+                          <select
+                            className="production-qc-item"
+                            aria-label={t("production.qcItem")}
+                            value={qcFailItem}
+                            onChange={(event) => setQcFailItem(event.target.value)}
                           >
-                            {t(actionLabel[stepAction])}
-                          </button>
-                        ),
-                      )}
-                    </span>
+                            <option value="">{t("production.qcItemAny")}</option>
+                            {qcItemOptions.map((code) => (
+                              <option key={code} value={code}>
+                                {code}
+                              </option>
+                            ))}
+                          </select>
+                        ) : null}
+                        {stepActions(nextStep).map((stepAction) =>
+                          stepAction === "START" && stepNeedsPlan(nextStep, detail) ? (
+                            <span className="production-step-hint" key={stepAction}>
+                              {t(
+                                canWrite
+                                  ? "production.stepNeedsPlan"
+                                  : "production.stepNeedsPlanWait",
+                              )}
+                            </span>
+                          ) : (
+                            <button
+                              key={stepAction}
+                              type="button"
+                              disabled={busy}
+                              onClick={() => void transition(nextStep.id, stepAction, detail.id)}
+                            >
+                              {t(actionLabel[stepAction])}
+                            </button>
+                          ),
+                        )}
+                      </span>
+                    ) : null}
                   </div>
                 );
               })()}
@@ -2684,6 +2745,10 @@ export function ProductionPage(): JSX.Element {
                   nextStep ??
                   detail.steps[detail.steps.length - 1] ??
                   null;
+                // Only the first open station is actually workable — every
+                // later READY step reads "Pendiente", never "Lista".
+                const firstOpenStepId =
+                  detail.steps.find((step) => step.status !== "DONE")?.id ?? null;
                 return (
                   <>
                     <ol className="production-steps">
@@ -2713,11 +2778,16 @@ export function ProductionPage(): JSX.Element {
                               </span>
                             ) : null}
                             <span className={`production-chip status-${step.status.toLowerCase()}`}>
-                              {t(stepStatusKey[step.status] ?? "production.stepReady")}
+                              {t(
+                                step.status === "READY" && step.id !== firstOpenStepId
+                                  ? "production.stepPending"
+                                  : (stepStatusKey[step.status] ?? "production.stepReady"),
+                              )}
                             </span>
                           </div>
                           {step.note ? <p className="production-step-note">{step.note}</p> : null}
-                          {detail.status !== "COMPLETED" &&
+                          {canStep &&
+                          detail.status !== "COMPLETED" &&
                           detail.status !== "DISPATCHED" &&
                           detail.status !== "INSTALLED" ? (
                             <div className="production-step-actions">
@@ -2776,7 +2846,9 @@ export function ProductionPage(): JSX.Element {
                         step={operatorStep}
                         trace={trace}
                         traceBusy={traceBusy}
-                        onQcCheck={(stepId, check) => qcCheck(stepId, check, detail.id)}
+                        onQcCheck={
+                          canStep ? (stepId, check) => qcCheck(stepId, check, detail.id) : undefined
+                        }
                         opsCheckable={
                           canStep &&
                           operatorStep.status === "IN_PROGRESS" &&
@@ -2794,15 +2866,17 @@ export function ProductionPage(): JSX.Element {
                   </>
                 );
               })()}
-              <label className="production-note">
-                {t("production.noteLabel")}
-                <input
-                  type="text"
-                  value={note}
-                  onChange={(event) => setNote(event.target.value)}
-                  placeholder={t("production.notePlaceholder")}
-                />
-              </label>
+              {canStep ? (
+                <label className="production-note">
+                  {t("production.noteLabel")}
+                  <input
+                    type="text"
+                    value={note}
+                    onChange={(event) => setNote(event.target.value)}
+                    placeholder={t("production.notePlaceholder")}
+                  />
+                </label>
+              ) : null}
               <section className="production-trace" aria-label={t("production.traceTitle")}>
                 <header className="production-optimize-head">
                   <h3>{t("production.traceTitle")}</h3>

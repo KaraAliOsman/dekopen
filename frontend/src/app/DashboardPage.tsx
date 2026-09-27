@@ -74,9 +74,13 @@ export function DashboardPage(): JSX.Element {
     },
   });
 
+  // Floor roles land on /production — the operational summary is a
+  // commercial/management feed and its readers exclude them; don't fire a
+  // query that's guaranteed to 403.
+  const opsVisible = ["OWNER", "ESTIMATOR", "WORKSHOP_MANAGER"].includes(org?.role ?? "");
   const opsQuery = useQuery<OperationalSummary>({
     queryKey: ["dashboard", "ops", org?.id],
-    enabled: org !== undefined,
+    enabled: org !== undefined && opsVisible,
     queryFn: async ({ signal }) => {
       const response = await analyticsOperationalSummary({
         signal,
@@ -117,7 +121,7 @@ export function DashboardPage(): JSX.Element {
 
       <section className="dashboard-attention" aria-label={t("dashboard.attention")}>
         <h2 className="eyebrow">{t("dashboard.attention")}</h2>
-        {query.isPending || opsQuery.isPending ? (
+        {query.isPending || (opsVisible && opsQuery.isPending) ? (
           <p className="dashboard-attention-clear">{t("dashboard.attentionLoading")}</p>
         ) : query.isError || opsQuery.isError ? (
           <p className="dashboard-attention-clear" role="alert">

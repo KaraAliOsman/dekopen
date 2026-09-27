@@ -111,6 +111,22 @@ class SystemWriteSerializer(StrictSerializer):
     applications = serializers.ListField(
         child=serializers.CharField(max_length=60), required=False
     )
+    # Finishes the series actually sells — the estimator's finish picker is
+    # this list, never a fixed enum. Empty/missing ⇒ ["WHITE"].
+    finishes = serializers.ListField(
+        child=serializers.CharField(max_length=50, allow_blank=False),
+        required=False,
+    )
+
+    def validate_finishes(self, value):
+        seen: list[str] = []
+        for finish in value:
+            canonical = finish.strip().upper()
+            if canonical and canonical not in seen:
+                seen.append(canonical)
+        # An empty declaration can't mean "sells nothing" — WHITE is the
+        # baseline every PVC/ALU series offers.
+        return seen or ["WHITE"]
     # Declared process authority — bound rows must be global or org-owned.
     process_profile_id = serializers.UUIDField(required=False, allow_null=True)
 

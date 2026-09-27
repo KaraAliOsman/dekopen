@@ -64,6 +64,9 @@ export interface ShapeSolid {
   depth: number;
   approximate?: boolean;
   leafId?: string;
+  /** Weld vertices + smooth normals — curved outlines (contour arcs) read
+   * faceted otherwise, since ExtrudeGeometry emits per-face normals. */
+  smooth?: boolean;
 }
 
 /** Member run with a declared catalog cross-section (§05-B): `outline` is
@@ -280,6 +283,7 @@ function contourGlassInfill(
       holes: [],
       z0,
       depth: glassT,
+      smooth: true,
     });
     return;
   }
@@ -298,6 +302,7 @@ function contourGlassInfill(
       holes: [],
       z0: cursor,
       depth: thickness,
+      smooth: true,
     });
     cursor += thickness;
     const cavityT = (igu.chambers[index] ?? 0) * scale;
@@ -318,6 +323,7 @@ function contourGlassInfill(
           holes: [ringHole],
           z0: cursor,
           depth: cavityT,
+          smooth: true,
         });
       }
       cursor += cavityT;
@@ -1462,6 +1468,7 @@ export function buildScene3D(
         holes: [insetContourPoints(module.contour, frameT).map((p) => [p.x, p.y] as Pt2)],
         z0: 0,
         depth,
+        smooth: true,
       });
       const primaryBay = modulePrimaryBay(module);
       const bead = members.beadFor(primaryBay?.glass_thickness_mm ?? null);

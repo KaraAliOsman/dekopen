@@ -30,7 +30,9 @@ class WorkshopAnnotationSerializer(StrictSerializer):
         allow_null=True, required=False, default=None,
     )
     finish_class = serializers.ChoiceField(
-        choices=["WHITE"], allow_null=True, required=False, default=None
+        # WHITE|FOILED is the machining finish domain; whether FOILED is legal
+        # on a given design is checked downstream against its declared color.
+        choices=["WHITE", "FOILED"], allow_null=True, required=False, default=None
     )
     has_coupler = serializers.BooleanField(allow_null=True, required=False, default=None)
 

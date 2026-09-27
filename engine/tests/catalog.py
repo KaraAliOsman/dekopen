@@ -95,6 +95,7 @@ def demo_60_params() -> SystemParams:
 
     return SystemParams(
         system_code="DEMO_60",
+        finishes=("WHITE", "FOILED"),
         depth_mm=d("60.00"),
         material=MaterialType.PVC,
         effective_profile_articles={

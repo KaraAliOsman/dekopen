@@ -259,7 +259,7 @@ def _contents_json(components):
     return "[" + ",".join(encoded) + "]"
 
 
-_JSONB_FIELDS = {"contents", "section"}
+_JSONB_FIELDS = {"contents", "section", "finishes"}
 
 
 def _json_value(value):
@@ -289,7 +289,7 @@ def _parameters(values):
         _contents_json(value)
         if name == "contents"
         else _jsonb(value)
-        if name == "section"
+        if name in ("section", "finishes")
         else value
         for name, value in values.items()
     ]

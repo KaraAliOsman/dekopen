@@ -4,7 +4,6 @@ import { useParams } from "react-router-dom";
 import { ApiError } from "../../api/apiMutator";
 import { portalQuoteDecide, portalQuoteRetrieve } from "../../api/generated/dekopen";
 import type { PortalPosition, PortalQuote } from "../../api/generated/models";
-import { WhiteColorEnum } from "../../api/generated/models";
 import type { PositionDesign } from "../../api/generated/models";
 import { t, TranslationKey } from "../../i18n/es-CL";
 import { formatRevision } from "../../format";
@@ -46,9 +45,9 @@ function positionDesign(position: PortalPosition): PositionDesign {
     system_id: "",
     nominal_width_mm: position.width_mm,
     nominal_height_mm: position.height_mm,
-    // WhiteColorEnum is the only declared design color today — the sealed
-    // interior/exterior colors render in the facts line via `finish`.
-    color: WhiteColorEnum.WHITE,
+    // The sealed interior color drives the preview's finish semantics —
+    // exterior face coloring is conveyed separately in the facts line.
+    color: position.color_interior || "WHITE",
     parametric_tree: position.parametric_tree,
   };
 }

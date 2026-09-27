@@ -46,6 +46,7 @@ SELECT lives_ok($$INSERT INTO position_documentary_inputs(position_id,project_id
  WHERE placement.system_id=handles.system_id AND handles.system_id=steel.system_id
    AND placement.org_id IS NULL AND handles.org_id IS NULL AND steel.org_id IS NULL
    AND handles.version=(SELECT max(h2.version) FROM handle_requirement_policies h2 WHERE h2.system_id=handles.system_id AND h2.org_id IS NULL)
+   AND placement.version=(SELECT max(p2.version) FROM manufacturing_placement_policies p2 WHERE p2.system_id=placement.system_id AND p2.org_id IS NULL)
    AND placement.system_id=(SELECT id FROM profile_systems WHERE code='DEMO_60')$$,'typed position inputs accept global scoped policies');
 INSERT INTO manufacturing_placement_policies(id,system_id,org_id,version,authority)
  SELECT '88690000-0000-4000-8000-000000000009',id,'88600000-0000-4000-8000-000000000002',1,

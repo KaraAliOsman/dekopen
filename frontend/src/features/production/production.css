@@ -103,8 +103,12 @@
   gap: 0.5rem;
 }
 .production-order {
-  display: grid;
-  gap: 0.25rem;
+  /* Chips wrap onto their own row instead of squashing or overflowing the
+     card when the order carries several states at once. */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
   width: 100%;
   text-align: left;
   padding: 0.6rem 0.75rem;
@@ -112,6 +116,13 @@
   border-radius: 0.375rem;
   background: var(--theme-bg-canvas);
   color: var(--theme-text-primary);
+}
+.production-order .production-order-progress {
+  flex: 1 1 auto;
+}
+.production-order .production-order-next {
+  flex-basis: 100%;
+  order: 9;
 }
 .production-order.active {
   border-color: var(--theme-accent);
@@ -127,7 +138,14 @@
 .production-detail-head {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.75rem;
+}
+.production-detail-head .production-chip,
+.production-order .production-chip {
+  /* Chip text wraps inside the chip before it ever overflows it. */
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .production-materials {
   display: flex;
@@ -1126,6 +1144,25 @@
   width: 100%;
   border-collapse: collapse;
   font-size: 0.85rem;
+  table-layout: auto;
+}
+.cnc-workspace-grid > div {
+  min-width: 0;
+  overflow-x: auto;
+}
+.cnc-member-meta {
+  font-size: 0.75rem;
+  color: var(--theme-text-muted, #6b675f);
+}
+.cnc-hint {
+  font-size: 0.75rem;
+  color: var(--theme-text-muted, #6b675f);
+  margin: 0 0 0.35rem;
+}
+.cnc-required-tools {
+  font-size: 0.8rem;
+  color: var(--theme-text-muted, #6b675f);
+  margin: 0.15rem 0 0.4rem;
 }
 .cnc-table th,
 .cnc-table td {

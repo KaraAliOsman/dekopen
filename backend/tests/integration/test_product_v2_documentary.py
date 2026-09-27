@@ -189,6 +189,10 @@ def _seed_bow_project(
             "JOIN public.reinforcement_cut_policies steel ON steel.system_id=system.id "
             "WHERE system.id=%s AND placement.org_id IS NULL AND handles.org_id IS NULL "
             "AND steel.org_id IS NULL "
+            "AND placement.version=(SELECT max(p2.version) FROM public.manufacturing_placement_policies p2 "
+            "WHERE p2.system_id=placement.system_id AND p2.org_id IS NULL) "
+            "AND steel.version=(SELECT max(s2.version) FROM public.reinforcement_cut_policies s2 "
+            "WHERE s2.system_id=steel.system_id AND s2.org_id IS NULL) "
             "AND handles.version=(SELECT max(h2.version) FROM public.handle_requirement_policies h2 "
             "WHERE h2.system_id=handles.system_id AND h2.org_id IS NULL) ",
             [system_id],
@@ -240,6 +244,10 @@ def _policies(org: UUID) -> dict[str, object]:
         "JOIN public.reinforcement_cut_policies steel ON steel.system_id=system.id "
         "WHERE system.id=%s AND placement.org_id IS NULL AND handles.org_id IS NULL "
         "AND steel.org_id IS NULL "
+            "AND placement.version=(SELECT max(p2.version) FROM public.manufacturing_placement_policies p2 "
+            "WHERE p2.system_id=placement.system_id AND p2.org_id IS NULL) "
+            "AND steel.version=(SELECT max(s2.version) FROM public.reinforcement_cut_policies s2 "
+            "WHERE s2.system_id=steel.system_id AND s2.org_id IS NULL) "
             "AND handles.version=(SELECT max(h2.version) FROM public.handle_requirement_policies h2 "
             "WHERE h2.system_id=handles.system_id AND h2.org_id IS NULL) ",
         [system_id],

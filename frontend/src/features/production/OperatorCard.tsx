@@ -322,6 +322,9 @@ export function OperatorStepCard({
   // QC, PACK) still own the physical pieces — the sealed cut/sheet lists
   // are their work checklist, not a CUT-only artifact.
   const consumesStock = kinds.length > 0;
+  // Whether the order carries a live plan at all — without it, an empty
+  // material table means "not computed yet", never "nothing needed".
+  const hasPlan = Boolean((trace?.plan as Record<string, unknown> | undefined)?.optimized_at);
   const showPieces = step.code === "CUT" || step.code === "GLAZE" || !consumesStock;
   const cutPieces: Array<{ barIndex: number; source?: string } & CutPiece> = [];
   if (step.code === "CUT" || !consumesStock) {
@@ -440,7 +443,9 @@ export function OperatorStepCard({
                   </tbody>
                 </table>
               ) : (
-                <p className="production-trace-empty">{t("production.operatorNoStock")}</p>
+                <p className="production-trace-empty">
+                  {hasPlan ? t("production.operatorNoStock") : t("production.operatorNoPlan")}
+                </p>
               )}
               {remnants.length ? (
                 <ul className="operator-remnants">
@@ -728,8 +733,9 @@ export function OperatorStepCard({
 
           {!consumesStock && !cutPieces.length && !sheetPieces.length && !unnestedPanes.length ? (
             <p className="operator-summary">
-              {t("production.operatorNoStock")} · {totalPieces}{" "}
-              {t("production.operatorPiecesTotal")}
+              {hasPlan
+                ? `${t("production.operatorNoStock")} · ${totalPieces} ${t("production.operatorPiecesTotal")}`
+                : t("production.operatorNoPlan")}
             </p>
           ) : null}
         </div>

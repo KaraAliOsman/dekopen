@@ -116,7 +116,7 @@ class DesignOptionsView(APIView):
                         }
                         for item in glass_rows
                     ],
-                    "colors": ["WHITE"],
+                    "colors": list(params.finishes),
                     "coupler_skus": sorted(couplers),
                     "coupler_profiles": [
                         {

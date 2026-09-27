@@ -693,6 +693,10 @@
   gap: 0.9rem;
   grid-area: status;
   padding: 0.3rem 0.75rem;
+  /* Above the canvas' floating islands (z2) — a scrolled viewport-status
+   * chip must never underlap/intercept the issues button (render P2-7). */
+  position: relative;
+  z-index: 3;
 }
 
 .assembly-statusbar__dims {

@@ -43,6 +43,11 @@ type CncMachineVerdict = {
 type CncMember = {
   member_id: string;
   member_label: string;
+  workshop_sku?: string | null;
+  role?: string | null;
+  bay_id?: string | null;
+  leaf_id?: string | null;
+  position_index?: number | null;
   length_mm: string;
   operation_count: number;
   kinds: string[];
@@ -73,6 +78,7 @@ type CncReadinessData = {
   order_code: string;
   members: CncMember[];
   issues?: CncIssue[];
+  required_tool_ids?: string[];
   machines: { id: string; code: string; name: string }[];
   programs: CncProgram[];
 };
@@ -111,6 +117,10 @@ function opKindLabel(kind: string): string {
 function faceLabel(face: string | null): string {
   if (!face) return "—";
   return tOptional(FACE_LABELS[face] ?? "") ?? face;
+}
+
+function roleLabel(role: string): string {
+  return tOptional(`production.role.${role}`) ?? role;
 }
 
 function blockerText(blocker: CncVerdict): string {
@@ -224,6 +234,11 @@ export function CncPanel({ orderId, canWrite }: { orderId: string; canWrite: boo
               {data.machines.length === 0 ? (
                 <p className="cnc-empty" role="alert">
                   {t("production.cncNoMachines")}
+                </p>
+              ) : null}
+              {data.required_tool_ids?.length ? (
+                <p className="cnc-required-tools">
+                  {t("production.cncRequiredTools")}: {data.required_tool_ids.join(", ")}
                 </p>
               ) : null}
               <table className="cnc-table">
@@ -340,6 +355,13 @@ function CncMemberRow({
             {member.member_label}
             <span aria-hidden="true">{expanded ? "▾" : "▸"}</span>
           </button>
+          {member.workshop_sku || member.role ? (
+            <div className="cnc-member-meta">
+              {[member.workshop_sku, member.role ? roleLabel(member.role) : null]
+                .filter(Boolean)
+                .join(" · ")}
+            </div>
+          ) : null}
         </td>
         <td>
           {member.operation_count} · {member.kinds.map(opKindLabel).join(", ")}

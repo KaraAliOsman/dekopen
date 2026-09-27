@@ -18,7 +18,8 @@ export function AttentionBell(): JSX.Element | null {
 
   const query = useQuery({
     queryKey: ["shell", "attention", org?.id],
-    enabled: org !== undefined,
+    enabled:
+      org !== undefined && ["OWNER", "ESTIMATOR", "WORKSHOP_MANAGER"].includes(org?.role ?? ""),
     staleTime: 60_000,
     queryFn: async ({ signal }) => {
       const ops = await analyticsOperationalSummary({

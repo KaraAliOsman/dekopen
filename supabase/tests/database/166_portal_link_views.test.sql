@@ -11,8 +11,8 @@ SELECT has_column(
     'public', 'customer_approvals', 'last_viewed_at',
     'last_viewed_at exists on share links'
 );
-SELECT col_has_default(
-    'public', 'customer_approvals', 'view_count', '0'::text,
+SELECT col_default_is(
+    'public', 'customer_approvals', 'view_count', 0,
     'view_count defaults to zero'
 );
 

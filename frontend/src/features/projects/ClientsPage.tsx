@@ -89,7 +89,7 @@ export function ClientsPage(): JSX.Element {
   const org = auth.me?.active_organization;
 
   if (!org || !["OWNER", "ESTIMATOR", "WORKSHOP_MANAGER"].includes(org.role)) {
-    return <DeniedState reason={t("projects.denied")} />;
+    return <DeniedState reason={t("clients.denied")} />;
   }
   return (
     <ClientsWorkspace

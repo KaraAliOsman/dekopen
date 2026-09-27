@@ -279,6 +279,7 @@ export const messages = {
   "projects.openPosition": "Abrir diseño",
   "projects.priceProject": "Calcular precio",
   "projects.denied": "Tu rol no permite editar proyectos.",
+  "clients.denied": "Tu rol no permite ver el registro de clientes.",
   "projects.editorLockedTitle": "Revisión cerrada para edición",
   "projects.editorLockedBody":
     "Esta revisión ya fue emitida, cotizada o aprobada — sus vanos no pueden modificarse. Desde el proyecto puedes abrir una nueva revisión para seguir editando.",
@@ -770,7 +771,8 @@ export const messages = {
   "app.brand": "DEKOPEN",
   "app.brandOs": "OS",
   "auth.resolving": "Resolviendo sesión…",
-  "auth.unavailable": "Acceso tenant no disponible.",
+  "auth.unavailable":
+    "No pudimos conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.",
   "auth.contextError": "No fue posible resolver el contexto autenticado.",
   "auth.callback": "Validando el enlace y resolviendo tu taller…",
   "auth.callbackError": "No fue posible validar el enlace de acceso.",
@@ -1494,7 +1496,7 @@ export const messages = {
   "production.shortageChip": "Falta material ({count})",
   "production.materialShortageToast":
     "Paso bloqueado por falta de material — revisa los faltantes de la orden.",
-  "production.versionShortageChip": "Otras posiciones: {count} datos pendientes",
+  "production.versionShortageChip": "Versión: {count} datos pendientes",
   "production.versionShortageTitle":
     "El faltante corresponde a la versión completa, no solo a esta orden",
   "production.dispatchReadyChip": "Guía pendiente",
@@ -1556,6 +1558,7 @@ export const messages = {
   "production.optimizeStatsRemnant": "retazo(s)",
   "production.optimizeStatsCuts": "Cortes",
   "production.optimizeStatsWaste": "Desperdicio",
+  "production.optimizeStatsRemnantReusable": "retazo reutilizable",
   "production.optimizeStatsSheets": "Planchas",
   "production.optimizeStatsUnnested": "Sin ubicar",
   "production.optimizeStatsPurchases": "Compras",
@@ -1628,6 +1631,12 @@ export const messages = {
     "La reserva de cola es menor que el espesor del corte — queda una viruta, no una pieza",
   "production.cncIssue_handle_without_member":
     "Posición de manilla sin pieza anfitriona — la preparación no se puede ubicar",
+  "production.cncIssue_declared_intent_not_emitted":
+    "Se declaró trabajo de taller que no generó operaciones — revisa la autoridad del proceso",
+  "production.cncRequiredTools": "Códigos de herramienta que deben existir en el magazine",
+  "production.cncToolCodeHint":
+    "El código debe coincidir con el tool_id que piden las operaciones (p. ej. drill, end_mill, saw) — el detalle del bloqueo indica cuál falta.",
+  "production.cncDeclaredGaps": "Intención declarada sin operación",
   "production.cncWorkspaceTitle": "Centros CNC y herramientas",
   "production.cncMachines": "Máquinas",
   "production.cncMachinesEmpty":
@@ -1654,6 +1663,7 @@ export const messages = {
   "production.cncToolKinds": "Operaciones compatibles",
   "production.cncToolLength": "Largo útil (mm)",
   "production.cncToolDepth": "Profundidad máx. (mm)",
+  "production.cncClampZones": "Zonas de mordaza (mm)",
   "production.cncOrders": "Órdenes con programa",
   "production.cncOrdersEmpty": "Aún no hay órdenes optimizadas.",
   "production.cncOrderCode": "Orden",
@@ -1665,6 +1675,7 @@ export const messages = {
   "production.cncDiagramEnd": "FIN",
   "production.cncDiagramMissing": "Sin posición en el eje del perfil",
   "production.eventRemnantsSettled": "Retazos liquidados",
+  "production.eventStockConsumed": "Consumo de material registrado",
   "production.remakeButton": "Rehacer orden",
   "production.cncExportButton": "Plan de corte (CSV)",
   "production.opsExportButton": "Operaciones de fabricación",
@@ -1696,6 +1707,9 @@ export const messages = {
   "production.optimizeSize": "Formato",
   "production.optimizePieces": "Piezas",
   "production.optimizePurchases": "Compra sugerida",
+  "production.optimizeStockNew": "Material de stock nuevo que consume el plan",
+  "production.optimizeBuy": "Por comprar",
+  "production.optimizeUnmapped": "sin equivalencia de stock",
   "production.optimizePurchaseUnit": "barra(s)",
   "production.optimizePurchaseSheet": "plancha(s)",
   "production.optimizeRotated": "rotada",
@@ -1747,6 +1761,7 @@ export const messages = {
   "production.operatorBasis": "Base",
   "production.operatorPieces": "Piezas",
   "production.operatorNoStock": "Este paso no requiere material de bodega",
+  "production.operatorNoPlan": "Optimiza la OT para ver el material reservado de este paso",
   "production.operatorNoOps": "Optimiza la OT para ver la secuencia de trabajo",
   "production.operatorBlockers": "Falta material — reserva incompleta",
   "production.operatorUnmapped": "SKU sin equivalencia comercial",
@@ -2093,6 +2108,7 @@ export const messages = {
   "catalog.field.manufacturer": "Fabricante",
   "catalog.field.family": "Familia",
   "catalog.field.applications": "Aplicaciones (separadas por coma)",
+  "catalog.field.finishes": "Acabados que vende la serie (separados por coma)",
   "catalog.field.process_profile_id": "Perfil de proceso",
   "catalog.field.end_milling_overlap_mm": "Solape de desbaste de extremo (mm)",
   "catalog.field.pulley_height_mm": "Altura de rueda (mm)",
@@ -2179,6 +2195,8 @@ export const messages = {
   "catalog.importsUpload": "Subir PDF, XLSX o imagen",
   "catalog.importsUploading": "Subiendo…",
   "catalog.importsEmpty": "Sin importaciones de catálogo.",
+  "catalog.importsReadOnly":
+    "La carga de catálogos la hace un usuario con permiso de catálogo (dueño o jefe de taller).",
   "catalog.importsLoadError": "No pudimos cargar las importaciones.",
   "catalog.importsUploadError": "No pudimos subir el documento.",
   "catalog.importsConfirmError": "No pudimos confirmar la importación.",

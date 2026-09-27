@@ -5,7 +5,6 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
-import type { WhiteColorEnum } from "./whiteColorEnum";
 
 export interface PositionDesign {
   system_id: string;
@@ -13,6 +12,7 @@ export interface PositionDesign {
   nominal_width_mm: string;
   /** @pattern ^-?\d{0,8}(?:\.\d{0,2})?$ */
   nominal_height_mm: string;
-  color: WhiteColorEnum;
+  /** @maxLength 50 */
+  color: string;
   parametric_tree: unknown;
 }

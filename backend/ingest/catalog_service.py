@@ -21,7 +21,7 @@ from documents.storage import SupabaseDocumentStorage
 from ingest.catalog_parser import ROLES, parse_catalog_lines
 from ingest.extract import extract_tagged, kind_for, safe_file_name, sniffed_kind
 from jobs import service as jobs_service
-from pricing.repository import rows
+from pricing.repository import rows, write
 
 MAX_UPLOAD_BYTES = 15_000_000
 MAX_CANDIDATES = 200
@@ -341,7 +341,7 @@ def mark_catalog_import_failed(*, org_id: UUID, import_id: UUID, code: str) -> N
         with documentary_backend():
             # Only an in-flight import may fail — a stale retry must never
             # overwrite a REVIEW_READY or CONFIRMED outcome.
-            rows(
+            write(
                 "UPDATE public.catalog_imports SET status='FAILED', "
                 "error_code=%s, updated_at=now() WHERE id=%s AND org_id=%s "
                 "AND status IN ('UPLOADED','EXTRACTING')",

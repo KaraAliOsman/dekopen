@@ -21,6 +21,17 @@ def _atomic():
     yield
 
 
+def _write_via(fake_rows):
+    """`production.service.write` fake that keeps the same capture list —
+    bare UPDATE/DELETE statements land in `write`, not `rows`."""
+
+    def fake_write(query, params=()):
+        fake_rows(query, params)
+        return 1
+
+    return fake_write
+
+
 def _tenant(role: str, org_id):
     return SimpleNamespace(
         active_organization=SimpleNamespace(organization_id=org_id, role=role)
@@ -413,7 +424,7 @@ def test_release_creates_work_order_with_steps() -> None:
         "production.service.rows", side_effect=fake_rows
     ), patch("production.service.transaction.atomic", side_effect=_atomic), patch(
         "production.service.documentary_backend", side_effect=_atomic
-    ), patch(
+    ), patch("production.service.write", side_effect=_write_via(fake_rows)), patch(
         "production.service.production_stock.coverage_for_version", return_value={"shortages": 0}
     ):
         output = service.release_production(
@@ -497,7 +508,7 @@ def test_release_routes_steps_by_declared_process_profile() -> None:
         "production.service.rows", side_effect=fake_rows
     ), patch("production.service.transaction.atomic", side_effect=_atomic), patch(
         "production.service.documentary_backend", side_effect=_atomic
-    ), patch(
+    ), patch("production.service.write", side_effect=_write_via(fake_rows)), patch(
         "production.service.production_stock.coverage_for_version", return_value={"shortages": 0}
     ):
         output = service.release_production(
@@ -550,7 +561,7 @@ def test_release_freezes_process_authority_into_the_payload() -> None:
         "production.service.rows", side_effect=fake_rows
     ), patch("production.service.transaction.atomic", side_effect=_atomic), patch(
         "production.service.documentary_backend", side_effect=_atomic
-    ), patch(
+    ), patch("production.service.write", side_effect=_write_via(fake_rows)), patch(
         "production.service.production_stock.coverage_for_version", return_value={"shortages": 0}
     ), patch("production.service._work_order_payload", side_effect=capture):
         service.release_production(
@@ -632,7 +643,7 @@ def test_release_replay_returns_existing() -> None:
         "production.service.rows", side_effect=fake_rows
     ), patch("production.service.transaction.atomic", side_effect=_atomic), patch(
         "production.service.documentary_backend", side_effect=_atomic
-    ), patch(
+    ), patch("production.service.write", side_effect=_write_via(fake_rows)), patch(
         "production.service.production_stock.coverage_for_version", return_value={"shortages": 0}
     ):
         output = service.release_production(
@@ -808,7 +819,9 @@ def test_unassigned_step_adopts_a_later_activated_center() -> None:
 
     with patch("production.service.one", side_effect=fake_one), patch(
         "production.service.rows", side_effect=fake_rows
-    ), patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+    ), patch("production.service.write", side_effect=_write_via(fake_rows)), patch(
+        "production.service.transaction.atomic", side_effect=_atomic
+    ), patch(
         "production.service.documentary_backend", side_effect=_atomic
     ):
         service.transition_step(
@@ -1097,7 +1110,7 @@ def test_order_code_scopes_to_project() -> None:
         "production.service.rows", side_effect=fake_rows
     ), patch("production.service.transaction.atomic", side_effect=_atomic), patch(
         "production.service.documentary_backend", side_effect=_atomic
-    ), patch(
+    ), patch("production.service.write", side_effect=_write_via(fake_rows)), patch(
         "production.service._ensure_work_centers", return_value=({}, set())
     ), patch(
         "production.service.production_stock.coverage_for_version", return_value={"shortages": 0}
@@ -1498,7 +1511,7 @@ def test_release_seals_system_from_snapshot_positions() -> None:
         "production.service.rows", side_effect=fake_rows
     ), patch("production.service.transaction.atomic", side_effect=_atomic), patch(
         "production.service.documentary_backend", side_effect=_atomic
-    ), patch(
+    ), patch("production.service.write", side_effect=_write_via(fake_rows)), patch(
         "production.service._ensure_work_centers", return_value=({}, set())
     ), patch(
         "production.service.production_stock.coverage_for_version", return_value={"shortages": 0}
@@ -1545,7 +1558,7 @@ def test_release_seals_glass_polishing_from_snapshot_positions() -> None:
         "production.service.rows", side_effect=fake_rows
     ), patch("production.service.transaction.atomic", side_effect=_atomic), patch(
         "production.service.documentary_backend", side_effect=_atomic
-    ), patch(
+    ), patch("production.service.write", side_effect=_write_via(fake_rows)), patch(
         "production.service._ensure_work_centers", return_value=({}, set())
     ), patch(
         "production.service.production_stock.coverage_for_version", return_value={"shortages": 0}

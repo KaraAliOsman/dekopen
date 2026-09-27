@@ -395,7 +395,7 @@ def test_shot06_all_28_catalog_fields_reach_typed_engine(real_rows: RLSFixtures)
     expected_fields = expected.model_dump()
     actual_fields["available_hardware_kits"] = sorted(actual_fields["available_hardware_kits"], key=lambda k: k["sku"])
     expected_fields["available_hardware_kits"] = sorted(expected_fields["available_hardware_kits"], key=lambda k: k["sku"])
-    assert len(SystemParams.model_fields) == len(actual_fields) == 25
+    assert len(SystemParams.model_fields) == len(actual_fields) == 26
     # The demo seed declares the same synthetic per-article masses the engine
     # fixture carries — mass authority must reach the typed model
     # field-for-field rather than arriving through a fallback.
@@ -488,14 +488,23 @@ def test_ai_context_projections_execute_against_real_schema(
                 [org_id],
             )
             project_id = cursor.fetchone()[0]
+            cursor.execute(
+                "INSERT INTO public.clients (org_id, name, created_by) VALUES (%s, %s, %s) RETURNING id",
+                [org_id, "RLS fixture client", uuid4()],
+            )
+            client_id = cursor.fetchone()[0]
         covered = []
         for surface in sorted(REQUIRED_REFS):
             needed = REQUIRED_REFS[surface]
-            if needed and set(needed) != {"project_id"}:
+            if needed and set(needed) not in ({"project_id"}, {"client_id"}):
                 # position/work_order refs need entities this fixture does not
                 # create; every other projection's SQL must execute for real.
                 continue
-            refs = {"project_id": str(project_id)} if needed else {}
+            refs = {}
+            if needed == ("project_id",):
+                refs = {"project_id": str(project_id)}
+            elif needed == ("client_id",):
+                refs = {"client_id": str(client_id)}
             context = build_context(org_id, surface, refs)
             assert context["surface"] == surface
             assert context["organization"]["name"]

@@ -397,6 +397,12 @@ def test_mark_failed_only_updates_inflight(monkeypatch):
         return []
 
     monkeypatch.setattr(catalog_service, "rows", _rows)
+
+    def _write(sql, params=None):
+        statements.append((sql, params))
+        return 1
+
+    monkeypatch.setattr(catalog_service, "write", _write)
     monkeypatch.setattr(catalog_service, "documentary_backend", _backend)
     catalog_service.mark_catalog_import_failed(org_id=uuid4(), import_id=uuid4(), code="x" * 200)
     sql, params = statements[0]

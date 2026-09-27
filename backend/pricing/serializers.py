@@ -194,7 +194,9 @@ class PriceResponseSerializer(serializers.Serializer):
 
 
 class DraftPositionSerializer(EngineCalculateRequestSerializer):
-    color = serializers.ChoiceField(choices=['WHITE'])
+    # Validated against the system's declared finishes downstream
+    # (adapter has params; serializers don't).
+    color = serializers.CharField(max_length=50)
     position_index = serializers.IntegerField(min_value=1)
     quantity = serializers.IntegerField(min_value=1)
     typology = serializers.CharField(max_length=50)

@@ -477,7 +477,17 @@ def _hardware_marks(opening: str, handedness: str, ix: Decimal, iy: Decimal,
             )
     elif hinge_left is not None:
         hx = ix if hinge_left else ix + iw - w_tick
-        for frac in (Decimal("0.16"), Decimal("0.84")):
+        # Fitting schedule — doors hang on 3+ hinges, windows on 2; the
+        # figure follows the 3D scene's leaf-height rule.
+        door = opening == "DOOR_ENTRY"
+        fracs = (
+            (Decimal("0.12"), Decimal("0.38"), Decimal("0.62"), Decimal("0.88"))
+            if door and ih > 2200
+            else (Decimal("0.14"), Decimal("0.50"), Decimal("0.86"))
+            if door
+            else (Decimal("0.16"), Decimal("0.84"))
+        )
+        for frac in fracs:
             hy = iy + ih * frac - ih * Decimal("0.045")
             out.append(
                 f'<rect x="{_pt(hx)}" y="{_pt(hy)}" width="{_pt(w_tick)}" '
@@ -640,6 +650,33 @@ def _svg_elements(node: dict[str, object], x: Decimal, y: Decimal,
             f'<line x1="{_pt(ix)}" y1="{_pt(iy + ih)}" x2="{_pt(ix + iw)}" '
             f'y2="{_pt(iy + ih)}" stroke="{pal["accent"]}" stroke-width="{stroke}"/>'
         )
+        # Swing arc on each leaf: the quarter circle anchored on the hinge-side
+        # top corner, dashed — the elevation's way of saying which edge is
+        # hinged before hardware marks load (review: door leaves read as
+        # blank slabs without it).
+        dash = f'{_pt(stroke * Decimal("2.4"))} {_pt(stroke * Decimal("2"))}'
+        handedness = str(node.get("door_handedness") or "")
+        leaves = (
+            [(ix, iw, handedness != "RIGHT")]
+            if opening == "DOOR_ENTRY"
+            else [(ix, iw / 2, True), (ix + iw / 2, iw / 2, False)]
+        )
+        for leaf_x, leaf_w, leaf_hinge_left in leaves:
+            radius = leaf_w
+            if leaf_hinge_left:
+                out.append(
+                    f'<path d="M {_pt(leaf_x + leaf_w)} {_pt(iy)} '
+                    f'A {_pt(radius)} {_pt(radius)} 0 0 1 {_pt(leaf_x)} '
+                    f'{_pt(iy + radius)}" fill="none" stroke="{pal["glyph"]}" '
+                    f'stroke-width="{stroke}" stroke-dasharray="{dash}"/>'
+                )
+            else:
+                out.append(
+                    f'<path d="M {_pt(leaf_x)} {_pt(iy)} '
+                    f'A {_pt(radius)} {_pt(radius)} 0 0 0 {_pt(leaf_x + leaf_w)} '
+                    f'{_pt(iy + radius)}" fill="none" stroke="{pal["glyph"]}" '
+                    f'stroke-width="{stroke}" stroke-dasharray="{dash}"/>'
+                )
         if opening == "DOOR_DOUBLE":
             out.append(
                 f'<line x1="{_pt(mx)}" y1="{_pt(iy)}" x2="{_pt(mx)}" '

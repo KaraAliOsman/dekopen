@@ -325,8 +325,10 @@ def normalized_root_from_api(
     color: str,
     params: SystemParams,
 ) -> ParametricNode:
-    if color != "WHITE":
-        raise UnsupportedEngineContract("Only WHITE has a canonical SHOT-04 color mapping")
+    if color not in params.finishes:
+        raise InvalidEngineRequest(
+            f"finish '{color}' is not declared for system {params.system_code}"
+        )
 
     root = parse_parametric_node(parametric_tree)
     if root.width_mm is not None and root.width_mm != nominal_width_mm:
@@ -348,7 +350,7 @@ def calculate_from_api(
         nominal_height_mm=nominal_height_mm, color=color, params=params,
     )
     try:
-        return calculate_geometry(root, params, is_foiled=False)
+        return calculate_geometry(root, params, is_foiled=color != "WHITE")
     except NotImplementedError as error:
         raise UnsupportedEngineContract(str(error)) from error
     except ValueError as error:
@@ -542,9 +544,9 @@ def evaluate_assembly_from_api(
     params: SystemParams,
     coupler_articles: dict[str, EffectiveProfileArticle] | None = None,
 ) -> ProductEvaluation:
-    if color != "WHITE":
-        raise UnsupportedEngineContract(
-            "Only WHITE has a canonical color mapping"
+    if color not in params.finishes:
+        raise InvalidEngineRequest(
+            f"finish '{color}' is not declared for system {params.system_code}"
         )
     model = (
         product
@@ -552,7 +554,7 @@ def evaluate_assembly_from_api(
         else parse_product_model(product)
     )
     return evaluate_product(
-        model, params, coupler_articles=coupler_articles, is_foiled=False
+        model, params, coupler_articles=coupler_articles, is_foiled=color != "WHITE"
     )
 
 

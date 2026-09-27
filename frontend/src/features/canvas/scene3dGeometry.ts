@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 import type { Solid3D } from "./Product3DScene";
 
@@ -12,10 +13,17 @@ export function solidToGeometry(solid: Solid3D): THREE.ExtrudeGeometry | null {
     for (const hole of solid.holes) {
       shape.holes.push(new THREE.Path(hole.map(([x, y]) => new THREE.Vector2(x, y))));
     }
-    const geo = new THREE.ExtrudeGeometry(shape, {
+    let geo = new THREE.ExtrudeGeometry(shape, {
       depth: solid.depth,
       bevelEnabled: false,
     });
+    if (solid.smooth) {
+      // ExtrudeGeometry is non-indexed — every arc chord owns its face
+      // normal, so curves shade as facets. Welding duplicate vertices and
+      // recomputing averages them back into a smooth run (render P2-5).
+      geo = mergeVertices(geo, 1e-3) as THREE.ExtrudeGeometry;
+      geo.computeVertexNormals();
+    }
     geo.translate(0, 0, solid.z0);
     return geo;
   }

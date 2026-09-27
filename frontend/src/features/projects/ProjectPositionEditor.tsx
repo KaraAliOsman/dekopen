@@ -24,10 +24,14 @@ import { useShellLeaf } from "../../app/shellLeaf";
 import { t, tDynamic } from "../../i18n/es-CL";
 import { DeniedState } from "../../ui";
 import { type CanvasDesignInputs, useCanvasStore } from "../canvas/canvasStore";
-import { AssemblyEditor } from "../canvas/AssemblyEditor";
+import { AssemblyEditor, issueText } from "../canvas/AssemblyEditor";
 import { useAssistantSurface } from "../assistant/assistantContext";
 import type { IntentNode, Opening } from "../canvas/intentEditing";
-import { starterContextSize, type StarterDefinition } from "../canvas/designLibrary";
+import {
+  starterContextSize,
+  starterNominalSize,
+  type StarterDefinition,
+} from "../canvas/designLibrary";
 import { resolveMembers } from "../canvas/members";
 import { StarterGallery } from "../canvas/StarterGallery";
 import {
@@ -224,13 +228,11 @@ function designPayload(
   allowedColors: string[],
 ): PositionDesignRequest | null {
   const product = inputs.product;
-  // The save contract today declares exactly one mappable finish — the
-  // picker's options come from the catalog, but the payload type only
-  // accepts a finish the engine can map. A color outside that set stays
-  // displayed, selectable, and unsaveable rather than silently coerced.
-  const color = inputs.color === "WHITE" ? inputs.color : null;
-  if (product === null || !inputs.systemId || color === null || !allowedColors.includes(color))
-    return null;
+  // The picker's options come from the system's declared finishes — a color
+  // outside that set stays displayed and selectable but unsaveable, never
+  // silently coerced.
+  const color = allowedColors.includes(inputs.color) ? inputs.color : null;
+  if (product === null || !inputs.systemId || color === null) return null;
   const single = isSingleUnit(product) ? product.assembly.modules[0] : undefined;
   return single !== undefined
     ? {
@@ -502,6 +504,16 @@ function PositionWorkspace({
   const assemblyUnsaveable =
     assemblyEval?.status === "INVALID" ||
     (assemblyEval?.modules ?? []).some((module) => module.result == null);
+  // A disabled Guardar must name the first real blocker ("la hoja queda bajo
+  // el ancho mínimo del herraje"), not a generic "revisa los parámetros".
+  const saveBlockReason =
+    assemblyUnsaveable && assemblyEval !== null && assemblyEval.issues.length > 0
+      ? issueText(
+          assemblyEval.issues[0]!,
+          inputs.product?.assembly.modules ?? [],
+          inputs.product?.assembly.couplings ?? [],
+        )
+      : null;
 
   async function save(): Promise<void> {
     if (
@@ -570,7 +582,15 @@ function PositionWorkspace({
   const product = inputs.product;
   const pickStarter = (definition: StarterDefinition) => {
     const { widthMm, heightMm } = starterContextSize(product);
-    const nextProduct = definition.build(widthMm, heightMm);
+    // The library card previews the starter at its nominal size — building
+    // it smaller than that can land a leaf under the hardware minimum (a
+    // 1000 mm "Dos hojas" makes two ~440 mm sashes). Floor at nominal so a
+    // starter always produces what its thumbnail promised.
+    const nominal = starterNominalSize(definition.key);
+    const nextProduct = definition.build(
+      Math.max(widthMm, nominal.widthMm),
+      Math.max(heightMm, nominal.heightMm),
+    );
     const store = useCanvasStore.getState();
     store.commitInputs({ ...inputs, product: nextProduct });
     // Coupled starters mint fresh module ids — a stale selection would leave
@@ -632,14 +652,20 @@ function PositionWorkspace({
         <button
           className="primary-action"
           disabled={uncertainCreate || busy || !result || assemblyUnsaveable}
-          title={!result || assemblyUnsaveable ? t("projects.saveBlocked") : undefined}
+          title={
+            saveBlockReason !== null
+              ? `${t("projects.saveBlocked")}: ${saveBlockReason}`
+              : !result || assemblyUnsaveable
+                ? t("projects.saveBlocked")
+                : undefined
+          }
           onClick={() => void save()}
         >
           {t("projects.save")}
         </button>
         {loaded && (busy || assemblyUnsaveable || result === null) && (
           <span className="handle-pending">
-            {busy ? t("projects.savingBusy") : t("projects.saveBlocked")}
+            {busy ? t("projects.savingBusy") : (saveBlockReason ?? t("projects.saveBlocked"))}
           </span>
         )}
       </header>

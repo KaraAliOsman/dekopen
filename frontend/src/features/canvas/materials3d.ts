@@ -190,6 +190,18 @@ export function solidMaterial(solid: Solid3D, mode: MaterialMode): SolidMaterial
         detail: true,
       };
     case "handle":
+      // The lever reads as real hardware — graphite, not sash-tinted steel
+      // that vanishes against white PVC at scene zoom (render P2-4).
+      return {
+        colorToken: "--model3d-handle",
+        colorFallback: "rgb(74,80,85)",
+        roughness: commercial ? 0.32 : 0.45,
+        metalness: commercial ? 0.9 : 0.55,
+        transparent: false,
+        opacity: 1,
+        glass: false,
+        detail: true,
+      };
     case "hinge":
     case "fitting":
     case "support":

@@ -18,6 +18,15 @@ def _jsonb_columns(table):
     }
 
 
+def decode_jsonb_columns(table: str, row: dict) -> dict:
+    """Re-decode a `rows()` dict's jsonb columns before `json_text`
+    re-encoding — every clone helper must pass through this."""
+    for column in _jsonb_columns(table):
+        if isinstance(row.get(column), str):
+            row[column] = json.loads(row[column])
+    return row
+
+
 def copy_fixed_catalog(org, code="DEMO_60", global_scope=False):
     """Clone a global system into an unreferenced, unlocked copy.
 

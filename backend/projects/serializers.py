@@ -47,7 +47,9 @@ class PositionDesignSerializer(EngineCalculateRequestSerializer, StrictSerialize
     nominal_height_mm = DecimalStringField(
         max_digits=10, decimal_places=2, min_value=Decimal("250")
     )
-    color = serializers.ChoiceField(choices=["WHITE"])
+    # Validated against the system's declared finishes downstream
+    # (adapter has params; serializers don't).
+    color = serializers.CharField(max_length=50)
 
 
 class PositionWriteSerializer(StrictSerializer):

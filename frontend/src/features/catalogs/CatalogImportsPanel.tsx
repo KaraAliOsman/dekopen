@@ -330,7 +330,11 @@ export function CatalogImportsPanel({
       </div>
       <p className="imports-hint">{ct("importsHelp")}</p>
       {message && <p className="form-error">{message}</p>}
-      {imports.length === 0 && <p className="imports-empty">{ct("importsEmpty")}</p>}
+      {imports.length === 0 && (
+        <p className="imports-empty">
+          {canWrite ? ct("importsEmpty") : `${ct("importsEmpty")} ${ct("importsReadOnly")}`}
+        </p>
+      )}
       {imports.length > 0 && (
         <div className="catalog-table-scroll">
           <table className="payments-table">

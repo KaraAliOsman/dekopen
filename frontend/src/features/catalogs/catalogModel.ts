@@ -119,6 +119,8 @@ export const schemas: Record<Resource, Group[]> = {
         text("manufacturer", 255, true),
         text("family", 150, true),
         { name: "applications", kind: "csv", optional: true, maxLength: 60 },
+        // Finishes the series sells — feeds the estimator's Acabado picker.
+        { name: "finishes", kind: "csv", optional: true, maxLength: 50 },
         { name: "process_profile_id", kind: "processProfile", optional: true },
         decimal("depth_mm"),
         integer("chamber_count"),

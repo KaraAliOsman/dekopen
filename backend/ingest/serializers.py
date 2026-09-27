@@ -65,7 +65,9 @@ class ConfirmItemSerializer(StrictSerializer):
     quantity = serializers.IntegerField(min_value=1, max_value=999)
     opening_type = serializers.ChoiceField(choices=sorted(_OPENING_TYPES))
     system_id = serializers.UUIDField()
-    color = serializers.ChoiceField(choices=["WHITE"])
+    # Validated against the system's declared finishes downstream
+    # (adapter has params; serializers don't).
+    color = serializers.CharField(max_length=50)
     glass_thickness_mm = DecimalStringField(max_digits=10, decimal_places=2, min_value=Decimal("1"))
     # glass_spec is the physical composition; glass_article_sku is the
     # catalog/technical SKU — a saved position carries both. The spec is

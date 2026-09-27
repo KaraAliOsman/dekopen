@@ -13,7 +13,7 @@ import pytest
 from django.db import transaction
 
 from documents.repository import documentary_backend
-from pricing.repository import one, rows
+from pricing.repository import one, rows, write
 from production import service as production_service
 
 from tests.integration.test_shot09_documentary import (
@@ -200,7 +200,7 @@ def test_golden_path_revision_immutable_after_change(
             [str(version_id)],
         )["snap"]
         with pytest.raises(Exception), transaction.atomic():
-            rows(
+            write(
                 "UPDATE public.project_versions SET snapshot_json='{}'::jsonb WHERE id=%s",
                 [str(version_id)],
             )

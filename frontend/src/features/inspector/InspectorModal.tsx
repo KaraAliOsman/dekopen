@@ -162,7 +162,9 @@ export function InspectorModal({
         leaf_id: null,
         bottom_drain_holes_mm: positions,
         continuous_width_mm: continuous.trim() || null,
-        finish_class: "WHITE",
+        // Machining finish class follows the design's declared finish —
+        // the workshop annotation domain is WHITE|FOILED (non-white ⇒ foil).
+        finish_class: inputs.color === "WHITE" ? "WHITE" : "FOILED",
         has_coupler: coupler === "" ? null : coupler === "yes",
       },
     ]);

@@ -16,7 +16,8 @@ INSERT INTO public.profile_systems (
     sliding_glazing_deduction_height_mm,
     door_leaf_side_clearance_mm,
     is_global,
-    is_demo
+    is_demo,
+    finishes
 )
 VALUES (
     uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/DEMO_60'),
@@ -34,7 +35,8 @@ VALUES (
     20.00,
     7.00,
     TRUE,
-    TRUE
+    TRUE,
+    '["WHITE", "FOILED"]'::jsonb
 )
 ON CONFLICT (id) DO UPDATE SET
     org_id = EXCLUDED.org_id,
@@ -51,7 +53,8 @@ ON CONFLICT (id) DO UPDATE SET
     sliding_glazing_deduction_height_mm = EXCLUDED.sliding_glazing_deduction_height_mm,
     door_leaf_side_clearance_mm = EXCLUDED.door_leaf_side_clearance_mm,
     is_global = EXCLUDED.is_global,
-    is_demo = EXCLUDED.is_demo;
+    is_demo = EXCLUDED.is_demo,
+    finishes = EXCLUDED.finishes;
 
 INSERT INTO public.profile_articles (
     id,

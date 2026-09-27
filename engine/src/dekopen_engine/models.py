@@ -353,6 +353,9 @@ class SystemParams(EngineModel):
     # declares it explicitly — layouts may never exceed this capacity.
     rail_count: int | None = None
     available_hardware_kits: list[HardwareKitRule] = Field(default_factory=list)
+    # Finishes the series actually sells — the estimator picks only declared
+    # ones; every non-WHITE finish consumes the foil clearances.
+    finishes: tuple[str, ...] = ("WHITE",)
     sliding_glazing_deduction_width_mm: Decimal
     sliding_glazing_deduction_height_mm: Decimal
     door_leaf_side_clearance_mm: Decimal

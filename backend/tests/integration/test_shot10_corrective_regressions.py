@@ -159,7 +159,11 @@ def test_invalid_annotation_target_fails_closed(documentary_tenant):
             "JOIN public.handle_requirement_policies handles ON handles.system_id=system.id "
             "JOIN public.reinforcement_cut_policies steel ON steel.system_id=system.id "
             "WHERE placement.org_id IS NULL AND handles.org_id IS NULL AND steel.org_id IS NULL "
-        "AND handles.version=(SELECT max(h2.version) FROM public.handle_requirement_policies h2 "
+        "AND placement.version=(SELECT max(p2.version) FROM public.manufacturing_placement_policies p2 "
+            "WHERE p2.system_id=placement.system_id AND p2.org_id IS NULL) "
+            "AND steel.version=(SELECT max(s2.version) FROM public.reinforcement_cut_policies s2 "
+            "WHERE s2.system_id=steel.system_id AND s2.org_id IS NULL) "
+            "AND handles.version=(SELECT max(h2.version) FROM public.handle_requirement_policies h2 "
         "WHERE h2.system_id=handles.system_id AND h2.org_id IS NULL) LIMIT 1"
         )
         # Invalid bay_id "B99" that does not exist in single bay geometry

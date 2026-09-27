@@ -22,6 +22,7 @@ from documents.repository import (
     documentary_backend,
     one,
     rows,
+    write,
 )
 
 _TOKEN_BYTES = 32
@@ -370,7 +371,8 @@ def portal_quote(token: str, *, track: bool = True) -> dict[str, object]:
             # so the estimator sees "opened N times · last today". Decisions
             # replay through this reader untracked: a decision row is the
             # stronger signal, and replays must not write.
-            rows(
+            # Write helper — a bare UPDATE has no result set for rows().
+            write(
                 "UPDATE public.customer_approvals SET view_count=view_count+1,"
                 "first_viewed_at=COALESCE(first_viewed_at, clock_timestamp()),"
                 "last_viewed_at=clock_timestamp() WHERE id=%s AND org_id=%s",
@@ -537,7 +539,7 @@ def approve_internal(
 
     now = datetime.now(timezone.utc)
     with transaction.atomic(), documentary_backend():
-        rows(
+        write(
             "UPDATE public.customer_approvals SET status='REVOKED',revoked_at=%s,"
             "revoked_by=%s WHERE org_id=%s AND project_id=%s "
             "AND project_version_id=%s AND status='PENDING'",

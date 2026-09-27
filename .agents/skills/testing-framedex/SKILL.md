@@ -152,3 +152,27 @@ description: Local dev-stack recipe for DEKOPEN E2E testing — Supabase CLI sta
   eval issue reason like `DOOR_ENTRY <uuid> requires panel_article_sku` embeds a
   node id and can be misread as "missing node id". Capture `POST
   /engine/assembly/calculate/` for the real product-v2 payload.
+
+## Whole-product pass gotchas (final E2E)
+
+- **`--noreload` Django serves stale bytecode — restart after every commit.** Two real
+  incidents: a newly-added route (`production/station-queue/`) 404'd until restart, and a
+  stale server *masked* a live regression (portal view-tracking `rows(UPDATE)` → 500) — the
+  proposal looked fine on pre-commit bytecode and only broke after a restart loaded current
+  code. Always restart Django before trusting a result; confirm with
+  `curl localhost:8000/api/v1/<new-route>` returning non-404.
+- **Restart Django with the full env**, not just DATABASE_URL: SUPABASE_URL/ANON/SERVICE_KEY,
+  JWT_SECRET, and `AI_GATEWAY_MIMO_API_KEY`+`AI_GATEWAY_MIMO_BASE_URL` (both required or the
+  AI provider reports unavailable). Correct gateway: base `https://token-plan-sgp.xiaomimimo.com/v1`,
+  model `mimo-v2.6-pro`, key = org secret `AI_GATEWAY_MIMO_API_KEY` (an `sk-` LiteLLM virtual key —
+  the `tp-…` key in the dev .env is for a different LiteLLM gateway and 401s).
+- **WORKSHOP_MANAGER login for production:** magic-link redirects to `127.0.0.1` while the app
+  runs on `localhost` — mismatched origins lose the session. Inject the session JSON into
+  `sb-127-auth-token` AND set `dekopen.active_org.<userId>` to the org id on the *localhost*
+  origin, or `auth.me` returns no active org → "Sin acceso".
+- **`portal_quote` write-vs-read trap:** `rows()` is SELECT-only (iterates `cursor.description`,
+  None after UPDATE). Using it for the view-tracking UPDATE crashes the public proposal GET → 500.
+- **AI dock (AskDekopen):** the "IA" header button toggles open/closed — don't double-click.
+  Ask = synchronous POST `/ai/ask/` (`surface`, `refs:{project_id}`, `question`,
+  `operation_key`), not a queued job. The dock renders its own failure state on
+  `ai_provider_error` — that IS the intentional path.

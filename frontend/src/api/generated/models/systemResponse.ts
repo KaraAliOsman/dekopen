@@ -95,6 +95,8 @@ export interface SystemResponse {
   family?: string | null;
   /** @items.maxLength 60 */
   applications?: string[];
+  /** @items.maxLength 50 */
+  finishes?: string[];
   /** @nullable */
   process_profile_id?: string | null;
   readonly readiness: CatalogReadiness;

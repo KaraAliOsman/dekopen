@@ -93,6 +93,14 @@ def rows(query: object, parameters: Sequence[object] = ()) -> list[dict[str, obj
         return [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
 
 
+def write(query: object, parameters: Sequence[object] = ()) -> int:
+    """Statement without a row result (UPDATE/DELETE) — returns rowcount.
+    `rows()` is SELECT-only: `cursor.description` is None on writes."""
+    with connection.cursor() as cursor:
+        cursor.execute(query, parameters)
+        return cursor.rowcount
+
+
 def one(
     query: object, parameters: Sequence[object] = (), code: str = "documentary_authority_not_found"
 ) -> dict[str, object]:

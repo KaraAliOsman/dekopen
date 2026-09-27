@@ -1153,7 +1153,11 @@ def freeze_revision_a(
             }
             if any(item.target_id not in spans for item in structural):
                 raise DocumentaryError("structural_input_target_invalid")
-            if color != "WHITE" or any(item.finish_class not in (None, "WHITE") for item in annotations):
+            # Foiled positions exist now — annotations on one may carry the
+            # FOILED machining class; a WHITE design can never claim it.
+            if color == "WHITE" and any(
+                item.finish_class not in (None, "WHITE") for item in annotations
+            ):
                 raise DocumentaryError("unsupported_documentary_color")
 
             inspector_authorities = InspectorRepository().load(system_id, org_id)

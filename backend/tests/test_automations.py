@@ -11,6 +11,20 @@ from automations import service as automations_service
 from automations import handlers
 
 
+@pytest.fixture(autouse=True)
+def _reregister_handlers():
+    """test_jobs' `reset_registry` wipes import-time registrations for the
+    whole pytest process; reload the handlers module so every automations
+    test sees the built-in job types regardless of file ordering."""
+    import importlib
+
+    from jobs import registry
+
+    registry.reset_registry()
+    importlib.reload(handlers)
+    yield
+
+
 @contextmanager
 def _atomic(*args, **kwargs):
     yield

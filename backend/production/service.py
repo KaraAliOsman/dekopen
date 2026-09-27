@@ -35,6 +35,7 @@ from documents.repository import (
     documentary_backend,
     one,
     rows,
+    write,
 )
 from documents.renderers import (
     _cut_key,
@@ -166,6 +167,7 @@ def _member_ops_for_station(
     sealed derivation the operator card and ops export read. Empty when the
     order has no derivable plan (the plan gates then refuse first)."""
     from production import trace as production_trace
+    from production.pack import _OP_LABELS
 
     payload = _decoded(order.get("payload_json"))
     optimization = payload.get("optimization")
@@ -199,10 +201,9 @@ def _member_ops_for_station(
     for op in ops_doc.get("items", []):
         if op.get("host_kind") != "MEMBER" or op.get("station") != station:
             continue
-        code = member_labels.get(str(op.get("host"))) or str(
-            op.get("host") or op["operation_id"]
-        )
-        expected[str(op["operation_id"])] = f"{code} · {op.get('kind')}"
+        code = member_labels.get(str(op.get("host"))) or f"pieza {len(expected) + 1}"
+        kind_label = _OP_LABELS.get(str(op.get("kind")), str(op.get("kind")))
+        expected[str(op["operation_id"])] = f"{code} · {kind_label}"
     return expected
 
 
@@ -891,7 +892,7 @@ def release_production(*, org_id: UUID, version_id: UUID, actor_id: UUID) -> dic
         # The project lifecycle moves with the work: once work orders exist
         # the deal is no longer "cotizada" — dashboards, the stepper and the
         # next-action all derive from project.status.
-        rows(
+        write(
             "UPDATE public.projects SET status='IN_PRODUCTION',updated_at=clock_timestamp() "
             "WHERE id=%s AND org_id=%s AND status IN ('QUOTED','APPROVED')",
             [str(version["project_id"]), str(org_id)],
@@ -1436,14 +1437,14 @@ def transition_step(
                 )
                 if not center:
                     raise DocumentaryError("work_center_unassigned")
-                rows(
+                write(
                     "UPDATE public.production_steps SET work_center_id = %s WHERE id = %s",
                     [str(center[0]["id"]), str(step_id)],
                 )
                 step["work_center_id"] = center[0]["id"]
                 step["work_center_code"] = center[0]["code"]
                 step["work_center_name"] = center[0]["name"]
-                rows(
+                write(
                     """
                     UPDATE public.orders
                     SET payload_json = jsonb_set(
@@ -2341,6 +2342,48 @@ def _operations_fact_units(
     ]
 
 
+# Workshop annotations that contractually name a machine operation kind:
+# drains and perimeter closing points are machining work, and a declared
+# handle intent is HANDLE_PREP. When the sealed payload declares one but
+# the ops model emits none, the gap must surface — a program that claims
+# coverage it does not have sends the cell hunting for phantom work.
+_DECLARED_INTENT_KINDS: tuple[tuple[str, str], ...] = (
+    ("bottom_drain_holes_mm", "DRAINAGE"),
+    ("closing_points_perimeter_mm", "LOCK_PREP"),
+)
+
+
+def _declared_intent_gaps(
+    version_snapshot: dict[str, object],
+    position_id: str | None,
+    emitted_kinds: set[str],
+) -> list[dict[str, object]]:
+    declared: set[str] = set()
+    for position in version_snapshot.get("positions") or []:
+        if not isinstance(position, dict):
+            continue
+        if position_id and str(position.get("position_id")) != position_id:
+            continue
+        for item in position.get("workshop_annotations") or []:
+            if isinstance(item, dict):
+                for field, kind in _DECLARED_INTENT_KINDS:
+                    if item.get(field):
+                        declared.add(kind)
+        if position.get("handle_intents"):
+            declared.add("HANDLE_PREP")
+    return [
+        {
+            "code": "declared_intent_not_emitted",
+            "kind": kind,
+            "detail": (
+                f"{kind} was declared in the sealed workshop data but no "
+                f"{kind} operations were generated"
+            ),
+        }
+        for kind in sorted(declared - emitted_kinds)
+    ]
+
+
 def export_operations(
     *, org_id: UUID, order_id: UUID, actor_id: UUID
 ) -> dict[str, object]:
@@ -2391,6 +2434,13 @@ def export_operations(
         ops_issues: list[dict[str, object]] = []
         ops = operations_from_plan(
             bars=bars, fact_units=fact_units, issues=ops_issues
+        )
+        ops_issues.extend(
+            _declared_intent_gaps(
+                version_snapshot,
+                str(payload.get("position_id") or "") or None,
+                {op.kind.value for op in ops},
+            )
         )
         empty_labels: dict[str, dict[object, str]] = {
             key: {}
@@ -2463,6 +2513,12 @@ def export_operations(
             "operation_count": document["operation_count"],
             "counts_by_kind": document["counts_by_kind"],
             "unemitted_kinds": document["unemitted_kinds"],
+            "declared_intent_gaps": [
+                issue["kind"]
+                for issue in document["issues"]
+                if isinstance(issue, dict)
+                and issue.get("code") == "declared_intent_not_emitted"
+            ],
             "exported_at": datetime.now(timezone.utc).isoformat(),
             "actor_id": str(actor_id),
             "files": files,
@@ -3391,6 +3447,18 @@ def _optimization_stats(plan: dict[str, object]) -> dict[str, object]:
             for sheet in (plan.get("sheets") or [])
         ),
         "unnested_count": len(plan.get("unnested") or []),
+        # Engine-authoritative waste split: kerf+trims+scrapped tails are
+        # process loss; a reusable remainder is inventory value, not waste.
+        "process_waste_mm": (
+            (plan["bars"].get("metrics") or {}).get("process_waste_mm")
+            if isinstance(plan.get("bars"), dict)
+            else None
+        ) or str(waste_mm),
+        "reusable_remnant_mm": (
+            (plan["bars"].get("metrics") or {}).get("reusable_remnant_mm")
+            if isinstance(plan.get("bars"), dict)
+            else None
+        ) or "0",
         "purchase_bars": sum(
             int(line.get("qty_bars") or 0) for line in bar_purchases
         ),

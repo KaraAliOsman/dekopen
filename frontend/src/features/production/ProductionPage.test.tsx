@@ -119,16 +119,18 @@ describe("ProductionPage", () => {
     );
   });
 
-  it("denies estimators", async () => {
+  it("gives estimators a read-only view", async () => {
     identity.role = "ESTIMATOR";
     render(
-      <MemoryRouter initialEntries={["/production"]}>
+      <MemoryRouter initialEntries={[`/production?order=${order.id}`]}>
         <ConfirmProvider>
           <ProductionPage />
         </ConfirmProvider>
       </MemoryRouter>,
     );
-    await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
-    expect(screen.getByText(t("production.denied"))).toBeTruthy();
+    await waitFor(() => expect(screen.getByText("OT-REV-A-01")).toBeTruthy());
+    // The estimator sees blockers and shortages, never step controls.
+    expect(screen.queryByText(t("production.denied"))).toBeNull();
+    expect(screen.queryByRole("button", { name: t("production.actionStart") })).toBeNull();
   });
 });

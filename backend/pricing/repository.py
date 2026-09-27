@@ -29,6 +29,14 @@ def rows(query, parameters=()):
         return [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
 
 
+def write(query, parameters=()):
+    """Statement without a row result — returns rowcount.
+    `rows()` is SELECT-only: `cursor.description` is None on writes."""
+    with connection.cursor() as cursor:
+        cursor.execute(query, parameters)
+        return cursor.rowcount
+
+
 def one(query, parameters=(), code='authority_not_found'):
     result = rows(query, parameters)
     if len(result) != 1:

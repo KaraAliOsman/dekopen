@@ -17435,7 +17435,9 @@ components:
           type: string
           format: uuid
         color:
-          $ref: '#/components/schemas/WhiteColorEnum'
+          type: string
+          minLength: 1
+          maxLength: 50
         glass_thickness_mm:
           type: string
           format: decimal
@@ -18554,7 +18556,9 @@ components:
           format: decimal
           pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
         color:
-          $ref: '#/components/schemas/WhiteColorEnum'
+          type: string
+          minLength: 1
+          maxLength: 50
         parametric_tree: {}
         position_index:
           type: integer
@@ -20662,6 +20666,10 @@ components:
           type: integer
         waste_mm:
           type: string
+        process_waste_mm:
+          type: string
+        reusable_remnant_mm:
+          type: string
         sheets_total:
           type: integer
         pieces_sheets:
@@ -20684,10 +20692,12 @@ components:
       - bars_total
       - cuts_total
       - pieces_sheets
+      - process_waste_mm
       - purchase_bars
       - purchase_sheets
       - remnants_consumed
       - remnants_produced
+      - reusable_remnant_mm
       - runtime_ms
       - sheets_total
       - strategy
@@ -21585,6 +21595,12 @@ components:
             type: string
             minLength: 1
             maxLength: 60
+        finishes:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 50
         process_profile_id:
           type: string
           format: uuid
@@ -22293,7 +22309,8 @@ components:
           format: decimal
           pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
         color:
-          $ref: '#/components/schemas/WhiteColorEnum'
+          type: string
+          maxLength: 50
         parametric_tree: {}
       required:
       - color
@@ -22316,7 +22333,9 @@ components:
           format: decimal
           pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
         color:
-          $ref: '#/components/schemas/WhiteColorEnum'
+          type: string
+          minLength: 1
+          maxLength: 50
         parametric_tree: {}
       required:
       - color
@@ -25400,6 +25419,11 @@ components:
           items:
             type: string
             maxLength: 60
+        finishes:
+          type: array
+          items:
+            type: string
+            maxLength: 50
         process_profile_id:
           type: string
           format: uuid
@@ -25607,6 +25631,12 @@ components:
             type: string
             minLength: 1
             maxLength: 60
+        finishes:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 50
         process_profile_id:
           type: string
           format: uuid
@@ -25708,11 +25738,6 @@ components:
       - lots
       - plan
       - trial_ends_at
-    WhiteColorEnum:
-      enum:
-      - WHITE
-      type: string
-      description: '* `WHITE` - WHITE'
     WithdrawRequest:
       type: object
       properties:
@@ -25891,7 +25916,7 @@ components:
         finish_class:
           nullable: true
           oneOf:
-          - $ref: '#/components/schemas/WhiteColorEnum'
+          - $ref: '#/components/schemas/ColorEnum'
           - $ref: '#/components/schemas/NullEnum'
         has_coupler:
           type: boolean
@@ -25932,7 +25957,7 @@ components:
         finish_class:
           nullable: true
           oneOf:
-          - $ref: '#/components/schemas/WhiteColorEnum'
+          - $ref: '#/components/schemas/ColorEnum'
           - $ref: '#/components/schemas/NullEnum'
         has_coupler:
           type: boolean
