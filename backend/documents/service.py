@@ -1190,15 +1190,22 @@ def freeze_revision_a(
                     except MissingStockAuthority:
                         inertia = None
                     inertias[span.target_id] = inertia
-                inspection = inspect(InspectorInput(
-                    computation=computation,
-                    chamber_clearance_mm=inspector_authorities.chamber_clearance_mm,
-                    annotations=_module_scoped(annotations, module_id, "bay_id", "leaf_id"),
-                    structural_inputs=_module_scoped(structural, module_id, "target_id"),
-                    reinforcement_ix_by_target=inertias,
-                    mode=InspectionMode.DESIGN,
-                    source_calculation_hash=str(source_hash),
-                ), inspector_authorities.config)
+                try:
+                    inspection = inspect(InspectorInput(
+                        computation=computation,
+                        chamber_clearance_mm=inspector_authorities.chamber_clearance_mm,
+                        annotations=_module_scoped(annotations, module_id, "bay_id", "leaf_id"),
+                        structural_inputs=_module_scoped(structural, module_id, "target_id"),
+                        reinforcement_ix_by_target=inertias,
+                        mode=InspectionMode.DESIGN,
+                        source_calculation_hash=str(source_hash),
+                    ), inspector_authorities.config)
+                except ValueError as error:
+                    # Inspector violations carry no position identity; without
+                    # it the estimator must binary-search the vano list.
+                    raise ValueError(
+                        f"Vano «{position['name'] or position['position_index']}»: {error}"
+                    ) from error
                 module_allowed = inspection.production_allowed
                 module_complete = not any(
                     evaluation.status is RuleEvaluationStatus.MISSING_INPUT

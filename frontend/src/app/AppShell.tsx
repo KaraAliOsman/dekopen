@@ -1,10 +1,13 @@
 import { type PropsWithChildren, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { t, type TranslationKey } from "../i18n/es-CL";
 
 import { useAuthSession } from "../auth/AuthSessionProvider";
 import { MOD_K_HINT } from "../platform";
+import { projectsRetrieve } from "../api/generated/dekopen";
+import { ApiError } from "../api/apiMutator";
 import { telemetry } from "../telemetry/telemetry";
 import { useTheme } from "../theme/ThemeProvider";
 import { CommandPalette } from "../features/commands/CommandPalette";
@@ -95,6 +98,28 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
 
   const parts = location.pathname.split("/").filter(Boolean);
   const projectId = parts[0] === "projects" && parts[1] !== undefined ? parts[1] : null;
+  // Same queryKey as the position editor's lock check — when the user is
+  // already on the project this is a cache hit; a locked project must not
+  // keep advertising «Nuevo vano» in the rail.
+  const projectLock = useQuery({
+    queryKey: ["projects", "editor-lock", org?.id ?? "", projectId ?? ""],
+    enabled: canWrite && projectId !== null && projectId !== "demo",
+    queryFn: async () => {
+      const response = await projectsRetrieve(projectId!, {
+        headers: { "X-Organization-ID": org!.id },
+      });
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      return response.data;
+    },
+    staleTime: 30_000,
+  });
+  const projectUnlocked =
+    !projectLock.data ||
+    (projectLock.data.status === "DRAFT" &&
+      !projectLock.data.versions?.some(
+        (version) => version.revision_code === projectLock.data.current_revision,
+      ) &&
+      !projectLock.data.current_pricing_operation_id);
   const context: "project" | "production" | null =
     projectId !== null ? "project" : parts[0] === "production" ? "production" : null;
   const projectName = useProjectName(projectId !== null && projectId !== "demo" ? projectId : null);
@@ -135,7 +160,7 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
                 },
               ]
             : []),
-          ...(canWrite
+          ...(canWrite && projectUnlocked
             ? [
                 {
                   to: `/projects/${projectId}/positions/new`,

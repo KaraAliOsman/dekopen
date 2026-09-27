@@ -579,7 +579,7 @@ export function ProjectPaymentsPanel({
             <input
               required
               inputMode="decimal"
-              pattern="[0-9]{1,3}(\\.[0-9]{3})+|[0-9]+"
+              pattern="[0-9]{1,3}(\.[0-9]{3})+|[0-9]+"
               title={t("projects.paymentAmountHint")}
               value={amount}
               onChange={(event) => setAmount(event.target.value)}

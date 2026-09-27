@@ -401,7 +401,25 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
                   </li>
                 );
               })}
-              {visible.length === 0 && <li className="clients-empty">{t("clients.empty")}</li>}
+              {visible.length === 0 && (
+                <li className="clients-empty">
+                  {t("clients.empty")}
+                  {canWrite && (
+                    <button
+                      type="button"
+                      className="clients-empty__cta"
+                      onClick={() => {
+                        setCreating(true);
+                        setEditing(null);
+                        selectClient(null);
+                        setDraft(empty());
+                      }}
+                    >
+                      {t("clients.new")}
+                    </button>
+                  )}
+                </li>
+              )}
             </ul>
           </div>
 

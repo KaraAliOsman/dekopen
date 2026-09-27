@@ -348,6 +348,11 @@ export function AppRoutes(): JSX.Element {
             </ReadyGuard>
           }
         />
+        {/* Bare guesses land on their real surface instead of silently
+         * bouncing home — /inventory lives inside Purchasing, /settings
+         * inside General. */}
+        <Route path="/settings" element={<Navigate to="/settings/general" replace />} />
+        <Route path="/inventory" element={<Navigate to="/purchasing" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </RouteErrorBoundary>

@@ -493,6 +493,12 @@ export default function Model3DView({
             {t("assembly.view3dExplode")}
           </button>
         )}
+        {/* Symmetric products look identical flipped, so the face toggle needs
+         * a persistent readout of which face is toward the camera — otherwise
+         * the control reads as dead on correderas and fixed windows. */}
+        <span className="model3d-face" aria-live="polite">
+          {inside ? t("assembly.view3dInside") : t("assembly.view3dOutside")}
+        </span>
       </div>
       <Canvas
         frameloop="demand"

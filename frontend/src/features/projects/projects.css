@@ -98,6 +98,22 @@
   column-gap: 1.5rem;
   row-gap: 0.25rem;
 }
+/* The right-rail inspector is ~280px: a 3-col grid there shreds values
+ * mid-token («Neto $247.2 99»). Label-left/value-right rows never split a
+ * token and survive long location tags. */
+.position-detail .project-metadata {
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 0.75rem;
+  row-gap: 0.35rem;
+}
+.position-detail .project-metadata > div {
+  display: contents;
+}
+.position-detail .project-metadata dd {
+  margin: 0;
+  overflow-wrap: normal;
+  text-align: right;
+}
 .project-metadata dt {
   color: var(--theme-text-secondary);
   font-size: 0.8125rem;

@@ -653,6 +653,15 @@
   color: var(--theme-accent-ink);
 }
 
+.model3d-face {
+  color: var(--theme-text-muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin-left: auto;
+  text-transform: uppercase;
+}
+
 .model3d-inset .model3d-view .model3d-canvas {
   flex: 1;
   min-height: 0;

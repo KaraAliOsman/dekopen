@@ -444,7 +444,11 @@ export function OperatorStepCard({
                 </table>
               ) : (
                 <p className="production-trace-empty">
-                  {hasPlan ? t("production.operatorNoStock") : t("production.operatorNoPlan")}
+                  {hasPlan
+                    ? unnestedPanes.length
+                      ? t("production.operatorNoStockButPanes")
+                      : t("production.operatorNoStock")
+                    : t("production.operatorNoPlan")}
                 </p>
               )}
               {remnants.length ? (
@@ -611,7 +615,9 @@ export function OperatorStepCard({
                   ) : null}
                 </>
               ) : (
-                <p className="production-trace-empty">{t("production.operatorNoOps")}</p>
+                <p className="production-trace-empty">
+                  {hasPlan ? t("production.operatorStepNoOps") : t("production.operatorNoOps")}
+                </p>
               )}
               {cutPieces.length ? (
                 <table className="production-plan operator-pieces">

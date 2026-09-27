@@ -42,7 +42,7 @@ def _line_item_identity(line_snapshot: dict[str, object]) -> dict[str, str]:
 def list_stock(*, org_id: UUID) -> dict[str, object]:
     items = rows(
         """
-        SELECT item_id, sku, name, category, unit, variant_key,
+        SELECT inventory_stock.item_id, sku, name, category, unit, variant_key,
                on_hand_qty, reserved_qty, (on_hand_qty - reserved_qty) AS available_qty,
                COALESCE(inc.incoming_qty, 0) AS incoming_qty,
                loc.racks
@@ -74,7 +74,7 @@ def list_stock(*, org_id: UUID) -> dict[str, object]:
             WHERE l.org_id = %s
             GROUP BY stock.item_id
         ) inc ON inc.item_id = public.inventory_stock.item_id
-        WHERE org_id = %s
+        WHERE inventory_stock.org_id = %s
         ORDER BY sku, variant_key
         """,
         [str(org_id), str(org_id), str(org_id)],

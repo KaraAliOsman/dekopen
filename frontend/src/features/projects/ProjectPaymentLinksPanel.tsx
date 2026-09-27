@@ -294,7 +294,7 @@ export function ProjectPaymentLinksPanel({
           </tbody>
         </table>
       )}
-      {links.length === 0 && !showForm && (
+      {links.length === 0 && !showForm && !message && (
         <p className="settings-hint">{t("projects.paymentLinksEmpty")}</p>
       )}
     </section>

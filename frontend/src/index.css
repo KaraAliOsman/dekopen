@@ -1763,8 +1763,21 @@ p[role="alert"]:only-child::before {
 }
 
 .clients-empty {
+  align-items: center;
   color: var(--theme-text-secondary);
+  display: flex;
+  gap: 0.6rem;
   padding: 0.75rem;
+}
+
+.clients-empty__cta {
+  background: transparent;
+  border: 1px solid var(--theme-accent);
+  border-radius: var(--radius-sm);
+  color: var(--theme-accent-ink);
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 0.18rem 0.6rem;
 }
 
 .clients-detail {
