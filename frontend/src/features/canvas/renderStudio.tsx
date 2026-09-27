@@ -5,7 +5,7 @@ import type { PlanGeometry } from "../../api/generated/models";
 import type { ProductJson } from "./productEditing";
 import { buildScene3D, type Scene3D, type Solid3D } from "./Product3DScene";
 import { solidToGeometry } from "./scene3dGeometry";
-import { solidMaterial } from "./materials3d";
+import { foilGrainTexture, runLength, solidMaterial } from "./materials3d";
 import type { MemberGeometry } from "./members";
 import { webglAvailable } from "./webglAvailable";
 
@@ -68,6 +68,9 @@ function solidMesh(solid: Solid3D): THREE.Mesh | null {
     transparent: material.transparent,
     opacity: material.opacity,
     depthWrite: !material.glass,
+    // Foil members keep their grain in the commercial render too — the
+    // same texture map the orbit view applies (§7 of the fidelity pass).
+    map: material.grain ? foilGrainTexture(material.grain, runLength(solid)) : null,
   });
   if (solid.kind === "box") {
     const geo = new THREE.BoxGeometry(solid.size[0], solid.size[1], solid.size[2]);
@@ -203,7 +206,11 @@ export function renderStudioImage(
   root.traverse((node) => {
     if (node instanceof THREE.Mesh) {
       node.geometry.dispose();
-      (node.material as THREE.Material).dispose();
+      const mat = node.material as THREE.MeshStandardMaterial;
+      // texture.dispose() isn't covered by material.dispose() — cloned
+      // grain maps would leak across every render pass.
+      mat.map?.dispose();
+      mat.dispose();
     }
   });
   // LRU eviction — Map order is insertion order, so the first key is the

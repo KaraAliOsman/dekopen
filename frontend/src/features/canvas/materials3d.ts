@@ -1,4 +1,79 @@
+import * as THREE from "three";
+
 import type { Solid3D } from "./Product3DScene";
+
+/** Wood-grain skin for foil-finished members (§05-C): a generated
+ * CanvasTexture, license-free, with streaks running along the member's
+ * run axis — never a flat brown fill. One base per orientation; solids
+ * clone it with a repeat matched to their run length so grain density
+ * stays physical. */
+const grainCache = new Map<string, THREE.Texture>();
+
+function drawGrain(axis: "u" | "v"): THREE.Texture {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 256;
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    ctx.fillStyle = "rgb(255,255,255)";
+    ctx.fillRect(0, 0, 256, 256);
+    // Grain needs real contrast to read at member scale (review M7) —
+    // faint 4–11% streaks vanished against the foil base coat.
+    for (let index = 0; index < 46; index += 1) {
+      const at = Math.random() * 256;
+      const wave = 4 + Math.random() * 14;
+      const alpha = 0.1 + Math.random() * 0.16;
+      ctx.strokeStyle = `rgba(52, 34, 16, ${alpha.toFixed(3)})`;
+      ctx.lineWidth = 0.9 + Math.random() * 3.2;
+      ctx.beginPath();
+      if (axis === "u") {
+        ctx.moveTo(-8, at);
+        ctx.bezierCurveTo(64, at + wave, 192, at - wave, 264, at + wave * 0.5);
+      } else {
+        ctx.moveTo(at, -8);
+        ctx.bezierCurveTo(at + wave, 64, at - wave, 192, at + wave * 0.5, 264);
+      }
+      ctx.stroke();
+    }
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.anisotropy = 4;
+  return texture;
+}
+
+/** The member's run length in mm — the axis the grain follows. */
+export function runLength(solid: Solid3D): number {
+  switch (solid.kind) {
+    case "box":
+      return Math.max(solid.size[0], solid.size[1]);
+    case "profile":
+      return Math.max(Math.abs(solid.a1 - solid.a0), 1);
+    case "prism":
+      return Math.max(Math.abs(solid.y1 - solid.y0), 1);
+    default: {
+      let extent = 1;
+      for (const [x, y] of solid.outline) {
+        extent = Math.max(extent, Math.abs(x), Math.abs(y));
+      }
+      return extent;
+    }
+  }
+}
+
+/** Per-solid grain texture: a clone of the cached base with a repeat
+ * matching the member's run. Callers own disposal of the returned clone. */
+export function foilGrainTexture(axis: "u" | "v", runMm: number): THREE.Texture {
+  let base = grainCache.get(axis);
+  if (!base) {
+    base = drawGrain(axis);
+    grainCache.set(axis, base);
+  }
+  const texture = base.clone();
+  const repeat = Math.max(1, Math.round(runMm / 400));
+  if (axis === "u") texture.repeat.set(repeat, 1);
+  else texture.repeat.set(1, repeat);
+  return texture;
+}
 
 /** Physical presentation materials (§05-C): the renderer's surface response
  * per catalog material and detail surface — two modes share one table.

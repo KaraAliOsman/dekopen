@@ -963,15 +963,22 @@ function leafSolids(
       tagLeaf(solids, leafFrom, leafId);
       // Presentation only: a leaf slides toward its neighbouring slot(s),
       // capped to stay inside the bay — the product declares no travel.
-      const dir = index * 2 < sliding.panels.length ? 1 : -1;
-      const room = dir > 0 ? region.x + region.w - leafX - leafW : leafX - region.x;
-      leaves.push({
-        leafId,
-        kind: "slide",
-        pivot: 0,
-        dir,
-        travel: Math.max(0, Math.min(pitch, room)),
-      });
+      // On a two-leaf slider both leaves moving at once just swap slots
+      // and reveal nothing; physically one leaf (the inner-rail sash)
+      // slides over the other to open half the bay.
+      const allMoving2 =
+        sliding.panels.length === 2 && sliding.panels.every((p) => p.kind === "MOVING");
+      if (!(allMoving2 && index === 1)) {
+        const dir = index * 2 < sliding.panels.length ? 1 : -1;
+        const room = dir > 0 ? region.x + region.w - leafX - leafW : leafX - region.x;
+        leaves.push({
+          leafId,
+          kind: "slide",
+          pivot: 0,
+          dir,
+          travel: Math.max(0, Math.min(pitch, room)),
+        });
+      }
     });
     // Sliding leaves ride rails — the track channels at the sill plane are
     // a physical detail, one per declared track.

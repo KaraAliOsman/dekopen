@@ -387,6 +387,41 @@ describe("buildScene3D", () => {
     expect(verticals[3]).toBeCloseTo(1104, 5);
   });
 
+  it("opens a two-leaf slider by sliding one leaf over the other", () => {
+    const base = makeBowProduct({ moduleCount: 1, widthMm: 1200, heightMm: 1400, angleDeg: 0 });
+    const bay: IntentNode = {
+      id: "b1",
+      type: "BAY",
+      opening_type: "SLIDING",
+      glass_thickness_mm: "4.00",
+      sliding_layout: {
+        tracks: 2,
+        panels: [
+          { slot: "S1", kind: "MOVING", track: 0 },
+          { slot: "S2", kind: "MOVING", track: 1 },
+        ],
+      },
+    };
+    const module = {
+      ...base.assembly.modules[0]!,
+      tree: { id: "r", type: "ROOT" as const, children: [bay] },
+    };
+    const product = {
+      ...base,
+      assembly: { modules: [module], couplings: [] },
+    } as ProductJson;
+    const scene = buildScene3D(product, members);
+    // Both leaves translating swaps their slots and reveals no aperture;
+    // only the inner-rail leaf carries a slide motion (one pitch over).
+    const slides = scene.modules[0]!.leaves.filter((leaf) => leaf.kind === "slide");
+    expect(slides).toHaveLength(1);
+    expect(slides[0]!.leafId).toBe("b1:0");
+    // leaf0 (60..672, leafW 612) slides right until its edge meets the bay
+    // edge at 1140 — travel 468 stacks it on leaf1's slot, opening the
+    // left half of the aperture.
+    expect(slides[0]!.travel).toBeCloseTo(468, 5);
+  });
+
   it("wraps an operable panel door's infill in a sash", () => {
     const base = makeBowProduct({ moduleCount: 1, widthMm: 900, heightMm: 2100, angleDeg: 0 });
     const bay: IntentNode = {
