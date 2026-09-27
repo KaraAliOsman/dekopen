@@ -4,6 +4,7 @@ import { createBrowserRouter, Navigate, Route, RouterProvider, Routes } from "re
 import { t } from "./i18n/es-CL";
 
 import { AppShell } from "./app/AppShell";
+import { RouteErrorBoundary } from "./app/RouteErrorBoundary";
 import { DashboardPage } from "./app/DashboardPage";
 import { JobsPage } from "./app/JobsPage";
 import { SettingsPage } from "./app/SettingsPage";
@@ -99,9 +100,7 @@ function HomeRedirect(): JSX.Element {
   if (auth.status === "ready") {
     // Floor roles live on the production floor — the commercial dashboard
     // would deny its queries and greet them with errors.
-    const floorRole = ["INSTALLER", "OPERATOR"].includes(
-      auth.me?.active_organization?.role ?? "",
-    );
+    const floorRole = ["INSTALLER", "OPERATOR"].includes(auth.me?.active_organization?.role ?? "");
     const home = floorRole ? "/production" : "/dashboard";
     return <Navigate to={home} replace />;
   }
@@ -110,246 +109,248 @@ function HomeRedirect(): JSX.Element {
 
 export function AppRoutes(): JSX.Element {
   return (
-    <Routes>
-      <Route
-        path="/settings/billing"
-        element={
-          <ReadyGuard>
-            <AppShell>
-              <Suspense fallback={<p role="status">{t("wallet.loading")}</p>}>
-                <BillingPage />
-              </Suspense>
-            </AppShell>
-          </ReadyGuard>
-        }
-      />
-      <Route
-        path="/settings/wallet"
-        element={
-          <ReadyGuard>
-            <AppShell>
-              <Suspense fallback={<p role="status">{t("wallet.loading")}</p>}>
-                <WalletPage />
-              </Suspense>
-            </AppShell>
-          </ReadyGuard>
-        }
-      />
-      <Route path="/projects/:id" element={<ProjectSurface />} />
-      <Route path="/projects/:id/positions/new" element={<ProjectSurface editor />} />
-      <Route
-        path="/projects/:id/pricing"
-        element={
-          <ReadyGuard>
-            <AppShell>
-              <Suspense fallback={<p role="status">{t("projects.loading")}</p>}>
-                <CommercialPricingPage />
-              </Suspense>
-            </AppShell>
-          </ReadyGuard>
-        }
-      />
-      <Route
-        path="/projects/demo/positions/g1/edit"
-        element={
-          <ReadyGuard>
-            <AppShell>
-              <Suspense fallback={<p role="status">{t("canvas.loading")}</p>}>
-                <CanvasEditor2DView demoRoute />
-              </Suspense>
-            </AppShell>
-          </ReadyGuard>
-        }
-      />
-      <Route
-        path="/pricing/commercial"
-        element={
-          <ReadyGuard>
-            <AppShell>
-              <Suspense fallback={<p role="status">{t("pricing.loading")}</p>}>
-                <CommercialPricingPage />
-              </Suspense>
-            </AppShell>
-          </ReadyGuard>
-        }
-      />
-      <Route
-        path="/pricing/cost-lists"
-        element={
-          <ReadyGuard>
-            <AppShell>
-              <Suspense fallback={<p role="status">{t("pricing.loading")}</p>}>
-                <PricingPage />
-              </Suspense>
-            </AppShell>
-          </ReadyGuard>
-        }
-      />
-      <Route path="/" element={<HomeRedirect />} />
-      <Route
-        path="/cotizacion/:token"
-        element={
-          <Suspense fallback={<p role="status">{t("portal.loading")}</p>}>
-            <PortalQuotePage />
-          </Suspense>
-        }
-      />
-      <Route
-        path="/pago/retorno"
-        element={
-          <Suspense fallback={<p role="status" />}>
-            <PaymentReturnPage />
-          </Suspense>
-        }
-      />
-      {import.meta.env.DEV && (
+    <RouteErrorBoundary>
+      <Routes>
         <Route
-          path="/benchmark"
+          path="/settings/billing"
           element={
-            <Suspense fallback={<p role="status" />}>
-              <BenchmarkPage />
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("wallet.loading")}</p>}>
+                  <BillingPage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route
+          path="/settings/wallet"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("wallet.loading")}</p>}>
+                  <WalletPage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route path="/projects/:id" element={<ProjectSurface />} />
+        <Route path="/projects/:id/positions/new" element={<ProjectSurface editor />} />
+        <Route
+          path="/projects/:id/pricing"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("projects.loading")}</p>}>
+                  <CommercialPricingPage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route
+          path="/projects/demo/positions/g1/edit"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("canvas.loading")}</p>}>
+                  <CanvasEditor2DView demoRoute />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route
+          path="/pricing/commercial"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("pricing.loading")}</p>}>
+                  <CommercialPricingPage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route
+          path="/pricing/cost-lists"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("pricing.loading")}</p>}>
+                  <PricingPage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route path="/" element={<HomeRedirect />} />
+        <Route
+          path="/cotizacion/:token"
+          element={
+            <Suspense fallback={<p role="status">{t("portal.loading")}</p>}>
+              <PortalQuotePage />
             </Suspense>
           }
         />
-      )}
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/auth/callback" element={<AuthCallbackPage />} />
-      <Route
-        path="/auth/mfa"
-        element={
-          <SessionGuard>
-            <MfaPage />
-          </SessionGuard>
-        }
-      />
-      <Route
-        path="/select-organization"
-        element={
-          <SessionGuard>
-            <SelectOrganizationPage />
-          </SessionGuard>
-        }
-      />
-      <Route
-        path="/dashboard"
-        element={
-          <ReadyGuard>
-            <AppShell>
-              <DashboardPage />
-            </AppShell>
-          </ReadyGuard>
-        }
-      />
-      <Route
-        path="/clients/:id?"
-        element={
-          <ReadyGuard>
-            <AppShell>
-              <Suspense fallback={<p role="status">{t("clients.loading")}</p>}>
-                <ClientsPage />
+        <Route
+          path="/pago/retorno"
+          element={
+            <Suspense fallback={<p role="status" />}>
+              <PaymentReturnPage />
+            </Suspense>
+          }
+        />
+        {import.meta.env.DEV && (
+          <Route
+            path="/benchmark"
+            element={
+              <Suspense fallback={<p role="status" />}>
+                <BenchmarkPage />
               </Suspense>
-            </AppShell>
-          </ReadyGuard>
-        }
-      />
-      <Route
-        path="/jobs"
-        element={
-          <ReadyGuard>
-            <AppShell>
-              <Suspense fallback={<p role="status">{t("jobs.title")}</p>}>
-                <JobsPage />
-              </Suspense>
-            </AppShell>
-          </ReadyGuard>
-        }
-      />
-      <Route
-        path="/purchasing"
-        element={
-          <ReadyGuard>
-            <AppShell>
-              <Suspense fallback={<p role="status">{t("purchasing.loading")}</p>}>
-                <PurchasingPage />
-              </Suspense>
-            </AppShell>
-          </ReadyGuard>
-        }
-      />
-      <Route
-        path="/production"
-        element={
-          <ReadyGuard>
-            <AppShell>
-              <Suspense fallback={<p role="status">{t("production.loading")}</p>}>
-                <ProductionPage />
-              </Suspense>
-            </AppShell>
-          </ReadyGuard>
-        }
-      />
-      <Route
-        path="/projects/:id/positions/:posId/edit"
-        element={
-          <ReadyGuard>
-            <AppShell>
-              <Suspense fallback={<p role="status">{t("projects.loading")}</p>}>
-                <ProjectPositionEditor />
-              </Suspense>
-            </AppShell>
-          </ReadyGuard>
-        }
-      />
-      <Route path="/projects" element={<ProjectSurface />} />
-      <Route path="/catalogs" element={<Navigate to="/catalogs/systems" replace />} />
-      <Route
-        path="/assistant"
-        element={
-          <ReadyGuard>
-            <AppShell>
-              <Suspense fallback={<p role="status">{t("projects.loading")}</p>}>
-                <AssistantWorkspacePage />
-              </Suspense>
-            </AppShell>
-          </ReadyGuard>
-        }
-      />
-      <Route
-        path="/catalogs/systems"
-        element={
-          <ReadyGuard>
-            <AppShell>
-              <Suspense fallback={<p role="status">{t("projects.loading")}</p>}>
-                <CatalogPage />
-              </Suspense>
-            </AppShell>
-          </ReadyGuard>
-        }
-      />
-      <Route
-        path="/onboarding"
-        element={
-          <ReadyGuard>
-            <AppShell>
-              <Suspense fallback={<p role="status">{t("onboarding.loading")}</p>}>
-                <OnboardingPage />
-              </Suspense>
-            </AppShell>
-          </ReadyGuard>
-        }
-      />
-      <Route
-        path="/settings/general"
-        element={
-          <ReadyGuard>
-            <AppShell>
-              <SettingsPage />
-            </AppShell>
-          </ReadyGuard>
-        }
-      />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+            }
+          />
+        )}
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/auth/callback" element={<AuthCallbackPage />} />
+        <Route
+          path="/auth/mfa"
+          element={
+            <SessionGuard>
+              <MfaPage />
+            </SessionGuard>
+          }
+        />
+        <Route
+          path="/select-organization"
+          element={
+            <SessionGuard>
+              <SelectOrganizationPage />
+            </SessionGuard>
+          }
+        />
+        <Route
+          path="/dashboard"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <DashboardPage />
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route
+          path="/clients/:id?"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("clients.loading")}</p>}>
+                  <ClientsPage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route
+          path="/jobs"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("jobs.title")}</p>}>
+                  <JobsPage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route
+          path="/purchasing"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("purchasing.loading")}</p>}>
+                  <PurchasingPage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route
+          path="/production"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("production.loading")}</p>}>
+                  <ProductionPage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route
+          path="/projects/:id/positions/:posId/edit"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("projects.loading")}</p>}>
+                  <ProjectPositionEditor />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route path="/projects" element={<ProjectSurface />} />
+        <Route path="/catalogs" element={<Navigate to="/catalogs/systems" replace />} />
+        <Route
+          path="/assistant"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("projects.loading")}</p>}>
+                  <AssistantWorkspacePage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route
+          path="/catalogs/systems"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("projects.loading")}</p>}>
+                  <CatalogPage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route
+          path="/onboarding"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("onboarding.loading")}</p>}>
+                  <OnboardingPage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route
+          path="/settings/general"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <SettingsPage />
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </RouteErrorBoundary>
   );
 }
 

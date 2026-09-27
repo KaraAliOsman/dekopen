@@ -2383,7 +2383,14 @@ export function ProductionPage(): JSX.Element {
                         <div>
                           <dt>{t("production.deliveryDate")}</dt>
                           <dd>
-                            {delivery.scheduled_date} · {delivery.time_window}
+                            {delivery.scheduled_date} ·{" "}
+                            {t(
+                              delivery.time_window === "JORNADA"
+                                ? "production.windowAllDay"
+                                : delivery.time_window === "PM"
+                                  ? "production.windowPm"
+                                  : "production.windowAm",
+                            )}
                           </dd>
                         </div>
                         <div>
@@ -2592,9 +2599,9 @@ export function ProductionPage(): JSX.Element {
                               })
                             }
                           >
-                            <option value="AM">AM</option>
-                            <option value="PM">PM</option>
-                            <option value="JORNADA">JORNADA</option>
+                            <option value="AM">{t("production.windowAm")}</option>
+                            <option value="PM">{t("production.windowPm")}</option>
+                            <option value="JORNADA">{t("production.windowAllDay")}</option>
                           </select>
                         </label>
                         <label className="production-delivery-wide">

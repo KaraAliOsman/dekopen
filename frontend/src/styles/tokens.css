@@ -237,3 +237,43 @@
   --line-strong: var(--theme-border-strong);
   --border: var(--theme-border-subtle);
 }
+
+/* Route-level error boundary: a crashed view keeps a recoverable frame. */
+.route-error {
+  min-height: 60vh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-6, 24px);
+}
+.route-error-card {
+  max-width: 26rem;
+  text-align: center;
+  display: grid;
+  gap: var(--space-3, 12px);
+}
+.route-error-card h1 {
+  font-size: 1.25rem;
+  margin: 0;
+}
+.route-error-card p {
+  color: var(--theme-text-secondary, #5b6472);
+  margin: 0;
+}
+.route-error-actions {
+  display: flex;
+  gap: var(--space-2, 8px);
+  justify-content: center;
+}
+.route-error-actions button {
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--line, #d6dae2);
+  background: var(--accent, #1b5cff);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+.route-error-actions .route-error-secondary {
+  background: transparent;
+  color: var(--theme-text-primary, #1d2430);
+}
