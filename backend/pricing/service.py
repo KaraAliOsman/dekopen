@@ -7,6 +7,7 @@ import json
 
 from django.db import connection, DatabaseError
 
+from authentication.errors import contract_error
 from dekopen_engine.commercial import (
     CommercialLine, PricingError, PricingMode, direct_cost, discount_state,
     finish_lines, target_project, unit_price, validate_segment,
@@ -18,6 +19,54 @@ from engine_api.repository import SystemParamsRepository
 from pricing.repository import PricingRepository, audit_reason, json_text, one, rows
 
 D = Decimal
+
+# Human es-CL detail per pricing failure code — the HTTP layer renders
+# these so an estimator sees what to fix, never a raw engine code. Codes
+# raised while iterating positions get prefixed with the position label
+# ("Vano 3 · Dormitorio: …") so the blocker names where it lives.
+PRICING_ERROR_DETAILS = {
+    'ambiguous_authority': 'hay más de una autoridad de costos vigente para la fecha; revisa las listas de costos',
+    'ambiguous_cost_list': 'hay más de una lista de costos vigente; revisa las vigencias en Configuración',
+    'ambiguous_selected_glass': 'usa más de un vidrio distinto y el precio por m² exige un solo vidrio por vano',
+    'audit_reason_required': 'indica el motivo del cambio para dejar trazabilidad',
+    'commercial_revision_required': 'requiere una nueva revisión antes de cotizar; crea la revisión siguiente desde el proyecto',
+    'cost_list_not_found': 'no existe la lista de costos indicada',
+    'fx_snapshot_immutable': 'la cotización de moneda ya está cerrada',
+    'glass_bay_not_found': 'no se encontró su paño de vidrio; revisa el diseño',
+    'incompatible_cost_unit': 'la unidad de costo de un material no es compatible con su uso; revisa la lista de costos',
+    'invalid_admin_fields': 'revisa los campos de configuración',
+    'invalid_column_mapping': 'revisa el mapeo de columnas del archivo',
+    'invalid_xlsx_file': 'el archivo Excel no es válido o está dañado',
+    'missing_fx_authority': 'falta la cotización de moneda para la fecha; regístrala antes de cotizar en otra moneda',
+    'missing_glass_authority': 'no hay precio registrado para el vidrio seleccionado; agrégalo a la lista de costos o cambia el vidrio',
+    'missing_selected_glass_sku': 'no declara el vidrio seleccionado; revisa el diseño',
+    'negative_margin': 'la operación dejaría margen negativo; ajusta el precio o el costo',
+    'operation_already_final': 'la operación de precios ya está cerrada',
+    'operation_not_withdrawable': 'la operación ya no se puede anular',
+    'owner_approval_required': 'el descuento requiere aprobación del dueño',
+    'pricing_permission_denied': 'tu rol no permite esta operación comercial',
+    'project_has_no_positions': 'el proyecto no tiene vanos para cotizar',
+    'stale_pricing_operation': 'los precios cambiaron desde que preparaste la operación; recarga y vuelve a aplicar',
+    'target_margin_already_defines_final_price': 'el margen objetivo ya define el precio final y no admite descuento adicional',
+    'unknown_pricing_resource': 'la configuración no está disponible',
+    'xlsx_expanded_limit': 'el archivo supera el límite de filas permitido',
+    'xlsx_header_missing_or_duplicate': 'el Excel no tiene los encabezados esperados o los repite',
+    'xlsx_no_rows': 'el archivo no contiene filas de datos',
+    'xlsx_sheet_limit': 'el archivo supera el tamaño permitido',
+}
+
+
+def _position_label(position):
+    tag = (position.get('location_tag') or '').strip()
+    return f"Vano {position['position_index']}" + (f" · {tag}" if tag else "")
+
+
+def pricing_public_detail(code):
+    """Failure code → standalone human sentence, for surfaces that show the
+    detail without a position prefix (view mapping, batch item errors)."""
+    detail = PRICING_ERROR_DETAILS.get(
+        code,'la operación comercial requiere revisar sus permisos, datos o configuración')
+    return detail[0].upper() + detail[1:] + '.'
 
 
 def glass_sku(tree, bay_id):
@@ -209,36 +258,43 @@ def preview(org_id, actor, request):
     with localcontext() as context:
         context.prec = 80
         for position in positions:
-            cost, area, result, formation = position_cost(repo,position,calculation_rules)
-            index = position['position_index']
-            cost_lines.append((index,cost*position['quantity']))
-            technical.append({'position_id':position['id'],
-                              'position_index':index,
-                              'unit_cost':str(cost.quantize(D('0.0001'))),
-                              'bom':result.model_dump(mode='json'),**formation})
-            if mode == PricingMode.TARGET_GROSS_MARGIN_PROJECT:
-                continue
-            extra = {}
-            if mode != PricingMode.COST_PLUS_MARGIN:
-                config = repo.configuration(mode.value,request['context_code'],position['typology'])
-                if mode == PricingMode.PRICE_PER_M2_BY_TYPOLOGY:
-                    if not config['base_glass_sku'] or not result.glasses:
-                        raise PricingError('missing_glass_authority')
-                    selected = {design_glass_sku(decoded(position['parametric_tree']),glass.bay_id)
-                                for glass in result.glasses}
-                    if len(selected) != 1:
-                        raise PricingError('ambiguous_selected_glass')
-                    extra = {'rate':repo.convert(config['rate_per_m2'],config['currency']),
-                             'selected_glass':repo.cost(next(iter(selected)),'M2'),
-                             'base_glass':repo.cost(config['base_glass_sku'],'M2')}
-                elif mode == PricingMode.FIXED_PRICE_MATRIX_DIMENSIONAL:
-                    extra = {'cells':repo.matrix(config)}
-                else:
-                    extra = {'catalog_price':repo.convert(config['catalog_price'],config['currency'])}
-            exact_price = unit_price(mode,cost=cost,margin=rules['default_margin_pct'],area=area,
-                                     width=position['width_mm'],height=position['height_mm'],
-                                     foil=position['color_interior']!='WHITE' or position['color_exterior']!='WHITE',**extra)
-            priced_lines.append(CommercialLine(index,position['quantity'],cost,exact_price,discount))
+            try:
+                cost, area, result, formation = position_cost(repo,position,calculation_rules)
+                index = position['position_index']
+                cost_lines.append((index,cost*position['quantity']))
+                technical.append({'position_id':position['id'],
+                                  'position_index':index,
+                                  'unit_cost':str(cost.quantize(D('0.0001'))),
+                                  'bom':result.model_dump(mode='json'),**formation})
+                if mode == PricingMode.TARGET_GROSS_MARGIN_PROJECT:
+                    continue
+                extra = {}
+                if mode != PricingMode.COST_PLUS_MARGIN:
+                    config = repo.configuration(mode.value,request['context_code'],position['typology'])
+                    if mode == PricingMode.PRICE_PER_M2_BY_TYPOLOGY:
+                        if not config['base_glass_sku'] or not result.glasses:
+                            raise PricingError('missing_glass_authority')
+                        selected = {design_glass_sku(decoded(position['parametric_tree']),glass.bay_id)
+                                    for glass in result.glasses}
+                        if len(selected) != 1:
+                            raise PricingError('ambiguous_selected_glass')
+                        extra = {'rate':repo.convert(config['rate_per_m2'],config['currency']),
+                                 'selected_glass':repo.cost(next(iter(selected)),'M2'),
+                                 'base_glass':repo.cost(config['base_glass_sku'],'M2')}
+                    elif mode == PricingMode.FIXED_PRICE_MATRIX_DIMENSIONAL:
+                        extra = {'cells':repo.matrix(config)}
+                    else:
+                        extra = {'catalog_price':repo.convert(config['catalog_price'],config['currency'])}
+                exact_price = unit_price(mode,cost=cost,margin=rules['default_margin_pct'],area=area,
+                                         width=position['width_mm'],height=position['height_mm'],
+                                         foil=position['color_interior']!='WHITE' or position['color_exterior']!='WHITE',**extra)
+                priced_lines.append(CommercialLine(index,position['quantity'],cost,exact_price,discount))
+            except PricingError as error:
+                # The estimator fixing this has to know WHICH vano fails —
+                # name the position, then the human reason for the code.
+                detail = PRICING_ERROR_DETAILS.get(
+                    error.code,'la operación comercial requiere revisar sus permisos, datos o configuración')
+                raise contract_error(422,error.code,f'{_position_label(position)}: {detail}.') from error
         extra_amounts = [D(str(item['amount'])) for item in request.get('extras') or []]
         output = (target_project(cost_lines,request['target_margin'],request['currency'],rules['tax_rate_pct'],extra_amounts)
                   if mode == PricingMode.TARGET_GROSS_MARGIN_PROJECT
@@ -367,7 +423,8 @@ def design_batch_preview(org_id, _actor, request):
                 continue
             except PricingError as error:
                 items.append({'position_id':position_id,'ok':False,
-                              'error_code':error.code,'error':error.code})
+                              'error_code':error.code,
+                              'error':pricing_public_detail(error.code)})
                 continue
             quantity = position['quantity']
             items.append({

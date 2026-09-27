@@ -75,17 +75,23 @@ export function ProjectPaymentLinksPanel({
   const load = useCallback(async () => {
     const current = ++generation.current;
     try {
-      const [linksResponse, statusResponse] = await Promise.all([
-        projectPaymentLinksList(projectId, requestOptions),
-        // Integration status is write-scoped — readers (e.g. taller) only
-        // need the links list; fetching it would 403 for them.
-        canWrite ? projectPaymentIntegrationStatus(requestOptions) : Promise.resolve(null),
-      ]);
+      const linksResponse = await projectPaymentLinksList(projectId, requestOptions);
       if (generation.current !== current) return;
       if (linksResponse.status === 200) setLinks(linksResponse.data.links);
-      if (statusResponse?.status === 200) setIntegration(statusResponse.data);
     } catch {
       if (generation.current === current) setMessage(t("projects.paymentLinksLoadError"));
+    }
+    // Integration status is write-scoped — readers (e.g. taller) only need
+    // the links list; fetching it would 403 for them. Its failure must not
+    // fail the list: an unconfigured/absent provider only hides the hint.
+    if (canWrite) {
+      try {
+        const statusResponse = await projectPaymentIntegrationStatus(requestOptions);
+        if (generation.current === current && statusResponse.status === 200)
+          setIntegration(statusResponse.data);
+      } catch {
+        // leave the links list standing
+      }
     }
   }, [projectId, canWrite]); // eslint-disable-line react-hooks/exhaustive-deps
 

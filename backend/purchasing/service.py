@@ -680,7 +680,9 @@ def orders_index(org_id: UUID, status: str | None = None) -> dict[str, object]:
             "JOIN public.order_receipt_lines rl ON rl.receipt_id=rc.id "
             "WHERE rc.org_id=%s GROUP BY rc.order_id"
             ") r ON r.order_id=o.id "
-            "WHERE o.org_id=%s" + status_filter + " "
+            # Purchasing index lists supplier purchase orders only — WORKSHOP_OT
+            # rows are production work orders sharing the orders table.
+            "WHERE o.org_id=%s AND o.order_type<>'WORKSHOP_OT'" + status_filter + " "
             "ORDER BY CASE WHEN o.expected_at IS NULL THEN 1 ELSE 0 END,"
             "o.expected_at,o.created_at DESC,o.id",
             [org_id, org_id] + params,

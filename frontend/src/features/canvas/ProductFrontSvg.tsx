@@ -625,7 +625,18 @@ function Bay({
               )}
               <path
                 className="sliding-arrow"
-                d={`M${midX - arrow} ${midY} H${midX + arrow} M${midX + arrow * 0.5} ${midY - arrow * 0.4} L${midX + arrow} ${midY}`}
+                // Travel convention shared with the 3D pose: a leaf opens
+                // toward its neighbouring slot — leaves in the left half of
+                // the bay slide right, the right half slides left. The
+                // product model declares no travel, so this stays a
+                // presentation convention, not manufacturing truth.
+                d={(() => {
+                  const dir = index * 2 < panels.length ? 1 : -1;
+                  const tip = midX + arrow * dir;
+                  const tail = midX - arrow * dir;
+                  const barb = tip - dir * arrow * 0.5;
+                  return `M${tail} ${midY} H${tip} M${barb} ${midY - arrow * 0.4} L${tip} ${midY} L${barb} ${midY + arrow * 0.4}`;
+                })()}
                 fill="none"
               />
             </g>

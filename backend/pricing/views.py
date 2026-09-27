@@ -30,7 +30,7 @@ from pricing.serializers import (
     DesignBatchPreviewResponseSerializer, WithdrawSerializer,
 )
 from pricing.service import (apply_operation, design_batch_preview, operation_public,
-                             preview, withdraw_operation)
+                             preview, withdraw_operation, pricing_public_detail)
 from pricing.xlsx_import import import_rows, parse_xlsx
 from projects.typology import derive_typology
 
@@ -61,7 +61,7 @@ def public_pricing_errors():
     except PricingError as error:
         forbidden = error.code in ('pricing_permission_denied','owner_confirmation_required','owner_approval_required')
         raise contract_error(403 if forbidden else 422,error.code,
-                             'La operación comercial requiere revisar sus permisos, datos o configuración.') from error
+                             pricing_public_detail(error.code)) from error
     except InvalidEngineRequest as error:
         raise contract_error(400,'validation_error',
                              'Revisa los campos y los valores ingresados.') from error

@@ -175,12 +175,18 @@ function actionErrorDetail(error: unknown): string {
   if (error instanceof ApiError) {
     const payload = error.payload as {
       error?: {
+        code?: unknown;
         detail?: unknown;
         short_skus?: unknown;
         unmapped_stock_skus?: unknown;
         missing_operations?: unknown;
       };
     } | null;
+    // The order's persistent blockers list already enumerates every missing
+    // SKU — the toast stays one line instead of repeating the whole wall
+    // (review: four stacked messages on a blocked Completar).
+    if (payload?.error?.code === "work_order_material_shortage")
+      return t("production.materialShortageToast");
     const detail = payload?.error?.detail;
     if (typeof detail === "string" && detail.trim()) {
       const shortList = payload?.error?.short_skus;
@@ -296,7 +302,15 @@ export function ProductionPage(): JSX.Element {
     };
   }, []);
 
-  const selectedId = params.get("order") ?? "";
+  const selectedParam = params.get("order") ?? "";
+  // Deep links accept the id or the printed order code («OT-0007») — scan and
+  // trace jumps hand the operator the code they see on the label (review).
+  const resolvedOrder = orders.find(
+    (order) =>
+      order.id === selectedParam ||
+      order.order_code.toUpperCase() === selectedParam.trim().toUpperCase(),
+  );
+  const selectedId = resolvedOrder?.id ?? selectedParam;
   selectedIdRef.current = selectedId;
   /** Triage queue — deep-linkable: /production?status=HOLD lands on the held
    * orders (dashboard attention items point here). */
@@ -418,6 +432,11 @@ export function ProductionPage(): JSX.Element {
       setConfirmOpen(false);
       return;
     }
+    // An unresolved human code («OT-0007») waits for the orders list to map
+    // it to the real id — firing now would 404 on the literal code. Once the
+    // list has loaded, an unresolved param is bogus: let the fetch fail and
+    // surface the honest error.
+    if (!resolvedOrder && orders.length === 0 && !/^[0-9a-f-]{32,}$/i.test(selectedParam)) return;
     setTrace(null);
     setOperatorStepId(null);
     setPieceQuery("");
@@ -427,7 +446,7 @@ export function ProductionPage(): JSX.Element {
     setPieceReport(null);
     void loadDetail(selectedId).catch(() => setMessage(t("production.loadError")));
     void loadTrace();
-  }, [selectedId, loadDetail, loadTrace]);
+  }, [selectedId, selectedParam, resolvedOrder, orders.length, loadDetail, loadTrace]);
 
   // Resolve a scan deep-link: piece → station code → step id on this order.
   useEffect(() => {

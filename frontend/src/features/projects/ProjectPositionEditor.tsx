@@ -8,6 +8,7 @@ import {
   positionsRetrieve,
   positionsUpdate,
   projectDesignOptions,
+  projectsRetrieve,
 } from "../../api/generated/dekopen";
 
 import type {
@@ -45,12 +46,53 @@ export function ProjectPositionEditor(): JSX.Element {
   const copyId = posId ? "" : (query.get("copy") ?? "");
   const preferredSystem = posId || copyId ? null : query.get("system");
   const org = useAuthSession().me?.active_organization;
-  if (!org || !["OWNER", "ESTIMATOR"].includes(org.role))
-    return <DeniedState reason={t("projects.denied")} />;
+  const canEdit = Boolean(org && ["OWNER", "ESTIMATOR"].includes(org.role));
+  // The editor must not mount on a closed revision — the backend's editable()
+  // gate would 409 every save, so check BEFORE the canvas store and dirty
+  // tracking initialize (review: the «Nuevo vano» dead-end on quoted deals).
+  const projectQuery = useQuery({
+    queryKey: ["projects", "editor-lock", org?.id ?? "", id],
+    enabled: canEdit && Boolean(id),
+    queryFn: async () => {
+      const response = await projectsRetrieve(id, {
+        headers: { "X-Organization-ID": org!.id },
+      });
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      return response.data;
+    },
+    staleTime: 30_000,
+  });
+  if (!canEdit) return <DeniedState reason={t("projects.denied")} />;
+  const project = projectQuery.data;
+  // Mirrors backend editable(): a closed revision is status≠DRAFT, a sealed
+  // version row for current_revision, or an applied pricing authority.
+  const locked = Boolean(
+    project &&
+    (project.status !== "DRAFT" ||
+      project.versions?.some((version) => version.revision_code === project.current_revision) ||
+      project.current_pricing_operation_id),
+  );
+  if (locked) {
+    return (
+      <div className="ui-empty ui-empty--denied">
+        <svg className="ui-empty__glyph" aria-hidden="true" viewBox="0 0 16 16">
+          <rect x="3" y="7" width="10" height="7" rx="1.5" />
+          <path d="M5.5 7V5.5a2.5 2.5 0 0 1 5 0V7" />
+        </svg>
+        <p className="ui-empty__title">{t("projects.editorLockedTitle")}</p>
+        <p className="ui-empty__body">{t("projects.editorLockedBody")}</p>
+        <div className="ui-empty__action">
+          <Link className="ui-button" to={`/projects/${id}`}>
+            {t("projects.editorLockedBack")}
+          </Link>
+        </div>
+      </div>
+    );
+  }
   return (
     <PositionWorkspace
-      key={`${org.id}:${id}:${posId}:${copyId}`}
-      orgId={org.id}
+      key={`${org!.id}:${id}:${posId}:${copyId}`}
+      orgId={org!.id}
       preferredSystem={preferredSystem}
       projectId={id}
       positionId={posId}

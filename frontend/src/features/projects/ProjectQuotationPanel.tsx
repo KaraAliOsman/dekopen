@@ -152,6 +152,16 @@ function readInspectorFailures(payload: unknown): InspectorFailure[] {
   );
 }
 
+/** The server's human detail ("Vano 3 · Dormitorio: no hay precio…") beats
+ * the generic toast copy whenever the API supplies one. */
+function apiDetail(payload: unknown): string | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const error = (payload as { error?: unknown }).error;
+  const detail =
+    typeof error === "object" && error !== null ? (error as { detail?: unknown }).detail : null;
+  return typeof detail === "string" && detail.trim() ? detail : null;
+}
+
 function GlassPolishingRow({
   target,
   record,
@@ -873,11 +883,10 @@ export function ProjectQuotationPanel({
       if (generation.current !== current) return;
       setInspectorFailures(error instanceof ApiError ? readInspectorFailures(error.payload) : []);
       setMessage(
-        t(
-          error instanceof ApiError && error.status === 409
-            ? "quotation.conflict"
-            : "quotation.error",
-        ),
+        error instanceof ApiError
+          ? (apiDetail(error.payload) ??
+              t(error.status === 409 ? "quotation.conflict" : "quotation.error"))
+          : t("quotation.error"),
       );
     } finally {
       if (generation.current === current) setBusy(false);

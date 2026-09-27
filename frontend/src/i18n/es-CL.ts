@@ -279,6 +279,10 @@ export const messages = {
   "projects.openPosition": "Abrir diseño",
   "projects.priceProject": "Calcular precio",
   "projects.denied": "Tu rol no permite editar proyectos.",
+  "projects.editorLockedTitle": "Revisión cerrada para edición",
+  "projects.editorLockedBody":
+    "Esta revisión ya fue emitida, cotizada o aprobada — sus vanos no pueden modificarse. Desde el proyecto puedes abrir una nueva revisión para seguir editando.",
+  "projects.editorLockedBack": "Volver al proyecto",
   "projects.loading": "Cargando proyecto…",
   "projects.loadError": "No pudimos cargar el proyecto. Vuelve a intentarlo.",
   "projects.saved": "Cambios guardados.",
@@ -1488,6 +1492,8 @@ export const messages = {
   "production.prepRelease": "Liberar",
   "production.prepPositions": "posiciones",
   "production.shortageChip": "Falta material ({count})",
+  "production.materialShortageToast":
+    "Paso bloqueado por falta de material — revisa los faltantes de la orden.",
   "production.versionShortageChip": "Otras posiciones: {count} datos pendientes",
   "production.versionShortageTitle":
     "El faltante corresponde a la versión completa, no solo a esta orden",

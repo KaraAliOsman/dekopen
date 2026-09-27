@@ -1351,7 +1351,11 @@ function SupplierDirectory({
             <div className="purchasing-directory-cats">
               {categories.length
                 ? categories
-                    .map((cat) => t(orderTypeLabels[cat as OrderType] ?? "purchasing.indexType"))
+                    .map((cat) =>
+                      orderTypeLabels[cat as OrderType]
+                        ? t(orderTypeLabels[cat as OrderType])
+                        : cat,
+                    )
                     .join(" · ")
                 : "—"}
             </div>
@@ -1439,10 +1443,16 @@ function OrdersIndex({
               <td>
                 {order.project_code ?? "—"} · {formatRevision(order.revision_code ?? "")}
               </td>
-              <td>{t(orderTypeLabels[order.order_type as OrderType] ?? "purchasing.indexType")}</td>
+              <td>
+                {orderTypeLabels[order.order_type as OrderType]
+                  ? t(orderTypeLabels[order.order_type as OrderType])
+                  : order.order_type}
+              </td>
               <td>{order.supplier_name ?? "—"}</td>
               <td>
-                {t(orderStatusLabels[order.status as OrderStatus] ?? "purchasing.indexStatus")}
+                {orderStatusLabels[order.status as OrderStatus]
+                  ? t(orderStatusLabels[order.status as OrderStatus])
+                  : order.status}
               </td>
               <td>{order.expected_at ?? "—"}</td>
               <td>{order.status === "CANCELLED" ? "—" : order.outstanding_qty}</td>

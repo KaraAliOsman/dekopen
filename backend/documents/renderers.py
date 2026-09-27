@@ -608,9 +608,15 @@ def _svg_elements(node: dict[str, object], x: Decimal, y: Decimal,
                 f'stroke-width="{stroke}"/>'
             )
             if not isinstance(panel, dict) or panel.get("kind") == "MOVING":
+                # A leaf opens toward its neighbouring slot: left half of
+                # the bay travels right, right half travels left — the same
+                # convention the pull mark below and the 3D pose use.
+                forward = index * 2 < len(layout_panels)
+                ax1 = lx + leaf_w / 4 if forward else lx + leaf_w * Decimal("3") / 4
+                ax2 = lx + leaf_w * Decimal("3") / 4 if forward else lx + leaf_w / 4
                 out.append(
-                    f'<line x1="{_pt(lx + leaf_w / 4)}" y1="{_pt(my)}" '
-                    f'x2="{_pt(lx + leaf_w * 3 / 4)}" y2="{_pt(my)}" stroke="{pal["glyph"]}" '
+                    f'<line x1="{_pt(ax1)}" y1="{_pt(my)}" '
+                    f'x2="{_pt(ax2)}" y2="{_pt(my)}" stroke="{pal["glyph"]}" '
                     f'stroke-width="{stroke}" marker-end="url(#{marker})"/>'
                 )
                 if pal.get("hardware"):

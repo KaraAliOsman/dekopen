@@ -855,8 +855,15 @@
 .project-facts__list {
   display: grid;
   gap: 0.375rem 0.75rem;
-  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  /* 10.5rem keeps names/tags from column-cramming into mid-token wraps; the
+   * hyphenation below turns unavoidable long-word splits into real breaks. */
+  grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
   margin: 0.75rem 0 0;
+}
+
+.project-facts__list dd {
+  hyphens: auto;
+  min-width: 0;
 }
 
 .project-facts__section {

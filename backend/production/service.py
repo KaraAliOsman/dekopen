@@ -888,6 +888,14 @@ def release_production(*, org_id: UUID, version_id: UUID, actor_id: UUID) -> dic
                         json.dumps({"order_code": order_code, "position_id": payload["position_id"]}),
                     ],
                 )
+        # The project lifecycle moves with the work: once work orders exist
+        # the deal is no longer "cotizada" — dashboards, the stepper and the
+        # next-action all derive from project.status.
+        rows(
+            "UPDATE public.projects SET status='IN_PRODUCTION',updated_at=clock_timestamp() "
+            "WHERE id=%s AND org_id=%s AND status IN ('QUOTED','APPROVED')",
+            [str(version["project_id"]), str(org_id)],
+        )
         # §8: the moment a version becomes work, the workshop should already
         # see the material shortage signal the purchasing coverage computes —
         # not only after someone clicks optimize. One coverage read stamps

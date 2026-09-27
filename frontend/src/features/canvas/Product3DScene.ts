@@ -747,22 +747,25 @@ function walkNode(
     const lo = vertical ? region.x : region.y;
     const extent = vertical ? region.w : region.h;
     const offset = Number(node.split_offset_mm);
-    const desired = (vertical ? origin.x : origin.y) + offset;
+    // split_offset_mm measures from the node's own top edge (document space,
+    // y grows downward); these regions are y-up world, so the horizontal
+    // axis sits region.h − offset above the region's bottom.
+    const desired = vertical ? origin.x + offset : region.y + region.h - offset;
     const axis =
       Number.isFinite(offset) && offset > 0
         ? Math.min(Math.max(desired, lo + barW / 2), lo + extent - barW / 2)
         : lo + extent / 2;
     const firstRegion: Region = vertical
       ? { x: region.x, y: region.y, w: axis - barW / 2 - region.x, h: region.h }
-      : { x: region.x, y: region.y, w: region.w, h: axis - barW / 2 - region.y };
-    const secondRegion: Region = vertical
-      ? { x: axis + barW / 2, y: region.y, w: region.x + region.w - (axis + barW / 2), h: region.h }
       : {
           x: region.x,
           y: axis + barW / 2,
           w: region.w,
           h: region.y + region.h - (axis + barW / 2),
         };
+    const secondRegion: Region = vertical
+      ? { x: axis + barW / 2, y: region.y, w: region.x + region.w - (axis + barW / 2), h: region.h }
+      : { x: region.x, y: region.y, w: region.w, h: axis - barW / 2 - region.y };
     walkNode(first!, firstRegion, { x: firstRegion.x, y: firstRegion.y }, members, out);
     walkNode(second!, secondRegion, { x: secondRegion.x, y: secondRegion.y }, members, out);
     out.bars.push({
