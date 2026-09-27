@@ -55,6 +55,17 @@ import type {
   ClientWriteRequest,
   CloneProjectRequest,
   CncExport,
+  CncGenerateRequestRequest,
+  CncMachine,
+  CncMachineList,
+  CncMachineRequestRequest,
+  CncProgram,
+  CncProgramList,
+  CncReadiness,
+  CncTool,
+  CncToolList,
+  CncToolRequestRequest,
+  CncWorkspace,
   Commerce,
   ConfirmBatchRequestRequest,
   ConfirmChangeRequest,
@@ -139,6 +150,8 @@ import type {
   PatchedArticleWriteRequest,
   PatchedBeadWriteRequest,
   PatchedClientUpdateRequest,
+  PatchedCncMachinePatchRequest,
+  PatchedCncToolPatchRequest,
   PatchedKitWriteRequest,
   PatchedProjectUpdateRequest,
   PatchedSystemWriteRequest,
@@ -8386,6 +8399,635 @@ export const pricingPreview = async (
   });
 };
 
+export type productionCncMachinesResponse200 = {
+  data: CncMachineList;
+  status: 200;
+};
+
+export type productionCncMachinesResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type productionCncMachinesResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type productionCncMachinesResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type productionCncMachinesResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type productionCncMachinesResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type productionCncMachinesResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type productionCncMachinesResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type productionCncMachinesResponseSuccess = productionCncMachinesResponse200 & {
+  headers: Headers;
+};
+export type productionCncMachinesResponseError = (
+  | productionCncMachinesResponse400
+  | productionCncMachinesResponse401
+  | productionCncMachinesResponse403
+  | productionCncMachinesResponse404
+  | productionCncMachinesResponse409
+  | productionCncMachinesResponse422
+  | productionCncMachinesResponse503
+) & {
+  headers: Headers;
+};
+
+export type productionCncMachinesResponse =
+  productionCncMachinesResponseSuccess | productionCncMachinesResponseError;
+
+export const getProductionCncMachinesUrl = () => {
+  return `/api/v1/production/cnc/machines/`;
+};
+
+export const productionCncMachines = async (
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<productionCncMachinesResponse> => {
+  return apiMutator<productionCncMachinesResponse>(getProductionCncMachinesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export type productionCncMachineCreateResponse201 = {
+  data: CncMachine;
+  status: 201;
+};
+
+export type productionCncMachineCreateResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type productionCncMachineCreateResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type productionCncMachineCreateResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type productionCncMachineCreateResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type productionCncMachineCreateResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type productionCncMachineCreateResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type productionCncMachineCreateResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type productionCncMachineCreateResponseSuccess = productionCncMachineCreateResponse201 & {
+  headers: Headers;
+};
+export type productionCncMachineCreateResponseError = (
+  | productionCncMachineCreateResponse400
+  | productionCncMachineCreateResponse401
+  | productionCncMachineCreateResponse403
+  | productionCncMachineCreateResponse404
+  | productionCncMachineCreateResponse409
+  | productionCncMachineCreateResponse422
+  | productionCncMachineCreateResponse503
+) & {
+  headers: Headers;
+};
+
+export type productionCncMachineCreateResponse =
+  productionCncMachineCreateResponseSuccess | productionCncMachineCreateResponseError;
+
+export const getProductionCncMachineCreateUrl = () => {
+  return `/api/v1/production/cnc/machines/`;
+};
+
+export const productionCncMachineCreate = async (
+  cncMachineRequestRequest: CncMachineRequestRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<productionCncMachineCreateResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<productionCncMachineCreateResponse>(getProductionCncMachineCreateUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+    body: JSON.stringify(cncMachineRequestRequest),
+  });
+};
+
+export type productionCncMachineUpdateResponse200 = {
+  data: CncMachine;
+  status: 200;
+};
+
+export type productionCncMachineUpdateResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type productionCncMachineUpdateResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type productionCncMachineUpdateResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type productionCncMachineUpdateResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type productionCncMachineUpdateResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type productionCncMachineUpdateResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type productionCncMachineUpdateResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type productionCncMachineUpdateResponseSuccess = productionCncMachineUpdateResponse200 & {
+  headers: Headers;
+};
+export type productionCncMachineUpdateResponseError = (
+  | productionCncMachineUpdateResponse400
+  | productionCncMachineUpdateResponse401
+  | productionCncMachineUpdateResponse403
+  | productionCncMachineUpdateResponse404
+  | productionCncMachineUpdateResponse409
+  | productionCncMachineUpdateResponse422
+  | productionCncMachineUpdateResponse503
+) & {
+  headers: Headers;
+};
+
+export type productionCncMachineUpdateResponse =
+  productionCncMachineUpdateResponseSuccess | productionCncMachineUpdateResponseError;
+
+export const getProductionCncMachineUpdateUrl = (machineId: string) => {
+  return `/api/v1/production/cnc/machines/${machineId}/`;
+};
+
+export const productionCncMachineUpdate = async (
+  machineId: string,
+  patchedCncMachinePatchRequest?: PatchedCncMachinePatchRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<productionCncMachineUpdateResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<productionCncMachineUpdateResponse>(
+    getProductionCncMachineUpdateUrl(machineId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+      body: JSON.stringify(patchedCncMachinePatchRequest),
+    },
+  );
+};
+
+export type productionCncProgramFileResponse200ApplicationJson = {
+  data: string;
+  status: 200;
+};
+
+export type productionCncProgramFileResponse200TextCsv = {
+  data: string;
+  status: 200;
+};
+
+export type productionCncProgramFileResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type productionCncProgramFileResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type productionCncProgramFileResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type productionCncProgramFileResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type productionCncProgramFileResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type productionCncProgramFileResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type productionCncProgramFileResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type productionCncProgramFileResponseSuccess = (
+  productionCncProgramFileResponse200ApplicationJson | productionCncProgramFileResponse200TextCsv
+) & {
+  headers: Headers;
+};
+export type productionCncProgramFileResponseError = (
+  | productionCncProgramFileResponse400
+  | productionCncProgramFileResponse401
+  | productionCncProgramFileResponse403
+  | productionCncProgramFileResponse404
+  | productionCncProgramFileResponse409
+  | productionCncProgramFileResponse422
+  | productionCncProgramFileResponse503
+) & {
+  headers: Headers;
+};
+
+export type productionCncProgramFileResponse =
+  productionCncProgramFileResponseSuccess | productionCncProgramFileResponseError;
+
+export const getProductionCncProgramFileUrl = (programId: string, filename: string) => {
+  return `/api/v1/production/cnc/programs/${programId}/file/${filename}`;
+};
+
+export const productionCncProgramFile = async (
+  programId: string,
+  filename: string,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<productionCncProgramFileResponse> => {
+  return apiMutator<productionCncProgramFileResponse>(
+    getProductionCncProgramFileUrl(programId, filename),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export type productionCncToolsResponse200 = {
+  data: CncToolList;
+  status: 200;
+};
+
+export type productionCncToolsResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type productionCncToolsResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type productionCncToolsResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type productionCncToolsResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type productionCncToolsResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type productionCncToolsResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type productionCncToolsResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type productionCncToolsResponseSuccess = productionCncToolsResponse200 & {
+  headers: Headers;
+};
+export type productionCncToolsResponseError = (
+  | productionCncToolsResponse400
+  | productionCncToolsResponse401
+  | productionCncToolsResponse403
+  | productionCncToolsResponse404
+  | productionCncToolsResponse409
+  | productionCncToolsResponse422
+  | productionCncToolsResponse503
+) & {
+  headers: Headers;
+};
+
+export type productionCncToolsResponse =
+  productionCncToolsResponseSuccess | productionCncToolsResponseError;
+
+export const getProductionCncToolsUrl = () => {
+  return `/api/v1/production/cnc/tools/`;
+};
+
+export const productionCncTools = async (
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<productionCncToolsResponse> => {
+  return apiMutator<productionCncToolsResponse>(getProductionCncToolsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export type productionCncToolCreateResponse201 = {
+  data: CncTool;
+  status: 201;
+};
+
+export type productionCncToolCreateResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type productionCncToolCreateResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type productionCncToolCreateResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type productionCncToolCreateResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type productionCncToolCreateResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type productionCncToolCreateResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type productionCncToolCreateResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type productionCncToolCreateResponseSuccess = productionCncToolCreateResponse201 & {
+  headers: Headers;
+};
+export type productionCncToolCreateResponseError = (
+  | productionCncToolCreateResponse400
+  | productionCncToolCreateResponse401
+  | productionCncToolCreateResponse403
+  | productionCncToolCreateResponse404
+  | productionCncToolCreateResponse409
+  | productionCncToolCreateResponse422
+  | productionCncToolCreateResponse503
+) & {
+  headers: Headers;
+};
+
+export type productionCncToolCreateResponse =
+  productionCncToolCreateResponseSuccess | productionCncToolCreateResponseError;
+
+export const getProductionCncToolCreateUrl = () => {
+  return `/api/v1/production/cnc/tools/`;
+};
+
+export const productionCncToolCreate = async (
+  cncToolRequestRequest: CncToolRequestRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<productionCncToolCreateResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<productionCncToolCreateResponse>(getProductionCncToolCreateUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+    body: JSON.stringify(cncToolRequestRequest),
+  });
+};
+
+export type productionCncToolUpdateResponse200 = {
+  data: CncTool;
+  status: 200;
+};
+
+export type productionCncToolUpdateResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type productionCncToolUpdateResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type productionCncToolUpdateResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type productionCncToolUpdateResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type productionCncToolUpdateResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type productionCncToolUpdateResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type productionCncToolUpdateResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type productionCncToolUpdateResponseSuccess = productionCncToolUpdateResponse200 & {
+  headers: Headers;
+};
+export type productionCncToolUpdateResponseError = (
+  | productionCncToolUpdateResponse400
+  | productionCncToolUpdateResponse401
+  | productionCncToolUpdateResponse403
+  | productionCncToolUpdateResponse404
+  | productionCncToolUpdateResponse409
+  | productionCncToolUpdateResponse422
+  | productionCncToolUpdateResponse503
+) & {
+  headers: Headers;
+};
+
+export type productionCncToolUpdateResponse =
+  productionCncToolUpdateResponseSuccess | productionCncToolUpdateResponseError;
+
+export const getProductionCncToolUpdateUrl = (toolId: string) => {
+  return `/api/v1/production/cnc/tools/${toolId}/`;
+};
+
+export const productionCncToolUpdate = async (
+  toolId: string,
+  patchedCncToolPatchRequest?: PatchedCncToolPatchRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<productionCncToolUpdateResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<productionCncToolUpdateResponse>(getProductionCncToolUpdateUrl(toolId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+    body: JSON.stringify(patchedCncToolPatchRequest),
+  });
+};
+
+export type productionCncWorkspaceResponse200 = {
+  data: CncWorkspace;
+  status: 200;
+};
+
+export type productionCncWorkspaceResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type productionCncWorkspaceResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type productionCncWorkspaceResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type productionCncWorkspaceResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type productionCncWorkspaceResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type productionCncWorkspaceResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type productionCncWorkspaceResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type productionCncWorkspaceResponseSuccess = productionCncWorkspaceResponse200 & {
+  headers: Headers;
+};
+export type productionCncWorkspaceResponseError = (
+  | productionCncWorkspaceResponse400
+  | productionCncWorkspaceResponse401
+  | productionCncWorkspaceResponse403
+  | productionCncWorkspaceResponse404
+  | productionCncWorkspaceResponse409
+  | productionCncWorkspaceResponse422
+  | productionCncWorkspaceResponse503
+) & {
+  headers: Headers;
+};
+
+export type productionCncWorkspaceResponse =
+  productionCncWorkspaceResponseSuccess | productionCncWorkspaceResponseError;
+
+export const getProductionCncWorkspaceUrl = () => {
+  return `/api/v1/production/cnc/workspace/`;
+};
+
+export const productionCncWorkspace = async (
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<productionCncWorkspaceResponse> => {
+  return apiMutator<productionCncWorkspaceResponse>(getProductionCncWorkspaceUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
 export type productionOrdersResponse200 = {
   data: ProductionOrderList;
   status: 200;
@@ -8670,6 +9312,240 @@ export const productionOrderCncFile = async (
 ): Promise<productionOrderCncFileResponse> => {
   return apiMutator<productionOrderCncFileResponse>(
     getProductionOrderCncFileUrl(orderId, filename),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export type productionOrderCncProgramsResponse200 = {
+  data: CncProgramList;
+  status: 200;
+};
+
+export type productionOrderCncProgramsResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type productionOrderCncProgramsResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type productionOrderCncProgramsResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type productionOrderCncProgramsResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type productionOrderCncProgramsResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type productionOrderCncProgramsResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type productionOrderCncProgramsResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type productionOrderCncProgramsResponseSuccess = productionOrderCncProgramsResponse200 & {
+  headers: Headers;
+};
+export type productionOrderCncProgramsResponseError = (
+  | productionOrderCncProgramsResponse400
+  | productionOrderCncProgramsResponse401
+  | productionOrderCncProgramsResponse403
+  | productionOrderCncProgramsResponse404
+  | productionOrderCncProgramsResponse409
+  | productionOrderCncProgramsResponse422
+  | productionOrderCncProgramsResponse503
+) & {
+  headers: Headers;
+};
+
+export type productionOrderCncProgramsResponse =
+  productionOrderCncProgramsResponseSuccess | productionOrderCncProgramsResponseError;
+
+export const getProductionOrderCncProgramsUrl = (orderId: string) => {
+  return `/api/v1/production/orders/${orderId}/cnc/programs/`;
+};
+
+export const productionOrderCncPrograms = async (
+  orderId: string,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<productionOrderCncProgramsResponse> => {
+  return apiMutator<productionOrderCncProgramsResponse>(getProductionOrderCncProgramsUrl(orderId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export type productionOrderCncProgramGenerateResponse201 = {
+  data: CncProgram;
+  status: 201;
+};
+
+export type productionOrderCncProgramGenerateResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type productionOrderCncProgramGenerateResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type productionOrderCncProgramGenerateResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type productionOrderCncProgramGenerateResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type productionOrderCncProgramGenerateResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type productionOrderCncProgramGenerateResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type productionOrderCncProgramGenerateResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type productionOrderCncProgramGenerateResponseSuccess =
+  productionOrderCncProgramGenerateResponse201 & {
+    headers: Headers;
+  };
+export type productionOrderCncProgramGenerateResponseError = (
+  | productionOrderCncProgramGenerateResponse400
+  | productionOrderCncProgramGenerateResponse401
+  | productionOrderCncProgramGenerateResponse403
+  | productionOrderCncProgramGenerateResponse404
+  | productionOrderCncProgramGenerateResponse409
+  | productionOrderCncProgramGenerateResponse422
+  | productionOrderCncProgramGenerateResponse503
+) & {
+  headers: Headers;
+};
+
+export type productionOrderCncProgramGenerateResponse =
+  productionOrderCncProgramGenerateResponseSuccess | productionOrderCncProgramGenerateResponseError;
+
+export const getProductionOrderCncProgramGenerateUrl = (orderId: string) => {
+  return `/api/v1/production/orders/${orderId}/cnc/programs/`;
+};
+
+export const productionOrderCncProgramGenerate = async (
+  orderId: string,
+  cncGenerateRequestRequest: CncGenerateRequestRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<productionOrderCncProgramGenerateResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<productionOrderCncProgramGenerateResponse>(
+    getProductionOrderCncProgramGenerateUrl(orderId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+      body: JSON.stringify(cncGenerateRequestRequest),
+    },
+  );
+};
+
+export type productionOrderCncReadinessResponse200 = {
+  data: CncReadiness;
+  status: 200;
+};
+
+export type productionOrderCncReadinessResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type productionOrderCncReadinessResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type productionOrderCncReadinessResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type productionOrderCncReadinessResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type productionOrderCncReadinessResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type productionOrderCncReadinessResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type productionOrderCncReadinessResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type productionOrderCncReadinessResponseSuccess = productionOrderCncReadinessResponse200 & {
+  headers: Headers;
+};
+export type productionOrderCncReadinessResponseError = (
+  | productionOrderCncReadinessResponse400
+  | productionOrderCncReadinessResponse401
+  | productionOrderCncReadinessResponse403
+  | productionOrderCncReadinessResponse404
+  | productionOrderCncReadinessResponse409
+  | productionOrderCncReadinessResponse422
+  | productionOrderCncReadinessResponse503
+) & {
+  headers: Headers;
+};
+
+export type productionOrderCncReadinessResponse =
+  productionOrderCncReadinessResponseSuccess | productionOrderCncReadinessResponseError;
+
+export const getProductionOrderCncReadinessUrl = (orderId: string) => {
+  return `/api/v1/production/orders/${orderId}/cnc/readiness/`;
+};
+
+export const productionOrderCncReadiness = async (
+  orderId: string,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<productionOrderCncReadinessResponse> => {
+  return apiMutator<productionOrderCncReadinessResponse>(
+    getProductionOrderCncReadinessUrl(orderId),
     {
       ...options,
       method: "GET",

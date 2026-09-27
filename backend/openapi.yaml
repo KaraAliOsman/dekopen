@@ -7454,6 +7454,596 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/production/cnc/machines/:
+    get:
+      operationId: production_cnc_machines
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - production
+      - cnc
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CncMachineList'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+    post:
+      operationId: production_cnc_machine_create
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - production
+      - cnc
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CncMachineRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CncMachineRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CncMachineRequestRequest'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CncMachine'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/production/cnc/machines/{machine_id}/:
+    patch:
+      operationId: production_cnc_machine_update
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: machine_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - production
+      - cnc
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCncMachinePatchRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCncMachinePatchRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCncMachinePatchRequest'
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CncMachine'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/production/cnc/programs/{program_id}/file/{filename}:
+    get:
+      operationId: production_cnc_program_file
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: filename
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: program_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - production
+      - cnc
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: string
+            text/csv:
+              schema:
+                type: string
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/production/cnc/tools/:
+    get:
+      operationId: production_cnc_tools
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - production
+      - cnc
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CncToolList'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+    post:
+      operationId: production_cnc_tool_create
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - production
+      - cnc
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CncToolRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CncToolRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CncToolRequestRequest'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CncTool'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/production/cnc/tools/{tool_id}/:
+    patch:
+      operationId: production_cnc_tool_update
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: tool_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - production
+      - cnc
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCncToolPatchRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCncToolPatchRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCncToolPatchRequest'
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CncTool'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/production/cnc/workspace/:
+    get:
+      operationId: production_cnc_workspace
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - production
+      - cnc
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CncWorkspace'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/production/orders/:
     get:
       operationId: production_orders
@@ -7690,6 +8280,230 @@ paths:
             text/csv:
               schema:
                 type: string
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/production/orders/{order_id}/cnc/programs/:
+    get:
+      operationId: production_order_cnc_programs
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: order_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - production
+      - cnc
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CncProgramList'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+    post:
+      operationId: production_order_cnc_program_generate
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: order_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - production
+      - cnc
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CncGenerateRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CncGenerateRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CncGenerateRequestRequest'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CncProgram'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/production/orders/{order_id}/cnc/readiness/:
+    get:
+      operationId: production_order_cnc_readiness
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: order_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - production
+      - cnc
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CncReadiness'
           description: ''
         '400':
           content:
@@ -15888,6 +16702,330 @@ components:
       - files
       - order_code
       - order_id
+    CncGenerateRequestRequest:
+      type: object
+      properties:
+        machine_id:
+          type: string
+          minLength: 1
+        member_id:
+          type: string
+          minLength: 1
+          maxLength: 200
+      required:
+      - machine_id
+      - member_id
+    CncMachine:
+      type: object
+      properties:
+        id:
+          type: string
+        code:
+          type: string
+        name:
+          type: string
+        manufacturer:
+          type: string
+        model:
+          type: string
+        controller_family:
+          type: string
+        coordinate_systems:
+          type: array
+          items: {}
+        supported_kinds:
+          type: array
+          items: {}
+          nullable: true
+        supported_faces:
+          type: array
+          items: {}
+          nullable: true
+        max_member_length_mm:
+          type: string
+          nullable: true
+        safe_margin_mm:
+          type: string
+          nullable: true
+        clamp_zones:
+          type: array
+          items: {}
+        tool_ids:
+          type: array
+          items: {}
+        postprocessor_id:
+          type: string
+        postprocessor_version:
+          type: string
+        units:
+          type: string
+        encoding:
+          type: string
+        active:
+          type: boolean
+      required:
+      - active
+      - clamp_zones
+      - code
+      - controller_family
+      - coordinate_systems
+      - encoding
+      - id
+      - manufacturer
+      - max_member_length_mm
+      - model
+      - name
+      - postprocessor_id
+      - postprocessor_version
+      - safe_margin_mm
+      - supported_faces
+      - supported_kinds
+      - tool_ids
+      - units
+    CncMachineList:
+      type: object
+      properties:
+        machines:
+          type: array
+          items:
+            $ref: '#/components/schemas/CncMachine'
+      required:
+      - machines
+    CncMachineRequestRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 40
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        manufacturer:
+          type: string
+          maxLength: 120
+        model:
+          type: string
+          maxLength: 120
+        controller_family:
+          type: string
+          minLength: 1
+          maxLength: 80
+        coordinate_systems:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        supported_kinds:
+          type: array
+          items:
+            type: string
+            minLength: 1
+          nullable: true
+        supported_faces:
+          type: array
+          items:
+            type: string
+            minLength: 1
+          nullable: true
+        max_member_length_mm:
+          type: string
+          nullable: true
+        safe_margin_mm:
+          type: string
+          nullable: true
+        clamp_zones:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        tool_ids:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        postprocessor_id:
+          type: string
+          minLength: 1
+          maxLength: 80
+        postprocessor_version:
+          type: string
+          minLength: 1
+          maxLength: 40
+        units:
+          type: string
+          minLength: 1
+          maxLength: 20
+        encoding:
+          type: string
+          minLength: 1
+          maxLength: 40
+        active:
+          type: boolean
+      required:
+      - code
+      - name
+    CncProgram:
+      type: object
+      properties:
+        id:
+          type: string
+        program_no:
+          type: string
+        verdict:
+          type: string
+        fingerprint:
+          type: string
+        operation_count:
+          type: integer
+        member_label:
+          type: string
+        machine_code:
+          type: string
+        files:
+          type: object
+          additionalProperties: {}
+        created_at:
+          type: string
+      required:
+      - created_at
+      - fingerprint
+      - id
+      - machine_code
+      - member_label
+      - operation_count
+      - program_no
+      - verdict
+    CncProgramList:
+      type: object
+      properties:
+        programs:
+          type: array
+          items: {}
+      required:
+      - programs
+    CncReadiness:
+      type: object
+      properties:
+        order_id:
+          type: string
+        order_code:
+          type: string
+        members:
+          type: array
+          items: {}
+        machines:
+          type: array
+          items:
+            $ref: '#/components/schemas/CncMachine'
+        programs:
+          type: array
+          items: {}
+      required:
+      - machines
+      - members
+      - order_code
+      - order_id
+      - programs
+    CncTool:
+      type: object
+      properties:
+        id:
+          type: string
+        code:
+          type: string
+        name:
+          type: string
+        kind:
+          type: string
+        diameter_mm:
+          type: string
+          nullable: true
+        working_length_mm:
+          type: string
+          nullable: true
+        max_depth_mm:
+          type: string
+          nullable: true
+        compatible_kinds:
+          type: array
+          items: {}
+          nullable: true
+        active:
+          type: boolean
+      required:
+      - active
+      - code
+      - diameter_mm
+      - id
+      - kind
+      - max_depth_mm
+      - name
+      - working_length_mm
+    CncToolList:
+      type: object
+      properties:
+        tools:
+          type: array
+          items:
+            $ref: '#/components/schemas/CncTool'
+      required:
+      - tools
+    CncToolRequestRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 40
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        kind:
+          type: string
+          minLength: 1
+          maxLength: 30
+        diameter_mm:
+          type: string
+          nullable: true
+        working_length_mm:
+          type: string
+          nullable: true
+        max_depth_mm:
+          type: string
+          nullable: true
+        compatible_kinds:
+          type: array
+          items:
+            type: string
+            minLength: 1
+          nullable: true
+        active:
+          type: boolean
+      required:
+      - code
+      - kind
+      - name
+    CncWorkspace:
+      type: object
+      properties:
+        machines:
+          type: array
+          items:
+            $ref: '#/components/schemas/CncMachine'
+        tools:
+          type: array
+          items:
+            $ref: '#/components/schemas/CncTool'
+        orders:
+          type: array
+          items: {}
+      required:
+      - machines
+      - orders
+      - tools
     ColorEnum:
       enum:
       - WHITE
@@ -19785,6 +20923,110 @@ components:
         expected_updated_at:
           type: string
           format: date-time
+    PatchedCncMachinePatchRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 40
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        manufacturer:
+          type: string
+          maxLength: 120
+        model:
+          type: string
+          maxLength: 120
+        controller_family:
+          type: string
+          minLength: 1
+          maxLength: 80
+        coordinate_systems:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        supported_kinds:
+          type: array
+          items:
+            type: string
+            minLength: 1
+          nullable: true
+        supported_faces:
+          type: array
+          items:
+            type: string
+            minLength: 1
+          nullable: true
+        max_member_length_mm:
+          type: string
+          nullable: true
+        safe_margin_mm:
+          type: string
+          nullable: true
+        clamp_zones:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        tool_ids:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        postprocessor_id:
+          type: string
+          minLength: 1
+          maxLength: 80
+        postprocessor_version:
+          type: string
+          minLength: 1
+          maxLength: 40
+        units:
+          type: string
+          minLength: 1
+          maxLength: 20
+        encoding:
+          type: string
+          minLength: 1
+          maxLength: 40
+        active:
+          type: boolean
+    PatchedCncToolPatchRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 40
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        kind:
+          type: string
+          minLength: 1
+          maxLength: 30
+        diameter_mm:
+          type: string
+          nullable: true
+        working_length_mm:
+          type: string
+          nullable: true
+        max_depth_mm:
+          type: string
+          nullable: true
+        compatible_kinds:
+          type: array
+          items:
+            type: string
+            minLength: 1
+          nullable: true
+        active:
+          type: boolean
     PatchedKitWriteRequest:
       type: object
       properties:

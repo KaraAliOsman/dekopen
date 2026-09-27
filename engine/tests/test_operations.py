@@ -233,3 +233,246 @@ def test_postprocessor_renders_deterministically() -> None:
     assert isinstance(machine, dict)
     assert machine["controller_family"] == "NEUTRAL"
     assert machine == NEUTRAL_MACHINE_PROFILE.model_dump(mode="json")
+
+
+# --- CNC domain: member datums, machine validation, program documents ---
+
+from dekopen_engine.operations import (  # noqa: E402
+    ClampZone,
+    MachineProfile,
+    MemberFace,
+    Tool,
+    ToolKind,
+    member_program,
+    program_fingerprint,
+    validate_operations,
+)
+
+
+def _cnc_machine(**overrides: object) -> MachineProfile:
+    base: dict[str, object] = {
+        "machine_id": "SBZ-01",
+        "name": "Centro CNC 01",
+        "controller_family": "NEUTRAL",
+        "coordinate_systems": [
+            CoordinateSystem.BAR_AXIS,
+            CoordinateSystem.MEMBER_PLAN,
+            CoordinateSystem.SHEET_PLAN,
+        ],
+        "tools": [],
+    }
+    base.update(overrides)
+    return MachineProfile(**base)
+
+
+def test_handle_prep_carries_member_local_datum() -> None:
+    """HANDLE_PREP answers u/reference against the host member — machining
+    never reads the elevation plan's screen coordinates."""
+    member = _member(ProfileRole.FRAME, "1200")  # vertical member at x=500
+    unit = _unit(members=[member], handles=[_handle()])
+    ops = operations_from_plan(bars=[], fact_units=[unit])
+    op = [o for o in ops if o.kind == OperationKind.HANDLE_PREP][0]
+    # vertical axis: u = point.y - member.start.y
+    assert op.u_mm == Decimal("1050")
+    assert op.reference == "member_start"
+    assert op.host == member.member_id
+
+
+def test_end_machining_carries_edge_datum_and_face() -> None:
+    member = _member(ProfileRole.MULLION_V, "1180", overlap="15")
+    ops = operations_from_plan(bars=[], fact_units=[_unit(members=[member])])
+    end_ops = [o for o in ops if o.kind == OperationKind.END_MACHINING]
+    by_edge = {o.detail["edge"]: o for o in end_ops}
+    assert by_edge["START"].u_mm == Decimal("0")
+    assert by_edge["START"].face == MemberFace.START_EDGE
+    assert by_edge["START"].reference == "member_start"
+    assert by_edge["END"].u_mm == member.cut_length_mm
+    assert by_edge["END"].face == MemberFace.END_EDGE
+    assert by_edge["END"].reference == "member_end"
+
+
+def test_saw_ops_reference_the_bar_edge() -> None:
+    plan = optimize_cut([_piece("p1", "2000")], [_stock()], _profile())
+    ops = operations_from_plan(bars=plan.workshop_cut_plan, fact_units=[])
+    assert all(op.reference == "bar_left_edge" for op in ops)
+
+
+def _member_ops() -> list:
+    member = _member(ProfileRole.FRAME, "1200")
+    unit = _unit(members=[member], handles=[_handle()])
+    return operations_from_plan(bars=[], fact_units=[unit])
+
+
+def test_validate_blocks_when_no_compatible_tool() -> None:
+    """No compatible tool in the magazine → BLOCK, never an invented one."""
+    ops = _member_ops()
+    machine = _cnc_machine(
+        tools=[
+            Tool(
+                tool_id="endmill-10",
+                kind=ToolKind.END_MILL,
+                name="Fresa 10",
+                compatible_kinds=[OperationKind.END_MACHINING],
+            )
+        ]
+    )
+    verdicts = validate_operations(ops, machine)
+    handle = [v for v in verdicts if v.code == "no_compatible_tool"]
+    assert len(handle) == 1
+    assert handle[0].level == "BLOCK"
+    assert handle[0].detail["tool_id"] == "drill"
+
+
+def test_validate_blocks_unsupported_kind_and_face() -> None:
+    ops = _member_ops()
+    machine = _cnc_machine(
+        supported_kinds=[OperationKind.DRILL],
+        supported_faces=[MemberFace.INSIDE_FACE],
+        tools=[
+            Tool(
+                tool_id="drill",
+                kind=ToolKind.DRILL_BIT,
+                name="Broca",
+            )
+        ],
+    )
+    verdicts = validate_operations(ops, machine)
+    assert all(v.level == "BLOCK" for v in verdicts)
+    codes = {v.code for v in verdicts}
+    # kind gate wins first — the machine can't run HANDLE_PREP at all
+    assert "unsupported_kind" in codes
+
+
+def test_validate_warns_on_clamp_zone_and_margin() -> None:
+    ops = _member_ops()
+    machine = _cnc_machine(
+        tools=[Tool(tool_id="drill", kind=ToolKind.DRILL_BIT, name="Broca")],
+        clamp_zones=[
+            ClampZone(
+                start_mm=Decimal("1000"),
+                end_mm=Decimal("1100"),
+                label="Mordaza B",
+            )
+        ],
+    )
+    verdicts = validate_operations(
+        ops,
+        machine,
+        member_lengths_mm={"a" * 64: Decimal("1200")},
+    )
+    handle = [
+        v
+        for v in verdicts
+        if v.detail.get("host")
+        and v.code == "clamp_conflict"
+    ]
+    assert handle and handle[0].level == "WARN"
+    assert handle[0].detail["clamp_label"] == "Mordaza B"
+
+
+def test_validate_blocks_envelope_overflow() -> None:
+    ops = _member_ops()
+    machine = _cnc_machine(
+        max_member_length_mm=Decimal("1000"),
+        tools=[Tool(tool_id="drill", kind=ToolKind.DRILL_BIT, name="Broca")],
+    )
+    verdicts = validate_operations(
+        ops,
+        machine,
+        member_lengths_mm={"a" * 64: Decimal("1200")},
+    )
+    blocked = [v for v in verdicts if v.level == "BLOCK"]
+    assert any(v.code == "envelope_exceeded" for v in blocked)
+
+
+def test_validate_passes_compatible_setup() -> None:
+    ops = _member_ops()
+    machine = _cnc_machine(
+        tools=[Tool(tool_id="drill", kind=ToolKind.DRILL_BIT, name="Broca")],
+        safe_margin_mm=Decimal("10"),
+    )
+    verdicts = validate_operations(
+        ops, machine, member_lengths_mm={"a" * 64: Decimal("1200")}
+    )
+    assert all(v.level == "PASS" for v in verdicts)
+
+
+def test_tool_depth_limit_blocks() -> None:
+    member = _member(ProfileRole.MULLION_V, "1180", overlap="40")
+    ops = operations_from_plan(bars=[], fact_units=[_unit(members=[member])])
+    machine = _cnc_machine(
+        tools=[
+            Tool(
+                tool_id="end_mill",
+                kind=ToolKind.END_MILL,
+                name="Fresa",
+                max_depth_mm=Decimal("25"),
+            )
+        ],
+    )
+    verdicts = validate_operations(ops, machine)
+    assert any(
+        v.code == "tool_depth_exceeded" and v.level == "BLOCK"
+        for v in verdicts
+    )
+
+
+def test_member_program_is_deterministic_and_sequenced() -> None:
+    ops = _member_ops()
+    member_id = "a" * 64
+    machine = _cnc_machine(
+        tools=[Tool(tool_id="drill", kind=ToolKind.DRILL_BIT, name="Broca")]
+    )
+    identity = {"order_code": "OT-1", "revision_code": "REV-A"}
+    a = member_program(
+        ops, member_id=member_id, member_label="M-01",
+        machine=machine, identity=identity,
+    )
+    b = member_program(
+        ops, member_id=member_id, member_label="M-01",
+        machine=machine, identity=identity,
+    )
+    assert a == b
+    program_ops = a["operations"]
+    assert [o["sequence_no"] for o in program_ops] == [1]
+    assert a["verdict"] == "PASS"
+    assert a["fingerprint"] == program_fingerprint(a)
+    # Program identity carries the piece/machine/postprocessor contract.
+    ident = a["identity"]
+    assert ident["member_label"] == "M-01"
+    assert ident["machine_id"] == "SBZ-01"
+    assert ident["postprocessor_id"] == "neutral-ops-v1"
+
+
+def test_member_program_marks_blocked_members() -> None:
+    ops = _member_ops()
+    machine = _cnc_machine()  # empty magazine — nothing is machinable
+    program = member_program(
+        ops,
+        member_id="a" * 64,
+        member_label="M-01",
+        machine=machine,
+        identity={"order_code": "OT-1"},
+        validations=validate_operations(ops, machine),
+    )
+    assert program["verdict"] == "BLOCK"
+
+
+def test_handle_prep_member_local_u_on_horizontal_member() -> None:
+    """Mirrored products put the handle on a different stile — u stays a
+    member datum regardless of which member/axis carries it."""
+    member = _member(ProfileRole.MULLION_V, "1000")
+    member.axis = Axis.HORIZONTAL
+    member.start = TracePointV1(x_mm=Decimal("200"), y_mm=Decimal("900"))
+    member.end = TracePointV1(x_mm=Decimal("1200"), y_mm=Decimal("900"))
+    member.cut_length_mm = Decimal("1000")
+    handle = _handle()
+    handle.host_member_id = member.member_id
+    handle.point = TracePointV1(x_mm=Decimal("900"), y_mm=Decimal("900"))
+    ops = operations_from_plan(
+        bars=[], fact_units=[_unit(members=[member], handles=[handle])]
+    )
+    op = [o for o in ops if o.kind == OperationKind.HANDLE_PREP][0]
+    # horizontal axis: u = point.x - member.start.x
+    assert op.u_mm == Decimal("700")
+    assert op.reference == "member_start"

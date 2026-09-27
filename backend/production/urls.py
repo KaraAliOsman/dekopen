@@ -33,6 +33,14 @@ from production.views import (
     ProductionReleaseView,
     ProductionStepTransitionView,
     WorkCenterListView,
+    CncWorkspaceView,
+    CncToolListView,
+    CncToolDetailView,
+    CncMachineListView,
+    CncMachineDetailView,
+    CncReadinessView,
+    CncProgramListView,
+    CncProgramFileView,
 )
 
 urlpatterns = [
@@ -184,4 +192,32 @@ urlpatterns = [
         name="production-release",
     ),
     path("work-centers/", WorkCenterListView.as_view(), name="production-work-centers"),
+    path("cnc/workspace/", CncWorkspaceView.as_view(), name="production-cnc-workspace"),
+    path("cnc/tools/", CncToolListView.as_view(), name="production-cnc-tools"),
+    path(
+        "cnc/tools/<uuid:tool_id>/",
+        CncToolDetailView.as_view(),
+        name="production-cnc-tool",
+    ),
+    path("cnc/machines/", CncMachineListView.as_view(), name="production-cnc-machines"),
+    path(
+        "cnc/machines/<uuid:machine_id>/",
+        CncMachineDetailView.as_view(),
+        name="production-cnc-machine",
+    ),
+    path(
+        "orders/<uuid:order_id>/cnc/readiness/",
+        CncReadinessView.as_view(),
+        name="production-order-cnc-readiness",
+    ),
+    path(
+        "orders/<uuid:order_id>/cnc/programs/",
+        CncProgramListView.as_view(),
+        name="production-order-cnc-programs",
+    ),
+    path(
+        "cnc/programs/<uuid:program_id>/file/<str:filename>",
+        CncProgramFileView.as_view(),
+        name="production-cnc-program-file",
+    ),
 ]

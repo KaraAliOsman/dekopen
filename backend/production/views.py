@@ -22,7 +22,7 @@ from dekopen_engine.cutting import InvalidCutContract
 from documents.repository import DocumentaryError
 from documents.views import DOCUMENTARY_ERROR_DETAILS, ERRORS, documentary_scope, validate
 from engine_api.repository import SystemNotFound
-from production import service
+from production import cnc, service
 from production.trace import trace_piece, trace_version, trace_work_order
 from production.confirmations import confirmation_access, confirm_delivery
 from production.dispatch_notes import dispatch_note_access
@@ -41,6 +41,19 @@ from production.serializers import (
     DeliveryScheduleRequestSerializer,
     DeliveryTransitionRequestSerializer,
     CncExportSerializer,
+    CncGenerateRequestSerializer,
+    CncMachineListSerializer,
+    CncMachinePatchSerializer,
+    CncMachineRequestSerializer,
+    CncMachineSerializer,
+    CncProgramListSerializer,
+    CncProgramSerializer,
+    CncReadinessSerializer,
+    CncToolListSerializer,
+    CncToolPatchSerializer,
+    CncToolRequestSerializer,
+    CncToolSerializer,
+    CncWorkspaceSerializer,
     DxfExportSerializer,
     OpsExportSerializer,
     DispatchNoteAccessSerializer,
@@ -831,3 +844,188 @@ class ProductionVersionTraceView(APIView):
             with documentary_scope(request, _READERS) as (_, _, org_id):
                 output = trace_version(org_id=org_id, version_id=version_id)
         return Response(output)
+
+
+class CncWorkspaceView(APIView):
+    @extend_schema(
+        operation_id="production_cnc_workspace",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={200: CncWorkspaceSerializer, **ERRORS},
+        tags=["production", "cnc"],
+    )
+    def get(self, request):
+        with public_production_errors():
+            with documentary_scope(request, _READERS) as (_, _, org_id):
+                output = cnc.cnc_workspace(org_id=org_id)
+        return Response(output)
+
+
+class CncToolListView(APIView):
+    @extend_schema(
+        operation_id="production_cnc_tools",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={200: CncToolListSerializer, **ERRORS},
+        tags=["production", "cnc"],
+    )
+    def get(self, request):
+        with public_production_errors():
+            with documentary_scope(request, _READERS) as (_, _, org_id):
+                return Response({"tools": cnc.list_tools(org_id=org_id)})
+
+    @extend_schema(
+        operation_id="production_cnc_tool_create",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=CncToolRequestSerializer,
+        responses={201: CncToolSerializer, **ERRORS},
+        tags=["production", "cnc"],
+    )
+    def post(self, request):
+        data = validate(CncToolRequestSerializer, request.data)
+        with public_production_errors():
+            with documentary_scope(request, _WRITERS) as (token, _, org_id):
+                output = cnc.create_tool(
+                    org_id=org_id, actor_id=token.user_id, data=data
+                )
+        return Response(output, status=201)
+
+
+class CncToolDetailView(APIView):
+    @extend_schema(
+        operation_id="production_cnc_tool_update",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=CncToolPatchSerializer,
+        responses={200: CncToolSerializer, **ERRORS},
+        tags=["production", "cnc"],
+    )
+    def patch(self, request, tool_id: UUID):
+        data = validate(CncToolPatchSerializer, request.data)
+        with public_production_errors():
+            with documentary_scope(request, _WRITERS) as (token, _, org_id):
+                output = cnc.update_tool(
+                    org_id=org_id, tool_id=tool_id, data=data
+                )
+        return Response(output)
+
+
+class CncMachineListView(APIView):
+    @extend_schema(
+        operation_id="production_cnc_machines",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={200: CncMachineListSerializer, **ERRORS},
+        tags=["production", "cnc"],
+    )
+    def get(self, request):
+        with public_production_errors():
+            with documentary_scope(request, _READERS) as (_, _, org_id):
+                return Response({"machines": cnc.list_machines(org_id=org_id)})
+
+    @extend_schema(
+        operation_id="production_cnc_machine_create",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=CncMachineRequestSerializer,
+        responses={201: CncMachineSerializer, **ERRORS},
+        tags=["production", "cnc"],
+    )
+    def post(self, request):
+        data = validate(CncMachineRequestSerializer, request.data)
+        with public_production_errors():
+            with documentary_scope(request, _WRITERS) as (token, _, org_id):
+                output = cnc.create_machine(
+                    org_id=org_id, actor_id=token.user_id, data=data
+                )
+        return Response(output, status=201)
+
+
+class CncMachineDetailView(APIView):
+    @extend_schema(
+        operation_id="production_cnc_machine_update",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=CncMachinePatchSerializer,
+        responses={200: CncMachineSerializer, **ERRORS},
+        tags=["production", "cnc"],
+    )
+    def patch(self, request, machine_id: UUID):
+        data = validate(CncMachinePatchSerializer, request.data)
+        with public_production_errors():
+            with documentary_scope(request, _WRITERS) as (token, _, org_id):
+                output = cnc.update_machine(
+                    org_id=org_id, machine_id=machine_id, data=data
+                )
+        return Response(output)
+
+
+class CncReadinessView(APIView):
+    @extend_schema(
+        operation_id="production_order_cnc_readiness",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={200: CncReadinessSerializer, **ERRORS},
+        tags=["production", "cnc"],
+    )
+    def get(self, request, order_id: UUID):
+        with public_production_errors():
+            with documentary_scope(request, _READERS) as (_, _, org_id):
+                output = cnc.cnc_readiness(org_id=org_id, order_id=order_id)
+        return Response(output)
+
+
+class CncProgramListView(APIView):
+    @extend_schema(
+        operation_id="production_order_cnc_programs",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={200: CncProgramListSerializer, **ERRORS},
+        tags=["production", "cnc"],
+    )
+    def get(self, request, order_id: UUID):
+        with public_production_errors():
+            with documentary_scope(request, _READERS) as (_, _, org_id):
+                return Response(
+                    {"programs": cnc.list_programs(org_id=org_id, order_id=order_id)}
+                )
+
+    @extend_schema(
+        operation_id="production_order_cnc_program_generate",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=CncGenerateRequestSerializer,
+        responses={201: CncProgramSerializer, **ERRORS},
+        tags=["production", "cnc"],
+    )
+    def post(self, request, order_id: UUID):
+        data = validate(CncGenerateRequestSerializer, request.data)
+        with public_production_errors():
+            with documentary_scope(request, _WRITERS) as (token, _, org_id):
+                output = cnc.generate_program(
+                    org_id=org_id,
+                    order_id=order_id,
+                    machine_id=UUID(data["machine_id"]),
+                    member_id=data["member_id"],
+                    actor_id=token.user_id,
+                )
+        return Response(output, status=201)
+
+
+class CncProgramFileView(APIView):
+    @extend_schema(
+        operation_id="production_cnc_program_file",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={(200, "application/json"): OpenApiTypes.STR, (200, "text/csv"): OpenApiTypes.STR, **ERRORS},
+        tags=["production", "cnc"],
+    )
+    def get(self, request, program_id: UUID, filename: str):
+        with public_production_errors():
+            with documentary_scope(request, _READERS) as (_, _, org_id):
+                resolved = cnc.program_file(
+                    org_id=org_id, program_id=program_id, filename=filename
+                )
+                if resolved is None:
+                    raise DocumentaryError("cnc_file_not_found")
+                name, content = resolved
+        mime = "text/csv" if filename.endswith(".csv") else "application/json"
+        response = HttpResponse(content, content_type=f"{mime}; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="{name}"'
+        return response

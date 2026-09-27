@@ -1088,3 +1088,215 @@
   color: var(--theme-danger, #b3261e);
   font-weight: 600;
 }
+
+/* CNC readiness — per-member machining verdicts and programs. */
+.cnc-panel {
+  margin-top: 0.6rem;
+  border: 1px solid var(--theme-border, #d8d4cd);
+  border-radius: 8px;
+  background: var(--theme-surface, #fff);
+}
+.cnc-panel-toggle {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  background: none;
+  border: none;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--theme-text);
+}
+.cnc-panel-body {
+  padding: 0.4rem 0.75rem 0.75rem;
+}
+.cnc-empty {
+  color: var(--theme-text-secondary);
+  font-size: 0.85rem;
+  margin: 0.25rem 0;
+}
+.cnc-error {
+  color: var(--theme-danger, #b3261e);
+  font-size: 0.85rem;
+  margin: 0.25rem 0;
+}
+.cnc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.cnc-table th,
+.cnc-table td {
+  text-align: left;
+  padding: 0.3rem 0.4rem;
+  border-bottom: 1px solid var(--theme-border, #d8d4cd);
+  vertical-align: top;
+}
+.cnc-member-label {
+  background: none;
+  border: none;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  color: var(--theme-accent);
+  display: inline-flex;
+  gap: 0.25rem;
+  align-items: center;
+}
+.cnc-verdict {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.cnc-verdict-pass {
+  background: color-mix(in srgb, var(--theme-success, #1a7f4b) 15%, transparent);
+  color: var(--theme-success, #1a7f4b);
+}
+.cnc-verdict-warn {
+  background: color-mix(in srgb, var(--theme-warning, #b26a00) 15%, transparent);
+  color: var(--theme-warning, #b26a00);
+}
+.cnc-verdict-block {
+  background: color-mix(in srgb, var(--theme-danger, #b3261e) 12%, transparent);
+  color: var(--theme-danger, #b3261e);
+}
+.cnc-generate {
+  margin-right: 0.4rem;
+  font-size: 0.8rem;
+}
+.cnc-member-ops td {
+  background: var(--theme-bg, #faf9f7);
+}
+.cnc-ops {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+.cnc-ops th,
+.cnc-ops td {
+  padding: 0.2rem 0.4rem;
+  border-bottom: 1px dashed var(--theme-border, #d8d4cd);
+  text-align: left;
+}
+.cnc-programs {
+  margin-top: 0.75rem;
+}
+.cnc-programs h4 {
+  margin: 0 0 0.35rem;
+  font-size: 0.85rem;
+  color: var(--theme-text-secondary);
+}
+.cnc-programs ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.cnc-program {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  align-items: center;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--theme-border, #d8d4cd);
+  font-size: 0.85rem;
+}
+.cnc-program-stale {
+  opacity: 0.65;
+}
+.cnc-program-no {
+  font-family: var(--font-mono, monospace);
+  font-weight: 600;
+}
+.cnc-program-meta {
+  color: var(--theme-text-secondary);
+}
+.cnc-stale {
+  color: var(--theme-danger, #b3261e);
+  font-weight: 600;
+  font-size: 0.78rem;
+}
+.cnc-program-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 0.4rem;
+}
+.cnc-program-file {
+  font-size: 0.78rem;
+  padding: 0.15rem 0.5rem;
+}
+
+/* CNC workspace — machine + tool authority management. */
+.cnc-workspace {
+  margin-top: 0.75rem;
+  border: 1px solid var(--theme-border, #d8d4cd);
+  border-radius: 8px;
+  background: var(--theme-surface, #fff);
+}
+.cnc-workspace-grid {
+  display: grid;
+  gap: 1rem;
+}
+.cnc-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.35rem;
+}
+.cnc-section-head h3 {
+  margin: 0;
+  font-size: 0.9rem;
+}
+.cnc-add {
+  font-size: 0.8rem;
+  padding: 0.2rem 0.6rem;
+}
+.cnc-form {
+  margin-top: 0.5rem;
+  padding: 0.6rem;
+  border: 1px dashed var(--theme-border, #d8d4cd);
+  border-radius: 6px;
+  display: grid;
+  gap: 0.5rem;
+}
+.cnc-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.5rem;
+}
+.cnc-form-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.78rem;
+  color: var(--theme-text-secondary);
+}
+.cnc-form-group {
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+.cnc-form-group legend {
+  font-size: 0.78rem;
+  color: var(--theme-text-secondary);
+  padding: 0;
+}
+.cnc-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.9rem;
+  font-size: 0.8rem;
+}
+.cnc-checks label {
+  display: inline-flex;
+  gap: 0.3rem;
+  align-items: center;
+}
+.cnc-form-actions {
+  display: flex;
+  gap: 0.5rem;
+}

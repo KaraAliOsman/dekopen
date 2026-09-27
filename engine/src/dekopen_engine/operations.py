@@ -72,22 +72,62 @@ class ToolKind(str, Enum):
     CUSTOM = "CUSTOM"
 
 
+class MemberFace(str, Enum):
+    """The physical face a machining operation works on. ``None`` on an
+    operation means the authority that produced it did not declare a face —
+    validation reports that honestly instead of guessing."""
+
+    OUTSIDE_FACE = "OUTSIDE_FACE"
+    INSIDE_FACE = "INSIDE_FACE"
+    TOP_EDGE = "TOP_EDGE"
+    BOTTOM_EDGE = "BOTTOM_EDGE"
+    START_EDGE = "START_EDGE"
+    END_EDGE = "END_EDGE"
+
+
+class ClampZone(EngineModel):
+    """A forbidden span along the member axis (machine clamp/jaw)."""
+
+    start_mm: Decimal
+    end_mm: Decimal
+    label: str = ""
+
+
 class Tool(EngineModel):
     tool_id: str
     kind: ToolKind
     name: str
     diameter_mm: Decimal | None = None
+    working_length_mm: Decimal | None = None
+    max_depth_mm: Decimal | None = None
+    # Operation kinds this tool can run; None = unrestricted (the magazine
+    # entry still binds the op's tool_id to a physical tool).
+    compatible_kinds: list[OperationKind] | None = None
 
 
 class MachineProfile(EngineModel):
     """A machining target. The neutral profile claims no vendor controller —
-    it exists so the ops document always carries an explicit target."""
+    it exists so the ops document always carries an explicit target.
+
+    Capability fields are optional authority: unset means "no declared
+    constraint", never "assumed capable"."""
 
     machine_id: str
     name: str
     controller_family: str = "NEUTRAL"
     coordinate_systems: list[CoordinateSystem]
     tools: list[Tool]
+    supported_kinds: list[OperationKind] | None = None
+    supported_faces: list[MemberFace] | None = None
+    # Longest member the machine accepts (axis travel / loading length).
+    max_member_length_mm: Decimal | None = None
+    # Margin at each member end where inside-axis operations cannot run.
+    safe_margin_mm: Decimal | None = None
+    clamp_zones: list[ClampZone] = []
+    postprocessor_id: str | None = None
+    postprocessor_version: str | None = None
+    units: str = "mm"
+    encoding: str = "utf-8"
 
 
 NEUTRAL_MACHINE_PROFILE = MachineProfile(
@@ -122,11 +162,20 @@ class ManufacturingOperation(EngineModel):
     coordinate_system: CoordinateSystem
     x_mm: Decimal | None = None
     y_mm: Decimal | None = None
+    # Member-local longitudinal coordinate: distance from the member's START
+    # along its axis. Machines datum on the member, not on screen/plan space.
+    u_mm: Decimal | None = None
+    # The physical datum the coordinate refers to ("member_start",
+    # "bar_left_edge", "sheet_top_left") — never screen coordinates.
+    reference: str | None = None
+    face: MemberFace | None = None
     # For saw boundaries: the face angles each side of the cut must form.
     angle_left_deg: Decimal | None = None
     angle_right_deg: Decimal | None = None
     depth_mm: Decimal | None = None
     tool_id: str | None = None
+    # Execution order within a program document (1-based, deterministic).
+    sequence_no: int | None = None
     basis: str
     detail: dict[str, str] = {}
 
@@ -161,6 +210,7 @@ def _saw_ops(bar: CutBar) -> list[ManufacturingOperation]:
             host=host,
             coordinate_system=CoordinateSystem.BAR_AXIS,
             x_mm=head,
+            reference="bar_left_edge",
             angle_left_deg=Decimal("90"),
             angle_right_deg=Decimal("90"),
             tool_id="saw",
@@ -179,6 +229,7 @@ def _saw_ops(bar: CutBar) -> list[ManufacturingOperation]:
                 host=host,
                 coordinate_system=CoordinateSystem.BAR_AXIS,
                 x_mm=cut_x,
+                reference="bar_left_edge",
                 # Face angles each side of the blade: the left face closes
                 # this piece, the right face opens the next.
                 angle_left_deg=cut.angle_right,
@@ -204,6 +255,7 @@ def _saw_ops(bar: CutBar) -> list[ManufacturingOperation]:
                 host=host,
                 coordinate_system=CoordinateSystem.BAR_AXIS,
                 x_mm=tail_x,
+                reference="bar_left_edge",
                 angle_left_deg=Decimal("90"),
                 angle_right_deg=Decimal("90"),
                 tool_id="saw",
@@ -249,6 +301,19 @@ def _member_ops(unit: ManufacturingFactsV1) -> list[ManufacturingOperation]:
                     coordinate_system=CoordinateSystem.MEMBER_PLAN,
                     x_mm=point.x_mm,
                     y_mm=point.y_mm,
+                    # Member-local datum: START edge is u=0, END edge is the
+                    # physical cut length (span + declared overlap).
+                    u_mm=(
+                        Decimal("0")
+                        if edge == "START"
+                        else member.cut_length_mm
+                    ),
+                    reference="member_start" if edge == "START" else "member_end",
+                    face=(
+                        MemberFace.START_EDGE
+                        if edge == "START"
+                        else MemberFace.END_EDGE
+                    ),
                     depth_mm=overlap,
                     tool_id="end_mill",
                     basis="member_end_overlap",
@@ -261,8 +326,16 @@ def _member_ops(unit: ManufacturingFactsV1) -> list[ManufacturingOperation]:
                 )
             )
     for handle in unit.handles:
-        if handle.host_member_id not in members:
+        host_member = members.get(handle.host_member_id)
+        if host_member is None:
             continue
+        # Member-local u: projection of the handle point onto the host
+        # member's axis, measured from member START — machining datums on
+        # the member, never on the elevation plan.
+        if host_member.axis.value == "HORIZONTAL":
+            handle_u = handle.point.x_mm - host_member.start.x_mm
+        else:
+            handle_u = handle.point.y_mm - host_member.start.y_mm
         ops.append(
             ManufacturingOperation(
                 operation_id=_op_id(
@@ -274,6 +347,8 @@ def _member_ops(unit: ManufacturingFactsV1) -> list[ManufacturingOperation]:
                 coordinate_system=CoordinateSystem.MEMBER_PLAN,
                 x_mm=handle.point.x_mm,
                 y_mm=handle.point.y_mm,
+                u_mm=handle_u,
+                reference="member_start",
                 tool_id="drill",
                 basis=(
                     f"handle_requirement_policy:{handle.policy_id}"
@@ -441,3 +516,230 @@ def _cell(value: object) -> str:
     if any(ch in text for ch in (",", '"', "\n")):
         text = '"' + text.replace('"', '""') + '"'
     return text
+
+
+class OperationValidation(EngineModel):
+    """Dry-run verdict for one operation against one machine. Codes are
+    stable; ``detail`` carries the physical values a human needs (member
+    code, tool, depth, clamp zone…)."""
+
+    operation_id: str
+    level: str  # PASS | WARN | BLOCK
+    code: str
+    detail: dict[str, str] = {}
+
+
+def validate_operations(
+    ops: list[ManufacturingOperation],
+    machine: MachineProfile,
+    *,
+    member_lengths_mm: dict[str, Decimal] | None = None,
+    member_labels: dict[str, str] | None = None,
+) -> list[OperationValidation]:
+    """Machine-neutral dry run. BLOCK = the op cannot run on this machine;
+    WARN = it runs but a declared limit needs attention (clamp zone, margin).
+    Missing authority (unknown member length, no declared faces) never
+    blocks — it just can't be checked."""
+    lengths = member_lengths_mm or {}
+    labels = member_labels or {}
+    by_tool = {tool.tool_id: tool for tool in machine.tools}
+    verdicts: list[OperationValidation] = []
+    for op in ops:
+        host_label = labels.get(op.host, op.host)
+        verdict: OperationValidation | None = None
+        if machine.supported_kinds is not None and op.kind not in (
+            machine.supported_kinds
+        ):
+            verdict = OperationValidation(
+                operation_id=op.operation_id,
+                level="BLOCK",
+                code="unsupported_kind",
+                detail={
+                    "host": host_label,
+                    "kind": op.kind.value,
+                    "machine": machine.machine_id,
+                },
+            )
+        if verdict is None and (
+            op.face is not None
+            and machine.supported_faces is not None
+            and op.face not in machine.supported_faces
+        ):
+            verdict = OperationValidation(
+                operation_id=op.operation_id,
+                level="BLOCK",
+                code="face_unsupported",
+                detail={
+                    "host": host_label,
+                    "kind": op.kind.value,
+                    "face": op.face.value,
+                    "machine": machine.machine_id,
+                },
+            )
+        if verdict is None and op.tool_id:
+            tool = by_tool.get(op.tool_id)
+            if tool is None or (
+                tool.compatible_kinds is not None
+                and op.kind not in tool.compatible_kinds
+            ):
+                verdict = OperationValidation(
+                    operation_id=op.operation_id,
+                    level="BLOCK",
+                    code="no_compatible_tool",
+                    detail={
+                        "host": host_label,
+                        "kind": op.kind.value,
+                        "tool_id": op.tool_id,
+                        "machine": machine.machine_id,
+                    },
+                )
+            elif (
+                op.depth_mm is not None
+                and tool.max_depth_mm is not None
+                and op.depth_mm > tool.max_depth_mm
+            ):
+                verdict = OperationValidation(
+                    operation_id=op.operation_id,
+                    level="BLOCK",
+                    code="tool_depth_exceeded",
+                    detail={
+                        "host": host_label,
+                        "kind": op.kind.value,
+                        "tool_id": tool.tool_id,
+                        "depth_mm": str(op.depth_mm),
+                        "max_depth_mm": str(tool.max_depth_mm),
+                    },
+                )
+        if verdict is None and op.host_kind == "MEMBER":
+            member_len = lengths.get(op.host)
+            if (
+                member_len is not None
+                and machine.max_member_length_mm is not None
+                and member_len > machine.max_member_length_mm
+            ):
+                verdict = OperationValidation(
+                    operation_id=op.operation_id,
+                    level="BLOCK",
+                    code="envelope_exceeded",
+                    detail={
+                        "host": host_label,
+                        "member_length_mm": str(member_len),
+                        "machine_limit_mm": str(machine.max_member_length_mm),
+                        "machine": machine.machine_id,
+                    },
+                )
+            # Edge-referenced ops (u=0 / u=len) legitimately sit at the ends;
+            # margins and clamps govern strictly-interior u positions.
+            elif op.u_mm is not None and op.face not in (
+                MemberFace.START_EDGE,
+                MemberFace.END_EDGE,
+            ):
+                if member_len is not None:
+                    for zone in machine.clamp_zones:
+                        if zone.start_mm <= op.u_mm <= zone.end_mm:
+                            verdict = OperationValidation(
+                                operation_id=op.operation_id,
+                                level="WARN",
+                                code="clamp_conflict",
+                                detail={
+                                    "host": host_label,
+                                    "u_mm": str(op.u_mm),
+                                    "clamp_zone": f"{zone.start_mm}-{zone.end_mm}",
+                                    "clamp_label": zone.label,
+                                },
+                            )
+                            break
+                if (
+                    verdict is None
+                    and member_len is not None
+                    and machine.safe_margin_mm is not None
+                    and (
+                        op.u_mm < machine.safe_margin_mm
+                        or op.u_mm > member_len - machine.safe_margin_mm
+                    )
+                ):
+                    verdict = OperationValidation(
+                        operation_id=op.operation_id,
+                        level="WARN",
+                        code="margin_violation",
+                        detail={
+                            "host": host_label,
+                            "u_mm": str(op.u_mm),
+                            "safe_margin_mm": str(machine.safe_margin_mm),
+                        },
+                    )
+        if verdict is None:
+            verdict = OperationValidation(
+                operation_id=op.operation_id,
+                level="PASS",
+                code="ok",
+                detail={"host": host_label},
+            )
+        verdicts.append(verdict)
+    return verdicts
+
+
+def member_program(
+    ops: list[ManufacturingOperation],
+    *,
+    member_id: str,
+    member_label: str,
+    machine: MachineProfile,
+    identity: dict[str, str],
+    validations: list[OperationValidation] | None = None,
+) -> dict[str, object]:
+    """Canonical per-member machine program (dekopen_cnc_program_v1).
+
+    ``identity`` carries org/project/revision/position/member/machine so a
+    printed program is self-describing; ``fingerprint`` covers everything an
+    operator could accidentally re-run after a replan."""
+    member_ops = [op for op in ops if op.host_kind == "MEMBER" and op.host == member_id]
+    sequenced: list[ManufacturingOperation] = []
+    for index, op in enumerate(member_ops):
+        sequenced.append(op.model_copy(update={"sequence_no": index + 1}))
+    member_validations = [
+        item
+        for item in (validations or [])
+        if item.operation_id in {op.operation_id for op in sequenced}
+    ]
+    verdict = "PASS"
+    if any(item.level == "BLOCK" for item in member_validations):
+        verdict = "BLOCK"
+    elif any(item.level == "WARN" for item in member_validations):
+        verdict = "WARN"
+    document: dict[str, object] = {
+        "schema": "dekopen_cnc_program_v1",
+        "identity": {
+            **identity,
+            "member_id": member_id,
+            "member_label": member_label,
+            "machine_id": machine.machine_id,
+            "machine_name": machine.name,
+            "postprocessor_id": machine.postprocessor_id or "neutral-ops-v1",
+            "postprocessor_version": machine.postprocessor_version or "1",
+        },
+        "operation_count": len(sequenced),
+        "counts_by_kind": {
+            kind: len(group) for kind, group in _group(sequenced).items()
+        },
+        "verdict": verdict,
+        "validation": [
+            item.model_dump(mode="json") for item in member_validations
+        ],
+        "operations": [op.model_dump(mode="json") for op in sequenced],
+    }
+    document["fingerprint"] = program_fingerprint(document)
+    return document
+
+
+def program_fingerprint(document: dict[str, object]) -> str:
+    """Stable fingerprint over program inputs: identity + machine +
+    operations + validation. Volatile metadata (exported_at) excluded."""
+    stable = {
+        key: value
+        for key, value in document.items()
+        if key not in {"fingerprint", "exported_at"}
+    }
+    return hashlib.sha256(
+        json.dumps(stable, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()

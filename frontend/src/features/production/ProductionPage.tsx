@@ -56,6 +56,8 @@ import { t, tDynamic } from "../../i18n/es-CL";
 import { useAssistantSurface } from "../assistant/assistantContext";
 import { STEP_STOCK_KINDS, cutRoleLabel } from "./labels";
 import { CutPlanView, type WorkOrderOptimization } from "./CutPlanView";
+import { CncPanel } from "./CncPanel";
+import { CncWorkspace } from "./CncWorkspace";
 import {
   GlassSummary,
   glassSummaryCsv,
@@ -141,6 +143,7 @@ const eventKey: Record<string, Parameters<typeof t>[0]> = {
   WO_DELIVERY_FAILED: "production.eventDeliveryFailed",
   WO_REMNANTS_SETTLED: "production.eventRemnantsSettled",
   WO_OPS_EXPORTED: "production.eventOpsExported",
+  WO_CNC_PROGRAM: "production.eventCncProgram",
 };
 
 const deliveryStatusKey: Record<string, Parameters<typeof t>[0]> = {
@@ -1113,6 +1116,7 @@ export function ProductionPage(): JSX.Element {
               </li>
             ))}
           </ul>
+          <CncWorkspace />
         </aside>
         <article className="production-detail">
           {detail ? (
@@ -1683,6 +1687,9 @@ export function ProductionPage(): JSX.Element {
                         </div>
                       );
                     })()}
+                    {optimization && !optimization.invalidated ? (
+                      <CncPanel orderId={detail.id} canWrite={canOptimize} />
+                    ) : null}
                     {!optimization ? (
                       <p className="production-optimize-empty">{t("production.optimizeEmpty")}</p>
                     ) : (
