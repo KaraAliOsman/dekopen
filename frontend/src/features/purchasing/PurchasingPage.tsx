@@ -577,6 +577,10 @@ function PurchasingWorkspace({
         (() => {
           // §1 at-a-glance: shortages and next incoming answer "what's missing
           // and when does it land" before the operator reads a single row.
+          // "Sin stock" is the raw fact (required − on hand); "Por comprar" is
+          // the actionable number (net of stock AND open orders) — the red
+          // state belongs on the number a buyer can still act on, so a fully
+          // ordered line stops flagging red.
           const shortLines = coverageLines.filter((line) => line.shortage !== "0");
           const recommended = coverageLines.filter((line) => line.recommended_purchase !== "0");
           const openOrders = orders.filter(
@@ -588,15 +592,15 @@ function PurchasingWorkspace({
             .sort()[0];
           return (
             <section className="purchasing-glance" aria-label={t("purchasing.glanceTitle")}>
-              <div
-                className={
-                  shortLines.length ? "purchasing-glance-cell is-short" : "purchasing-glance-cell"
-                }
-              >
+              <div className="purchasing-glance-cell">
                 <strong>{shortLines.length}</strong>
                 <span>{t("purchasing.glanceShort")}</span>
               </div>
-              <div className="purchasing-glance-cell">
+              <div
+                className={
+                  recommended.length ? "purchasing-glance-cell is-short" : "purchasing-glance-cell"
+                }
+              >
                 <strong>{recommended.length}</strong>
                 <span>{t("purchasing.glanceBuying")}</span>
               </div>

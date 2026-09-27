@@ -1294,7 +1294,7 @@ export const messages = {
   "purchasing.blockers": "Bloqueos pendientes",
   "purchasing.coverageTitle": "Cobertura de stock",
   "purchasing.glanceTitle": "Resumen de compras",
-  "purchasing.glanceShort": "líneas con faltante",
+  "purchasing.glanceShort": "líneas sin stock",
   "purchasing.glanceBuying": "líneas por comprar",
   "purchasing.glanceIncoming": "pedidos abiertos",
   "purchasing.glanceNext": "próxima entrega",

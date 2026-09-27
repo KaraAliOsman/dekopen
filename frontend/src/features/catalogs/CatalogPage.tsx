@@ -566,23 +566,28 @@ function CatalogEditor({
   );
   const noBeads = resource === "glazing" && beadOptions.length === 0;
   const [profiles, setProfiles] = useState<ProcessProfileOption[] | null>(null);
-  const profilesLoaded = useRef(false);
 
   useEffect(() => {
     // The binding picker loads only when the systems editor needs it — the
     // option list caps at 200 profiles, so one lazy fetch per editor mount.
-    if (resource !== "systems" || profilesLoaded.current) return;
-    profilesLoaded.current = true;
+    // Per-effect `active` flag, not a shared loaded-ref: a StrictMode remount
+    // (or a transient abort) must be free to refetch — the old ref guard left
+    // the picker permanently empty after its first request was aborted.
+    if (resource !== "systems") return;
     const controller = new AbortController();
+    let active = true;
     void api
       .processProfiles(controller.signal)
       .then((items) => {
-        if (alive.current) setProfiles(items);
+        if (active) setProfiles(items);
       })
       .catch(() => {
-        if (alive.current) setProfiles([]);
+        if (active) setProfiles([]);
       });
-    return () => controller.abort();
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [api, resource]);
 
   useEffect(() => {
