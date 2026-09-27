@@ -5,6 +5,7 @@ import { fmtMm } from "../../format";
 import { t } from "../../i18n/es-CL";
 import type { IntentNode } from "./intentEditing";
 import { isSlidingOpening, resolvedSlidingLayout } from "./intentEditing";
+import { OPENING_OPTIONS } from "./openings";
 import { memberSurface, type MemberSurface } from "./materials";
 import { contourOutset, contourPathD, insetContourPoints, pointsPathD } from "./contourGeometry";
 import type { MemberGeometry } from "./members";
@@ -497,6 +498,7 @@ function Bay({
           onSelect();
         },
         role: "button" as const,
+        "aria-label": `${t("intent.bay")} · ${t(OPENING_OPTIONS.find(([value]) => value === opening)?.[1] ?? "intent.fixed")}`,
         tabIndex: 0,
         onKeyDown: (event: React.KeyboardEvent) => {
           if (event.key === "Enter" || event.key === " ") {

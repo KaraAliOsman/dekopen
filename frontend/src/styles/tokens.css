@@ -22,6 +22,7 @@
   --theme-text-primary: #1f2a29;
   --theme-text-secondary: #55635f;
   --theme-text-muted: #5c6c68;
+  --theme-text-tertiary: #5c6c68; /* smallest text tier — AA on panel surfaces */
   --theme-accent: #0f817a;
   --theme-accent-strong: #0b6b66;
   --theme-accent-deep: #09524e;
@@ -103,6 +104,7 @@
   --theme-text-primary: #edf2f1;
   --theme-text-secondary: #a4b6b3;
   --theme-text-muted: #81938f;
+  --theme-text-tertiary: #81938f;
   --theme-accent: #2aa69b;
   --theme-accent-strong: #45beb1;
   --theme-accent-deep: #2aa69b;

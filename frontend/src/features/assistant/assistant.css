@@ -434,7 +434,7 @@
 .aiws-state[data-state="queued"],
 .aiws-state[data-state="planning"] {
   background: var(--theme-accent-ghost, rgba(15, 129, 122, 0.12));
-  color: var(--theme-accent, #0f817a);
+  color: var(--theme-accent-deep);
 }
 .aiws-state[data-state="waiting-for-user"],
 .aiws-state[data-state="waiting-for-approval"] {
@@ -624,6 +624,11 @@
   align-items: center;
   gap: 16px;
   padding: 18px 8px;
+}
+.aiws-hero__title {
+  font-size: var(--text-title);
+  font-weight: 600;
+  margin: 0 0 4px;
 }
 .aiws-error {
   margin: 0 18px 8px;

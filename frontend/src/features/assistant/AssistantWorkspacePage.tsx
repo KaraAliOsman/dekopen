@@ -917,7 +917,10 @@ export function AssistantWorkspacePage(): JSX.Element {
             <>
               <div className="aiws-hero">
                 <Orb state="idle" size={64} />
-                <AiMetricsCard organizationId={orgId ?? ""} />
+                <div>
+                  <h1 className="aiws-hero__title">{t("aiws.title")}</h1>
+                  <AiMetricsCard organizationId={orgId ?? ""} />
+                </div>
               </div>
               <p className="aiws-empty">{t("aiws.hint")}</p>
             </>

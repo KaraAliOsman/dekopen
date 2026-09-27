@@ -13,7 +13,6 @@ import {
   projectQuoteLinksList,
   projectsList,
   projectsCreate,
-  projectsRetrieve,
   projectsUpdate,
   projectsClone,
   positionsDestroy,
@@ -35,6 +34,7 @@ import { t, type TranslationKey } from "../../i18n/es-CL";
 import { formatDate, formatMoney } from "../money";
 import { fmtMm, formatDateTime, formatRevision } from "../../format";
 import { projectNameWrite } from "./projectNames";
+import { useProjectView } from "./useProject";
 import "./projects.css";
 import { PositionThumb } from "./PositionThumb";
 import { ProjectBom } from "./ProjectPositionEditor";
@@ -1028,21 +1028,17 @@ function ProjectWorkspace({
     return () => controller.abort();
   }, []);
 
-  const query = useQuery<View>({
-    queryKey: ["project-pages", identity, id ?? "list"],
+  // Detail rides the shared project query (same cache entry the shell lock
+  // check and the crumb use) — one fetch per project, not one per observer.
+  const detailQuery = useProjectView(id ?? null);
+  const listQuery = useQuery<View>({
+    queryKey: ["project-pages", identity, "list"],
+    enabled: !id,
     queryFn: async ({ signal }) => {
-      const options = {
+      const response = await projectsList({
         signal,
         headers: { "X-Organization-ID": orgId },
-      };
-      if (id) {
-        const response = await projectsRetrieve(id, options);
-        if (response.status !== 200) {
-          throw new ApiError(response.status, response.data);
-        }
-        return { project: response.data, items: [] };
-      }
-      const response = await projectsList(options);
+      });
       if (response.status !== 200) {
         throw new ApiError(response.status, response.data);
       }
@@ -1053,6 +1049,7 @@ function ProjectWorkspace({
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
+  const query = id ? detailQuery : listQuery;
 
   // Workspace-first pattern (same as /clients and /production): land on the
   // first vano's detail card rather than an empty hint pane.

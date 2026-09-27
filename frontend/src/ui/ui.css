@@ -31,9 +31,12 @@ button.ui-button {
  * chrome, never default-browser blue (review m5). */
 a.ui-backlink {
   align-items: center;
-  color: var(--theme-text-muted);
+  color: var(--theme-text-secondary);
   display: inline-flex;
   font-size: var(--text-s);
+  font-weight: 600;
+  /* WCAG 2.5.8 — 24 px click box; visual glyphs stay small. */
+  min-height: 24px;
   text-decoration: none;
 }
 

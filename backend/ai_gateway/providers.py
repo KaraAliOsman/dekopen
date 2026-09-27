@@ -12,6 +12,7 @@ import base64
 import hashlib
 import ipaddress
 import json
+import logging
 import os
 import re
 import socket
@@ -20,6 +21,8 @@ from typing import Any
 from urllib.parse import urlparse
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 
 MAX_BODY_BYTES = 1_048_576
@@ -499,7 +502,19 @@ class OpenAICompatibleProvider(HttpProvider):
     def _requested_model(self, route: dict) -> str:
         # AI_GATEWAY_{P}_MODEL is an operational override — the audit must
         # seal this effective model, not the route's, or provenance lies.
-        return self._model or str(route["provider_model"])
+        if self._model:
+            pinned = str(route["provider_model"])
+            if self._model != pinned:
+                logger.warning(
+                    "AI_GATEWAY_%s_MODEL overrides the ai_routes pin: "
+                    "env=%s route=%s capability=%s",
+                    self.provider,
+                    self._model,
+                    pinned,
+                    route.get("capability", "?"),
+                )
+            return self._model
+        return str(route["provider_model"])
 
     def _parse_response(self, content: bytes) -> dict[str, Any]:
         """OpenAI envelope: choices[0].message.content + usage."""

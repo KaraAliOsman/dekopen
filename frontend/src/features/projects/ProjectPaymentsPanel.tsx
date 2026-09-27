@@ -1,4 +1,4 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { ApiError } from "../../api/apiMutator";
 import {
@@ -71,7 +71,22 @@ export function ProjectPaymentsPanel({
   const confirm = useConfirm();
   const prompt = usePrompt();
   const queryClient = useQueryClient();
-  const [summary, setSummary] = useState<PaymentsSummary | null>(null);
+  // Shares the project header's `payments-summary` query — one fetch serves
+  // both consumers instead of the panel re-fetching the same endpoint.
+  const paymentsKey = ["projects", "payments-summary", orgId, projectId] as const;
+  const paymentsQuery = useQuery({
+    queryKey: paymentsKey,
+    queryFn: async ({ signal }) => {
+      const response = await projectPaymentsList(projectId, {
+        signal,
+        headers: { "X-Organization-ID": orgId },
+      });
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      return response.data;
+    },
+  });
+  const summary = paymentsQuery.data ?? null;
+  const setSummary = (data: PaymentsSummary) => queryClient.setQueryData(paymentsKey, data);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -93,23 +108,14 @@ export function ProjectPaymentsPanel({
   );
 
   const load = useCallback(async () => {
-    const current = ++generation.current;
-    setBusy(true);
     setMessage("");
-    try {
-      const response = await projectPaymentsList(projectId, requestOptions);
-      if (response.status !== 200) throw new ApiError(response.status, response.data);
-      if (generation.current === current) setSummary(response.data);
-    } catch {
-      if (generation.current === current) setMessage(t("projects.paymentsLoadError"));
-    } finally {
-      if (generation.current === current) setBusy(false);
-    }
-  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+    const result = await paymentsQuery.refetch();
+    if (result.isError) setMessage(t("projects.paymentsLoadError"));
+  }, [paymentsQuery]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (paymentsQuery.isError) setMessage(t("projects.paymentsLoadError"));
+  }, [paymentsQuery.isError]);
 
   const formDirty =
     showForm &&

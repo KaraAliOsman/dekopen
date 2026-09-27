@@ -8,7 +8,6 @@ import {
   positionsRetrieve,
   positionsUpdate,
   projectDesignOptions,
-  projectsRetrieve,
 } from "../../api/generated/dekopen";
 
 import type {
@@ -24,6 +23,7 @@ import { useShellLeaf } from "../../app/shellLeaf";
 import { t, tDynamic } from "../../i18n/es-CL";
 import { DeniedState } from "../../ui";
 import { type CanvasDesignInputs, useCanvasStore } from "../canvas/canvasStore";
+import { useProject } from "./useProject";
 import { AssemblyEditor, issueText } from "../canvas/AssemblyEditor";
 import { useAssistantSurface } from "../assistant/assistantContext";
 import type { IntentNode, Opening } from "../canvas/intentEditing";
@@ -54,18 +54,7 @@ export function ProjectPositionEditor(): JSX.Element {
   // The editor must not mount on a closed revision — the backend's editable()
   // gate would 409 every save, so check BEFORE the canvas store and dirty
   // tracking initialize (review: the «Nuevo vano» dead-end on quoted deals).
-  const projectQuery = useQuery({
-    queryKey: ["projects", "editor-lock", org?.id ?? "", id],
-    enabled: canEdit && Boolean(id),
-    queryFn: async () => {
-      const response = await projectsRetrieve(id, {
-        headers: { "X-Organization-ID": org!.id },
-      });
-      if (response.status !== 200) throw new ApiError(response.status, response.data);
-      return response.data;
-    },
-    staleTime: 30_000,
-  });
+  const projectQuery = useProject(canEdit && id ? id : null);
   if (!canEdit) return <DeniedState reason={t("projects.denied")} />;
   const project = projectQuery.data;
   // Mirrors backend editable(): a closed revision is status≠DRAFT, a sealed

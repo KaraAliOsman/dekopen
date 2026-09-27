@@ -672,8 +672,44 @@
   color: var(--theme-text-muted);
   display: flex;
   flex: 1;
+  flex-direction: column;
   font-size: 0.78rem;
+  gap: 10px;
   justify-content: center;
+}
+/* First open pulls the lazy three.js chunk (~2 s) — an indeterminate bar
+   makes the wait legible instead of looking frozen. */
+.model3d-loading__bar {
+  width: 148px;
+  height: 3px;
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+  background: var(--theme-skeleton);
+}
+.model3d-loading__bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  border-radius: 2px;
+  background: var(--theme-accent);
+  animation: model3d-slide 1.1s ease-in-out infinite;
+}
+@keyframes model3d-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  60%,
+  100% {
+    transform: translateX(260%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .model3d-loading__bar::after {
+    animation: none;
+    width: 100%;
+  }
 }
 
 /* The 3D toggle stacks above the floating zoom cluster — both anchor
@@ -1811,8 +1847,8 @@
 }
 
 .prov-chip--verified .prov-chip__state {
-  background: color-mix(in srgb, var(--theme-ok, #2f9e6e) 16%, transparent);
-  color: var(--theme-ok, #2f9e6e);
+  background: color-mix(in srgb, var(--theme-success) 16%, transparent);
+  color: var(--theme-success);
 }
 
 .prov-chip--declared .prov-chip__state {

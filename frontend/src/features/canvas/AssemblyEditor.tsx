@@ -1066,9 +1066,9 @@ function ProvenanceStrip({
 }): JSX.Element {
   return (
     <ul className="prov-strip" aria-label={t("prov.title")}>
-      {items.map((item) => (
+      {items.map((item, index) => (
         <li
-          key={item.label}
+          key={`${item.label}-${index}`}
           className={`prov-chip prov-chip--${item.state.toLowerCase()}`}
           title={t(`prov.${item.state.toLowerCase()}` as TranslationKey)}
         >
@@ -2265,7 +2265,14 @@ export function AssemblyEditor({
                 ×
               </button>
             </div>
-            <Suspense fallback={<div className="model3d-loading">{t("assembly.loading3d")}</div>}>
+            <Suspense
+              fallback={
+                <div className="model3d-loading" role="status">
+                  <span className="model3d-loading__bar" aria-hidden="true" />
+                  {t("assembly.loading3d")}
+                </div>
+              }
+            >
               <Model3DView
                 product={product}
                 members={members}

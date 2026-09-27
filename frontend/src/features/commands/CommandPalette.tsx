@@ -72,6 +72,7 @@ export function CommandPalette({
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const searchSeq = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const paletteRef = useRef<HTMLDivElement>(null);
   const surface = useCommandSurface();
 
   const close = useCallback(() => {
@@ -95,6 +96,26 @@ export function CommandPalette({
           setCursor(0);
           setInvalidParam(false);
         } else close();
+      } else if (event.key === "Tab" && open) {
+        // aria-modal obliges a focus trap: cycle Tab/Shift+Tab inside the
+        // palette (the input is the only tabbable — options use
+        // aria-activedescendant).
+        const root = paletteRef.current;
+        const focusables = root
+          ? Array.from(root.querySelectorAll<HTMLElement>("input, button:not([disabled])"))
+          : [];
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (!first || !last) {
+          event.preventDefault();
+          return;
+        }
+        const active = document.activeElement;
+        const outside = !root?.contains(active);
+        if (event.shiftKey ? active === first || outside : active === last || outside) {
+          event.preventDefault();
+          (event.shiftKey ? last : first).focus();
+        }
       }
     }
     window.addEventListener("keydown", onKeyDown);
@@ -244,6 +265,7 @@ export function CommandPalette({
       }}
     >
       <div
+        ref={paletteRef}
         className="command-palette"
         role="dialog"
         aria-modal="true"
@@ -284,6 +306,7 @@ export function CommandPalette({
                 <li key={option.value}>
                   <button
                     type="button"
+                    tabIndex={-1}
                     id={`command-palette-option-${index}`}
                     role="option"
                     aria-selected={index === cursor}
@@ -319,6 +342,7 @@ export function CommandPalette({
                 <li key={item.key}>
                   <button
                     type="button"
+                    tabIndex={-1}
                     id={`command-palette-option-${index}`}
                     role="option"
                     aria-selected={index === cursor}

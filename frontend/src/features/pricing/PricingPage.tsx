@@ -312,6 +312,9 @@ function CommercialWorkspace({
           {t("projects.back")}
         </Link>
       )}
+      <header>
+        <h1>{t("crumb.pricingCommercial")}</h1>
+      </header>
       <CommercialOperations request={request} owner={owner} boundProjectId={projectId} />
     </section>
   );

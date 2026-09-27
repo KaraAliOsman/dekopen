@@ -469,9 +469,12 @@ a:focus-visible {
 }
 
 .rail-context__back {
+  align-items: center;
   color: var(--theme-text-muted);
+  display: flex;
   font-size: var(--text-s);
   margin: 0 var(--space-2) var(--space-1);
+  min-height: 24px;
   text-decoration: none;
 }
 
@@ -818,7 +821,11 @@ a:focus-visible {
 }
 
 .crumbs__link {
+  align-items: center;
   color: var(--theme-text-secondary);
+  display: inline-flex;
+  /* WCAG 2.5.8 — 24 px click box; visual glyphs stay small. */
+  min-height: 24px;
   text-decoration: none;
 }
 
@@ -1267,7 +1274,7 @@ p[role="alert"]:only-child::before {
    status palette so a status reads identically on every surface. */
 .production-chip.status-released {
   background: var(--theme-info-soft);
-  color: var(--theme-info);
+  color: var(--theme-accent-deep);
 }
 .production-chip.status-in_progress {
   background: var(--theme-accent-soft);

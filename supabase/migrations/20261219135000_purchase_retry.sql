@@ -1,4 +1,7 @@
--- Purchase retry + DOC-02 PDF: a cancelled order must release its requirement
+-- Purchase retry + DOC-02 PDF (re-dated to run after order_cancellation —
+-- the release backfill reads orders.cancelled_at — and after
+-- doc08_generic_order, whose check2 it intentionally widens to allow the
+-- DOC-02 PDF renderer). A cancelled order must release its requirement
 -- claims so the same order type can be confirmed again, and DOC-02 is allowed
 -- in both formats (the PDF renderer exists; the check predates it).
 

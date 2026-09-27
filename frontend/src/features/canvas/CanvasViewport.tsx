@@ -263,7 +263,14 @@ export function CanvasViewport({
       onPointerCancel={endDrag}
       onKeyDown={onKeyDown}
     >
-      <svg className="canvas-sheet" role="img" data-testid="assembly-sheet">
+      {/* role="group" keeps the interactive member nodes in the AT tree —
+          "img" would flatten 90+ focusable bays/members into one picture. */}
+      <svg
+        className="canvas-sheet"
+        role="group"
+        aria-label={t("assembly.frontView")}
+        data-testid="assembly-sheet"
+      >
         <g transform={`translate(${view.tx} ${view.ty}) scale(${view.scale})`}>
           <ViewportScaleContext.Provider value={scaleContext}>
             {children}
@@ -298,9 +305,9 @@ export function CanvasViewport({
         </button>
         {menuOpen && (
           <div className="viewport-menu">
-            {menu.map((item) => (
+            {menu.map((item, index) => (
               <button
-                key={item.label}
+                key={`${item.label}-${index}`}
                 type="button"
                 className="viewport-menu__item"
                 disabled={item.disabled}
