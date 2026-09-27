@@ -926,7 +926,7 @@ function BayInspector({
             state: bay.glass_thickness_mm ? "DECLARED" : "UNKNOWN",
           },
           {
-            label: t("quotation.handleHeight"),
+            label: t("assembly.handleHeight"),
             state: bay.handle_height_mm ? "DECLARED" : "UNKNOWN",
           },
         ]}

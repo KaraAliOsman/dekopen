@@ -2866,6 +2866,7 @@ export const messages = {
   "aiws.art.catalogAuto": "Confirman solos",
   "aiws.art.catalogReview": "Revisar",
   "aiws.art.catalogBlocked": "Bloqueados",
+  "aiws.art.empty": "Este resultado no tiene contenido detallado.",
   "aiws.openWorkspace": "ver trabajo",
   "aiws.justNow": "ahora",
   "aiws.minutesAgo": "hace {n} min",

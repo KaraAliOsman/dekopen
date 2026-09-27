@@ -220,6 +220,39 @@ function CatalogReviewView({ payload }: { payload: Dict }): JSX.Element {
   );
 }
 
+function GenericView({ payload }: { payload: Dict }): JSX.Element {
+  const rows = Object.entries(payload);
+  if (!rows.length) return <p className="art-empty">{t("aiws.art.empty")}</p>;
+  return (
+    <dl className="art-kv">
+      {rows.map(([key, value]) => (
+        <div key={key} className="art-kv-row">
+          <dt>{key.replace(/_/g, " ")}</dt>
+          <dd>
+            {value === null || value === undefined
+              ? "—"
+              : Array.isArray(value)
+                ? value.map((item, i) => (
+                    <div key={i}>
+                      {typeof item === "object" && item !== null
+                        ? Object.entries(item as Dict)
+                            .map(([k, v]) => `${k}: ${text(v)}`)
+                            .join(" · ")
+                        : text(item)}
+                    </div>
+                  ))
+                : typeof value === "object"
+                  ? Object.entries(value as Dict)
+                      .map(([k, v]) => `${k}: ${text(v)}`)
+                      .join(" · ")
+                  : text(value)}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 const VIEWS: Record<string, (p: Dict) => JSX.Element> = {
   message: (p) => <MessageView payload={p} />,
   quote_draft: (p) => <QuoteDraftView payload={p} />,
@@ -230,17 +263,9 @@ const VIEWS: Record<string, (p: Dict) => JSX.Element> = {
 };
 
 /** Artifacts are work products — they render as readable documents, not JSON
- * dumps. Kinds without a dedicated view still get a readable fallback. */
+ * dumps. Kinds without a dedicated view render as labelled field rows. */
 export function ArtifactDetail({ artifact }: { artifact: Artifact }): JSX.Element {
   const payload = asDict(artifact.payload);
   const view = artifact.kind ? VIEWS[artifact.kind] : undefined;
-  return (
-    <div className="art">
-      {view ? (
-        view(payload)
-      ) : (
-        <pre className="aiws-payload">{JSON.stringify(artifact.payload ?? {}, null, 2)}</pre>
-      )}
-    </div>
-  );
+  return <div className="art">{view ? view(payload) : <GenericView payload={payload} />}</div>;
 }

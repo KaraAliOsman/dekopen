@@ -186,6 +186,13 @@ export function changeOpening(tree: IntentNode, bayId: string, opening: Opening)
   return requestTree(replaceNode(tree, bayId, replacement));
 }
 
+const MIRRORED_OPENING: Partial<Record<Opening, Opening>> = {
+  TURN_LEFT: "TURN_RIGHT",
+  TURN_RIGHT: "TURN_LEFT",
+  TILT_TURN_LEFT: "TILT_TURN_RIGHT",
+  TILT_TURN_RIGHT: "TILT_TURN_LEFT",
+};
+
 export function splitBay(
   tree: IntentNode,
   bayId: string,
@@ -223,12 +230,19 @@ export function splitBay(
     delete first.sliding_layout;
     if (first.opening_type === "SLIDING") first.opening_type = "SLIDING_2L";
   }
+  // A vertical split of a handed leaf yields a mullioned pair: the second
+  // leaf mirrors so both handles meet at the poste. Horizontal splits
+  // (transoms) keep the same opening type on both bays.
+  const second = { ...first, id: ids.secondBay };
+  if (division.type === "SPLIT_V" && second.opening_type) {
+    second.opening_type = MIRRORED_OPENING[second.opening_type] ?? second.opening_type;
+  }
   const replacement: IntentNode = {
     id: ids.split,
     type: division.type,
     split_offset_mm: exactMm(division.offsetMm),
     mullion_profile_sku: division.mullionSku,
-    children: [first, { ...first, id: ids.secondBay }],
+    children: [first, second],
   };
 
   return requestTree(replaceNode(tree, bayId, replacement));

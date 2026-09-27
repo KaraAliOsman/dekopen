@@ -66,6 +66,34 @@ describe("rectangular intent", () => {
     },
   );
 
+  it("mirrors the second leaf's handedness on a vertical split", () => {
+    const source: IntentNode = { ...bay, opening_type: "TILT_TURN_LEFT" };
+    const tree = splitBay(
+      source,
+      source.id,
+      { type: "SPLIT_V", offsetMm: "500", mullionSku: "POST" },
+      { split: "split-a", secondBay: "bay-b" },
+    );
+    expect(intentBays(tree).map((node) => node.opening_type)).toEqual([
+      "TILT_TURN_LEFT",
+      "TILT_TURN_RIGHT",
+    ]);
+  });
+
+  it("keeps identical opening types on a horizontal split", () => {
+    const source: IntentNode = { ...bay, opening_type: "TILT_TURN_LEFT" };
+    const tree = splitBay(
+      source,
+      source.id,
+      { type: "SPLIT_H", offsetMm: "400", mullionSku: "TRAV" },
+      { split: "split-a", secondBay: "bay-b" },
+    );
+    expect(intentBays(tree).map((node) => node.opening_type)).toEqual([
+      "TILT_TURN_LEFT",
+      "TILT_TURN_LEFT",
+    ]);
+  });
+
   it("edits only the selected nested bay and preserves explicit materials", () => {
     const tree = divided();
     const changed = changeOpening(tree, "bay-b", "TILT_TURN_RIGHT");
