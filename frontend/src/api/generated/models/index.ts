@@ -71,6 +71,8 @@ export * from "./approvalRecord";
 export * from "./articleList";
 export * from "./articleResponse";
 export * from "./articleWriteRequest";
+export * from "./artifactListItem";
+export * from "./artifactListResponse";
 export * from "./artifactRequestRequest";
 export * from "./artifactResponse";
 export * from "./artifactScopeEnum";

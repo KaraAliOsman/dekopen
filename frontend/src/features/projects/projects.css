@@ -677,12 +677,14 @@
 }
 .starter-gallery {
   display: grid;
-  grid-auto-columns: 7.5rem;
-  grid-auto-flow: column;
+  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
   gap: 0.625rem;
   max-width: 100%;
   min-width: 0;
-  overflow-x: auto;
+  /* Wrap over scroll: a hidden tail row made contour/door starters
+   * undiscoverable; the enclosing <details> already owns the vertical
+   * budget, so showing every starter costs the user nothing. */
+  overflow-x: visible;
   padding: 0.25rem 0.75rem 0.75rem;
 }
 .starter-card {

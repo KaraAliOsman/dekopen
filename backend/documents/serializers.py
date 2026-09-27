@@ -272,6 +272,23 @@ class ArtifactResponseSerializer(serializers.Serializer):
     created_at = serializers.DateTimeField()
 
 
+class ArtifactListItemSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    document_type = serializers.CharField()
+    format = serializers.CharField()
+    artifact_scope = serializers.ChoiceField(choices=["PROJECT_REVISION", "ORDER"])
+    project_version_id = serializers.UUIDField()
+    order_id = serializers.UUIDField(allow_null=True)
+    order_type = serializers.CharField(allow_null=True)
+    revision_code = serializers.CharField()
+    byte_size = serializers.IntegerField()
+    created_at = serializers.DateTimeField()
+
+
+class ArtifactListResponseSerializer(serializers.Serializer):
+    artifacts = ArtifactListItemSerializer(many=True)
+
+
 class SignedAccessResponseSerializer(serializers.Serializer):
     artifact_id = serializers.UUIDField()
     signed_url = serializers.URLField()

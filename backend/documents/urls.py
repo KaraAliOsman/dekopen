@@ -3,6 +3,7 @@ from django.urls import path
 from documents.views import (
     ArtifactAccessView,
     ArtifactGenerateView,
+    ArtifactListView,
     DocumentaryInputsView,
     FreezeRevisionView,
     RevisionCompareView,
@@ -14,6 +15,11 @@ urlpatterns = [
         "artifacts/<uuid:artifact_id>/access/",
         ArtifactAccessView.as_view(),
         name="documentary-artifact-access",
+    ),
+    path(
+        "projects/<uuid:project_id>/artifacts/",
+        ArtifactListView.as_view(),
+        name="documentary-artifact-list",
     ),
     path(
         "projects/<uuid:project_id>/inputs/",

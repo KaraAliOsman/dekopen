@@ -16,9 +16,6 @@ export interface AiJobMessageRequest {
   message: string;
   product?: AiJobMessageRequestProduct;
   refs?: AiJobMessageRequestRefs;
-  /**
-   * @minLength 1
-   * @maxLength 64
-   */
+  /** @maxLength 64 */
   product_sig?: string;
 }

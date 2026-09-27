@@ -618,3 +618,62 @@ def test_signed_url_uses_fixed_ttl_and_is_not_artifact_identity(
             "http://127.0.0.1:25321/storage/v1/object/sign/documents/key"
             "?token=transient"
         )
+
+
+def test_artifact_list_passes_role_and_returns_items(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The index must forward the tenant role — _DOCUMENT_ROLES filtering is
+    what keeps a document type the role cannot open out of the metadata."""
+    from contextlib import contextmanager
+    from uuid import uuid4
+
+    from rest_framework.test import APIClient
+
+    from documents import views as document_views
+
+    org_id = uuid4()
+    project_id = uuid4()
+    version_id = uuid4()
+    seen: dict[str, object] = {}
+
+    @contextmanager
+    def fake_scope(request, allowed):
+        assert set(allowed) == {"OWNER", "ESTIMATOR", "WORKSHOP_MANAGER"}
+        tenant = SimpleNamespace(
+            active_organization=SimpleNamespace(role="WORKSHOP_MANAGER"),
+        )
+        yield SimpleNamespace(user_id=uuid4()), tenant, org_id
+
+    def fake_list(*, org_id, project_id, role):  # noqa: ANN001
+        seen["role"] = role
+        seen["org_id"] = org_id
+        seen["project_id"] = project_id
+        return [
+            {
+                "id": str(uuid4()),
+                "document_type": "DOC-01",
+                "format": "PDF",
+                "artifact_scope": "PROJECT_REVISION",
+                "project_version_id": str(version_id),
+                "order_id": None,
+                "order_type": None,
+                "revision_code": "REV-A",
+                "byte_size": 128,
+                "created_at": "2026-09-25T00:00:00Z",
+            }
+        ]
+
+    monkeypatch.setattr(document_views, "documentary_scope", fake_scope)
+    monkeypatch.setattr(document_views, "list_artifacts", fake_list)
+    client = APIClient()
+    client.force_authenticate(
+        user=SimpleNamespace(is_authenticated=True), token=object()
+    )
+    response = client.get(f"/api/v1/documents/projects/{project_id}/artifacts/")
+    assert response.status_code == 200
+    assert seen["role"] == "WORKSHOP_MANAGER"
+    assert seen["org_id"] == org_id
+    assert seen["project_id"] == project_id
+    [item] = response.data["artifacts"]
+    assert item["project_version_id"] == str(version_id)
+    assert item["document_type"] == "DOC-01"
+    assert item["revision_code"] == "REV-A"

@@ -6,6 +6,7 @@ import { ApiError } from "../../api/apiMutator";
 import {
   documentaryArtifactAccess,
   documentaryFreezeRevisionA,
+  documentaryListArtifacts,
   documentaryPrepareInputs,
   documentarySaveInputs,
   productionRelease,
@@ -588,6 +589,16 @@ export function ProjectQuotationPanel({
   // placement/policy changes recompute only the seeded ones.
   const seededIntentKeys = useRef(new Map<string, Set<string>>());
   const requestOptions = { headers: { "X-Organization-ID": orgId } };
+  // Emitted document index: opening an existing artifact is one access call,
+  // not a generation job — the emit path only runs when the slot is empty.
+  const artifactIndex = useQuery({
+    queryKey: ["documents", "artifacts", orgId, project.id],
+    queryFn: async () => {
+      const response = await documentaryListArtifacts(project.id, requestOptions);
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      return response.data.artifacts;
+    },
+  });
   // The customer-link ledger — same key the workspace header polls, so one
   // cache feeds both the timeline and the per-link revoke controls here.
   const approvals = useQuery({
@@ -949,22 +960,35 @@ export function ProjectQuotationPanel({
     setBusy(true);
     setMessage("");
     try {
-      setMessage(t("quotation.documentGenerating"));
-      const job = await runJob(
-        {
-          type: "document.artifact.generate",
-          payload: {
-            document_type: "DOC-01",
-            format: "PDF",
-            project_version_id: versionId,
-            order_id: null,
+      // An emitted artifact opens straight through access — no generation
+      // job, no worker round-trip, nothing for the user to wait on.
+      let artifactId = artifactIndex.data?.find(
+        (item) =>
+          item.project_version_id === versionId &&
+          item.document_type === "DOC-01" &&
+          item.format === "PDF",
+      )?.id;
+      if (!artifactId) {
+        setMessage(t("quotation.documentGenerating"));
+        const job = await runJob(
+          {
+            type: "document.artifact.generate",
+            payload: {
+              document_type: "DOC-01",
+              format: "PDF",
+              project_version_id: versionId,
+              order_id: null,
+            },
+            idempotency_key: `doc01:${versionId}`,
           },
-          idempotency_key: `doc01:${versionId}`,
-        },
-        requestOptions,
-      );
-      const artifact = (job.result as { artifact: { id: string } }).artifact;
-      const access = await documentaryArtifactAccess(artifact.id, requestOptions);
+          requestOptions,
+        );
+        artifactId = (job.result as { artifact: { id: string } }).artifact.id;
+        queryClient.invalidateQueries({
+          queryKey: ["documents", "artifacts", orgId, project.id],
+        });
+      }
+      const access = await documentaryArtifactAccess(artifactId, requestOptions);
       if (access.status !== 200) {
         throw new ApiError(access.status, access.data);
       }
@@ -1931,6 +1955,10 @@ export function ProjectQuotationPanel({
                       : "quotation.quoteOnlyChip",
                   )}
                 </span>
+                {artifactIndex.data?.some(
+                  (item) =>
+                    item.project_version_id === version.id && item.document_type === "DOC-01",
+                ) && <span>{t("quotation.documentEmitted")}</span>}
                 <button
                   disabled={busy}
                   onClick={() => void openEvidence(version.id, version.revision_code)}

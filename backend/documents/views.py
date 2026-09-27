@@ -25,9 +25,10 @@ from dekopen_engine.purchasing import PurchaseAuthorityError
 from engine_api.adapter import InvalidEngineRequest, UnsupportedEngineContract
 from engine_api.repository import SystemNotFound, UnsupportedCatalogContract
 
-from documents.artifacts import generate_artifact, signed_artifact_access
+from documents.artifacts import generate_artifact, list_artifacts, signed_artifact_access
 from documents.repository import DocumentaryError, documentary_backend
 from documents.serializers import (
+    ArtifactListResponseSerializer,
     ArtifactRequestSerializer,
     ArtifactResponseSerializer,
     DocumentaryInputsResponseSerializer,
@@ -375,6 +376,29 @@ class RevisionCompareView(APIView):
                     base_code=str(query["base"]),
                     head_code=str(query["head"]),
                 )
+            )
+
+
+class ArtifactListView(APIView):
+    @extend_schema(
+        operation_id="documentary_list_artifacts",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={200: ArtifactListResponseSerializer, **ERRORS},
+        tags=["documents"],
+    )
+    def get(self, request, project_id: UUID):
+        with documentary_scope(
+            request, ("OWNER", "ESTIMATOR", "WORKSHOP_MANAGER")
+        ) as (_, tenant, org_id):
+            return Response(
+                {
+                    "artifacts": list_artifacts(
+                        org_id=org_id,
+                        project_id=project_id,
+                        role=tenant.active_organization.role,
+                    )
+                }
             )
 
 

@@ -443,6 +443,7 @@ export const messages = {
   "quotation.releaseError": "No se pudo liberar a producción.",
   "quotation.designEvidence": "Evidencia de diseño; faltan antecedentes de producción",
   "quotation.openEvidence": "Abrir cotización emitida",
+  "quotation.documentEmitted": "PDF emitido",
   "quotation.documentError": "No se pudo generar o abrir la cotización emitida.",
   "quotation.documentGenerating": "Generando cotización emitida…",
   "quotation.loadError": "No pudimos preparar la emisión. Revisa las autoridades técnicas.",

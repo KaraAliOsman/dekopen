@@ -472,6 +472,10 @@ function PurchasingWorkspace({
     orderId?: string,
   ): Promise<void> {
     if (!state?.version) return;
+    // The artifact resolves after an async job — opening the tab inside the
+    // click gesture keeps it out of the popup blocker; a synchronous
+    // window.open(url) at resolve time would be silently swallowed.
+    const tab = window.open("", "_blank");
     setMessage("");
     try {
       setMessage(t("purchasing.documentGenerating"));
@@ -493,9 +497,11 @@ function PurchasingWorkspace({
         headers: { "X-Organization-ID": orgId },
       });
       if (access.status !== 200) throw new ApiError(access.status, access.data);
-      window.open(access.data.signed_url, "_blank", "noopener,noreferrer");
+      if (tab) tab.location.href = access.data.signed_url;
+      else window.open(access.data.signed_url, "_blank", "noopener,noreferrer");
       setMessage("");
     } catch {
+      tab?.close();
       if (mounted.current) setMessage(t("purchasing.documentError"));
     }
   }

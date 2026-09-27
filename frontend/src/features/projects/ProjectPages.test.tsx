@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { ApiError, apiMutator } from "../../api/apiMutator";
 import {
+  documentaryListArtifacts,
   positionsDestroy,
   projectPaymentIntegrationStatus,
   projectPaymentLinksList,
@@ -63,6 +64,7 @@ vi.mock("../../api/generated/dekopen", async (importOriginal) => {
     projectPaymentLinkCreate: vi.fn(),
     projectPaymentLinkRecover: vi.fn(),
     projectQuoteLinksList: vi.fn(),
+    documentaryListArtifacts: vi.fn(),
     documentsCompareVersions: vi.fn(),
   };
 });
@@ -237,6 +239,7 @@ beforeEach(() => {
     response(200, { configured: false, enabled: false }),
   );
   vi.mocked(projectQuoteLinksList).mockResolvedValue(response(200, []));
+  vi.mocked(documentaryListArtifacts).mockResolvedValue(response(200, { artifacts: [] }));
 });
 
 afterEach(() => {

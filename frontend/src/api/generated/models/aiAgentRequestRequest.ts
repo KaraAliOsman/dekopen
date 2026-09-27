@@ -22,10 +22,7 @@ export interface AiAgentRequestRequest {
    */
   goal: string;
   product?: AiAgentRequestRequestProduct;
-  /**
-   * @minLength 1
-   * @maxLength 64
-   */
+  /** @maxLength 64 */
   product_sig?: string;
   history?: AiAgentHistoryRequest[];
   /**

@@ -232,6 +232,41 @@ def _delete_unreferenced_object(
         )
 
 
+def list_artifacts(
+    *, org_id: UUID, project_id: UUID, role: str
+) -> list[dict[str, object]]:
+    """Emitted documents for a project — existence is metadata, not content:
+    rows are filtered to the document types the requester's role may open,
+    and access stays behind signed_artifact_access's per-type role gate."""
+    with documentary_backend():
+        found = rows(
+            "SELECT a.id, a.document_type, a.format, a.artifact_scope,"
+            " a.project_version_id, a.order_id, a.order_type::text,"
+            " a.byte_size, a.created_at, v.revision_code"
+            " FROM public.document_artifacts a"
+            " JOIN public.project_versions v ON v.id = a.project_version_id"
+            " WHERE a.org_id=%s AND a.project_id=%s"
+            " ORDER BY a.created_at DESC, a.id DESC",
+            [org_id, project_id],
+        )
+    return [
+        {
+            "id": str(item["id"]),
+            "document_type": item["document_type"],
+            "format": item["format"],
+            "artifact_scope": item["artifact_scope"],
+            "project_version_id": str(item["project_version_id"]),
+            "order_id": str(item["order_id"]) if item["order_id"] else None,
+            "order_type": item["order_type"],
+            "revision_code": item["revision_code"],
+            "byte_size": item["byte_size"],
+            "created_at": item["created_at"],
+        }
+        for item in found
+        if role in _DOCUMENT_ROLES.get(str(item["document_type"]), set())
+    ]
+
+
 def signed_artifact_access(
     *, org_id: UUID, artifact_id: UUID, role: str
 ) -> tuple[dict[str, object], dict[str, object]]:

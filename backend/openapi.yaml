@@ -4382,6 +4382,76 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/documents/projects/{project_id}/artifacts/:
+    get:
+      operationId: documentary_list_artifacts
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: project_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - documents
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArtifactListResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/documents/projects/{project_id}/freeze/:
     post:
       operationId: documentary_freeze_revision_a
@@ -15325,7 +15395,6 @@ components:
           additionalProperties: {}
         product_sig:
           type: string
-          minLength: 1
           maxLength: 64
         history:
           type: array
@@ -15697,7 +15766,6 @@ components:
           additionalProperties: {}
         product_sig:
           type: string
-          minLength: 1
           maxLength: 64
       required:
       - message
@@ -16095,6 +16163,55 @@ components:
       - role
       - sku
       - system_id
+    ArtifactListItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        document_type:
+          type: string
+        format:
+          type: string
+        artifact_scope:
+          $ref: '#/components/schemas/ArtifactScopeEnum'
+        project_version_id:
+          type: string
+          format: uuid
+        order_id:
+          type: string
+          format: uuid
+          nullable: true
+        order_type:
+          type: string
+          nullable: true
+        revision_code:
+          type: string
+        byte_size:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - artifact_scope
+      - byte_size
+      - created_at
+      - document_type
+      - format
+      - id
+      - order_id
+      - order_type
+      - project_version_id
+      - revision_code
+    ArtifactListResponse:
+      type: object
+      properties:
+        artifacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArtifactListItem'
+      required:
+      - artifacts
     ArtifactRequestRequest:
       type: object
       properties:

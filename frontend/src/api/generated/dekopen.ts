@@ -31,6 +31,7 @@ import type {
   ArticleList,
   ArticleResponse,
   ArticleWriteRequest,
+  ArtifactListResponse,
   ArtifactRequestRequest,
   ArtifactResponse,
   AuthMeResponse,
@@ -5089,6 +5090,78 @@ export const documentaryArtifactAccess = async (
       method: "POST",
     },
   );
+};
+
+export type documentaryListArtifactsResponse200 = {
+  data: ArtifactListResponse;
+  status: 200;
+};
+
+export type documentaryListArtifactsResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type documentaryListArtifactsResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type documentaryListArtifactsResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type documentaryListArtifactsResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type documentaryListArtifactsResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type documentaryListArtifactsResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type documentaryListArtifactsResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type documentaryListArtifactsResponseSuccess = documentaryListArtifactsResponse200 & {
+  headers: Headers;
+};
+export type documentaryListArtifactsResponseError = (
+  | documentaryListArtifactsResponse400
+  | documentaryListArtifactsResponse401
+  | documentaryListArtifactsResponse403
+  | documentaryListArtifactsResponse404
+  | documentaryListArtifactsResponse409
+  | documentaryListArtifactsResponse422
+  | documentaryListArtifactsResponse503
+) & {
+  headers: Headers;
+};
+
+export type documentaryListArtifactsResponse =
+  documentaryListArtifactsResponseSuccess | documentaryListArtifactsResponseError;
+
+export const getDocumentaryListArtifactsUrl = (projectId: string) => {
+  return `/api/v1/documents/projects/${projectId}/artifacts/`;
+};
+
+export const documentaryListArtifacts = async (
+  projectId: string,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<documentaryListArtifactsResponse> => {
+  return apiMutator<documentaryListArtifactsResponse>(getDocumentaryListArtifactsUrl(projectId), {
+    ...options,
+    method: "GET",
+  });
 };
 
 export type documentaryFreezeRevisionAResponse200 = {

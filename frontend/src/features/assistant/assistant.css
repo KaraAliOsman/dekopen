@@ -1105,3 +1105,17 @@
 .ask-dock__meta-link:hover {
   text-decoration: none;
 }
+
+/* Mobile: the dock is the customer/operator surface — full-width panel,
+ * clear of the canvas inspector offset that only exists on desktop. */
+@media (max-width: 640px) {
+  .ask-dock,
+  .ask-dock--canvas {
+    right: 8px;
+    bottom: 8px;
+  }
+  .ask-dock__panel {
+    width: calc(100vw - 16px);
+    max-height: 72vh;
+  }
+}
