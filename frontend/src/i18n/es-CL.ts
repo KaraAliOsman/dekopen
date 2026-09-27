@@ -1161,6 +1161,12 @@ export const messages = {
   "quotation.linkRevokeConfirm": "¿Revocar este enlace? El cliente perderá acceso de inmediato.",
   "quotation.linkRevokedDone": "Enlace revocado.",
   "quotation.shareCopied": "Enlace copiado al portapapeles",
+  "quotation.shareReady": "Enlace listo para compartir",
+  "quotation.shareWhatsApp": "Enviar por WhatsApp",
+  "quotation.shareEmail": "Enviar por correo",
+  "quotation.shareCopy": "Copiar enlace",
+  "quotation.shareSubject": "Cotización {code}",
+  "quotation.shareBody": "Hola, te comparto la propuesta del proyecto {name}: {url}",
   "quotation.shareReplacesLink":
     "Ya hay un enlace activo; compartir uno nuevo lo invalidará. ¿Continuar?",
   "quotation.markApproved": "Marcar aprobada",

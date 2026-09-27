@@ -580,6 +580,7 @@ export function ProjectQuotationPanel({
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [sharedUrl, setSharedUrl] = useState("");
   // Inspector rules that blocked the last freeze attempt — the 422's
   // inspector_failures payload so the estimator sees WHAT failed (WB2).
   const [inspectorFailures, setInspectorFailures] = useState<InspectorFailure[]>([]);
@@ -1036,6 +1037,7 @@ export function ProjectQuotationPanel({
     const current = ++generation.current;
     setBusy(true);
     setMessage("");
+    setSharedUrl("");
     try {
       const response = await projectQuoteLinkCreate(project.id, requestOptions);
       if (response.status !== 200) throw new ApiError(response.status, response.data);
@@ -1046,16 +1048,26 @@ export function ProjectQuotationPanel({
         queryKey: ["projects", "quote-approvals", orgId, project.id],
       });
       const url = `${window.location.origin}${response.data.path}`;
+      setSharedUrl(url);
       try {
         await navigator.clipboard.writeText(url);
         setMessage(t("quotation.shareCopied"));
       } catch {
-        setMessage(url);
+        setMessage(t("quotation.shareReady"));
       }
     } catch {
       if (generation.current === current) setMessage(t("quotation.error"));
     } finally {
       if (generation.current === current) setBusy(false);
+    }
+  }
+
+  async function copySharedUrl(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(sharedUrl);
+      setMessage(t("quotation.shareCopied"));
+    } catch {
+      setMessage(sharedUrl);
     }
   }
 
@@ -1216,6 +1228,33 @@ export function ProjectQuotationPanel({
         )}
       </header>
       {message && <p role="status">{message}</p>}
+      {sharedUrl && (
+        <div className="quotation-share">
+          <a
+            className="link-button"
+            href={`https://wa.me/?text=${encodeURIComponent(
+              t("quotation.shareBody").replace("{name}", project.name).replace("{url}", sharedUrl),
+            )}`}
+            rel="noreferrer"
+            target="_blank"
+          >
+            {t("quotation.shareWhatsApp")}
+          </a>
+          <a
+            className="link-button"
+            href={`mailto:${project.client_email ?? ""}?subject=${encodeURIComponent(
+              t("quotation.shareSubject").replace("{code}", project.code),
+            )}&body=${encodeURIComponent(
+              t("quotation.shareBody").replace("{name}", project.name).replace("{url}", sharedUrl),
+            )}`}
+          >
+            {t("quotation.shareEmail")}
+          </a>
+          <button className="link-button" onClick={() => void copySharedUrl()} type="button">
+            {t("quotation.shareCopy")}
+          </button>
+        </div>
+      )}
       {inspectorFailures.length > 0 && (
         <ul className="quotation-inspector-failures" role="alert">
           {inspectorFailures.map((failure, index) => (
