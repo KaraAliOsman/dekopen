@@ -521,7 +521,7 @@ def test_xlsx_formula_like_text_stays_literal_never_a_formula() -> None:
     profile_line["category"] = "@PROFILE"
     profile_line["purchasing_sku"] = "-BUY"
     profile_line["physical_stock_identity"] = "=STOCK+1"
-    profile_line["specification"]["cutting_profile_id"] = "+CUT"
+    profile_line["source_trace_labels"] = ["+TRACE"]
     profile, _ = render_order_xlsx("DOC-04", profile_snapshot)
     profile_workbook = load_workbook(BytesIO(profile), read_only=True, data_only=False)
     try:
@@ -530,7 +530,7 @@ def test_xlsx_formula_like_text_stays_literal_never_a_formula() -> None:
         assert sheet["B8"].value == "@PROFILE"
         assert sheet["D8"].value == "-BUY"
         assert sheet["E8"].value == "=STOCK+1"
-        assert sheet["I8"].value == "+CUT"
+        assert sheet["I8"].value == "+TRACE"
         assert all(
             cell.data_type != "f" for row in sheet.iter_rows() for cell in row
         )

@@ -21,6 +21,8 @@ type Remnant = {
   origin: "RECEIPT" | "PRODUCTION" | "MANUAL";
   origin_order_id: string | null;
   reserved_order_id: string | null;
+  reserved_order_code: string | null;
+  origin_order_code: string | null;
   rack_location: string | null;
   notes: string | null;
   created_at: string;
@@ -33,11 +35,24 @@ type Movement = {
   quantity: string;
   order_id: string | null;
   lot_code: string | null;
+  rack_location: string | null;
   note: string | null;
+  actor_label: string | null;
   created_at: string;
 };
 
-type StockIdentity = { item_id: string; sku: string; name: string };
+type StockIdentity = {
+  item_id: string;
+  sku: string;
+  name: string;
+  racks?: string | null;
+};
+
+function remnantAge(createdAt: string): string {
+  const days = Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 86_400_000));
+  if (days === 0) return t("inventory.ageNew");
+  return `${days} ${t(days === 1 ? "inventory.ageDay" : "inventory.ageDays")}`;
+}
 
 type BarAuthority = {
   id: string;
@@ -120,6 +135,7 @@ export function InventorySection({
     movement_type: "ADJUSTMENT",
     quantity: "",
     lot_code: "",
+    rack_location: "",
     note: "",
   });
   const [form, setForm] = useState({
@@ -218,6 +234,7 @@ export function InventorySection({
         movement_type: adjustForm.movement_type,
         quantity: adjustForm.quantity,
         lot_code: adjustForm.lot_code.trim() || null,
+        rack_location: adjustForm.rack_location.trim() || null,
         note: adjustForm.note.trim(),
       }),
       "inventory.movementError",
@@ -297,6 +314,13 @@ export function InventorySection({
                 <input
                   value={adjustForm.lot_code}
                   onChange={(e) => setAdjustForm((f) => ({ ...f, lot_code: e.target.value }))}
+                />
+              </label>
+              <label>
+                {t("inventory.movementRack")}
+                <input
+                  value={adjustForm.rack_location}
+                  onChange={(e) => setAdjustForm((f) => ({ ...f, rack_location: e.target.value }))}
                 />
               </label>
               <label>
@@ -451,6 +475,7 @@ export function InventorySection({
               <th>{t("inventory.dims")}</th>
               <th>{t("inventory.rack")}</th>
               <th>{t("inventory.origin")}</th>
+              <th>{t("inventory.reservedFor")}</th>
               <th>{t("inventory.registered")}</th>
               <th>{t("inventory.actions")}</th>
             </tr>
@@ -468,8 +493,19 @@ export function InventorySection({
                 </td>
                 <td>{remnantDims(r)}</td>
                 <td>{r.rack_location ?? "—"}</td>
-                <td>{remnantOriginLabel(r.origin)}</td>
-                <td>{formatDateTime(r.created_at)}</td>
+                <td>
+                  {remnantOriginLabel(r.origin)}
+                  {r.origin_order_code ? ` · ${r.origin_order_code}` : ""}
+                </td>
+                <td>
+                  {r.status === "RESERVED"
+                    ? (r.reserved_order_code ?? r.reserved_order_id?.slice(0, 8) ?? "—")
+                    : "—"}
+                </td>
+                <td>
+                  {remnantAge(r.created_at)}
+                  <span className="purchasing-hint"> · {formatDateTime(r.created_at)}</span>
+                </td>
                 <td>
                   <button type="button" className="secondary" onClick={() => showLabel(r)}>
                     {t("inventory.label")}
@@ -538,6 +574,8 @@ export function InventorySection({
                 <th>{t("inventory.movementType")}</th>
                 <th>{t("inventory.movementItem")}</th>
                 <th>{t("inventory.movementQty")}</th>
+                <th>{t("inventory.movementRack")}</th>
+                <th>{t("inventory.movementWho")}</th>
                 <th>{t("inventory.movementNote")}</th>
               </tr>
             </thead>
@@ -548,6 +586,8 @@ export function InventorySection({
                   <td>{movementLabel(m.movement_type)}</td>
                   <td>{itemNames.get(m.item_id) ?? m.item_id.slice(0, 8)}</td>
                   <td>{m.quantity}</td>
+                  <td>{m.rack_location ?? "—"}</td>
+                  <td>{m.actor_label ?? "—"}</td>
                   <td>{m.note ?? m.lot_code ?? "—"}</td>
                 </tr>
               ))}

@@ -20,6 +20,8 @@ export interface OrderIndexItem {
   /** @nullable */
   expected_at: string | null;
   /** @nullable */
+  sent_to: string | null;
+  /** @nullable */
   sent_at: string | null;
   created_at: string;
   /** @nullable */

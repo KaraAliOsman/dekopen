@@ -91,7 +91,35 @@ def list_remnants(
         " LIMIT 500",
         parameters,
     )
-    return {"remnants": [_remnant_row(r) for r in items]}
+    # Resolve the work order a remnant is reserved for (or came from) into its
+    # human code — the operator never sees a UUID.
+    order_ids = {
+        str(value)
+        for r in items
+        for value in (
+            r["reserved_order_id"],
+            r["origin_order_id"],
+            r["consumed_order_id"],
+        )
+        if value
+    }
+    codes = (
+        {
+            str(row["id"]): str(row["order_code"])
+            for row in rows(
+                "SELECT id, order_code FROM public.orders"
+                " WHERE org_id = %s AND id = ANY(%s::uuid[])",
+                [str(org_id), order_ids],
+            )
+        }
+        if order_ids
+        else {}
+    )
+    remnants = [_remnant_row(r) for r in items]
+    for entry in remnants:
+        entry["reserved_order_code"] = codes.get(entry["reserved_order_id"])
+        entry["origin_order_code"] = codes.get(entry["origin_order_id"])
+    return {"remnants": remnants}
 
 
 def list_bar_authorities(*, org_id: UUID) -> dict[str, object]:

@@ -24,6 +24,8 @@ export interface OrderResponse {
   /** @nullable */
   expected_at?: string | null;
   /** @nullable */
+  sent_to?: string | null;
+  /** @nullable */
   cancelled_by?: string | null;
   /** @nullable */
   cancelled_at?: string | null;

@@ -130,8 +130,9 @@ def render_order_xlsx(document_type: str, snapshot: dict[str, object]) -> tuple[
                 ) or "SIN PULIDO",
                 _text(specification.get("location_tag")),
                 ", ".join(_text(item) for item in _array(
-                    line.get("source_trace"), "invalid_order_line"
-                )),
+                    line.get("source_trace_labels") or line.get("source_trace"),
+                    "invalid_order_line",
+                ) if item),
                 format(area.normalize(), "f"),
             ])
         data.append([
@@ -162,14 +163,15 @@ def render_order_xlsx(document_type: str, snapshot: dict[str, object]) -> tuple[
                 _text(line.get("unit")),
                 detail,
                 ", ".join(_text(item) for item in _array(
-                    line.get("source_trace"), "invalid_order_line"
-                )),
+                    line.get("source_trace_labels") or line.get("source_trace"),
+                    "invalid_order_line",
+                ) if item),
             ])
     else:
         sheet_name = "Pedido de perfiles"
         headers = [
             "Requisito", "Categoría", "SKU taller", "SKU compra", "Stock físico",
-            "Largo barra mm", "Cantidad", "Unidad", "Perfil de corte", "Trazabilidad",
+            "Largo barra mm", "Cantidad", "Unidad", "Trazabilidad",
         ]
         data = []
         for line in lines:
@@ -181,14 +183,17 @@ def render_order_xlsx(document_type: str, snapshot: dict[str, object]) -> tuple[
                     line.get("technical_skus"), "invalid_order_line"
                 )),
                 _text(line.get("purchasing_sku")),
-                _text(line.get("physical_stock_identity")),
+                _text(
+                    line.get("physical_stock_sku")
+                    or line.get("physical_stock_identity")
+                ),
                 _text(specification.get("stock_length_mm")),
                 int(line["quantity"]),
                 _text(line.get("unit")),
-                _text(specification.get("cutting_profile_id")),
                 ", ".join(_text(item) for item in _array(
-                    line.get("source_trace"), "invalid_order_line"
-                )),
+                    line.get("source_trace_labels") or line.get("source_trace"),
+                    "invalid_order_line",
+                ) if item),
             ])
 
     metadata = [

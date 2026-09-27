@@ -151,11 +151,22 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-it.each(["ESTIMATOR", "INSTALLER"])("denies S19 to %s without fetching", (role) => {
+it.each(["INSTALLER"])("denies S19 to %s without fetching", (role) => {
   identity.role = role;
   renderPage();
   expect(screen.getByRole("alert")).toHaveTextContent(t("purchasing.denied"));
   expect(apiMutator).not.toHaveBeenCalled();
+});
+
+it("opens read-only to ESTIMATOR: coverage visible, no write controls", async () => {
+  identity.role = "ESTIMATOR";
+  mockState();
+  renderPage();
+  await screen.findByText("4 unidades");
+  expect(
+    screen.queryByRole("combobox", { name: t("purchasing.chooseSupplier") }),
+  ).not.toBeInTheDocument();
+  expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
 });
 
 it("renders immutable quantities without editable inputs", async () => {
@@ -240,7 +251,7 @@ it("sends a draft order only after explicit attestation", async () => {
     expect(apiMutator).toHaveBeenCalledWith(
       "/api/v1/purchasing/orders/order-1/send/",
       expect.objectContaining({
-        body: JSON.stringify({ confirmed: true, expected_at: null }),
+        body: JSON.stringify({ confirmed: true, expected_at: null, sent_to: null }),
       }),
     ),
   );

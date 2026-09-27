@@ -199,6 +199,7 @@ def purchasing_state(org_id: UUID, version_id: UUID | None = None) -> dict[str, 
         orders = rows(
             "SELECT o.id,o.order_code,o.order_type::text,o.status::text,o.supplier_identity,"
             "o.supplier_name,o.order_snapshot_hash,o.confirmed_at,o.sent_at,o.expected_at,"
+            "o.sent_to,o.cancelled_at,o.supplier_details::text AS supplier_details,"
             "l.line_count,l.total_qty,l.lines_preview::text AS lines_preview "
             "FROM public.orders o LEFT JOIN ("
             "SELECT order_id, COUNT(*) AS line_count, SUM(quantity) AS total_qty,"
@@ -262,6 +263,9 @@ def purchasing_state(org_id: UUID, version_id: UUID | None = None) -> dict[str, 
                     "lines_preview": decoded(item["lines_preview"])
                     if item.get("lines_preview")
                     else [],
+                    "supplier_details": _object(
+                        item["supplier_details"] or {}, "invalid_order_snapshot"
+                    ),
                 }
                 for item in orders
             ],
@@ -580,7 +584,7 @@ def confirm_order_type_batch(
 
 def send_order(
     *, org_id: UUID, actor_id: UUID, order_id: UUID, confirmed: bool,
-    expected_at=None,
+    expected_at=None, sent_to=None,
 ) -> dict[str, object]:
     if not confirmed:
         raise DocumentaryError("order_send_confirmation_required")
@@ -598,12 +602,14 @@ def send_order(
         if order["status"] != "DRAFT":
             raise DocumentaryError("order_state_invalid")
         sent_at = datetime.now(timezone.utc)
+        if sent_to is not None:
+            sent_to = str(sent_to).strip() or None
         updated = one(
             "UPDATE public.orders SET status='SENT',sent_by=%s,sent_at=%s,"
-            "expected_at=%s,updated_at=%s "
+            "expected_at=%s,sent_to=%s,updated_at=%s "
             "WHERE id=%s AND org_id=%s RETURNING id,order_code,order_type::text,status::text,"
-            "supplier_name,order_snapshot_hash,expected_at",
-            [actor_id, sent_at, expected_at, sent_at, order_id, org_id],
+            "supplier_name,order_snapshot_hash,expected_at,sent_to",
+            [actor_id, sent_at, expected_at, sent_to, sent_at, order_id, org_id],
         )
         return _public(updated)
 
@@ -654,7 +660,7 @@ def orders_index(org_id: UUID, status: str | None = None) -> dict[str, object]:
     with documentary_backend():
         orders = rows(
             "SELECT o.id,o.order_code,o.order_type::text,o.status::text,o.supplier_identity,"
-            "o.supplier_name,o.expected_at,o.sent_at,o.created_at,"
+            "o.supplier_name,o.expected_at,o.sent_at,o.sent_to,o.created_at,"
             "v.revision_code,v.id AS project_version_id,"
             "p.id AS project_id,p.code AS project_code,"
             "COALESCE(l.line_count,0) AS line_count,l.total_qty,"
@@ -668,12 +674,11 @@ def orders_index(org_id: UUID, status: str | None = None) -> dict[str, object]:
             "FROM public.order_requirement_lines WHERE org_id=%s GROUP BY order_id"
             ") l ON l.order_id=o.id "
             "LEFT JOIN ("
-            "SELECT o2.id AS order_id,"
+            "SELECT rc.order_id,"
             " SUM(rl.received_qty - rl.damaged_qty) AS good_qty "
-            "FROM public.order_receipt_lines rl "
-            "JOIN public.order_receipts rc ON rc.id=rl.receipt_id AND rc.org_id=rl.org_id "
-            "JOIN public.orders o2 ON o2.id=rc.order_id AND o2.org_id=rc.org_id "
-            "WHERE rl.org_id=%s GROUP BY o2.id"
+            "FROM public.order_receipts rc "
+            "JOIN public.order_receipt_lines rl ON rl.receipt_id=rc.id "
+            "WHERE rc.org_id=%s GROUP BY rc.order_id"
             ") r ON r.order_id=o.id "
             "WHERE o.org_id=%s" + status_filter + " "
             "ORDER BY CASE WHEN o.expected_at IS NULL THEN 1 ELSE 0 END,"

@@ -251,7 +251,7 @@ def _tenant(role: str, org_id):
 
 def _client_with_scope(monkeypatch, role: str):
     org_id = uuid4()
-    token = SimpleNamespace(user_id=uuid4(), claims={}, aal="aal1")
+    token = SimpleNamespace(user_id=uuid4(), email="op@taller.cl", claims={}, aal="aal1")
 
     @contextmanager
     def fake_scope(request, allowed):
@@ -297,7 +297,7 @@ def test_receipt_post_forwards_payload(monkeypatch) -> None:
 
 def test_receipt_post_denies_estimator(monkeypatch) -> None:
     org_id = uuid4()
-    token = SimpleNamespace(user_id=uuid4(), claims={}, aal="aal1")
+    token = SimpleNamespace(user_id=uuid4(), email="op@taller.cl", claims={}, aal="aal1")
 
     @contextmanager
     def fake_scope(request, allowed):

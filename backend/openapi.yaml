@@ -18395,12 +18395,18 @@ components:
         lot_code:
           type: string
           nullable: true
+        rack_location:
+          type: string
+          nullable: true
         note:
           type: string
           nullable: true
         actor_id:
           type: string
           format: uuid
+          nullable: true
+        actor_label:
+          type: string
           nullable: true
         created_at:
           type: string
@@ -18461,6 +18467,11 @@ components:
           nullable: true
           minLength: 1
           maxLength: 100
+        rack_location:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 50
         note:
           type: string
           minLength: 1
@@ -18521,6 +18532,9 @@ components:
           format: decimal
           pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
           default: '0.00'
+        racks:
+          type: string
+          nullable: true
       required:
       - available_qty
       - category
@@ -19227,6 +19241,9 @@ components:
           type: string
           format: date
           nullable: true
+        sent_to:
+          type: string
+          nullable: true
         sent_at:
           type: string
           nullable: true
@@ -19269,6 +19286,7 @@ components:
       - project_version_id
       - revision_code
       - sent_at
+      - sent_to
       - status
       - supplier_identity
       - supplier_name
@@ -19413,6 +19431,9 @@ components:
         expected_at:
           type: string
           format: date
+          nullable: true
+        sent_to:
+          type: string
           nullable: true
         cancelled_by:
           type: string
@@ -22610,6 +22631,12 @@ components:
         notes:
           type: string
           nullable: true
+        reserved_order_code:
+          type: string
+          nullable: true
+        origin_order_code:
+          type: string
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -23122,6 +23149,10 @@ components:
           type: string
           format: date
           nullable: true
+        sent_to:
+          type: string
+          nullable: true
+          maxLength: 200
       required:
       - confirmed
     ShareQuoteResponse:

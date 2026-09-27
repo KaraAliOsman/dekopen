@@ -141,6 +141,7 @@ class SendOrderView(APIView):
                 order_id=order_id,
                 confirmed=data["confirmed"],
                 expected_at=data.get("expected_at"),
+                sent_to=data.get("sent_to"),
             )
         return Response(output)
 

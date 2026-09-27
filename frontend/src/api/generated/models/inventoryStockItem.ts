@@ -21,4 +21,6 @@ export interface InventoryStockItem {
   available_qty: string;
   /** @pattern ^-?\d{0,12}(?:\.\d{0,2})?$ */
   incoming_qty?: string;
+  /** @nullable */
+  racks?: string | null;
 }

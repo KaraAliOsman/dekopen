@@ -193,20 +193,23 @@ def positions(org_id, project_id):
 
 
 def project_versions(org_id, project_id):
-    return rows(
-        "SELECT id,revision_code,authority_version,bom_hash,snapshot_sha256,"
-        "production_allowed,documentary_complete,emitted_at,"
-        # Sealed money lets a successor revision's pricing decision compare
-        # against what the customer was actually quoted (live totals are
-        # zeroed by start_successor, so the snapshot is the only baseline).
-        "snapshot_json->>'total_price_net' AS sealed_price_net,"
-        "snapshot_json->>'total_price_tax' AS sealed_price_tax,"
-        "snapshot_json->>'total_price_gross' AS sealed_price_gross,"
-        "snapshot_json->>'currency' AS sealed_currency "
-        "FROM public.project_versions WHERE project_id=%s AND org_id=%s "
-        "ORDER BY emitted_at,id",
-        [project_id, org_id],
-    )
+    # snapshot_json is role-denied (rbac_repair): the sealed money fields must
+    # be read through the documentary backend, like _latest_version does.
+    with documentary_backend():
+        return rows(
+            "SELECT id,revision_code,authority_version,bom_hash,snapshot_sha256,"
+            "production_allowed,documentary_complete,emitted_at,"
+            # Sealed money lets a successor revision's pricing decision compare
+            # against what the customer was actually quoted (live totals are
+            # zeroed by start_successor, so the snapshot is the only baseline).
+            "snapshot_json->>'total_price_net' AS sealed_price_net,"
+            "snapshot_json->>'total_price_tax' AS sealed_price_tax,"
+            "snapshot_json->>'total_price_gross' AS sealed_price_gross,"
+            "snapshot_json->>'currency' AS sealed_currency "
+            "FROM public.project_versions WHERE project_id=%s AND org_id=%s "
+            "ORDER BY emitted_at,id",
+            [project_id, org_id],
+        )
 
 
 _UNSET = object()

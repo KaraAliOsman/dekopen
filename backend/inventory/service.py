@@ -44,8 +44,18 @@ def list_stock(*, org_id: UUID) -> dict[str, object]:
         """
         SELECT item_id, sku, name, category, unit, variant_key,
                on_hand_qty, reserved_qty, (on_hand_qty - reserved_qty) AS available_qty,
-               COALESCE(inc.incoming_qty, 0) AS incoming_qty
+               COALESCE(inc.incoming_qty, 0) AS incoming_qty,
+               loc.racks
         FROM public.inventory_stock
+        LEFT JOIN (
+            SELECT item_id,
+                   STRING_AGG(DISTINCT rack_location, ', ' ORDER BY rack_location) AS racks
+            FROM public.inventory_movements
+            WHERE org_id = %s
+              AND rack_location IS NOT NULL
+              AND rack_location <> ''
+            GROUP BY item_id
+        ) loc ON loc.item_id = public.inventory_stock.item_id
         LEFT JOIN (
             SELECT stock.item_id,
                    SUM(l.quantity - COALESCE(r.received_qty, 0)) AS incoming_qty
@@ -67,7 +77,7 @@ def list_stock(*, org_id: UUID) -> dict[str, object]:
         WHERE org_id = %s
         ORDER BY sku, variant_key
         """,
-        [str(org_id), str(org_id)],
+        [str(org_id), str(org_id), str(org_id)],
     )
     return {"items": items}
 
@@ -82,7 +92,8 @@ def list_movements(*, org_id: UUID, item_id: UUID | None, limit: int) -> dict[st
     items = rows(
         f"""
         SELECT m.id, m.item_id, m.movement_type::text, m.quantity, m.order_id,
-               m.order_line_id, m.lot_code, m.note, m.actor_id, m.created_at
+               m.order_line_id, m.lot_code, m.rack_location, m.note,
+               m.actor_id, m.actor_label, m.created_at
         FROM public.inventory_movements m
         WHERE {' AND '.join(clauses)}
         ORDER BY m.created_at DESC
@@ -197,6 +208,7 @@ def receive_order(
     receipt_key: str,
     note: str | None,
     lines: list[dict[str, Any]],
+    actor_label: str | None = None,
 ) -> tuple[dict[str, object], bool]:
     """Record a physical receipt against a SENT/partial order. Idempotent per
     (org, receipt_key): a replayed key returns the existing receipt."""
@@ -300,8 +312,9 @@ def receive_order(
                 """
                 INSERT INTO public.inventory_movements(
                     org_id, item_id, movement_type, quantity, order_id,
-                    order_line_id, receipt_line_id, lot_code, note, actor_id)
-                VALUES (%s, %s, 'RECEIPT', %s, %s, %s, %s, %s, %s, %s)
+                    order_line_id, receipt_line_id, lot_code, rack_location,
+                    note, actor_id, actor_label)
+                VALUES (%s, %s, 'RECEIPT', %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
                 [
@@ -312,8 +325,10 @@ def receive_order(
                     order_line_id,
                     str(receipt_line["id"]),
                     entry.get("lot_code"),
+                    entry.get("rack_location"),
                     entry.get("note"),
                     str(actor_id),
+                    actor_label,
                 ],
             )
         new_status = _next_order_status(org_id=org_id, order_id=order_id)
@@ -333,6 +348,8 @@ def record_movement(
     quantity: Any,
     lot_code: str | None,
     note: str,
+    rack_location: str | None = None,
+    actor_label: str | None = None,
 ) -> dict[str, object]:
     """Manual stock corrections. Reservation/consumption stay reserved for
     production flows; here only RECEIPT-free adjustments are allowed."""
@@ -347,10 +364,12 @@ def record_movement(
         movement = one(
             """
             INSERT INTO public.inventory_movements(
-                org_id, item_id, movement_type, quantity, lot_code, note, actor_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                org_id, item_id, movement_type, quantity, lot_code,
+                rack_location, note, actor_id, actor_label)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id, item_id, movement_type::text, quantity, order_id,
-                      order_line_id, lot_code, note, actor_id, created_at
+                      order_line_id, lot_code, rack_location, note,
+                      actor_id, actor_label, created_at
             """,
             [
                 str(org_id),
@@ -358,8 +377,10 @@ def record_movement(
                 movement_type,
                 quantity,
                 lot_code,
+                rack_location,
                 note,
                 str(actor_id),
+                actor_label,
             ],
         )
     return dict(movement)

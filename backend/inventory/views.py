@@ -120,6 +120,8 @@ class InventoryMovementsView(APIView):
                     quantity=data["quantity"],
                     lot_code=data.get("lot_code"),
                     note=data["note"],
+                    rack_location=data.get("rack_location"),
+                    actor_label=token.email or None,
                 )
         return Response(output)
 
@@ -158,6 +160,7 @@ class OrderReceiptCreateView(APIView):
                     receipt_key=data["receipt_key"],
                     note=data.get("note"),
                     lines=data["lines"],
+                    actor_label=token.email or None,
                 )
         return Response(output, status=201 if created else 200)
 

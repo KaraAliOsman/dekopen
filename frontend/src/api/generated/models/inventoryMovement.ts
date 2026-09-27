@@ -20,8 +20,12 @@ export interface InventoryMovement {
   /** @nullable */
   lot_code: string | null;
   /** @nullable */
+  rack_location?: string | null;
+  /** @nullable */
   note: string | null;
   /** @nullable */
   actor_id: string | null;
+  /** @nullable */
+  actor_label?: string | null;
   created_at: string;
 }

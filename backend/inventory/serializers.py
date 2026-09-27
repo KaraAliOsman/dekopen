@@ -27,6 +27,7 @@ class InventoryStockItemSerializer(serializers.Serializer):
     incoming_qty = serializers.DecimalField(
         max_digits=14, decimal_places=2, required=False, default="0"
     )
+    racks = serializers.CharField(allow_null=True, required=False)
 
 
 class InventoryStockSerializer(serializers.Serializer):
@@ -51,8 +52,10 @@ class InventoryMovementSerializer(serializers.Serializer):
     order_id = serializers.UUIDField(allow_null=True)
     order_line_id = serializers.UUIDField(allow_null=True)
     lot_code = serializers.CharField(allow_null=True)
+    rack_location = serializers.CharField(allow_null=True, required=False)
     note = serializers.CharField(allow_null=True)
     actor_id = serializers.UUIDField(allow_null=True)
+    actor_label = serializers.CharField(allow_null=True, required=False)
     created_at = serializers.DateTimeField()
 
 
@@ -114,6 +117,7 @@ class InventoryMovementRequestSerializer(StrictSerializer):
     movement_type = serializers.ChoiceField(choices=("ADJUSTMENT", "RETURN", "SCRAP"))
     quantity = serializers.DecimalField(max_digits=14, decimal_places=2, min_value=Decimal("0"))
     lot_code = serializers.CharField(required=False, allow_null=True, max_length=100)
+    rack_location = serializers.CharField(required=False, allow_null=True, max_length=50)
     note = serializers.CharField(max_length=500)
 
 
@@ -143,6 +147,8 @@ class RemnantSerializer(serializers.Serializer):
     consumed_order_id = serializers.UUIDField(allow_null=True)
     rack_location = serializers.CharField(allow_null=True)
     notes = serializers.CharField(allow_null=True)
+    reserved_order_code = serializers.CharField(allow_null=True, required=False)
+    origin_order_code = serializers.CharField(allow_null=True, required=False)
     created_at = serializers.DateTimeField()
     updated_at = serializers.DateTimeField()
 

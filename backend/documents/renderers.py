@@ -1933,17 +1933,18 @@ def _doc04(snapshot: dict[str, object]) -> str:
     body += (
         _po_parties(order, snapshot)
         + _table(
-            ["SKU compra", "SKU taller", "Categoría", "Acabado", "Largo barra (mm)",
-             "Cantidad", "Unidad", "Perfil de corte", "Requisito"],
+            ["SKU compra", "Descripción", "SKU taller", "Acabado", "Largo barra (mm)",
+             "Cantidad", "Unidad", "Origen"],
             [[line.get("purchasing_sku"),
+              line.get("physical_stock_name") or _value(line.get("physical_stock_sku")),
               ", ".join(_value(item) for item in _array(line.get("technical_skus"), "invalid_order_line")),
-              _CATEGORY_ES.get(_value(line.get("category")), line.get("category")),
               _object(line.get("specification"), "invalid_order_line").get("color"),
               _object(line.get("specification"), "invalid_order_line").get("stock_length_mm"),
               line.get("quantity"), line.get("unit"),
-              _object(line.get("specification"), "invalid_order_line").get("cutting_profile_id"),
-              _value(line.get("requirement_key"))[:8]]
-             for line in lines], ["", "", "", "", "dimension", "dimension", "", "", "hash"],
+              ", ".join(str(label) for label in _array(
+                  line.get("source_trace_labels") or [], "invalid_order_line"
+              ) if label)]
+             for line in lines], ["", "", "", "", "dimension", "dimension", "", ""],
         )
         + "</main>"
     )
@@ -2027,7 +2028,7 @@ def _doc08(snapshot: dict[str, object]) -> str:
         _po_parties(order, snapshot)
         + _table(
             ["SKU compra", "Descripción", "SKU taller",
-             "Cantidad", "Unidad", "Detalle", "Requisito"],
+             "Cantidad", "Unidad", "Detalle", "Origen"],
             [[line.get("purchasing_sku"),
               _object(line.get("specification"), "invalid_order_line").get("description")
               or _object(line.get("specification"), "invalid_order_line").get("manufacturer_name"),
@@ -2040,8 +2041,10 @@ def _doc08(snapshot: dict[str, object]) -> str:
                   )
                   if key not in ("description", "manufacturer_name")
               ),
-              _value(line.get("requirement_key"))[:8]]
-             for line in lines], ["", "", "", "dimension", "", "", "hash"],
+              ", ".join(str(label) for label in _array(
+                  line.get("source_trace_labels") or [], "invalid_order_line"
+              ) if label)]
+             for line in lines], ["", "", "", "dimension", "", "", ""],
         )
         + "</main>"
     )

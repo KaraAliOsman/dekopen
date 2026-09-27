@@ -55,6 +55,9 @@ class ConfirmBatchRequestSerializer(StrictSerializer):
 class SendOrderRequestSerializer(StrictSerializer):
     confirmed = serializers.BooleanField()
     expected_at = serializers.DateField(required=False, allow_null=True, default=None)
+    sent_to = serializers.CharField(
+        required=False, allow_null=True, allow_blank=True, max_length=200, default=None
+    )
 
 
 class PurchasingStateSerializer(serializers.Serializer):
@@ -99,6 +102,7 @@ class OrderResponseSerializer(serializers.Serializer):
     confirmed_at = serializers.CharField(required=False, allow_null=True)
     sent_at = serializers.CharField(required=False, allow_null=True)
     expected_at = serializers.DateField(required=False, allow_null=True)
+    sent_to = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     cancelled_by = serializers.UUIDField(required=False, allow_null=True)
     cancelled_at = serializers.CharField(required=False, allow_null=True)
     line_count = serializers.CharField(required=False, allow_null=True)
@@ -116,6 +120,7 @@ class OrderIndexItemSerializer(serializers.Serializer):
     supplier_identity = serializers.CharField(allow_null=True)
     supplier_name = serializers.CharField(allow_null=True)
     expected_at = serializers.DateField(allow_null=True)
+    sent_to = serializers.CharField(allow_null=True, allow_blank=True)
     sent_at = serializers.CharField(allow_null=True)
     created_at = serializers.CharField()
     project_id = serializers.UUIDField(allow_null=True)

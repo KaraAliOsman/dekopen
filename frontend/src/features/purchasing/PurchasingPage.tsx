@@ -106,6 +106,10 @@ type Order = {
   supplier_name: string;
   order_snapshot_hash: string;
   expected_at?: string | null;
+  sent_to?: string | null;
+  sent_at?: string | null;
+  cancelled_at?: string | null;
+  supplier_details?: Record<string, unknown> | null;
   line_count?: string | null;
   total_qty?: string | null;
   lines_preview?: OrderLinePreview[];
@@ -158,6 +162,7 @@ type StockItem = {
   reserved_qty: string;
   available_qty: string;
   incoming_qty?: string;
+  racks?: string | null;
 };
 type VersionItem = {
   id: string;
@@ -241,7 +246,7 @@ function usePurchasingRequest(orgId: string): {
 export function PurchasingPage(): JSX.Element {
   const org = useAuthSession().me?.active_organization;
   const [query] = useSearchParams();
-  if (!org || !["OWNER", "WORKSHOP_MANAGER"].includes(org.role))
+  if (!org || !["OWNER", "WORKSHOP_MANAGER", "ESTIMATOR"].includes(org.role))
     return <DeniedState reason={t("purchasing.denied")} />;
   const initialVersionId = query.get("version") ?? "";
   return (
@@ -328,6 +333,7 @@ function PurchasingWorkspace({
   const [busy, setBusy] = useState(true);
   const [message, setMessage] = useState("");
   const [revision, setRevision] = useState(0);
+  const canWrite = role === "WORKSHOP_MANAGER" || role === "OWNER";
   // Independent side-loads fail per-section, not into a fake empty state.
   const [failedSections, setFailedSections] = useState<ReadonlySet<string>>(new Set());
   function markSection(section: string, failed: boolean): void {
@@ -686,6 +692,7 @@ function PurchasingWorkspace({
             eligibilities={eligibilities.filter((item) => item.order_type === orderType)}
             allocations={allocations}
             confirmed={confirmedTypes.has(orderType)}
+            canWrite={canWrite}
             busy={busy}
             versionId={state.version!.id}
             request={request}
@@ -703,6 +710,7 @@ function PurchasingWorkspace({
               key={order.id}
               order={order}
               role={role}
+              canWrite={canWrite}
               busy={busy}
               request={request}
               action={action}
@@ -726,6 +734,7 @@ function PurchasingWorkspace({
                 <th>{t("purchasing.stockReserved")}</th>
                 <th>{t("purchasing.stockAvailable")}</th>
                 <th>{t("purchasing.stockIncoming")}</th>
+                <th>{t("purchasing.stockRacks")}</th>
               </tr>
             </thead>
             <tbody>
@@ -745,6 +754,7 @@ function PurchasingWorkspace({
                       "0"
                     )}
                   </td>
+                  <td>{item.racks || "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -753,7 +763,7 @@ function PurchasingWorkspace({
       )}
       <InventorySection
         request={request}
-        canWrite={role === "WORKSHOP_MANAGER" || role === "OWNER"}
+        canWrite={canWrite}
         stockItems={stock.map((item) => ({
           item_id: item.item_id,
           sku: item.sku,
@@ -789,6 +799,7 @@ function RequirementSection({
   eligibilities,
   allocations,
   confirmed,
+  canWrite,
   busy,
   versionId,
   request,
@@ -801,6 +812,7 @@ function RequirementSection({
   eligibilities: Eligibility[];
   allocations: Allocation[];
   confirmed: boolean;
+  canWrite: boolean;
   busy: boolean;
   versionId: string;
   request: RequestFn;
@@ -841,6 +853,7 @@ function RequirementSection({
                 )}
                 allocation={allocations.find((item) => item.requirement_line_id === requirement.id)}
                 confirmed={confirmed}
+                canWrite={canWrite}
                 busy={busy}
                 request={request}
                 action={action}
@@ -849,7 +862,7 @@ function RequirementSection({
           </tbody>
         </table>
       )}
-      {!confirmed && (
+      {!confirmed && canWrite && (
         <>
           <EligibilityForm
             orderType={orderType}
@@ -902,6 +915,7 @@ function RequirementRow({
   eligibilities,
   allocation,
   confirmed,
+  canWrite,
   busy,
   request,
   action,
@@ -910,6 +924,7 @@ function RequirementRow({
   eligibilities: Eligibility[];
   allocation: Allocation | undefined;
   confirmed: boolean;
+  canWrite: boolean;
   busy: boolean;
   request: RequestFn;
   action: (task: Promise<unknown>) => Promise<boolean>;
@@ -937,7 +952,7 @@ function RequirementRow({
         {purchaseUnitLabel(requirement.unit, qtyNumber(requirement.quantity))}
       </td>
       <td>
-        {confirmed ? (
+        {confirmed || !canWrite ? (
           (allocated?.supplier_name ?? "—")
         ) : (
           <select
@@ -1160,6 +1175,7 @@ function EligibilityForm({
 function OrderCard({
   order,
   role,
+  canWrite,
   busy,
   request,
   action,
@@ -1167,6 +1183,7 @@ function OrderCard({
 }: {
   order: Order;
   role: string;
+  canWrite: boolean;
   busy: boolean;
   request: RequestFn;
   action: (task: Promise<unknown>) => Promise<boolean>;
@@ -1174,6 +1191,9 @@ function OrderCard({
 }): JSX.Element {
   const [attested, setAttested] = useState(false);
   const [expectedAt, setExpectedAt] = useState("");
+  const supplierEmail =
+    typeof order.supplier_details?.email === "string" ? order.supplier_details.email : "";
+  const [sentTo, setSentTo] = useState(supplierEmail);
   return (
     <article className={`purchasing-order purchasing-order-${order.status.toLowerCase()}`}>
       <header>
@@ -1185,24 +1205,26 @@ function OrderCard({
       </header>
       {order.lines_preview && order.lines_preview.length > 0 && (
         <ul className="purchasing-order-lines">
-          {order.lines_preview.slice(0, 4).map((line, index) => (
+          {order.lines_preview.map((line, index) => (
             <li key={index}>
               {line.sku} × {line.qty} {line.unit}
             </li>
           ))}
-          {Number(order.line_count) > 4 && (
-            <li>
-              +{Number(order.line_count) - 4} {t("purchasing.moreLines")}
-            </li>
-          )}
         </ul>
       )}
-      {order.expected_at && (
+      {(order.expected_at || order.sent_to) && (
         <p className="purchasing-order-expected">
-          {t("purchasing.expectedAt")}: {order.expected_at}
+          {order.expected_at ? `${t("purchasing.expectedAt")}: ${order.expected_at}` : ""}
+          {order.expected_at && order.sent_to ? " · " : ""}
+          {order.sent_to ? `${t("purchasing.sentTo")}: ${order.sent_to}` : ""}
         </p>
       )}
-      {order.status === "DRAFT" && (
+      {order.status === "CANCELLED" && order.cancelled_at && (
+        <p className="purchasing-order-expected">
+          {t("purchasing.cancelledAt")}: {formatDateTime(order.cancelled_at)}
+        </p>
+      )}
+      {order.status === "DRAFT" && canWrite && (
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -1210,6 +1232,7 @@ function OrderCard({
               request(`purchasing/orders/${order.id}/send/`, "POST", {
                 confirmed: true,
                 expected_at: expectedAt || null,
+                sent_to: sentTo.trim() || null,
               }),
             );
           }}
@@ -1221,6 +1244,16 @@ function OrderCard({
               value={expectedAt}
               disabled={busy}
               onChange={(event) => setExpectedAt(event.target.value)}
+            />
+          </label>
+          <label>
+            {t("purchasing.sentTo")}
+            <input
+              type="text"
+              value={sentTo}
+              disabled={busy}
+              placeholder={t("purchasing.sentToPlaceholder")}
+              onChange={(event) => setSentTo(event.target.value)}
             />
           </label>
           <label>
@@ -1246,10 +1279,10 @@ function OrderCard({
           </li>
         ))}
       </ul>
-      {(order.status === "DRAFT" || order.status === "SENT") && (
+      {canWrite && (order.status === "DRAFT" || order.status === "SENT") && (
         <CancelOrderButton order={order} busy={busy} request={request} action={action} />
       )}
-      {(order.status === "SENT" || order.status === "PARTIALLY_RECEIVED") && (
+      {canWrite && (order.status === "SENT" || order.status === "PARTIALLY_RECEIVED") && (
         <ReceivingPanel order={order} busy={busy} request={request} action={action} />
       )}
     </article>
