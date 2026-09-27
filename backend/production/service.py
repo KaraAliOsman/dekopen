@@ -1008,10 +1008,12 @@ def get_work_order(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
     )
     events = rows(
         """
-        SELECT id, step_id, event, actor_id, payload, created_at
-        FROM public.production_step_events
-        WHERE order_id = %s AND org_id = %s
-        ORDER BY created_at
+        SELECT ev.id, ev.step_id, ev.event, ev.actor_id, ev.actor_label,
+               ev.payload, ev.created_at, st.code::text AS step_code
+        FROM public.production_step_events ev
+        LEFT JOIN public.production_steps st ON st.id = ev.step_id
+        WHERE ev.order_id = %s AND ev.org_id = %s
+        ORDER BY ev.created_at
         """,
         [str(order_id), str(org_id)],
     )
@@ -1086,8 +1088,10 @@ def get_work_order(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
         {
             "id": str(event["id"]),
             "step_id": str(event["step_id"]) if event["step_id"] else None,
+            "step_code": event.get("step_code"),
             "event": event["event"],
             "actor_id": str(event["actor_id"]) if event["actor_id"] else None,
+            "actor_label": event.get("actor_label"),
             "payload": event["payload"],
             "created_at": event["created_at"],
         }
@@ -1172,6 +1176,10 @@ def transition_step(
     if action not in _TRANSITIONS:
         raise DocumentaryError("step_action_unknown")
     if action == "NOTE" and not (note or "").strip():
+        raise DocumentaryError("step_note_required")
+    if action == "BLOCK" and not (note or "").strip():
+        # A blocked step without a reason is a dead end on the floor — the
+        # note IS the instruction for whoever unblocks it.
         raise DocumentaryError("step_note_required")
     if action == "QC_CHECK":
         if not qc_check or not str(qc_check.get("check") or "").strip():
@@ -1301,10 +1309,20 @@ def transition_step(
         ) else _EVENTS[action]
         now = datetime.now(timezone.utc)
         if new_status is not None:
+            # UNBLOCK resolves the blocking reason — a stale failure note
+            # must not follow the step into re-work (the event log keeps the
+            # history); an explicit unblock note still wins.
+            clears_block_note = (
+                new_status == "READY" and str(step["status"]) == "BLOCKED"
+            )
             updates = {
                 "status": new_status,
                 "updated_at": now,
-                "note": note.strip() if note is not None else step.get("note"),
+                "note": (
+                    note.strip()
+                    if note is not None
+                    else (None if clears_block_note else step.get("note"))
+                ),
             }
             if new_status == "IN_PROGRESS":
                 updates["started_at"] = step.get("started_at") or now
@@ -1825,16 +1843,23 @@ def _cnc_sheets_csv(optimization: dict[str, object]) -> str:
     return "\n".join(rows_out) + "\n"
 
 
-# Settlement stamps (consumed_at on stock_reservations) are workflow
-# bookkeeping, not plan geometry — a file rendered pre-cut must still serve
-# after CUT-DONE marks its stock consumed. Everything else — layouts,
-# reservations, the invalidated flag — stays inside the fingerprint.
+# Settlement stamps (consumed_at on stock_reservations), wall-clock data
+# (optimized_at, actor_id) and measured runtime are bookkeeping, not plan
+# geometry — a file rendered pre-cut must still serve after CUT-DONE marks
+# its stock consumed, and re-running an identical plan must fingerprint
+# identically. Everything else — layouts, reservations, the invalidated
+# flag — stays inside the fingerprint.
+_FINGERPRINT_VOLATILE = frozenset({
+    "consumed_at", "optimized_at", "actor_id", "runtime_ms",
+})
+
+
 def _fingerprint_clean(value: object) -> object:
     if isinstance(value, dict):
         return {
             key: _fingerprint_clean(item)
             for key, item in value.items()
-            if key != "consumed_at"
+            if key not in _FINGERPRINT_VOLATILE
         }
     if isinstance(value, list):
         return [_fingerprint_clean(item) for item in value]
@@ -2737,12 +2762,11 @@ def _compute_optimization(
         reinforcement_skus=authorities.reinforcement_skus,
         reinforcement_angles=_reinforcement_angle_map(version_snapshot, position_id),
     )
-    # pieces_from_result already expands each unit's qty via unit_index;
-    # offset by the per-unit count so the identity stays unique per unit.
+    # pieces_from_result returns one unit's pieces; unit_index is the
+    # physical unit ordinal the workshop reads (u1 = first unit), while
+    # identical copies inside a unit are disambiguated inside piece_id.
     pieces = [
-        piece.model_copy(
-            update={"unit_index": (repetition - 1) * len(per_unit) + piece.unit_index}
-        )
+        piece.model_copy(update={"unit_index": repetition})
         for repetition in range(1, quantity + 1)
         for piece in per_unit
     ]
@@ -3260,6 +3284,14 @@ def optimize_work_order(
             "color": color,
             "units": quantity,
             "strategy": strategy,
+            # Which engine strategy physically produced this plan — the
+            # `auto` comparison's `chosen`, or the requested one outright.
+            "applied_strategy": (
+                str(bars.get("strategy_comparison", {}).get("chosen"))
+                if isinstance(bars.get("strategy_comparison"), dict)
+                and bars["strategy_comparison"].get("chosen")
+                else strategy
+            ),
             "bars": bars,
             "sheets": sheets,
             "sheet_purchases": sheet_purchases,

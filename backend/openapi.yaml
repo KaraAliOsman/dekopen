@@ -14255,7 +14255,7 @@ components:
         name:
           type: string
         role:
-          $ref: '#/components/schemas/RoleEnum'
+          $ref: '#/components/schemas/Role3ceEnum'
       required:
       - id
       - name
@@ -18974,7 +18974,7 @@ components:
         organization_name:
           type: string
         role:
-          $ref: '#/components/schemas/RoleEnum'
+          $ref: '#/components/schemas/Role3ceEnum'
       required:
       - organization_id
       - organization_name
@@ -21542,11 +21542,17 @@ components:
           type: string
           format: uuid
           nullable: true
+        step_code:
+          type: string
+          nullable: true
         event:
           type: string
         actor_id:
           type: string
           format: uuid
+          nullable: true
+        actor_label:
+          type: string
           nullable: true
         payload:
           type: object
@@ -22950,18 +22956,20 @@ components:
       - price_gross_delta
       - removed
       - unchanged
-    RoleEnum:
+    Role3ceEnum:
       enum:
       - OWNER
       - ESTIMATOR
       - WORKSHOP_MANAGER
       - INSTALLER
+      - OPERATOR
       type: string
       description: |-
         * `OWNER` - OWNER
         * `ESTIMATOR` - ESTIMATOR
         * `WORKSHOP_MANAGER` - WORKSHOP_MANAGER
         * `INSTALLER` - INSTALLER
+        * `OPERATOR` - OPERATOR
     RuleEvaluation:
       type: object
       properties:

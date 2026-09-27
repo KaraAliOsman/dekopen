@@ -95,7 +95,8 @@ def _one_factory():
         if "FROM public.project_versions" in query:
             return {"id": str(VERSION), "revision_code": "REV-A",
                     "snapshot_sha256": "s" * 64, "bom_hash": "b" * 64,
-                    "emitted_at": "t0", "production_allowed": True}
+                    "emitted_at": "t0", "production_allowed": True,
+                    "snapshot_json": json.dumps({"manufacturing": []})}
         raise AssertionError(query[:80])
     return fake_one
 
@@ -166,7 +167,8 @@ def test_trace_piece_walks_backward() -> None:
         raise AssertionError(query[:90])
 
     with patch("production.trace.rows", side_effect=fake_rows), \
-         patch("production.trace.one", side_effect=_one_factory()):
+         patch("production.trace.one", side_effect=_one_factory()), \
+         patch("production.trace.documentary_backend"):
         report = trace.trace_piece(org_id=ORG, piece_id=PIECE)
 
     bar_match, sheet_match = report["matches"]

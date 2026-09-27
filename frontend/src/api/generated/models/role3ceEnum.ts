@@ -11,12 +11,14 @@
  * * `ESTIMATOR` - ESTIMATOR
  * * `WORKSHOP_MANAGER` - WORKSHOP_MANAGER
  * * `INSTALLER` - INSTALLER
+ * * `OPERATOR` - OPERATOR
  */
-export type RoleEnum = (typeof RoleEnum)[keyof typeof RoleEnum];
+export type Role3ceEnum = (typeof Role3ceEnum)[keyof typeof Role3ceEnum];
 
-export const RoleEnum = {
+export const Role3ceEnum = {
   OWNER: "OWNER",
   ESTIMATOR: "ESTIMATOR",
   WORKSHOP_MANAGER: "WORKSHOP_MANAGER",
   INSTALLER: "INSTALLER",
+  OPERATOR: "OPERATOR",
 } as const;

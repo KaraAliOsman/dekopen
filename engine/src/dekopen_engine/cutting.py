@@ -227,9 +227,21 @@ def pieces_from_result(
             sagitta_mm=steel.sagitta_mm,
         )
         rows[key] = (piece, rows.get(key, (piece, 0))[1] + steel.qty)
-    return [piece.model_copy(update={"unit_index": index})
-            for key in sorted(rows) for piece, qty in [rows[key]]
-            for index in range(1, qty + 1)]
+    # unit_index is the physical unit ordinal (1..order quantity) — callers
+    # stamping a per-unit piece list leave it at 1 and the work-order loop
+    # assigns the real unit. Identical copies within one unit keep one spec
+    # hash but disambiguate piece_id like nested panes do (V-01-02), so the
+    # (position, piece_id, unit_index) identity key stays unique.
+    return [
+        piece.model_copy(update={
+            "unit_index": 1,
+            "piece_id": (
+                piece.piece_id if qty == 1 else f"{piece.piece_id}-{index:02d}"
+            ),
+        })
+        for key in sorted(rows) for piece, qty in [rows[key]]
+        for index in range(1, qty + 1)
+    ]
 
 
 def _piece_order(piece: CutPiece) -> tuple[Decimal, str, str, str, str, str, str, int]:

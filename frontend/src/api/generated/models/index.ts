@@ -449,7 +449,7 @@ export * from "./revisionCompareResponse";
 export * from "./revisionCompareSide";
 export * from "./revisionCompareSideIntegrity";
 export * from "./revisionCompareSummary";
-export * from "./roleEnum";
+export * from "./role3ceEnum";
 export * from "./ruleEvaluation";
 export * from "./ruleEvaluationStatusEnum";
 export * from "./searchResponse";

@@ -36,7 +36,7 @@ from inventory.serializers import (
 
 logger = logging.getLogger(__name__)
 
-_READERS = ("OWNER", "ESTIMATOR", "WORKSHOP_MANAGER")
+_READERS = ("OWNER", "ESTIMATOR", "WORKSHOP_MANAGER", "OPERATOR")
 _WRITERS = ("OWNER", "WORKSHOP_MANAGER")
 
 

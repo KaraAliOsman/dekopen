@@ -1318,7 +1318,10 @@ def test_optimize_work_order_builds_bar_plan_and_event() -> None:
     assert output["optimization"]["units"] == 2
     pieces_arg = cut.call_args[0][0]
     assert len(pieces_arg) == 4  # qty 2 per unit x 2 units
-    assert len({p.unit_index for p in pieces_arg}) == 4  # unique per-unit identity
+    # unit_index is the physical unit ordinal (u1/u2 on workshop labels);
+    # identical in-unit copies are disambiguated inside piece_id.
+    assert {p.unit_index for p in pieces_arg} == {1, 2}
+    assert len({(p.piece_id, p.unit_index) for p in pieces_arg}) == 4
     writes = seen["writes"]
     assert any("payload_json" in q for q in writes)
     assert any("WO_OPTIMIZED" in q for q in writes)

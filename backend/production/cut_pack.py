@@ -18,6 +18,7 @@ from documents.renderers import (
     _infill_code_map,
     _infill_key,
     _location,
+    _pct,
     _piece_labels,
     _table,
     _url_fetcher,
@@ -59,22 +60,26 @@ def _bar_svg(
     bar: dict[str, object],
     labels: dict[str, dict[object, str]],
     cut_map: dict[tuple[str, ...], str],
+    *,
+    span_mm: Decimal = Decimal("260"),
 ) -> str:
     """The wide strip the saw operator reads: head trim → pieces separated
     by kerf marks → tail trim → remainder (green when reusable, hatched when
     waste). Text is sized in physical millimetres — a 6000mm bar and a 900mm
     remnant render the same print size — and dense small pieces take leader
-    labels in alternating lanes so codes never overlap."""
+    labels in alternating lanes so codes never overlap. ``span_mm`` is the
+    printed width available on the page (landscape pack ≈ 260, portrait
+    DOC-05 ≈ 186)."""
     stock = _mm(bar["stock_length_mm"])
     head_trim = _mm(bar["head_trim_mm"])
     tail_trim = _mm(bar["tail_trim_mm"])
     kerf = _mm(bar["kerf_mm"])
     remainder = _mm(bar["remainder_mm"])
     cuts = [c for c in bar.get("cuts") or [] if isinstance(c, dict)]
-    # The strip renders ~260mm wide on the page: `u` viewBox units ≈ 1
+    # The strip renders ~span_mm wide on the page: `u` viewBox units ≈ 1
     # printed mm. Sizing every label off `u` keeps real print size constant
     # regardless of the stock length.
-    u = max(stock / Decimal("260"), Decimal("4"))
+    u = max(stock / span_mm, Decimal("4"))
     fs_code = u * Decimal("3.2")
     fs_dim = u * Decimal("2.8")
     fs_seq = u * Decimal("3.4")
@@ -387,7 +392,7 @@ def _pack_html(
                 f"{escape(_value(bar.get('commercial_sku')))} · "
                 f"{escape(_value(bar.get('material')))} · "
                 f"{_value(bar.get('stock_length_mm'))} mm {badge} · "
-                f"rendimiento {_value(bar.get('yield_pct'))}%</h3>"
+                f"rendimiento {_pct(bar.get('yield_pct'))}%</h3>"
                 + _bar_svg(bar, labels, cut_map)
                 + "</div>"
                 + _table(
@@ -430,7 +435,7 @@ def _pack_html(
                 f"{escape(_value(sheet.get('purchasing_sku')))} · "
                 f"{_value(sheet.get('sheet_width_mm'))}×"
                 f"{_value(sheet.get('sheet_height_mm'))} mm · "
-                f"rendimiento {_value(sheet.get('yield_pct'))}%</h3>"
+                f"rendimiento {_pct(sheet.get('yield_pct'))}%</h3>"
                 + _sheet_svg(sheet, labels, infills)
                 + "</div>"
             )

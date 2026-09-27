@@ -11,9 +11,13 @@ export interface ProductionStepEvent {
   id: string;
   /** @nullable */
   step_id: string | null;
+  /** @nullable */
+  step_code?: string | null;
   event: string;
   /** @nullable */
   actor_id: string | null;
+  /** @nullable */
+  actor_label?: string | null;
   payload: ProductionStepEventPayload;
   created_at: string;
 }

@@ -20,7 +20,7 @@ import type {
   ApiUrlEnum,
   Membership,
   PaymentIntegrationStatus,
-  RoleEnum,
+  Role3ceEnum,
   SiiCaf,
   SiiCertificate,
 } from "../api/generated/models";
@@ -30,11 +30,12 @@ import { t, type TranslationKey } from "../i18n/es-CL";
 import { MOD_K_HINT, MOD_KEY_HINT } from "../platform";
 import { useTheme } from "../theme/ThemeProvider";
 
-const ROLE_KEYS: Record<RoleEnum, TranslationKey> = {
+const ROLE_KEYS: Record<Role3ceEnum, TranslationKey> = {
   OWNER: "settings.roleOwner",
   ESTIMATOR: "settings.roleEstimator",
   WORKSHOP_MANAGER: "settings.roleWorkshopManager",
   INSTALLER: "settings.roleInstaller",
+  OPERATOR: "settings.roleOperator",
 };
 
 function FilePick({

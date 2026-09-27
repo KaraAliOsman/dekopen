@@ -72,11 +72,11 @@ from production.serializers import (
 
 logger = logging.getLogger(__name__)
 
-_READERS = ("OWNER", "ESTIMATOR", "WORKSHOP_MANAGER", "INSTALLER")
+_READERS = ("OWNER", "ESTIMATOR", "WORKSHOP_MANAGER", "INSTALLER", "OPERATOR")
 _STEP_ACTORS = ("OWNER", "WORKSHOP_MANAGER", "INSTALLER")
 # Station steps are workshop authority — INSTALLER's field role ends at
 # delivery/installation confirmation, not at weld/glaze/QC sign-off.
-_WORKSHOP_STEP_ACTORS = ("OWNER", "WORKSHOP_MANAGER")
+_WORKSHOP_STEP_ACTORS = ("OWNER", "WORKSHOP_MANAGER", "OPERATOR")
 _LEDGER_WRITERS = ("OWNER", "ESTIMATOR")
 _WRITERS = ("OWNER", "WORKSHOP_MANAGER")
 

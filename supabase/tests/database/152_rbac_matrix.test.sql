@@ -1,7 +1,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
 SET LOCAL search_path = public, private, auth, extensions, pg_temp;
-SELECT plan(17);
+SELECT plan(18);
 
 -- §B RBAC matrix — functional verification that PostgREST (the
 -- `authenticated` role) is at least as restrictive as the Django role gates.
@@ -209,6 +209,12 @@ SELECT policies_are(
     'public', 'clients',
     ARRAY['clients_member_read', 'clients_member_insert', 'clients_member_update'],
     'clients exposes member-read + estimator-write policies only'
+);
+
+SELECT enum_has_labels(
+    'public', 'org_role',
+    ARRAY['OWNER', 'ESTIMATOR', 'WORKSHOP_MANAGER', 'INSTALLER', 'OPERATOR'],
+    'org_role carries the OPERATOR station role'
 );
 
 SELECT * FROM finish();

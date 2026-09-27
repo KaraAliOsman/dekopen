@@ -179,8 +179,13 @@ export function OperatorStepCard({
     : [];
   const sawOps = stepOps.filter((op) => op.kind === "SAW_CUT");
   const memberOps = stepOps.filter((op) => op.kind !== "SAW_CUT");
+  // Stations that consume no stock (WELD, CLEAN, SASH_ASSEMBLE, CRIMP,
+  // QC, PACK) still own the physical pieces — the sealed cut/sheet lists
+  // are their work checklist, not a CUT-only artifact.
+  const consumesStock = kinds.length > 0;
+  const showPieces = step.code === "CUT" || step.code === "GLAZE" || !consumesStock;
   const cutPieces: Array<{ barIndex: number; source?: string } & CutPiece> = [];
-  if (step.code === "CUT") {
+  if (step.code === "CUT" || !consumesStock) {
     for (const bar of bars) {
       const cuts = (bar.cuts as CutPiece[] | undefined) ?? [];
       for (const cut of cuts) {
@@ -194,7 +199,7 @@ export function OperatorStepCard({
     cutPieces.sort((a, b) => a.barIndex - b.barIndex || (a.sequence ?? 0) - (b.sequence ?? 0));
   }
   const sheetPieces: SheetPiece[] = [];
-  if (step.code === "GLAZE" || step.code === "CUT") {
+  if (showPieces) {
     for (const sheet of sheets) {
       for (const piece of (sheet.pieces as SheetPiece[] | undefined) ?? []) {
         sheetPieces.push(piece);
@@ -248,7 +253,7 @@ export function OperatorStepCard({
                       <th>{t("production.stockNeeded")}</th>
                       <th>{t("production.stockReserved")}</th>
                       <th>{t("production.stockShort")}</th>
-                      <th>{t("production.stockConsumed")}</th>
+                      <th>{t("production.stockConsumedAt")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -296,9 +301,16 @@ export function OperatorStepCard({
             </div>
           ) : null}
 
-          {step.code === "CUT" || step.code === "MACHINING" || stepOps.length ? (
+          {step.code === "CUT" ||
+          step.code === "MACHINING" ||
+          stepOps.length ||
+          (!consumesStock && (cutPieces.length || sheetPieces.length)) ? (
             <div className="operator-section">
-              <h4>{t("production.operatorSequence")}</h4>
+              <h4>
+                {step.code === "CUT" || step.code === "MACHINING" || stepOps.length
+                  ? t("production.operatorSequence")
+                  : t("production.operatorPieces")}
+              </h4>
               {stepOps.length ? (
                 <>
                   {sawOps.length ? (
@@ -408,7 +420,7 @@ export function OperatorStepCard({
             </div>
           ) : null}
 
-          {step.code === "GLAZE" && sheetPieces.length ? (
+          {(step.code === "GLAZE" || !consumesStock) && sheetPieces.length ? (
             <div className="operator-section">
               <h4>{t("production.operatorPieces")}</h4>
               <table className="production-plan operator-pieces">
@@ -443,7 +455,7 @@ export function OperatorStepCard({
             <QcCheckSection step={step} trace={trace} onQcCheck={onQcCheck} />
           ) : null}
 
-          {!kinds.length ? (
+          {!consumesStock && !cutPieces.length && !sheetPieces.length ? (
             <p className="operator-summary">
               {t("production.operatorNoStock")} · {totalPieces}{" "}
               {t("production.operatorPiecesTotal")}

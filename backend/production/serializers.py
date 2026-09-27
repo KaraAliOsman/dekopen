@@ -78,8 +78,10 @@ class ProductionOrderListSerializer(serializers.Serializer):
 class ProductionStepEventSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     step_id = serializers.UUIDField(allow_null=True)
+    step_code = serializers.CharField(allow_null=True, required=False)
     event = serializers.CharField()
     actor_id = serializers.UUIDField(allow_null=True)
+    actor_label = serializers.CharField(allow_null=True, required=False)
     payload = serializers.DictField()
     created_at = serializers.DateTimeField()
 

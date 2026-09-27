@@ -1,7 +1,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
 SET LOCAL search_path = public, private, auth, extensions, pg_temp;
-SELECT plan(23);
+SELECT plan(25);
 
 SELECT has_table('public', 'work_centers', 'work centers table exists');
 SELECT has_table('public', 'production_steps', 'routing steps table exists');
@@ -170,6 +170,17 @@ SELECT ok(
           AND pg_get_constraintdef(oid) LIKE '%SASH_ASSEMBLY%'
     ),
     'work center kinds accept the real shop vocabulary (§29/§30)'
+);
+SELECT has_column(
+    'public', 'production_step_events', 'actor_label',
+    'step events carry a human actor label'
+);
+SELECT ok(
+    EXISTS (
+        SELECT 1 FROM pg_trigger
+        WHERE tgname = 'production_step_events_actor_label'
+    ),
+    'actor_label fills from the verified JWT claims on insert'
 );
 SELECT * FROM finish();
 ROLLBACK;

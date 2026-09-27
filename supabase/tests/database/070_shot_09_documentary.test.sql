@@ -1,7 +1,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET LOCAL search_path=public,extensions;
-SELECT plan(98);
+SELECT plan(99);
 SELECT ok(relrowsecurity,relname||' has RLS') FROM pg_class
  WHERE relnamespace='public'::regnamespace AND relname IN
  ('manufacturing_placement_policies','handle_requirement_policies','reinforcement_cut_policies',
@@ -196,5 +196,14 @@ SELECT lives_ok($$INSERT INTO suppliers(org_id,tax_id,name) VALUES('88600000-000
 SELECT throws_ok($$INSERT INTO suppliers(org_id,tax_id,name) VALUES('88600000-0000-4000-8000-000000000001','76.111-2','Otra Vidrieria')$$,'23505',NULL,'one supplier per org tax id');
 SELECT lives_ok($$INSERT INTO suppliers(org_id,tax_id,name) VALUES('88600000-0000-4000-8000-000000000002','76.111-2','Otra Org')$$,'same tax id may exist for another org');
 SELECT throws_ok($$INSERT INTO suppliers(org_id,tax_id,name) VALUES('88600000-0000-4000-8000-000000000001','','Sin nombre')$$,'23514',NULL,'empty tax id rejected');
+SELECT ok(
+    EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE schemaname = 'public' AND tablename = 'projects'
+          AND policyname = 'project_documentary_backend_lock'
+          AND cmd = 'UPDATE'
+    ),
+    'documentary_backend can lock project rows (POD confirm) without gaining UPDATE grants'
+);
 SELECT * FROM finish();
 ROLLBACK;

@@ -9,6 +9,14 @@ export function formatRevision(code: string | null | undefined): string {
 
 /** Display a decimal millimetre string at business precision: "1200.0000" →
  * "1200", "235.50" → "235.5". Non-decimal text passes through untouched. */
+/** Yield/utilization percentages display at one decimal (93.5, not 93.4667). */
+export function fmtPct(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const num = Number(value);
+  if (!Number.isFinite(num)) return String(value);
+  return num.toFixed(1);
+}
+
 export function fmtMm(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === "") return "—";
   const text = String(value);

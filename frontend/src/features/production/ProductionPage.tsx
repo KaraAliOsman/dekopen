@@ -50,7 +50,7 @@ import { ApiError, apiFetchBlob } from "../../api/apiMutator";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
 import { formatDateTime } from "../../format";
 import { DeniedState, usePrompt } from "../../ui";
-import { fmtMm } from "../../format";
+import { fmtMm, fmtPct } from "../../format";
 import { formatDate } from "../money";
 import { t, tDynamic } from "../../i18n/es-CL";
 import { useAssistantSurface } from "../assistant/assistantContext";
@@ -825,7 +825,7 @@ export function ProductionPage(): JSX.Element {
 
   const canAct = role === "OWNER" || role === "WORKSHOP_MANAGER" || role === "INSTALLER";
   const canWrite = role === "OWNER" || role === "WORKSHOP_MANAGER";
-  const canStep = canWrite || role === "INSTALLER";
+  const canStep = canWrite || role === "INSTALLER" || role === "OPERATOR";
   if (!canAct) {
     return (
       <section className="production-page">
@@ -1292,6 +1292,16 @@ export function ProductionPage(): JSX.Element {
                   >
                     <header className="production-optimize-head">
                       <h3>{t("production.optimizeTitle")}</h3>
+                      {optimization?.applied_strategy || optimization?.strategy ? (
+                        <span className="production-remnant-tag">
+                          {t("production.optimizeStrategy")}:{" "}
+                          {t(
+                            `production.optimizeVariant.${String(
+                              optimization.applied_strategy ?? optimization.strategy,
+                            )}` as Parameters<typeof t>[0],
+                          ) || String(optimization.applied_strategy ?? optimization.strategy)}
+                        </span>
+                      ) : null}
                       {optimization?.optimized_at ? (
                         <time dateTime={optimization.optimized_at}>
                           {t("production.optimizeRunAt")}:
@@ -1608,7 +1618,7 @@ export function ProductionPage(): JSX.Element {
                                       </span>
                                     ) : null}
                                   </td>
-                                  <td>{bar.yield_pct}%</td>
+                                  <td>{fmtPct(bar.yield_pct)}%</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -1651,7 +1661,7 @@ export function ProductionPage(): JSX.Element {
                                       <th>{t("production.stockNeeded")}</th>
                                       <th>{t("production.stockReserved")}</th>
                                       <th>{t("production.stockShort")}</th>
-                                      <th>{t("production.stockConsumed")}</th>
+                                      <th>{t("production.stockConsumedAt")}</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -1725,9 +1735,9 @@ export function ProductionPage(): JSX.Element {
                                   {[
                                     `${metrics.bars ?? 0} barras`,
                                     `${metrics.purchased_bars ?? 0} compra`,
-                                    `${metrics.remnant_bars ?? 0} remanentes`,
-                                    `${metrics.process_waste_mm ?? "0"} mm desperdicio`,
-                                    `${metrics.reusable_remnant_mm ?? "0"} mm reutilizable`,
+                                    `${metrics.remnant_bars ?? 0} barras retazo`,
+                                    `${metrics.process_waste_mm ?? "0"} mm merma de proceso`,
+                                    `${metrics.reusable_remnant_mm ?? "0"} mm retazo reutilizable`,
                                     `${metrics.cuts ?? 0} cortes`,
                                   ].join(" · ")}
                                 </p>
@@ -1802,7 +1812,7 @@ export function ProductionPage(): JSX.Element {
                                       )
                                       .join(" · ")}
                                   </td>
-                                  <td>{layout.yield_pct}%</td>
+                                  <td>{fmtPct(layout.yield_pct)}%</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -2490,10 +2500,14 @@ export function ProductionPage(): JSX.Element {
                 <ol>
                   {detail.events.map((event) => {
                     const eventNote = (event.payload as { note?: unknown } | undefined)?.note;
+                    const eventStep = detail.steps.find((step) => step.id === event.step_id);
+                    const stepName = event.step_code ?? eventStep?.label ?? eventStep?.code;
                     return (
                       <li key={event.id}>
                         <time dateTime={event.created_at}>{formatDateTime(event.created_at)}</time>
+                        {stepName ? <strong>{stepName} · </strong> : null}
                         <span>{t(eventKey[event.event] ?? "production.eventNote")}</span>
+                        {event.actor_label ? <span> · {event.actor_label}</span> : null}
                         {typeof eventNote === "string" && eventNote.trim() ? (
                           <em className="production-event-note">{eventNote}</em>
                         ) : null}

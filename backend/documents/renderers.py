@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import re
 from decimal import Decimal
 from html import escape
 from pathlib import Path
@@ -89,6 +90,11 @@ tbody tr:last-child td { border-bottom: 0.9pt solid #465158; }
 .workshop h1 { font-size: 14pt; } .workshop th { background: #252D31; color: #FCFDFC; }
 .dimension { font: 11pt 'IBM Plex Mono', monospace; font-weight: 500; color: #161C1F; }
 .hash { font: 6.5pt 'IBM Plex Mono', monospace; color: #465158; overflow-wrap: anywhere; }
+.qc-box { display: inline-block; width: 3.2mm; height: 3.2mm; border: 0.45mm solid #111;
+    vertical-align: -0.5mm; }
+.bar-band { break-inside: avoid; display: inline-block; width: 100%; margin-bottom: 4mm; }
+.bar-svg { width: 100%; height: auto; display: block; }
+.bar-svg text { font-family: 'IBM Plex Mono', monospace; }
 .break-avoid { break-inside: avoid; } h2, h3 { break-after: avoid; } .blank { display: inline-block; width: 5mm; height: 5mm; border: 1px solid #252D31; vertical-align: middle; }
 .confidential { color: #991B1B; font-weight: 600; font-size: 6.5pt; text-transform: uppercase; letter-spacing: 0.8pt; }
 .voided-banner { border: 1.5pt solid #991B1B; color: #991B1B; padding: 3mm 5mm; margin: 3mm 0; break-inside: avoid; }
@@ -101,7 +107,7 @@ tbody tr:last-child td { border-bottom: 0.9pt solid #465158; }
 .sign-cell.sign-date { flex: 0 0 22mm; }
 .sign-label { position: absolute; bottom: -4.5mm; left: 0; font: 600 6pt 'IBM Plex Mono', monospace; text-transform: uppercase; letter-spacing: 0.08em; color: #727D82; }
 table tr { break-inside: avoid; }
-.sol-table td.dimension, table td.dimension { text-align: right; white-space: nowrap; }
+.sol-table td.dimension, table td.dimension { text-align: right; overflow-wrap: anywhere; }
 .nowrap { white-space: nowrap; }
 svg:not(.miter) { max-width: 100%; height: auto; display: block; } svg text { font-family: 'IBM Plex Mono', monospace; }
 .figures { display: flex; flex-wrap: wrap; gap: 4mm; margin: 2mm 0 4mm; }
@@ -229,8 +235,22 @@ def _value(value: object) -> str:
     raise DocumentaryError("pdf_value_not_scalar")
 
 
+def _pct(value: object) -> str:
+    """Yield percentages print at one decimal — 93.5%, not 93.4667%."""
+    if value is None:
+        return "—"
+    return format(Decimal(str(value)).quantize(Decimal("0.1")), "f")
+
+
+class _Raw(str):
+    """Marks a cell that renders its HTML verbatim inside `_table` — only for
+    hardcoded markup (e.g. a drawn checkbox), never for payload content."""
+
+
 def _cell(value: object, class_name: str = "") -> str:
     css = f' class="{escape(class_name)}"' if class_name else ""
+    if isinstance(value, _Raw):
+        return f"<td{css}>{value}</td>"
     return f"<td{css}>{escape(_value(value))}</td>"
 
 
@@ -1592,10 +1612,40 @@ def _role_name(value: object) -> str:
 
 
 def _join_codes(codes: list[str]) -> str:
+    """Join printed piece codes without hiding identity. Short lists join
+    fully; longer runs of contiguous same-prefix codes compress to a range
+    (``M-06–M-09``); only a truly mixed bag falls back to a count suffix."""
     unique = sorted(set(codes))
-    if len(unique) <= 3:
+    if len(unique) <= 4:
         return " · ".join(unique)
-    return f"{unique[0]} · +{len(unique) - 1}"
+    grouped: dict[str, list[int]] = {}
+    rest: list[str] = []
+    for code in unique:
+        match = re.match(r"^([A-ZÁÉÍÓÚÑ]+-?)(\d+)$", code)
+        if match:
+            grouped.setdefault(match.group(1), []).append(int(match.group(2)))
+        else:
+            rest.append(code)
+    parts: list[str] = []
+    for prefix, digits in grouped.items():
+        digits.sort()
+        start = prev = digits[0]
+        run: list[int] = []
+        for digit in digits[1:] + [-1]:
+            if digit == prev + 1:
+                prev = digit
+                continue
+            if prev - start >= 2:
+                parts.append(f"{prefix}{start}–{prefix}{prev}")
+            else:
+                run.extend(range(start, prev + 1))
+            start = prev = digit
+        parts.extend(f"{prefix}{d}" for d in run)
+    parts.extend(rest)
+    joined = " · ".join(parts)
+    if len(parts) <= 4:
+        return joined
+    return f"{parts[0]} · … · {parts[-1]} · +{len(unique) - 2}" if len(unique) > 6 else joined
 
 
 def _cut_spec_index(
@@ -1767,17 +1817,37 @@ def _doc05(snapshot: dict[str, object]) -> str:
         body += (
             f"<h2>{escape(_value(group.get('purchasing_sku')))} · "
             f"{escape(_value(group.get('source_kind')))}</h2>"
-            f"<p><strong>Stock físico:</strong> {escape(_short_id(group.get('physical_stock_identity')))} · "
-            f"<strong>Largo:</strong> {escape(_value(group.get('stock_length_mm')))} mm · "
-            f"<strong>Barras:</strong> {escape(_value(group.get('purchased_bar_count')))}</p>"
+            f"<p><strong>Largo:</strong> {escape(_value(group.get('stock_length_mm')))} mm · "
+            f"<strong>Barras:</strong> {escape(_value(group.get('purchased_bar_count')))} · "
+            f'<span class="hash">stock {escape(_value(group.get("physical_stock_identity")))}</span></p>'
         )
         for bar_value in _array(group.get("bars"), "invalid_stock_group"):
             bar = _object(bar_value, "invalid_cut_bar")
             cuts = [_object(item, "invalid_cut_piece")
                     for item in _array(bar.get("cuts"), "invalid_cut_bar")]
+            # Deferred import: cut_pack borrows the shared helpers from this
+            # module, so pulling the strip lazily keeps the dependency one-way.
+            from production.cut_pack import _bar_svg
+
+            remainder_label = (
+                "retazo reutilizable"
+                if bar.get("remainder_reusable")
+                else "remanente"
+            )
             body += (
-                f"<h3>Barra {escape(_value(bar.get('bar_index')))} · remanente "
-                f"{escape(_value(bar.get('remainder_mm')))} mm</h3>"
+                f"<h3>Barra {escape(_value(bar.get('bar_index')))} · "
+                f"{escape(_value(bar.get('commercial_sku')))} · "
+                f"{escape(_value(bar.get('stock_length_mm')))} mm · "
+                f"{remainder_label} {escape(_value(bar.get('remainder_mm')))} mm"
+                + (
+                    f" · aprovechamiento {_pct(bar.get('yield_pct'))}%"
+                    if bar.get("yield_pct") is not None
+                    else ""
+                )
+                + "</h3>"
+                + '<div class="bar-band">'
+                + _bar_svg(bar, labels, cut_map, span_mm=Decimal("186"))
+                + "</div>"
                 + _table(
                     ["Sec.", "Pieza física", "Posición", "Vano / hoja", "SKU taller", "Corte mm", "Ángulos", "Flecha mm"],
                     [[cut.get("sequence"),
@@ -1786,7 +1856,9 @@ def _doc05(snapshot: dict[str, object]) -> str:
                           cut.get("source_position_id"),
                           _short_id(cut.get("source_position_id")),
                       ),
-                      _location(labels, cut.get("bay_id"), cut.get("leaf_id")),
+                      (f"u{cut.get('unit_index')} · "
+                       if cut.get("unit_index") is not None else "")
+                      + _location(labels, cut.get("bay_id"), cut.get("leaf_id")),
                       cut.get("workshop_sku"), cut.get("length_mm"),
                       f"{_value(cut.get('angle_left'))}° / {_value(cut.get('angle_right'))}°",
                       cut.get("sagitta_mm") if cut.get("sagitta_mm") is not None else "—"]
@@ -1810,18 +1882,24 @@ def _doc06(snapshot: dict[str, object]) -> str:
         r10 = config.get("R10")
         if isinstance(r10, dict) and r10.get("tolerance_mm") is not None:
             tolerance = _value(r10.get("tolerance_mm"))
+    # The Cumple box is a drawn element — glyph boxes (□/☐) rasterize as tofu
+    # under several WeasyPrint font stacks.
+    box = '<span class="qc-box"></span>'
     rows = [
-        ["Escuadra de diagonales", f"Diferencia ≤ {tolerance} mm", "□", "________________"],
-        ["Burletes y estanqueidad", "Continuidad visual y cierre", "□", "________________"],
-        ["Desagües", "Libres y según diseño congelado", "□", "________________"],
-        ["Herrajes", "Operación y calibración física", "□", "________________"],
-        ["Vidrios / paneles", "Sin daño y correctamente retenidos", "□", "________________"],
+        ["Escuadra de diagonales", f"Diferencia ≤ {tolerance} mm", box, "________________"],
+        ["Burletes y estanqueidad", "Continuidad visual y cierre", box, "________________"],
+        ["Desagües", "Libres y según diseño congelado", box, "________________"],
+        ["Herrajes", "Operación y calibración física", box, "________________"],
+        ["Vidrios / paneles", "Sin daño y correctamente retenidos", box, "________________"],
     ]
-    body += _table(["Control", "Criterio esperado", "Cumple", "Medición / observación"], rows)
+    body += _table(
+        ["Control", "Criterio esperado", "Cumple", "Medición / observación"],
+        [[check, criterion, _Raw(box_html), notes] for check, criterion, box_html, notes in rows],
+    )
     body += (
         "<p><strong>Operador:</strong> ______________________________</p>"
         "<p><strong>Fecha de ejecución QC:</strong> __________________</p>"
-        "<p><strong>Resultado físico:</strong> ☐ Pendiente &nbsp; ☐ Conforme &nbsp; ☐ No conforme</p>"
+        f"<p><strong>Resultado físico:</strong> {box} Pendiente &nbsp; {box} Conforme &nbsp; {box} No conforme</p>"
         "<div class=\"signature\"></div><p>Firma responsable QC</p></main>"
     )
     return body

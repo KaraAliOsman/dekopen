@@ -895,6 +895,7 @@ export const messages = {
   "settings.roleEstimator": "Estimador",
   "settings.roleWorkshopManager": "Jefe de taller",
   "settings.roleInstaller": "Instalador",
+  "settings.roleOperator": "Operador de taller",
   "settings.appearance": "Apariencia",
   "settings.theme": "Tema",
   "settings.light": "Claro",
@@ -960,6 +961,7 @@ export const messages = {
   "shell.role.estimator": "Estimador",
   "shell.role.workshopManager": "Jefe de taller",
   "shell.role.installer": "Instalador",
+  "shell.role.operator": "Operador",
   "page.dashboard": "Panel del taller",
   "page.dashboardDescription":
     "Crea un proyecto, configura sus vanos y prepara la cotización del taller.",
@@ -1578,6 +1580,7 @@ export const messages = {
   "production.stockReserved": "Reservado",
   "production.stockShort": "Faltante",
   "production.stockConsumed": "Consumido",
+  "production.stockConsumedAt": "Consumida el",
   "production.stockUnmapped": "Sin autoridad de compra declarada",
   "production.traceTitle": "Trazabilidad",
   "production.traceLoad": "Ver cadena completa",

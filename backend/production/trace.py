@@ -30,6 +30,7 @@ from documents.renderers import (
     _infill_code_map,
     _infill_key,
     _infill_spec_index,
+    _location,
     _piece_labels,
 )
 
@@ -419,6 +420,25 @@ def _piece_hits(
 
 
 _CODE_RE = re.compile(r"^(MAN|M|R|I|V|H)-?(\d+)$|^P-?(\d+)$|^-?U(\d+)$", re.IGNORECASE)
+# Scanned unit-label identities: the packing QR payload
+# ``DEKOPEN|<order_code>|<label_code>|<pieces>`` and the printed label code
+# ``<order_code>-U<nn>`` both end in the unit marker.
+_QR_RE = re.compile(r"^DEKOPEN\|[^|]+\|([^|]+)\|", re.IGNORECASE)
+_UNIT_SUFFIX_RE = re.compile(r"-?U(\d+)$", re.IGNORECASE)
+
+
+def _normalize_query(query: str) -> str:
+    """Reduce a scanned QR payload or printed label code to the piece code
+    grammar ``_CODE_RE`` understands — operators scan what the label carries,
+    not the raw spec codes."""
+    text = query.strip().upper()
+    qr = _QR_RE.match(text)
+    if qr:
+        text = qr.group(1)
+    unit = _UNIT_SUFFIX_RE.search(text)
+    if unit and not _CODE_RE.match(text):
+        return f"U{unit.group(1)}"
+    return text
 
 
 def _resolve_code(
@@ -428,7 +448,7 @@ def _resolve_code(
     reinforcement, infill, bay, leaf and position ids — so a scanned
     M-03/I-02/-U01 hits the same pieces the paper label does. Returns the
     label maps plus the resolved id sets (empty dict when nothing resolves)."""
-    match = _CODE_RE.match(query.strip().upper())
+    match = _CODE_RE.match(_normalize_query(query))
     if not match:
         return {}
     try:
@@ -491,9 +511,10 @@ def _resolve_code(
 def trace_piece(*, org_id: UUID, piece_id: str) -> dict[str, Any]:
     """Backward lookup: which work order(s) and plan location carry a
     physical piece — walk from the piece back to order → version → project."""
-    if not piece_id or len(piece_id) > 128:
+    if not piece_id or len(piece_id) > 256:
         raise DocumentaryError("work_order_piece_invalid")
-    code_query = bool(_CODE_RE.match(piece_id.strip().upper()))
+    normalized = _normalize_query(piece_id)
+    code_query = bool(_CODE_RE.match(normalized))
     # A printed code never appears inside payload_json, so the LIKE prefilter
     # only applies to raw piece_id scans — code lookups scan every order in
     # the org (bounded; an operator scan is a rare call).
@@ -510,23 +531,32 @@ def trace_piece(*, org_id: UUID, piece_id: str) -> dict[str, Any]:
     )
     matches: list[dict[str, Any]] = []
     snapshots: dict[str, dict[str, Any]] = {}
+
+    def _snapshot(version_id: str) -> dict[str, Any]:
+        if version_id not in snapshots:
+            with documentary_backend():
+                snapshot_row = one(
+                    """
+                    SELECT snapshot_json::text
+                    FROM public.project_versions
+                    WHERE id = %s AND org_id = %s
+                    """,
+                    [version_id, str(org_id)],
+                    "work_order_not_found",
+                )
+            snapshots[version_id] = _decoded(snapshot_row["snapshot_json"])
+        return snapshots[version_id]
+
     for order in orders:
         resolved: dict[str, Any] = {}
-        if code_query and order["project_version_id"]:
-            version_id = str(order["project_version_id"])
-            if version_id not in snapshots:
-                with documentary_backend():
-                    snapshot_row = one(
-                        """
-                        SELECT snapshot_json::text
-                        FROM public.project_versions
-                        WHERE id = %s AND org_id = %s
-                        """,
-                        [version_id, str(org_id)],
-                        "work_order_not_found",
-                    )
-                snapshots[version_id] = _decoded(snapshot_row["snapshot_json"])
-            resolved = _resolve_code(snapshots[version_id], piece_id)
+        labels: dict[str, dict[Any, str]] = {}
+        # A code lookup resolves against the sealed snapshot before the piece
+        # scan; a raw piece_id scan only needs the snapshot once the order
+        # actually carries a hit (saves one read per non-matching order).
+        if order["project_version_id"] and code_query:
+            resolved = _resolve_code(
+                _snapshot(str(order["project_version_id"])), piece_id
+            )
         hits = _piece_hits(
             order,
             piece_id,
@@ -541,6 +571,25 @@ def trace_piece(*, org_id: UUID, piece_id: str) -> dict[str, Any]:
         )
         if not hits:
             continue
+        if order["project_version_id"]:
+            try:
+                labels = _piece_labels(
+                    _snapshot(str(order["project_version_id"]))
+                )
+            except DocumentaryError:
+                labels = {}
+        # Stamp the human location on every hit: two pieces on the same bar
+        # read identically until the position/unit/vano-hoja codes join them.
+        for hit in hits:
+            piece = hit.get("piece") or {}
+            hit["position_code"] = labels.get("position", {}).get(
+                piece.get("source_position_id")
+            )
+            hit["location_code"] = (
+                _location(labels, piece.get("bay_id"), piece.get("leaf_id"))
+                if labels
+                else None
+            )
         steps = rows(
             """
             SELECT sequence, code, label, status

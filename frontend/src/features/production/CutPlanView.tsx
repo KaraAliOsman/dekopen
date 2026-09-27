@@ -121,6 +121,8 @@ export type WorkOrderOptimization = {
   optimized_at?: string;
   actor_id?: string;
   strategy?: string;
+  /** The strategy that physically produced this plan (auto → its `chosen`). */
+  applied_strategy?: string;
   bars?: {
     workshop_cut_plan?: CutBar[];
     purchase_list?: PurchaseLine[];

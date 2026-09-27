@@ -57,12 +57,15 @@ type PieceMatch = {
     kind?: string;
     bar_index?: number;
     sheet_index?: number;
+    position_code?: string;
+    location_code?: string;
     piece?: {
       role?: string;
       length_mm?: string;
       bay_id?: string;
       leaf_id?: string;
       code?: string;
+      unit_index?: number;
     };
   };
   steps?: Array<{ sequence?: number; code?: string; label?: string; status?: string }>;
@@ -198,6 +201,11 @@ export function TracePieceMatches({ report }: { report: ProductionPieceTrace }) 
             ? ` · ${t("production.traceBar")} ${match.location.bar_index ?? "—"}`
             : ` · ${t("production.traceSheet")} ${match.location?.sheet_index ?? "—"}`}
           {match.location?.piece?.code ? ` · ${match.location.piece.code}` : ""}
+          {match.location?.piece?.unit_index != null
+            ? ` · u${match.location.piece.unit_index}`
+            : ""}
+          {match.location?.position_code ? ` · ${match.location.position_code}` : ""}
+          {match.location?.location_code ? ` · ${match.location.location_code}` : ""}
           {match.location?.piece?.role ? ` · ${match.location.piece.role}` : ""}
           {match.location?.piece?.length_mm ? ` · ${fmtMm(match.location.piece.length_mm)} mm` : ""}
           {match.steps?.length
