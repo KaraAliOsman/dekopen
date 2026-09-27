@@ -1,7 +1,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
 SET LOCAL search_path = public, private, auth, extensions, pg_temp;
-SELECT plan(2);
+SELECT plan(3);
 
 SELECT ok(
     EXISTS (
@@ -20,6 +20,11 @@ SELECT ok(
           AND 'authenticated' = ANY(roles)
     ),
     'members do NOT gain the portal payment read'
+);
+
+SELECT ok(
+    has_table_privilege('portal_backend', 'public.project_payment_links', 'SELECT'),
+    'portal_backend can read the live payment link the proposal renders'
 );
 
 SELECT * FROM finish();

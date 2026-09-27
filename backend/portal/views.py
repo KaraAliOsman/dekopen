@@ -64,6 +64,10 @@ def public_portal_errors():
             raise contract_error(
                 409, error.code, "Esta cotización fue reemplazada por una revisión nueva."
             ) from error
+        if error.code == "quote_already_decided":
+            raise contract_error(
+                409, error.code, "Esta cotización ya fue respondida."
+            ) from error
         raise contract_error(
             422, error.code, "La acción sobre la cotización fue rechazada."
         ) from error

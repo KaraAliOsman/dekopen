@@ -21922,6 +21922,18 @@ components:
         emitted_at:
           type: string
           format: date-time
+        sealed_price_net:
+          type: string
+          nullable: true
+        sealed_price_tax:
+          type: string
+          nullable: true
+        sealed_price_gross:
+          type: string
+          nullable: true
+        sealed_currency:
+          type: string
+          nullable: true
       required:
       - authority_version
       - bom_hash

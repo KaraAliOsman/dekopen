@@ -116,6 +116,10 @@ class ProjectVersionResponseSerializer(serializers.Serializer):
     production_allowed = serializers.BooleanField(allow_null=True)
     documentary_complete = serializers.BooleanField(allow_null=True)
     emitted_at = serializers.DateTimeField()
+    sealed_price_net = serializers.CharField(allow_null=True, required=False)
+    sealed_price_tax = serializers.CharField(allow_null=True, required=False)
+    sealed_price_gross = serializers.CharField(allow_null=True, required=False)
+    sealed_currency = serializers.CharField(allow_null=True, required=False)
 
 
 class ProjectResponseSerializer(ProjectWriteSerializer):

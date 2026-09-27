@@ -360,10 +360,21 @@ def portal_quote(token: str) -> dict[str, object]:
         )
         gross = Decimal(str(sealed.get("total_price_gross") or "0"))
         superseded = str(project["current_revision"]) != str(version["revision_code"])
+        validity_expired = bool(
+            sealed.get("quotation_valid_until")
+            and date.fromisoformat(str(sealed["quotation_valid_until"]))
+            < datetime.now(timezone.utc).date()
+        )
         # A live Flow link the estimator already minted is the proposal's next
-        # step — only for CLP deals (the provider charges CLP).
+        # step — only for CLP deals (the provider charges CLP), and never on a
+        # dead revision or lapsed validity: paying a superseded quote is worse
+        # than no button.
         payment_url = None
-        if str(sealed.get("currency") or "CLP") == "CLP":
+        if (
+            str(sealed.get("currency") or "CLP") == "CLP"
+            and not superseded
+            and not validity_expired
+        ):
             live_link = rows(
                 "SELECT url FROM public.project_payment_links "
                 "WHERE org_id=%s AND project_id=%s AND status='PENDING' AND url IS NOT NULL "
@@ -400,11 +411,7 @@ def portal_quote(token: str) -> dict[str, object]:
             ),
             "payment_url": payment_url,
             "valid_until": sealed.get("quotation_valid_until"),
-            "validity_expired": bool(
-                sealed.get("quotation_valid_until")
-                and date.fromisoformat(str(sealed["quotation_valid_until"]))
-                < datetime.now(timezone.utc).date()
-            ),
+            "validity_expired": validity_expired,
             "superseded": superseded,
             "expires_at": approval["expires_at"].isoformat(),
             "approval_status": approval["status"],
@@ -550,13 +557,15 @@ def decide_quote(
                 raise DocumentaryError("quote_validity_expired")
             project = _live_project(approval, for_update=True)
             live_status = str(project["status"])
-            if str(project["current_revision"]) != str(version["revision_code"]) or (
-                live_status != "QUOTED"
-                and not (live_status == "APPROVED" and decision == "APPROVED")
-            ):
-                # A successor revision reset the live project, or the quote
-                # already moved on — the link no longer decides anything.
+            if str(project["current_revision"]) != str(version["revision_code"]):
+                # A successor revision replaced the quote this link decided.
                 raise DocumentaryError("quote_link_stale")
+            if live_status != "QUOTED" and not (
+                live_status == "APPROVED" and decision == "APPROVED"
+            ):
+                # The project already moved on — approved or rejected — so
+                # this link no longer decides anything.
+                raise DocumentaryError("quote_already_decided")
             now = datetime.now(timezone.utc)
             # The status guard makes the write atomic: a concurrent decision
             # that commits first turns this into a no-op, and the fresh read

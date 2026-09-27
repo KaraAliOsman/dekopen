@@ -48,6 +48,7 @@ const optionLabels: Record<string, Parameters<typeof t>[0]> = {
   RETAIL: "pricing.retail",
   ARCHITECT: "pricing.architect",
   CONSTRUCTION: "pricing.construction",
+  REINFORCEMENT: "pricing.coverageKind.reinforcement",
 };
 function optionLabel(value: string): string {
   const key = optionLabels[value];
@@ -980,27 +981,63 @@ function CostComposition({
   currency,
   discount,
   lineNet,
+  lineCost,
 }: {
   entry: NonNullable<PriceResponse["positions_breakdown"]>[number];
   currency: string;
   discount: number;
   lineNet: string;
+  lineCost: string;
 }): JSX.Element {
   const area = Number(entry.area_m2);
   const rates = Number(entry.labor_rate_per_m2) + Number(entry.installation_rate_per_m2);
   const labour = Number.isFinite(area) && Number.isFinite(rates) ? area * rates : null;
+  // BOM cut rows map 1:1 into components — the estimator reads materials,
+  // not cuts, so identical SKUs aggregate into one row.
+  const grouped = new Map<
+    string,
+    { kind: string; sku: string; unit: string; qty: number; cents: bigint }
+  >();
+  for (const component of entry.composition ?? []) {
+    const key = `${component.kind}|${component.sku}|${component.unit}`;
+    const existing = grouped.get(key);
+    const cents = moneyCents(component.cost ?? "0") ?? 0n;
+    if (existing) {
+      existing.qty += Number(component.quantity);
+      existing.cents += cents;
+    } else {
+      grouped.set(key, {
+        kind: component.kind ?? "",
+        sku: component.sku ?? "",
+        unit: component.unit ?? "",
+        qty: Number(component.quantity),
+        cents,
+      });
+    }
+  }
+  const netCents = moneyCents(lineNet);
+  const costCents = moneyCents(lineCost);
+  const marginPct =
+    netCents !== null && costCents !== null && netCents > 0n
+      ? Number(((netCents - costCents) * 10000n) / netCents) / 100
+      : null;
   return (
     <div className="cost-composition">
       <table className="cost-composition__table">
         <tbody>
-          {(entry.composition ?? []).map((component, index) => (
+          {[...grouped.values()].map((component, index) => (
             <tr key={index}>
-              <td>{optionLabel(component.kind ?? "")}</td>
+              <td>{optionLabel(component.kind)}</td>
               <td>{component.sku}</td>
               <td>
-                {component.quantity} {optionLabel(component.unit ?? "")}
+                {component.qty} {optionLabel(component.unit)}
               </td>
-              <td>{formatMoney(component.cost ?? "0", currency)}</td>
+              <td>
+                {formatMoney(
+                  `${component.cents / 100n}.${`${component.cents % 100n}`.padStart(2, "0")}`,
+                  currency,
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -1011,8 +1048,9 @@ function CostComposition({
         {labour !== null &&
           ` + ${t("pricing.laborShort")} ${formatMoney(String(labour), currency)}`}{" "}
         → {t("pricing.unitCost")} {formatMoney(entry.unit_cost ?? "0", currency)}
-        {discount > 0 &&
-          ` · ${t("pricing.discount")} ${pctDisplay(discount)}% → ${formatMoney(lineNet, currency)}`}
+        {marginPct !== null && ` · ${t("pricing.marginRealized")} ${marginPct.toFixed(1)}%`}
+        {discount > 0 && ` · ${t("pricing.discount")} ${pctDisplay(discount)}%`} →{" "}
+        {formatMoney(lineNet, currency)}
       </p>
     </div>
   );
@@ -1043,6 +1081,21 @@ function marginText(net: string, cost: string, currency: string): string {
 /** §03-D — the pricing decision surface: the estimator and the approver
  * read the SAME frozen numbers — per-position cost vs selling, project
  * margin, the recorded reason and who applied/rejected it. */
+
+/** Nested authority records flatten to `key.sub: value` pairs — String(value)
+ * on an object renders '[object Object]', which the audit panel shipped. */
+function flattenAuthority(value: unknown, prefix = ""): string[] {
+  if (Array.isArray(value)) {
+    return [`${prefix}: ${value.length} ítems`];
+  }
+  if (value !== null && typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>).flatMap(([key, sub]) =>
+      flattenAuthority(sub, prefix ? `${prefix}.${key}` : key),
+    );
+  }
+  return [`${prefix}: ${String(value)}`];
+}
+
 function OperationDecision({
   operation,
   owner,
@@ -1089,20 +1142,29 @@ function OperationDecision({
       : []
     ).map((position) => [position.position_index, position]),
   );
+  // Baseline for the delta: the live priced totals, or — after a successor
+  // revision zeroed them — the latest sealed version's snapshot totals (what
+  // the customer was actually quoted). Without it CURRENT→PROPOSED is
+  // invisible exactly when it matters: the reprice decision.
+  const sealedBaseline = isBoundProject
+    ? [...(boundProject?.versions ?? [])].filter((version) => version.sealed_price_gross).at(-1)
+    : undefined;
+  const baselineGross =
+    boundProject?.pricing_current && boundProject.total_price_gross
+      ? boundProject.total_price_gross
+      : (sealedBaseline?.sealed_price_gross ?? null);
+  const baselineCurrency = boundProject?.pricing_current
+    ? boundProject.currency
+    : (sealedBaseline?.sealed_currency ?? boundProject?.currency);
   // A delta is only meaningful when both sides share a currency — a
   // historical operation in another currency shows its own totals instead.
-  const sameCurrency = boundProject?.currency === operation.currency;
+  const sameCurrency = baselineCurrency === operation.currency;
   const diff =
-    isBoundProject &&
-    boundProject?.pricing_current &&
-    boundProject.total_price_gross &&
-    sameCurrency
-      ? Number(operation.project_gross) - Number(boundProject.total_price_gross)
+    isBoundProject && baselineGross && Number(baselineGross) > 0 && sameCurrency
+      ? Number(operation.project_gross) - Number(baselineGross)
       : null;
   const diffPct =
-    diff !== null && Number(boundProject?.total_price_gross) > 0
-      ? (diff / Number(boundProject?.total_price_gross)) * 100
-      : null;
+    diff !== null && Number(baselineGross) > 0 ? (diff / Number(baselineGross)) * 100 : null;
   // Per-position delta: the live price_net of the bound revision vs the
   // proposed line_net — same position index, same currency, never a guess.
   const canLineDelta = isBoundProject && sameCurrency;
@@ -1162,11 +1224,16 @@ function OperationDecision({
         {stale && <p className="operation-decision__stale">{t("pricing.staleHint")}</p>}
       </header>
 
-      {diff !== null && boundProject?.total_price_gross ? (
+      {diff !== null && baselineGross ? (
         <div className="operation-compare">
           <div className="operation-compare__cell">
-            <span>{t("pricing.currentTotal")}</span>
-            <strong>{formatMoney(boundProject.total_price_gross, operation.currency)}</strong>
+            <span>
+              {t("pricing.currentTotal")}
+              {sealedBaseline && !boundProject?.pricing_current
+                ? ` · ${sealedBaseline.revision_code}`
+                : ""}
+            </span>
+            <strong>{formatMoney(baselineGross, operation.currency)}</strong>
           </div>
           <span className="operation-compare__arrow" aria-hidden>
             →
@@ -1315,6 +1382,7 @@ function OperationDecision({
                           discount={discount}
                           entry={breakdown}
                           lineNet={line.line_net}
+                          lineCost={costs.get(line.position_index) ?? "0"}
                         />
                       </details>
                     </td>
@@ -1363,11 +1431,7 @@ function OperationDecision({
           <summary>{t("pricing.authorities")}</summary>
           <ul>
             {(operation.authorities ?? []).map((authority, index) => (
-              <li key={index}>
-                {Object.entries(authority as Record<string, unknown>)
-                  .map(([key, value]) => `${key}: ${String(value)}`)
-                  .join(" · ")}
-              </li>
+              <li key={index}>{flattenAuthority(authority).join(" · ")}</li>
             ))}
           </ul>
         </details>
@@ -1510,10 +1574,38 @@ function CommercialOperations({
   // per effect run; the mount load's publish is guarded by the generation
   // counter like every other request, never by mount bookkeeping.
   const historyOrg = useRef<string | undefined>();
+  const historyInflight = useRef<string | undefined>();
+  function loadHistory(): Promise<"published" | "stopped" | "retry"> {
+    let aborted = false;
+    return runCurrent(
+      () =>
+        request<Operation[]>("operations/").catch((loadError: unknown) => {
+          if (loadError instanceof DOMException && loadError.name === "AbortError") aborted = true;
+          throw loadError;
+        }),
+      setHistory,
+      "pricing.loadError",
+    ).then((published) => (published ? "published" : aborted ? "retry" : "stopped"));
+  }
   useEffect(() => {
-    if (historyOrg.current === orgId) return;
-    historyOrg.current = orgId;
-    if (orgId) void reload();
+    if (!orgId || historyOrg.current === orgId || historyInflight.current === orgId) return;
+    historyInflight.current = orgId;
+    // StrictMode's simulated unmount aborts the first request while the
+    // component stays alive; an abort is retried once. A real failure is
+    // surfaced by runCurrent's error state and a superseding request owns
+    // the newer generation — neither is retried here.
+    const finish = (result: string) => {
+      if (historyInflight.current !== orgId) return;
+      historyInflight.current = undefined;
+      if (result === "published") historyOrg.current = orgId;
+    };
+    void loadHistory().then((result) => {
+      if (result === "retry" && historyInflight.current === orgId) {
+        void loadHistory().then(finish);
+        return;
+      }
+      finish(result);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgId]);
   function invalidate(): void {
@@ -1526,20 +1618,26 @@ function CommercialOperations({
     action: () => Promise<T>,
     publish: (value: T) => void,
     errorKey: Parameters<typeof t>[0],
-  ): Promise<void> {
+  ): Promise<boolean> {
     const current = ++generation.current;
     setBusy(true);
     setError("");
     try {
       const value = await action();
-      if (generation.current === current) publish(value);
+      if (generation.current !== current) return false;
+      publish(value);
+      return true;
     } catch (error) {
-      if (generation.current === current) setError(pricingError(error, errorKey));
+      // An aborted request (unmount, StrictMode remount) is not an error
+      // worth showing — the next load owns the surface.
+      const aborted = error instanceof DOMException && error.name === "AbortError";
+      if (generation.current === current && !aborted) setError(pricingError(error, errorKey));
+      return false;
     } finally {
       if (generation.current === current) setBusy(false);
     }
   }
-  function reload(): Promise<void> {
+  function reload(): Promise<boolean> {
     return runCurrent(() => request<Operation[]>("operations/"), setHistory, "pricing.loadError");
   }
   function isOperation(value: unknown): value is Operation {
@@ -1556,8 +1654,8 @@ function CommercialOperations({
     setStale(false);
     setOperation(value);
   }
-  function apply(reject = false): Promise<void> {
-    if (!operation) return Promise.resolve();
+  function apply(reject = false): Promise<boolean> {
+    if (!operation) return Promise.resolve(false);
     return runCurrent(
       () =>
         request<Operation>(`operations/${operation.id}/apply/`, "POST", {
@@ -1573,8 +1671,8 @@ function CommercialOperations({
       "pricing.applyError",
     );
   }
-  function withdraw(): Promise<void> {
-    if (!operation) return Promise.resolve();
+  function withdraw(): Promise<boolean> {
+    if (!operation) return Promise.resolve(false);
     return runCurrent(
       () =>
         request<Operation>(`operations/${operation.id}/withdraw/`, "POST", {

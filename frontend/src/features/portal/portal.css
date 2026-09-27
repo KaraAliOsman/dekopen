@@ -119,6 +119,38 @@
   font-weight: 500;
 }
 
+/* Approval and decline must not look identical — success tints teal,
+   decline stays neutral-warm so the states are legible at a glance. */
+.portal-decided[data-state="declined"] {
+  background: color-mix(in srgb, var(--theme-danger) 8%, var(--theme-surface-panel));
+  color: var(--theme-text);
+}
+
+.portal-decided__contact {
+  font-weight: 400;
+  color: var(--theme-text-secondary);
+  font-size: var(--text-s);
+}
+
+.portal-decision__notehint {
+  margin: 0;
+  font-size: var(--text-s);
+  color: var(--theme-text-secondary);
+}
+
+/* A disabled decision button must not keep its hover styling — a dead
+   green button reads as broken, not as a missing field. */
+.portal-decision button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.portal-position__taxincl {
+  font-size: var(--text-s);
+  font-weight: 500;
+  color: var(--theme-text-secondary);
+}
+
 .portal-decision {
   display: grid;
   gap: var(--space-3);
@@ -287,7 +319,10 @@
   position: relative;
   border-radius: var(--radius-md);
   overflow: hidden;
-  background: var(--theme-bg-canvas);
+  /* Studio backdrop — white PVC on near-white canvas washed the render out. */
+  background:
+    radial-gradient(120% 90% at 50% 25%, rgba(255, 255, 255, 0.75), transparent 62%),
+    linear-gradient(180deg, #e2e7e3 0%, #ccd4cf 100%);
 }
 
 .portal-position__views {

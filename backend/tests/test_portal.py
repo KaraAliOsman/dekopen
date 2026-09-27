@@ -365,6 +365,55 @@ def test_decide_confirm_on_already_approved_project(monkeypatch) -> None:
     assert out["approval_status"] in {"PENDING", "APPROVED"}
 
 
+def test_decide_decline_on_approved_project_is_honest(monkeypatch) -> None:
+    """Declining a pending link on an already-APPROVED project must not claim
+    a new revision replaced it — the quote was decided, not superseded."""
+    _roles(monkeypatch)
+    approval = _approval()
+    _install_fakes(monkeypatch, approval, live=_live(status="APPROVED"))
+    with patch("portal.service.SupabaseDocumentStorage"):
+        with pytest.raises(DocumentaryError, match="quote_already_decided"):
+            service.decide_quote(
+                token="tok", decision="DECLINED", decided_by="Ana", note="x"
+            )
+
+
+def test_portal_quote_hides_payment_url_on_superseded(monkeypatch) -> None:
+    """A superseded revision must not offer a pay link for dead money."""
+    _roles(monkeypatch)
+    approval = _approval()
+    sealed = _version(
+        snapshot={
+            "project": {
+                "currency": "CLP",
+                "total_price_gross": "1000000",
+            }
+        }
+    )
+    live = _live(status="QUOTED", revision="REV-B")  # link bound to REV-A
+    calls = _install_fakes(monkeypatch, approval, version=sealed, live=live)
+
+    base_rows = service.rows
+
+    def fake_rows(sql_text, params=()):
+        lowered = " ".join(sql_text.lower().split())
+        calls.append(lowered)
+        if "token_hash" in lowered:
+            return [approval]
+        if "project_payment_links" in lowered:
+            return [{"url": "https://pay.example/link"}]
+        return []
+
+    monkeypatch.setattr("portal.service.rows", fake_rows)
+    with patch("portal.service.SupabaseDocumentStorage"):
+        out = service.portal_quote("tok")
+    assert out["superseded"] is True
+    assert out["payment_url"] is None
+    # the link table is never even queried once the revision is dead
+    assert not any("project_payment_links" in c for c in calls)
+    monkeypatch.setattr("portal.service.rows", base_rows)
+
+
 def test_decide_rejects_expired_quote_validity(monkeypatch) -> None:
     _roles(monkeypatch)
     approval = _approval()

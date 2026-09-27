@@ -26,4 +26,12 @@ export interface ProjectVersionResponse {
   /** @nullable */
   documentary_complete: boolean | null;
   emitted_at: string;
+  /** @nullable */
+  sealed_price_net?: string | null;
+  /** @nullable */
+  sealed_price_tax?: string | null;
+  /** @nullable */
+  sealed_price_gross?: string | null;
+  /** @nullable */
+  sealed_currency?: string | null;
 }

@@ -382,7 +382,13 @@ function formatCompareValue(field: string, value: string, currency: string): str
   if (value === "" || value == null) return "";
   if (field === "price_net") return formatMoney(value, currency);
   if (field === "width_mm" || field === "height_mm") return fmtMm(value);
-  if (field === "discount_pct") return `${value.replace(/\.0+$/, "")}%`;
+  // discount_pct persists as a fraction (0.10 = 10 %) — percent-format it.
+  if (field === "discount_pct") {
+    const fraction = Number(value);
+    if (!Number.isFinite(fraction)) return `${value}%`;
+    const pct = fraction <= 1 ? fraction * 100 : fraction;
+    return `${pct.toFixed(2).replace(/\.?0+$/, "")}%`;
+  }
   return value;
 }
 

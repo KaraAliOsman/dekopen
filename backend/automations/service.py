@@ -18,7 +18,7 @@ from contextlib import contextmanager
 from typing import Iterator
 from uuid import UUID
 
-from django.db import connection
+from django.db import connection, transaction
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,10 @@ def emit(
     from jobs.service import enqueue, job_backend
 
     try:
-        with job_backend(), _service_claims():
+        # Savepoint: emit() runs inside the caller's transaction (e.g. the
+        # documentary freeze); a failed enqueue must roll back only this
+        # statement, never poison the whole commit it rides on.
+        with transaction.atomic(), job_backend(), _service_claims():
             job, created = enqueue(
                 org_id=org_id,
                 job_type=job_type,

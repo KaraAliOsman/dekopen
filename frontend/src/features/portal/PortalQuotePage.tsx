@@ -18,7 +18,7 @@ const money = formatMoney;
 /** Sealed finish text → the closest renderable member surface — a Nogal foil
  * quote must not draw a white PVC window beside "Terminación: Nogal". */
 const FINISH_SURFACES: [RegExp, string][] = [
-  [/madera|nogal|roble|caoba|wengue|cedro|sapeli|rovere|nuss|wood|foil/i, "PVC_FOIL"],
+  [/madera|nogal|roble|caoba|wengue|cedro|sapeli|rovere|nuss|wood|foil|foliad/i, "PVC_FOIL"],
   [/antracit|grafito|negro|dark|black|bronce|bronze/i, "ALUMINIUM_ANTHRACITE"],
   [/aluminio|aluminum|anodiz|natural/i, "ALUMINIUM"],
 ];
@@ -70,6 +70,14 @@ const typologyKeys: Record<string, TranslationKey> = {
   FRAMELESS: "typology.frameless",
   COMPOSITE: "typology.composite",
 };
+
+/** discount_pct persists as a fraction (0.10 = 10 %) — never print it raw. */
+function pctLabel(raw: string | null | undefined): string {
+  const fraction = Number(raw);
+  if (!Number.isFinite(fraction)) return `${raw}%`;
+  const pct = fraction <= 1 ? fraction * 100 : fraction;
+  return `${pct.toFixed(2).replace(/\.?0+$/, "")}%`;
+}
 
 function typologyLabel(raw: string | null | undefined): string {
   const key = raw ? typologyKeys[raw] : undefined;
@@ -141,9 +149,13 @@ function groupPositions(positions: PortalPosition[]): {
 function PositionGroupCard({
   group,
   currency,
+  taxRate,
 }: {
   group: ReturnType<typeof groupPositions>[number];
   currency: string;
+  // IVA-included line totals reconcile with the headline Total — a customer
+  // thinks in gross, so the card leads with it when the rate is derivable.
+  taxRate: number | null;
 }): JSX.Element {
   const { position } = group;
   const [variant, setVariant] = useState<"studio" | "elevation">("studio");
@@ -212,7 +224,7 @@ function PositionGroupCard({
           {Number(position.discount_pct) > 0 ? (
             <div>
               <dt>{t("portal.discount")}</dt>
-              <dd>{Number(position.discount_pct)}%</dd>
+              <dd>{pctLabel(position.discount_pct)}</dd>
             </div>
           ) : null}
         </dl>
@@ -222,8 +234,19 @@ function PositionGroupCard({
               {t("portal.unitNet")} {money(String(group.totalNet / group.quantity), currency)}
             </span>
           )}
-          <span>{t("portal.lineNet")}</span>
-          <strong>{hasPrice ? money(String(group.totalNet), currency) : "—"}</strong>
+          <span>
+            {t("portal.lineNet")} {hasPrice ? money(String(group.totalNet), currency) : "—"}
+          </span>
+          <strong>
+            {hasPrice
+              ? taxRate !== null
+                ? money(String(Math.round(group.totalNet * (1 + taxRate))), currency)
+                : money(String(group.totalNet), currency)
+              : "—"}
+            {taxRate !== null && hasPrice ? (
+              <span className="portal-position__taxincl"> {t("portal.taxIncluded")}</span>
+            ) : null}
+          </strong>
         </p>
       </div>
     </article>
@@ -257,14 +280,31 @@ export function PortalQuotePage(): JSX.Element {
           return;
         }
         setQuote(response.data);
-      } catch {
-        if (active) setError(t("portal.loadError"));
+      } catch (error) {
+        if (!active) return;
+        // apiMutator throws on non-OK — the link's real state (revoked 410,
+        // expired 410, gone 404) must surface, not a generic load error.
+        setError(
+          error instanceof ApiError
+            ? error.status === 404
+              ? t("portal.notFound")
+              : (errorDetail(error.payload) ?? t("portal.loadError"))
+            : t("portal.loadError"),
+        );
       }
     })();
     return () => {
       active = false;
     };
   }, [token]);
+
+  // The only page a customer ever sees carries the issuer's name in the tab.
+  useEffect(() => {
+    const issuer = quote?.organization?.commercial_name || quote?.organization?.name || "";
+    document.title = issuer
+      ? `${issuer} · ${t("portal.proposalTitle")} · ${quote?.project_code ?? ""}`
+      : t("portal.proposalTitle");
+  }, [quote]);
 
   async function decide(decision: "APPROVED" | "DECLINED"): Promise<void> {
     if (!name.trim() || busy) return;
@@ -304,8 +344,7 @@ export function PortalQuotePage(): JSX.Element {
     return (
       <main className="portal-page">
         <section className="portal-card portal-card--narrow">
-          <p className="eyebrow">DEKOPEN</p>
-          <h1>{t("portal.title")}</h1>
+          <h1>{t("portal.proposalTitle")}</h1>
           <p role="alert">{error}</p>
         </section>
       </main>
@@ -321,6 +360,12 @@ export function PortalQuotePage(): JSX.Element {
   }
 
   const decided = quote.approval_status !== "PENDING";
+  // Line-level IVA: net + tax are the sealed truth — the implied rate lets
+  // product cards show the gross the customer will actually pay.
+  const taxRate =
+    quote.total_price_net && quote.total_price_tax
+      ? Number(quote.total_price_tax) / Number(quote.total_price_net)
+      : null;
   const org = quote.organization;
   const issuer = org?.commercial_name || org?.name || "DEKOPEN";
   const issuerContact =
@@ -414,7 +459,12 @@ export function PortalQuotePage(): JSX.Element {
             <h2>{t("portal.positions")}</h2>
             <div className="portal-positions">
               {groups.map((group) => (
-                <PositionGroupCard key={group.key} group={group} currency={quote.currency} />
+                <PositionGroupCard
+                  key={group.key}
+                  group={group}
+                  currency={quote.currency}
+                  taxRate={taxRate}
+                />
               ))}
             </div>
           </section>
@@ -463,9 +513,16 @@ export function PortalQuotePage(): JSX.Element {
                 </div>
               </dl>
             ) : null}
-            {quote.payment_url ? (
-              <a className="portal-pay" href={quote.payment_url}>
-                {t("portal.payNow")}
+            {quote.payment_url && !quote.superseded && !quote.validity_expired ? (
+              <a
+                className="portal-pay"
+                href={quote.payment_url}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {quote.payment
+                  ? `${t("portal.payBalance")} ${money(quote.payment.balance, quote.currency)}`
+                  : t("portal.payNow")}
               </a>
             ) : null}
           </section>
@@ -483,7 +540,11 @@ export function PortalQuotePage(): JSX.Element {
         ) : null}
 
         {decided ? (
-          <div className="portal-decided" role="status">
+          <div
+            className="portal-decided"
+            data-state={quote.approval_status === "APPROVED" ? "approved" : "declined"}
+            role="status"
+          >
             <p className="portal-decided__state">
               {quote.approval_status === "APPROVED"
                 ? t("portal.wasApproved")
@@ -494,6 +555,7 @@ export function PortalQuotePage(): JSX.Element {
                 ? t("portal.wasApprovedDetail")
                 : t("portal.wasDeclinedDetail")}
             </p>
+            {issuerContact ? <p className="portal-decided__contact">{issuerContact}</p> : null}
           </div>
         ) : quote.superseded ? (
           <p className="portal-decided" role="status">
@@ -581,6 +643,9 @@ export function PortalQuotePage(): JSX.Element {
                 {t("portal.requestChange")}
               </button>
             </div>
+            {!note.trim() ? (
+              <p className="portal-decision__notehint">{t("portal.noteRequired")}</p>
+            ) : null}
           </form>
         )}
 
