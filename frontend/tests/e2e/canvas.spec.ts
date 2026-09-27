@@ -161,11 +161,11 @@ test("G1 canvas uses runtime discovery, transactional dimensions, snapping and <
   await expect(page.getByLabel("Ancho nominal (mm)")).toHaveValue("1000.00");
   await expect(page.getByLabel("Alto nominal (mm)")).toHaveValue("1000.00");
   await expect(page.getByText("FIXED", { exact: true })).toBeVisible();
-  await expect(page.getByTestId("canvas-glass-dimension")).toHaveText("910.00 × 910.00 mm");
-  await expect(page.getByTestId("technical-frame")).toHaveText("1006.00 mm");
-  await expect(page.getByTestId("technical-reinforcement")).toHaveText("970.00 mm");
-  await expect(page.getByTestId("technical-glass")).toHaveText("910.00 × 910.00 mm");
-  await expect(page.getByTestId("technical-bead")).toHaveText("919.00 mm");
+  await expect(page.getByTestId("canvas-glass-dimension")).toHaveText("910 × 910 mm");
+  await expect(page.getByTestId("technical-frame")).toHaveText("1006 mm");
+  await expect(page.getByTestId("technical-reinforcement")).toHaveText("970 mm");
+  await expect(page.getByTestId("technical-glass")).toHaveText("910 × 910 mm");
+  await expect(page.getByTestId("technical-bead")).toHaveText("919 mm");
   expect(calculationRequests).toBe(1);
 
   const width = page.getByLabel("Ancho nominal (mm)");
@@ -214,7 +214,7 @@ test("G1 canvas uses runtime discovery, transactional dimensions, snapping and <
   );
   await page.mouse.up();
   await expect(width).toHaveValue("1050.00");
-  await expect(page.getByTestId("canvas-glass-dimension")).toHaveText("960.00 × 910.00 mm");
+  await expect(page.getByTestId("canvas-glass-dimension")).toHaveText("960 × 910 mm");
   const snappedRequest = await snappedRequestPromise;
   expect(snappedRequest.postDataJSON().nominal_width_mm).toBe("1050.00");
 
@@ -247,7 +247,7 @@ for (const theme of ["light", "dark"] as const) {
   }) => {
     await authenticate(page, await setupEstimator());
     await page.goto("/projects/demo/positions/g1/edit");
-    await expect(page.getByTestId("technical-frame")).toHaveText("1006.00 mm");
+    await expect(page.getByTestId("technical-frame")).toHaveText("1006 mm");
     if (theme === "dark") await page.getByRole("button", { name: "Cambiar tema" }).click();
     const optimization = page.waitForResponse(
       (response) =>
@@ -315,6 +315,6 @@ for (const theme of ["light", "dark"] as const) {
     await modal.screenshot({ path: `test-results/shot07-${theme}.png` });
     await modal.getByRole("button", { name: "Cerrar revisión" }).click();
     await expect(modal).not.toBeVisible();
-    await expect(page.getByTestId("canvas-glass-dimension")).toHaveText("910.00 × 910.00 mm");
+    await expect(page.getByTestId("canvas-glass-dimension")).toHaveText("910 × 910 mm");
   });
 }

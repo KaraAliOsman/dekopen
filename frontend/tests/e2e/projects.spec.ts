@@ -5,6 +5,7 @@ import type {
   PositionResponse,
   ProjectResponse,
 } from "../../src/api/generated/models";
+import { fmtMm } from "../../src/format";
 import { test } from "./support/manual-project-fixture";
 
 test.use({ viewport: { width: 1366, height: 768 }, actionTimeout: 15_000 });
@@ -202,7 +203,7 @@ test("SHOT-10 real project core path and visual evidence", async ({ page, manual
   for (const [index, cut] of editedBom.profile_cuts.entries()) {
     await expect(profileRows.nth(index).locator("td")).toHaveText([
       cut.sku,
-      cut.length_mm,
+      fmtMm(cut.length_mm),
       String(cut.qty),
     ]);
   }

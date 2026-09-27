@@ -334,7 +334,7 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   await page.getByRole("button", { name: "Guardar", exact: true }).click();
   await expect(page.getByText("Guardado", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: /Volver al proyecto/ }).click();
-  await page.getByRole("link", { name: "Calcular precio", exact: true }).click();
+  await page.getByRole("link", { name: "Cotizar proyecto", exact: true }).click();
   await expect(page.getByLabel("Proyecto", { exact: true })).toHaveCount(0);
   await page.getByLabel("Fecha efectiva", { exact: true }).fill("2026-09-10");
   await page.getByLabel("Motivo del cambio", { exact: true }).fill("Apply browser quote");
@@ -438,7 +438,7 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   await page.getByRole("button", { name: "Guardar", exact: true }).click();
   await expect(page.getByText("Guardado", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: /Volver al proyecto/ }).click();
-  await page.getByRole("link", { name: "Calcular precio", exact: true }).click();
+  await page.getByRole("link", { name: "Cotizar proyecto", exact: true }).click();
   await page.getByLabel("Fecha efectiva", { exact: true }).fill("2026-09-19");
   await page.getByLabel("Motivo del cambio", { exact: true }).fill("Apply browser REV-B quote");
   await page.getByRole("button", { name: "Calcular y revisar", exact: true }).click();
@@ -550,7 +550,7 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   await expect(page.locator(".canvas-sheet .member-mullion")).toHaveCount(1);
   await expect(page.locator(".canvas-sheet .module-glass")).toHaveCount(2);
   await page.getByRole("link", { name: /Volver al proyecto/ }).click();
-  await page.getByRole("link", { name: "Calcular precio", exact: true }).click();
+  await page.getByRole("link", { name: "Cotizar proyecto", exact: true }).click();
   await page.getByLabel("Fecha efectiva", { exact: true }).fill("2026-09-19");
   await page.getByLabel("Motivo del cambio", { exact: true }).fill("Composite browser price");
   const compositePreview = page.waitForResponse(

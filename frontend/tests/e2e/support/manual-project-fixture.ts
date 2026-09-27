@@ -81,7 +81,10 @@ export const test = base.extend<{
         signal: AbortSignal.timeout(15_000),
       });
       if (!response.ok) {
-        throw new Error(`Fixture ${method} ${path.split("?")[0]}: HTTP ${response.status}`);
+        const detail = (await response.text()).slice(0, 400);
+        throw new Error(
+          `Fixture ${method} ${path.split("?")[0]}: HTTP ${response.status} — ${detail}`,
+        );
       }
       return response;
     }
