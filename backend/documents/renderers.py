@@ -354,6 +354,12 @@ def _discount_label(raw: object) -> str:
     return f"{value.normalize():f}%"
 
 
+def _rev_display(raw: object) -> str:
+    """'REV-A' reads 'A' under a Rev. label — the folio keeps the full code."""
+    text = _value(raw)
+    return text[4:] if text.upper().startswith("REV-") else text
+
+
 
 def _num(value: object) -> Decimal:
     if isinstance(value, bool):
@@ -927,7 +933,7 @@ def _revision_header(
         f'<div class="tb-cell"><span class="tb-label">Documento</span>'
         f'<span class="tb-value">{escape(doc_code)}</span></div>'
         f'<div class="tb-cell"><span class="tb-label">Rev.</span>'
-        f'<span class="tb-value">{escape(revision)}</span></div>'
+        f'<span class="tb-value">{escape(_rev_display(revision))}</span></div>'
         f'<div class="tb-cell"><span class="tb-label">Fecha</span>'
         f'<span class="tb-value">{escape(_cldate(sealed_at))}</span></div>'
         f"{fingerprint}"
@@ -940,7 +946,7 @@ def _revision_header(
         '<div class="meta">'
         f"{issuer}"
         f"<strong>{escape(project_code)}</strong><br>"
-        f"{escape(doc_code)} · Rev. {escape(revision)}<br>"
+        f"{escape(doc_code)} · Rev. {escape(_rev_display(revision))}<br>"
         f"{escape(_cldate(sealed_at))}</div></div>"
         '<div class="rule-stack"></div>'
         f"<h1>{escape(title)}</h1>"
@@ -1014,7 +1020,7 @@ def _doc01(snapshot: dict[str, object]) -> str:
         f'<div class="tb-cell"><span class="tb-label">Documento</span>'
         f'<span class="tb-value">{escape(quote_folio)}</span></div>'
         f'<div class="tb-cell"><span class="tb-label">Rev.</span>'
-        f'<span class="tb-value">{escape(_value(snapshot.get("revision")))}</span></div>'
+        f'<span class="tb-value">{escape(_rev_display(snapshot.get("revision")))}</span></div>'
         f'<div class="tb-cell"><span class="tb-label">Fecha</span>'
         f'<span class="tb-value">{escape(_cldate(snapshot.get("sealed_at")))}</span></div>'
         '<div class="tb-cell"><span class="tb-label">Página</span>'
@@ -1096,7 +1102,7 @@ def _doc01(snapshot: dict[str, object]) -> str:
         '<div class="cover-doc">'
         "<strong>Propuesta comercial</strong>"
         f"{escape(quote_folio)}<br>"
-        f"Revisión {escape(_value(snapshot.get('revision')))} · "
+        f"Revisión {escape(_rev_display(snapshot.get('revision')))} · "
         f"{escape(_cldate(snapshot.get('sealed_at')))}"
         "</div></div>"
         '<div class="cover-main"><div class="cover-left">'
@@ -1326,7 +1332,7 @@ def _doc01(snapshot: dict[str, object]) -> str:
     body += (
         '<div class="accept"><h2>Aceptación</h2>'
         '<p class="accept-recap">'
-        f"{escape(quote_folio)} · Revisión {escape(_value(snapshot.get('revision')))}"
+        f"{escape(quote_folio)} · Revisión {escape(_rev_display(snapshot.get('revision')))}"
         + (
             f" · Total {escape(_money(project.get('total_price_gross'), currency))}"
             if totals_priced
