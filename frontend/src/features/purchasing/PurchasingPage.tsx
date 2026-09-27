@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { apiMutator, ApiError } from "../../api/apiMutator";
@@ -521,6 +521,7 @@ function PurchasingWorkspace({
           if (order.project_version_id) setVersionId(order.project_version_id);
         }}
       />
+      <SupplierDirectory suppliers={suppliers} orders={ordersIndex} />
       {versions.length > 0 && (
         <label>
           {t("purchasing.chooseVersion")}
@@ -1249,6 +1250,89 @@ function OrderCard({
         <ReceivingPanel order={order} busy={busy} request={request} action={action} />
       )}
     </article>
+  );
+}
+
+function SupplierDirectory({
+  suppliers,
+  orders,
+}: {
+  suppliers: Supplier[];
+  orders: OrderIndexItem[];
+}): JSX.Element | null {
+  // §2: directory built from real evidence only — contact fields, the
+  // categories the supplier has actually been ordered under, and live
+  // order state. No lead-time or price columns: nothing stores them.
+  const rows = useMemo(() => {
+    const bySupplier = new Map<string, OrderIndexItem[]>();
+    for (const order of orders) {
+      const key = order.supplier_identity ?? order.supplier_name ?? "";
+      if (!key) continue;
+      bySupplier.set(key, [...(bySupplier.get(key) ?? []), order]);
+    }
+    return suppliers.map((supplier) => {
+      const theirs = bySupplier.get(supplier.tax_id) ?? bySupplier.get(supplier.name) ?? [];
+      const open = theirs.filter(
+        (order) => order.status === "SENT" || order.status === "PARTIALLY_RECEIVED",
+      );
+      const categories = [...new Set(theirs.map((order) => order.order_type))];
+      const lastOrder = theirs
+        .slice()
+        .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0];
+      const nextExpected = open
+        .map((order) => order.expected_at)
+        .filter((value): value is string => Boolean(value))
+        .sort()[0];
+      return { supplier, open, categories, total: theirs.length, lastOrder, nextExpected };
+    });
+  }, [suppliers, orders]);
+  if (!rows.length) return null;
+  return (
+    <section className="purchasing-directory" aria-label={t("purchasing.directoryTitle")}>
+      <h2>{t("purchasing.directoryTitle")}</h2>
+      <ul>
+        {rows.map(({ supplier, open, categories, total, lastOrder, nextExpected }) => (
+          <li key={supplier.id} className="purchasing-directory-row">
+            <div className="purchasing-directory-id">
+              <strong>{supplier.name}</strong>
+              {supplier.tax_id ? (
+                <span className="purchasing-directory-tax">{supplier.tax_id}</span>
+              ) : null}
+            </div>
+            <div className="purchasing-directory-contact">
+              {supplier.details?.email ? <span>{supplier.details.email}</span> : null}
+              {supplier.details?.phone ? <span>{supplier.details.phone}</span> : null}
+              {!supplier.details?.email && !supplier.details?.phone ? (
+                <span className="purchasing-directory-empty">—</span>
+              ) : null}
+            </div>
+            <div className="purchasing-directory-cats">
+              {categories.length
+                ? categories
+                    .map((cat) => t(orderTypeLabels[cat as OrderType] ?? "purchasing.indexType"))
+                    .join(" · ")
+                : "—"}
+            </div>
+            <div className="purchasing-directory-orders">
+              {open.length ? (
+                <span className="purchasing-directory-open">
+                  {open.length} {t("purchasing.directoryOpen")}
+                  {nextExpected
+                    ? ` · ${t("purchasing.glanceNext")} ${formatDate(nextExpected)}`
+                    : ""}
+                </span>
+              ) : (
+                <span>{t("purchasing.directoryNoOpen")}</span>
+              )}
+              <span className="purchasing-directory-history">
+                {total} {t("purchasing.directoryHistory")}
+                {lastOrder ? ` · ${lastOrder.order_code}` : ""}
+              </span>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
