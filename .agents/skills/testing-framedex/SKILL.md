@@ -48,6 +48,111 @@ description: Local dev-stack recipe for DEKOPEN E2E testing — Supabase CLI sta
 ## Merged stack (89d22e0+) extras
 
 - **Job worker required**: artifact generation (DOC-01/03) is now async via the `jobs` queue — the UI polls `/api/v1/jobs/{id}/` forever unless a worker runs: `python backend/manage.py runjobs --poll 1.5` (same env as runserver). No worker = "Generando cotización…" spinner forever.
+- **Async artifact open = popup-blocked**: the emitted-doc button calls `window.open` after the job poll, outside the user gesture → Chrome blocks it (watch omnibox popup icon; click the blocked URL). Not a signed-url bug — URL works when opened manually.
+- **Fresh-DB column grants**: `authenticated` has column-level (not table-level) SELECT on `projects`/`project_positions`. New columns added without grants → `GET /projects` 409 `pricing_transaction_rejected` (SQLSTATE 42501). Check `information_schema.column_privileges` and GRANT the missing columns (`pricing_reset_at`, `client_id`, `client_*` were missing in a from-scratch migrate).
+- **Fixture API shapes**: POST `/projects/`; POST `/projects/{id}/positions/` `{location_tag,quantity,design:{system_id,nominal_width_mm,nominal_height_mm,color,parametric_tree}}`; POST `/pricing/preview/` `{project_id,pricing_mode:COST_PLUS_MARGIN,context_code:DEFAULT,currency:CLP,effective_date,discount_pct,target_margin,segment:RETAIL,confirmed,reason}` then POST `/pricing/operations/{op}/apply/` `{reason,confirmed:true}`; GET/PUT `/documents/projects/{id}/inputs/`; POST `/documents/projects/{id}/freeze/` `{pricing_operation_id,confirmed:true}`; POST `/production/versions/{vid}/release/` (OWNER/WM only); POST `/production/orders/{oid}/optimize/` `{color}` (required!).
+- **Org needs `pricing_rules` row** (`INSERT INTO public.pricing_rules(org_id,pricing_mode,default_margin_pct,tax_rate_pct,waste_factor_pct,labor_rate_per_m2,installation_rate_per_m2)`) else preview 422s `pricing_rules_not_found`.
+- **Cost lookup mixes SKUs**: pricing calls `cost()` on purchasing SKU for profiles/steel (DEMO-BAR-*, DEMO-STEEL-BAR-*), but TECHNICAL sku for glass (GLASS-BASE @ M2) and kits (KIT-TURN @ KIT) — seed both forms.
+- **workshop_annotations**: ONE record per (bay_id, leaf_id) target — when prep echoes `leaf_id: null`, merge drains+closing+tramo+finish+coupler into the single bay annotation; a second record with the same (bay,null) pair → freeze `Duplicate annotation target` → 422 documentary_authority_required.
+- **Priced projects lock positions** — "Duplicar proyecto" needed to edit; demo canvas edits on an unpriced project instead.
+- Production optimize UI requires typing a color (placeholder "BLANCO" is not a value) before the button enables.
+
+## Contour slices (Phase-2) — trapezoid/arch specifics
+
+- Trapecio/Arco starters live at the FAR RIGHT of the horizontally-scrolling design-library
+  gallery on /positions/new. FORMA section appears on contour modules: "Desvío sup. izq./der."
+  (trapezoid top-corner offsets) or "Flecha del arco" (arch rise). Width/height edits rescale
+  the contour proportionally (offsets and rise auto-scale).
+- KNOWN DEFECT signature: POST /engine/assembly/calculate → 400 for any contour whose cut
+  angles aren't exact 0.1° multiples (trapezoid 2400×1400 @200mm offsets → miters 40.93°/49.07°).
+  Root cause: engine/src/dekopen_engine/snapshot.py::_json_value enforces Decimal("0.1")
+  quantum on fields literally named angle_left/angle_right → "Canonical output would lose
+  precision: angle_left" → swallowed as generic validation_error. The SAME crash 500s
+  save_position via calculation_response — contour positions are unsaveable through every path.
+- Guardar button is gated on assemblyEval.status === "VALID" (ProjectPositionEditor.tsx) —
+  MANUFACTURING_INCOMPLETE (arch) and eval-failure (trapezoid) both keep it disabled.
+- Arch at spec values DOES evaluate: 1800×1600 rise 300 → "Geometría válida — fabricación
+  incompleta" + issues "El miembro N de el módulo 1 necesita curvado (flecha X mm) — sin regla
+  de curvado declarada". Its cut angles happen to be 0.1-multiples so it dodges the bug.
+- To reproduce the exact engine error in-shell: authenticated_rls_context(claims) +
+  SystemParamsRepository().load_visible + parse_product_model + evaluate_assembly_from_api +
+  evaluation_response — mint a real token via Mailpit OTP link's verify?token= redirect
+  Location header (access_token in the fragment), password grants don't exist for OTP users.
+- Contour positions persist as product-v2 in project_positions.parametric_tree (isSingleUnit
+  excludes contour modules). To insert one for testing: copy a valid bom_snapshot from an
+  existing row and STRIP its "calculation_hash" key — position_public() revalidates stored
+  hash vs design and 409s stored_calculation_invalid on mismatch; no-hash BOMs skip the check.
+- Recurring flake: the whole in-memory design silently RESETS to a 1000×1000 default rect
+  mid-edit (~3× observed). No console/error — just re-apply the starter. Also: wheel-scroll
+  over the canvas PANS the SVG viewport (shape doesn't vanish, it pans away — scroll back).
+
+## Gauntlet R2 (447efb9+) — emit/finance specifics
+
+- **DB resets between sessions** — the shared supabase_db_dekopen container loses fixture
+  orgs/users overnight. Rebuild recipe: `auth.admin/users` POST → `tenancy_organizations`
+  (cols: name,tax_id,country,currency,subscription_active,credits_balance INT) →
+  `tenancy_memberships` (cols: org_id,user_id,role,is_active) → `pricing_rules`
+  (fractions 0–1, waste_factor_pct must equal exactly 0.08) → `cost_lists` +
+  `cost_list_items` → `pricing_configurations` (has rate_per_m2/base_glass_sku/catalog_price
+  /is_active/revision) → `clients` (cols: name,rut,email,phone,address,giro,comuna,
+  is_active,created_by NOT NULL).
+- **Emit gotea real seeds now**: GET inputs returns prefilled workshop_annotations
+  (drains spaced to width, closing_points at R08 spacing, tramo=width, WHITE finish),
+  glass_polishing all-false edges, accessory_schedule NONE_REQUIRED — but leaf-targeted
+  rows still land with `leaf_id: null` on single-module positions → merge into the bay row
+  before PUT or freeze 422s "Duplicate annotation target".
+- **Freeze needs a real handle intent** per operable leaf (PRIMARY slot): PUT
+  `handle_intents:[{schema_version:1,bay_id,leaf_id:null,handle_domain_slot:"PRIMARY",
+  requested_height_mm,vertical_reference:"OUTER_BOTTOM"}]` — else 422 with the specific
+  `ManufacturingAuthorityError` only visible in the Django log (API detail is generic).
+- **Emission date input is automation-flaky**: `<input type=date required>` cleared on
+  submit repeatedly; the native picker via Enter-on-focus also failed under tooling.
+  Bypass via PUT inputs + POST freeze when only the submit needs proving.
+- **Finance chain**: POST `projects/{id}/invoices/` → 201 FAC-XXXX; POST `invoices/{iid}/dte/`
+  → 409 `sii_caf_exhausted` without a CAF (no UI surface for CAF/cert upload — API-only
+  `siiCafRegister`/`siiCertificateUpload`). payment-links GET is now skipped (not 403) for
+  non-write roles; `projects/payment-integration/` returns `{configured:false}`.
+- **Optimize color now seeds** from sealed position finish (WHITE) — the R1
+  placeholder-trap is fixed; step buttons survive optimize (busy reset in finally).
+- **PDF rasterize**: no poppler — `uv pip install --python .venv/bin/python pymupdf` then
+  `fitz.open(pdf)` → `page.get_pixmap(dpi=95)`. Signed storage URLs break in Chrome's
+  URL bar (JWT chars mangled) — curl them instead.
+
+## Worktree testing (e.g. /home/ubuntu/wt-main)
+
+- A worktree shares the repo's venv — run backend as `<repo>/.venv/bin/python` with `PYTHONPATH=<worktree>/engine/src` and `cd <worktree>/backend`; runjobs worker needs the same env (`manage.py runjobs` alongside runserver or artifact jobs never complete).
+- Frontend worktree: symlink `node_modules` from the main checkout (`ln -s <repo>/frontend/node_modules`) — package.json deltas are additive there.
+
+## Routing / member ops facts (verified §29/§30)
+
+- Member machining ops exist ONLY where sealed authority exists: `END_MACHINING` on mullions when `profile_systems.end_milling_overlap_mm > 0`, `HANDLE_PREP` on handle policies. A fixed-window order's MACHINING step legitimately shows an empty ops table.
+- To see END_MACHINING live, seed a `SPLIT_V` position whose mullion SKU belongs to the system (ALU_65 → POSTE-A-V) — `mullion_profile_sku` must match a system article or the splitter resolves nothing.
+- Step ladders follow `profile_systems.material`: PVC → CUT→(MACHINING if end_milling>0)→WELD→CLEAN→SASH_ASSEMBLE?→HARDWARE?→GLAZE?→QC→PACK; ALU → CUT→MACHINING→CRIMP→… . SASH_ASSEMBLE needs a SASH-role cut; HARDWARE needs fittings/hardware_items.
+- The operator card trace refetches after mutating actions; still F5 before judging staleness.
+
+## Emit → DOC-01 in the UI (walkthrough learnings)
+
+- `/tmp/supa.env` regenerated via `supabase status --output json` exports `SERVICE_KEY` — Django needs `SUPABASE_SERVICE_ROLE_KEY` (same JWT). If missing: freeze jobs → `document_storage_not_configured`. Also `SUPABASE_URL`/`SUPABASE_ANON_KEY` must be exported (supa.env names them API_URL/ANON_KEY).
+- Emit form per-leaf handle intents now SEED at load (and on placement/handle-policy change) with the displayed midpoint + first permitted reference — emitting untouched works; only requirements with unresolvable bounds keep the "pendiente" chip. Ubicación, date and condiciones are all required for emit. Committed intents display raw decimals (`1561.0000`) vs clean seeded values (`1552`) — cosmetic only.
+- POST /api/v1/jobs/ is idempotent — a FAILED/CANCELED `job_runs` row now REQUEUES in place on retry (fresh attempt budget, carries the new request's payload + actor); SUCCEEDED stays deduped. No manual row deletion needed to retry "Abrir cotización emitida".
+- Freeze can emit **quote-only** ("Sólo cotización") when production evidence is incomplete — the order never reaches production_allowed; use seeded versions for production demos.
+- COMPLETE on a consuming step (e.g. CUT) is gated by `work_order_material_shortage` when the order's reservation has short SKUs — Iniciar works, Completar 422s. Expected, not a bug.
+- No §16 3D view exists in current builds — don't hunt for it in routes/features.
+- OWNER login requires MFA enrollment (aal2) on first run; use ESTIMATOR for edit flows, WM for production/purchasing — the position editor hard-blocks non-EST roles ("Tu rol no permite editar proyectos").
+
+## §03 commercial-workspace testing (wt-commercial learnings)
+
+- **Fresh fixture orgs are empty** — a brand-new org (e.g. devin-designsys, 1fcb95f8) has NO `pricing_rules`, NO `cost_lists`/`cost_list_items`, and only the seeded DEMO_60_* quotation authorities. `pricing_preview` 422s generically ("No se pudo cotizar…") — the real code is only in the response body (`pricing_rules_not_found`, `cost_list_not_found`, `incompatible_cost_unit`). Replay `POST /api/v1/pricing/preview/` with a GoTrue password-grant token (`POST $API_URL/auth/v1/token?grant_type=password` + `X-Organization-ID`) to read `error.code`.
+- **Cost-item units must match the lookup contract**: profile purchase skus → `BAR` (falls back to `M`), reinforcement/steel commercial skus → `M`, technical glass/panel skus → `M2`, kit skus (`KIT-*`, `DEMO-BUY-KIT-*`) → `KIT`, fittings → `EA`. `incompatible_cost_unit` = item exists but unit wrong — update `cost_list_items.unit`, don't re-seed.
+- **Emit-form controlled checkbox**: `label.quotation-confirm input` is React-controlled — coordinate clicks at ≤67% zoom often hit without toggling `confirmed`, leaving `Emitir cotización` disabled even when visually checked. Fallback: console `cb.click()` on it, then click the (now-enabled) button. Same trick works for `Calificar` / other disabled-until-confirm buttons.
+- **Navigation instability at low zoom**: address-bar Enter and `<a>` clicks intermittently fail to navigate (autocomplete/hover-target issues); `location.href='…'` via console is the reliable fallback. The workspace is ~1440px-designed — run browser zoom ~50–67% and verify coordinates with `getBoundingClientRect()` + zoom factor, or the `devin-scrollable` aside's inner content will shift under your cursor.
+- **Compare needs 2 sealed revisions**: apply → emit REV-A → `Editar cotización` (successor, confirms) → edit position → reprice → apply → emit REV-B. The `successor` POST frees prices; compare then shows real before→after diffs (dims, net price, spec-change note).
+- **job_runs retry**: `POST /api/v1/jobs/{id}/retry/` requeues terminal FAILED rows in place (attempt reset). Seed a FAILED clone (`INSERT … SELECT` with `idempotency_key||'-x'` — unique index blocks identical keys) to exercise the UI Reintentar path; the runjobs worker must be running for the requeued job to reach Completado.
+- **Analytics defect live in this build**: `GET /api/v1/analytics/summary/` 409s for members — `_summary` counts `job_runs` inside the documentary (authenticated) scope, but `rbac_repair` grants job_runs only to service_role/postgres. Dashboard "Necesita atención" shows "No pudimos cargar la operación de hoy." — a real defect, not env. Jobs views are fine (`job_scope()` verifies inside RLS then yields outside it).
+
+## Merged stack (89d22e0+) extras
+
+- **Job worker required**: artifact generation (DOC-01/03) is now async via the `jobs` queue — the UI polls `/api/v1/jobs/{id}/` forever unless a worker runs: `python backend/manage.py runjobs --poll 1.5` (same env as runserver). No worker = "Generando cotización…" spinner forever.
 - **Async artifact open**: the emitted-doc button fetches the artifact and downloads it via an anchor — a post-job `window.open` runs outside the user gesture and gets popup-blocked. If a new open flow ever opens a tab after awaiting, it will hit the same block.
 - **Fresh-DB column grants**: `authenticated` has column-level (not table-level) SELECT on `projects`/`project_positions`. New columns added without grants → `GET /projects` 409 `pricing_transaction_rejected` (SQLSTATE 42501). Any migration adding a column to a column-granted table must GRANT it (see 20261020000000 for the projects repair).
 - **Fixture API shapes**: POST `/projects/`; POST `/projects/{id}/positions/` `{location_tag,quantity,design:{system_id,nominal_width_mm,nominal_height_mm,color,parametric_tree}}`; POST `/pricing/preview/` `{project_id,pricing_mode:COST_PLUS_MARGIN,context_code:DEFAULT,currency:CLP,effective_date,discount_pct,target_margin,segment:RETAIL,confirmed,reason}` then POST `/pricing/operations/{op}/apply/` `{reason,confirmed:true}`; GET/PUT `/documents/projects/{id}/inputs/`; POST `/documents/projects/{id}/freeze/` `{pricing_operation_id,confirmed:true}`; POST `/production/versions/{vid}/release/` (OWNER/WM only); POST `/production/orders/{oid}/optimize/` `{color}` (required!).
