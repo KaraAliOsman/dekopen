@@ -92,10 +92,21 @@ class ProductionOrderDetailSerializer(ProductionOrderSerializer):
     dispatch_note_dte = serializers.DictField(allow_null=True, required=False)
 
 
+class QcCheckSerializer(StrictSerializer):
+    check = serializers.CharField(max_length=200)
+    expected = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
+    actual = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
+    item_code = serializers.CharField(max_length=50, required=False, allow_blank=True, default="")
+    result = serializers.ChoiceField(choices=("PASS", "FAIL"))
+
+
 class StepTransitionRequestSerializer(StrictSerializer):
-    action = serializers.ChoiceField(choices=("START", "COMPLETE", "BLOCK", "UNBLOCK", "NOTE"))
+    action = serializers.ChoiceField(
+        choices=("START", "COMPLETE", "BLOCK", "UNBLOCK", "NOTE", "QC_CHECK")
+    )
     note = serializers.CharField(required=False, allow_null=True, max_length=500)
     qc_result = serializers.ChoiceField(choices=("PASS", "FAIL"), required=False, allow_null=True)
+    qc_check = QcCheckSerializer(required=False, allow_null=True)
 
     def validate(self, data):
         data = super().validate(data)
@@ -104,6 +115,12 @@ class StepTransitionRequestSerializer(StrictSerializer):
         if data.get("qc_result") and data["action"] != "COMPLETE":
             raise serializers.ValidationError(
                 {"qc_result": "QC outcome only applies to COMPLETE"}
+            )
+        if data["action"] == "QC_CHECK" and not data.get("qc_check"):
+            raise serializers.ValidationError({"qc_check": "QC check payload is required"})
+        if data.get("qc_check") and data["action"] != "QC_CHECK":
+            raise serializers.ValidationError(
+                {"qc_check": "QC check payload only applies to QC_CHECK"}
             )
         return data
 

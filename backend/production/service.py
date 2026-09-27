@@ -126,6 +126,7 @@ _EVENTS = {
     "BLOCK": "STEP_BLOCKED",
     "UNBLOCK": "STEP_UNBLOCKED",
     "NOTE": "NOTE",
+    "QC_CHECK": "QC_CHECK",
 }
 
 _TRANSITIONS = {
@@ -134,6 +135,9 @@ _TRANSITIONS = {
     "BLOCK": ("BLOCKED", {"PENDING", "READY", "IN_PROGRESS"}),
     "UNBLOCK": ("READY", {"BLOCKED"}),
     "NOTE": (None, {"PENDING", "READY", "IN_PROGRESS", "DONE", "BLOCKED"}),
+    # §13: recording one measured check on the QC step is not a status
+    # change — the step still completes via COMPLETE/QC_FAILED.
+    "QC_CHECK": (None, {"READY", "IN_PROGRESS", "BLOCKED"}),
 }
 
 
@@ -1128,11 +1132,26 @@ def transition_step(
     actor_id: UUID,
     note: str | None,
     qc_result: str | None = None,
+    qc_check: dict[str, object] | None = None,
 ) -> dict[str, object]:
     if action not in _TRANSITIONS:
         raise DocumentaryError("step_action_unknown")
     if action == "NOTE" and not (note or "").strip():
         raise DocumentaryError("step_note_required")
+    if action == "QC_CHECK":
+        if not qc_check or not str(qc_check.get("check") or "").strip():
+            raise DocumentaryError("qc_check_required")
+        if qc_check.get("result") not in ("PASS", "FAIL"):
+            raise DocumentaryError("qc_check_result_invalid")
+        qc_check = {
+            "check": str(qc_check["check"]).strip()[:200],
+            "expected": str(qc_check.get("expected") or "").strip()[:100],
+            "actual": str(qc_check.get("actual") or "").strip()[:100],
+            "item_code": str(qc_check.get("item_code") or "").strip()[:50],
+            "result": qc_check["result"],
+        }
+    elif qc_check is not None:
+        raise DocumentaryError("step_transition_invalid")
     with transaction.atomic(), documentary_backend():
         step_ref = one(
             """
@@ -1174,6 +1193,8 @@ def transition_step(
         if qc_result is not None and not (
             action == "COMPLETE" and str(step["code"]) == "QC"
         ):
+            raise DocumentaryError("step_transition_invalid")
+        if action == "QC_CHECK" and str(step["code"]) != "QC":
             raise DocumentaryError("step_transition_invalid")
         new_status, allowed = _TRANSITIONS[action]
         if action == "COMPLETE" and qc_result == "FAIL":
@@ -1298,6 +1319,7 @@ def transition_step(
                 json.dumps({
                     **({"note": note.strip()} if note else {}),
                     **({"qc_result": qc_result} if qc_result else {}),
+                    **({"qc_check": qc_check} if qc_check else {}),
                 }),
             ],
         )

@@ -1,7 +1,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
 SET LOCAL search_path = public, private, auth, extensions, pg_temp;
-SELECT plan(22);
+SELECT plan(23);
 
 SELECT has_table('public', 'work_centers', 'work centers table exists');
 SELECT has_table('public', 'production_steps', 'routing steps table exists');
@@ -138,6 +138,14 @@ SELECT ok(
           AND pg_get_constraintdef(oid) LIKE '%WO_STOCK_CONSUMED%'
     ),
     'step events accept operations export, remnant settlement and stock consumption outcomes'
+);
+SELECT ok(
+    EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'production_step_events_event_check'
+          AND pg_get_constraintdef(oid) LIKE '%QC_CHECK%'
+    ),
+    'step events accept per-check QC records'
 );
 SELECT ok(
     EXISTS (

@@ -12,6 +12,7 @@
  * * `BLOCK` - BLOCK
  * * `UNBLOCK` - UNBLOCK
  * * `NOTE` - NOTE
+ * * `QC_CHECK` - QC_CHECK
  */
 export type StepTransitionRequestActionEnum =
   (typeof StepTransitionRequestActionEnum)[keyof typeof StepTransitionRequestActionEnum];
@@ -22,4 +23,5 @@ export const StepTransitionRequestActionEnum = {
   BLOCK: "BLOCK",
   UNBLOCK: "UNBLOCK",
   NOTE: "NOTE",
+  QC_CHECK: "QC_CHECK",
 } as const;

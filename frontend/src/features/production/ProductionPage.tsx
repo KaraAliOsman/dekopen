@@ -61,7 +61,7 @@ import {
   type PolishingEntry,
 } from "./GlassSummary";
 import SignaturePad, { type SignaturePadHandle } from "./SignaturePad";
-import { OperatorStepCard } from "./OperatorCard";
+import { OperatorStepCard, type QcCheckInput } from "./OperatorCard";
 import { TracePieceMatches, TracePlan, TraceStock } from "./TraceView";
 import "./production.css";
 
@@ -124,6 +124,7 @@ const eventKey: Record<string, Parameters<typeof t>[0]> = {
   WO_HOLD: "production.eventHold",
   WO_OPTIMIZED: "production.eventOptimized",
   QC_FAILED: "production.eventQcFailed",
+  QC_CHECK: "production.eventQcCheck",
   WO_REMADE: "production.eventRemade",
   WO_CNC_EXPORTED: "production.eventCncExported",
   WO_DXF_EXPORTED: "production.eventDxfExported",
@@ -417,6 +418,10 @@ export function ProductionPage(): JSX.Element {
     } finally {
       if (mounted.current) setBusy(false);
     }
+  }
+
+  function qcCheck(stepId: string, check: QcCheckInput, orderId: string): void {
+    void action(productionStepTransition(stepId, { action: "QC_CHECK", qc_check: check }), orderId);
   }
 
   function transition(stepId: string, stepAction: StepAction, orderId: string): void {
@@ -2238,7 +2243,12 @@ export function ProductionPage(): JSX.Element {
                       ))}
                     </ol>
                     {operatorStep ? (
-                      <OperatorStepCard step={operatorStep} trace={trace} traceBusy={traceBusy} />
+                      <OperatorStepCard
+                        step={operatorStep}
+                        trace={trace}
+                        traceBusy={traceBusy}
+                        onQcCheck={(stepId, check) => qcCheck(stepId, check, detail.id)}
+                      />
                     ) : null}
                   </>
                 );

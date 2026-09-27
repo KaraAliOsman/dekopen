@@ -950,3 +950,54 @@
   font-size: 0.72rem;
   color: var(--theme-text-secondary);
 }
+
+/* QC check ledger + entry form — large controls, high contrast for gloves. */
+.operator-qc-ledger td strong {
+  font-size: 0.78rem;
+}
+.qc-result-pass {
+  color: var(--theme-success, #1a7f4b);
+}
+.qc-result-fail {
+  color: var(--theme-danger, #b3261e);
+}
+.operator-qc-form {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.8fr) 1.6fr 0.8fr 0.8fr auto auto;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  align-items: stretch;
+}
+.operator-qc-form select,
+.operator-qc-form input {
+  min-height: 44px;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.9rem;
+}
+.operator-qc-form button {
+  min-height: 44px;
+  padding: 0.45rem 1rem;
+  border-radius: var(--radius-sm, 6px);
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.qc-submit-pass {
+  border: 1px solid var(--theme-success, #1a7f4b);
+  background: var(--theme-success, #1a7f4b);
+  color: #fff;
+}
+.qc-submit-fail {
+  border: 1px solid var(--theme-danger, #b3261e);
+  background: transparent;
+  color: var(--theme-danger, #b3261e);
+}
+.operator-qc-form button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+@media (max-width: 900px) {
+  .operator-qc-form {
+    grid-template-columns: 1fr 1fr;
+  }
+}

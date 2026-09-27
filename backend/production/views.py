@@ -199,6 +199,7 @@ class ProductionStepTransitionView(APIView):
                     actor_id=token.user_id,
                     note=data.get("note"),
                     qc_result=data.get("qc_result"),
+                    qc_check=data.get("qc_check"),
                 )
         return Response(output)
 

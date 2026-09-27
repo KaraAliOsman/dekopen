@@ -810,6 +810,106 @@ def test_note_action_requires_text() -> None:
     assert error.value.code == "step_note_required"
 
 
+def _qc_fakes(step: dict):
+    def fake_one(query, params=(), code=None):
+        if "SELECT order_id FROM public.production_steps" in query:
+            return {"order_id": step["order_id"]}
+        if "FROM public.orders" in query and "FOR UPDATE" in query:
+            return {"id": step["order_id"], "status": "IN_PROGRESS"}
+        if "FOR UPDATE OF s" in query:
+            return step
+        if "status::text AS status" in query:
+            return {"status": "IN_PROGRESS"}
+        if "COUNT(*)" in query and "production_steps" in query:
+            return {"total": 3, "done": 0, "blocked": 0, "in_progress": 1}
+        if "UPDATE public.orders SET status" in query:
+            return {"status": "IN_PROGRESS"}
+        if "FROM public.production_steps s" in query:
+            return step
+        raise AssertionError(query)
+
+    return fake_one
+
+
+def test_qc_check_records_structured_event() -> None:
+    step = _step_row(status="IN_PROGRESS", code="QC")
+    inserted = []
+
+    def fake_rows(query, params=()):
+        if "INSERT INTO public.production_step_events" in query:
+            inserted.append(params)
+        return []
+
+    with patch("production.service.one", side_effect=_qc_fakes(step)), patch(
+        "production.service.rows", side_effect=fake_rows
+    ), patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ):
+        output = service.transition_step(
+            org_id=uuid4(), step_id=step["id"], action="QC_CHECK",
+            actor_id=uuid4(), note=None,
+            qc_check={
+                "check": "Medida total", "expected": "1200mm",
+                "actual": "1201mm", "item_code": "M-01", "result": "PASS",
+            },
+        )
+    assert output["step"]["status"] == "IN_PROGRESS"
+    assert len(inserted) == 1
+    params = inserted[0]
+    assert params[3] == "QC_CHECK"
+    payload = json.loads(params[5])
+    assert payload["qc_check"]["check"] == "Medida total"
+    assert payload["qc_check"]["actual"] == "1201mm"
+    assert payload["qc_check"]["item_code"] == "M-01"
+    assert payload["qc_check"]["result"] == "PASS"
+
+
+def test_qc_check_rejected_on_non_qc_step() -> None:
+    step = _step_row(status="IN_PROGRESS", code="CUT")
+
+    with patch("production.service.one", side_effect=_qc_fakes(step)), patch(
+        "production.service.rows", side_effect=lambda *a, **k: []
+    ), patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ):
+        with pytest.raises(DocumentaryError) as error:
+            service.transition_step(
+                org_id=uuid4(), step_id=step["id"], action="QC_CHECK",
+                actor_id=uuid4(), note=None,
+                qc_check={"check": "x", "result": "PASS"},
+            )
+    assert error.value.code == "step_transition_invalid"
+
+
+def test_qc_check_requires_payload() -> None:
+    with pytest.raises(DocumentaryError) as error:
+        service.transition_step(
+            org_id=uuid4(), step_id=uuid4(), action="QC_CHECK",
+            actor_id=uuid4(), note=None,
+        )
+    assert error.value.code == "qc_check_required"
+
+
+def test_qc_check_requires_valid_result() -> None:
+    with pytest.raises(DocumentaryError) as error:
+        service.transition_step(
+            org_id=uuid4(), step_id=uuid4(), action="QC_CHECK",
+            actor_id=uuid4(), note=None,
+            qc_check={"check": "Medida", "result": "MAYBE"},
+        )
+    assert error.value.code == "qc_check_result_invalid"
+
+
+def test_qc_check_not_allowed_with_other_actions() -> None:
+    with pytest.raises(DocumentaryError) as error:
+        service.transition_step(
+            org_id=uuid4(), step_id=uuid4(), action="START",
+            actor_id=uuid4(), note=None,
+            qc_check={"check": "Medida", "result": "PASS"},
+        )
+    assert error.value.code == "step_transition_invalid"
+
+
 def test_hold_event_only_appended_once() -> None:
     captured = []
 

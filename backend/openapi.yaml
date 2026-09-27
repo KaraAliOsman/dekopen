@@ -22174,6 +22174,30 @@ components:
         coverage:
           type: object
           additionalProperties: {}
+    QcCheckRequest:
+      type: object
+      properties:
+        check:
+          type: string
+          minLength: 1
+          maxLength: 200
+        expected:
+          type: string
+          default: ''
+          maxLength: 100
+        actual:
+          type: string
+          default: ''
+          maxLength: 100
+        item_code:
+          type: string
+          default: ''
+          maxLength: 50
+        result:
+          $ref: '#/components/schemas/ResultEnum'
+      required:
+      - check
+      - result
     QcResultEnum:
       enum:
       - PASS
@@ -22574,6 +22598,14 @@ components:
       - confirmed
       - expected_operation_id
       - reason
+    ResultEnum:
+      enum:
+      - PASS
+      - FAIL
+      type: string
+      description: |-
+        * `PASS` - PASS
+        * `FAIL` - FAIL
     RevisionCompareEntry:
       type: object
       properties:
@@ -23231,6 +23263,7 @@ components:
       - BLOCK
       - UNBLOCK
       - NOTE
+      - QC_CHECK
       type: string
       description: |-
         * `START` - START
@@ -23238,6 +23271,7 @@ components:
         * `BLOCK` - BLOCK
         * `UNBLOCK` - UNBLOCK
         * `NOTE` - NOTE
+        * `QC_CHECK` - QC_CHECK
     StepTransitionRequestRequest:
       type: object
       properties:
@@ -23253,6 +23287,10 @@ components:
           oneOf:
           - $ref: '#/components/schemas/QcResultEnum'
           - $ref: '#/components/schemas/NullEnum'
+        qc_check:
+          allOf:
+          - $ref: '#/components/schemas/QcCheckRequest'
+          nullable: true
       required:
       - action
     StockKindEnum:

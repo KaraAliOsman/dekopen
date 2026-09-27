@@ -5,7 +5,9 @@
  * piece list with dimensions/angles/origins. Every value is sealed evidence
  * from the trace read — nothing is recomputed here. */
 
-import { fmtMm } from "../../format";
+import { useState } from "react";
+
+import { fmtMm, formatDateTime } from "../../format";
 import { t } from "../../i18n/es-CL";
 import { opKindLabel, stockKindLabel } from "./labels";
 import type { ProductionOrderTrace, ProductionStep } from "../../api/generated/models";
@@ -133,14 +135,24 @@ function _isShort(value: string | undefined): boolean {
   return !!value && Number(value) > 0;
 }
 
+export type QcCheckInput = {
+  check: string;
+  expected: string;
+  actual: string;
+  item_code: string;
+  result: "PASS" | "FAIL";
+};
+
 export function OperatorStepCard({
   step,
   trace,
   traceBusy,
+  onQcCheck,
 }: {
   step: ProductionStep;
   trace: ProductionOrderTrace | null;
   traceBusy: boolean;
+  onQcCheck?: (stepId: string, check: QcCheckInput) => void;
 }) {
   const kinds = STEP_STOCK_KINDS[step.code] ?? [];
   const reservations = trace ? _reservations(trace) : [];
@@ -427,6 +439,10 @@ export function OperatorStepCard({
             </div>
           ) : null}
 
+          {step.code === "QC" ? (
+            <QcCheckSection step={step} trace={trace} onQcCheck={onQcCheck} />
+          ) : null}
+
           {!kinds.length ? (
             <p className="operator-summary">
               {t("production.operatorNoStock")} · {totalPieces}{" "}
@@ -436,5 +452,158 @@ export function OperatorStepCard({
         </div>
       )}
     </section>
+  );
+}
+
+type _QcCheckEntry = {
+  id: string;
+  check: string;
+  expected: string;
+  actual: string;
+  item_code: string;
+  result: string;
+  created_at: string;
+};
+
+function _qcEntries(trace: ProductionOrderTrace | null, stepId: string): _QcCheckEntry[] {
+  if (!trace) return [];
+  const entries: _QcCheckEntry[] = [];
+  for (const event of (trace.events as Array<Record<string, unknown>> | undefined) ?? []) {
+    if (event?.event !== "QC_CHECK" || String(event.step_id ?? "") !== stepId) continue;
+    const payload = (event.payload ?? {}) as { qc_check?: Record<string, unknown> };
+    const check = payload.qc_check;
+    if (!check || typeof check !== "object") continue;
+    entries.push({
+      id: String(event.id ?? `${check.check}-${entries.length}`),
+      check: String(check.check ?? ""),
+      expected: String(check.expected ?? ""),
+      actual: String(check.actual ?? ""),
+      item_code: String(check.item_code ?? ""),
+      result: String(check.result ?? ""),
+      created_at: String(event.created_at ?? ""),
+    });
+  }
+  return entries;
+}
+
+function QcCheckSection({
+  step,
+  trace,
+  onQcCheck,
+}: {
+  step: ProductionStep;
+  trace: ProductionOrderTrace | null;
+  onQcCheck?: (stepId: string, check: QcCheckInput) => void;
+}) {
+  const [itemCode, setItemCode] = useState("");
+  const [checkName, setCheckName] = useState("");
+  const [expected, setExpected] = useState("");
+  const [actual, setActual] = useState("");
+  const entries = _qcEntries(trace, step.id);
+  const itemOptions = trace
+    ? [...new Set(Object.values(trace.labels ?? {}).map(String))].sort()
+    : [];
+  const writable = !!onQcCheck && ["READY", "IN_PROGRESS", "BLOCKED"].includes(step.status);
+
+  function submit(result: "PASS" | "FAIL"): void {
+    if (!onQcCheck || !checkName.trim()) return;
+    onQcCheck(step.id, {
+      check: checkName.trim(),
+      expected: expected.trim(),
+      actual: actual.trim(),
+      item_code: itemCode,
+      result,
+    });
+    setCheckName("");
+    setExpected("");
+    setActual("");
+  }
+
+  return (
+    <div className="operator-section operator-qc">
+      <h4>{t("production.qcChecksTitle")}</h4>
+      {entries.length ? (
+        <table className="production-plan operator-qc-ledger">
+          <thead>
+            <tr>
+              <th>{t("production.qcCheck")}</th>
+              <th>{t("production.qcExpected")}</th>
+              <th>{t("production.qcActual")}</th>
+              <th>{t("production.qcItem")}</th>
+              <th>{t("production.qcResult")}</th>
+              <th>{t("production.qcTime")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {entries.map((entry) => (
+              <tr key={entry.id}>
+                <td>{entry.check}</td>
+                <td>{entry.expected || "—"}</td>
+                <td>{entry.actual || "—"}</td>
+                <td>{entry.item_code ? <strong>{entry.item_code}</strong> : "—"}</td>
+                <td>
+                  <strong className={entry.result === "FAIL" ? "qc-result-fail" : "qc-result-pass"}>
+                    {entry.result === "FAIL" ? t("production.qcFail") : t("production.qcPass")}
+                  </strong>
+                </td>
+                <td>{formatDateTime(entry.created_at)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p className="production-trace-empty">{t("production.qcChecksEmpty")}</p>
+      )}
+      {writable ? (
+        <div className="operator-qc-form">
+          <select
+            aria-label={t("production.qcItem")}
+            value={itemCode}
+            onChange={(event) => setItemCode(event.target.value)}
+          >
+            <option value="">{t("production.qcItemAny")}</option>
+            {itemOptions.map((code) => (
+              <option key={code} value={code}>
+                {code}
+              </option>
+            ))}
+          </select>
+          <input
+            aria-label={t("production.qcCheck")}
+            placeholder={t("production.qcCheckPlaceholder")}
+            value={checkName}
+            onChange={(event) => setCheckName(event.target.value)}
+          />
+          <input
+            aria-label={t("production.qcExpected")}
+            placeholder={t("production.qcExpected")}
+            value={expected}
+            onChange={(event) => setExpected(event.target.value)}
+          />
+          <input
+            aria-label={t("production.qcActual")}
+            placeholder={t("production.qcActual")}
+            value={actual}
+            onChange={(event) => setActual(event.target.value)}
+          />
+          <button
+            type="button"
+            className="qc-submit-pass"
+            disabled={!checkName.trim()}
+            onClick={() => submit("PASS")}
+          >
+            {t("production.qcPass")}
+          </button>
+          <button
+            type="button"
+            className="qc-submit-fail"
+            disabled={!checkName.trim()}
+            onClick={() => submit("FAIL")}
+          >
+            {t("production.qcFail")}
+          </button>
+        </div>
+      ) : null}
+    </div>
   );
 }

@@ -5,6 +5,7 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { QcCheckRequest } from "./qcCheckRequest";
 import type { StepTransitionRequestActionEnum } from "./stepTransitionRequestActionEnum";
 import type { StepTransitionRequestRequestQcResult } from "./stepTransitionRequestRequestQcResult";
 
@@ -19,4 +20,5 @@ export interface StepTransitionRequestRequest {
   qc_result?:
     | (typeof StepTransitionRequestRequestQcResult)[keyof typeof StepTransitionRequestRequestQcResult]
     | null;
+  qc_check?: QcCheckRequest | null;
 }
