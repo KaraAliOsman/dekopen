@@ -1,4 +1,4 @@
-import { fmtMm } from "../../format";
+import { fmtMm, parseLocaleNumber } from "../../format";
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import "./canvas.css";
@@ -208,22 +208,22 @@ export function issueText(
 }
 
 function normalizeMm(candidate: string): string | null {
-  const value = Number(candidate.replace(",", "."));
-  if (!Number.isFinite(value) || value <= 0) return null;
+  const value = parseLocaleNumber(candidate);
+  if (value === null || value <= 0) return null;
   return value.toFixed(2);
 }
 
 function normalizeAngle(candidate: string): string | null {
-  const value = Number(candidate.replace(",", "."));
-  if (!Number.isFinite(value) || Math.abs(value) >= 90) return null;
+  const value = parseLocaleNumber(candidate);
+  if (value === null || Math.abs(value) >= 90) return null;
   return value.toFixed(1);
 }
 
 /** Contour coordinates are signed: zero/negative carry meaning (a vertical
  * side, an inward arc). Bounds keep the corner ordering the engine requires. */
 function normalizeRange(candidate: string, min: number, max: number): string | null {
-  const value = Number(candidate.replace(",", "."));
-  if (!Number.isFinite(value) || value < min || value >= max) return null;
+  const value = parseLocaleNumber(candidate);
+  if (value === null || value < min || value >= max) return null;
   return value.toFixed(2);
 }
 

@@ -269,8 +269,17 @@ export const schemas: Record<Resource, Group[]> = {
   ],
 };
 
-// Decimal strings remain strings throughout form state and transport.
-export const exact = (value: string): string => value.trim().replace(",", ".");
+// Decimal strings remain strings throughout form state and transport —
+// precision is the contract ("0.1000000000000000001" reaches the engine
+// untouched). Only the es-CL thousands-dot pattern normalizes: "1.500" is
+// fifteen hundred, never 1.5.
+export const exact = (value: string): string => {
+  const text = value.trim();
+  if (/^[+-]?\d{1,3}(?:\.\d{3})+(?:,\d+)?$/.test(text)) {
+    return text.replaceAll(".", "").replace(",", ".");
+  }
+  return text.replace(",", ".");
+};
 
 /** §15 section authoring state — structured like the kit `contents` list:
  * vertices/axes carry stable keys for the editable tables; string decimals

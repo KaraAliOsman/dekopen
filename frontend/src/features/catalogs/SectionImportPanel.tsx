@@ -9,6 +9,7 @@
 import { useMemo, useRef, useState } from "react";
 
 import type { SectionImportCandidate, SectionImportResponse } from "../../api/generated/models";
+import { parseLocaleNumber } from "../../format";
 import { t, type TranslationKey } from "../../i18n/es-CL";
 import type { catalogApi } from "./catalogModel";
 
@@ -102,9 +103,8 @@ export function SectionImportPanel({
       : null;
 
   const scaleText = useMemo(() => {
-    const normalized = scale.replace(",", ".").trim();
-    const value = Number(normalized);
-    return Number.isFinite(value) && value > 0 ? normalized : null;
+    const value = parseLocaleNumber(scale);
+    return value !== null && value > 0 ? String(value) : null;
   }, [scale]);
 
   const scaledPoints = useMemo(() => {

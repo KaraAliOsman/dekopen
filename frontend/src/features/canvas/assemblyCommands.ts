@@ -1,3 +1,4 @@
+import { parseLocaleNumber } from "../../format";
 import { t } from "../../i18n/es-CL";
 import type {
   CommandArgs,
@@ -49,20 +50,20 @@ import {
  * commit at 0.01mm, joint angles stay strictly inside ±90° at 0.1°, module
  * counts are positive integers bounded by the product contract. */
 function normalizeMm(raw: string): string | null {
-  const value = Number(raw.replace(",", "."));
-  if (!Number.isFinite(value) || value <= 0) return null;
+  const value = parseLocaleNumber(raw);
+  if (value === null || value <= 0) return null;
   return value.toFixed(2);
 }
 
 function normalizeAngle(raw: string): string | null {
-  const value = Number(raw.replace(",", "."));
-  if (!Number.isFinite(value) || Math.abs(value) >= 90) return null;
+  const value = parseLocaleNumber(raw);
+  if (value === null || Math.abs(value) >= 90) return null;
   return value.toFixed(1);
 }
 
 function normalizeCount(raw: string): string | null {
-  const value = Number(raw.replace(",", "."));
-  if (!Number.isInteger(value) || value < 1 || value > 12) return null;
+  const value = parseLocaleNumber(raw);
+  if (value === null || !Number.isInteger(value) || value < 1 || value > 12) return null;
   return String(value);
 }
 
