@@ -60,7 +60,9 @@ def test_emit_enqueues_under_service_role_with_idempotency():
     order_id = uuid4()
     with patch("jobs.service.job_backend", side_effect=_job_backend), patch(
         "automations.service._service_claims", side_effect=_atomic
-    ), patch("jobs.service.enqueue", side_effect=_enqueue):
+    ), patch("automations.service.transaction.atomic", _atomic), patch(
+        "jobs.service.enqueue", side_effect=_enqueue
+    ):
         result = automations_service.emit(
             "automation.step_advance",
             org_id=org_id,
