@@ -664,3 +664,59 @@ def test_handle_prep_member_local_u_on_horizontal_member() -> None:
     # horizontal axis: u = point.x - member.start.x
     assert op.u_mm == Decimal("700")
     assert op.reference == "member_start"
+
+
+def _stile(member_id: str, slot: str, x: Decimal, span: Decimal) -> PhysicalMemberFactV1:
+    return PhysicalMemberFactV1(
+        member_id=member_id,
+        semantic_member_id=f"sem-{slot}",
+        identity=PhysicalMemberIdentityV1(
+            position_id="pos-1", position_index=1, repetition_index=1,
+            topology_path="root/door/leaf", assembly="A", leaf_slot=None,
+            role=ProfileRole.SASH, physical_member_slot=slot,
+        ),
+        bay_id="bay-1", leaf_id="leaf-1", workshop_sku="WS-P1",
+        material=MaterialType.PVC, cut_length_mm=span,
+        angle_left=Decimal("90"), angle_right=Decimal("90"),
+        axis=Axis.VERTICAL,
+        start=TracePointV1(x_mm=x, y_mm=Decimal("0")),
+        end=TracePointV1(x_mm=x, y_mm=span),
+    )
+
+
+def test_mirrored_door_mirrors_machining_host() -> None:
+    """§4 handedness: a door's handle stile swaps when the product
+    mirrors — the prep must land on the mirrored member, at the same
+    member-local datum height. Visual and CNC handedness never diverge."""
+    left_stile = _stile("c" * 64, "LEFT", Decimal("60"), Decimal("2000"))
+    right_stile = _stile("d" * 64, "RIGHT", Decimal("940"), Decimal("2000"))
+
+    def ops_for(host: str, x: Decimal) -> list[ManufacturingOperation]:
+        handle = _handle()
+        handle.handle_id = f"h{host[:3]}" * 16
+        handle.host_member_id = host
+        handle.point = TracePointV1(x_mm=x, y_mm=Decimal("1050"))
+        return operations_from_plan(
+            bars=[],
+            fact_units=[
+                _unit(members=[left_stile, right_stile], handles=[handle])
+            ],
+        )
+
+    [prep_on_left] = [
+        o for o in ops_for(left_stile.member_id, Decimal("60"))
+        if o.kind == OperationKind.HANDLE_PREP
+    ]
+    [prep_on_right] = [
+        o for o in ops_for(right_stile.member_id, Decimal("940"))
+        if o.kind == OperationKind.HANDLE_PREP
+    ]
+    # The mirrored product carries the prep on the mirrored member —
+    # same member-local u (same physical height from the member start),
+    # never a screen-space mirror of the same host.
+    assert prep_on_left.host == left_stile.member_id
+    assert prep_on_right.host == right_stile.member_id
+    assert prep_on_left.u_mm == prep_on_right.u_mm == Decimal("1050")
+    assert prep_on_left.x_mm == Decimal("60")
+    assert prep_on_right.x_mm == Decimal("940")
+    assert prep_on_left.operation_id != prep_on_right.operation_id

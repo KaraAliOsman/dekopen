@@ -929,6 +929,53 @@ def _work_order(org_id: UUID, refs: dict) -> dict:
         if isinstance(reservations, list)
         else 0
     )
+    # §21: the assistant reads canonical CNC truth — per-member machining
+    # verdicts against the org's real machines — so "why is M-07 blocked"
+    # is answered from engine validation, never invented.
+    cnc: dict[str, Any] = {}
+    try:
+        from production.cnc import cnc_readiness
+
+        readiness = cnc_readiness(org_id=org_id, order_id=order_id)
+        members = readiness.get("members", [])
+        cnc = {
+            "issues": [
+                _cut(str(issue.get("detail", issue.get("code", ""))))
+                for issue in readiness.get("issues", [])[:MAX_LIST]
+                if isinstance(issue, dict)
+            ],
+            "members": [
+                {
+                    "member": _cut(str(m.get("member_label", ""))),
+                    "kinds": m.get("kinds", []),
+                    "machines": [
+                        {
+                            "machine": _cut(str(mc.get("machine_code", ""))),
+                            "verdict": mc.get("verdict"),
+                            "blockers": [
+                                _cut(str(b.get("detail", b.get("code", ""))))
+                                for b in (mc.get("blockers") or [])[:5]
+                                if isinstance(b, dict)
+                            ],
+                        }
+                        for mc in m.get("machines", [])[:5]
+                    ],
+                }
+                for m in members[:MAX_LIST]
+                if isinstance(m, dict)
+            ],
+            "programs": [
+                {
+                    "program_no": _cut(str(p.get("program_no", ""))),
+                    "machine": _cut(str(p.get("machine_code", ""))),
+                    "status": p.get("status"),
+                }
+                for p in readiness.get("programs", [])[:MAX_LIST]
+                if isinstance(p, dict)
+            ],
+        }
+    except Exception:  # noqa: BLE001 — CNC truth must never break the projection
+        cnc = {}
     return {
         "id": str(order_id),
         "order_code": _cut(order[0]["order_code"]),
@@ -943,6 +990,7 @@ def _work_order(org_id: UUID, refs: dict) -> dict:
             }
             for s in steps
         ],
+        "cnc": cnc,
     }
 
 
