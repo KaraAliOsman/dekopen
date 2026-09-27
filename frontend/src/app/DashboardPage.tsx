@@ -6,6 +6,7 @@ import { analyticsOperationalSummary, projectsList } from "../api/generated/deko
 import type { OperationalSummary, ProjectResponse } from "../api/generated/models";
 import { useAuthSession } from "../auth/AuthSessionProvider";
 import { formatDateTime } from "../format";
+import { formatMoney } from "../features/money";
 import { t, type TranslationKey } from "../i18n/es-CL";
 import { attentionEntries, attentionLabel } from "./attention";
 
@@ -208,6 +209,40 @@ export function DashboardPage(): JSX.Element {
               </strong>
             </div>
           </div>
+          {["OWNER", "ESTIMATOR"].includes(org?.role ?? "") &&
+          opsQuery.data.commercial.length > 0 ? (
+            <div className="dashboard-money">
+              {opsQuery.data.commercial.map((row) => {
+                const outstanding = Math.max(
+                  0,
+                  Number(row.booked) - Number(row.collected),
+                );
+                return (
+                  <div key={row.currency} className="dashboard-money-currency">
+                    <h3 className="eyebrow">{row.currency}</h3>
+                    <div className="dashboard-cards">
+                      <div className="metric-card">
+                        <span className="eyebrow">{t("dashboard.moneyQuoted")}</span>
+                        <strong>{formatMoney(row.quoted, row.currency)}</strong>
+                      </div>
+                      <div className="metric-card">
+                        <span className="eyebrow">{t("dashboard.moneyBooked")}</span>
+                        <strong>{formatMoney(row.booked, row.currency)}</strong>
+                      </div>
+                      <div className="metric-card">
+                        <span className="eyebrow">{t("dashboard.moneyCollected")}</span>
+                        <strong>{formatMoney(row.collected, row.currency)}</strong>
+                      </div>
+                      <div className="metric-card">
+                        <span className="eyebrow">{t("dashboard.moneyOutstanding")}</span>
+                        <strong>{formatMoney(String(outstanding), row.currency)}</strong>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
           {((opsQuery.data.recent_events as RecentEvent[]) ?? []).length > 0 ? (
             <ul className="dashboard-activity">
               {(opsQuery.data.recent_events as RecentEvent[]).map((item, i) => (

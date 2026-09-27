@@ -26,7 +26,7 @@ def _order_payload() -> dict:
             "units": 1,
             "bars": {"workshop_cut_plan": [{
                 "bar_index": 1,
-                "commercial_sku": "DEMO-BAR-MARCO",
+                "commercial_sku": "COMPRA-MARCO",
                 "material": "PVC",
                 "color": "BLANCO",
                 "stock_length_mm": "6000.00",
@@ -70,8 +70,8 @@ def _order_payload() -> dict:
                 }],
             }],
             "stock_reservations": [{
-                "kind": "BAR", "sku": "DEMO-BAR-MARCO", "variant_key": "",
-                "name": "DEMO-BAR-MARCO", "unit": "BAR", "needed": "1",
+                "kind": "BAR", "sku": "COMPRA-MARCO", "variant_key": "",
+                "name": "COMPRA-MARCO", "unit": "BAR", "needed": "1",
                 "on_hand": "10", "reserved": "1", "short": "0",
                 "consumed_at": None,
             }],
@@ -120,7 +120,7 @@ def _rows_factory():
             return [{"id": str(uuid4()), "movement_type": "RESERVATION",
                      "quantity": "1", "note": "wo-reserve:BAR",
                      "created_at": "t0", "actor_id": str(uuid4()),
-                     "item_id": str(uuid4()), "sku": "DEMO-BAR-MARCO",
+                     "item_id": str(uuid4()), "sku": "COMPRA-MARCO",
                      "variant_key": "", "item_name": "Bar"}]
         if "FROM public.inventory_remnants" in query:
             return []

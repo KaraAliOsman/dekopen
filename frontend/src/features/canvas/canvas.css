@@ -1703,6 +1703,19 @@
   fill-opacity: 0.14;
 }
 
+.seam-grip-dot,
+.divider-grip-dots circle {
+  fill: var(--theme-text-muted);
+  opacity: 0.55;
+}
+
+.seam-grip:hover ~ .seam-grip-dot,
+.divider-grip:hover ~ .divider-grip-dots circle,
+.divider-grip.is-selected ~ .divider-grip-dots circle {
+  fill: var(--theme-accent);
+  opacity: 1;
+}
+
 .divide-preview-line {
   pointer-events: none;
   stroke: var(--theme-accent);

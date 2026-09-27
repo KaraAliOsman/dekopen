@@ -75,7 +75,7 @@ def _bow_tree(
                 "opening_type": "TURN_LEFT" if operable and index == 2 else "FIXED",
                 "glass_spec": "4-12-4 Float Incoloro",
                 "glass_thickness_mm": "24.00",
-                "glass_article_sku": "GLASS-BASE",
+                "glass_article_sku": "VIDRIO-BASE",
             },
         }
 
@@ -138,15 +138,15 @@ def _seed_bow_project(
             "assembly fixture list",
         )
         for sku, unit in (
-            ("DEMO-BAR-MARCO", "BAR"),
-            ("DEMO-BAR-JQ-10", "BAR"),
-            ("DEMO-BAR-JQ-24", "BAR"),
-            ("DEMO-STEEL-BAR-MARCO", "BAR"),
-            ("DEMO-BAR-COPLE-60", "BAR"),
-            ("DEMO-BAR-HOJA", "BAR"),
-            ("DEMO-STEEL-BAR-HOJA", "BAR"),
+            ("COMPRA-MARCO", "BAR"),
+            ("COMPRA-JQ-10", "BAR"),
+            ("COMPRA-JQ-24", "BAR"),
+            ("COMPRA-ACERO-MARCO", "BAR"),
+            ("COMPRA-COPLE-60", "BAR"),
+            ("COMPRA-HOJA", "BAR"),
+            ("COMPRA-ACERO-HOJA", "BAR"),
             ("KIT-TURN", "KIT"),
-            ("GLASS-BASE", "M2"),
+            ("VIDRIO-BASE", "M2"),
         ):
             admin_write(
                 "cost-items", org,

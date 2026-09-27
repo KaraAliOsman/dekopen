@@ -199,6 +199,35 @@ describe("rectangular intent", () => {
     });
   });
 
+  it("keeps the target's declared opening when pasting a spec onto it", () => {
+    // Mirrored pair: copying the left leaf's spec to the right leaf must
+    // carry glass/hardware but never flip Osc-der back to Osc-izq.
+    const tree = requestTree(
+      JSON.parse(
+        JSON.stringify(divided())
+          .replace('"opening_type":"FIXED"', '"opening_type":"TILT_TURN_LEFT"')
+          .replace('"opening_type":"FIXED"', '"opening_type":"TILT_TURN_RIGHT"'),
+      ) as IntentNode,
+    );
+    const applied = applyBaySpec(tree, "bay-a", "bay-b");
+    const target = intentBays(applied).find((node) => node.id === "bay-b")!;
+    expect(target.opening_type).toBe("TILT_TURN_RIGHT");
+    expect(target.glass_thickness_mm).toBe("24.00");
+    expect(target.glass_article_sku).toBe("GLASS-A");
+    // A bay that never declared an opening still adopts the source's.
+    const ontoFixed = requestTree(
+      JSON.parse(
+        JSON.stringify(divided())
+          .replace(',"opening_type":"FIXED"', "")
+          .replace('"opening_type":"FIXED"', '"opening_type":"TILT_TURN_RIGHT"'),
+      ) as IntentNode,
+    );
+    const filled = applyBaySpec(ontoFixed, "bay-b", "bay-a");
+    expect(intentBays(filled).find((node) => node.id === "bay-a")!.opening_type).toBe(
+      "TILT_TURN_RIGHT",
+    );
+  });
+
   it("rejects a stale calculation after reset, even with identical values", () => {
     const base = useCanvasStore.getState().inputs;
     useCanvasStore.getState().reset();

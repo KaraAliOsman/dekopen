@@ -207,9 +207,11 @@ export function issueText(
   return text;
 }
 
+const MAX_MM = 30000;
+
 function normalizeMm(candidate: string): string | null {
   const value = parseLocaleNumber(candidate);
-  if (value === null || value <= 0) return null;
+  if (value === null || value <= 0 || value > MAX_MM) return null;
   return value.toFixed(2);
 }
 
@@ -270,9 +272,15 @@ function DraftField({
           }}
           onBlur={() => {
             const normalized = normalize(draft);
-            if (normalized === null) setDraft(value);
-            else if (normalized !== value) onCommit(normalized);
-            setInvalid(false);
+            if (normalized === null) {
+              // Revert to the last valid value but keep the field flagged —
+              // a silent snap-back reads as the input being ignored.
+              setDraft(value);
+              setInvalid(true);
+            } else {
+              if (normalized !== value) onCommit(normalized);
+              setInvalid(false);
+            }
           }}
           onKeyDown={(event) => {
             // Enter on an unparseable value keeps the field open and flags
@@ -1086,7 +1094,7 @@ function BayInspector({
           </label>
         )}
         <DraftField
-          label={t("quotation.handleHeight")}
+          label={t("assembly.handleHeight")}
           value={bay.handle_height_mm ?? ""}
           unit="mm"
           disabled={busy}
@@ -2031,8 +2039,18 @@ export function AssemblyEditor({
     () => ({ commands: resolveCommands(commandCtx, assemblyCommands(commandCtx)) }),
     [commandCtx],
   );
+  // Every chord the surface advertises (menus, palette) is reserved while the
+  // editor is mounted — a filtered-out command's shortcut must not leak to
+  // the browser (Ctrl+D opened the bookmark dialog).
+  const reservedShortcuts = useMemo(() => {
+    const specs = assemblyCommands(commandCtx);
+    return specs.flatMap((spec) => {
+      const s = spec.shortcut;
+      return s === undefined ? [] : Array.isArray(s) ? [...s] : [s];
+    });
+  }, [commandCtx]);
   useRegisterCommands(surface);
-  useCommandShortcuts(surface);
+  useCommandShortcuts(surface, reservedShortcuts);
   const statusText = `${front.totalW.toFixed(0)} × ${front.height.toFixed(0)} mm`;
   // Labels derive from actual product membership — selection ids are
   // arbitrary strings, so a coupling legitimately named "coupling-x" must
@@ -2097,8 +2115,8 @@ export function AssemblyEditor({
     select(id);
   }
   const objectTree = useMemo(
-    () => buildObjectTree(product, members, issues, t),
-    [product, members, issues],
+    () => buildObjectTree(product, members, issues, t, options),
+    [product, members, issues, options],
   );
 
   function coupleUnit(side: "left" | "right"): void {

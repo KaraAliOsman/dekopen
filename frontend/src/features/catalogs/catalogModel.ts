@@ -398,7 +398,13 @@ export function initialDraft(
       source[field.name] == null
         ? field.name === "system_id"
           ? (systemId ?? "")
-          : ""
+          : // A required select renders its first option visually; the draft
+            // must start there too or it would silently submit "".
+            row === undefined && field.kind === "select" && !field.optional
+            ? (field.options?.[0] ?? "")
+            : row === undefined && field.kind === "boolean"
+              ? "true"
+              : ""
         : Array.isArray(source[field.name])
           ? (source[field.name] as string[]).join(", ")
           : String(source[field.name]),
@@ -434,10 +440,10 @@ export function writeFromDraft<R extends Resource>(
         count < -2147483648 ||
         count > 2147483647
       )
-        throw new Error("Invalid integer");
+        throw new Error(`Invalid integer: ${field.name}`);
       values[field.name] = count;
     } else if (field.kind === "boolean") {
-      if (value !== "true" && value !== "false") throw new Error("Missing boolean");
+      if (value !== "true" && value !== "false") throw new Error(`Missing boolean: ${field.name}`);
       values[field.name] = value === "true";
     } else if (field.kind === "processProfile") {
       values[field.name] = value === "" ? null : value;

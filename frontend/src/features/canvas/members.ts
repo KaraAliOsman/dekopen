@@ -7,6 +7,9 @@ import type { DesignOptions, ProfileSection } from "../../api/generated/models";
 
 export interface MemberSpec {
   sku: string | null;
+  /** Human catalog name for the resolved article — what the UI shows;
+   * the SKU stays available for identity, not display. */
+  name?: string | null;
   material: "PVC" | "ALUMINIUM" | string;
   faceWidthMm: number;
   /** Declared catalog cross-section; absent means the renderer must stay
@@ -55,6 +58,7 @@ function member(
   const faceWidth = profile ? Number(profile.face_width_mm) : NaN;
   return {
     sku: profile?.sku ?? null,
+    name: profile?.name ?? null,
     material: profile?.material ?? "PVC",
     faceWidthMm: profile && Number.isFinite(faceWidth) && faceWidth > 0 ? faceWidth : fallbackWidth,
     section: profile?.section ?? null,
@@ -67,6 +71,7 @@ export function resolveMembers(options: DesignOptions | undefined): MemberGeomet
     const faceWidth = Number(item.face_width_mm);
     couplers.set(item.sku, {
       sku: item.sku,
+      name: item.name,
       material: item.material,
       faceWidthMm: Number.isFinite(faceWidth) && faceWidth > 0 ? faceWidth : FALLBACK.mullion,
       section: item.section ?? null,

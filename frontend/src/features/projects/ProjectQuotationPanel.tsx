@@ -1110,7 +1110,7 @@ export function ProjectQuotationPanel({
       setSharedUrl(url);
       try {
         await navigator.clipboard.writeText(url);
-        setMessage(t("quotation.shareCopied"));
+        setMessage(`${t("quotation.shareCopied")} — ${url}`);
       } catch {
         setMessage(t("quotation.shareReady"));
       }
@@ -1124,7 +1124,7 @@ export function ProjectQuotationPanel({
   async function copySharedUrl(): Promise<void> {
     try {
       await navigator.clipboard.writeText(sharedUrl);
-      setMessage(t("quotation.shareCopied"));
+      setMessage(`${t("quotation.shareCopied")} — ${sharedUrl}`);
     } catch {
       setMessage(sharedUrl);
     }
@@ -1249,6 +1249,21 @@ export function ProjectQuotationPanel({
         targetId: "quotation-confirm",
       });
     }
+  }
+
+  /** production_ready is a load-time snapshot — it can't see policies the
+   * user just picked in this form. A position whose own fields are now
+   * complete shouldn't keep a stale "sólo cotización" warning on screen. */
+  function positionFormComplete(
+    position: DocumentaryPreparationResponse["positions"][number],
+  ): boolean {
+    return Boolean(
+      position.location_tag.trim() &&
+        position.manufacturing_placement_policy_id &&
+        position.handle_requirement_policy_id &&
+        position.reinforcement_cut_policy_id &&
+        !(seededIntentKeys.current.get(String(position.position_id))?.size ?? 0),
+    );
   }
 
   return (
@@ -1949,14 +1964,19 @@ export function ProjectQuotationPanel({
             </div>
           )}
           {preparation.positions.length > 0 &&
-            (preparation.positions.every((position) => position.production_ready) ? (
+            (preparation.positions.every(
+              (position) => position.production_ready || positionFormComplete(position),
+            ) ? (
               <p className="emit-outcome">{t("quotation.emitOutcomeReady")}</p>
             ) : (
               <p className="emit-outcome emit-outcome--warn" role="note">
                 {t("quotation.emitOutcomeQuoteOnly")}{" "}
                 {preparation.positions
                   .map((position, index) => ({ position, index }))
-                  .filter(({ position }) => !position.production_ready)
+                  .filter(
+                    ({ position }) =>
+                      !position.production_ready && !positionFormComplete(position),
+                  )
                   .map(({ index }) => `${t("quotation.position")} ${index + 1}`)
                   .join(" · ")}
               </p>

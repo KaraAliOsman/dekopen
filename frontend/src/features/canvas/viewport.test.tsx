@@ -2,7 +2,16 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, it } from "vitest";
 
 import { CanvasViewport } from "./CanvasViewport";
-import { FIT_PADDING, fitTransform, panBy, shouldRefitView, unionBox, zoomAt } from "./viewport";
+import {
+  clampViewToBox,
+  FIT_PADDING,
+  fitTransform,
+  PAN_MARGIN,
+  panBy,
+  shouldRefitView,
+  unionBox,
+  zoomAt,
+} from "./viewport";
 
 const BOX = { x: -170, y: -150, w: 2100, h: 1670 };
 
@@ -33,6 +42,25 @@ it("zoom clamps at the bounds and pan translates", () => {
   expect(zoomAt(view, 0, 0, 1e-6).scale).toBeGreaterThanOrEqual(0.03);
   const moved = panBy(view, 10, -20);
   expect(moved).toMatchObject({ tx: 10, ty: -20 });
+});
+
+it("clampViewToBox keeps a margin of content on-screen", () => {
+  // Content stranding: a huge pan that would put the whole box off-canvas
+  // gets pulled back so PAN_MARGIN px stay visible.
+  const fitted = fitTransform(BOX, 1000, 700);
+  const stranded = panBy(fitted, -5000, 0);
+  const clamped = clampViewToBox(stranded, BOX, 1000, 700);
+  const right = (BOX.x + BOX.w) * clamped.scale + clamped.tx;
+  expect(right).toBeCloseTo(PAN_MARGIN, 1);
+  // A normal pan inside bounds is untouched.
+  const small = panBy(fitted, -30, -15);
+  expect(clampViewToBox(small, BOX, 1000, 700)).toBe(small);
+  // Both directions stranded at once.
+  const corner = clampViewToBox(panBy(fitted, 5000, 5000), BOX, 1000, 700);
+  const left = BOX.x * corner.scale + corner.tx;
+  const top = BOX.y * corner.scale + corner.ty;
+  expect(left).toBeCloseTo(1000 - PAN_MARGIN, 1);
+  expect(top).toBeCloseTo(700 - PAN_MARGIN, 1);
 });
 
 it("a content epoch bump refits even after manual pan/zoom", () => {

@@ -303,6 +303,7 @@ export * from "./nullEnum";
 export * from "./obligationKindEnum";
 export * from "./offer";
 export * from "./operationalSummary";
+export * from "./operationalSummaryCommercialItem";
 export * from "./operationalSummaryDeliveries";
 export * from "./operationalSummaryDocuments";
 export * from "./operationalSummaryInventory";

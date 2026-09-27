@@ -1506,8 +1506,19 @@ export function copyBaySpec(
 ): ProductJson {
   const target = product.assembly.modules.find((item) => item.id === targetModuleId);
   if (!target) return product;
+  const targetNode = findNode(target.tree, targetBayId);
+  // Opening identity (which way the leaf opens, hinge side, sliding layout)
+  // never travels with a spec paste once the target declares one — copying
+  // Osc-izq onto an Osc-der leaf would silently break the mirrored pair.
+  // A bay with no declared opening adopts the source's.
+  const payload = { ...spec };
+  if (targetNode?.opening_type) {
+    delete payload.opening_type;
+    delete payload.door_handedness;
+    delete payload.sliding_layout;
+  }
   try {
-    const tree = updateBay(target.tree, targetBayId, spec);
+    const tree = updateBay(target.tree, targetBayId, payload);
     return replaceModule(product, targetModuleId, { ...target, tree });
   } catch {
     return product;

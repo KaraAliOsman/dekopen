@@ -49,9 +49,11 @@ import {
 /** Same presentation rules as the canvas DraftFields: positive dimensions
  * commit at 0.01mm, joint angles stay strictly inside ±90° at 0.1°, module
  * counts are positive integers bounded by the product contract. */
+const MAX_MM = 30000;
+
 function normalizeMm(raw: string): string | null {
   const value = parseLocaleNumber(raw);
-  if (value === null || value <= 0) return null;
+  if (value === null || value <= 0 || value > MAX_MM) return null;
   return value.toFixed(2);
 }
 
@@ -69,6 +71,13 @@ function normalizeCount(raw: string): string | null {
 
 function selectedModule(ctx: CommandContext): ProductModuleJson | null {
   return ctx.product.assembly.modules.find((module) => module.id === ctx.selection) ?? null;
+}
+
+/** Module the selection lives in — the module row itself, or the module
+ * owning a selected bay/split/handle. Module-level commands (duplicate,
+ * reorder, width) act on it so a selected paño doesn't orphan them. */
+function selectedModuleScope(ctx: CommandContext): ProductModuleJson | null {
+  return selectedModule(ctx) ?? selectedTreeNode(ctx)?.module ?? null;
 }
 
 function selectedCoupling(ctx: CommandContext) {
@@ -104,7 +113,7 @@ function selectedBayTarget(ctx: CommandContext) {
 /** Target resolution: explicit args (palette params, AI wire args) win over
  * the live selection — same stable id space either way. */
 function moduleTarget(ctx: CommandContext, args: CommandArgs): ProductModuleJson | null {
-  const id = args.module ?? selectedModule(ctx)?.id ?? null;
+  const id = args.module ?? selectedModuleScope(ctx)?.id ?? null;
   return id ? (ctx.product.assembly.modules.find((module) => module.id === id) ?? null) : null;
 }
 
@@ -293,7 +302,7 @@ export const ASSEMBLY_COMMANDS: CommandSpec[] = [
     id: "module.remove",
     title: "cmd.removeUnit",
     keywords: ["eliminar", "quitar", "unidad", "vano", "hoja", "modulo"],
-    applicable: (ctx) => selectedModule(ctx) !== null && ctx.product.assembly.modules.length > 1,
+    applicable: (ctx) => selectedModuleScope(ctx) !== null && ctx.product.assembly.modules.length > 1,
     apply: (ctx, args) => {
       const id = args.module ?? selectedModule(ctx)?.id;
       return id && ctx.product.assembly.modules.length > 1
@@ -378,7 +387,7 @@ export const ASSEMBLY_COMMANDS: CommandSpec[] = [
         id: "width",
         label: t("cmd.widthLabel"),
         unit: "mm",
-        defaultValue: selectedModule(ctx)?.width_mm,
+        defaultValue: selectedModuleScope(ctx)?.width_mm,
         validate: normalizeMm,
       },
     ],
@@ -627,7 +636,7 @@ export const ASSEMBLY_COMMANDS: CommandSpec[] = [
     title: "cmd.duplicateModule",
     keywords: ["duplicar", "copiar", "clonar", "unidad", "vano"],
     shortcut: "mod+d",
-    applicable: (ctx) => selectedModule(ctx) !== null,
+    applicable: (ctx) => selectedModuleScope(ctx) !== null,
     apply: (ctx, args) => {
       const module = moduleTarget(ctx, args);
       return module ? duplicateModule(ctx.product, module.id) : ctx.product;
@@ -644,10 +653,10 @@ export const ASSEMBLY_COMMANDS: CommandSpec[] = [
     title: "cmd.moveModuleLeft",
     keywords: ["mover", "izquierda", "reordenar", "orden", "intercambiar"],
     applicable: (ctx) =>
-      selectedModule(ctx) !== null &&
-      moduleNeighbors(ctx.product, selectedModule(ctx)!.id).left !== null,
+      selectedModuleScope(ctx) !== null &&
+      moduleNeighbors(ctx.product, selectedModuleScope(ctx)!.id).left !== null,
     apply: (ctx) => {
-      const module = selectedModule(ctx);
+      const module = selectedModuleScope(ctx);
       const left = module ? moduleNeighbors(ctx.product, module.id).left : null;
       return module && left ? swapModules(ctx.product, module.id, left) : ctx.product;
     },
@@ -658,10 +667,10 @@ export const ASSEMBLY_COMMANDS: CommandSpec[] = [
     title: "cmd.moveModuleRight",
     keywords: ["mover", "derecha", "reordenar", "orden", "intercambiar"],
     applicable: (ctx) =>
-      selectedModule(ctx) !== null &&
-      moduleNeighbors(ctx.product, selectedModule(ctx)!.id).right !== null,
+      selectedModuleScope(ctx) !== null &&
+      moduleNeighbors(ctx.product, selectedModuleScope(ctx)!.id).right !== null,
     apply: (ctx) => {
-      const module = selectedModule(ctx);
+      const module = selectedModuleScope(ctx);
       const right = module ? moduleNeighbors(ctx.product, module.id).right : null;
       return module && right ? swapModules(ctx.product, module.id, right) : ctx.product;
     },
@@ -672,7 +681,7 @@ export const ASSEMBLY_COMMANDS: CommandSpec[] = [
     title: "cmd.stackAbove",
     keywords: ["apilar", "encima", "montante", "transom", "stacked", "superior"],
     applicable: (ctx) => {
-      const module = selectedModule(ctx);
+      const module = selectedModuleScope(ctx);
       return (
         module !== null &&
         !module.contour &&
@@ -696,9 +705,9 @@ export const ASSEMBLY_COMMANDS: CommandSpec[] = [
     title: "cmd.copySpec",
     keywords: ["copiar", "especificación", "propiedades", "formato"],
     shortcut: "mod+shift+c",
-    applicable: (ctx) => selectedModule(ctx) !== null && ctx.writeSpecClipboard !== undefined,
+    applicable: (ctx) => selectedModuleScope(ctx) !== null && ctx.writeSpecClipboard !== undefined,
     run: (ctx) => {
-      const module = selectedModule(ctx);
+      const module = selectedModuleScope(ctx);
       if (module) ctx.writeSpecClipboard?.({ kind: "module", tree: module.tree });
     },
   },
@@ -707,9 +716,9 @@ export const ASSEMBLY_COMMANDS: CommandSpec[] = [
     title: "cmd.applySpec",
     keywords: ["aplicar", "pegar", "especificación", "propiedades", "formato"],
     shortcut: "mod+shift+v",
-    applicable: (ctx) => selectedModule(ctx) !== null && ctx.specClipboard?.kind === "module",
+    applicable: (ctx) => selectedModuleScope(ctx) !== null && ctx.specClipboard?.kind === "module",
     apply: (ctx) => {
-      const module = selectedModule(ctx);
+      const module = selectedModuleScope(ctx);
       const clipboard = ctx.specClipboard;
       return module && clipboard?.kind === "module"
         ? setModuleTree(ctx.product, module.id, structuredClone(clipboard.tree))

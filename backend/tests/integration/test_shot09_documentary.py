@@ -114,7 +114,7 @@ def _seed_project(
         "opening_type": "FIXED",
         "glass_spec": "4-12-4 Float Incoloro",
         "glass_thickness_mm": "24.00",
-        "glass_article_sku": "GLASS-BASE",
+        "glass_article_sku": "VIDRIO-BASE",
     }
     with as_user(owner):
         params = SystemParamsRepository().load_visible(system_id, org)
@@ -139,10 +139,10 @@ def _seed_project(
                 "SHOT-09 fixture list",
             )
             for sku, unit in (
-                ("DEMO-BAR-MARCO", "BAR"),
-                ("DEMO-BAR-JQ-10", "BAR"),
-                ("DEMO-STEEL-BAR-MARCO", "BAR"),
-                ("GLASS-BASE", "M2"),
+                ("COMPRA-MARCO", "BAR"),
+                ("COMPRA-JQ-10", "BAR"),
+                ("COMPRA-ACERO-MARCO", "BAR"),
+                ("VIDRIO-BASE", "M2"),
             ):
                 admin_write(
                     "cost-items", org,

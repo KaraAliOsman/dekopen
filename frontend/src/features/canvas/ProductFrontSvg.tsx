@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 
 import type { ProductIssue } from "../../api/generated/models";
-import { fmtMm } from "../../format";
+import { fmtMm, parseLocaleNumber } from "../../format";
 import { t } from "../../i18n/es-CL";
 import type { IntentNode } from "./intentEditing";
 import { isSlidingOpening, resolvedSlidingLayout } from "./intentEditing";
@@ -130,7 +130,14 @@ function SvgDim({
         onFocus={(event) => event.target.select()}
         onBlur={() => {
           const normalized = normalizeDimension(draft);
-          if (normalized !== null && normalized !== value) onCommit(normalized);
+          if (normalized === null) {
+            // Reject like Enter does — flag the editor and stay open so a
+            // mistyped dimension never silently snaps back.
+            setDraft(value);
+            setInvalid(true);
+            return;
+          }
+          if (normalized !== value) onCommit(normalized);
           setEditing(false);
         }}
         onKeyDown={(event) => {
@@ -153,9 +160,14 @@ function SvgDim({
   );
 }
 
+/** Sanity ceiling for a typed dimension: well past any real module/assembly
+ * size, it exists to catch slips (e.g. a stray comma) — not an engineering
+ * bound; kit/system limits still apply downstream. */
+const MAX_DIMENSION_MM = 30000;
+
 function normalizeDimension(candidate: string): string | null {
-  const value = Number(candidate.trim().replace(",", ".").replace(/[°\s]/g, ""));
-  if (!Number.isFinite(value) || value <= 0) return null;
+  const value = parseLocaleNumber(candidate.trim().replace(/[°\s]/g, ""));
+  if (value === null || value <= 0 || value > MAX_DIMENSION_MM) return null;
   return value.toFixed(2);
 }
 
@@ -980,6 +992,25 @@ function ModuleTree({
           showSplitDims={showSplitDims}
           moduleBottom={moduleBottom}
         />
+        <ModuleTree
+          node={second!}
+          region={secondRegion}
+          localOrigin={{ x: secondRegion.x, y: secondRegion.y }}
+          members={members}
+          liveOffsets={liveOffsets}
+          hitMm={hitMm}
+          onDividerDown={onDividerDown}
+          moduleId={moduleId}
+          selectedBayId={selectedBayId}
+          onSelectBay={onSelectBay}
+          selectedDivisionId={selectedDivisionId}
+          onSelectDivision={onSelectDivision}
+          moduleBottom={moduleBottom}
+          showSplitDims={showSplitDims}
+        />
+        {/* The mullion, its dim and the grip draw after both subtrees so the
+            bar stays selectable and its label stays visible where the second
+            region's bays overlap the hit zone. */}
         <Member
           x={bar.x}
           y={bar.y}
@@ -997,7 +1028,7 @@ function ModuleTree({
             {offset.toFixed(0)}
           </text>
         )}
-        {onDividerDown && (
+        {(onDividerDown || onSelectDivision) && (
           <rect
             className={`divider-grip${vertical ? " is-vertical" : " is-horizontal"}${selectedDivisionId === node.id ? " is-selected" : ""}`}
             x={vertical ? axis - grip / 2 : bar.x}
@@ -1009,7 +1040,7 @@ function ModuleTree({
               onSelectDivision?.(node.id);
             }}
             onPointerDown={(event) =>
-              onDividerDown({
+              onDividerDown?.({
                 event,
                 divisionId: node.id,
                 vertical,
@@ -1020,35 +1051,19 @@ function ModuleTree({
             }
           />
         )}
-        {!onDividerDown && onSelectDivision && (
-          <rect
-            className="divider-grip"
-            x={vertical ? axis - grip / 2 : bar.x}
-            y={vertical ? bar.y : axis - grip / 2}
-            width={vertical ? grip : Math.max(bar.w, 0)}
-            height={vertical ? Math.max(bar.h, 0) : grip}
-            onClick={(event) => {
-              event.stopPropagation();
-              onSelectDivision(node.id);
-            }}
-          />
-        )}
-        <ModuleTree
-          node={second!}
-          region={secondRegion}
-          localOrigin={{ x: secondRegion.x, y: secondRegion.y }}
-          members={members}
-          liveOffsets={liveOffsets}
-          hitMm={hitMm}
-          onDividerDown={onDividerDown}
-          moduleId={moduleId}
-          selectedBayId={selectedBayId}
-          onSelectBay={onSelectBay}
-          selectedDivisionId={selectedDivisionId}
-          onSelectDivision={onSelectDivision}
-          moduleBottom={moduleBottom}
-          showSplitDims={showSplitDims}
-        />
+        {(onDividerDown || onSelectDivision) &&
+          (vertical ? bar.h : bar.w) > grip * 1.6 && (
+            <g className="divider-grip-dots" pointerEvents="none" aria-hidden="true">
+              {[-1, 0, 1].map((slot) => (
+                <circle
+                  key={slot}
+                  cx={vertical ? axis : bar.x + bar.w / 2 + slot * grip * 0.22}
+                  cy={vertical ? bar.y + bar.h / 2 + slot * grip * 0.22 : axis}
+                  r={Math.max(grip * 0.07, 1.4)}
+                />
+              ))}
+            </g>
+          )}
       </>
     );
   }
@@ -1989,15 +2004,29 @@ export function ProductFrontContent({
               Math.max(12, Math.min(column.w, neighbor?.w ?? column.w) * 0.5),
             );
             return (
-              <rect
-                key={`seam-${index}`}
-                className="seam-grip"
-                x={column.x + column.w - seamW / 2}
-                y={0}
-                width={seamW}
-                height={height}
-                onPointerDown={beginSeamDrag(index)}
-              />
+              <g key={`seam-${index}`}>
+                <rect
+                  className="seam-grip"
+                  x={column.x + column.w - seamW / 2}
+                  y={0}
+                  width={seamW}
+                  height={height}
+                  onPointerDown={beginSeamDrag(index)}
+                />
+                {/* Resting drag affordance: three dots mid-seam so the grip
+                  doesn't need a lucky hover to be discovered. */}
+                {height > seamW * 2.4 &&
+                  [-1, 0, 1].map((slot) => (
+                    <circle
+                      key={slot}
+                      className="seam-grip-dot"
+                      cx={column.x + column.w}
+                      cy={height / 2 + slot * seamW * 0.5}
+                      r={Math.max(seamW * 0.1, 1.4)}
+                      pointerEvents="none"
+                    />
+                  ))}
+              </g>
             );
           })}
         {seamDrag && seamLeftMm !== null && seamRightMm !== null && (

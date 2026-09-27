@@ -312,8 +312,16 @@ export function applyBaySpec(
 ): IntentNode {
   const source = selectedBay(tree, sourceBayId);
   const target = selectedBay(tree, targetBayId);
+  const spec = baySpec(source);
+  if (target.opening_type) {
+    // An opening the target already declared is identity, not spec — the
+    // paste must not silently flip a mirrored leaf's handedness.
+    delete spec.opening_type;
+    delete spec.door_handedness;
+    delete spec.sliding_layout;
+  }
   return requestTree(
-    replaceNode(tree, targetBayId, { ...target, ...baySpec(source), id: target.id, type: "BAY" }),
+    replaceNode(tree, targetBayId, { ...target, ...spec, id: target.id, type: "BAY" }),
   );
 }
 

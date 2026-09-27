@@ -827,7 +827,24 @@ it("lists human project identities before any pricing operation and submits only
   expect(previewBodies()[0]?.project_id).toBe("project-a");
 });
 
-it("keeps FX authority available for a bound foreign-currency project quote", () => {
+it("keeps FX authority available for a bound foreign-currency project quote", async () => {
+  vi.mocked(apiMutator).mockImplementation((url) => {
+    if (String(url).endsWith("admin/fx/"))
+      return Promise.resolve({
+        data: {
+          items: [
+            {
+              id: "fx-snapshot-a",
+              base_currency: "USD",
+              quote_currency: "CLP",
+              observed_rate: "950.00",
+              observed_date: "2026-09-20",
+            },
+          ],
+        },
+      });
+    return Promise.resolve({ data: { items: [] } });
+  });
   render(
     <MemoryRouter initialEntries={["/projects/project-a/pricing"]}>
       <Routes>
@@ -838,6 +855,8 @@ it("keeps FX authority available for a bound foreign-currency project quote", ()
   fireEvent.change(screen.getByLabelText(t("pricing.currency")), {
     target: { value: "USD" },
   });
+  fireEvent.focus(screen.getByLabelText(t("pricing.fxId")));
+  await screen.findByRole("option", { name: /USD→CLP/ });
   fireEvent.change(screen.getByLabelText(t("pricing.fxId")), {
     target: { value: "fx-snapshot-a" },
   });

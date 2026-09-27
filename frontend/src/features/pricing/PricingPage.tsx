@@ -1525,6 +1525,18 @@ function CommercialOperations({
 
   const [projectReload, setProjectReload] = useState(0);
 
+  // FX snapshots exist as a managed resource — the quote form offers them as
+  // a picklist instead of asking for a raw UUID nobody can type. Loaded lazily
+  // on first focus: a USD picker is rare, and an unconditional mount fetch
+  // would add a network call to every pricing visit.
+  const [fxOptions, setFxOptions] = useState<Row[] | null>(null);
+  function loadFxOptions(): void {
+    if (fxOptions !== null) return;
+    void request<{ items: Row[] }>("admin/fx/")
+      .then((response) => setFxOptions(Array.isArray(response.items) ? response.items : []))
+      .catch(() => setFxOptions([]));
+  }
+
   useEffect(() => {
     let active = true;
 
@@ -1825,7 +1837,20 @@ function CommercialOperations({
         </label>
         <label>
           {t("pricing.fxId")}
-          <input name="fx_snapshot_id" />
+          <select name="fx_snapshot_id" defaultValue="" onFocus={loadFxOptions}>
+            <option value="">{t("pricing.fxNone")}</option>
+            {(fxOptions ?? []).map((row) => (
+              <option key={String(row.id)} value={String(row.id)}>
+                {[
+                  `${row.base_currency ?? ""}→${row.quote_currency ?? ""}`,
+                  row.observed_rate,
+                  row.observed_date ?? row.effective_date,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </option>
+            ))}
+          </select>
         </label>
         <p className="field-hint">{t("pricing.fxHint")}</p>
         <label>

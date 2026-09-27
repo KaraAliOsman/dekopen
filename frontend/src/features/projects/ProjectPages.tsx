@@ -122,12 +122,19 @@ function PositionQtyInput({
 }): JSX.Element {
   const [value, setValue] = useState(String(position.quantity));
   const [saving, setSaving] = useState(false);
-  useEffect(() => setValue(String(position.quantity)), [position.quantity]);
+  const [invalid, setInvalid] = useState(false);
+  useEffect(() => {
+    setValue(String(position.quantity));
+    setInvalid(false);
+  }, [position.quantity]);
 
   async function commit(): Promise<void> {
     const next = Number(value);
+    // Rejects flag the field instead of silently reverting — a quantity that
+    // "snaps back" with no hint reads as the input being ignored.
     if (!Number.isInteger(next) || next < 1) {
       setValue(String(position.quantity));
+      setInvalid(true);
       return;
     }
     if (next === position.quantity || saving) return;
@@ -157,12 +164,17 @@ function PositionQtyInput({
   return (
     <input
       aria-label={t("pricing.quantity")}
-      className="position-row__qty-input"
+      aria-invalid={invalid || undefined}
+      className={`position-row__qty-input${invalid ? " is-invalid" : ""}`}
       disabled={disabled || saving}
       inputMode="numeric"
       min={1}
+      title={invalid ? t("projects.qtyInvalid") : undefined}
       onBlur={() => void commit()}
-      onChange={(event) => setValue(event.target.value)}
+      onChange={(event) => {
+        setValue(event.target.value);
+        setInvalid(false);
+      }}
       onClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => {
         if (event.key === "Enter") event.currentTarget.blur();
@@ -1274,9 +1286,15 @@ function ProjectWorkspace({
         queryKey: ["projects", "quote-approvals", orgId, project.id],
       });
       const url = `${window.location.origin}${response.data.path}`;
+      // Reveal the quote section so the share visibly lands somewhere —
+      // a bare toast under the header reads as "nothing happened".
+      setFactsCollapsed(false);
+      setOpenSection("quote");
       try {
         await navigator.clipboard.writeText(url);
-        setNotice(t("quotation.shareCopied"));
+        // The notice carries the URL verbatim: some clipboards accept the
+        // write without copying, so the link must always be selectable.
+        setNotice(`${t("quotation.shareCopied")} — ${url}`);
       } catch {
         setNotice(url);
       }

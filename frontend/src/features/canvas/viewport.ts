@@ -60,6 +60,31 @@ export function panBy(view: ViewTransform, dx: number, dy: number): ViewTransfor
   return { ...view, tx: view.tx + dx, ty: view.ty + dy };
 }
 
+/** Pan hard-stop: at least PAN_MARGIN px of the content stays on-screen —
+ * unbounded wheel/drag panning can otherwise fling the whole drawing off
+ * the viewport with no obvious way back. */
+export const PAN_MARGIN = 48;
+
+export function clampViewToBox(
+  view: ViewTransform,
+  box: Box,
+  width: number,
+  height: number,
+): ViewTransform {
+  if (box.w <= 0 || box.h <= 0 || width <= 0 || height <= 0) return view;
+  const left = box.x * view.scale + view.tx;
+  const top = box.y * view.scale + view.ty;
+  const right = left + box.w * view.scale;
+  const bottom = top + box.h * view.scale;
+  let tx = view.tx;
+  let ty = view.ty;
+  if (left > width - PAN_MARGIN) tx += width - PAN_MARGIN - left;
+  if (right < PAN_MARGIN) tx += PAN_MARGIN - right;
+  if (top > height - PAN_MARGIN) ty += height - PAN_MARGIN - top;
+  if (bottom < PAN_MARGIN) ty += PAN_MARGIN - bottom;
+  return tx === view.tx && ty === view.ty ? view : { ...view, tx, ty };
+}
+
 /** Auto-fit policy: whether the viewport should re-fit the content box.
  * A wholesale content replacement (epoch bump — e.g. a starter pick) always
  * refits, even after the user took manual pan/zoom control; otherwise refit

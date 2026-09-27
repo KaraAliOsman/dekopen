@@ -1,4 +1,4 @@
-import type { ProductIssue } from "../../api/generated/models";
+import type { DesignOptions, ProductIssue } from "../../api/generated/models";
 import type { TranslationKey } from "../../i18n/es-CL";
 import type { IntentNode, Opening } from "./intentEditing";
 import type { ProductJson } from "./productEditing";
@@ -49,6 +49,7 @@ function bayChildren(
   moduleId: string,
   members: MemberGeometry,
   t: (key: TranslationKey) => string,
+  glassNames: Map<string, string>,
 ): TreeNode[] {
   const rows: TreeNode[] = [];
   const opening = node.opening_type ?? "FIXED";
@@ -57,7 +58,7 @@ function bayChildren(
     rows.push({
       id: `${moduleId}/${node.id}/sash`,
       label: t("tree.sash"),
-      detail: members.sash.sku,
+      detail: members.sash.name ?? members.sash.sku,
       kind: "member",
       severity: null,
       selectId: `${moduleId}/${node.id}`,
@@ -86,7 +87,10 @@ function bayChildren(
   } else {
     const detail = [
       node.glass_thickness_mm ? `${node.glass_thickness_mm} mm` : null,
-      node.glass_article_sku ?? node.glass_spec ?? null,
+      // Prefer the catalog spec text over the raw SKU — "VIDRIO-BASE" is a
+      // code, not a label a designer should read.
+      node.glass_article_sku ? (glassNames.get(node.glass_article_sku) ?? node.glass_spec ?? null)
+        : (node.glass_spec ?? null),
     ]
       .filter(Boolean)
       .join(" · ");
@@ -106,6 +110,8 @@ function bayChildren(
 interface BayContext {
   moduleLabel: string;
   bayCounter: { value: number };
+  /** glass SKU → human spec text ("Vidrio 24mm" instead of "VIDRIO-BASE"). */
+  glassNames: Map<string, string>;
 }
 
 function intentRows(
@@ -128,7 +134,7 @@ function intentRows(
         severity: null,
         selectId: `${moduleId}/${node.id}`,
         ariaLabel: `${label} · ${t("tree.bay")} ${context.bayCounter.value} · ${context.moduleLabel}`,
-        children: bayChildren(node, moduleId, members, t),
+        children: bayChildren(node, moduleId, members, t, context.glassNames),
       },
     ];
   }
@@ -137,7 +143,10 @@ function intentRows(
       {
         id: `${moduleId}/${node.id}`,
         label: node.type === "SPLIT_V" ? t("tree.mullionV") : t("tree.mullionH"),
-        detail: node.mullion_profile_sku ?? null,
+        detail:
+          (node.type === "SPLIT_V" ? members.mullionV : members.mullionH)?.name ??
+          node.mullion_profile_sku ??
+          null,
         kind: "mullion",
         severity: null,
         selectId: `${moduleId}/${node.id}`,
@@ -157,8 +166,17 @@ export function buildObjectTree(
   members: MemberGeometry,
   issues: ProductIssue[],
   t: (key: TranslationKey) => string,
+  options?: DesignOptions,
 ): TreeNode {
   const { modules, couplings } = product.assembly;
+  const glassNames = new Map(
+    (options?.glass_specs ?? [])
+      .filter((choice) => choice.spec)
+      .map((choice) => [choice.sku, choice.spec as string]),
+  );
+  const couplerNames = new Map(
+    (options?.coupler_profiles ?? []).map((choice) => [choice.sku, choice.name]),
+  );
   const children: TreeNode[] = [];
   modules.forEach((module, index) => {
     const width = Number(module.width_mm);
@@ -174,7 +192,7 @@ export function buildObjectTree(
         {
           id: `${module.id}/frame`,
           label: t("tree.frame"),
-          detail: members.frame.sku,
+          detail: members.frame.name ?? members.frame.sku,
           kind: "member",
           severity: null,
           selectId: module.id,
@@ -183,6 +201,7 @@ export function buildObjectTree(
         ...intentRows(module.tree, module.id, members, t, {
           moduleLabel: `${t("tree.module")} ${index + 1}`,
           bayCounter: { value: 0 },
+          glassNames,
         }),
       ],
     });
@@ -191,7 +210,7 @@ export function buildObjectTree(
       children.push({
         id: `coupling:${coupling.id}`,
         label: t("tree.coupler"),
-        detail: `${coupling.coupler_profile_sku ?? "?"} · ${coupling.angle_deg}°`,
+        detail: `${couplerNames.get(coupling.coupler_profile_sku ?? "") ?? coupling.coupler_profile_sku ?? "?"} · ${coupling.angle_deg}°`,
         kind: "coupler",
         severity: severityFor(issues, `coupling:${coupling.id}`),
         selectId: coupling.id,

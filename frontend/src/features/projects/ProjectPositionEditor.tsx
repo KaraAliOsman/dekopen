@@ -129,6 +129,7 @@ function resolveDefaults(
   mullionSkus: { SPLIT_V?: string; SPLIT_H?: string },
   glassThicknessMm?: string,
   panelSku?: string,
+  glassArticleSku?: string,
 ): ProductJson {
   let next = product;
   if (couplerSkus.length === 1) {
@@ -156,6 +157,15 @@ function resolveDefaults(
       node.type === "BAY" &&
       glassThicknessMm !== undefined &&
       (!node.glass_thickness_mm || !node.glass_spec);
+    // A bay can carry thickness/spec without the article (e.g. a pasted spec
+    // on a catalog whose glass article was added later) — the select reads the
+    // article key, so a missing one leaves phantom glass that eval rejects.
+    const missingGlassArticle =
+      node.type === "BAY" &&
+      !node.glass_article_sku &&
+      glassArticleSku !== undefined &&
+      ((node.glass_thickness_mm !== null && node.glass_thickness_mm !== undefined) ||
+        glassThicknessMm !== undefined);
     const missingPanel =
       node.type === "BAY" &&
       node.opening_type === "DOOR_ENTRY" &&
@@ -168,6 +178,7 @@ function resolveDefaults(
     return (
       missingMullion ||
       missingGlass ||
+      missingGlassArticle ||
       missingPanel ||
       missingHandedness ||
       (node.children?.some(needsFill) ?? false)
@@ -186,6 +197,14 @@ function resolveDefaults(
       if (!updated.glass_thickness_mm)
         updated = { ...updated, glass_thickness_mm: glassThicknessMm };
       if (!updated.glass_spec) updated = { ...updated, glass_spec: glassThicknessMm };
+    }
+    if (
+      updated.type === "BAY" &&
+      !updated.glass_article_sku &&
+      glassArticleSku !== undefined &&
+      updated.glass_thickness_mm
+    ) {
+      updated = { ...updated, glass_article_sku: glassArticleSku };
     }
     if (updated.type === "BAY" && updated.opening_type === "DOOR_ENTRY" && panelSku !== undefined) {
       if (!updated.panel_article_sku) updated = { ...updated, panel_article_sku: panelSku };
@@ -479,6 +498,7 @@ function PositionWorkspace({
         ? options.data.glazing_thicknesses[0]
         : undefined,
       options.data.panel_skus.length === 1 ? options.data.panel_skus[0] : undefined,
+      options.data.glass_skus.length === 1 ? options.data.glass_skus[0] : undefined,
     );
     if (resolved !== product) {
       // Deterministic normalization is not a user step: folding it into

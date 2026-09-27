@@ -13,6 +13,7 @@ import {
 import { t } from "../../i18n/es-CL";
 import {
   type Box,
+  clampViewToBox,
   fitTransform,
   IDENTITY,
   panBy,
@@ -155,6 +156,12 @@ export function CanvasViewport({
     };
   }, []);
 
+  // Wheel handler is bound once — latest box/size reach it through refs.
+  const boxRef = useRef(contentBox);
+  const sizeRef = useRef(size);
+  boxRef.current = contentBox;
+  sizeRef.current = size;
+
   // Native wheel listener: React's delegated wheel events are passive and
   // cannot preventDefault for zoom-to-cursor.
   useEffect(() => {
@@ -170,9 +177,23 @@ export function CanvasViewport({
           zoomAt(current, event.clientX - rect.left, event.clientY - rect.top, factor),
         );
       } else if (event.shiftKey) {
-        setView((current) => panBy(current, -event.deltaY, 0));
+        setView((current) =>
+          clampViewToBox(
+            panBy(current, -event.deltaY, 0),
+            boxRef.current,
+            sizeRef.current.w,
+            sizeRef.current.h,
+          ),
+        );
       } else {
-        setView((current) => panBy(current, -event.deltaX, -event.deltaY));
+        setView((current) =>
+          clampViewToBox(
+            panBy(current, -event.deltaX, -event.deltaY),
+            boxRef.current,
+            sizeRef.current.w,
+            sizeRef.current.h,
+          ),
+        );
       }
     };
     host.addEventListener("wheel", onWheel, { passive: false });
@@ -192,7 +213,14 @@ export function CanvasViewport({
   function onPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    setView((current) => panBy(current, event.clientX - drag.x, event.clientY - drag.y));
+    setView((current) =>
+      clampViewToBox(
+        panBy(current, event.clientX - drag.x, event.clientY - drag.y),
+        contentBox,
+        size.w,
+        size.h,
+      ),
+    );
     drag.x = event.clientX;
     drag.y = event.clientY;
   }
@@ -222,16 +250,20 @@ export function CanvasViewport({
       setView((current) => zoomAt(current, size.w / 2, size.h / 2, SCALE_100 / current.scale));
     } else if (event.key === "ArrowLeft") {
       userInteractedRef.current = true;
-      setView((current) => panBy(current, PAN_STEP, 0));
+      setView((current) => clampViewToBox(panBy(current, PAN_STEP, 0), contentBox, size.w, size.h));
     } else if (event.key === "ArrowRight") {
       userInteractedRef.current = true;
-      setView((current) => panBy(current, -PAN_STEP, 0));
+      setView((current) =>
+        clampViewToBox(panBy(current, -PAN_STEP, 0), contentBox, size.w, size.h),
+      );
     } else if (event.key === "ArrowUp") {
       userInteractedRef.current = true;
-      setView((current) => panBy(current, 0, PAN_STEP));
+      setView((current) => clampViewToBox(panBy(current, 0, PAN_STEP), contentBox, size.w, size.h));
     } else if (event.key === "ArrowDown") {
       userInteractedRef.current = true;
-      setView((current) => panBy(current, 0, -PAN_STEP));
+      setView((current) =>
+        clampViewToBox(panBy(current, 0, -PAN_STEP), contentBox, size.w, size.h),
+      );
     }
   }
 

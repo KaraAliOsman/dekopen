@@ -17,6 +17,7 @@ import { useAuthSession } from "../../auth/AuthSessionProvider";
 import { t } from "../../i18n/es-CL";
 import { DeniedState, useConfirm } from "../../ui";
 import "./projects.css";
+import { isValidRut } from "../../format";
 import { formatDate } from "../money";
 
 const clientFields = [
@@ -180,6 +181,10 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
   async function save(): Promise<void> {
     const controller = lifetime.current;
     if (!draft || !controller || controller.signal.aborted) return;
+    if (!isValidRut(draft.value.rut ?? "")) {
+      setError(t("clients.rutInvalid"));
+      return;
+    }
     setBusy(true);
     setError("");
     setNotice("");
@@ -337,6 +342,11 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
                     ) : null}
                   </span>
                   {type === "textarea" ? <textarea {...props} /> : <input {...props} type={type} />}
+                  {name === "rut" && props.value !== "" && !isValidRut(props.value) ? (
+                    <span className="field-hint" role="alert">
+                      {t("clients.rutInvalid")}
+                    </span>
+                  ) : null}
                 </label>
               );
             })}

@@ -410,7 +410,8 @@ SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/DEMO_60/' 
 FROM public.profile_systems AS system
 CROSS JOIN (VALUES
     ('COPLE-60', 'Acoplador Angular Demo 60/30', 30.00::numeric, 0.9000::numeric),
-    ('COPLE-90', 'Acoplador Angular Demo 60/34', 34.00::numeric, 1.1000::numeric)
+    ('COPLE-90', 'Acoplador Angular Demo 60/34', 34.00::numeric, 1.1000::numeric),
+    ('CANAL-U', 'Canal U vidrio sin marco 60/24', 24.00::numeric, 0.7000::numeric)
 ) AS coupler(sku, name, face_mm, weight)
 WHERE system.code = 'DEMO_60' AND system.is_global = TRUE
 ON CONFLICT (system_id, sku) DO UPDATE SET
@@ -470,12 +471,12 @@ UPDATE public.profile_systems SET chamber_clearance_mm=12.00
 INSERT INTO public.cutting_profiles
  (id, org_id, code, name, kerf_mm, head_trim_mm, tail_trim_mm, is_default, is_active)
 VALUES (uuid_generate_v5(uuid_ns_url(),'https://dekopen.local/shot07/cutting/DEMO'),
- NULL,'DEMO','DEMO_60 SYNTHETIC FIXTURE',4.00,15.00,15.00,TRUE,TRUE)
+ NULL,'DEMO','Catálogo de demostración',4.00,15.00,15.00,TRUE,TRUE)
 ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.profile_purchase_mappings
  (id,profile_article_id,org_id,commercial_sku,manufacturer_name,supplier_name,purchase_unit)
 SELECT uuid_generate_v5(uuid_ns_url(),'https://dekopen.local/shot07/purchase/'||article.id),
- article.id,NULL,'DEMO-BAR-'||article.sku,'DEMO_60 SYNTHETIC FIXTURE','DEMO-SUPPLIER','BAR'
+ article.id,NULL,'COMPRA-'||article.sku,'Catálogo de demostración','Proveedor de referencia','BAR'
 FROM public.profile_articles article JOIN public.profile_systems system ON system.id=article.system_id
 WHERE system.code='DEMO_60' AND system.is_global=TRUE AND article.org_id IS NULL
 ON CONFLICT (id) DO NOTHING;
@@ -483,8 +484,8 @@ INSERT INTO public.reinforcement_articles
  (id,system_id,org_id,parent_profile_article_id,sku,commercial_sku,name,
  manufacturer_name,supplier_name,stock_length_mm,purchase_unit,is_default)
 SELECT uuid_generate_v5(uuid_ns_url(),'https://dekopen.local/shot07/steel/'||article.id),
- system.id,NULL,article.id,'DEMO-STEEL-'||article.sku,'DEMO-STEEL-BAR-'||article.sku,
- 'DEMO_60 SYNTHETIC FIXTURE','DEMO_60 SYNTHETIC FIXTURE','DEMO-SUPPLIER',6000.00,'BAR',TRUE
+ system.id,NULL,article.id,'ACERO-'||article.sku,'COMPRA-ACERO-'||article.sku,
+ 'Catálogo de demostración','Catálogo de demostración','Proveedor de referencia',6000.00,'BAR',TRUE
 FROM public.profile_articles article JOIN public.profile_systems system ON system.id=article.system_id
 WHERE system.code='DEMO_60' AND system.is_global=TRUE AND article.org_id IS NULL
  AND article.role NOT IN ('GLAZING_BEAD','THRESHOLD')
@@ -557,8 +558,8 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.glass_purchase_mappings
  (id,system_id,org_id,technical_sku,purchasing_sku,manufacturer_name,purchase_unit,version,provenance,glass_spec)
 SELECT uuid_generate_v5(uuid_ns_url(),'https://dekopen.local/shot09/glass/DEMO_60/GLASS-BASE/V1'),
- system.id,NULL,'GLASS-BASE','DEMO-GLASS-FINISHED-UNIT','DEMO_60 SYNTHETIC FIXTURE','EA',1,
- '{"source":"DEMO_60 SYNTHETIC FIXTURE","certified":"false"}'::jsonb,'4 Float Incoloro'
+ system.id,NULL,'VIDRIO-BASE','VIDRIO-TERMINADO','Catálogo de demostración','EA',1,
+ '{"source":"Referencia DEKOPEN","certified":"false"}'::jsonb,'4 Float Incoloro'
 FROM public.profile_systems system
 WHERE system.code='DEMO_60' AND system.is_global=TRUE
 ON CONFLICT (id) DO NOTHING;
@@ -566,8 +567,8 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.hardware_purchase_mappings
  (id,hardware_kit_id,org_id,purchasing_sku,manufacturer_name,purchase_unit,version,provenance)
 SELECT uuid_generate_v5(uuid_ns_url(),'https://dekopen.local/shot09/hardware/'||kit.id||'/V1'),
- kit.id,NULL,'DEMO-BUY-'||kit.sku,'DEMO_60 SYNTHETIC FIXTURE','KIT',1,
- '{"source":"DEMO_60 SYNTHETIC FIXTURE","mode":"KIT_ONLY"}'::jsonb
+ kit.id,NULL,'COMPRA-'||kit.sku,'Catálogo de demostración','KIT',1,
+ '{"source":"Referencia DEKOPEN","mode":"KIT_ONLY"}'::jsonb
 FROM public.hardware_kits kit JOIN public.profile_systems system ON system.id=kit.system_id
 WHERE system.code='DEMO_60' AND system.is_global=TRUE AND kit.org_id IS NULL
 ON CONFLICT (id) DO NOTHING;
@@ -575,8 +576,8 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.panel_purchase_authorities
  (id,infill_article_id,org_id,purchasing_sku,manufacturer_name,supply_form,purchase_unit,version,provenance)
 SELECT uuid_generate_v5(uuid_ns_url(),'https://dekopen.local/shot09/panel/'||panel.id||'/V1'),
- panel.id,NULL,'DEMO-BUY-'||panel.sku,'DEMO_60 SYNTHETIC FIXTURE','CUT_TO_SIZE','EA',1,
- '{"source":"DEMO_60 SYNTHETIC FIXTURE","certified":"false"}'::jsonb
+ panel.id,NULL,'COMPRA-'||panel.sku,'Catálogo de demostración','CUT_TO_SIZE','EA',1,
+ '{"source":"Referencia DEKOPEN","certified":"false"}'::jsonb
 FROM public.infill_articles panel JOIN public.profile_systems system ON system.id=panel.system_id
 WHERE system.code='DEMO_60' AND system.is_global=TRUE AND panel.org_id IS NULL
 ON CONFLICT (id) DO NOTHING;
@@ -661,7 +662,8 @@ FROM public.profile_systems s CROSS JOIN (VALUES
     ('JQ-A-8','Junquillo Aluminio 8','GLAZING_BEAD',8.00,0.2000),
     ('UMBRAL-A','Umbral Aluminio 65','THRESHOLD',28.00,0.9000),
     ('COPLE-A-30','Acoplador Aluminio 30','COUPLER',30.00,0.8500),
-    ('COPLE-A-90','Acoplador Aluminio 90','COUPLER',34.00,1.0000)
+    ('COPLE-A-90','Acoplador Aluminio 90','COUPLER',34.00,1.0000),
+    ('CANAL-A-U','Canal U vidrio sin marco Aluminio 26','COUPLER',26.00,0.7200)
 ) AS a(sku, name, role, face_mm, weight)
 WHERE s.code = 'ALU_65' AND s.is_global = TRUE
 ON CONFLICT (system_id, sku) DO UPDATE SET
@@ -686,7 +688,8 @@ FROM public.profile_systems s CROSS JOIN (VALUES
     ('UMBRAL-G','Umbral Vidrio 45','THRESHOLD',18.00,0.6000),
     ('COPLE-G-30','Acoplador Vidrio 30','COUPLER',26.00,0.7000),
     ('COPLE-G-90','Acoplador Vidrio 90','COUPLER',28.00,0.7800),
-    ('REMATE-G','Remate estructural Vidrio 45','COUPLER',20.00,0.5500)
+    ('REMATE-G','Remate estructural Vidrio 45','COUPLER',20.00,0.5500),
+    ('CANAL-G-U','Canal U estructural Vidrio 45/24','COUPLER',24.00,0.6400)
 ) AS a(sku, name, role, face_mm, weight)
 WHERE s.code = 'GLASS_45' AND s.is_global = TRUE
 ON CONFLICT (system_id, sku) DO UPDATE SET
@@ -858,7 +861,7 @@ INSERT INTO public.profile_purchase_mappings
  (id, profile_article_id, org_id, commercial_sku, manufacturer_name, supplier_name,
   purchase_unit, physical_stock_identity, stock_color, cutting_profile_id, binding_version)
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot07/purchase/' || article.id::text),
- article.id, NULL, 'TEST-BUY-' || article.sku, 'SYNTHETIC TEST DATA', 'TEST-SUPPLIER', 'BAR',
+ article.id, NULL, 'COMPRA-' || article.sku, 'Referencia DEKOPEN', 'Proveedor de referencia', 'BAR',
  uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/physical/profile/' || article.id::text),
  'WHITE',
  uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot07/cutting/DEMO'),
@@ -872,7 +875,7 @@ INSERT INTO public.profile_purchase_mappings
  (id, profile_article_id, org_id, commercial_sku, manufacturer_name, supplier_name,
   purchase_unit, physical_stock_identity, stock_color, cutting_profile_id, binding_version)
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot07/purchase/' || article.id::text),
- article.id, NULL, 'TEST-BUY-' || article.sku, 'SYNTHETIC TEST DATA', 'TEST-SUPPLIER', 'BAR',
+ article.id, NULL, 'COMPRA-' || article.sku, 'Referencia DEKOPEN', 'Proveedor de referencia', 'BAR',
  uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/physical/profile/' || article.id::text),
  'WHITE',
  uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot07/cutting/DEMO'),
@@ -885,8 +888,8 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.hardware_purchase_mappings
  (id, hardware_kit_id, org_id, purchasing_sku, manufacturer_name, purchase_unit, version, provenance)
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/hardware/' || kit.id::text || '/V1'),
- kit.id, NULL, 'TEST-BUY-' || kit.sku, 'SYNTHETIC TEST DATA', 'KIT', 1,
- '{"source":"SYNTHETIC TEST DATA","mode":"KIT_ONLY"}'::jsonb
+ kit.id, NULL, 'COMPRA-' || kit.sku, 'Referencia DEKOPEN', 'KIT', 1,
+ '{"source":"Referencia DEKOPEN","mode":"KIT_ONLY"}'::jsonb
 FROM public.hardware_kits kit
 JOIN public.profile_systems s ON s.id = kit.system_id
 WHERE s.code = 'ALU_65' AND s.is_global = TRUE AND kit.org_id IS NULL
@@ -895,24 +898,24 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.glass_purchase_mappings
  (id, system_id, org_id, technical_sku, purchasing_sku, manufacturer_name, purchase_unit, version, provenance, glass_spec)
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/glass/ALU_65/DVH-24/V1'), s.id, NULL,
- 'DVH-24', 'TEST-BUY-DVH-24', 'SYNTHETIC TEST DATA', 'EA', 1,
- '{"source":"SYNTHETIC TEST DATA","certified":"false"}'::jsonb, '4-16-4'
+ 'DVH-24', 'TEST-BUY-DVH-24', 'Referencia DEKOPEN', 'EA', 1,
+ '{"source":"Referencia DEKOPEN","certified":"false"}'::jsonb, '4-16-4'
 FROM public.profile_systems s WHERE s.code='ALU_65' AND s.is_global=TRUE
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.glass_purchase_mappings
  (id, system_id, org_id, technical_sku, purchasing_sku, manufacturer_name, purchase_unit, version, provenance, glass_spec)
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/glass/ALU_65/MONO-5/V1'), s.id, NULL,
- 'MONO-5', 'TEST-BUY-MONO-5', 'SYNTHETIC TEST DATA', 'EA', 1,
- '{"source":"SYNTHETIC TEST DATA","certified":"false"}'::jsonb, '5'
+ 'MONO-5', 'TEST-BUY-MONO-5', 'Referencia DEKOPEN', 'EA', 1,
+ '{"source":"Referencia DEKOPEN","certified":"false"}'::jsonb, '5'
 FROM public.profile_systems s WHERE s.code='ALU_65' AND s.is_global=TRUE
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.panel_purchase_authorities
  (id, infill_article_id, org_id, purchasing_sku, manufacturer_name, supply_form, purchase_unit, version, provenance)
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/panel/' || panel.id::text || '/V1'),
- panel.id, NULL, 'TEST-BUY-' || panel.sku, 'SYNTHETIC TEST DATA', 'CUT_TO_SIZE', 'EA', 1,
- '{"source":"SYNTHETIC TEST DATA","certified":"false"}'::jsonb
+ panel.id, NULL, 'COMPRA-' || panel.sku, 'Referencia DEKOPEN', 'CUT_TO_SIZE', 'EA', 1,
+ '{"source":"Referencia DEKOPEN","certified":"false"}'::jsonb
 FROM public.infill_articles panel
 JOIN public.profile_systems s ON s.id = panel.system_id
 WHERE s.code = 'ALU_65' AND s.is_global = TRUE AND panel.org_id IS NULL
@@ -921,8 +924,8 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.hardware_purchase_mappings
  (id, hardware_kit_id, org_id, purchasing_sku, manufacturer_name, purchase_unit, version, provenance)
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/hardware/' || kit.id::text || '/V1'),
- kit.id, NULL, 'TEST-BUY-' || kit.sku, 'SYNTHETIC TEST DATA', 'KIT', 1,
- '{"source":"SYNTHETIC TEST DATA","mode":"KIT_ONLY"}'::jsonb
+ kit.id, NULL, 'COMPRA-' || kit.sku, 'Referencia DEKOPEN', 'KIT', 1,
+ '{"source":"Referencia DEKOPEN","mode":"KIT_ONLY"}'::jsonb
 FROM public.hardware_kits kit
 JOIN public.profile_systems s ON s.id = kit.system_id
 WHERE s.code = 'GLASS_45' AND s.is_global = TRUE AND kit.org_id IS NULL
@@ -931,32 +934,32 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.glass_purchase_mappings
  (id, system_id, org_id, technical_sku, purchasing_sku, manufacturer_name, purchase_unit, version, provenance, glass_spec)
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/glass/GLASS_45/DVH-28/V1'), s.id, NULL,
- 'DVH-28', 'TEST-BUY-DVH-28', 'SYNTHETIC TEST DATA', 'EA', 1,
- '{"source":"SYNTHETIC TEST DATA","certified":"false"}'::jsonb, '4-20-4'
+ 'DVH-28', 'TEST-BUY-DVH-28', 'Referencia DEKOPEN', 'EA', 1,
+ '{"source":"Referencia DEKOPEN","certified":"false"}'::jsonb, '4-20-4'
 FROM public.profile_systems s WHERE s.code='GLASS_45' AND s.is_global=TRUE
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.glass_purchase_mappings
  (id, system_id, org_id, technical_sku, purchasing_sku, manufacturer_name, purchase_unit, version, provenance, glass_spec)
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/glass/GLASS_45/DVH-32/V1'), s.id, NULL,
- 'DVH-32', 'TEST-BUY-DVH-32', 'SYNTHETIC TEST DATA', 'EA', 1,
- '{"source":"SYNTHETIC TEST DATA","certified":"false"}'::jsonb, '4-24-4'
+ 'DVH-32', 'TEST-BUY-DVH-32', 'Referencia DEKOPEN', 'EA', 1,
+ '{"source":"Referencia DEKOPEN","certified":"false"}'::jsonb, '4-24-4'
 FROM public.profile_systems s WHERE s.code='GLASS_45' AND s.is_global=TRUE
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.glass_purchase_mappings
  (id, system_id, org_id, technical_sku, purchasing_sku, manufacturer_name, purchase_unit, version, provenance, glass_spec)
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/glass/GLASS_45/MONO-8/V1'), s.id, NULL,
- 'MONO-8', 'TEST-BUY-MONO-8', 'SYNTHETIC TEST DATA', 'EA', 1,
- '{"source":"SYNTHETIC TEST DATA","certified":"false"}'::jsonb, '8'
+ 'MONO-8', 'TEST-BUY-MONO-8', 'Referencia DEKOPEN', 'EA', 1,
+ '{"source":"Referencia DEKOPEN","certified":"false"}'::jsonb, '8'
 FROM public.profile_systems s WHERE s.code='GLASS_45' AND s.is_global=TRUE
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.panel_purchase_authorities
  (id, infill_article_id, org_id, purchasing_sku, manufacturer_name, supply_form, purchase_unit, version, provenance)
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/panel/' || panel.id::text || '/V1'),
- panel.id, NULL, 'TEST-BUY-' || panel.sku, 'SYNTHETIC TEST DATA', 'CUT_TO_SIZE', 'EA', 1,
- '{"source":"SYNTHETIC TEST DATA","certified":"false"}'::jsonb
+ panel.id, NULL, 'COMPRA-' || panel.sku, 'Referencia DEKOPEN', 'CUT_TO_SIZE', 'EA', 1,
+ '{"source":"Referencia DEKOPEN","certified":"false"}'::jsonb
 FROM public.infill_articles panel
 JOIN public.profile_systems s ON s.id = panel.system_id
 WHERE s.code = 'GLASS_45' AND s.is_global = TRUE AND panel.org_id IS NULL

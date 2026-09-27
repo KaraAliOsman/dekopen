@@ -628,8 +628,13 @@ function CatalogEditor({
     let body;
     try {
       body = writeFromDraft(resource, draft, contents, sectionDraft);
-    } catch {
-      setError(ct("errorValidation"));
+    } catch (caught) {
+      // writeFromDraft tags the failing field ("Invalid integer: sku") — name
+      // it so the reviewer doesn't hunt the whole form.
+      const failed = /: ([a-z_]+)$/.exec(caught instanceof Error ? caught.message : "")?.[1];
+      setError(
+        failed ? `${ct("errorValidation")} — ${ct(`field.${failed}`)}` : ct("errorValidation"),
+      );
       return;
     }
     inFlight.current = true;

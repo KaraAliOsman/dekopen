@@ -137,8 +137,15 @@ export function formatShortcut(shortcut: string): string {
 
 /** Global keyboard dispatch: every command carrying a `shortcut` fires when
  * its binding matches — unless the user is typing in a field. Only
- * param-less commands qualify (param collection is the palette's job). */
-export function useCommandShortcuts(surface: CommandSurface | null): void {
+ * param-less commands qualify (param collection is the palette's job).
+ * `reserved` lists every chord the surface advertises anywhere (menus,
+ * palette): a reserved chord whose command is momentarily inapplicable is
+ * still swallowed, so e.g. Ctrl+D never falls through to the browser's
+ * bookmark dialog while the editor teaches the binding. */
+export function useCommandShortcuts(
+  surface: CommandSurface | null,
+  reserved: readonly string[] = [],
+): void {
   useEffect(() => {
     if (!surface) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -158,10 +165,13 @@ export function useCommandShortcuts(surface: CommandSurface | null): void {
           return;
         }
       }
+      if (reserved.some((binding) => shortcutMatches(binding, event))) {
+        event.preventDefault();
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [surface]);
+  }, [surface, reserved]);
 }
 
 /** Apply one backend-validated wire op through the shared command table. The

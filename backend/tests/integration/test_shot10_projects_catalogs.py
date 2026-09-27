@@ -48,7 +48,7 @@ def position_data(system_id, width="1000.00"):
                     "opening_type": "FIXED",
                     "glass_spec": "4-12-4 Float Incoloro",
                     "glass_thickness_mm": "24.00",
-                    "glass_article_sku": "GLASS-BASE",
+                    "glass_article_sku": "VIDRIO-BASE",
                 },
             },
         }

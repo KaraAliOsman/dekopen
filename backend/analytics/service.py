@@ -214,6 +214,37 @@ def _summary(org_id: UUID) -> dict[str, Any]:
         """,
         [str(org_id)] * 7,
     )
+    # Money stays per currency — a CLP collected total must never absorb a USD
+    # pipeline figure without an FX authority.
+    commercial = [
+        {
+            "currency": str(row["currency"]),
+            "quoted": str(row["quoted"]),
+            "booked": str(row["booked"]),
+            "collected": str(row["collected"]),
+        }
+        for row in rows(
+            """
+            SELECT p.currency,
+                COALESCE(SUM(p.total_price_gross)
+                    FILTER (WHERE p.status = 'QUOTED'), 0) AS quoted,
+                COALESCE(SUM(p.total_price_gross)
+                    FILTER (WHERE p.status IN
+                        ('APPROVED','IN_PRODUCTION','COMPLETED')), 0) AS booked,
+                (SELECT COALESCE(SUM(pp.amount), 0)
+                 FROM public.project_payments pp
+                 JOIN public.projects px
+                   ON px.id = pp.project_id AND px.org_id = pp.org_id
+                 WHERE pp.org_id = p.org_id AND pp.voided_at IS NULL
+                   AND px.currency = p.currency) AS collected
+            FROM public.projects p
+            WHERE p.org_id = %s AND p.total_price_gross IS NOT NULL
+            GROUP BY p.currency
+            ORDER BY p.currency
+            """,
+            [str(org_id)],
+        )
+    ]
     recent = [
         {
             "event": str(row["event"]),
@@ -245,5 +276,6 @@ def _summary(org_id: UUID) -> dict[str, Any]:
         "deliveries": {k: int(v or 0) for k, v in deliveries.items()},
         "documents": documents,
         "projects": {k: int(v or 0) for k, v in projects.items()},
+        "commercial": commercial,
         "recent_events": recent,
     }

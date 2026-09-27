@@ -1033,6 +1033,16 @@ p[role="alert"]:only-child::before {
   padding: 0.875rem 1rem;
 }
 
+.dashboard-money {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.dashboard-money-currency > .eyebrow {
+  margin-bottom: 0.375rem;
+}
+
 .metric-card strong {
   /* Headline digits, not code — IBM Plex Mono slashes its zero, so a "0"
    * KPI read as an empty-set placeholder (review VM3). */

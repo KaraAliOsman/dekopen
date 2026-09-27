@@ -45,6 +45,25 @@ export function fmtMm(value: string | number | null | undefined): string {
   return text.includes(".") ? text.replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "") : text;
 }
 
+/** Chilean RUT — módulo-11 check digit. Accepts "12.345.678-5", "12345678-5",
+ * "123456785" and "K" digits; empty/blank is valid (the field is optional). */
+export function isValidRut(candidate: string): boolean {
+  const cleaned = candidate.replace(/[.\-\s]/g, "").toUpperCase();
+  if (cleaned === "") return true;
+  if (!/^\d{1,8}[\dK]$/.test(cleaned)) return false;
+  const body = cleaned.slice(0, -1);
+  const digit = cleaned.slice(-1);
+  let sum = 0;
+  let factor = 2;
+  for (let index = body.length - 1; index >= 0; index -= 1) {
+    sum += Number(body[index]) * factor;
+    factor = factor === 7 ? 2 : factor + 1;
+  }
+  const remainder = 11 - (sum % 11);
+  const expected = remainder === 11 ? "0" : remainder === 10 ? "K" : String(remainder);
+  return digit === expected;
+}
+
 const BUSINESS_TZ = "America/Santiago";
 
 /** Operator-facing timestamp: business timezone and minute precision — the
