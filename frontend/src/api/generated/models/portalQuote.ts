@@ -8,6 +8,7 @@
 import type { PortalOrganization } from "./portalOrganization";
 import type { PortalPayment } from "./portalPayment";
 import type { PortalPosition } from "./portalPosition";
+import type { PortalQuoteExtrasItem } from "./portalQuoteExtrasItem";
 
 export interface PortalQuote {
   schema: string;
@@ -28,6 +29,7 @@ export interface PortalQuote {
   total_price_tax: string | null;
   /** @nullable */
   total_price_gross: string | null;
+  extras: PortalQuoteExtrasItem[];
   positions: PortalPosition[];
   payment: PortalPayment | null;
   /** @nullable */

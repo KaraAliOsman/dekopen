@@ -136,6 +136,7 @@ def _preview_with_retry(token, claims, organization_header, data, service=previe
 
 def price_response(value):
     return {**value,'lines':[{'position_index':index,'line_net':str(amount)} for index,amount in value['lines']],
+            'extras':value.get('extras') or [],'extras_net':str(value.get('extras_net') or '0'),
             'project_net':str(value['project_net']),'project_tax':str(value['project_tax']),
             'project_gross':str(value['project_gross'])}
 

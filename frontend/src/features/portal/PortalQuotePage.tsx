@@ -439,6 +439,12 @@ export function PortalQuotePage(): JSX.Element {
             </div>
           </dl>
           <dl className="portal-totals">
+            {(quote.extras ?? []).map((item, index) => (
+              <div key={`${String(item.label)}-${index}`}>
+                <dt>{String(item.label ?? "")}</dt>
+                <dd>{money(String(item.amount ?? "0"), quote.currency)}</dd>
+              </div>
+            ))}
             <div>
               <dt>{t("portal.net")}</dt>
               <dd>{money(quote.total_price_net, quote.currency)}</dd>

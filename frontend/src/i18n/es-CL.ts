@@ -703,6 +703,17 @@ export const messages = {
   "pricing.segment": "Segmento del cliente",
   "pricing.confirmDiscount":
     "Confirmo expresamente el descuento solicitado y su advertencia de margen crítico.",
+  "pricing.extras": "Cargos del proyecto",
+  "pricing.extrasHint":
+    "Instalación, traslado u otros cargos netos — se suman al neto y tributan; no reciben descuento.",
+  "pricing.extraAdd": "Agregar cargo",
+  "pricing.extraLabel": "Nombre del cargo",
+  "pricing.extraAmount": "Monto neto",
+  "pricing.extraKindInstallation": "Instalación",
+  "pricing.extraKindFreight": "Traslado",
+  "pricing.extraKindOther": "Otro",
+  "pricing.extraRemove": "Quitar",
+  "pricing.extrasNet": "Cargos netos",
   "pricing.preview": "Calcular y revisar",
   "pricing.calculateError":
     "No se pudo cotizar. Revisa autoridades de costo, tarifas, diseño, vigencia y margen.",

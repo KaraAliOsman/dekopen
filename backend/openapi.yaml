@@ -19061,6 +19061,37 @@ components:
             $ref: '#/components/schemas/Membership'
       required:
       - error
+    ExtraChargeKindEnum:
+      enum:
+      - INSTALLATION
+      - FREIGHT
+      - OTHER
+      type: string
+      description: |-
+        * `INSTALLATION` - INSTALLATION
+        * `FREIGHT` - FREIGHT
+        * `OTHER` - OTHER
+    ExtraChargeRequest:
+      type: object
+      description: |-
+        A project-level priced charge — instalación, traslado, otro — that
+        adds to the net after position discounts and is taxed with the sale.
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 120
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/ExtraChargeKindEnum'
+          default: OTHER
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,4})?$
+      required:
+      - amount
+      - label
     FittingPiece:
       type: object
       description: Counted frameless fitting — patch/clamp/hinge/lock/connector/seal/support.
@@ -22137,6 +22168,11 @@ components:
         total_price_gross:
           type: string
           nullable: true
+        extras:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
         positions:
           type: array
           items:
@@ -22182,6 +22218,7 @@ components:
       - decided_note
       - emitted_at
       - expires_at
+      - extras
       - notes_commercial
       - organization
       - payment
@@ -22450,6 +22487,11 @@ components:
           allOf:
           - $ref: '#/components/schemas/SegmentEnum'
           default: RETAIL
+        extras:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExtraChargeRequest'
+          maxItems: 10
         confirmed:
           type: boolean
           default: false
@@ -22499,6 +22541,13 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CostLineResponse'
+        extras:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        extras_net:
+          type: string
         positions_breakdown:
           type: array
           items:
@@ -22541,6 +22590,8 @@ components:
       - created_at
       - currency
       - discount_pct
+      - extras
+      - extras_net
       - id
       - lines
       - positions_breakdown

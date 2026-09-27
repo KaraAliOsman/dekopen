@@ -239,9 +239,10 @@ def preview(org_id, actor, request):
                                      width=position['width_mm'],height=position['height_mm'],
                                      foil=position['color_interior']!='WHITE' or position['color_exterior']!='WHITE',**extra)
             priced_lines.append(CommercialLine(index,position['quantity'],cost,exact_price,discount))
-        output = (target_project(cost_lines,request['target_margin'],request['currency'],rules['tax_rate_pct'])
+        extra_amounts = [D(str(item['amount'])) for item in request.get('extras') or []]
+        output = (target_project(cost_lines,request['target_margin'],request['currency'],rules['tax_rate_pct'],extra_amounts)
                   if mode == PricingMode.TARGET_GROSS_MARGIN_PROJECT
-                  else finish_lines(priced_lines,request['currency'],rules['tax_rate_pct']))
+                  else finish_lines(priced_lines,request['currency'],rules['tax_rate_pct'],extra_amounts))
     audit_reason(request['reason'])
     record = one(
         'INSERT INTO public.pricing_operations(org_id,project_id,requested_by,requested_by_email,'
@@ -274,6 +275,9 @@ def preview(org_id, actor, request):
             'pricing_mode':request.get('pricing_mode') or '',
             'segment':request.get('segment') or '',
             'currency':request['currency'],**asdict(output),
+            'extras':[{'label':item['label'],'kind':item['kind'],
+                       'amount':str(item['amount'])}
+                      for item in request.get('extras') or []],
             'cost_lines':[{'position_index':index,'line_cost':str(cost)} for index,cost in costs],
             'total_cost':str(sum((cost for _, cost in costs), D('0'))),
             'positions_breakdown':breakdown,
@@ -407,6 +411,9 @@ def operation_public(operation):
             'pricing_mode':decoded(operation['request']).get('pricing_mode') or '',
             'segment':decoded(operation['request']).get('segment') or '',
             'currency':decoded(operation['request'])['currency'],**decoded(operation['result']),
+            'extras':[{'label':item['label'],'kind':item.get('kind') or 'OTHER',
+                       'amount':str(item['amount'])}
+                      for item in decoded(operation['request']).get('extras') or []],
             'cost_lines':[{'position_index':index,'line_cost':str(cost)} for index,cost in costs],
             'total_cost':str(sum((D(str(cost)) for _, cost in costs), D('0'))),
             'positions_breakdown':breakdown,

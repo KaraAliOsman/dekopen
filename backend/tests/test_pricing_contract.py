@@ -409,3 +409,19 @@ def test_withdraw_retracts_only_own_pending(monkeypatch):
     operation['state'] = 'APPLIED'
     with pytest.raises(PricingError):
         service.withdraw_operation(org_id, requester, 'ESTIMATOR', operation_id, 'mistake')
+
+
+def test_extras_serializer_contract():
+    base = {'project_id':'11111111-1111-4111-8111-111111111111','pricing_mode':'COST_PLUS_MARGIN',
+            'currency':'CLP','effective_date':'2026-09-10','reason':'Review'}
+    ok = {**base,'extras':[{'label':'Instalación','kind':'INSTALLATION','amount':'150000'},
+                           {'label':'Traslado','kind':'FREIGHT','amount':'0'}]}
+    assert PriceRequestSerializer(data=ok).is_valid()
+    negative = {**base,'extras':[{'label':'X','kind':'OTHER','amount':'-1'}]}
+    assert not PriceRequestSerializer(data=negative).is_valid()
+    unknown_kind = {**base,'extras':[{'label':'X','kind':'MYSTERY','amount':'1'}]}
+    assert not PriceRequestSerializer(data=unknown_kind).is_valid()
+    blank_label = {**base,'extras':[{'label':'  ','kind':'OTHER','amount':'1'}]}
+    assert not PriceRequestSerializer(data=blank_label).is_valid()
+    overflow = {**base,'extras':[{'label':str(i),'kind':'OTHER','amount':'1'} for i in range(11)]}
+    assert not PriceRequestSerializer(data=overflow).is_valid()

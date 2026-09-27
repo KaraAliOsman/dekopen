@@ -92,6 +92,20 @@ class AdminResponseSerializer(serializers.Serializer):
     items = serializers.ListField(child=serializers.DictField())
 
 
+class ExtraChargeSerializer(StrictSerializer):
+    """A project-level priced charge — instalación, traslado, otro — that
+    adds to the net after position discounts and is taxed with the sale."""
+    label = serializers.CharField(max_length=120, trim_whitespace=True)
+    kind = serializers.ChoiceField(
+        choices=['INSTALLATION', 'FREIGHT', 'OTHER'], default='OTHER')
+    amount = money()
+
+    def validate_label(self, value):
+        if not value:
+            raise serializers.ValidationError('Cargo requiere nombre')
+        return value
+
+
 class PriceRequestSerializer(StrictSerializer):
     project_id = serializers.UUIDField()
     pricing_mode = serializers.ChoiceField(choices=MODES)
@@ -102,6 +116,8 @@ class PriceRequestSerializer(StrictSerializer):
     discount_pct = fraction(default=Decimal('0'))
     target_margin = fraction(default=Decimal('0.35'))
     segment = serializers.ChoiceField(choices=['RETAIL','ARCHITECT','CONSTRUCTION'],default='RETAIL')
+    extras = serializers.ListField(
+        child=ExtraChargeSerializer(), required=False, default=list, max_length=10)
     confirmed = serializers.BooleanField(default=False)
     reason = serializers.CharField(max_length=1000)
 
@@ -160,6 +176,8 @@ class PriceResponseSerializer(serializers.Serializer):
     currency = serializers.ChoiceField(choices=['CLP','USD'])
     lines = LineResponseSerializer(many=True)
     cost_lines = CostLineResponseSerializer(many=True)
+    extras = serializers.ListField(child=serializers.DictField())
+    extras_net = serializers.CharField()
     positions_breakdown = PositionBreakdownSerializer(many=True)
     authorities = serializers.ListField(child=serializers.JSONField())
     rules = serializers.DictField()

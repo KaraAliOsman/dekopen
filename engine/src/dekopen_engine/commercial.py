@@ -175,21 +175,27 @@ class CommercialResult:
     project_net: Decimal
     project_tax: Decimal
     project_gross: Decimal
+    extras_net: Decimal = ZERO
 
 
 def totals(lines: Sequence[tuple[int, Decimal]], currency: str,
-           tax_rate: Decimal) -> CommercialResult:
+           tax_rate: Decimal, extras: Sequence[Decimal] = ()) -> CommercialResult:
+    """Project totals: discounted position lines plus project-level charges
+    (installation, freight) that are never discounted but do tax."""
     fraction(tax_rate)
+    extras_net = ZERO
+    for amount in extras:
+        extras_net += number(amount)
     with localcontext() as context:
         context.prec = 80
         ordered = tuple(sorted(lines))
-        net = sum((price for _, price in ordered), ZERO)
+        net = sum((price for _, price in ordered), ZERO) + extras_net
         tax = quantize_currency(net * tax_rate, currency)
-        return CommercialResult(ordered, net, tax, net + tax)
+        return CommercialResult(ordered, net, tax, net + tax, extras_net)
 
 
 def finish_lines(lines: Sequence[CommercialLine], currency: str,
-                 tax_rate: Decimal) -> CommercialResult:
+                 tax_rate: Decimal, extras: Sequence[Decimal] = ()) -> CommercialResult:
     if not lines or len({line.position_index for line in lines}) != len(lines):
         raise PricingError('invalid_positions')
     result = []
@@ -206,7 +212,7 @@ def finish_lines(lines: Sequence[CommercialLine], currency: str,
             if net < line.unit_cost * line.quantity:
                 raise PricingError('negative_margin')
             result.append((line.position_index, net))
-    return totals(result, currency, tax_rate)
+    return totals(result, currency, tax_rate, extras)
 
 
 def _decimal_ratio(value: Decimal) -> tuple[int, int]:
@@ -230,7 +236,8 @@ def _currency_amount(units: int, currency: str) -> Decimal:
 
 
 def target_project(costs: Sequence[tuple[int, Decimal]], margin: Decimal,
-                   currency: str, tax_rate: Decimal) -> CommercialResult:
+                   currency: str, tax_rate: Decimal,
+                   extras: Sequence[Decimal] = ()) -> CommercialResult:
     fraction(margin, margin=True)
     q_numerator, q_denominator = _decimal_ratio(quantum(currency))
     if not costs or len({index for index, _ in costs}) != len(costs):
@@ -282,4 +289,4 @@ def target_project(costs: Sequence[tuple[int, Decimal]], margin: Decimal,
     for index in sorted(assigned, key=lambda item: (-rank[item], item))[:residual]:
         assigned[index] += 1
     return totals([(index, _currency_amount(units, currency))
-                   for index, units in assigned.items()], currency, tax_rate)
+                   for index, units in assigned.items()], currency, tax_rate, extras)

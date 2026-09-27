@@ -990,6 +990,18 @@ def _revision_header(
     return f'<main class="{class_name}">{titleblock}{header}', bom_hash
 
 
+def _pricing_extras(snapshot: dict[str, object]) -> list[dict[str, object]]:
+    """Project-level charges (instalación, traslado) frozen inside the
+    applied pricing request — rendered as labeled money rows, never
+    re-derived."""
+    pricing = snapshot.get("pricing")
+    request = pricing.get("request") if isinstance(pricing, dict) else None
+    items = request.get("extras") if isinstance(request, dict) else None
+    if not isinstance(items, list):
+        return []
+    return [item for item in items if isinstance(item, dict)]
+
+
 def _doc01(snapshot: dict[str, object]) -> str:
     """Commercial proposal (DOC-01): a sales document, not a table dump.
 
@@ -1322,10 +1334,19 @@ def _doc01(snapshot: dict[str, object]) -> str:
     if discount_note:
         invest_note.append(f"<p>{escape(discount_note)}</p>")
     if totals_priced:
+        extras_html = "".join(
+            '<div class="inv-row"><span>'
+            + escape(_value(item.get("label")))
+            + "</span><strong>"
+            + escape(_money(item.get("amount"), currency))
+            + "</strong></div>"
+            for item in _pricing_extras(snapshot)
+        )
         body += (
             "<h2>Inversión</h2>"
             '<div class="invest"><div class="invest-panel">'
-            '<div class="inv-row"><span>Neto</span>'
+            + extras_html
+            + '<div class="inv-row"><span>Neto</span>'
             f'<strong>{escape(_money(project.get("total_price_net"), currency))}</strong></div>'
             '<div class="inv-row"><span>Impuesto</span>'
             f'<strong>{escape(_money(project.get("total_price_tax"), currency))}</strong></div>'

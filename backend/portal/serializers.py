@@ -56,6 +56,7 @@ class PortalQuoteSerializer(serializers.Serializer):
     total_price_net = serializers.CharField(allow_null=True)
     total_price_tax = serializers.CharField(allow_null=True)
     total_price_gross = serializers.CharField(allow_null=True)
+    extras = serializers.ListField(child=serializers.DictField())
     positions = PortalPositionSerializer(many=True)
     payment = PortalPaymentSerializer(allow_null=True)
     payment_url = serializers.CharField(allow_null=True)

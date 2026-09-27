@@ -1287,6 +1287,12 @@ function OperationDecision({
             <dd>{formatMoney(String(listNet), operation.currency)}</dd>
           </div>
         )}
+        {(operation.extras ?? []).map((item, index) => (
+          <div className="operation-total" key={`${item.label}-${index}`}>
+            <dt>{String(item.label ?? t("pricing.extras"))}</dt>
+            <dd>{formatMoney(String(item.amount ?? "0"), operation.currency)}</dd>
+          </div>
+        ))}
         <div className="operation-total">
           <dt>{t("pricing.net")}</dt>
           <dd>{formatMoney(operation.project_net, operation.currency)}</dd>
@@ -1491,6 +1497,9 @@ function CommercialOperations({
   const [confirmed, setConfirmed] = useState(false);
   const [projectId, setProjectId] = useState(boundProjectId ?? "");
   const [selectedMode, setSelectedMode] = useState("COST_PLUS_MARGIN");
+  // Project-level charges (instalación, traslado) — priced extras that ride
+  // the pricing request into the sealed revision. Amounts are net.
+  const [extras, setExtras] = useState<{ label: string; kind: string; amount: string }[]>([]);
   const [history, setHistory] = useState<Operation[]>([]);
   const [boundProject, setBoundProject] = useState<ProjectResponse | undefined>();
   // Bumped after a successful apply — the project's live totals changed, so
@@ -1731,8 +1740,16 @@ function CommercialOperations({
             if (data[key] !== undefined && data[key] !== "")
               data[key] = String(Number(data[key]) / 100);
           }
+          const extraLines = extras
+            .filter((item) => item.label.trim() !== "" && item.amount !== "")
+            .map((item) => ({
+              label: item.label.trim(),
+              kind: item.kind,
+              amount: item.amount,
+            }));
           void runCurrent(
-            () => request<Operation>("preview/", "POST", { ...data, confirmed }),
+            () =>
+              request<Operation>("preview/", "POST", { ...data, extras: extraLines, confirmed }),
             publishOperation,
             "pricing.calculateError",
           );
@@ -1845,6 +1862,70 @@ function CommercialOperations({
           </select>
         </label>
         <p className="field-hint">{t("pricing.segmentHint")}</p>
+        <fieldset className="pricing-extras">
+          <legend>{t("pricing.extras")}</legend>
+          <p className="field-hint">{t("pricing.extrasHint")}</p>
+          {extras.map((item, index) => (
+            <div className="pricing-extras__row" key={index}>
+              <select
+                aria-label={t("pricing.extras")}
+                value={item.kind}
+                onChange={(event) =>
+                  setExtras(
+                    extras.map((entry, i) =>
+                      i === index ? { ...entry, kind: event.target.value } : entry,
+                    ),
+                  )
+                }
+              >
+                <option value="INSTALLATION">{t("pricing.extraKindInstallation")}</option>
+                <option value="FREIGHT">{t("pricing.extraKindFreight")}</option>
+                <option value="OTHER">{t("pricing.extraKindOther")}</option>
+              </select>
+              <input
+                aria-label={t("pricing.extraLabel")}
+                placeholder={t("pricing.extraLabel")}
+                maxLength={120}
+                value={item.label}
+                onChange={(event) =>
+                  setExtras(
+                    extras.map((entry, i) =>
+                      i === index ? { ...entry, label: event.target.value } : entry,
+                    ),
+                  )
+                }
+              />
+              <input
+                aria-label={t("pricing.extraAmount")}
+                placeholder={t("pricing.extraAmount")}
+                type="number"
+                min="0"
+                step="1"
+                value={item.amount}
+                onChange={(event) =>
+                  setExtras(
+                    extras.map((entry, i) =>
+                      i === index ? { ...entry, amount: event.target.value } : entry,
+                    ),
+                  )
+                }
+              />
+              <button type="button" onClick={() => setExtras(extras.filter((_, i) => i !== index))}>
+                {t("pricing.extraRemove")}
+              </button>
+            </div>
+          ))}
+          {extras.length < 10 && (
+            <button
+              type="button"
+              onClick={() =>
+                setExtras([...extras, { label: "", kind: "INSTALLATION", amount: "" }])
+              }
+            >
+              {t("pricing.extraAdd")}
+            </button>
+          )}
+        </fieldset>
         <label>
           {t("pricing.reason")}
           <input

@@ -304,6 +304,22 @@ def _sealed_organization(version: dict[str, object]) -> dict[str, object]:
     }
 
 
+def _sealed_extras(version: dict[str, object]) -> list[dict[str, object]]:
+    """Project-level charges sealed inside the applied pricing request —
+    labeled net amounts the customer should see, never re-derived."""
+    snapshot = decoded(version["snapshot_json"])
+    pricing = snapshot.get("pricing") if isinstance(snapshot, dict) else None
+    request = pricing.get("request") if isinstance(pricing, dict) else None
+    items = request.get("extras") if isinstance(request, dict) else None
+    if not isinstance(items, list):
+        return []
+    return [
+        {"label": str(item.get("label") or ""), "amount": str(item.get("amount") or "0")}
+        for item in items
+        if isinstance(item, dict) and item.get("label")
+    ]
+
+
 def _payment_state(
     *, org_id: object, project_id: object, gross: Decimal, superseded: bool
 ) -> dict[str, object] | None:
@@ -402,6 +418,7 @@ def portal_quote(token: str) -> dict[str, object]:
             "total_price_net": str(price_net) if price_net is not None else None,
             "total_price_tax": str(price_tax) if price_tax is not None else None,
             "total_price_gross": str(price_gross) if price_gross is not None else None,
+            "extras": _sealed_extras(version),
             "positions": _sealed_positions(version),
             "payment": _payment_state(
                 org_id=org_id,

@@ -9,6 +9,7 @@ import type { CostLineResponse } from "./costLineResponse";
 import type { CurrencyEnum } from "./currencyEnum";
 import type { LineResponse } from "./lineResponse";
 import type { PositionBreakdown } from "./positionBreakdown";
+import type { PriceResponseExtrasItem } from "./priceResponseExtrasItem";
 import type { PriceResponseRules } from "./priceResponseRules";
 import type { PriceResponseStateEnum } from "./priceResponseStateEnum";
 
@@ -27,6 +28,8 @@ export interface PriceResponse {
   currency: CurrencyEnum;
   lines: LineResponse[];
   cost_lines: CostLineResponse[];
+  extras: PriceResponseExtrasItem[];
+  extras_net: string;
   positions_breakdown: PositionBreakdown[];
   authorities: unknown[];
   rules: PriceResponseRules;

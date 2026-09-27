@@ -246,3 +246,35 @@ def test_missing_fx_and_missing_tariff_are_typed() -> None:
     with pytest.raises(PricingError, match='missing_typology_authority'):
         unit_price(PricingMode.PRICE_PER_M2_BY_TYPOLOGY,cost=D('1'),margin=D('0'),
                    area=D('1'),width=D('1000'),height=D('1000'))
+
+
+def test_extras_raise_net_and_tax_but_never_discount() -> None:
+    # Instalación / traslado are project-level charges: they add to the net
+    # after every position discount and bear the same tax rate.
+    lines = [CommercialLine(1, 1, D('80'), D('100'), D('0.1'))]
+    base = finish_lines(lines, 'CLP', D('0.19'))
+    charged = finish_lines(lines, 'CLP', D('0.19'), extras=[D('10'), D('5')])
+    assert charged.extras_net == D('15')
+    assert charged.project_net == base.project_net + D('15')
+    assert charged.project_tax == quantize_currency(charged.project_net * D('0.19'), 'CLP')
+    assert charged.project_gross == charged.project_net + charged.project_tax
+
+
+def test_target_project_receives_extras() -> None:
+    result = target_project([(1, D('100'))], D('0.5'), 'CLP', D('0.19'), extras=[D('7')])
+    assert result.extras_net == D('7')
+    assert result.project_net == D('200') + D('7')
+    assert result.project_tax == quantize_currency(result.project_net * D('0.19'), 'CLP')
+
+
+@pytest.mark.parametrize('value', [D('-0.01'), D('-1000')])
+def test_extras_reject_negative_amounts(value: Decimal) -> None:
+    with pytest.raises(PricingError):
+        finish_lines([CommercialLine(1, 1, D('80'), D('100'), D('0'))],
+                     'CLP', D('0.19'), extras=[value])
+
+
+def test_extras_reject_non_decimal() -> None:
+    with pytest.raises(PricingError):
+        finish_lines([CommercialLine(1, 1, D('80'), D('100'), D('0'))],
+                     'CLP', D('0.19'), extras=[0.1])  # type: ignore[list-item]
