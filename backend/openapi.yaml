@@ -9249,6 +9249,87 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/production/orders/{order_id}/optimize/compare/:
+    post:
+      operationId: production_order_optimize_compare
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: order_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - production
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkOrderOptimizeCompareRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/WorkOrderOptimizeCompareRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/WorkOrderOptimizeCompareRequestRequest'
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkOrderOptimizeCompare'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/production/orders/{order_id}/packing/:
     post:
       operationId: production_order_packing
@@ -19078,6 +19159,52 @@ components:
       - operation_count
       - order_code
       - order_id
+    OptimizeStrategyStats:
+      type: object
+      properties:
+        strategy:
+          type: string
+        bars_total:
+          type: integer
+        bars_new:
+          type: integer
+        bars_remnant:
+          type: integer
+        cuts_total:
+          type: integer
+        waste_mm:
+          type: string
+        sheets_total:
+          type: integer
+        pieces_sheets:
+          type: integer
+        unnested_count:
+          type: integer
+        purchase_bars:
+          type: integer
+        purchase_sheets:
+          type: integer
+        remnants_consumed:
+          type: integer
+        remnants_produced:
+          type: integer
+        runtime_ms:
+          type: integer
+      required:
+      - bars_new
+      - bars_remnant
+      - bars_total
+      - cuts_total
+      - pieces_sheets
+      - purchase_bars
+      - purchase_sheets
+      - remnants_consumed
+      - remnants_produced
+      - runtime_ms
+      - sheets_total
+      - strategy
+      - unnested_count
+      - waste_mm
     OrderIndexItem:
       type: object
       properties:
@@ -23996,6 +24123,31 @@ components:
       - optimization
       - order_code
       - order_id
+    WorkOrderOptimizeCompare:
+      type: object
+      properties:
+        order_id:
+          type: string
+          format: uuid
+        order_code:
+          type: string
+        color:
+          type: string
+        strategies:
+          type: array
+          items:
+            $ref: '#/components/schemas/OptimizeStrategyStats'
+      required:
+      - color
+      - order_code
+      - order_id
+      - strategies
+    WorkOrderOptimizeCompareRequestRequest:
+      type: object
+      properties:
+        color:
+          type: string
+          maxLength: 50
     WorkOrderOptimizeRequestRequest:
       type: object
       properties:

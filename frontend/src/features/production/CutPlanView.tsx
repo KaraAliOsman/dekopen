@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 
+import type { OptimizeStrategyStats } from "../../api/generated/models";
 import { cutRoleLabel } from "./labels";
 import { fmtMm } from "../../format";
 import { t } from "../../i18n/es-CL";
@@ -136,6 +137,7 @@ export type WorkOrderOptimization = {
   unmapped_stock_skus?: string[];
   invalidated?: boolean;
   invalidated_by?: string;
+  stats?: OptimizeStrategyStats;
 };
 
 type PieceRef = {

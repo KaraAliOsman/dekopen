@@ -64,6 +64,8 @@ from production.serializers import (
     WorkCenterListSerializer,
     WorkCenterRequestSerializer,
     WorkCenterSerializer,
+    WorkOrderOptimizeCompareRequestSerializer,
+    WorkOrderOptimizeCompareSerializer,
     WorkOrderOptimizeRequestSerializer,
     WorkOrderOptimizeSerializer,
 )
@@ -646,6 +648,28 @@ class ProductionOrderOptimizeView(APIView):
                     color=data.get("color"),
                     cutting_profile_code=data.get("cutting_profile_code"),
                     strategy=data["strategy"],
+                )
+        return Response(output)
+
+
+class ProductionOrderOptimizeCompareView(APIView):
+    @extend_schema(
+        operation_id="production_order_optimize_compare",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=WorkOrderOptimizeCompareRequestSerializer,
+        responses={200: WorkOrderOptimizeCompareSerializer, **ERRORS},
+        tags=["production"],
+    )
+    def post(self, request, order_id: UUID):
+        data = validate(WorkOrderOptimizeCompareRequestSerializer, request.data)
+        with public_production_errors():
+            # Preview only — readers can compare, writers still hold the
+            # commit authority on an actual plan.
+            with documentary_scope(request, _READERS) as (_, _, org_id):
+                output = service.compare_optimization_strategies(
+                    org_id=org_id,
+                    order_id=order_id,
+                    color=data.get("color") or "",
                 )
         return Response(output)
 

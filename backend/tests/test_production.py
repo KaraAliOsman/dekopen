@@ -910,6 +910,79 @@ def test_qc_check_not_allowed_with_other_actions() -> None:
     assert error.value.code == "step_transition_invalid"
 
 
+def test_optimization_stats_aggregates_plan() -> None:
+    plan = {
+        "bars": {
+            "workshop_cut_plan": [
+                {"cuts": [{}, {}, {}], "waste_mm": "250.00", "source": "NEW"},
+                {"cuts": [{}], "waste_mm": "10.00", "source": "REMNANT"},
+            ],
+            "purchase_list": [{"qty_bars": 2}],
+        },
+        "sheets": [{"placements": [{}, {}]}],
+        "sheet_purchases": [{"qty_sheets": 1}],
+        "unnested": [{"reason": "shaped_glass_outline"}],
+        "consumed_bars": [{"id": "x"}], "consumed_sheets": [],
+        "produced_bars": [{"stock_authority_id": "a", "remainder_mm": "800"}],
+        "produced_sheets": [],
+        "runtime_ms": 42,
+    }
+    stats = service._optimization_stats(plan)
+    assert stats["bars_total"] == 2
+    assert stats["bars_remnant"] == 1 and stats["bars_new"] == 1
+    assert stats["cuts_total"] == 4
+    assert stats["waste_mm"] == "260.00"
+    assert stats["sheets_total"] == 1 and stats["pieces_sheets"] == 2
+    assert stats["unnested_count"] == 1
+    assert stats["purchase_bars"] == 2 and stats["purchase_sheets"] == 1
+    assert stats["remnants_consumed"] == 1 and stats["remnants_produced"] == 1
+    assert stats["runtime_ms"] == 42
+
+
+def test_compare_strategies_runs_fast_and_deep() -> None:
+    order = {
+        "id": uuid4(), "order_code": "OT-1",
+        "payload_json": {"position_id": "p1", "system_id": "s1"},
+    }
+    plans = []
+
+    def fake_plan(**kwargs):
+        plans.append(kwargs["strategy"])
+        return {
+            "bars": {"workshop_cut_plan": [{"cuts": [{}], "waste_mm": "5"}]},
+            "sheets": [], "sheet_purchases": [], "unnested": [],
+            "consumed_bars": [], "consumed_sheets": [],
+            "produced_bars": [], "produced_sheets": [],
+            "runtime_ms": 7 if kwargs["strategy"] == "fast" else 70,
+        }
+
+    def fake_context(**kwargs):
+        return (
+            order, "BLANCO", {"positions": [{"id": "p1", "system_id": "s1"}]},
+            object(), 1,
+        )
+
+    payload_patches = patch(
+        "production.service._order_optimize_context", side_effect=fake_context
+    ), patch(
+        "production.service._compute_optimization", side_effect=fake_plan
+    ), patch(
+        "production.service._decoded", side_effect=lambda raw: raw
+    ), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    )
+    with payload_patches[0], payload_patches[1], payload_patches[2], payload_patches[3]:
+        output = service.compare_optimization_strategies(
+            org_id=uuid4(), order_id=order["id"], color=""
+        )
+    assert plans == ["fast", "deep"]
+    assert output["order_code"] == "OT-1"
+    assert [row["strategy"] for row in output["strategies"]] == ["fast", "deep"]
+    assert output["strategies"][0]["runtime_ms"] == 7
+    assert output["strategies"][1]["runtime_ms"] == 70
+    assert output["strategies"][0]["waste_mm"] == "5"
+
+
 def test_hold_event_only_appended_once() -> None:
     captured = []
 

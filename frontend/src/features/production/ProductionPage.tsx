@@ -21,6 +21,7 @@ import {
   productionOrderInstall,
   productionOrderLabels,
   productionOrderOptimize,
+  productionOrderOptimizeCompare,
   productionOrderPacking,
   productionOrderRemake,
   productionOrders,
@@ -43,6 +44,7 @@ import type {
   ProductionOrderDetail,
   ProductionPrepItem,
   ProductionStep,
+  WorkOrderOptimizeCompare,
 } from "../../api/generated/models";
 import { ApiError, apiFetchBlob } from "../../api/apiMutator";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
@@ -233,6 +235,8 @@ export function ProductionPage(): JSX.Element {
   const [sigDrawn, setSigDrawn] = useState(false);
   const [signatureMode, setSignatureMode] = useState<"draw" | "typed">("draw");
   const [trace, setTrace] = useState<ProductionOrderTrace | null>(null);
+  const [strategyCompare, setStrategyCompare] = useState<WorkOrderOptimizeCompare | null>(null);
+  const [compareBusy, setCompareBusy] = useState(false);
   const [traceBusy, setTraceBusy] = useState(false);
   const [operatorStepId, setOperatorStepId] = useState<string | null>(null);
   const [pieceQuery, setPieceQuery] = useState("");
@@ -358,6 +362,7 @@ export function ProductionPage(): JSX.Element {
     setTrace(null);
     setOperatorStepId(null);
     setPieceQuery("");
+    setStrategyCompare(null);
     setPieceReport(null);
     void loadDetail(selectedId).catch(() => setMessage(t("production.loadError")));
     void loadTrace();
@@ -485,6 +490,9 @@ export function ProductionPage(): JSX.Element {
 
   function optimize(orderId: string): void {
     if (!optColor.trim()) return;
+    // A committed plan supersedes any comparison that ran against the prior
+    // stock/piece state — stale numbers must not survive next to a new plan.
+    setStrategyCompare(null);
     void action(
       productionOrderOptimize(orderId, {
         color: optColor.trim(),
@@ -492,6 +500,23 @@ export function ProductionPage(): JSX.Element {
       }),
       orderId,
     );
+  }
+
+  function compareStrategies(orderId: string): void {
+    setCompareBusy(true);
+    setMessage("");
+    productionOrderOptimizeCompare(orderId, { color: optColor.trim() })
+      .then((response) => {
+        if (mounted.current && response.status === 200) {
+          setStrategyCompare(response.data);
+        }
+      })
+      .catch((error) => {
+        if (mounted.current) setMessage(actionErrorDetail(error));
+      })
+      .finally(() => {
+        if (mounted.current) setCompareBusy(false);
+      });
   }
 
   function exportCnc(orderId: string): void {
@@ -1272,8 +1297,106 @@ export function ProductionPage(): JSX.Element {
                         >
                           {t("production.optimizeButton")}
                         </button>
+                        <button
+                          type="button"
+                          className="production-compare"
+                          disabled={busy || compareBusy}
+                          onClick={() => compareStrategies(detail.id)}
+                        >
+                          {compareBusy
+                            ? t("production.optimizeComparing")
+                            : t("production.optimizeCompare")}
+                        </button>
                       </div>
                     ) : null}
+                    {(() => {
+                      const stats = optimization?.stats;
+                      if (!stats || optimization?.invalidated) return null;
+                      return (
+                        <p className="production-optimize-stats">
+                          {t("production.optimizeStatsBars")}:{" "}
+                          <strong>
+                            {stats.bars_total}
+                            {stats.bars_remnant
+                              ? ` (+${stats.bars_remnant} ${t("production.optimizeStatsRemnant")})`
+                              : ""}
+                          </strong>
+                          {" · "}
+                          {t("production.optimizeStatsCuts")}: <strong>{stats.cuts_total}</strong>
+                          {" · "}
+                          {t("production.optimizeStatsWaste")}:{" "}
+                          <strong>{fmtMm(stats.waste_mm)} mm</strong>
+                          {stats.sheets_total
+                            ? ` · ${t("production.optimizeStatsSheets")}: ${stats.sheets_total}`
+                            : ""}
+                          {stats.unnested_count
+                            ? ` · ${t("production.optimizeStatsUnnested")}: ${stats.unnested_count}`
+                            : ""}
+                          {stats.purchase_bars || stats.purchase_sheets
+                            ? ` · ${t("production.optimizeStatsPurchases")}: ${
+                                stats.purchase_bars + stats.purchase_sheets
+                              }`
+                            : ""}
+                          {" · "}
+                          {stats.runtime_ms} ms
+                        </p>
+                      );
+                    })()}
+                    {strategyCompare
+                      ? (() => {
+                          const bestWaste = Math.min(
+                            ...strategyCompare.strategies.map((row) => Number(row.waste_mm)),
+                          );
+                          return (
+                            <table className="production-plan production-compare-table">
+                              <thead>
+                                <tr>
+                                  <th>{t("production.optimizeStrategy")}</th>
+                                  <th>{t("production.optimizeStatsBars")}</th>
+                                  <th>{t("production.optimizeStatsCuts")}</th>
+                                  <th>{t("production.optimizeStatsWaste")}</th>
+                                  <th>{t("production.optimizeStatsPurchases")}</th>
+                                  <th>{t("production.optimizeStatsRemnants")}</th>
+                                  <th>{t("production.optimizeStatsRuntime")}</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {strategyCompare.strategies.map((row) => (
+                                  <tr
+                                    key={row.strategy}
+                                    className={
+                                      Number(row.waste_mm) === bestWaste
+                                        ? "production-compare-best"
+                                        : ""
+                                    }
+                                  >
+                                    <td>
+                                      {row.strategy === "fast"
+                                        ? t("production.optimizeStrategyFast")
+                                        : row.strategy === "deep"
+                                          ? t("production.optimizeStrategyDeep")
+                                          : row.strategy}
+                                    </td>
+                                    <td>
+                                      {row.bars_total}
+                                      {row.bars_remnant
+                                        ? ` (+${row.bars_remnant} ${t("production.optimizeStatsRemnant")})`
+                                        : ""}
+                                    </td>
+                                    <td>{row.cuts_total}</td>
+                                    <td>{fmtMm(row.waste_mm)} mm</td>
+                                    <td>{row.purchase_bars + row.purchase_sheets}</td>
+                                    <td>
+                                      {row.remnants_consumed}↓ {row.remnants_produced}↑
+                                    </td>
+                                    <td>{row.runtime_ms} ms</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          );
+                        })()
+                      : null}
                     {(() => {
                       const cncExport = detail.payload?.cnc_export as CncExport | undefined;
                       const dxfExport = detail.payload?.dxf_export as DxfExport | undefined;

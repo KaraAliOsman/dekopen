@@ -22,6 +22,7 @@ from production.views import (
     ProductionOrderPackView,
     ProductionOrderDetailView,
     ProductionOrderListView,
+    ProductionOrderOptimizeCompareView,
     ProductionOrderOptimizeView,
     ProductionOrderPackingView,
     ProductionPrepView,
@@ -56,6 +57,11 @@ urlpatterns = [
         "orders/<uuid:order_id>/optimize/",
         ProductionOrderOptimizeView.as_view(),
         name="production-order-optimize",
+    ),
+    path(
+        "orders/<uuid:order_id>/optimize/compare/",
+        ProductionOrderOptimizeCompareView.as_view(),
+        name="production-order-optimize-compare",
     ),
     path(
         "orders/<uuid:order_id>/cnc-export/",

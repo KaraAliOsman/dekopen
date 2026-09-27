@@ -1001,3 +1001,27 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+
+.production-compare {
+  background: transparent;
+  border: 1px solid var(--theme-accent);
+  color: var(--theme-accent);
+}
+.production-optimize-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.5rem 0;
+  font-size: 0.8rem;
+  color: var(--theme-text-secondary);
+}
+.production-optimize-stats strong {
+  color: var(--theme-text);
+  font-size: 0.85rem;
+}
+.production-compare-table {
+  margin-top: 0.4rem;
+}
+.production-compare-table .production-compare-best {
+  background: color-mix(in srgb, var(--theme-success, #1a7f4b) 10%, transparent);
+}

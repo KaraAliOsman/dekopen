@@ -272,6 +272,34 @@ class WorkOrderOptimizeSerializer(serializers.Serializer):
     optimization = serializers.DictField()
 
 
+class WorkOrderOptimizeCompareRequestSerializer(StrictSerializer):
+    color = serializers.CharField(required=False, allow_blank=True, max_length=50)
+
+
+class OptimizeStrategyStatsSerializer(serializers.Serializer):
+    strategy = serializers.CharField()
+    bars_total = serializers.IntegerField()
+    bars_new = serializers.IntegerField()
+    bars_remnant = serializers.IntegerField()
+    cuts_total = serializers.IntegerField()
+    waste_mm = serializers.CharField()
+    sheets_total = serializers.IntegerField()
+    pieces_sheets = serializers.IntegerField()
+    unnested_count = serializers.IntegerField()
+    purchase_bars = serializers.IntegerField()
+    purchase_sheets = serializers.IntegerField()
+    remnants_consumed = serializers.IntegerField()
+    remnants_produced = serializers.IntegerField()
+    runtime_ms = serializers.IntegerField()
+
+
+class WorkOrderOptimizeCompareSerializer(serializers.Serializer):
+    order_id = serializers.UUIDField()
+    order_code = serializers.CharField()
+    color = serializers.CharField()
+    strategies = OptimizeStrategyStatsSerializer(many=True)
+
+
 class DeliveryConfirmationSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     confirmation_code = serializers.CharField()

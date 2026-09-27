@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 from decimal import Decimal
+from time import perf_counter
 import hashlib
 import json
 from uuid import UUID
@@ -2669,6 +2670,400 @@ def _decoded(payload: object) -> dict[str, object]:
     return payload if isinstance(payload, dict) else {}
 
 
+def _compute_optimization(
+    *,
+    org_id: UUID,
+    result: EngineResult,
+    system_id: str,
+    color: str,
+    quantity: int,
+    position_id: str | None,
+    version_snapshot: dict[str, object],
+    strategy: str,
+    cutting_profile_code: str | None = None,
+) -> dict[str, object]:
+    """Pure plan computation — reads stock/remnant pools, writes nothing:
+    no reservations, no events. ``optimize_work_order`` persists the result;
+    ``compare_optimization_strategies`` previews the same computation per
+    strategy so the choice is evidence, not a guess."""
+    started = perf_counter()
+    stocks = CuttingRepository()
+    authorities = stocks.for_result(result, UUID(str(system_id)), org_id, color)
+    profile = stocks.cutting_profile(org_id, cutting_profile_code)
+    # §6: on-hand bar drops matching the plan's stock authorities are cut
+    # before any purchase; the engine consumes smallest-fitting-first.
+    bar_remnants = remnants_service.bar_remnants_for_authorities(
+        org_id=org_id,
+        authority_ids={s.stock_authority_id for s in authorities.stocks},
+    )
+    per_unit = pieces_from_result(
+        result,
+        color=color,
+        source_position_id=position_id,
+        reinforcement_skus=authorities.reinforcement_skus,
+        reinforcement_angles=_reinforcement_angle_map(version_snapshot, position_id),
+    )
+    # pieces_from_result already expands each unit's qty via unit_index;
+    # offset by the per-unit count so the identity stays unique per unit.
+    pieces = [
+        piece.model_copy(
+            update={"unit_index": (repetition - 1) * len(per_unit) + piece.unit_index}
+        )
+        for repetition in range(1, quantity + 1)
+        for piece in per_unit
+    ]
+    bars = optimize_cut(
+        pieces, authorities.stocks, profile,
+        remnants=bar_remnants, strategy=strategy,
+    ).model_dump(mode="json")
+    bar_runtime_ms = int((perf_counter() - started) * 1000)
+
+    rules = _sheet_rules(org_id)
+    sheets: list[dict[str, object]] = []
+    sheet_purchases: list[dict[str, object]] = []
+    unnested: list[dict[str, object]] = []
+    sheet_groups: list[tuple[SheetRule, list[NestPiece], str]] = []
+    for group_key, entries, kind in (
+        ("by_thickness", result.glasses, "GLASS"),
+        ("by_sku", result.panels, "PANEL"),
+    ):
+        for index, entry in enumerate(entries, start=1):
+            # Glass substrate identity: the resolved catalog article (or
+            # the composition spec when no article authority exists) is
+            # the grouping key — never net thickness alone.
+            substrate = (
+                (entry.article_sku or entry.glass_spec)
+                if kind == "GLASS"
+                else None
+            )
+            group = (
+                str(substrate)
+                if substrate
+                else (
+                    str(entry.thickness_net_mm)
+                    if kind == "GLASS"
+                    else entry.sku
+                )
+            )
+            if getattr(entry, "shape", None):
+                # Non-rectangular glass cannot be guillotine-nested by a
+                # bounding rect — it goes to the shape-cutting cell with
+                # its true outline, never silently a rectangle.
+                unnested.append({
+                    "kind": kind, "group": group,
+                    "width_mm": str(entry.width_mm),
+                    "height_mm": str(entry.height_mm), "quantity": quantity,
+                    "bay_id": entry.bay_id, "leaf_id": entry.leaf_id,
+                    "shape": [
+                        {"x_mm": str(p.x_mm), "y_mm": str(p.y_mm)}
+                        for p in entry.shape
+                    ],
+                    "reason": "shaped_glass_outline",
+                })
+                continue
+            candidates: list[SheetRule]
+            if kind == "GLASS" and substrate:
+                # Declared substrate → only rules declaring the same
+                # substrate; a same-thickness sheet of another glass type
+                # is not a compatible host.
+                candidates = rules["by_glass"].get(str(substrate)) or []
+            else:
+                candidates = rules[group_key].get(group) or []
+            rule = _pick_sheet_rule(
+                candidates, entry.width_mm, entry.height_mm
+            )
+            label = f"V-{index:02d}" if kind == "GLASS" else f"PAN-{index:02d}"
+            if rule is None:
+                unnested.append({
+                    "kind": kind, "group": group,
+                    "width_mm": str(entry.width_mm),
+                    "height_mm": str(entry.height_mm), "quantity": quantity,
+                    "bay_id": entry.bay_id, "leaf_id": entry.leaf_id,
+                    "reason": "no_declared_sheet",
+                })
+                continue
+            sheet_groups.append((
+                rule,
+                [
+                    NestPiece(
+                        piece_id=(
+                            label if quantity == 1
+                            else f"{label}-{repetition:02d}"
+                        ),
+                        workshop_sku=rule.workshop_sku,
+                        width_mm=entry.width_mm,
+                        height_mm=entry.height_mm,
+                        source_position_id=position_id,
+                        bay_id=entry.bay_id,
+                        leaf_id=entry.leaf_id,
+                        unit_index=repetition,
+                    )
+                    for repetition in range(1, quantity + 1)
+                ],
+                kind,
+            ))
+    # Group by the full selected rule identity (format + trim + purchasing
+    # identity), never just the SKU — pieces picked for different variants
+    # of one SKU keep separate layouts and purchase lines.
+    merged: dict[tuple, tuple[SheetRule, list[NestPiece], str]] = {}
+    for rule, pieces_group, group_kind in sheet_groups:
+        key = (
+            rule.workshop_sku,
+            str(rule.sheet_width_mm),
+            str(rule.sheet_height_mm),
+            str(rule.edge_trim_mm),
+            rule.purchasing_sku,
+        )
+        merged.setdefault(key, (rule, [], group_kind))[1].extend(pieces_group)
+    for rule, group_pieces, group_kind in merged.values():
+        outcome = nest_rects(
+            group_pieces, rule,
+            remnants=remnants_service.sheet_remnants_for_sku(
+                org_id=org_id, workshop_sku=rule.workshop_sku
+            ),
+        )
+        for layout in outcome.layouts:
+            dumped = layout.model_dump(mode="json")
+            # sheet_index restarts per bin — renumber across the whole plan
+            # so layouts keep a stable globally-unique identity.
+            dumped["sheet_index"] = len(sheets) + 1
+            # Remnant identity: the workshop sku this layout nests under
+            # (produced_remnants rejoin the pool under the same key).
+            dumped["workshop_sku"] = rule.workshop_sku
+            sheets.append(dumped)
+        for purchase in outcome.purchase_list:
+            dumped_purchase = purchase.model_dump(mode="json")
+            # The purchase row is bought sheet stock — tag which piece group
+            # it serves so stock needs can route it (glass sheets reserve at
+            # CUT; panel sheets stay on the PANEL authority path).
+            dumped_purchase["group_kind"] = group_kind
+            sheet_purchases.append(dumped_purchase)
+        for piece in outcome.unplaced:
+            unnested.append({
+                "kind": "SHEET", "group": rule.workshop_sku,
+                "width_mm": str(piece.width_mm), "height_mm": str(piece.height_mm),
+                "quantity": 1, "bay_id": piece.bay_id, "leaf_id": piece.leaf_id,
+                "reason": "piece_larger_than_usable_sheet",
+            })
+
+    # §6 remnant lifecycle: the plan claims what it will cut (RESERVED
+    # inside the caller's transaction — never a drop double-booked) and
+    # reports what reusable material it will return to the rack.
+    consumed_bars = [
+        {"id": bar["remnant_id"], "kind": "BAR"}
+        for bar in bars.get("workshop_cut_plan") or []
+        if bar.get("source") == "REMNANT" and bar.get("remnant_id")
+    ]
+    consumed_sheets = [
+        {"id": sheet["remnant_id"], "kind": "SHEET"}
+        for sheet in sheets
+        if sheet.get("source") == "REMNANT" and sheet.get("remnant_id")
+    ]
+    # The plan names each physical drop it claims — the operator matches
+    # the printed remnant id to the rack tag without opening the ledger.
+    consumed_ids = [entry["id"] for entry in consumed_bars + consumed_sheets]
+    if consumed_ids:
+        consumed_locations = {
+            str(r["id"]): r["rack_location"]
+            for r in rows(
+                "SELECT id, rack_location FROM public.inventory_remnants"
+                " WHERE org_id = %s AND id = ANY(%s::uuid[])",
+                [str(org_id), consumed_ids],
+            )
+        }
+        for entry in consumed_bars + consumed_sheets:
+            entry["rack_location"] = consumed_locations.get(entry["id"])
+    produced_bars = [
+        {
+            "stock_authority_id": bar["stock_authority_id"],
+            "remainder_mm": bar["remainder_mm"],
+        }
+        for bar in bars.get("workshop_cut_plan") or []
+        if bar.get("remainder_reusable") and bar.get("stock_authority_id")
+    ]
+    produced_sheets = [
+        {
+            "workshop_sku": sheet["workshop_sku"],
+            "width_mm": remnant["width_mm"],
+            "height_mm": remnant["height_mm"],
+        }
+        for sheet in sheets
+        for remnant in sheet.get("produced_remnants") or []
+    ]
+    return {
+        "bars": bars,
+        "sheets": sheets,
+        "sheet_purchases": sheet_purchases,
+        "unnested": unnested,
+        "consumed_bars": consumed_bars,
+        "consumed_sheets": consumed_sheets,
+        "produced_bars": produced_bars,
+        "produced_sheets": produced_sheets,
+        "bar_runtime_ms": bar_runtime_ms,
+        "runtime_ms": int((perf_counter() - started) * 1000),
+    }
+
+
+def _optimization_stats(plan: dict[str, object]) -> dict[str, object]:
+    """Plan aggregates for the optimize header — derived from the dumped
+    plan, never recomputed physics."""
+    bars = (plan["bars"].get("workshop_cut_plan") or []) if isinstance(
+        plan.get("bars"), dict
+    ) else []
+    cuts_total = 0
+    waste_mm = Decimal("0")
+    new_bars = 0
+    remnant_bars = 0
+    for bar in bars:
+        cuts_total += len(bar.get("cuts") or [])
+        waste_mm += Decimal(str(bar.get("waste_mm") or "0"))
+        if bar.get("source") == "REMNANT":
+            remnant_bars += 1
+        else:
+            new_bars += 1
+    sheet_purchases = plan.get("sheet_purchases") or []
+    bar_purchases = (plan["bars"].get("purchase_list") or []) if isinstance(
+        plan.get("bars"), dict
+    ) else []
+    return {
+        "bars_total": len(bars),
+        "bars_new": new_bars,
+        "bars_remnant": remnant_bars,
+        "cuts_total": cuts_total,
+        "waste_mm": str(waste_mm),
+        "sheets_total": len(plan.get("sheets") or []),
+        "pieces_sheets": sum(
+            len(sheet.get("placements") or [])
+            for sheet in (plan.get("sheets") or [])
+        ),
+        "unnested_count": len(plan.get("unnested") or []),
+        "purchase_bars": sum(
+            int(line.get("qty_bars") or 0) for line in bar_purchases
+        ),
+        "purchase_sheets": sum(
+            int(line.get("qty_sheets") or 0) for line in sheet_purchases
+        ),
+        "remnants_consumed": len(
+            (plan.get("consumed_bars") or []) + (plan.get("consumed_sheets") or [])
+        ),
+        "remnants_produced": len(
+            (plan.get("produced_bars") or []) + (plan.get("produced_sheets") or [])
+        ),
+        "runtime_ms": plan.get("runtime_ms") or 0,
+    }
+
+
+def _order_optimize_context(
+    *, org_id: UUID, order_id: UUID, color: str
+) -> tuple[dict[str, object], str, dict[str, object], EngineResult, int]:
+    """Shared guards + inputs for optimizing an order — the mutating path and
+    the read-only comparison both validate against the same sealed facts."""
+    order = one(
+        """
+        SELECT id, order_code, status::text, payload_json FROM public.orders
+        WHERE id = %s AND org_id = %s AND order_type = 'WORKSHOP_OT'
+        """,
+        [str(order_id), str(org_id)],
+        "work_order_not_found",
+    )
+    if str(order["status"]) == "INSTALLED":
+        raise DocumentaryError("work_order_installed")
+    if str(order["status"]) == "DISPATCHED":
+        raise DocumentaryError("work_order_dispatched")
+    if str(order["status"]) == "COMPLETED":
+        raise DocumentaryError("work_order_completed")
+    payload = _decoded(order["payload_json"])
+    position_id = payload.get("position_id")
+    system_id = payload.get("system_id")
+    sealed_color = str(payload.get("color") or "").strip()
+    if sealed_color and not color:
+        color = sealed_color
+    if not color:
+        raise DocumentaryError("optimize_color_required")
+    if sealed_color and color != sealed_color:
+        raise DocumentaryError("optimize_color_mismatch")
+    version_row = one(
+        """
+        SELECT pv.snapshot_json FROM public.project_versions pv
+        JOIN public.orders o ON o.project_version_id = pv.id
+        WHERE o.id = %s AND o.org_id = %s
+        """,
+        [str(order_id), str(org_id)],
+        "work_order_missing_system",
+    )
+    version_snapshot = _decoded(version_row["snapshot_json"])
+    if not system_id:
+        for pos in version_snapshot.get("positions") or []:
+            if str(pos.get("id")) == str(position_id) and pos.get("system_id"):
+                system_id = str(pos["system_id"])
+                break
+        if not system_id:
+            raise DocumentaryError("work_order_missing_system")
+    quantity = int(payload.get("quantity") or 1)
+    materials = payload.get("materials") or {}
+    result = EngineResult.model_validate(
+        {
+            "profile_cuts": materials.get("profile_cuts") or [],
+            "reinforcements": materials.get("reinforcements") or [],
+            "glasses": materials.get("glasses") or [],
+            "panels": materials.get("panels") or [],
+            "fittings": materials.get("fittings") or [],
+            "hardware_items": materials.get("hardware_items") or [],
+            "leaf_weights": materials.get("leaf_weights") or [],
+        },
+        strict=False,
+    )
+    return order, color, version_snapshot, result, quantity
+
+
+def compare_optimization_strategies(
+    *,
+    org_id: UUID,
+    order_id: UUID,
+    color: str,
+) -> dict[str, object]:
+    """§6: preview FAST vs DEEP on the same sealed pieces and live stock —
+    read-only, no reservations, no events. AUTO delegates to the engine's own
+    pick, so the comparison covers the two explicit policies the operator can
+    choose."""
+    color = (color or "").strip()
+    with documentary_backend():
+        order, color, version_snapshot, result, quantity = _order_optimize_context(
+            org_id=org_id, order_id=order_id, color=color
+        )
+        payload = _decoded(order["payload_json"])
+        position_id = payload.get("position_id")
+        system_id = payload.get("system_id") or next(
+            (
+                str(pos["system_id"])
+                for pos in (version_snapshot.get("positions") or [])
+                if str(pos.get("id")) == str(position_id) and pos.get("system_id")
+            ),
+            None,
+        )
+        rows_out = []
+        for strategy in ("fast", "deep"):
+            plan = _compute_optimization(
+                org_id=org_id,
+                result=result,
+                system_id=str(system_id),
+                color=color,
+                quantity=quantity,
+                position_id=str(position_id) if position_id else None,
+                version_snapshot=version_snapshot,
+                strategy=strategy,
+            )
+            rows_out.append(
+                {"strategy": strategy, **_optimization_stats(plan)}
+            )
+        return {
+            "order_id": str(order_id),
+            "order_code": order["order_code"],
+            "color": color,
+            "strategies": rows_out,
+        }
+
+
 def optimize_work_order(
     *,
     org_id: UUID,
@@ -2773,210 +3168,25 @@ def optimize_work_order(
             },
             strict=False,
         )
-        stocks = CuttingRepository()
-        authorities = stocks.for_result(result, UUID(str(system_id)), org_id, color)
-        profile = stocks.cutting_profile(org_id, cutting_profile_code)
-        # §6: on-hand bar drops matching the plan's stock authorities are cut
-        # before any purchase; the engine consumes smallest-fitting-first.
-        bar_remnants = remnants_service.bar_remnants_for_authorities(
+        plan = _compute_optimization(
             org_id=org_id,
-            authority_ids={s.stock_authority_id for s in authorities.stocks},
-        )
-        per_unit = pieces_from_result(
-            result,
+            result=result,
+            system_id=str(system_id),
             color=color,
-            source_position_id=str(position_id) if position_id else None,
-            reinforcement_skus=authorities.reinforcement_skus,
-            reinforcement_angles=_reinforcement_angle_map(
-                version_snapshot, str(position_id) if position_id else None
-            ),
+            quantity=quantity,
+            position_id=str(position_id) if position_id else None,
+            version_snapshot=version_snapshot,
+            strategy=strategy,
+            cutting_profile_code=cutting_profile_code,
         )
-        # pieces_from_result already expands each unit's qty via unit_index;
-        # offset by the per-unit count so the identity stays unique per unit.
-        pieces = [
-            piece.model_copy(
-                update={"unit_index": (repetition - 1) * len(per_unit) + piece.unit_index}
-            )
-            for repetition in range(1, quantity + 1)
-            for piece in per_unit
-        ]
-        bars = optimize_cut(
-            pieces, authorities.stocks, profile,
-            remnants=bar_remnants, strategy=strategy,
-        ).model_dump(mode="json")
-
-        rules = _sheet_rules(org_id)
-        sheets: list[dict[str, object]] = []
-        sheet_purchases: list[dict[str, object]] = []
-        unnested: list[dict[str, object]] = []
-        sheet_groups: list[tuple[SheetRule, list[NestPiece], str]] = []
-        for group_key, entries, kind in (
-            ("by_thickness", result.glasses, "GLASS"),
-            ("by_sku", result.panels, "PANEL"),
-        ):
-            for index, entry in enumerate(entries, start=1):
-                # Glass substrate identity: the resolved catalog article (or
-                # the composition spec when no article authority exists) is
-                # the grouping key — never net thickness alone.
-                substrate = (
-                    (entry.article_sku or entry.glass_spec)
-                    if kind == "GLASS"
-                    else None
-                )
-                group = (
-                    str(substrate)
-                    if substrate
-                    else (
-                        str(entry.thickness_net_mm)
-                        if kind == "GLASS"
-                        else entry.sku
-                    )
-                )
-                if getattr(entry, "shape", None):
-                    # Non-rectangular glass cannot be guillotine-nested by a
-                    # bounding rect — it goes to the shape-cutting cell with
-                    # its true outline, never silently a rectangle.
-                    unnested.append({
-                        "kind": kind, "group": group,
-                        "width_mm": str(entry.width_mm),
-                        "height_mm": str(entry.height_mm), "quantity": quantity,
-                        "bay_id": entry.bay_id, "leaf_id": entry.leaf_id,
-                        "shape": [
-                            {"x_mm": str(p.x_mm), "y_mm": str(p.y_mm)}
-                            for p in entry.shape
-                        ],
-                        "reason": "shaped_glass_outline",
-                    })
-                    continue
-                candidates: list[SheetRule]
-                if kind == "GLASS" and substrate:
-                    # Declared substrate → only rules declaring the same
-                    # substrate; a same-thickness sheet of another glass type
-                    # is not a compatible host.
-                    candidates = rules["by_glass"].get(str(substrate)) or []
-                else:
-                    candidates = rules[group_key].get(group) or []
-                rule = _pick_sheet_rule(
-                    candidates, entry.width_mm, entry.height_mm
-                )
-                label = f"V-{index:02d}" if kind == "GLASS" else f"PAN-{index:02d}"
-                if rule is None:
-                    unnested.append({
-                        "kind": kind, "group": group,
-                        "width_mm": str(entry.width_mm),
-                        "height_mm": str(entry.height_mm), "quantity": quantity,
-                        "bay_id": entry.bay_id, "leaf_id": entry.leaf_id,
-                        "reason": "no_declared_sheet",
-                    })
-                    continue
-                sheet_groups.append((
-                    rule,
-                    [
-                        NestPiece(
-                            piece_id=(
-                                label if quantity == 1
-                                else f"{label}-{repetition:02d}"
-                            ),
-                            workshop_sku=rule.workshop_sku,
-                            width_mm=entry.width_mm,
-                            height_mm=entry.height_mm,
-                            source_position_id=str(position_id) if position_id else None,
-                            bay_id=entry.bay_id,
-                            leaf_id=entry.leaf_id,
-                            unit_index=repetition,
-                        )
-                        for repetition in range(1, quantity + 1)
-                    ],
-                    kind,
-                ))
-        # Group by the full selected rule identity (format + trim + purchasing
-        # identity), never just the SKU — pieces picked for different variants
-        # of one SKU keep separate layouts and purchase lines.
-        merged: dict[tuple, tuple[SheetRule, list[NestPiece], str]] = {}
-        for rule, pieces_group, group_kind in sheet_groups:
-            key = (
-                rule.workshop_sku,
-                str(rule.sheet_width_mm),
-                str(rule.sheet_height_mm),
-                str(rule.edge_trim_mm),
-                rule.purchasing_sku,
-            )
-            merged.setdefault(key, (rule, [], group_kind))[1].extend(pieces_group)
-        for rule, group_pieces, group_kind in merged.values():
-            outcome = nest_rects(
-                group_pieces, rule,
-                remnants=remnants_service.sheet_remnants_for_sku(
-                    org_id=org_id, workshop_sku=rule.workshop_sku
-                ),
-            )
-            for layout in outcome.layouts:
-                dumped = layout.model_dump(mode="json")
-                # sheet_index restarts per bin — renumber across the whole plan
-                # so layouts keep a stable globally-unique identity.
-                dumped["sheet_index"] = len(sheets) + 1
-                # Remnant identity: the workshop sku this layout nests under
-                # (produced_remnants rejoin the pool under the same key).
-                dumped["workshop_sku"] = rule.workshop_sku
-                sheets.append(dumped)
-            for purchase in outcome.purchase_list:
-                dumped_purchase = purchase.model_dump(mode="json")
-                # The purchase row is bought sheet stock — tag which piece group
-                # it serves so stock needs can route it (glass sheets reserve at
-                # CUT; panel sheets stay on the PANEL authority path).
-                dumped_purchase["group_kind"] = group_kind
-                sheet_purchases.append(dumped_purchase)
-            for piece in outcome.unplaced:
-                unnested.append({
-                    "kind": "SHEET", "group": rule.workshop_sku,
-                    "width_mm": str(piece.width_mm), "height_mm": str(piece.height_mm),
-                    "quantity": 1, "bay_id": piece.bay_id, "leaf_id": piece.leaf_id,
-                    "reason": "piece_larger_than_usable_sheet",
-                })
-
-        # §6 remnant lifecycle: the plan claims what it will cut (RESERVED
-        # inside this same transaction — never a drop double-booked) and
-        # reports what reusable material it will return to the rack.
-        consumed_bars = [
-            {"id": bar["remnant_id"], "kind": "BAR"}
-            for bar in bars.get("workshop_cut_plan") or []
-            if bar.get("source") == "REMNANT" and bar.get("remnant_id")
-        ]
-        consumed_sheets = [
-            {"id": sheet["remnant_id"], "kind": "SHEET"}
-            for sheet in sheets
-            if sheet.get("source") == "REMNANT" and sheet.get("remnant_id")
-        ]
-        # The plan names each physical drop it claims — the operator matches
-        # the printed remnant id to the rack tag without opening the ledger.
-        consumed_ids = [entry["id"] for entry in consumed_bars + consumed_sheets]
-        if consumed_ids:
-            consumed_locations = {
-                str(r["id"]): r["rack_location"]
-                for r in rows(
-                    "SELECT id, rack_location FROM public.inventory_remnants"
-                    " WHERE org_id = %s AND id = ANY(%s::uuid[])",
-                    [str(org_id), consumed_ids],
-                )
-            }
-            for entry in consumed_bars + consumed_sheets:
-                entry["rack_location"] = consumed_locations.get(entry["id"])
-        produced_bars = [
-            {
-                "stock_authority_id": bar["stock_authority_id"],
-                "remainder_mm": bar["remainder_mm"],
-            }
-            for bar in bars.get("workshop_cut_plan") or []
-            if bar.get("remainder_reusable") and bar.get("stock_authority_id")
-        ]
-        produced_sheets = [
-            {
-                "workshop_sku": sheet["workshop_sku"],
-                "width_mm": remnant["width_mm"],
-                "height_mm": remnant["height_mm"],
-            }
-            for sheet in sheets
-            for remnant in sheet.get("produced_remnants") or []
-        ]
+        bars = plan["bars"]
+        sheets = plan["sheets"]
+        sheet_purchases = plan["sheet_purchases"]
+        unnested = plan["unnested"]
+        consumed_bars = plan["consumed_bars"]
+        consumed_sheets = plan["consumed_sheets"]
+        produced_bars = plan["produced_bars"]
+        produced_sheets = plan["produced_sheets"]
         # Re-optimizing replaces the plan: the old reservation releases before
         # the new one claims, atomically — for remnants and for ledger stock
         # alike. Ledger reservations are capped at what is physically
@@ -3025,6 +3235,9 @@ def optimize_work_order(
                 "produced_bars": produced_bars,
                 "produced_sheets": produced_sheets,
             },
+            # §6 plan summary — aggregates computed from the same dumped plan
+            # the UI renders, never a second source of numbers.
+            "stats": _optimization_stats(plan),
             # §10 ledger reservations this plan holds — what production
             # claimed from stock, what it is short of, and (once the routing
             # consumes them) when each hold settled.

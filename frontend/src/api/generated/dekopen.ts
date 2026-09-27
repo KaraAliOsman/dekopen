@@ -215,6 +215,8 @@ import type {
   WorkCenterList,
   WorkCenterRequestRequest,
   WorkOrderOptimize,
+  WorkOrderOptimizeCompare,
+  WorkOrderOptimizeCompareRequestRequest,
   WorkOrderOptimizeRequestRequest,
 } from "./models";
 
@@ -10269,6 +10271,93 @@ export const productionOrderOptimize = async (
     headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
     body: JSON.stringify(workOrderOptimizeRequestRequest),
   });
+};
+
+export type productionOrderOptimizeCompareResponse200 = {
+  data: WorkOrderOptimizeCompare;
+  status: 200;
+};
+
+export type productionOrderOptimizeCompareResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type productionOrderOptimizeCompareResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type productionOrderOptimizeCompareResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type productionOrderOptimizeCompareResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type productionOrderOptimizeCompareResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type productionOrderOptimizeCompareResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type productionOrderOptimizeCompareResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type productionOrderOptimizeCompareResponseSuccess =
+  productionOrderOptimizeCompareResponse200 & {
+    headers: Headers;
+  };
+export type productionOrderOptimizeCompareResponseError = (
+  | productionOrderOptimizeCompareResponse400
+  | productionOrderOptimizeCompareResponse401
+  | productionOrderOptimizeCompareResponse403
+  | productionOrderOptimizeCompareResponse404
+  | productionOrderOptimizeCompareResponse409
+  | productionOrderOptimizeCompareResponse422
+  | productionOrderOptimizeCompareResponse503
+) & {
+  headers: Headers;
+};
+
+export type productionOrderOptimizeCompareResponse =
+  productionOrderOptimizeCompareResponseSuccess | productionOrderOptimizeCompareResponseError;
+
+export const getProductionOrderOptimizeCompareUrl = (orderId: string) => {
+  return `/api/v1/production/orders/${orderId}/optimize/compare/`;
+};
+
+export const productionOrderOptimizeCompare = async (
+  orderId: string,
+  workOrderOptimizeCompareRequestRequest?: WorkOrderOptimizeCompareRequestRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<productionOrderOptimizeCompareResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<productionOrderOptimizeCompareResponse>(
+    getProductionOrderOptimizeCompareUrl(orderId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+      body: JSON.stringify(workOrderOptimizeCompareRequestRequest),
+    },
+  );
 };
 
 export type productionOrderPackingResponse201 = {
