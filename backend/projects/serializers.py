@@ -243,6 +243,8 @@ class ProjectCreditNoteSerializer(serializers.Serializer):
     invoice_id = serializers.UUIDField()
     invoice_code = serializers.CharField(allow_null=True)
     project_id = serializers.UUIDField()
+    partial = serializers.BooleanField(required=False)
+    credit_amount_gross = serializers.CharField(allow_null=True, required=False)
     dte = ProjectDteSerializer(allow_null=True, required=False)
     created_at = serializers.CharField()
 
@@ -255,6 +257,10 @@ class ProjectCreditNoteAccessSerializer(ProjectCreditNoteSerializer):
 
 class ProjectCreditNoteEmitSerializer(serializers.Serializer):
     reason = serializers.CharField(required=False, allow_blank=True)
+    amount = serializers.DecimalField(
+        max_digits=14, decimal_places=2, required=False,
+        min_value=Decimal("0.01"),
+    )
 
 
 class ProjectInvoiceSerializer(serializers.Serializer):

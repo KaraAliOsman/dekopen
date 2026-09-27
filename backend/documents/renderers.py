@@ -567,7 +567,8 @@ def _svg_elements(node: dict[str, object], x: Decimal, y: Decimal,
     inset_y = height * _SVG_INSET
     ix, iy = x + inset_x, y + inset_y
     iw, ih = width - inset_x * 2, height - inset_y * 2
-    stroke = _pt(min(width, height) / Decimal("120"))
+    stroke_mm = min(width, height) / Decimal("120")
+    stroke = _pt(stroke_mm)
     if not glyph_only:
         out.append(
             f'<rect x="{_pt(x)}" y="{_pt(y)}" width="{_pt(width)}" height="{_pt(height)}" '
@@ -667,7 +668,7 @@ def _svg_elements(node: dict[str, object], x: Decimal, y: Decimal,
         # top corner, dashed — the elevation's way of saying which edge is
         # hinged before hardware marks load (review: door leaves read as
         # blank slabs without it).
-        dash = f'{_pt(stroke * Decimal("2.4"))} {_pt(stroke * Decimal("2"))}'
+        dash = f'{_pt(stroke_mm * Decimal("2.4"))} {_pt(stroke_mm * Decimal("2"))}'
         handedness = str(node.get("door_handedness") or "")
         leaves = (
             [(ix, iw, handedness != "RIGHT")]
@@ -1995,6 +1996,24 @@ def _doc06(snapshot: dict[str, object]) -> str:
         r10 = config.get("R10")
         if isinstance(r10, dict) and r10.get("tolerance_mm") is not None:
             tolerance = _value(r10.get("tolerance_mm"))
+    # The checklist must bind to the physical units it covers — a QC hold has
+    # to name the position it stops, not float over "the revision".
+    units_rows = []
+    for position in _array(snapshot.get("positions"), "invalid_frozen_revision_snapshot"):
+        position = _object(position, "invalid_frozen_revision_snapshot")
+        units_rows.append([
+            f"P{_value(position.get('position_index'))}",
+            _value(position.get("location_tag")),
+            _TYPOLOGY_ES.get(_value(position.get("typology")), _value(position.get("typology"))),
+            _value(position.get("quantity")),
+            f"{_value(position.get('width_mm'))} × {_value(position.get('height_mm'))} mm",
+        ])
+    if units_rows:
+        body += _table(
+            ["Posición", "Ubicación", "Tipología", "Cant.", "Dimensiones"],
+            units_rows,
+            ["", "", "", "dimension", "dimension"],
+        )
     # The Cumple box is a drawn element — glyph boxes (□/☐) rasterize as tofu
     # under several WeasyPrint font stacks.
     box = '<span class="qc-box"></span>'
@@ -2010,6 +2029,7 @@ def _doc06(snapshot: dict[str, object]) -> str:
         [[check, criterion, _Raw(box_html), notes] for check, criterion, box_html, notes in rows],
     )
     body += (
+        "<p><strong>Orden de trabajo / unidad:</strong> ______________________</p>"
         "<p><strong>Operador:</strong> ______________________________</p>"
         "<p><strong>Fecha de ejecución QC:</strong> __________________</p>"
         f"<p><strong>Resultado físico:</strong> {box} Pendiente &nbsp; {box} Conforme &nbsp; {box} No conforme</p>"
@@ -2026,20 +2046,54 @@ def _doc07(snapshot: dict[str, object]) -> str:
     realized = _object(snapshot.get("realized_waste"), "invalid_frozen_revision_snapshot")
     body, _ = _revision_header(snapshot, "Informe ejecutivo de costos y margen", "DOC-07")
     currency = _value(project.get("currency"))
+    price_by_index = {}
+    for pos in _array(snapshot.get("positions"), "invalid_frozen_revision_snapshot"):
+        pos = _object(pos, "invalid_frozen_revision_snapshot")
+        price_by_index[str(pos.get("position_index"))] = pos.get("price_net")
+
+    def _cost_row(item: object) -> list[object]:
+        line = _array(item, "invalid_pricing_evidence")
+        price = price_by_index.get(str(line[0]))
+        if price is None:
+            return [line[0], _money(line[1], currency), "—", "—", "—"]
+        sell = _num(price)
+        margin = sell - _num(line[1])
+        pct = (
+            f"{(margin / sell * 100).quantize(Decimal('0.1'))} %"
+            if sell != 0
+            else "—"
+        )
+        return [
+            line[0],
+            _money(line[1], currency),
+            _money(sell, currency),
+            _money(margin, currency),
+            pct,
+        ]
+
     body += '<p class="confidential">CONFIDENCIAL · SOLO PROPIETARIO</p>'
     body += _table(
-        ["Posición", "Costo capturado"],
-        [[_array(item, "invalid_pricing_evidence")[0],
-          _money(_array(item, "invalid_pricing_evidence")[1], currency)]
-         for item in costs], ["", "dimension"],
+        ["Posición", "Costo capturado", "Venta neta", "Margen", "Margen %"],
+        [_cost_row(item) for item in costs],
+        ["", "dimension", "dimension", "dimension", "dimension"],
+    )
+    cost_net = _num(pricing.get("applied_total_cost_net"))
+    sell_net = _num(project.get("total_price_net"))
+    margin_net = sell_net - cost_net
+    margin_pct = (
+        f"{(margin_net / sell_net * 100).quantize(Decimal('0.1'))} %"
+        if sell_net != 0
+        else "—"
     )
     body += _table(
-        ["Costo neto", "Venta neta", "Impuesto", "Venta total"],
+        ["Costo neto", "Venta neta", "Margen neto", "Margen %", "Impuesto", "Venta total"],
         [[_money(pricing.get("applied_total_cost_net"), currency),
           _money(project.get("total_price_net"), currency),
+          _money(margin_net, currency),
+          margin_pct,
           _money(project.get("total_price_tax"), currency),
           _money(project.get("total_price_gross"), currency)]],
-        ["dimension", "dimension", "", "dimension"],
+        ["dimension", "dimension", "dimension", "dimension", "", "dimension"],
     )
     status = realized.get("status")
     if status != "NOT_RECORDED" or realized.get("value") is not None:
@@ -2420,6 +2474,8 @@ def _dispatch_note_body(payload: dict[str, object]) -> str:
     project = _object(payload.get("project"), "invalid_dispatch_note_project")
     totals = _object(payload.get("totals"), "invalid_dispatch_note_totals")
     dispatch = _object(payload.get("dispatch"), "invalid_dispatch_note_dispatch")
+    delivery = payload.get("delivery")
+    delivery = delivery if isinstance(delivery, dict) else {}
     units = payload.get("units") or []
     issued_at = _value(payload.get("issued_at"))
     note_code = _value(payload.get("note_code"))
@@ -2453,11 +2509,43 @@ def _dispatch_note_body(payload: dict[str, object]) -> str:
         '<section class="hero"><p>Destinatario</p>'
         f"<h2>{escape(_value(project.get('client_name')))}</h2>"
         f"<p>RUT: {escape(_value(project.get('client_rut')))}</p>"
-        f"<p>{escape(_value(project.get('delivery_address')))}</p>"
         f'<p class="total">'
         + ("Bultos" if units else "Unidades")
         + f': {escape(_value(totals.get("units")))}</p></section>'
     )
+    # The guía proves movement to a physical destination — the delivery row
+    # is that destination (scheduled before dispatch); without one the
+    # project address is the fallback.
+    delivery_lines = []
+    if delivery.get("address"):
+        delivery_lines.append(
+            f"<strong>Dirección de entrega:</strong> {escape(_value(delivery.get('address')))}"
+        )
+    window = str(delivery.get("time_window") or "")
+    window_es = {"AM": "AM", "PM": "PM", "JORNADA": "Jornada completa"}.get(
+        window, window
+    )
+    if delivery.get("scheduled_date"):
+        when = f"{escape(_cldate(str(delivery['scheduled_date'])))}"
+        if window_es:
+            when += f" · {escape(window_es)}"
+        delivery_lines.append(f"<strong>Entrega programada:</strong> {when}")
+    contact = " · ".join(
+        part
+        for part in (
+            _value(delivery.get("contact_name")),
+            _value(delivery.get("contact_phone")),
+        )
+        if part != "—"
+    )
+    if contact:
+        delivery_lines.append(f"<strong>Contacto:</strong> {escape(contact)}")
+    if delivery.get("installer_name"):
+        delivery_lines.append(
+            f"<strong>Instalador:</strong> {escape(_value(delivery.get('installer_name')))}"
+        )
+    if delivery_lines:
+        body += "<p>" + "<br>".join(delivery_lines) + "</p>"
     if units:
         body += (
             "<h2>Bultos</h2>"
@@ -2726,6 +2814,12 @@ def _credit_note_body(payload: dict[str, object]) -> str:
     revision = _value(payload.get("revision_code"))
     currency = _value((deal or {}).get("currency")) or _value(project.get("currency"))
     organization = payload.get("organization")
+    # Sealed credit: an explicit amount stays partial; legacy payloads without
+    # the field credited the full invoice.
+    credited = payload.get("credit_amount_gross")
+    if credited in (None, ""):
+        credited = deal.get("total_gross")
+    partial = payload.get("credit_partial") is True
     titleblock = (
         '<div class="titleblock">'
         f'<div class="tb-cell"><span class="tb-label">Proyecto</span>'
@@ -2753,10 +2847,11 @@ def _credit_note_body(payload: dict[str, object]) -> str:
         '<section class="hero"><p>Acreditar a</p>'
         f"<h2>{escape(_value(project.get('client_name')))}</h2>"
         f"<p>RUT: {escape(_value(project.get('client_rut')))}</p>"
-        f'<p class="total">Crédito: {escape(_money(deal.get("total_gross"), currency))}</p></section>'
+        f'<p class="total">Crédito: {escape(_money(credited, currency))}</p></section>'
     )
+    reference_verb = "abono parcial de la Factura" if partial else "anula Factura"
     body += (
-        f"<p><strong>Referencia:</strong> anula Factura {escape(invoice_code)}"
+        f"<p><strong>Referencia:</strong> {reference_verb} {escape(invoice_code)}"
         + (
             f" emitida el {escape(_cldate(invoice.get('issued_at')))}"
             if invoice.get("issued_at")
@@ -2764,6 +2859,11 @@ def _credit_note_body(payload: dict[str, object]) -> str:
         )
         + "</p>"
     )
+    if partial:
+        body += (
+            "<p><strong>Crédito parcial:</strong> la factura queda vigente por "
+            f"el saldo de {escape(_money(_num(deal.get('total_gross')) - _num(credited), currency))}.</p>"
+        )
     reason = _value(payload.get("reason"))
     if reason != "—":
         body += f"<p><strong>Motivo:</strong> {escape(reason)}</p>"
@@ -2798,20 +2898,40 @@ def _credit_note_body(payload: dict[str, object]) -> str:
                 ["", "", "", "dimension", "dimension"],
             )
         )
-    body += (
-        "<h2>Totales acreditados</h2>"
-        + _table(
-            ["Neto", "IVA", "Total"],
-            [
+    if partial:
+        # Gross-level truth only — a partial credit's net/IVA split is the
+        # fiscal counter-document's job (DTE-61), not this internal note's.
+        body += (
+            "<h2>Totales acreditados</h2>"
+            + _table(
+                ["Monto acreditado", "Total factura", "Saldo de la factura"],
                 [
-                    _money(deal.get("total_net"), currency),
-                    _money(deal.get("total_tax"), currency),
-                    _money(deal.get("total_gross"), currency),
-                ]
-            ],
-            ["dimension", "dimension", "dimension"],
+                    [
+                        _money(credited, currency),
+                        _money(deal.get("total_gross"), currency),
+                        _money(_num(deal.get("total_gross")) - _num(credited), currency),
+                    ]
+                ],
+                ["dimension", "dimension", "dimension"],
+            )
         )
-        + "<div class=\"signoff\"><div class=\"signature\"></div>"
+    else:
+        body += (
+            "<h2>Totales acreditados</h2>"
+            + _table(
+                ["Neto", "IVA", "Total"],
+                [
+                    [
+                        _money(deal.get("total_net"), currency),
+                        _money(deal.get("total_tax"), currency),
+                        _money(deal.get("total_gross"), currency),
+                    ]
+                ],
+                ["dimension", "dimension", "dimension"],
+            )
+        )
+    body += (
+        "<div class=\"signoff\"><div class=\"signature\"></div>"
         + "<p class=\"muted\">Emitido por / Recibido conforme</p></div></main>"
     )
     return body

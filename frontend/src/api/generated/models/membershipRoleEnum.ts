@@ -13,9 +13,9 @@
  * * `INSTALLER` - INSTALLER
  * * `OPERATOR` - OPERATOR
  */
-export type Role3ceEnum = (typeof Role3ceEnum)[keyof typeof Role3ceEnum];
+export type MembershipRoleEnum = (typeof MembershipRoleEnum)[keyof typeof MembershipRoleEnum];
 
-export const Role3ceEnum = {
+export const MembershipRoleEnum = {
   OWNER: "OWNER",
   ESTIMATOR: "ESTIMATOR",
   WORKSHOP_MANAGER: "WORKSHOP_MANAGER",

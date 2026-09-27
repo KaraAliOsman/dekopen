@@ -513,6 +513,23 @@ def test_dte_access_missing_raises_404(monkeypatch):
     assert excinfo.value.contract_code == "dte_not_found"
 
 
+def test_emit_credit_note_dte_rejects_partial_amount(monkeypatch):
+    from decimal import Decimal
+
+    storage = _Storage()
+    _patch_env(monkeypatch, storage)
+    with pytest.raises(ContractAPIException) as excinfo:
+        sii.emit_credit_note_dte(
+            org_id=uuid4(),
+            project={"id": uuid4()},
+            invoice_id=uuid4(),
+            actor_id=uuid4(),
+            amount=Decimal("1000"),
+        )
+    assert excinfo.value.contract_code == "credit_note_dte_partial_unsupported"
+    assert storage.uploads == []
+
+
 def test_emit_credit_note_dte_references_parent_folio(monkeypatch):
     storage = _Storage()
     invoice = _invoice_row()

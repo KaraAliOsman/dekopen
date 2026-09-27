@@ -101,7 +101,7 @@ def _patch_env(monkeypatch, storage, *, invoice=None, existing=None, count=0, st
         text = str(sql)
         one_calls.append((text, params))
         if "INSERT INTO public.project_credit_notes" in text:
-            return _note_row()
+            return _note_row({"payload_json": json.loads(params[4])})
         if "COUNT(*)" in text:
             return {"n": count}
         if "pg_advisory_xact_lock" in text:
@@ -232,4 +232,72 @@ def test_issue_credit_note_refuses_stamped_invoice(monkeypatch):
             reason="Error",
         )
     assert excinfo.value.contract_code == "invoice_already_stamped"
+    assert storage.uploads == []
+
+
+def test_issue_credit_note_partial_marks_amount_and_renders_balance(monkeypatch):
+    from decimal import Decimal
+
+    storage = _Storage()
+    invoice = _invoice_row()
+    one_calls = _patch_env(monkeypatch, storage, invoice=invoice)
+    out = credit_notes.issue_credit_note(
+        org_id=uuid4(),
+        project=_project(),
+        invoice_id=invoice["id"],
+        actor_id=uuid4(),
+        reason=None,
+        amount=Decimal("500000"),
+    )
+    assert out["partial"] is True
+    insert = next(
+        params
+        for sql, params in one_calls
+        if "INSERT INTO public.project_credit_notes" in sql
+    )
+    payload = json.loads(insert[4])
+    assert payload["credit_partial"] is True
+    assert payload["credit_amount_gross"] == "500000"
+
+
+def test_issue_credit_note_amount_exceeds_invoice_raises_422(monkeypatch):
+    from decimal import Decimal
+
+    from authentication.errors import ContractAPIException
+
+    storage = _Storage()
+    invoice = _invoice_row()
+    _patch_env(monkeypatch, storage, invoice=invoice)
+    with pytest.raises(ContractAPIException) as excinfo:
+        credit_notes.issue_credit_note(
+            org_id=uuid4(),
+            project=_project(),
+            invoice_id=invoice["id"],
+            actor_id=uuid4(),
+            reason=None,
+            amount=Decimal("1190001"),
+        )
+    assert excinfo.value.contract_code == "credit_note_amount_exceeds"
+    assert storage.uploads == []
+
+
+def test_issue_credit_note_amount_unverifiable_raises_422(monkeypatch):
+    from decimal import Decimal
+
+    from authentication.errors import ContractAPIException
+
+    storage = _Storage()
+    invoice = _invoice_row()
+    invoice["payload_json"]["deal"]["total_gross"] = None
+    _patch_env(monkeypatch, storage, invoice=invoice)
+    with pytest.raises(ContractAPIException) as excinfo:
+        credit_notes.issue_credit_note(
+            org_id=uuid4(),
+            project=_project(),
+            invoice_id=invoice["id"],
+            actor_id=uuid4(),
+            reason=None,
+            amount=Decimal("500000"),
+        )
+    assert excinfo.value.contract_code == "credit_note_amount_unverifiable"
     assert storage.uploads == []

@@ -649,6 +649,7 @@ class ProjectCreditNotesView(APIView):
                     invoice_id=invoice_id,
                     actor_id=token.user_id,
                     reason=data.get("reason"),
+                    amount=data.get("amount"),
                 ),
                 status=201,
             )
@@ -729,6 +730,7 @@ class ProjectCreditNoteDteView(APIView):
                     invoice_id=invoice_id,
                     actor_id=token.user_id,
                     reason=data.get("reason"),
+                    amount=data.get("amount"),
                 ),
                 status=201,
             )

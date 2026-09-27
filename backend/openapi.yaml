@@ -15288,7 +15288,7 @@ components:
         name:
           type: string
         role:
-          $ref: '#/components/schemas/Role3ceEnum'
+          $ref: '#/components/schemas/MembershipRoleEnum'
       required:
       - id
       - name
@@ -20452,11 +20452,25 @@ components:
         organization_name:
           type: string
         role:
-          $ref: '#/components/schemas/Role3ceEnum'
+          $ref: '#/components/schemas/MembershipRoleEnum'
       required:
       - organization_id
       - organization_name
       - role
+    MembershipRoleEnum:
+      enum:
+      - OWNER
+      - ESTIMATOR
+      - WORKSHOP_MANAGER
+      - INSTALLER
+      - OPERATOR
+      type: string
+      description: |-
+        * `OWNER` - OWNER
+        * `ESTIMATOR` - ESTIMATOR
+        * `WORKSHOP_MANAGER` - WORKSHOP_MANAGER
+        * `INSTALLER` - INSTALLER
+        * `OPERATOR` - OPERATOR
     MethodEnum:
       enum:
       - TRANSFER
@@ -23408,6 +23422,11 @@ components:
         project_id:
           type: string
           format: uuid
+        partial:
+          type: boolean
+        credit_amount_gross:
+          type: string
+          nullable: true
         dte:
           allOf:
           - $ref: '#/components/schemas/ProjectDte'
@@ -23438,6 +23457,11 @@ components:
         project_id:
           type: string
           format: uuid
+        partial:
+          type: boolean
+        credit_amount_gross:
+          type: string
+          nullable: true
         dte:
           allOf:
           - $ref: '#/components/schemas/ProjectDte'
@@ -23466,6 +23490,10 @@ components:
       properties:
         reason:
           type: string
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
     ProjectDte:
       type: object
       properties:
@@ -24010,7 +24038,7 @@ components:
           default: ''
           maxLength: 50
         result:
-          $ref: '#/components/schemas/ResultEnum'
+          $ref: '#/components/schemas/QcResultEnum'
       required:
       - check
       - result
@@ -24423,14 +24451,6 @@ components:
       - confirmed
       - expected_operation_id
       - reason
-    ResultEnum:
-      enum:
-      - PASS
-      - FAIL
-      type: string
-      description: |-
-        * `PASS` - PASS
-        * `FAIL` - FAIL
     RevisionCompareEntry:
       type: object
       properties:
@@ -24587,20 +24607,6 @@ components:
       - price_gross_delta
       - removed
       - unchanged
-    Role3ceEnum:
-      enum:
-      - OWNER
-      - ESTIMATOR
-      - WORKSHOP_MANAGER
-      - INSTALLER
-      - OPERATOR
-      type: string
-      description: |-
-        * `OWNER` - OWNER
-        * `ESTIMATOR` - ESTIMATOR
-        * `WORKSHOP_MANAGER` - WORKSHOP_MANAGER
-        * `INSTALLER` - INSTALLER
-        * `OPERATOR` - OPERATOR
     RuleEvaluation:
       type: object
       properties:

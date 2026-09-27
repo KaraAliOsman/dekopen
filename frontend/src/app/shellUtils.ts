@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-import type { Role3ceEnum } from "../api/generated/models";
+import type { MembershipRoleEnum } from "../api/generated/models";
 import type { TranslationKey } from "../i18n/es-CL";
 
 /** Editors register while they hold unsaved work so non-router transitions
@@ -31,7 +31,7 @@ export function consumeNavigationBypass(): boolean {
   return armed;
 }
 
-export const roleLabel: Record<Role3ceEnum, TranslationKey> = {
+export const roleLabel: Record<MembershipRoleEnum, TranslationKey> = {
   OWNER: "shell.role.owner",
   ESTIMATOR: "shell.role.estimator",
   WORKSHOP_MANAGER: "shell.role.workshopManager",

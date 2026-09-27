@@ -8,4 +8,6 @@
 
 export interface ProjectCreditNoteEmitRequest {
   reason?: string;
+  /** @pattern ^-?\d{0,12}(?:\.\d{0,2})?$ */
+  amount?: string;
 }

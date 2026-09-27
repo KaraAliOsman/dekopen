@@ -130,6 +130,11 @@ SPECTACULAR_SETTINGS = {
     "ENUM_NAME_OVERRIDES": {
         "CatalogProfileRoleEnum": ["FRAME", "SASH", "MULLION_V", "MULLION_H", "INVERSOR", "GLAZING_BEAD", "COUPLER", "ADDITIONAL", "THRESHOLD"],
         "RoleEnum": ["OWNER", "ESTIMATOR", "WORKSHOP_MANAGER", "INSTALLER"],
+        "MembershipRoleEnum": [
+            "OWNER", "ESTIMATOR", "WORKSHOP_MANAGER", "INSTALLER", "OPERATOR",
+        ],
+        "AiAgentHistoryRoleEnum": ["user", "agent"],
+        "QcResultEnum": ["PASS", "FAIL"],
         "UnitEnum": ["kit"],
         "PurchaseUnitEnum": ["BAR"],
         "MaterialEnum": ["PVC", "ALUMINIUM"],

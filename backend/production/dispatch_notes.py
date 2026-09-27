@@ -104,6 +104,22 @@ def issue_dispatch_note(
     note_code = f"GD-{sequence + 1:04d}"
     order_payload = order["payload_json"] if isinstance(order["payload_json"], dict) else json.loads(order["payload_json"] or "{}")
     units = _manifest_units(order_payload)
+    client_rut = project.get("client_rut")
+    project_address = project.get("delivery_address")
+    if project.get("client_id") and (not client_rut or not project_address):
+        client = rows(
+            "SELECT rut, address FROM public.clients WHERE id=%s AND org_id=%s",
+            [str(project["client_id"]), org_id_s],
+        )
+        if client:
+            client_rut = client_rut or client[0].get("rut")
+            project_address = project_address or client[0].get("address")
+    delivery = rows(
+        "SELECT scheduled_date, time_window, address, contact_name, "
+        "contact_phone, installer_name FROM public.deliveries "
+        "WHERE order_id=%s AND org_id=%s",
+        [order_id_s, org_id_s],
+    )
     payload = {
         "note_code": note_code,
         "organization": org_branding.branding_for_snapshot(org_id=org_id),
@@ -118,9 +134,22 @@ def issue_dispatch_note(
             "code": project["code"],
             "name": project["name"],
             "client_name": project["client_name"],
-            "client_rut": project["client_rut"],
-            "delivery_address": project["delivery_address"],
+            "client_rut": client_rut,
         },
+        "delivery": (
+            {
+                "scheduled_date": str(delivery[0]["scheduled_date"]),
+                "time_window": delivery[0]["time_window"],
+                "address": delivery[0]["address"],
+                "contact_name": delivery[0]["contact_name"],
+                "contact_phone": delivery[0]["contact_phone"],
+                "installer_name": delivery[0]["installer_name"],
+            }
+            if delivery
+            else {
+                "address": project_address,
+            }
+        ),
         "units": units,
         "totals": {
             "units": len(units) if units else order_payload.get("quantity"),

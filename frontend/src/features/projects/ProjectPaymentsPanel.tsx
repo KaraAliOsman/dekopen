@@ -413,6 +413,19 @@ export function ProjectPaymentsPanel({
     if (!(await confirm({ title: t("projects.creditNoteAnnulConfirm"), danger: true }))) return;
     const reason = await prompt({ title: t("projects.creditNoteReason") });
     if (reason === null) return;
+    const amountText = await prompt({
+      title: t("projects.creditNoteAmount"),
+      input: {
+        label: t("projects.creditNoteAmount"),
+        placeholder: t("projects.creditNoteAmountHint"),
+      },
+    });
+    if (amountText === null) return;
+    const amountDigits = amountText.replace(/[^\d]/g, "");
+    if (amountText.trim() && !amountDigits) {
+      setMessage(t("projects.creditNoteAmountInvalid"));
+      return;
+    }
     const current = generation.current;
     setBusy(true);
     setMessage("");
@@ -420,7 +433,10 @@ export function ProjectPaymentsPanel({
       const response = await projectCreditNoteEmit(
         projectId,
         invoice.id,
-        reason.trim() ? { reason: reason.trim() } : {},
+        {
+          ...(reason.trim() ? { reason: reason.trim() } : {}),
+          ...(amountDigits ? { amount: amountDigits } : {}),
+        },
         requestOptions,
       );
       if (response.status !== 201) throw new ApiError(response.status, response.data);
@@ -706,7 +722,7 @@ export function ProjectPaymentsPanel({
                           }}
                           disabled={busy}
                         >
-                          {`${t("projects.invoiceStatusAnnulled")} · ${invoice.credit_note.credit_code}`}
+                          {`${t(invoice.credit_note.partial ? "projects.invoiceStatusCredited" : "projects.invoiceStatusAnnulled")} · ${invoice.credit_note.credit_code}`}
                         </button>
                       ) : (
                         <span className="production-chip">{t("projects.invoiceStatusIssued")}</span>

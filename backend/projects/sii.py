@@ -984,6 +984,7 @@ def emit_credit_note_dte(
     invoice_id: UUID,
     actor_id: UUID,
     reason: str | None = None,
+    amount: object = None,
 ) -> dict:
     """Timbra the electronic annulment of a stamped factura: seals the nota
     de crédito document AND its DTE-61 in one transaction — a factura the
@@ -993,6 +994,15 @@ def emit_credit_note_dte(
     credit note and UNIQUE(org_id, credit_note_id) on the DTE make a
     retried emit replay the same artifacts."""
     org_id_s, project_id_s, invoice_id_s = str(org_id), str(project["id"]), str(invoice_id)
+    if amount is not None:
+        # A DTE-61's <Monto> itemization is a different emission shape — a
+        # partial fiscal credit is not silently downgraded to a full one.
+        raise contract_error(
+            422,
+            "credit_note_dte_partial_unsupported",
+            "La nota de crédito electrónica anula la factura completa — "
+            "para un abono parcial emite la nota de crédito interna.",
+        )
     object_key: str | None = None
     credit_object_key: str | None = None
     try:

@@ -5,7 +5,7 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
-import type { ResultEnum } from "./resultEnum";
+import type { QcResultEnum } from "./qcResultEnum";
 
 export interface QcCheckRequest {
   /**
@@ -19,5 +19,5 @@ export interface QcCheckRequest {
   actual?: string;
   /** @maxLength 50 */
   item_code?: string;
-  result: ResultEnum;
+  result: QcResultEnum;
 }

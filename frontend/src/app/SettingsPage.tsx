@@ -20,7 +20,7 @@ import type {
   ApiUrlEnum,
   Membership,
   PaymentIntegrationStatus,
-  Role3ceEnum,
+  MembershipRoleEnum,
   SiiCaf,
   SiiCertificate,
 } from "../api/generated/models";
@@ -30,7 +30,7 @@ import { t, type TranslationKey } from "../i18n/es-CL";
 import { MOD_K_HINT, MOD_KEY_HINT } from "../platform";
 import { useTheme } from "../theme/ThemeProvider";
 
-const ROLE_KEYS: Record<Role3ceEnum, TranslationKey> = {
+const ROLE_KEYS: Record<MembershipRoleEnum, TranslationKey> = {
   OWNER: "settings.roleOwner",
   ESTIMATOR: "settings.roleEstimator",
   WORKSHOP_MANAGER: "settings.roleWorkshopManager",

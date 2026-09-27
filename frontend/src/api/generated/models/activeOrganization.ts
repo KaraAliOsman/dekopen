@@ -5,10 +5,10 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
-import type { Role3ceEnum } from "./role3ceEnum";
+import type { MembershipRoleEnum } from "./membershipRoleEnum";
 
 export interface ActiveOrganization {
   id: string;
   name: string;
-  role: Role3ceEnum;
+  role: MembershipRoleEnum;
 }
