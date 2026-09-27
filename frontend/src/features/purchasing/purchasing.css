@@ -325,3 +325,33 @@
     margin: 0;
   }
 }
+
+.purchasing-glance {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+.purchasing-glance-cell {
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-md, 8px);
+  padding: 0.6rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  background: var(--theme-surface);
+}
+.purchasing-glance-cell strong {
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+.purchasing-glance-cell span {
+  font-size: 0.78rem;
+  color: var(--theme-text-secondary);
+}
+.purchasing-glance-cell.is-short {
+  border-color: var(--theme-danger, #b3261e);
+}
+.purchasing-glance-cell.is-short strong {
+  color: var(--theme-danger, #b3261e);
+}

@@ -12,6 +12,7 @@ import { DeniedState } from "../../ui";
 import { fmtMm } from "../../format";
 import { t } from "../../i18n/es-CL";
 import { formatDateTime, formatRevision } from "../../format";
+import { formatDate } from "../money";
 import "./purchasing.css";
 
 type OrderType =
@@ -543,6 +544,44 @@ function PurchasingWorkspace({
           {formatRevision(state.version.revision_code)} · {t("purchasing.immutable")}
         </p>
       )}
+      {coverageLines.length > 0 &&
+        (() => {
+          // §1 at-a-glance: shortages and next incoming answer "what's missing
+          // and when does it land" before the operator reads a single row.
+          const shortLines = coverageLines.filter((line) => line.shortage !== "0");
+          const recommended = coverageLines.filter((line) => line.recommended_purchase !== "0");
+          const openOrders = orders.filter(
+            (order) => order.status === "SENT" || order.status === "PARTIALLY_RECEIVED",
+          );
+          const nextExpected = openOrders
+            .map((order) => order.expected_at)
+            .filter((value): value is string => Boolean(value))
+            .sort()[0];
+          return (
+            <section className="purchasing-glance" aria-label={t("purchasing.glanceTitle")}>
+              <div
+                className={
+                  shortLines.length ? "purchasing-glance-cell is-short" : "purchasing-glance-cell"
+                }
+              >
+                <strong>{shortLines.length}</strong>
+                <span>{t("purchasing.glanceShort")}</span>
+              </div>
+              <div className="purchasing-glance-cell">
+                <strong>{recommended.length}</strong>
+                <span>{t("purchasing.glanceBuying")}</span>
+              </div>
+              <div className="purchasing-glance-cell">
+                <strong>{openOrders.length}</strong>
+                <span>{t("purchasing.glanceIncoming")}</span>
+              </div>
+              <div className="purchasing-glance-cell">
+                <strong>{nextExpected ? formatDate(nextExpected) : "—"}</strong>
+                <span>{t("purchasing.glanceNext")}</span>
+              </div>
+            </section>
+          );
+        })()}
       {blockers.length > 0 && (
         <section
           className="purchasing-blockers"
