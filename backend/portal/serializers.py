@@ -81,6 +81,8 @@ class ApprovalRecordSerializer(serializers.Serializer):
     expires_at = serializers.DateTimeField()
     created_at = serializers.DateTimeField()
     revoked_at = serializers.DateTimeField(allow_null=True)
+    view_count = serializers.IntegerField()
+    last_viewed_at = serializers.DateTimeField(allow_null=True)
 
 
 class InternalApprovalSerializer(serializers.Serializer):

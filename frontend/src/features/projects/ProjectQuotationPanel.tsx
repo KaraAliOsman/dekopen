@@ -1910,6 +1910,12 @@ export function ProjectQuotationPanel({
                         : t("quotation.linkExpired")}
                     </span>
                   )}
+                  {(link.view_count ?? 0) > 0 && (
+                    <span className="quotation-link__meta">
+                      {t("quotation.linkViews").replace("{count}", String(link.view_count))}
+                      {link.last_viewed_at ? ` · ${formatDateTime(link.last_viewed_at)}` : ""}
+                    </span>
+                  )}
                   {(link.status === "APPROVED" || link.status === "DECLINED") && (
                     <span className="quotation-link__meta">
                       {link.decided_by ?? ""}

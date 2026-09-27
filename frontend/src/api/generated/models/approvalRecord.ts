@@ -20,4 +20,7 @@ export interface ApprovalRecord {
   created_at: string;
   /** @nullable */
   revoked_at: string | null;
+  view_count: number;
+  /** @nullable */
+  last_viewed_at: string | null;
 }

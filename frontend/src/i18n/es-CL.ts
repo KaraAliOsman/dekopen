@@ -1156,6 +1156,7 @@ export const messages = {
   "quotation.linkExpires": "Vence",
   "quotation.linkExpired": "Vencido",
   "quotation.linkRevokedAt": "Revocado el",
+  "quotation.linkViews": "El cliente la abrió {count} veces",
   "quotation.linkRevoke": "Revocar",
   "quotation.linkRevokeConfirm": "¿Revocar este enlace? El cliente perderá acceso de inmediato.",
   "quotation.linkRevokedDone": "Enlace revocado.",

@@ -629,3 +629,53 @@ def test_revoke_link_transitions_pending_only(monkeypatch) -> None:
             approval_id=approval_id,
             actor_id=actor_id,
         )
+
+
+def test_portal_quote_records_the_client_view(monkeypatch) -> None:
+    """Each public open bumps the link's view counters — the estimator's
+    'client opened it twice' signal."""
+    _roles(monkeypatch)
+    approval = _approval()
+    calls = _install_fakes(monkeypatch, approval)
+    with patch("portal.service.SupabaseDocumentStorage"):
+        service.portal_quote("tok")
+    bumps = [
+        call
+        for call in calls
+        if "view_count=view_count+1" in call and "customer_approvals" in call
+    ]
+    assert len(bumps) == 1
+
+
+def test_list_approvals_exposes_the_view_signal(monkeypatch) -> None:
+    _roles(monkeypatch)
+    viewed_at = datetime.now(timezone.utc)
+
+    def fake_rows(sql_text, params=()):
+        lowered = " ".join(sql_text.lower().split())
+        if "customer_approvals" in lowered:
+            return [
+                {
+                    "id": uuid4(),
+                    "status": "PENDING",
+                    "revision_code": "REV-A",
+                    "decided_by": None,
+                    "decided_at": None,
+                    "decided_note": None,
+                    "expires_at": datetime.now(timezone.utc) + timedelta(days=30),
+                    "created_at": datetime.now(timezone.utc),
+                    "revoked_at": None,
+                    "view_count": 3,
+                    "last_viewed_at": viewed_at,
+                }
+            ]
+        return []
+
+    monkeypatch.setattr("portal.service.rows", fake_rows)
+    monkeypatch.setattr(
+        "portal.service.one",
+        lambda *a, **k: {"id": uuid4()},
+    )
+    out = service.list_approvals(org_id=uuid4(), project_id=uuid4())
+    assert out[0]["view_count"] == 3
+    assert out[0]["last_viewed_at"] == viewed_at.isoformat()

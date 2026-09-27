@@ -172,10 +172,15 @@ def list_approvals(*, org_id: UUID, project_id: UUID) -> list[dict[str, object]]
                 if row["revoked_at"]
                 else None,
                 "decided_note": row["decided_note"],
+                "view_count": int(row["view_count"] or 0),
+                "last_viewed_at": row["last_viewed_at"].isoformat()
+                if row["last_viewed_at"]
+                else None,
             }
             for row in rows(
                 "SELECT a.id,a.status,a.decided_by,a.decided_at,a.decided_note,"
-                "a.expires_at,a.created_at,a.revoked_at,v.revision_code "
+                "a.expires_at,a.created_at,a.revoked_at,a.view_count,a.last_viewed_at,"
+                "v.revision_code "
                 "FROM public.customer_approvals a "
                 "JOIN public.project_versions v "
                 "ON v.id = a.project_version_id "
@@ -353,13 +358,24 @@ def _payment_state(
     }
 
 
-def portal_quote(token: str) -> dict[str, object]:
+def portal_quote(token: str, *, track: bool = True) -> dict[str, object]:
     """Public read: the sealed proposal — positions, issuer, totals, payment."""
     with transaction.atomic(), portal_backend():
         approval = _approval_for_token(token)
         org_id = approval["org_id"]
         _scope_org(org_id)
         version = _bound_version(approval)
+        if track:
+            # The client's open is the sales signal — record it on the link
+            # so the estimator sees "opened N times · last today". Decisions
+            # replay through this reader untracked: a decision row is the
+            # stronger signal, and replays must not write.
+            rows(
+                "UPDATE public.customer_approvals SET view_count=view_count+1,"
+                "first_viewed_at=COALESCE(first_viewed_at, clock_timestamp()),"
+                "last_viewed_at=clock_timestamp() WHERE id=%s AND org_id=%s",
+                [approval["id"], org_id],
+            )
         sealed = _sealed_project(version)
         project = _live_project(approval)
         artifacts = rows(
@@ -605,4 +621,4 @@ def decide_quote(
                     version_id=str(approval["project_version_id"]),
                     now=now,
                 )
-    return portal_quote(token)
+    return portal_quote(token, track=False)

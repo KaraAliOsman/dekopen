@@ -15970,6 +15970,12 @@ components:
           type: string
           format: date-time
           nullable: true
+        view_count:
+          type: integer
+        last_viewed_at:
+          type: string
+          format: date-time
+          nullable: true
       required:
       - created_at
       - decided_at
@@ -15977,9 +15983,11 @@ components:
       - decided_note
       - expires_at
       - id
+      - last_viewed_at
       - revision_code
       - revoked_at
       - status
+      - view_count
     ArticleList:
       type: object
       properties:
