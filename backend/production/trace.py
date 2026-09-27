@@ -36,7 +36,11 @@ from documents.renderers import (
 
 from dekopen_engine.cutting import CutBar
 from dekopen_engine.manufacturing import ManufacturingFactsV1
-from dekopen_engine.operations import OperationKind, operations_from_plan
+from dekopen_engine.operations import (
+    OperationKind,
+    member_meta_map,
+    operations_from_plan,
+)
 
 
 def _decoded(raw: Any) -> dict[str, Any]:
@@ -383,6 +387,9 @@ def _trace_operations(
         "by_kind": by_kind,
         "items": ops,
         "station_map": station_map,
+        # Sealed member geometry the ops reference — the station card draws
+        # the member strip and anchors each op on it without a snapshot read.
+        "members": member_meta_map(fact_units),
         "unemitted_kinds": unemitted,
         "unclaimed": unclaimed,
         "issues": ops_issues,

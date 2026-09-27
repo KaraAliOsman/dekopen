@@ -87,6 +87,7 @@ type PieceMatch = {
     depth_mm?: string;
     tool_id?: string;
     sequence_no?: number;
+    station?: string;
   }>;
 };
 
@@ -209,7 +210,7 @@ export function TracePieceMatches({
   onSelectOrder,
 }: {
   report: ProductionPieceTrace;
-  onSelectOrder?: (orderId: string) => void;
+  onSelectOrder?: (orderId: string, stepCode?: string) => void;
 }) {
   const matches = (report.matches as PieceMatch[] | undefined) ?? [];
   if (!matches.length) {
@@ -264,13 +265,16 @@ export function TracePieceMatches({
           </>
         );
         const orderId = match.work_order?.id;
+        // The op's station names the step the scanned piece belongs to —
+        // deep-link opens that card, not just the order.
+        const station = match.operations?.find((op) => op.station)?.station;
         return (
           <li key={`${orderId ?? "wo"}-${index}`}>
             {orderId && onSelectOrder ? (
               <button
                 type="button"
                 className="production-trace-match"
-                onClick={() => onSelectOrder(orderId)}
+                onClick={() => onSelectOrder(orderId, station)}
               >
                 {body}
               </button>

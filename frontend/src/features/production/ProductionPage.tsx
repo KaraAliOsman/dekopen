@@ -278,6 +278,9 @@ export function ProductionPage(): JSX.Element {
   const [compareBusy, setCompareBusy] = useState(false);
   const [traceBusy, setTraceBusy] = useState(false);
   const [operatorStepId, setOperatorStepId] = useState<string | null>(null);
+  // Scan deep-link: the piece's station code is known before the order
+  // detail loads — hold it until the step list resolves it to a step id.
+  const [pendingStepCode, setPendingStepCode] = useState<string | null>(null);
   const [pieceQuery, setPieceQuery] = useState("");
   const [pieceReport, setPieceReport] = useState<ProductionPieceTrace | null>(null);
   const [pieceBusy, setPieceBusy] = useState(false);
@@ -418,11 +421,21 @@ export function ProductionPage(): JSX.Element {
     setTrace(null);
     setOperatorStepId(null);
     setPieceQuery("");
+    // Keep pendingStepCode — it survives the async detail load so a scan
+    // lands on the piece's station. It resolves once below.
     setStrategyCompare(null);
     setPieceReport(null);
     void loadDetail(selectedId).catch(() => setMessage(t("production.loadError")));
     void loadTrace();
   }, [selectedId, loadDetail, loadTrace]);
+
+  // Resolve a scan deep-link: piece → station code → step id on this order.
+  useEffect(() => {
+    if (!pendingStepCode || !detail) return;
+    const match = detail.steps.find((step) => step.code === pendingStepCode);
+    if (match) setOperatorStepId(match.id);
+    setPendingStepCode(null);
+  }, [pendingStepCode, detail]);
 
   // piece_id → printed workshop code (M-xx/R-xx/I-xx) from the trace's
   // sealed plan — the same codes the emitted packs carry, so screen and
@@ -1145,7 +1158,10 @@ export function ProductionPage(): JSX.Element {
           {pieceReport ? (
             <TracePieceMatches
               report={pieceReport}
-              onSelectOrder={(id) => setParams({ order: id })}
+              onSelectOrder={(id, stepCode) => {
+                setPendingStepCode(stepCode ?? null);
+                setParams({ order: id });
+              }}
             />
           ) : null}
           {orders.length === 0 ? <p>{t("production.empty")}</p> : null}

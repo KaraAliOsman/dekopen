@@ -12,6 +12,7 @@ import { t, tOptional } from "../../i18n/es-CL";
 import {
   STEP_STOCK_KINDS,
   opBasisLabel,
+  opBoundaryLabel,
   opFaceLabel,
   opKindLabel,
   opReferenceLabel,
@@ -71,6 +72,107 @@ type UnclaimedOps = {
   operation_count?: number;
   kinds?: string[];
 };
+
+type MemberMeta = {
+  cut_length_mm?: string;
+  workshop_sku?: string;
+  role?: string;
+  axis?: string;
+  bay_id?: string;
+  leaf_id?: string;
+};
+
+/** One member strip per physical piece: the op marks sit at their member
+ * coordinate (u = mm from the member start, the datum the printed pack
+ * calls Ext. A) so the operator verifies position on the part, not in an
+ * abstract coordinate table. */
+function MemberOpsStrip({
+  memberCode,
+  locationCode,
+  lengthMm,
+  ops,
+}: {
+  memberCode: string;
+  locationCode?: string;
+  lengthMm: number;
+  ops: Op[];
+}) {
+  const W = 560;
+  const H = 56;
+  const pad = 24;
+  const barY = 30;
+  const barH = 12;
+  const scale = Math.max(lengthMm, 1);
+  const ux = (u: number) => pad + (u / scale) * (W - pad * 2);
+  const opX = (op: Op): number | null => {
+    const u = op.u_mm != null ? Number(op.u_mm) : null;
+    if (u != null) {
+      return op.reference === "member_end" ? ux(scale - u) : ux(u);
+    }
+    if (op.face === "START_EDGE") return pad;
+    if (op.face === "END_EDGE") return W - pad;
+    return null;
+  };
+  const unplaced = ops.filter((op) => opX(op) === null);
+  return (
+    <figure className="operator-member-strip">
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={memberCode}>
+        <text x={pad} y={12} className="operator-member-datum">
+          {t("production.operatorDatumStart")}
+        </text>
+        <text x={W - pad} y={12} textAnchor="end" className="operator-member-datum">
+          {t("production.operatorDatumEnd")} · {fmtMm(String(lengthMm))} mm
+        </text>
+        <line x1={pad} y1={16} x2={pad} y2={barY - 2} className="operator-member-datum-line" />
+        <line
+          x1={W - pad}
+          y1={16}
+          x2={W - pad}
+          y2={barY - 2}
+          className="operator-member-datum-line"
+        />
+        <rect
+          x={pad}
+          y={barY}
+          width={W - pad * 2}
+          height={barH}
+          rx={2}
+          className="operator-member-bar"
+        />
+        {ops.map((op, index) => {
+          const x = opX(op);
+          if (x === null) return null;
+          return (
+            <g key={op.operation_id ?? index}>
+              <title>
+                {`${index + 1} · ${opKindLabel(op.kind)} · u=${op.u_mm ?? "—"} · ${opFaceLabel(op.face)}`}
+              </title>
+              <line
+                x1={x}
+                y1={barY - 4}
+                x2={x}
+                y2={barY + barH + 4}
+                className="operator-member-op"
+              />
+              <text x={x} y={barY + barH + 12} textAnchor="middle" className="operator-member-seq">
+                {index + 1}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      <figcaption>
+        {memberCode}
+        {locationCode ? ` · ${locationCode}` : ""}
+        {unplaced.length > 0
+          ? ` · ${t("production.operatorNoPosition")}: ${unplaced
+              .map((op) => opKindLabel(op.kind))
+              .join(", ")}`
+          : ""}
+      </figcaption>
+    </figure>
+  );
+}
 
 type CutPiece = {
   sequence?: number;
@@ -199,6 +301,9 @@ export function OperatorStepCard({
   const unclaimedStations =
     ((trace?.operations as { unclaimed?: UnclaimedOps[] } | undefined)?.unclaimed as
       UnclaimedOps[] | undefined) ?? [];
+  const memberMeta =
+    ((trace?.operations as { members?: Record<string, MemberMeta> } | undefined)?.members as
+      Record<string, MemberMeta> | undefined) ?? {};
   const planInvalidated = Boolean(
     (trace?.operations as { plan_invalidated?: boolean } | undefined)?.plan_invalidated,
   );
@@ -388,7 +493,7 @@ export function OperatorStepCard({
                             </td>
                             <td>
                               {op.detail?.boundary
-                                ? String(op.detail.boundary)
+                                ? opBoundaryLabel(String(op.detail.boundary))
                                 : op.detail?.sequence
                                   ? `#${String(op.detail.sequence)}`
                                   : "—"}
@@ -415,6 +520,31 @@ export function OperatorStepCard({
                           {t("production.opsDoneAll")}
                         </button>
                       ) : null}
+                      <div className="operator-member-strips">
+                        {Object.entries(
+                          memberOps.reduce<Record<string, Op[]>>((acc, op) => {
+                            const host = String(op.host ?? "");
+                            (acc[host] = acc[host] ?? []).push(op);
+                            return acc;
+                          }, {}),
+                        ).map(([host, hostOps]) => {
+                          const meta = memberMeta[host] ?? {};
+                          const code = labels[host] ?? String(meta.role ?? host);
+                          const locationCode = _loc(labels, meta);
+                          const length =
+                            Number(meta.cut_length_mm ?? 0) ||
+                            Math.max(...hostOps.map((op) => Number(op.u_mm ?? 0)), 1);
+                          return (
+                            <MemberOpsStrip
+                              key={host}
+                              memberCode={code}
+                              locationCode={locationCode || undefined}
+                              lengthMm={length}
+                              ops={hostOps}
+                            />
+                          );
+                        })}
+                      </div>
                       <table className="production-plan operator-ops">
                         <thead>
                           <tr>

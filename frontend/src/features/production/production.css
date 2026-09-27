@@ -1414,3 +1414,45 @@
 .cnc-op-row.is-selected td {
   background: #fef3c7;
 }
+.operator-member-strips {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0.35rem 0 0.6rem;
+}
+.operator-member-strip {
+  margin: 0;
+}
+.operator-member-strip svg {
+  width: 100%;
+  max-width: 640px;
+  display: block;
+}
+.operator-member-strip figcaption {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--theme-text-secondary);
+}
+.operator-member-datum {
+  font-size: 10px;
+  fill: var(--theme-text-secondary);
+  font-weight: 600;
+}
+.operator-member-datum-line {
+  stroke: var(--theme-text-secondary);
+  stroke-dasharray: 3 2;
+  stroke-width: 1;
+}
+.operator-member-bar {
+  fill: var(--theme-surface-alt, #f1efe9);
+  stroke: var(--theme-border, #d8d4cd);
+  stroke-width: 1.5;
+}
+.operator-member-op {
+  stroke: #7a5af8;
+  stroke-width: 2;
+}
+.operator-member-seq {
+  font-size: 9px;
+  fill: var(--theme-text-secondary);
+}

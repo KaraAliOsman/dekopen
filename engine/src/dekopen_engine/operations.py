@@ -574,25 +574,13 @@ def operations_from_plan(
     return ops
 
 
-def ops_document(
-    ops: list[ManufacturingOperation],
-    *,
-    machine: MachineProfile = NEUTRAL_MACHINE_PROFILE,
-    order_code: str,
-    plan_seed: str | None = None,
-    piece_labels: dict[str, str] | None = None,
-    fact_units: list[ManufacturingFactsV1] | None = None,
-    issues: list[dict[str, object]] | None = None,
-) -> dict[str, object]:
-    """Canonical machine-neutral ops document (dekopen_ops_v1).
-
-    ``piece_labels`` maps piece/member ids to shop codes (M-xx/R-xx/…):
-    presentation metadata, never dimensional authority. ``fact_units``
-    ships the member geometry the ops reference — axis, datum ends, cut
-    length, angles, bay/leaf identity — so an adapter holding only this
-    document can resolve every ``host`` without a second snapshot."""
-    emitted = {op.kind.value for op in ops}
-    all_kinds = {kind.value for kind in OperationKind}
+def member_meta_map(
+    fact_units: list[ManufacturingFactsV1] | None,
+) -> dict[str, dict[str, object]]:
+    """member_id → the sealed geometry the ops on it reference: axis, datum
+    ends, cut length, angles, bay/leaf identity. Shared by the ops document
+    and the live trace so an operator screen can draw the member without a
+    second snapshot read."""
     members: dict[str, dict[str, object]] = {}
     for unit in fact_units or []:
         for member in unit.members:
@@ -619,6 +607,29 @@ def ops_document(
                 "position_index": member.identity.position_index,
                 "repetition_index": member.identity.repetition_index,
             }
+    return members
+
+
+def ops_document(
+    ops: list[ManufacturingOperation],
+    *,
+    machine: MachineProfile = NEUTRAL_MACHINE_PROFILE,
+    order_code: str,
+    plan_seed: str | None = None,
+    piece_labels: dict[str, str] | None = None,
+    fact_units: list[ManufacturingFactsV1] | None = None,
+    issues: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    """Canonical machine-neutral ops document (dekopen_ops_v1).
+
+    ``piece_labels`` maps piece/member ids to shop codes (M-xx/R-xx/…):
+    presentation metadata, never dimensional authority. ``fact_units``
+    ships the member geometry the ops reference — axis, datum ends, cut
+    length, angles, bay/leaf identity — so an adapter holding only this
+    document can resolve every ``host`` without a second snapshot."""
+    emitted = {op.kind.value for op in ops}
+    all_kinds = {kind.value for kind in OperationKind}
+    members = member_meta_map(fact_units)
     document: dict[str, object] = {
         "schema": "dekopen_ops_v1",
         "order_code": order_code,
