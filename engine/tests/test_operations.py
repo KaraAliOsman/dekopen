@@ -1,6 +1,7 @@
 """§7 machine-neutral manufacturing operations — authority-bound derivation."""
 
 from decimal import Decimal
+from typing import Any
 
 
 from dekopen_engine.cutting import (
@@ -147,6 +148,170 @@ def test_saw_ops_carry_angles() -> None:
     )
     piece_cut = [op for op in ops if op.detail.get("piece_id") == "p1"][0]
     assert piece_cut.angle_left_deg == Decimal("45")
+    # The head pass is the first piece's left face — it must carry the
+    # miter, not a blanket 90° (hostile review: first piece lost it).
+    head = [op for op in ops if op.detail.get("boundary") == "HEAD_TRIM"][0]
+    assert head.angle_left_deg == Decimal("45")
+    assert head.angle_right_deg == Decimal("45")
+    assert head.detail["forms_piece_id"] == "p1"
+    tail = [op for op in ops if op.detail.get("boundary") == "TAIL_TRIM"][0]
+    assert tail.angle_left_deg == Decimal("45")
+
+
+def test_saw_ops_order_is_numeric() -> None:
+    """Cut order must track physical position — a 510 mm boundary can't
+    sort after 4045 mm because of string collation."""
+    pieces = [_piece(f"p{i}", "500") for i in range(8)]
+    plan = optimize_cut(pieces, [_stock()], _profile())
+    ops = operations_from_plan(
+        bars=plan.workshop_cut_plan, fact_units=[]
+    )
+    xs = [op.x_mm for op in ops if op.x_mm is not None]
+    assert xs == sorted(xs)
+    assert len(xs) == len(ops)
+    assert xs[1] < Decimal("1000")
+
+
+def test_saw_boundary_conflict_is_flagged() -> None:
+    """One blade pass cannot leave 45° left and 90° right — the op records
+    both faces and the document reports the contradiction."""
+    miter = _piece("pM", "2000")
+    miter.angle_left = Decimal("45")
+    miter.angle_right = Decimal("45")
+    butt = _piece("pS", "1500")
+    plan = optimize_cut([miter, butt], [_stock()], _profile())
+    issues: list[dict[str, object]] = []
+    ops = operations_from_plan(
+        bars=plan.workshop_cut_plan, fact_units=[], issues=issues
+    )
+    boundary = [
+        op for op in ops
+        if op.detail.get("piece_id") == "pM" and "boundary" not in op.detail
+    ][0]
+    assert boundary.angle_left_deg == Decimal("45")
+    assert boundary.angle_right_deg == Decimal("90")
+    assert boundary.detail["boundary_conflict"] == "angle_mismatch"
+    assert [issue["code"] for issue in issues] == ["boundary_conflict"]
+    doc = ops_document(ops, order_code="OT-1", issues=issues)
+    assert doc["issues"] == issues
+
+
+def test_operation_ids_track_content_not_serialization() -> None:
+    """Decimal cosmetics must not mint new ids; real geometry moves must."""
+    member_a = _member(ProfileRole.MULLION_V, "1180", overlap="15")
+    member_b = _member(ProfileRole.MULLION_V, "1180.00", overlap="15.000")
+    member_b.member_id = member_a.member_id
+    ops_a = operations_from_plan(
+        bars=[], fact_units=[_unit(members=[member_a])]
+    )
+    ops_b = operations_from_plan(
+        bars=[], fact_units=[_unit(members=[member_b])]
+    )
+    assert [op.operation_id for op in ops_a] == [
+        op.operation_id for op in ops_b
+    ]
+    # Moving the member 200 mm in plan is a real change — ids must differ.
+    member_c = _member(ProfileRole.MULLION_V, "1180", overlap="15")
+    member_c.member_id = member_a.member_id
+    member_c.start = member_a.start.model_copy(
+        update={"x_mm": member_a.start.x_mm + Decimal("200")}
+    )
+    member_c.end = member_a.end.model_copy(
+        update={"x_mm": member_a.end.x_mm + Decimal("200")}
+    )
+    ops_c = operations_from_plan(
+        bars=[], fact_units=[_unit(members=[member_c])]
+    )
+    assert [op.operation_id for op in ops_a] != [
+        op.operation_id for op in ops_c
+    ]
+
+
+def test_end_machining_handles_reversed_member_direction() -> None:
+    """A member traced end-to-start must not inflate the overlap."""
+    member = _member(ProfileRole.MULLION_V, "1180", overlap="15")
+    member.start, member.end = member.end, member.start
+    ops = operations_from_plan(
+        bars=[], fact_units=[_unit(members=[member])]
+    )
+    end_ops = [op for op in ops if op.kind == OperationKind.END_MACHINING]
+    assert len(end_ops) == 2
+    assert all(op.depth_mm == Decimal("15") for op in end_ops)
+
+
+def test_end_machining_skips_arc_members() -> None:
+    """An arc member's cut_length-minus-chord surplus is not end overlap."""
+    member = _member(ProfileRole.MULLION_V, "1180", overlap="15")
+    member.sagitta_mm = Decimal("120")
+    ops = operations_from_plan(
+        bars=[], fact_units=[_unit(members=[member])]
+    )
+    assert not [op for op in ops if op.kind == OperationKind.END_MACHINING]
+
+
+def test_handle_without_member_is_reported_not_dropped() -> None:
+    handle = _handle()
+    handle.host_member_id = "f" * 64  # no member fact exists for it
+    issues: list[dict[str, object]] = []
+    ops = operations_from_plan(
+        bars=[], fact_units=[_unit(handles=[handle])], issues=issues
+    )
+    assert not [op for op in ops if op.kind == OperationKind.HANDLE_PREP]
+    assert [issue["code"] for issue in issues] == ["handle_without_member"]
+
+
+def test_ops_document_ships_member_geometry() -> None:
+    member = _member(ProfileRole.MULLION_V, "1180", overlap="15")
+    unit = _unit(members=[member])
+    ops = operations_from_plan(bars=[], fact_units=[unit])
+    doc = ops_document(ops, order_code="OT-1", fact_units=[unit])
+    members = doc["members"]
+    assert isinstance(members, dict)
+    entry = members[member.member_id]
+    assert isinstance(entry, dict)
+    start = entry["start"]
+    end = entry["end"]
+    assert entry["axis"] == "VERTICAL"
+    assert entry["cut_length_mm"] == "1210"
+    assert isinstance(start, dict) and start["y_mm"] == "0"
+    assert isinstance(end, dict) and end["y_mm"] == "1180"
+    coverage = doc["coverage"]
+    assert isinstance(coverage, dict)
+    assert coverage["members_total"] == 1
+    assert coverage["members_with_ops"] == 1
+    fingerprint = doc["fingerprint"]
+    assert isinstance(fingerprint, str) and len(fingerprint) == 64
+    # same inputs → same fingerprint (determinism)
+    doc_b = ops_document(
+        operations_from_plan(bars=[], fact_units=[unit]),
+        order_code="OT-1",
+        fact_units=[unit],
+    )
+    assert doc["fingerprint"] == doc_b["fingerprint"]
+
+
+def test_ops_fingerprint_changes_on_intentional_change() -> None:
+    unit = _unit(members=[_member(ProfileRole.MULLION_V, "1180", overlap="15")])
+    doc_a = ops_document(
+        operations_from_plan(bars=[], fact_units=[unit]),
+        order_code="OT-1",
+        fact_units=[unit],
+    )
+    other = _unit(members=[_member(ProfileRole.MULLION_V, "900", overlap="15")])
+    doc_b = ops_document(
+        operations_from_plan(bars=[], fact_units=[other]),
+        order_code="OT-1",
+        fact_units=[other],
+    )
+    assert doc_a["fingerprint"] != doc_b["fingerprint"]
+
+
+def test_ops_get_sequence_numbers() -> None:
+    plan = optimize_cut([_piece("p1", "2000"), _piece("p2", "1500")],
+                        [_stock()], _profile())
+    ops = operations_from_plan(
+        bars=plan.workshop_cut_plan, fact_units=[])
+    assert [op.sequence_no for op in ops] == list(range(1, len(ops) + 1))
 
 
 def test_no_ops_without_authority_kinds() -> None:
@@ -240,6 +405,7 @@ def test_postprocessor_renders_deterministically() -> None:
 from dekopen_engine.operations import (  # noqa: E402
     ClampZone,
     MachineProfile,
+    ManufacturingOperation,
     MemberFace,
     Tool,
     ToolKind,
@@ -249,8 +415,8 @@ from dekopen_engine.operations import (  # noqa: E402
 )
 
 
-def _cnc_machine(**overrides: object) -> MachineProfile:
-    base: dict[str, object] = {
+def _cnc_machine(**overrides: Any) -> MachineProfile:
+    base: dict[str, Any] = {
         "machine_id": "SBZ-01",
         "name": "Centro CNC 01",
         "controller_family": "NEUTRAL",
@@ -297,7 +463,7 @@ def test_saw_ops_reference_the_bar_edge() -> None:
     assert all(op.reference == "bar_left_edge" for op in ops)
 
 
-def _member_ops() -> list:
+def _member_ops() -> list[ManufacturingOperation]:
     member = _member(ProfileRole.FRAME, "1200")
     unit = _unit(members=[member], handles=[_handle()])
     return operations_from_plan(bars=[], fact_units=[unit])
@@ -394,7 +560,26 @@ def test_validate_passes_compatible_setup() -> None:
     verdicts = validate_operations(
         ops, machine, member_lengths_mm={"a" * 64: Decimal("1200")}
     )
-    assert all(v.level == "PASS" for v in verdicts)
+    # HANDLE_PREP carries no declared face or hole pattern — the authority
+    # gaps surface as WARN, never as a fabricated PASS.
+    assert all(v.level == "WARN" for v in verdicts)
+    assert {v.code for v in verdicts} <= {
+        "face_undeclared",
+        "feature_point_only",
+        "margin_violation",
+        "clamp_conflict",
+    }
+
+
+def test_validate_blocks_unsupported_coordinate_system() -> None:
+    ops = _member_ops()
+    machine = _cnc_machine(
+        coordinate_systems=[CoordinateSystem.BAR_AXIS],
+        tools=[Tool(tool_id="drill", kind=ToolKind.DRILL_BIT, name="Broca")],
+    )
+    verdicts = validate_operations(ops, machine)
+    assert all(v.level == "BLOCK" for v in verdicts)
+    assert {v.code for v in verdicts} == {"coordinate_unsupported"}
 
 
 def test_tool_depth_limit_blocks() -> None:
@@ -434,11 +619,14 @@ def test_member_program_is_deterministic_and_sequenced() -> None:
     )
     assert a == b
     program_ops = a["operations"]
+    assert isinstance(program_ops, list)
     assert [o["sequence_no"] for o in program_ops] == [1]
-    assert a["verdict"] == "PASS"
+    # No dry run was passed in — a program is never PASS without one.
+    assert a["verdict"] == "UNVERIFIED"
     assert a["fingerprint"] == program_fingerprint(a)
     # Program identity carries the piece/machine/postprocessor contract.
     ident = a["identity"]
+    assert isinstance(ident, dict)
     assert ident["member_label"] == "M-01"
     assert ident["machine_id"] == "SBZ-01"
     assert ident["postprocessor_id"] == "neutral-ops-v1"

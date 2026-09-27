@@ -525,6 +525,7 @@ class CncReadinessSerializer(serializers.Serializer):
     order_id = serializers.CharField()
     order_code = serializers.CharField()
     members = serializers.ListField()
+    issues = serializers.ListField(required=False)
     machines = CncMachineSerializer(many=True)
     programs = serializers.ListField()
 

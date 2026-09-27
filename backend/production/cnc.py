@@ -494,7 +494,10 @@ def _order_ops(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
         CutBar.model_validate_json(json.dumps(bar))
         for bar in (optimization.get("bars") or {}).get("workshop_cut_plan") or []
     ]
-    ops = operations_from_plan(bars=bars, fact_units=fact_units)
+    ops_issues: list[dict[str, object]] = []
+    ops = operations_from_plan(
+        bars=bars, fact_units=fact_units, issues=ops_issues
+    )
     labels = _piece_labels(version_snapshot)
     member_labels = {
         str(member_id): code for member_id, code in labels.get("member", {}).items()
@@ -530,6 +533,7 @@ def _order_ops(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
         "payload": payload,
         "optimization": optimization,
         "ops": ops,
+        "ops_issues": ops_issues,
         "fact_units": fact_units,
         "member_labels": member_labels,
         "member_lengths": member_lengths,
@@ -591,14 +595,21 @@ def cnc_readiness(
     for member_id in member_ids:
         label = bundle["member_labels"].get(member_id) or member_id[:8]
         ops = member_ops[member_id]
+        op_ids = {op.operation_id for op in ops}
         machine_results: list[dict[str, object]] = []
         for profile, machine_row in zip(machine_profiles, machine_rows):
-            validations = validate_operations(
-                ops,
-                profile,
-                member_lengths_mm=bundle["member_lengths"],
-                member_labels=bundle["member_labels"],
-            )
+            validations = [
+                item
+                for item in validate_operations(
+                    ops,
+                    profile,
+                    member_lengths_mm=bundle["member_lengths"],
+                    member_labels=bundle["member_labels"],
+                )
+                # A member's verdict covers its own ops only — a blocker on
+                # M-03 must not render M-07 as BLOCK on this machine.
+                if item.operation_id in op_ids
+            ]
             blockers = [item for item in validations if item.level == "BLOCK"]
             warnings = [item for item in validations if item.level == "WARN"]
             machine_results.append(
@@ -651,6 +662,7 @@ def cnc_readiness(
         "order_id": str(order_id),
         "order_code": bundle["order"]["order_code"],
         "members": members,
+        "issues": bundle["ops_issues"],
         "machines": [_public_machine(row) for row in machine_rows],
         "programs": list_programs(org_id=org_id, order_id=order_id),
     }
@@ -720,6 +732,19 @@ def generate_program(
         machine=profile,
         identity=bundle["identity"],
         validations=validations,
+        issues=bundle["ops_issues"],
+    )
+    # Ship the member's sealed geometry inside the program's ops doc so a
+    # vendor adapter holding only the file can resolve the host's datum,
+    # axis, length and end angles.
+    member_fact = next(
+        (
+            member
+            for unit in bundle["fact_units"]
+            for member in unit.members
+            if member.member_id == member_id
+        ),
+        None,
     )
     files = NeutralOpsPostProcessor().render(
         {
@@ -730,6 +755,38 @@ def generate_program(
             "operation_count": document["operation_count"],
             "counts_by_kind": document["counts_by_kind"],
             "unemitted_kinds": [],
+            "issues": document["issues"],
+            "members": (
+                {
+                    member_id: {
+                        "workshop_sku": member_fact.workshop_sku,
+                        "material": member_fact.material.value,
+                        "role": member_fact.identity.role.value,
+                        "cut_length_mm": str(member_fact.cut_length_mm),
+                        "angle_left_deg": str(member_fact.angle_left),
+                        "angle_right_deg": str(member_fact.angle_right),
+                        "axis": member_fact.axis.value,
+                        "start": {
+                            "x_mm": str(member_fact.start.x_mm),
+                            "y_mm": str(member_fact.start.y_mm),
+                        },
+                        "end": {
+                            "x_mm": str(member_fact.end.x_mm),
+                            "y_mm": str(member_fact.end.y_mm),
+                        },
+                        "sagitta_mm": (
+                            str(member_fact.sagitta_mm)
+                            if member_fact.sagitta_mm is not None
+                            else None
+                        ),
+                        "bay_id": member_fact.bay_id,
+                        "leaf_id": member_fact.leaf_id,
+                        "leaf_slot": member_fact.identity.leaf_slot,
+                    }
+                }
+                if member_fact is not None
+                else {}
+            ),
             "piece_labels": bundle["member_labels"],
             "operations": document["operations"],
         }

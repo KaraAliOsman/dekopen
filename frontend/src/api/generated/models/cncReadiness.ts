@@ -11,6 +11,7 @@ export interface CncReadiness {
   order_id: string;
   order_code: string;
   members: unknown[];
+  issues?: unknown[];
   machines: CncMachine[];
   programs: unknown[];
 }

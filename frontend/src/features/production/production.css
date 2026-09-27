@@ -1165,6 +1165,22 @@
   background: color-mix(in srgb, var(--theme-danger, #b3261e) 12%, transparent);
   color: var(--theme-danger, #b3261e);
 }
+.cnc-verdict-unverified {
+  background: color-mix(in srgb, var(--theme-fg, #444) 10%, transparent);
+  color: var(--theme-fg, #444);
+}
+.cnc-issues {
+  margin: 0 0 0.75rem;
+  padding: 0.55rem 0.9rem;
+  border-left: 3px solid var(--theme-warning, #b26a00);
+  background: color-mix(in srgb, var(--theme-warning, #b26a00) 8%, transparent);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  list-style: none;
+}
+.cnc-issues li + li {
+  margin-top: 0.3rem;
+}
 .cnc-generate {
   margin-right: 0.4rem;
   font-size: 0.8rem;
@@ -1333,14 +1349,38 @@
   stroke: #4c2fd1;
   stroke-width: 1;
 }
-.cnc-diagram-op .cnc-mark-drill { fill: #2563eb; stroke: #1e40af; }
-.cnc-diagram-op .cnc-mark-drainage { fill: #0891b2; stroke: #0e7490; }
-.cnc-diagram-op .cnc-mark-ventilation { fill: #0891b2; stroke: #0e7490; }
-.cnc-diagram-op .cnc-mark-slot { fill: #7c3aed; stroke: #5b21b6; }
-.cnc-diagram-op .cnc-mark-routing { fill: #7c3aed; stroke: #5b21b6; }
-.cnc-diagram-op .cnc-mark-milling { fill: #9333ea; stroke: #6b21a8; }
-.cnc-diagram-op .cnc-mark-edge { fill: #64748b; stroke: #334155; }
-.cnc-diagram-op .cnc-mark-custom { fill: #64748b; stroke: #334155; }
+.cnc-diagram-op .cnc-mark-drill {
+  fill: #2563eb;
+  stroke: #1e40af;
+}
+.cnc-diagram-op .cnc-mark-drainage {
+  fill: #0891b2;
+  stroke: #0e7490;
+}
+.cnc-diagram-op .cnc-mark-ventilation {
+  fill: #0891b2;
+  stroke: #0e7490;
+}
+.cnc-diagram-op .cnc-mark-slot {
+  fill: #7c3aed;
+  stroke: #5b21b6;
+}
+.cnc-diagram-op .cnc-mark-routing {
+  fill: #7c3aed;
+  stroke: #5b21b6;
+}
+.cnc-diagram-op .cnc-mark-milling {
+  fill: #9333ea;
+  stroke: #6b21a8;
+}
+.cnc-diagram-op .cnc-mark-edge {
+  fill: #64748b;
+  stroke: #334155;
+}
+.cnc-diagram-op .cnc-mark-custom {
+  fill: #64748b;
+  stroke: #334155;
+}
 .cnc-diagram-op .cnc-mark-hardware circle,
 .cnc-diagram-op .cnc-mark-hardware line {
   fill: none;

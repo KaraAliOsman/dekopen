@@ -63,10 +63,16 @@ type CncProgram = {
   created_at: string;
 };
 
+type CncIssue = {
+  code: string;
+  detail?: string;
+} & Record<string, unknown>;
+
 type CncReadinessData = {
   order_id: string;
   order_code: string;
   members: CncMember[];
+  issues?: CncIssue[];
   machines: { id: string; code: string; name: string }[];
   programs: CncProgram[];
 };
@@ -115,6 +121,17 @@ function blockerText(blocker: CncVerdict): string {
     .map(([k, v]) => `${k}=${v}`)
     .join(" · ");
   return values ? `${label}: ${values}` : label;
+}
+
+function issueText(issue: CncIssue): string {
+  const key = `production.cncIssue_${issue.code}`;
+  const label = tOptional(key) ?? issue.code;
+  const context = Object.entries(issue)
+    .filter(([k]) => !["code", "detail"].includes(k))
+    .map(([k, v]) => `${k}=${v}`)
+    .join(" · ");
+  const detail = typeof issue.detail === "string" ? issue.detail : "";
+  return [label, context, detail].filter(Boolean).join(" — ");
 }
 
 export function CncPanel({ orderId, canWrite }: { orderId: string; canWrite: boolean }) {
@@ -197,6 +214,13 @@ export function CncPanel({ orderId, canWrite }: { orderId: string; canWrite: boo
             <p className="cnc-empty">{t("production.cncNoOps")}</p>
           ) : (
             <>
+              {data.issues?.length ? (
+                <ul className="cnc-issues" role="alert">
+                  {data.issues.map((issue, index) => (
+                    <li key={index}>{issueText(issue)}</li>
+                  ))}
+                </ul>
+              ) : null}
               {data.machines.length === 0 ? (
                 <p className="cnc-empty" role="alert">
                   {t("production.cncNoMachines")}
@@ -366,11 +390,7 @@ function CncMemberRow({
       {expanded ? (
         <tr className="cnc-member-ops">
           <td colSpan={2 + machines.length + 1}>
-            <MemberOpsDiagram
-              member={member}
-              selectedOp={selectedOp}
-              onSelectOp={onSelectOp}
-            />
+            <MemberOpsDiagram member={member} selectedOp={selectedOp} onSelectOp={onSelectOp} />
             <table className="cnc-ops">
               <thead>
                 <tr>
@@ -475,9 +495,7 @@ function MemberOpsDiagram({
           return (
             <g
               key={op.operation_id}
-              className={
-                selected ? "cnc-diagram-op is-selected" : "cnc-diagram-op"
-              }
+              className={selected ? "cnc-diagram-op is-selected" : "cnc-diagram-op"}
               onClick={() => onSelectOp(selected ? null : op.operation_id)}
               role="button"
               aria-label={`${index + 1} ${opKindLabel(op.kind)}`}
@@ -511,7 +529,9 @@ function OpMark({ kind, x, cy }: { kind: string; x: number; cy: number }) {
     case "DRILL":
     case "DRAINAGE":
     case "VENTILATION":
-      return <circle cx={x} cy={cy} r={4.5} className={`cnc-mark cnc-mark-${kind.toLowerCase()}`} />;
+      return (
+        <circle cx={x} cy={cy} r={4.5} className={`cnc-mark cnc-mark-${kind.toLowerCase()}`} />
+      );
     case "SLOT":
     case "ROUTING":
       return (
@@ -539,24 +559,10 @@ function OpMark({ kind, x, cy }: { kind: string; x: number; cy: number }) {
     case "END_MACHINING":
     case "SAW_CUT":
     case "SAW_REFERENCE":
-      return (
-        <rect
-          x={x - 3}
-          y={cy - 8}
-          width={6}
-          height={16}
-          className="cnc-mark cnc-mark-edge"
-        />
-      );
+      return <rect x={x - 3} y={cy - 8} width={6} height={16} className="cnc-mark cnc-mark-edge" />;
     case "MILLING":
       return (
-        <rect
-          x={x - 6}
-          y={cy - 5}
-          width={12}
-          height={10}
-          className="cnc-mark cnc-mark-milling"
-        />
+        <rect x={x - 6} y={cy - 5} width={12} height={10} className="cnc-mark cnc-mark-milling" />
       );
     default:
       return (

@@ -343,7 +343,10 @@ def _trace_operations(
     except Exception:
         return {"count": 0, "items": [], "unemitted_kinds": [],
                 "unavailable": "operations_underivable"}
-    derived = operations_from_plan(bars=bars, fact_units=fact_units)
+    ops_issues: list[dict[str, object]] = []
+    derived = operations_from_plan(
+        bars=bars, fact_units=fact_units, issues=ops_issues
+    )
     ops = [op.model_dump(mode="json") for op in derived]
     by_kind: dict[str, int] = {}
     for op in ops:
@@ -382,6 +385,7 @@ def _trace_operations(
         "station_map": station_map,
         "unemitted_kinds": unemitted,
         "unclaimed": unclaimed,
+        "issues": ops_issues,
         "plan_invalidated": bool(optimization.get("invalidated")),
         "process_authority": payload.get("process_authority") or {},
     }

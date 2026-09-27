@@ -1559,6 +1559,7 @@ export const messages = {
   "production.cncVerdictPASS": "OK",
   "production.cncVerdictWARN": "Atención",
   "production.cncVerdictBLOCK": "Bloqueado",
+  "production.cncVerdictUNVERIFIED": "Sin verificar",
   "production.cncOpKind": "Operación",
   "production.cncFace": "Cara",
   "production.cncReference": "Referencia",
@@ -1592,6 +1593,16 @@ export const messages = {
   "production.cncBlock_envelope_exceeded": "Pieza excede la capacidad de la máquina",
   "production.cncBlock_clamp_conflict": "Operación dentro de zona de mordaza",
   "production.cncBlock_margin_violation": "Operación dentro del margen de seguridad",
+  "production.cncBlock_coordinate_unsupported":
+    "Sistema de coordenadas no soportado por la máquina",
+  "production.cncBlock_face_undeclared": "La operación no declara en qué cara trabaja",
+  "production.cncBlock_feature_point_only": "Posición sin patrón de perforación declarado",
+  "production.cncIssue_boundary_conflict":
+    "Conflicto de ángulos — un solo corte no puede dejar caras distintas en cada pieza",
+  "production.cncIssue_tail_sliver":
+    "La reserva de cola es menor que el espesor del corte — queda una viruta, no una pieza",
+  "production.cncIssue_handle_without_member":
+    "Posición de manilla sin pieza anfitriona — la preparación no se puede ubicar",
   "production.cncWorkspaceTitle": "Centros CNC y herramientas",
   "production.cncMachines": "Máquinas",
   "production.cncMachinesEmpty":

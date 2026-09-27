@@ -1310,20 +1310,29 @@ def transition_step(
         # Producer/verifier separation: the QC *decision* (COMPLETE, pass or
         # fail) belongs to a supervisor — the operator who ran the station
         # must not sign off on their own work. Recording a measurement
-        # (QC_CHECK) stays open so it can be logged mid-task.
-        if (
-            str(step["code"]) == "QC"
-            and action == "COMPLETE"
-            and actor_role not in _QC_STEP_ACTORS
-        ):
-            raise DocumentaryError(
-                "qc_requires_supervisor",
-                detail=(
-                    "El control de calidad solo lo firma un encargado "
-                    "(propietario o jefe de taller), no el operador que "
-                    "ejecutó el trabajo."
-                ),
-            )
+        # (QC_CHECK) stays open so it can be logged mid-task. Service callers
+        # may omit actor_role — resolve it from the membership only when the
+        # gate actually applies.
+        if str(step["code"]) == "QC" and action == "COMPLETE":
+            if actor_role is None:
+                membership = one(
+                    """
+                    SELECT role::text AS role FROM public.tenancy_memberships
+                    WHERE org_id = %s AND user_id = %s
+                    """,
+                    [str(org_id), str(actor_id)],
+                    "actor_membership_missing",
+                )
+                actor_role = str(membership["role"])
+            if actor_role not in _QC_STEP_ACTORS:
+                raise DocumentaryError(
+                    "qc_requires_supervisor",
+                    detail=(
+                        "El control de calidad solo lo firma un encargado "
+                        "(propietario o jefe de taller), no el operador que "
+                        "ejecutó el trabajo."
+                    ),
+                )
         if str(order["status"]) == "INSTALLED":
             raise DocumentaryError("work_order_installed")
         if str(order["status"]) == "DISPATCHED":
@@ -2332,7 +2341,10 @@ def export_operations(
             CutBar.model_validate_json(json.dumps(bar))
             for bar in (optimization.get("bars") or {}).get("workshop_cut_plan") or []
         ]
-        ops = operations_from_plan(bars=bars, fact_units=fact_units)
+        ops_issues: list[dict[str, object]] = []
+        ops = operations_from_plan(
+            bars=bars, fact_units=fact_units, issues=ops_issues
+        )
         empty_labels: dict[str, dict[object, str]] = {
             key: {}
             for key in (
@@ -2367,6 +2379,8 @@ def export_operations(
             order_code=str(order["order_code"]),
             plan_seed=(optimization.get("bars") or {}).get("plan_seed"),
             piece_labels=piece_labels,
+            fact_units=fact_units,
+            issues=ops_issues,
         )
         # The routing the frozen authority declares travels inside the
         # document: a cell loading the file knows which station each op

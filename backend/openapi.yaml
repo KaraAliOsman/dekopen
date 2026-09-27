@@ -16982,6 +16982,9 @@ components:
         members:
           type: array
           items: {}
+        issues:
+          type: array
+          items: {}
         machines:
           type: array
           items:
