@@ -58,6 +58,15 @@ export function AssistantPanel({
    * under a different prompt. */
   const requestSeq = useRef(0);
 
+  /** A product commit or system switch invalidates anything in flight —
+   * responses are only valid under the exact (product, system) pair they
+   * were validated against. Runs BEFORE the draft effect so a panel that
+   * mounts with a submitting draft doesn't cancel its own request. */
+  useEffect(() => {
+    requestSeq.current += 1;
+    setPreview(null);
+  }, [product, systemId]);
+
   useEffect(() => {
     if (draft === null) return;
     requestSeq.current += 1;
@@ -72,14 +81,6 @@ export function AssistantPanel({
     onDraftHandled();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- generate is defined below; draft is the trigger
   }, [draft, onDraftHandled]);
-
-  /** A product commit or system switch invalidates anything in flight —
-   * responses are only valid under the exact (product, system) pair they
-   * were validated against. */
-  useEffect(() => {
-    requestSeq.current += 1;
-    setPreview(null);
-  }, [product, systemId]);
   /** One operation key per (prompt, product, system) — a retry after a lost
    * response replays the committed call instead of debiting twice. */
   const operationKey = useRef<{

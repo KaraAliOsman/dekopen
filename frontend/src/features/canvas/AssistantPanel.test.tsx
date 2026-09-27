@@ -72,3 +72,26 @@ describe("AssistantPanel system binding", () => {
     expect(screen.queryByText(/mimo/)).toBeNull();
   });
 });
+
+describe("AssistantPanel queued drafts", () => {
+  beforeEach(() => assistMock.mockReset());
+
+  it("submits a fix draft straight away — one click produces a proposal", async () => {
+    assistMock.mockResolvedValue(successResponse() as never);
+    renderPanel({ draft: { text: "Corrige este problema: hoja fuera del herraje", submit: true } });
+    // No Generate click needed — the draft itself drives the request.
+    await waitFor(() => expect(assistMock).toHaveBeenCalledTimes(1));
+    const args = assistMock.mock.calls[0]![1] as { prompt: string };
+    expect(args.prompt).toContain("hoja fuera del herraje");
+    // The proposal renders for the human apply gate.
+    await screen.findByRole("button", { name: /Aplicar/i });
+  });
+
+  it("a non-submit draft only prefills the prompt", async () => {
+    renderPanel({ draft: { text: "Modifica el vano" } });
+    await waitFor(() =>
+      expect(screen.getByRole("textbox")).toHaveProperty("value", "Modifica el vano"),
+    );
+    expect(assistMock).not.toHaveBeenCalled();
+  });
+});
