@@ -296,6 +296,12 @@ def test_design_batch_preview_prices_before_and_after(monkeypatch):
             return Cursor()
 
     monkeypatch.setattr(service, 'connection', Conn())
+    # design_batch_preview opens documents.repository.documentary_backend for
+    # the sealed-revision check — stub it (the rows() it guards are mocked).
+    from contextlib import nullcontext
+
+    import documents.repository as documents_repository
+    monkeypatch.setattr(documents_repository, 'documentary_backend', nullcontext)
     monkeypatch.setattr(
         service, 'PricingRepository',
         lambda *a: SimpleNamespace(authorities=[], convert=lambda value, c: value),
@@ -359,6 +365,12 @@ def test_design_batch_preview_refuses_sealed_revision(monkeypatch):
         service, 'rows',
         lambda query, params=(): tables['project_versions'],
     )
+    # The sealed-version check runs under documents.repository.documentary_backend;
+    # stub it — the rows() it guards are mocked.
+    from contextlib import nullcontext
+
+    import documents.repository as documents_repository
+    monkeypatch.setattr(documents_repository, 'documentary_backend', nullcontext)
 
     try:
         service.design_batch_preview(org_id, None, {

@@ -1977,7 +1977,7 @@ function CommercialOperations({
             <option value="">{t("pricing.filterAll")}</option>
             {["PENDING", "APPLIED", "REJECTED", "WITHDRAWN", "PREVIEW"].map((state) => (
               <option key={state} value={state}>
-                {state.toLowerCase()}
+                {t(`pricing.operationState.${state}` as never)}
               </option>
             ))}
           </select>

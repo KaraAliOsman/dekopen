@@ -305,9 +305,9 @@ it.each(["apply", "reject"] as const)(
     expect(screen.getByText("Proyecto: P-B · Cliente B · Casa B")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: t("pricing.reload") }));
     await screen.findByRole("button", { name: t("pricing.review") });
-    expect(
-      screen.getByText(t(action === "reject" ? "pricing.rejected" : "pricing.applied")),
-    ).toBeInTheDocument();
+    // The state filter option shares the chip's label — scope to the chip.
+    const chip = document.querySelector(".operation-history__item .status-chip");
+    expect(chip).toHaveTextContent(t(action === "reject" ? "pricing.rejected" : "pricing.applied"));
     expect(screen.getByText("Proyecto: P-B · Cliente B · Casa B")).toBeInTheDocument();
   },
 );
