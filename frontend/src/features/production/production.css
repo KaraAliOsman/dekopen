@@ -84,6 +84,17 @@
   font-size: var(--text-sm);
 }
 
+/* §11 station controls: the next-step bar is the operator's primary touch
+ * target — large hit area and type readable from the workstation. */
+.production-next .production-step-actions button {
+  min-height: 52px;
+  min-width: 120px;
+  padding: 0.6rem 1.1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+}
+
 .production-orders ul {
   list-style: none;
   margin: 0;
