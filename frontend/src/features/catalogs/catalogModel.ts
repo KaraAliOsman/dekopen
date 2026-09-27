@@ -531,6 +531,11 @@ export function catalogApi(orgId: string) {
       }
       return response.data;
     },
+    async seedWorkCenters(): Promise<WorkCenter[]> {
+      const response = await client.productionWorkCentersSeedDefaults(options);
+      if (response.status !== 200) throw new Error("work_centers_seed_failed");
+      return response.data.centers;
+    },
     async review<R extends Resource>(resource: R, row: Row<R>): Promise<Row<R>> {
       // If-Match is required by the API: a review must approve the revision
       // the reviewer actually read, not a later edit (409 on drift).

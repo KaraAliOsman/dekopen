@@ -2007,7 +2007,9 @@ def create_remake(
 
 
 def list_work_centers(*, org_id: UUID) -> dict[str, object]:
-    _ensure_work_centers(org_id)
+    """Pure read — a GET must not write. Seeding happens at release
+    (_ensure_work_centers) or via the explicit seed endpoint, so an empty
+    list is honest and the readiness blocker stays truthful."""
     return {
         "centers": rows(
             """
@@ -2017,6 +2019,13 @@ def list_work_centers(*, org_id: UUID) -> dict[str, object]:
             [str(org_id)],
         )
     }
+
+
+def seed_default_work_centers(*, org_id: UUID) -> dict[str, object]:
+    """Explicit one-click seed of the standard station set — the write belongs
+    on a POST, not inside a list read."""
+    _ensure_work_centers(org_id)
+    return list_work_centers(org_id=org_id)
 
 
 def _reinforcement_angle_map(

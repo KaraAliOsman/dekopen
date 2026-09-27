@@ -161,6 +161,7 @@ def test_openapi_contains_only_authorized_shot_11_paths_and_bearer_security() ->
         "/api/v1/production/versions/{version_id}/release/",
         "/api/v1/production/versions/{version_id}/trace/",
         "/api/v1/production/work-centers/",
+        "/api/v1/production/work-centers/seed-defaults/",
         "/api/v1/purchasing/versions/",
         "/api/v1/purchasing/versions/{version_id}/",
         "/api/v1/purchasing/versions/{version_id}/eligibilities/",

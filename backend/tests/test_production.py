@@ -1121,6 +1121,61 @@ def test_order_code_scopes_to_project() -> None:
     assert seen["order_code"] == "OT-PRO-77-REV-A-01"
 
 
+def test_list_work_centers_never_writes() -> None:
+    """A GET must not self-seed — an empty org's work_centers blocker is
+    honest until someone seeds explicitly or releases a work order."""
+    org_id = uuid4()
+    seen: list[str] = []
+
+    def fake_rows(query: str, params=None):
+        seen.append(query)
+        assert "FROM public.work_centers" in query
+        assert params == [str(org_id)]
+        return []
+
+    with patch("production.service.rows", side_effect=fake_rows), patch(
+        "production.service._ensure_work_centers"
+    ) as ensure, patch("production.service.write") as write_mock:
+        output = service.list_work_centers(org_id=org_id)
+    assert output == {"centers": []}
+    assert len(seen) == 1
+    ensure.assert_not_called()
+    write_mock.assert_not_called()
+
+
+def test_seed_default_work_centers_explicit() -> None:
+    org_id = uuid4()
+    center = {
+        "id": uuid4(), "code": "CUT-01", "name": "Corte", "kind": "CUT",
+        "display_order": 1, "active": True,
+    }
+    with patch(
+        "production.service._ensure_work_centers", return_value=({"CUT": center}, {"CUT"})
+    ) as ensure, patch(
+        "production.service.rows", return_value=[center]
+    ) as list_rows:
+        output = service.seed_default_work_centers(org_id=org_id)
+    ensure.assert_called_once_with(org_id)
+    assert output == {"centers": [center]}
+    list_rows.assert_called_once()
+
+
+def test_work_center_seed_endpoint_forwards_scope(monkeypatch) -> None:
+    # _client_with_scope asserts the role is inside the view's allowed scope,
+    # so this also proves the endpoint gates on _WRITERS, not _READERS.
+    client, token, org_id = _client_with_scope(monkeypatch, "WORKSHOP_MANAGER")
+    seen = {}
+
+    def fake_seed(*, org_id):
+        seen["org_id"] = org_id
+        return {"centers": []}
+
+    monkeypatch.setattr(service, "seed_default_work_centers", fake_seed)
+    response = client.post("/api/v1/production/work-centers/seed-defaults/")
+    assert response.status_code == 200
+    assert seen["org_id"] == org_id
+
+
 def test_work_center_upsert_reports_created() -> None:
     row = {
         "id": uuid4(), "code": "X", "name": "x", "kind": "CUT",

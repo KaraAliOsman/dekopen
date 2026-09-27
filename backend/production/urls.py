@@ -34,6 +34,7 @@ from production.views import (
     ProductionReleaseView,
     ProductionStepTransitionView,
     WorkCenterListView,
+    WorkCenterSeedDefaultsView,
     CncWorkspaceView,
     CncToolListView,
     CncToolDetailView,
@@ -198,6 +199,11 @@ urlpatterns = [
         name="production-release",
     ),
     path("work-centers/", WorkCenterListView.as_view(), name="production-work-centers"),
+    path(
+        "work-centers/seed-defaults/",
+        WorkCenterSeedDefaultsView.as_view(),
+        name="production-work-centers-seed",
+    ),
     path("cnc/workspace/", CncWorkspaceView.as_view(), name="production-cnc-workspace"),
     path("cnc/tools/", CncToolListView.as_view(), name="production-cnc-tools"),
     path(

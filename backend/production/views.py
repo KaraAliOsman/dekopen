@@ -646,6 +646,21 @@ class WorkCenterListView(APIView):
         return Response(output, status=201 if created else 200)
 
 
+class WorkCenterSeedDefaultsView(APIView):
+    @extend_schema(
+        operation_id="production_work_centers_seed_defaults",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={200: WorkCenterListSerializer, **ERRORS},
+        tags=["production"],
+    )
+    def post(self, request):
+        with public_production_errors():
+            with documentary_scope(request, _WRITERS) as (_, _, org_id):
+                output = service.seed_default_work_centers(org_id=org_id)
+        return Response(output)
+
+
 class ProductionOrderOptimizeView(APIView):
     @extend_schema(
         operation_id="production_order_optimize",

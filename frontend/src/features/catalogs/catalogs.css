@@ -219,6 +219,11 @@
   gap: 0.75rem;
 }
 
+.catalog-field-hint {
+  display: block;
+  margin-top: 0.25rem;
+}
+
 .catalog-contents {
   min-width: 39rem;
 }

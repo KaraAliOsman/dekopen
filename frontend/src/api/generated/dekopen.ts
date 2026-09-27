@@ -12309,6 +12309,81 @@ export const productionWorkCentersCreate = async (
   });
 };
 
+export type productionWorkCentersSeedDefaultsResponse200 = {
+  data: WorkCenterList;
+  status: 200;
+};
+
+export type productionWorkCentersSeedDefaultsResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type productionWorkCentersSeedDefaultsResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type productionWorkCentersSeedDefaultsResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type productionWorkCentersSeedDefaultsResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type productionWorkCentersSeedDefaultsResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type productionWorkCentersSeedDefaultsResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type productionWorkCentersSeedDefaultsResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type productionWorkCentersSeedDefaultsResponseSuccess =
+  productionWorkCentersSeedDefaultsResponse200 & {
+    headers: Headers;
+  };
+export type productionWorkCentersSeedDefaultsResponseError = (
+  | productionWorkCentersSeedDefaultsResponse400
+  | productionWorkCentersSeedDefaultsResponse401
+  | productionWorkCentersSeedDefaultsResponse403
+  | productionWorkCentersSeedDefaultsResponse404
+  | productionWorkCentersSeedDefaultsResponse409
+  | productionWorkCentersSeedDefaultsResponse422
+  | productionWorkCentersSeedDefaultsResponse503
+) & {
+  headers: Headers;
+};
+
+export type productionWorkCentersSeedDefaultsResponse =
+  productionWorkCentersSeedDefaultsResponseSuccess | productionWorkCentersSeedDefaultsResponseError;
+
+export const getProductionWorkCentersSeedDefaultsUrl = () => {
+  return `/api/v1/production/work-centers/seed-defaults/`;
+};
+
+export const productionWorkCentersSeedDefaults = async (
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<productionWorkCentersSeedDefaultsResponse> => {
+  return apiMutator<productionWorkCentersSeedDefaultsResponse>(
+    getProductionWorkCentersSeedDefaultsUrl(),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
 export type projectsListResponse200 = {
   data: ProjectListResponse;
   status: 200;

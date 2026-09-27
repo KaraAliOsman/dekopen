@@ -754,6 +754,14 @@ function CatalogEditor({
             onChange={(event) => change(field.name, event.target.value)}
           />
         )}
+        {/* An empty process-profile picker is actionable information — the
+            system falls back to GENERIC_LEGACY routing until one is declared,
+            which is exactly the blocker the readiness ladder reports. */}
+        {field.kind === "processProfile" && profiles !== null && profiles.length === 0 ? (
+          <small className="catalog-field-hint" role="status">
+            {ct("noProcessProfiles")}
+          </small>
+        ) : null}
       </label>
     );
   }

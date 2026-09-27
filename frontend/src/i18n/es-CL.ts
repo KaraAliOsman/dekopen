@@ -1959,6 +1959,8 @@ export const messages = {
   "catalog.ws.centerKind": "Tipo",
   "catalog.ws.centerCreate": "Crear centro",
   "catalog.ws.noCenters": "No hay centros de trabajo declarados.",
+  "catalog.ws.seedCenters": "Crear estaciones estándar",
+  "catalog.ws.seedingCenters": "Creando estaciones…",
   "catalog.ws.sashAssembly": "Armado de hoja",
   "catalog.ws.hardwareStation": "Estación de herrajes",
   "catalog.ws.qc": "Control de calidad",
@@ -2046,6 +2048,8 @@ export const messages = {
   "catalog.noBeads":
     "Primero crea un artículo con función Junquillo en esta serie. Cierra este formulario y abre Artículos de perfil.",
   "catalog.beadUnavailable": "Junquillo no disponible",
+  "catalog.noProcessProfiles":
+    "No hay perfiles de proceso declarados; la ruta de producción usará el perfil genérico.",
   "catalog.unavailableValue": "Valor existente no disponible para selección",
   "catalog.discard": "Hay cambios sin guardar. ¿Quieres descartarlos?",
   "catalog.confirmDelete":

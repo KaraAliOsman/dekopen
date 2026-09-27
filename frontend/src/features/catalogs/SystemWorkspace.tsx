@@ -62,21 +62,33 @@ const BLOCKER_SECTION: Record<string, string> = {
 };
 
 /** Entity references in blocker text carry raw UUIDs — a record id means
- * nothing read as prose. Keep the identity but show only its short code. */
+ * nothing read as prose. The system's own id renders as its name; any other
+ * keeps a short code. */
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
-const shortId = (text: string) => text.replace(UUID_RE, (id) => id.slice(0, 8));
 
 function levelOk(level: { ok?: boolean; state?: string; blockers: unknown[] }): boolean {
   if (level.state) return level.state === "COMPLETE";
   return level.ok === true;
 }
 
-function ProvenanceBadge({ row }: { row: { data_provenance?: string; review_pending?: boolean } }) {
+function ProvenanceBadge({
+  row,
+}: {
+  row: {
+    data_provenance?: string;
+    review_pending?: boolean;
+    technical_reviewed_at?: string | null;
+  };
+}) {
+  // "Verificado" is reserved for an actual technical review — provenance
+  // alone (manual entry, an import, a demo seed) is not verification.
+  if (row.technical_reviewed_at)
+    return <span className="ws-badge ws-badge--ok">{wst("verified")}</span>;
   if (row.data_provenance === "LEGACY_UNVERIFIED")
     return <span className="ws-badge ws-badge--warn">{ct("provenanceLegacy")}</span>;
   if (row.review_pending)
     return <span className="ws-badge ws-badge--warn">{ct("reviewPending")}</span>;
-  return <span className="ws-badge ws-badge--ok">{wst("verified")}</span>;
+  return <span className="ws-badge">{provenanceLabel(row.data_provenance)}</span>;
 }
 
 function ArticleCard({
@@ -104,7 +116,7 @@ function ArticleCard({
         />
         <small>
           {article.section
-            ? `${ct(`option.${article.section.source}`)}${depth ? ` · ${depth} mm` : ""}`
+            ? `${ct(`sectionSource.${article.section.source}`)}${depth ? ` · ${depth} mm` : ""}`
             : wst("sectionApprox")}
         </small>
       </div>
@@ -177,6 +189,12 @@ function ReadinessLadder({
   const readiness = system.readiness;
   if (!readiness) return <p className="ws-empty">{ct("readinessUnknown")}</p>;
   const levels = readiness.levels ?? [];
+  /** Blocker text arrives with the raw system UUID embedded — it means
+   * this very record, so name it instead of showing a hex fragment. */
+  const labelFor = (text: string) =>
+    text.replace(UUID_RE, (id) =>
+      id.toLowerCase() === String(system.id).toLowerCase() ? system.name : id.slice(0, 8),
+    );
   // Levels carry cumulative blocker lists — attribute each blocker to the
   // first level that reports it so nothing repeats down the ladder.
   const blockerRows: { level: string; blocker: (typeof levels)[number]["blockers"][number] }[] = [];
@@ -227,15 +245,15 @@ function ReadinessLadder({
                   title={wst("jumpToSection")}
                 >
                   {ct(`readiness.${blocker.code}`)}
-                  <span className="ws-blocker-affected"> — {shortId(blocker.affected)}</span>
+                  <span className="ws-blocker-affected"> — {labelFor(blocker.affected)}</span>
                 </button>
               </div>
               <p className="ws-blocker-detail">
-                <strong>{wst("missingAuthority")}:</strong> {shortId(blocker.missing_authority)}
+                <strong>{wst("missingAuthority")}:</strong> {labelFor(blocker.missing_authority)}
                 <br />
-                <strong>{wst("consequence")}:</strong> {shortId(blocker.why)}
+                <strong>{wst("consequence")}:</strong> {labelFor(blocker.why)}
                 <br />
-                <strong>{wst("resolution")}:</strong> {shortId(blocker.action)}
+                <strong>{wst("resolution")}:</strong> {labelFor(blocker.action)}
               </p>
             </li>
           ))}
@@ -310,7 +328,22 @@ export function SystemWorkspaceView({
     kind: WorkCenterRequestRequest["kind"];
   } | null>(null);
   const [centerSaving, setCenterSaving] = useState(false);
+  const [centerSeeding, setCenterSeeding] = useState(false);
   const [centerError, setCenterError] = useState<string | null>(null);
+
+  /** One-click standard station set — the read no longer self-seeds, so an
+   * empty org resolves its work_centers blocker here (or at first release). */
+  const seedCenters = async () => {
+    setCenterSeeding(true);
+    setCenterError(null);
+    try {
+      setCenters(await api.seedWorkCenters());
+    } catch {
+      setCenterError(t("catalog.errorNetwork"));
+    } finally {
+      setCenterSeeding(false);
+    }
+  };
 
   const reactivateCenter = async (center: WorkCenter) => {
     try {
@@ -874,7 +907,24 @@ export function SystemWorkspaceView({
         {centers !== null ? (
           <div className="ws-centers">
             <h4>{wst("centers")}</h4>
-            {centers.length === 0 && <p className="ws-empty">{wst("noCenters")}</p>}
+            {centers.length === 0 && (
+              <p className="ws-empty">
+                {wst("noCenters")}
+                {canEdit && (
+                  <>
+                    {" "}
+                    <button
+                      type="button"
+                      className="ui-button ui-button--small"
+                      disabled={centerSeeding}
+                      onClick={() => void seedCenters()}
+                    >
+                      {centerSeeding ? wst("seedingCenters") : wst("seedCenters")}
+                    </button>
+                  </>
+                )}
+              </p>
+            )}
             <ul className="ws-stations">
               {centers.map((center) => (
                 <li key={center.id}>
