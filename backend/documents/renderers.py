@@ -6,7 +6,7 @@ import base64
 import hashlib
 import json
 import re
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from html import escape
 from pathlib import Path
 
@@ -255,6 +255,17 @@ def _pct(value: object) -> str:
     return format(Decimal(str(value)).quantize(Decimal("0.1")), "f")
 
 
+def _dim(value: object) -> str:
+    """Millimetre display — strips stored trailing zeros so a dimension
+    never prints as `1200.00 mm` or a coordinate as `750.0000`."""
+    if value is None:
+        return "—"
+    try:
+        return format(Decimal(str(value)).normalize(), "f")
+    except InvalidOperation:
+        return _value(value)
+
+
 class _Raw(str):
     """Marks a cell that renders its HTML verbatim inside `_table` — only for
     hardcoded markup (e.g. a drawn checkbox), never for payload content."""
@@ -355,19 +366,25 @@ def _brand_block(organization: dict | None) -> str:
     frozen before branding renders the bare DEKOPEN wordmark."""
     org = organization if isinstance(organization, dict) else {}
     uri = _logo_uri(org)
+    name = (
+        _value(org.get("commercial_name"))
+        if _value(org.get("commercial_name")) != "—"
+        else _value(org.get("name"))
+    )
     if uri:
-        brand = f'<img class="brand-logo" src="{uri}" alt="">'
-    else:
-        label = (
-            _value(org.get("commercial_name"))
-            if _value(org.get("commercial_name")) != "—"
-            else _value(org.get("name"))
+        # Logo + commercial name together — the name must survive the logo.
+        name_line = (
+            f'<div class="brand" style="font-size:9pt;letter-spacing:1.2pt">'
+            f'{escape(name)}</div>'
+            if name != "—"
+            else ""
         )
-        if label == "—":
-            label = "DEKOPEN"
-            brand = f'<div class="brand">{label}<span class="mark"></span></div>'
+        brand = f'<img class="brand-logo" src="{uri}" alt="">{name_line}'
+    else:
+        if name == "—":
+            brand = '<div class="brand">DEKOPEN<span class="mark"></span></div>'
         else:
-            brand = f'<div class="brand">{escape(label)}</div>'
+            brand = f'<div class="brand">{escape(name)}</div>'
     attribution = (
         '<div class="brand-sub">Generado con DEKOPEN</div>'
         if isinstance(organization, dict) and organization.get("name")
@@ -1015,16 +1032,23 @@ def _revision_header(
     # meaningless hex chunk.
     fingerprint = (
         '<div class="tb-cell tb-wide"><span class="tb-label">Huella BOM</span>'
-        f'<span class="tb-value">{escape(bom_hash)}</span></div>'
-        if workshop
+        f'<span class="tb-value">{escape(bom_hash[:24] + "…")}</span></div>'
+        if workshop and bom_hash != "—"
         else ""
     )
+    client = _value(project.get("client_name"))
     titleblock = (
         '<div class="titleblock">'
         f'<div class="tb-cell"><span class="tb-label">Proyecto</span>'
         f'<span class="tb-value">{escape(project_code)}</span></div>'
-        f'<div class="tb-cell"><span class="tb-label">Documento</span>'
-        f'<span class="tb-value">{escape(doc_code)}</span></div>'
+        + (
+            '<div class="tb-cell"><span class="tb-label">Cliente</span>'
+            f'<span class="tb-value">{escape(client)}</span></div>'
+            if client != "—"
+            else ""
+        )
+        + '<div class="tb-cell"><span class="tb-label">Documento</span>'
+        + f'<span class="tb-value">{escape(doc_code)}</span></div>'
         f'<div class="tb-cell"><span class="tb-label">Rev.</span>'
         f'<span class="tb-value">{escape(_rev_display(revision))}</span></div>'
         f'<div class="tb-cell"><span class="tb-label">Fecha</span>'
@@ -1155,9 +1179,9 @@ def _doc01(snapshot: dict[str, object]) -> str:
             + '<div class="figcap">'
             + escape(_TYPOLOGY_ES.get(_value(ref.get("typology")), _value(ref.get("typology"))))
             + " · "
-            + escape(_value(ref.get("width_mm")))
+            + escape(_dim(ref.get("width_mm")))
             + " × "
-            + escape(_value(ref.get("height_mm")))
+            + escape(_dim(ref.get("height_mm")))
             + " mm</div></div>"
         )
 
@@ -1354,7 +1378,7 @@ def _doc01(snapshot: dict[str, object]) -> str:
             f'<div class="pcard-fig">{_figure(ref, "c" + bucket["indexes"][0])}</div>'
             '<div class="pcard-body">'
             f'<h3>{escape(_TYPOLOGY_ES.get(typology, typology))}</h3>'
-            f'<p class="pcard-dims">{escape(width_mm)} × {escape(height_mm)} mm</p>'
+            f'<p class="pcard-dims">{escape(_dim(width_mm))} × {escape(_dim(height_mm))} mm</p>'
             f'<p style="margin:0 0 2mm"><strong>Cantidad:</strong> '
             f'{escape(_value(bucket["quantity"]))}</p>'
             f'<ul class="pcard-specs">{"".join(spec_items)}</ul>'
@@ -1494,11 +1518,21 @@ def _doc03(snapshot: dict[str, object]) -> str:
                    for item in _array(fact.get("handles"), "invalid_manufacturing_fact")]
         infills = [_object(item, "invalid_infill_fact")
                    for item in _array(fact.get("infills"), "invalid_manufacturing_fact")]
+        position_ref = positions_by_index.get(fact.get("position_index")) or {}
+        location_tag = _value(position_ref.get("location_tag"))
+        typology_es = _TYPOLOGY_ES.get(
+            _value(position_ref.get("typology")), _value(position_ref.get("typology"))
+        )
+        position_title = f"Posición {_value(fact.get('position_index'))}"
+        if location_tag != "—":
+            position_title += f" · {location_tag}"
+        if typology_es != "—":
+            position_title += f" · {typology_es}"
         body += (
-            f'<section><h2>Posición {escape(_value(fact.get("position_index")))} · '
+            f'<section><h2>{escape(position_title)} · '
             f'Repetición {escape(_value(fact.get("repetition_index")))}</h2>'
-            f'<p class="dimension">{escape(_value(fact.get("nominal_width_mm")))} × '
-            f'{escape(_value(fact.get("nominal_height_mm")))} mm</p>'
+            f'<p class="dimension">{escape(_dim(fact.get("nominal_width_mm")))} × '
+            f'{escape(_dim(fact.get("nominal_height_mm")))} mm</p>'
             + _table(
                 ["Pieza", "Rol / slot", "SKU taller", "Corte mm", "Ángulos", "Flecha mm", "Referencia X/Y"],
                 [[
@@ -1508,10 +1542,10 @@ def _doc03(snapshot: dict[str, object]) -> str:
                     member.get("workshop_sku"), member.get("cut_length_mm"),
                     f"{_value(member.get('angle_left'))}° / {_value(member.get('angle_right'))}°",
                     member.get("sagitta_mm") if member.get("sagitta_mm") is not None else "—",
-                    f"({_value(_object(member.get('start'), 'invalid_member_point').get('x_mm'))}, "
-                    f"{_value(_object(member.get('start'), 'invalid_member_point').get('y_mm'))}) → "
-                    f"({_value(_object(member.get('end'), 'invalid_member_point').get('x_mm'))}, "
-                    f"{_value(_object(member.get('end'), 'invalid_member_point').get('y_mm'))})",
+                    f"({_dim(_object(member.get('start'), 'invalid_member_point').get('x_mm'))}, "
+                    f"{_dim(_object(member.get('start'), 'invalid_member_point').get('y_mm'))}) → "
+                    f"({_dim(_object(member.get('end'), 'invalid_member_point').get('x_mm'))}, "
+                    f"{_dim(_object(member.get('end'), 'invalid_member_point').get('y_mm'))})",
                 ] for member in members], ["hash", "", "", "dimension", "", "dimension", ""]
             )
         )
@@ -1930,7 +1964,7 @@ def _doc05(snapshot: dict[str, object]) -> str:
     for group in groups:
         body += (
             f"<h2>{escape(_value(group.get('purchasing_sku')))} · "
-            f"{escape(_value(group.get('source_kind')))}</h2>"
+            f"{escape(_CATEGORY_ES.get(_value(group.get('source_kind')), _value(group.get('source_kind'))))}</h2>"
             f"<p><strong>Largo:</strong> {escape(_value(group.get('stock_length_mm')))} mm · "
             f"<strong>Barras:</strong> {escape(_value(group.get('purchased_bar_count')))} · "
             f'<span class="hash">stock {escape(_value(group.get("physical_stock_identity")))}</span></p>'
@@ -2171,7 +2205,6 @@ def _doc04(snapshot: dict[str, object]) -> str:
         "project": {"code": order.get("project_code")},
         "revision": revision.get("revision_code"),
         "sealed_at": order.get("confirmed_at"),
-        "bom_hash": revision.get("bom_hash"),
         "organization": snapshot.get("organization"),
     }
     body, _ = _revision_header(pseudo_revision, "Pedido de perfiles", "DOC-04", workshop=True)
@@ -2214,7 +2247,6 @@ def _doc02(snapshot: dict[str, object]) -> str:
         "project": {"code": order.get("project_code")},
         "revision": revision.get("revision_code"),
         "sealed_at": order.get("confirmed_at"),
-        "bom_hash": revision.get("bom_hash"),
         "organization": snapshot.get("organization"),
     }
     rows_data: list[list[object]] = []
@@ -2236,7 +2268,11 @@ def _doc02(snapshot: dict[str, object]) -> str:
             quantity,
             line.get("unit"),
             "/".join(
-                edge.upper() for edge in ("top", "right", "bottom", "left")
+                edge_es
+                for edge, edge_es in (
+                    ("top", "SUP"), ("right", "DER"),
+                    ("bottom", "INF"), ("left", "IZQ"),
+                )
                 if polishing.get(edge) is True
             ) or "SIN PULIDO",
             spec.get("location_tag"),
@@ -2270,7 +2306,6 @@ def _doc08(snapshot: dict[str, object]) -> str:
         "project": {"code": order.get("project_code")},
         "revision": revision.get("revision_code"),
         "sealed_at": order.get("confirmed_at"),
-        "bom_hash": revision.get("bom_hash"),
         "organization": snapshot.get("organization"),
     }
     body, _ = _revision_header(pseudo_revision, "Orden de compra", "DOC-08", workshop=True)
@@ -2660,6 +2695,10 @@ _SLOT_ES = {
     "LEAF_TOP": "Lado superior hoja",
     "LEAF_BOTTOM": "Lado inferior hoja",
     "CENTER": "Centro",
+    "PRIMARY": "Principal",
+    "SECONDARY": "Secundaria",
+    "LEFT": "Izquierda", "RIGHT": "Derecha",
+    "TOP": "Superior", "BOTTOM": "Inferior",
     "left": "Izquierda", "right": "Derecha",
     "top": "Superior", "bottom": "Inferior",
 }
@@ -2728,7 +2767,9 @@ def _invoice_body(payload: dict[str, object]) -> str:
             )
         )
         + "</p>"
-        f'<p class="total">Total: {escape(_money(deal.get("total_gross"), currency))}</p></section>'
+        f'<p class="total">Total: {escape(_money(deal.get("total_gross"), currency))}</p>'
+        '<p style="font-size:7pt;color:#727D82">Documento comercial interno — '
+        "no constituye documento tributario SII.</p></section>"
     )
     if positions:
         body += (

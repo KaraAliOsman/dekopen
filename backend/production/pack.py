@@ -25,7 +25,9 @@ from documents.renderers import (
     _infill_code_map,
     _infill_key,
     _location,
+    _pct,
     _piece_labels,
+    _SLOT_ES,
     _table,
     _url_fetcher,
     _value,
@@ -547,7 +549,7 @@ def _pack_html(
                 f"{escape(_value(bar.get('commercial_sku')))} · "
                 f"{escape(_value(bar.get('material')))} · "
                 f"{_value(bar.get('stock_length_mm'))} mm {badge} · "
-                f"rendimiento {_value(bar.get('yield_pct'))}%</h3>"
+                f"rendimiento {_pct(bar.get('yield_pct'))}%</h3>"
                 + _bar_svg(bar, labels, cut_map)
                 + "</div>"
                 + _table(
@@ -598,7 +600,7 @@ def _pack_html(
                 f"{escape(_value(sheet.get('purchasing_sku')))} · "
                 f"{_value(sheet.get('sheet_width_mm'))}×"
                 f"{_value(sheet.get('sheet_height_mm'))} mm · "
-                f"rendimiento {_value(sheet.get('yield_pct'))}%</h3>"
+                f"rendimiento {_pct(sheet.get('yield_pct'))}%</h3>"
                 + _sheet_svg(sheet, labels, infills)
                 + "</div>"
             )
@@ -750,7 +752,7 @@ def _pack_html(
                         [
                             labels["handle"].get(h.handle_id, "MAN"),
                             "Herraje",
-                            f"{escape(h.handle_domain_slot.replace('_', ' ').title())} · "
+                            f"{escape(_SLOT_ES.get(h.handle_domain_slot, h.handle_domain_slot))} · "
                             f"{_value(h.requested_height_mm)} mm",
                         ]
                         for h in unit.handles

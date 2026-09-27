@@ -742,6 +742,21 @@ class ProductionOrderDeliveryConfirmView(APIView):
         data = validate(DeliveryConfirmRequestSerializer, request.data)
         with public_production_errors():
             with documentary_scope(request, _READERS) as (token, tenant, org_id):
+                # Confirming a delivery signs a sealed POD — limited to the
+                # roles the deliveries UPDATE policy allows, otherwise the
+                # RLS-denied row surfaces as a misleading 404.
+                if tenant.active_organization.role not in (
+                    "OWNER",
+                    "WORKSHOP_MANAGER",
+                    "INSTALLER",
+                    "ESTIMATOR",
+                ):
+                    raise contract_error(
+                        403,
+                        "delivery_confirm_denied",
+                        "Confirmar una entrega requiere un rol de oficina "
+                        "o instalación — el rol Operador no firma entregas.",
+                    )
                 # A cobro en terreno writes the money ledger + a sealed
                 # comprobante — field crews sign PODs, they don't collect.
                 if data.get("payment") and tenant.active_organization.role not in _LEDGER_WRITERS:

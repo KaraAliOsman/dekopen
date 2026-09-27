@@ -88,9 +88,12 @@ def _bar_svg(
     # padding beyond the deepest lane so the third leader line never clips.
     pad_top = u * Decimal("19")
     pad_bottom = u * Decimal("22")
+    # Horizontal pad lets edge-segment leader labels use the margin instead
+    # of clipping at the viewBox boundary (first segment lost "1 · M-…").
+    pad_x = u * Decimal("7")
     height = pad_top + bar_h + pad_bottom
     svg = [
-        f'<svg class="bar-svg" viewBox="0 0 {stock} {height}" '
+        f'<svg class="bar-svg" viewBox="-{pad_x} 0 {stock + pad_x * 2} {height}" '
         'preserveAspectRatio="xMinYMid meet" '
         'xmlns="http://www.w3.org/2000/svg">'
     ]
@@ -109,6 +112,19 @@ def _bar_svg(
         "above": [[Decimal("0"), Decimal("0")] for _ in range(3)],
         "below": [[Decimal("0"), Decimal("0")] for _ in range(3)],
     }
+    # Under-bar dimension rows ride two alternating lanes with used extents —
+    # adjacent wide pieces can no longer run their `1256.00 mm · 45.0°/45.0°`
+    # strings into each other.
+    dim_ys = [
+        pad_top + bar_h + u * Decimal("4.5"),
+        pad_top + bar_h + u * Decimal("11"),
+    ]
+    dim_used: list[list[Decimal]] = [
+        [Decimal("0"), Decimal("0")] for _ in range(2)
+    ]
+
+    def _clamp_cx(cx: Decimal, half: Decimal) -> Decimal:
+        return min(max(cx, half - pad_x + u), stock + pad_x - half - u)
 
     def _cut_label(cut: dict[str, object]) -> str:
         piece_id = str(cut.get("piece_id") or "")
@@ -163,12 +179,25 @@ def _bar_svg(
                 f'{escape(location)}{" " if position else ""}'
                 f'{escape(str(position))}</text>'
             )
-            svg.append(
-                f'<text x="{center}" y="{pad_top + bar_h + u * Decimal("4.5")}" '
-                'text-anchor="middle" fill="#161C1F" '
-                f'font-size="{fs_dim}">'
-                f'{_value(cut.get("length_mm"))} mm · {angles}</text>'
+            dim_label = f'{_value(cut.get("length_mm"))} mm · {angles}'
+            dim_half = _est(dim_label, fs_dim) / 2
+            dim_lane = next(
+                (
+                    lane
+                    for lane in range(2)
+                    if dim_used[lane][1] == 0
+                    or center - dim_half > dim_used[lane][1]
+                ),
+                None,
             )
+            if dim_lane is not None:
+                dim_cx = _clamp_cx(center, dim_half)
+                dim_used[dim_lane] = [dim_cx - dim_half, dim_cx + dim_half]
+                svg.append(
+                    f'<text x="{dim_cx}" y="{dim_ys[dim_lane]}" '
+                    'text-anchor="middle" fill="#161C1F" '
+                    f'font-size="{fs_dim}">{dim_label}</text>'
+                )
         else:
             if _est(seq, fs_seq) < piece_len * Decimal("0.8"):
                 svg.append(
@@ -192,6 +221,7 @@ def _bar_svg(
                 # Deepest lane already busy — nudge the label right of the
                 # used extent; the leader line slants but never overlaps.
                 cx = lane_used[side][lane][1] + half + u * Decimal("1.5")
+            cx = _clamp_cx(cx, half)
             lane_used[side][lane] = [cx - half, cx + half]
             ly = lane_ys[side][lane]
             anchor_y = pad_top if side == "above" else pad_top + bar_h
@@ -226,19 +256,39 @@ def _bar_svg(
         )
         tag = "retazo" if reusable else "desecho"
         if remainder >= u * Decimal("4"):
-            # Clamp the label inside the piece — a narrow remainder at the
-            # right edge otherwise spills past the viewBox.
-            label = f"{tag} {_value(remainder)} mm"
-            cx = min(
-                x + remainder / 2,
-                stock - u * Decimal("0.5") - _est(label, fs_dim) / 2,
-            )
-            svg.append(
-                f'<text x="{cx}" y="{pad_top + bar_h / 2}" '
-                'text-anchor="middle" dominant-baseline="middle" '
-                f'fill="#161C1F" font-size="{fs_dim}">'
-                f'{tag} {escape(_value(remainder))} mm</text>'
-            )
+            # The full label only goes inside when the remainder can hold it —
+            # a narrow tail otherwise bleeds its text over the last segment.
+            # The mm value already prints in the bar's h3 line.
+            inside_label = f"{tag} {_value(remainder)} mm"
+            fits = _est(inside_label, fs_dim) <= remainder - u
+            label = inside_label if fits else tag
+            if fits:
+                cx = min(
+                    x + remainder / 2,
+                    stock - u * Decimal("0.5") - _est(label, fs_dim) / 2,
+                )
+                svg.append(
+                    f'<text x="{cx}" y="{pad_top + bar_h / 2}" '
+                    'text-anchor="middle" dominant-baseline="middle" '
+                    f'fill="#161C1F" font-size="{fs_dim}">'
+                    f'{tag} {escape(_value(remainder))} mm</text>'
+                )
+            elif _est(label, fs_dim) <= remainder - u * Decimal("0.5"):
+                svg.append(
+                    f'<text x="{x + remainder / 2}" y="{pad_top + bar_h / 2}" '
+                    'text-anchor="middle" dominant-baseline="middle" '
+                    f'fill="#161C1F" font-size="{fs_dim}">{tag}</text>'
+                )
+            else:
+                cx = _clamp_cx(x + remainder / 2, _est(label, fs_dim) / 2)
+                svg.append(
+                    f'<line x1="{x + remainder / 2}" y1="{pad_top}" '
+                    f'x2="{cx}" y2="{pad_top - u * Decimal("4")}" '
+                    'stroke="#465158" stroke-width="1"/>'
+                    f'<text x="{cx}" y="{pad_top - u * Decimal("4")}" '
+                    'text-anchor="middle" fill="#161C1F" '
+                    f'font-size="{fs_dim}">{tag}</text>'
+                )
     # stock baseline
     svg.append(
         f'<line x1="0" y1="{pad_top + bar_h + 6}" x2="{usable_end}" '

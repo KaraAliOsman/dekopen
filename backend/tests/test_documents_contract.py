@@ -452,13 +452,14 @@ def test_xlsx_is_deterministic_exact_text_and_no_formula_authority(
     workbook = load_workbook(BytesIO(first), read_only=True, data_only=False)
     try:
         sheet = workbook["Pedido de vidrios"]
-        assert sheet["E8"].value == "876.00"
-        assert sheet["F8"].value == "1076.00"
-        assert sheet["G8"].value == 2
-        assert sheet["I8"].value == "TOP/LEFT"
-        assert sheet["L8"].value == "1.885152"
-        assert sheet["A9"].value == "TOTAL"
-        assert sheet["L9"].value == "1.885152"
+        assert sheet["A6"].value == "L01"
+        assert sheet["E6"].value == "876.00"
+        assert sheet["F6"].value == "1076.00"
+        assert sheet["G6"].value == 2
+        assert sheet["I6"].value == "SUP/IZQ"
+        assert sheet["L6"].value == "1.885152"
+        assert sheet["A7"].value == "TOTAL"
+        assert sheet["L7"].value == "1.885152"
         assert not any(
             isinstance(cell.value, str) and cell.value.startswith("=")
             for row in sheet.iter_rows() for cell in row
@@ -468,7 +469,7 @@ def test_xlsx_is_deterministic_exact_text_and_no_formula_authority(
     profile, _ = render_order_xlsx("DOC-04", order_snapshot("SUPPLIER_PROFILE_PO"))
     profile_workbook = load_workbook(BytesIO(profile), read_only=True)
     try:
-        assert profile_workbook["Pedido de perfiles"]["F8"].value == "5800.00"
+        assert profile_workbook["Pedido de perfiles"]["F6"].value == "5800.00"
     finally:
         profile_workbook.close()
 
@@ -492,8 +493,8 @@ def test_doc08_generic_order_covers_hardware_and_panel_only() -> None:
     workbook = load_workbook(BytesIO(hardware), read_only=True)
     try:
         sheet = workbook["Orden de compra"]
-        assert sheet["B8"].value == "HARDWARE" or sheet["B8"].value == "PROFILE"
-        assert sheet["E8"].value == 2
+        assert sheet["B6"].value == "HARDWARE" or sheet["B6"].value == "PROFILE"
+        assert sheet["E6"].value == 2
     finally:
         workbook.close()
     panel, _ = render_order_xlsx("DOC-08", order_snapshot("SUPPLIER_PANEL_PO"))
@@ -520,11 +521,11 @@ def test_xlsx_formula_like_text_stays_literal_never_a_formula() -> None:
         sheet = workbook["Pedido de vidrios"]
         assert sheet["B2"].value == "+SUM(A1:A2)"
         assert sheet["B3"].value == "=1+1"
-        assert sheet["B8"].value == "@SUM(A1:A2), =cmd|' /C calc'!A0"
-        assert sheet["C8"].value == "-1+2"
-        assert sheet["D8"].value == "@FILTER(A:A)"
-        assert sheet["J8"].value == "-FACHADA"
-        assert sheet["K8"].value == '=HYPERLINK("http://x"), +POW(2,3)'
+        assert sheet["B6"].value == "@SUM(A1:A2), =cmd|' /C calc'!A0"
+        assert sheet["C6"].value == "-1+2"
+        assert sheet["D6"].value == "@FILTER(A:A)"
+        assert sheet["J6"].value == "-FACHADA"
+        assert sheet["K6"].value == '+POW(2,3), =HYPERLINK("http://x")'
         assert all(
             cell.data_type != "f" for row in sheet.iter_rows() for cell in row
         )
@@ -541,11 +542,11 @@ def test_xlsx_formula_like_text_stays_literal_never_a_formula() -> None:
     profile_workbook = load_workbook(BytesIO(profile), read_only=True, data_only=False)
     try:
         sheet = profile_workbook["Pedido de perfiles"]
-        assert sheet["A8"].value == "=REQ"
-        assert sheet["B8"].value == "@PROFILE"
-        assert sheet["D8"].value == "-BUY"
-        assert sheet["E8"].value == "=STOCK+1"
-        assert sheet["I8"].value == "+TRACE"
+        assert sheet["A6"].value == "L01"
+        assert sheet["B6"].value == "@PROFILE"
+        assert sheet["D6"].value == "-BUY"
+        assert sheet["E6"].value in (None, "")
+        assert sheet["I6"].value == "+TRACE"
         assert all(
             cell.data_type != "f" for row in sheet.iter_rows() for cell in row
         )
@@ -561,8 +562,8 @@ def test_xlsx_empty_text_cells_roundtrip_as_empty() -> None:
     workbook = load_workbook(BytesIO(content), read_only=True, data_only=False)
     try:
         sheet = workbook["Pedido de perfiles"]
-        assert sheet["C8"].value in (None, "")
-        assert sheet["E8"].value in (None, "")
+        assert sheet["C6"].value in (None, "")
+        assert sheet["E6"].value in (None, "")
         assert all(
             cell.data_type != "f" for row in sheet.iter_rows() for cell in row
         )
