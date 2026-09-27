@@ -1506,6 +1506,7 @@ export const messages = {
   "production.optimizeStatsRemnants": "Retazos (usa/produce)",
   "production.optimizeStatsRuntime": "Tiempo",
   "production.makingTitle": "Qué se fabrica",
+  "production.packingMissing": "Faltan piezas: {short} líneas con faltante · {unnested} sin ubicar",
   "production.eventRemade": "Orden rehecha",
   "production.eventCncExported": "Plan de corte (CSV) exportado",
   "production.eventOpsExported": "Operaciones de fabricación exportadas",

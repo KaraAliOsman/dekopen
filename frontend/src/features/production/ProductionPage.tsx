@@ -1924,6 +1924,24 @@ export function ProductionPage(): JSX.Element {
                     ) : (
                       <p className="production-optimize-empty">{t("production.packingEmpty")}</p>
                     )}
+                    {(() => {
+                      // §14: packing honesty — surface unresolved material
+                      // shortage and unnested pieces instead of letting a
+                      // complete-looking manifest hide them.
+                      const unnestedRaw = (
+                        detail.payload?.optimization as { unnested?: unknown[] } | undefined
+                      )?.unnested;
+                      const unnested = Array.isArray(unnestedRaw) ? unnestedRaw.length : 0;
+                      const missing = (detail.shortage ?? 0) + unnested;
+                      if (!missing) return null;
+                      return (
+                        <p className="production-packing-missing" role="alert">
+                          {t("production.packingMissing")
+                            .replace("{short}", String(detail.shortage ?? 0))
+                            .replace("{unnested}", String(unnested))}
+                        </p>
+                      );
+                    })()}
                   </section>
                 );
               })()}

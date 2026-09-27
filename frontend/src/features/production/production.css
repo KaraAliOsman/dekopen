@@ -1053,3 +1053,8 @@
 .production-making-location {
   color: var(--theme-accent);
 }
+
+.production-packing-missing {
+  color: var(--theme-danger, #b3261e);
+  font-weight: 600;
+}
