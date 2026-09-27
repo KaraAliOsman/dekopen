@@ -418,7 +418,7 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
       response.request().method() === "POST" &&
       new URL(response.url()).pathname === `/api/v1/projects/${draft.id}/successor/`,
   );
-  await page.getByRole("button", { name: "Editar cotización", exact: true }).click();
+  await page.getByRole("button", { name: "Crear nueva revisión", exact: true }).click();
   // §F: in-app ConfirmDialog replaced window.confirm — the successor POST
   // only fires after the product-surface confirmation.
   const successorDialog = page.getByRole("dialog");

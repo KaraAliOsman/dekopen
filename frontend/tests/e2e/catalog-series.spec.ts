@@ -3,6 +3,7 @@ import { expect, type Page } from "@playwright/test";
 
 import type { ArticleResponse, BeadResponse, SystemResponse } from "../../src/api/generated/models";
 import { t } from "../../src/i18n/es-CL";
+import { fmtMm } from "../../src/format";
 import { test } from "./support/manual-project-fixture";
 
 type Resource = "systems" | "articles" | "glazing";
@@ -334,7 +335,7 @@ test("manager creates, updates and reopens a synthetic series and bead compatibi
     read_only: false,
   });
 
-  const beadName = `${articleName} · ${bead.glass_thickness_mm} ${t("catalog.mm")}`;
+  const beadName = `${articleName} · ${fmtMm(bead.glass_thickness_mm)} ${t("catalog.mm")}`;
   await openEditor(page, "glazing", beadName);
   await fillFields(page, "glazing", { is_active: true }, ["is_active"]);
   bead = await save<BeadResponse>(page, "glazing", bead);
