@@ -346,6 +346,14 @@ def _cldate(raw: object) -> str:
     return text[:10]
 
 
+def _discount_label(raw: object) -> str:
+    """discount_pct is a fraction (0.10 = 10%); values > 1 are already percent."""
+    value = _num(raw)
+    if value <= 1:
+        value = value * 100
+    return f"{value.normalize():f}%"
+
+
 
 def _num(value: object) -> Decimal:
     if isinstance(value, bool):
@@ -860,8 +868,10 @@ def _position_glass_specs(position: dict[str, object]) -> list[str]:
                     _object(module, "invalid_frozen_parametric_tree").get("tree")
                 )
             )
-        return specs
-    return _glass_specs(tree)
+        return list(dict.fromkeys(specs))
+    # A composite quotes one glazing per leaf; identical specs dedupe so
+    # "4 Float, 4 Float" never prints on a customer document.
+    return list(dict.fromkeys(_glass_specs(tree)))
 
 
 def frozen_glass_specs(position: dict[str, object]) -> list[str]:
@@ -958,7 +968,7 @@ def _doc01(snapshot: dict[str, object]) -> str:
     # lies about which product the customer is buying.
     groups: dict[tuple[object, ...], dict[str, object]] = {}
     for position in positions:
-        specs = ", ".join(_position_glass_specs(position)) or "Panel declarado"
+        specs = ", ".join(_position_glass_specs(position)) or "Panel sándwich"
         tree_sig = json.dumps(
             position.get("parametric_tree"), sort_keys=True, default=str
         )
@@ -1213,8 +1223,9 @@ def _doc01(snapshot: dict[str, object]) -> str:
             )
         price_block = ""
         if bucket["priced"]:
+            # discount_pct is a fraction (0.10 = 10%) — render percent.
             discount_badge = (
-                f'<span class="off">-{format(_num(discount_pct).normalize(), "f")}%</span>'
+                f'<span class="off">-{_discount_label(discount_pct)}</span>'
                 if discount_pct not in ("0", "0.00", "0.0000", "—", "")
                 else ""
             )
@@ -1252,9 +1263,7 @@ def _doc01(snapshot: dict[str, object]) -> str:
     )
     discount_note = (
         "Precios incluyen descuento del "
-        + " / ".join(
-            f"{format(_num(pct).normalize(), 'f')}%" for pct in granted_discounts
-        )
+        + " / ".join(_discount_label(pct) for pct in granted_discounts)
         + "."
         if granted_discounts
         else ""

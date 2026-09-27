@@ -39,30 +39,30 @@ def insert_job(
     created_by: UUID | None,
 ) -> tuple[dict[str, object], bool]:
     """Insert a queued job; on idempotency conflict return the live row."""
-    try:
-        record = rows(
-            """
-            INSERT INTO public.job_runs
-                (org_id, type, payload, idempotency_key, max_attempts, run_after, created_by)
-            VALUES (%s, %s, %s::jsonb, %s, %s, %s, %s)
-            RETURNING *
-            """,
-            [
-                str(org_id),
-                job_type,
-                json_text(payload),
-                idempotency_key,
-                max_attempts,
-                run_after,
-                str(created_by) if created_by else None,
-            ],
-        )
+    # ON CONFLICT DO NOTHING never aborts the enclosing transaction (unlike a
+    # 23505 exception, after which any follow-up SELECT raises 25P02) — the
+    # emitter may legitimately share a transaction with the event it records.
+    record = rows(
+        """
+        INSERT INTO public.job_runs
+            (org_id, type, payload, idempotency_key, max_attempts, run_after, created_by)
+        VALUES (%s, %s, %s::jsonb, %s, %s, %s, %s)
+        ON CONFLICT (org_id, type, idempotency_key) WHERE idempotency_key IS NOT NULL
+        DO NOTHING
+        RETURNING *
+        """,
+        [
+            str(org_id),
+            job_type,
+            json_text(payload),
+            idempotency_key,
+            max_attempts,
+            run_after,
+            str(created_by) if created_by else None,
+        ],
+    )
+    if record:
         return _decode(record[0]), True
-    except DatabaseError as error:
-        if getattr(getattr(error, "__cause__", None), "sqlstate", None) != "23505":
-            raise
-    if idempotency_key is None:
-        raise DatabaseError("job_idempotency_conflict_unresolved")
     existing = get_job_by_key(org_id=org_id, job_type=job_type, key=idempotency_key)
     if existing is None:
         raise DatabaseError("job_idempotency_conflict_unresolved")

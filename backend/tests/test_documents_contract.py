@@ -286,6 +286,18 @@ def test_client_quote_includes_deterministic_opening_drawings() -> None:
     assert _doc01(sliding) == sliding_html
 
 
+def test_client_quote_renders_discount_fraction_as_percent() -> None:
+    """discount_pct is a fraction (0.10 = 10%) — the proposal must print the
+    percent the customer negotiated, never the raw fraction."""
+    snapshot = revision_snapshot()
+    snapshot["positions"][0]["discount_pct"] = "0.10"  # type: ignore[index]
+    snapshot["positions"][0]["price_net"] = "119000"  # type: ignore[index]
+    html = _doc01(snapshot)
+    assert "-10%" in html
+    assert "descuento del 10%" in html
+    assert "0.1 %" not in html and "0.1%" not in html
+
+
 def test_client_quote_draws_stacked_assembly_as_a_column() -> None:
     """A door + transom STACKED assembly draws the transom ABOVE its column —
     a 1000×2200 door carrying a 1000×400 transom spans 1000×2600 with a

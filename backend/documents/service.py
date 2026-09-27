@@ -1618,7 +1618,7 @@ def freeze_revision_a(
                 version_id=str(version_id),
             )
         else:
-            for system_id in sorted(position_system_ids):
+            for system_id in sorted(set(position_system_ids)):
                 emit(
                     "automation.catalog_task",
                     org_id=org_id,
