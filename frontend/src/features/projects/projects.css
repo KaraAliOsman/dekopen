@@ -296,6 +296,40 @@
   }
 }
 
+/* Unsaved-draft recovery banner — a reload no longer silently discards the
+   in-flight design; the offer sits between the header and the form strip. */
+.draft-banner {
+  align-items: center;
+  background: var(--theme-surface-raised, var(--theme-surface-panel));
+  border: 1px solid var(--theme-accent);
+  border-radius: var(--radius-md);
+  display: flex;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+  padding: 0.45rem 0.75rem;
+}
+
+.draft-banner span {
+  color: var(--theme-text-secondary);
+  flex: 1;
+  font-size: 0.82rem;
+}
+
+.draft-banner button {
+  background: transparent;
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--theme-text-secondary);
+  cursor: pointer;
+  font-size: 0.78rem;
+  padding: 0.22rem 0.6rem;
+}
+
+.draft-banner button:first-of-type {
+  border-color: var(--theme-accent);
+  color: var(--theme-accent-ink, var(--theme-accent));
+}
+
 /* Position metadata folded into the inspector column — compact fields, same
    visual language as the module inspector. */
 .position-panel fieldset {

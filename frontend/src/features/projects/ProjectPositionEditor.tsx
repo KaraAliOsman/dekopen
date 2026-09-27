@@ -33,6 +33,13 @@ import {
   type StarterDefinition,
 } from "../canvas/designLibrary";
 import { resolveMembers } from "../canvas/members";
+import {
+  clearPositionDraft,
+  positionDraftKey,
+  type PositionDraft,
+  readPositionDraft,
+  writePositionDraft,
+} from "./positionDraft";
 import { StarterGallery } from "../canvas/StarterGallery";
 import {
   elevationEnvelopeMm,
@@ -308,6 +315,10 @@ function PositionWorkspace({
   // Bump when a starter replaces the product — the canvas re-fits even if
   // the user had panned/zoomed the previous drawing away.
   const [viewEpoch, setViewEpoch] = useState(0);
+  // Unsaved-draft buffer: a reload used to silently discard the design.
+  // A pending draft is offered back explicitly — never auto-applied.
+  const draftKey = positionDraftKey(orgId, positionId || null, copyId || null);
+  const [pendingDraft, setPendingDraft] = useState<PositionDraft | null>(null);
   // New positions open on the design library (the start point); saved ones go
   // straight to the canvas — picking a starter collapses it.
   const [libraryOpen, setLibraryOpen] = useState(!positionId && !copyId);
@@ -363,17 +374,34 @@ function PositionWorkspace({
 
   useEffect(() => {
     let active = true;
+    const offerDraftIfDivergent = (
+      baselineDesign: string,
+      baselineLocation: string,
+      baselineQuantity: string,
+    ) => {
+      const draft = readPositionDraft(draftKey);
+      if (!draft) return;
+      if (
+        designIdentity(draft.inputs) !== baselineDesign ||
+        draft.location !== baselineLocation ||
+        draft.quantity !== baselineQuantity
+      )
+        setPendingDraft(draft);
+      else clearPositionDraft(draftKey);
+    };
     if (!positionId && !copyId) {
       const blank = initial();
       // Onboarding hands its picked system over via ?system= so the first
       // position opens on the catalog context the user already chose.
       if (preferredSystem) blank.systemId = preferredSystem;
       useCanvasStore.getState().loadDesign(blank);
+      const baselineDesign = designIdentity(blank);
       setBaseline({
-        design: designIdentity(blank),
+        design: baselineDesign,
         location: "",
         quantity: "1",
       });
+      offerDraftIfDivergent(baselineDesign, "", "1");
       setLoaded(true);
     } else
       void positionsRetrieve(positionId || copyId, { headers: { "X-Organization-ID": orgId } })
@@ -391,7 +419,7 @@ function PositionWorkspace({
                 item.design.nominal_width_mm,
                 item.design.nominal_height_mm,
               );
-          useCanvasStore.getState().loadDesign({
+          const loadedInputs = {
             systemId: item.design.system_id,
             nominalWidthMm: item.design.nominal_width_mm,
             nominalHeightMm: item.design.nominal_height_mm,
@@ -403,25 +431,22 @@ function PositionWorkspace({
               product.assembly.modules.at(0)?.tree ??
               ({ id: "m1", type: "BAY", opening_type: "FIXED" } as IntentNode),
             product,
-          });
+          };
+          useCanvasStore.getState().loadDesign(loadedInputs);
           setSaved(copyId ? null : item);
           setBaseline(
             copyId
               ? null
               : {
-                  design: designIdentity({
-                    color: item.design.color,
-                    nominalHeightMm: item.design.nominal_height_mm,
-                    nominalWidthMm: item.design.nominal_width_mm,
-                    parametricTree:
-                      product.assembly.modules.at(0)?.tree ??
-                      ({ id: "m1", type: "BAY", opening_type: "FIXED" } as IntentNode),
-                    product,
-                    systemId: item.design.system_id,
-                  }),
+                  design: designIdentity(loadedInputs),
                   location: item.location_tag ?? "",
                   quantity: String(item.quantity),
                 },
+          );
+          offerDraftIfDivergent(
+            designIdentity(loadedInputs),
+            item.location_tag ?? "",
+            String(item.quantity),
           );
           setLocation(item.location_tag ?? "");
           setQuantity(String(item.quantity));
@@ -436,7 +461,7 @@ function PositionWorkspace({
       generation.current += 1;
       useCanvasStore.getState().reset();
     };
-  }, [orgId, projectId, positionId, copyId, preferredSystem]);
+  }, [orgId, projectId, positionId, copyId, preferredSystem, draftKey]);
 
   // Once catalog options arrive, fill uniquely-determined SKUs (coupler when
   // the series has exactly one, mullions for splits created by starters).
@@ -492,6 +517,28 @@ function PositionWorkspace({
   // designIdentity deep-serializes the product — memoize on the inputs
   // reference so location/quantity keystrokes skip the canonicalization.
   const identity = useMemo(() => designIdentity(inputs), [inputs]);
+
+  const isDirty =
+    baseline === null
+      ? true
+      : identity !== baseline.design ||
+        location !== baseline.location ||
+        quantity !== baseline.quantity;
+
+  // Debounced draft write — clears once the design matches the saved state
+  // again (including right after a successful save).
+  useEffect(() => {
+    if (!loaded) return;
+    if (!isDirty) {
+      clearPositionDraft(draftKey);
+      return;
+    }
+    const timer = setTimeout(
+      () => writePositionDraft(draftKey, { inputs, location, quantity, savedAt: Date.now() }),
+      600,
+    );
+    return () => clearTimeout(timer);
+  }, [loaded, isDirty, identity, location, quantity, draftKey, inputs]);
 
   const assemblyUnsaveable =
     assemblyEval?.status === "INVALID" ||
@@ -565,12 +612,17 @@ function PositionWorkspace({
   }
 
   if (!loaded) return <p role={message ? "alert" : "status"}>{message || t("projects.loading")}</p>;
-  const dirty =
-    baseline === null
-      ? true
-      : identity !== baseline.design ||
-        location !== baseline.location ||
-        quantity !== baseline.quantity;
+  const dirty = isDirty;
+  const restoreDraft = (draft: PositionDraft) => {
+    const store = useCanvasStore.getState();
+    store.loadDesign(draft.inputs);
+    setLocation(draft.location);
+    setQuantity(draft.quantity);
+    setLibraryOpen(false);
+    setViewEpoch((epoch) => epoch + 1);
+    setPendingDraft(null);
+    setMessage("");
+  };
   const product = inputs.product;
   const pickStarter = (definition: StarterDefinition) => {
     const { widthMm, heightMm } = starterContextSize(product);
@@ -663,6 +715,31 @@ function PositionWorkspace({
         )}
       </header>
       {message && <p role="status">{message}</p>}
+      {pendingDraft !== null && (
+        <div className="draft-banner" role="status">
+          <span>
+            {t("projects.draftFound").replace(
+              "{time}",
+              new Date(pendingDraft.savedAt).toLocaleString("es-CL", {
+                dateStyle: "short",
+                timeStyle: "short",
+              }),
+            )}
+          </span>
+          <button type="button" onClick={() => restoreDraft(pendingDraft)}>
+            {t("projects.restoreDraft")}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              clearPositionDraft(draftKey);
+              setPendingDraft(null);
+            }}
+          >
+            {t("projects.discardDraft")}
+          </button>
+        </div>
+      )}
       <fieldset className="position-head" disabled={busy}>
         {/* <fieldset> can't be a flex container — the row wraps the fields
             so the strip stays horizontal. */}
