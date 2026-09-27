@@ -36,7 +36,7 @@ from documents.renderers import (
 
 from dekopen_engine.cutting import CutBar
 from dekopen_engine.manufacturing import ManufacturingFactsV1
-from dekopen_engine.operations import operations_from_plan
+from dekopen_engine.operations import OperationKind, operations_from_plan
 
 
 def _decoded(raw: Any) -> dict[str, Any]:
@@ -290,7 +290,25 @@ def trace_work_order(*, org_id: UUID, order_id: UUID) -> dict[str, Any]:
             payload=payload,
             optimization=optimization,
             version_snapshot=version_snapshot,
+            step_codes={str(step["code"]) for step in steps},
         ),
+    }
+
+
+def station_map_for(payload: dict[str, Any], kinds: list[str]) -> dict[str, str]:
+    """The frozen process authority decides which station an op kind lands
+    on — the UI groups by this declared map, never by a frontend guess.
+    Orders frozen before the authority model keep the legacy routing the
+    shop used: saw cuts at the saw, every other member op at machining."""
+    authority_map = (payload.get("process_authority") or {}).get(
+        "operation_station_map"
+    )
+    if authority_map:
+        station_map = dict(authority_map)
+        station_map.setdefault("SAW_CUT", "CUT")
+        return station_map
+    return {
+        kind: ("CUT" if kind == "SAW_CUT" else "MACHINING") for kind in kinds
     }
 
 
@@ -299,6 +317,7 @@ def _trace_operations(
     payload: dict[str, Any],
     optimization: dict[str, Any],
     version_snapshot: dict[str, Any],
+    step_codes: set[str] | None = None,
 ) -> dict[str, Any]:
     """The sealed plan's machining operations, reconstructed deterministically
     — the same derivation ``export_operations`` uses, computed at read time so
@@ -324,33 +343,46 @@ def _trace_operations(
     except Exception:
         return {"count": 0, "items": [], "unemitted_kinds": [],
                 "unavailable": "operations_underivable"}
-    ops = [
-        op.model_dump(mode="json")
-        for op in operations_from_plan(bars=bars, fact_units=fact_units)
-    ]
+    derived = operations_from_plan(bars=bars, fact_units=fact_units)
+    ops = [op.model_dump(mode="json") for op in derived]
     by_kind: dict[str, int] = {}
     for op in ops:
         by_kind[str(op["kind"])] = by_kind.get(str(op["kind"]), 0) + 1
-    # The frozen process authority decides which station an op kind lands on —
-    # the UI groups by this declared map, never by a frontend guess. Orders
-    # frozen before the authority model keep the legacy routing the shop used:
-    # saw cuts at the saw, every other member op at machining. Emitting the
-    # complete map (not a saw-only stub) is what lets the operator card treat
-    # legacy and frozen orders identically.
-    authority_map = (payload.get("process_authority") or {}).get("operation_station_map")
-    if authority_map:
-        station_map = dict(authority_map)
-        station_map.setdefault("SAW_CUT", "CUT")
-    else:
-        station_map = {
-            str(op["kind"]): ("CUT" if op["kind"] == "SAW_CUT" else "MACHINING")
-            for op in ops
-        }
+    station_map = station_map_for(payload, list(by_kind))
+    for op in ops:
+        op["station"] = station_map.get(str(op["kind"]))
+    # Ops mapped to a station the order never got are floor-invisible: no
+    # card claims them and the order can complete with work undone. Name
+    # them so the read surface — and the operator banner — can flag them.
+    unclaimed: list[dict[str, Any]] = []
+    if step_codes is not None:
+        by_station: dict[str, list[str]] = {}
+        for op in ops:
+            station = op.get("station")
+            if station and station not in step_codes:
+                by_station.setdefault(str(station), []).append(
+                    str(op["kind"])
+                )
+        unclaimed = [
+            {
+                "station": station,
+                "operation_count": len(kinds),
+                "kinds": sorted(set(kinds)),
+            }
+            for station, kinds in sorted(by_station.items())
+        ]
+    emitted = set(by_kind)
+    unemitted = sorted(
+        kind.value for kind in OperationKind if kind.value not in emitted
+    )
     return {
         "count": len(ops),
         "by_kind": by_kind,
         "items": ops,
         "station_map": station_map,
+        "unemitted_kinds": unemitted,
+        "unclaimed": unclaimed,
+        "plan_invalidated": bool(optimization.get("invalidated")),
         "process_authority": payload.get("process_authority") or {},
     }
 
@@ -423,8 +455,23 @@ _CODE_RE = re.compile(r"^(MAN|M|R|I|V|H)-?(\d+)$|^P-?(\d+)$|^-?U(\d+)$", re.IGNO
 # Scanned unit-label identities: the packing QR payload
 # ``DEKOPEN|<order_code>|<label_code>|<pieces>`` and the printed label code
 # ``<order_code>-U<nn>`` both end in the unit marker.
-_QR_RE = re.compile(r"^DEKOPEN\|[^|]+\|([^|]+)\|", re.IGNORECASE)
+_QR_RE = re.compile(r"^DEKOPEN\|([^|]+)\|([^|]+)\|", re.IGNORECASE)
 _UNIT_SUFFIX_RE = re.compile(r"-?U(\d+)$", re.IGNORECASE)
+_UNIT_LABEL_RE = re.compile(r"^(.+)-U(\d+)$", re.IGNORECASE)
+
+
+def _scan_order_hint(query: str) -> str | None:
+    """The label itself says which order it belongs to — a QR payload
+    (``DEKOPEN|<order>|<label>|…``) or a printed ``<order>-U<nn>`` code.
+    Without this hint a unit scan floods every order that cut unit 1."""
+    text = query.strip().upper()
+    qr = _QR_RE.match(text)
+    if qr:
+        return qr.group(1)
+    unit_label = _UNIT_LABEL_RE.match(text)
+    if unit_label:
+        return unit_label.group(1)
+    return None
 
 
 def _normalize_query(query: str) -> str:
@@ -434,7 +481,7 @@ def _normalize_query(query: str) -> str:
     text = query.strip().upper()
     qr = _QR_RE.match(text)
     if qr:
-        text = qr.group(1)
+        text = qr.group(2)
     unit = _UNIT_SUFFIX_RE.search(text)
     if unit and not _CODE_RE.match(text):
         return f"U{unit.group(1)}"
@@ -517,7 +564,18 @@ def trace_piece(*, org_id: UUID, piece_id: str) -> dict[str, Any]:
     code_query = bool(_CODE_RE.match(normalized))
     # A printed code never appears inside payload_json, so the LIKE prefilter
     # only applies to raw piece_id scans — code lookups scan every order in
-    # the org (bounded; an operator scan is a rare call).
+    # the org (bounded; an operator scan is a rare call). When the scanned
+    # label carries its own order code (QR payload, printed -Unn code),
+    # scope to that order instead of listing every order's unit 1.
+    order_hint = _scan_order_hint(piece_id)
+    params: list[Any] = [str(org_id)]
+    extra = ""
+    if order_hint:
+        extra += " AND order_code = %s"
+        params.append(order_hint)
+    if not code_query:
+        extra += " AND payload_json::text LIKE %s"
+        params.append(f"%{piece_id}%")
     orders = rows(
         """
         SELECT id::text, order_code, status::text,
@@ -525,9 +583,9 @@ def trace_piece(*, org_id: UUID, piece_id: str) -> dict[str, Any]:
         FROM public.orders
         WHERE org_id = %s
         """
-        + ("" if code_query else "AND payload_json::text LIKE %s")
+        + extra
         + " ORDER BY created_at",
-        [str(org_id)] if code_query else [str(org_id), f"%{piece_id}%"],
+        params,
     )
     matches: list[dict[str, Any]] = []
     snapshots: dict[str, dict[str, Any]] = {}
@@ -590,6 +648,51 @@ def trace_piece(*, org_id: UUID, piece_id: str) -> dict[str, Any]:
                 if labels
                 else None
             )
+        # The scan answers "what do I run on this stick": resolve the member
+        # ids behind the matched pieces and attach each one's machining ops —
+        # the same sealed derivation the ops export and the member diagram use.
+        order_ops: dict[str, Any] | None = None
+        spec_index: dict[tuple[str, ...], list[object]] | None = None
+        for hit in hits:
+            if hit.get("kind") != "BAR":
+                hit["operations"] = []
+                continue
+            piece = hit.get("piece") or {}
+            if order_ops is None:
+                try:
+                    snapshot = _snapshot(str(order["project_version_id"])) \
+                        if order["project_version_id"] else {}
+                    order_ops = _trace_operations(
+                        payload=_decoded(order["payload_json"]),
+                        optimization=_decoded(
+                            _decoded(order["payload_json"]).get("optimization")
+                        ) or {},
+                        version_snapshot=snapshot,
+                    )
+                    spec_index = _cut_spec_index(snapshot)
+                except DocumentaryError:
+                    order_ops = {"items": []}
+                    spec_index = {}
+            member_ids: set[str] = set()
+            key = _cut_key(piece)
+            for spec_key, ids in (spec_index or {}).items():
+                if spec_key == key:
+                    member_ids = {str(mid) for mid in ids}
+                    break
+            host_ops = [
+                {
+                    **op,
+                    "member_label": (labels.get("member", {}) or {}).get(
+                        op.get("host")
+                    )
+                    or (labels.get("reinforcement", {}) or {}).get(
+                        op.get("host")
+                    ),
+                }
+                for op in (order_ops or {}).get("items", [])
+                if op.get("host_kind") == "MEMBER" and str(op.get("host")) in member_ids
+            ]
+            hit["operations"] = host_ops
         steps = rows(
             """
             SELECT sequence, code, label, status

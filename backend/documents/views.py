@@ -70,6 +70,12 @@ DOCUMENTARY_ERROR_DETAILS = {
     "work_order_installed": "La orden ya fue marcada como instalada.",
     "work_order_dispatched": "La orden ya fue despachada; no puede modificarse.",
     "work_order_completed": "La orden ya está completada.",
+    "step_ops_incomplete": "Faltan operaciones por declarar antes de completar el paso.",
+    "step_ops_unknown": "Las operaciones declaradas no pertenecen a esta estación.",
+    "qc_requires_supervisor": "El control de calidad solo lo firma un encargado.",
+    "cnc_file_stale": "El archivo CNC corresponde a un plan anterior.",
+    "dxf_file_stale": "El archivo DXF corresponde a un plan anterior.",
+    "ops_file_stale": "El archivo de mecanizado corresponde a un plan anterior.",
     "work_order_remnant_released": "Los retazos de esta orden ya fueron liberados al inventario.",
     "work_order_replan_after_consumption": (
         "No se puede reoptimizar: ya hay pasos completados que consumieron material."

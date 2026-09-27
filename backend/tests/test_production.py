@@ -2048,6 +2048,7 @@ def test_qc_fail_blocks_step_and_holds_order(monkeypatch) -> None:
             step_id=step_id,
             action="COMPLETE",
             actor_id=uuid4(),
+            actor_role="WORKSHOP_MANAGER",
             note="rotura en esmerilado",
             qc_result="FAIL",
         )
@@ -2139,6 +2140,9 @@ def test_create_remake_clones_order_and_steps(monkeypatch) -> None:
         # The remake carries the QC failure that motivated it.
         if "production_step_events" in lowered and "qc_result" in lowered:
             return [{"payload": {"qc_item": "V-02", "note": "vidrio rayado"}}]
+        # No inactive work centers — the step copy keeps every assignment.
+        if "set work_center_id = null" in lowered:
+            return []
         return [{"id": str(remake_id)}]
 
     monkeypatch.setattr("production.service.one", fake_one)
@@ -2256,10 +2260,11 @@ def test_export_cnc_files_writes_deterministic_csv(monkeypatch) -> None:
     assert sorted(out["files"]) == ["bars.csv", "sheets.csv"]
     bars_csv = stored["files"]["bars.csv"]
     lines = bars_csv.strip().split("\n")
-    assert lines[0].startswith("bar_index,")
-    assert "M-02" in lines[1] and "M-01" in lines[2]  # stored cut sequence
-    assert lines[1].split(",")[3] == "1"  # sequence_in_bar column
-    assert "45.0" in lines[1] and "90.0" in lines[2]  # saw angles exported
+    assert lines[0].startswith("# dekopen order=OT-P-AAA-01 plan=")
+    assert lines[1].startswith("bar_index,")
+    assert "M-02" in lines[2] and "M-01" in lines[3]  # stored cut sequence
+    assert lines[2].split(",")[3] == "1"  # sequence_in_bar column
+    assert "45.0" in lines[2] and "90.0" in lines[3]  # saw angles exported
     assert stored["schema"] == "work_order_cnc_export_v2"
     assert stored["optimization_fingerprint"]
     sheets_csv = stored["files"]["sheets.csv"]

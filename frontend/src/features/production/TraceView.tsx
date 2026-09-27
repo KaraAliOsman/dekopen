@@ -6,7 +6,13 @@
 
 import { fmtMm } from "../../format";
 import { t } from "../../i18n/es-CL";
-import { remnantStatusLabel, stockKindLabel } from "./labels";
+import {
+  opFaceLabel,
+  opKindLabel,
+  opReferenceLabel,
+  remnantStatusLabel,
+  stockKindLabel,
+} from "./labels";
 import type {
   ProductionOrderTracePlan,
   ProductionOrderTraceStock,
@@ -71,6 +77,17 @@ type PieceMatch = {
     };
   };
   steps?: Array<{ sequence?: number; code?: string; label?: string; status?: string }>;
+  operations?: Array<{
+    operation_id?: string;
+    kind?: string;
+    member_label?: string;
+    u_mm?: string;
+    reference?: string;
+    face?: string;
+    depth_mm?: string;
+    tool_id?: string;
+    sequence_no?: number;
+  }>;
 };
 
 function _bars(plan: ProductionOrderTracePlan): TraceBar[] {
@@ -228,6 +245,22 @@ export function TracePieceMatches({
             {match.steps?.length
               ? ` · ${match.steps.filter((s) => s.status === "DONE").length}/${match.steps.length} ${t("production.stepsShort")}`
               : ""}
+            {match.operations?.length ? (
+              <ul className="production-trace-ops">
+                {match.operations.map((op) => (
+                  <li key={op.operation_id}>
+                    {op.member_label ? `${op.member_label} · ` : ""}
+                    {op.sequence_no ? `${op.sequence_no}. ` : ""}
+                    {opKindLabel(op.kind)}
+                    {op.u_mm ? ` · u ${op.u_mm} mm` : ""}
+                    {op.reference ? ` · ${opReferenceLabel(op.reference)}` : ""}
+                    {op.face ? ` · ${opFaceLabel(op.face)}` : ""}
+                    {op.depth_mm ? ` · ${op.depth_mm} mm` : ""}
+                    {op.tool_id ? ` · ${op.tool_id}` : ""}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </>
         );
         const orderId = match.work_order?.id;

@@ -179,6 +179,7 @@ import type {
   ProductionPieceTrace,
   ProductionPrep,
   ProductionRelease,
+  ProductionStationQueue,
   ProductionVersionTrace,
   ProjectCreditNote,
   ProjectCreditNoteAccess,
@@ -11672,6 +11673,81 @@ export const productionPrep = async (
   options?: Parameters<typeof apiMutator>[1],
 ): Promise<productionPrepResponse> => {
   return apiMutator<productionPrepResponse>(getProductionPrepUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export type productionStationQueueResponse200 = {
+  data: ProductionStationQueue;
+  status: 200;
+};
+
+export type productionStationQueueResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type productionStationQueueResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type productionStationQueueResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type productionStationQueueResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type productionStationQueueResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type productionStationQueueResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type productionStationQueueResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type productionStationQueueResponseSuccess = productionStationQueueResponse200 & {
+  headers: Headers;
+};
+export type productionStationQueueResponseError = (
+  | productionStationQueueResponse400
+  | productionStationQueueResponse401
+  | productionStationQueueResponse403
+  | productionStationQueueResponse404
+  | productionStationQueueResponse409
+  | productionStationQueueResponse422
+  | productionStationQueueResponse503
+) & {
+  headers: Headers;
+};
+
+export type productionStationQueueResponse =
+  productionStationQueueResponseSuccess | productionStationQueueResponseError;
+
+export const getProductionStationQueueUrl = () => {
+  return `/api/v1/production/station-queue/`;
+};
+
+/**
+ * Cross-order floor view: open steps grouped by station — what each
+ * bench/cell has queued, which one is next, which are blocked.
+ */
+export const productionStationQueue = async (
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<productionStationQueueResponse> => {
+  return apiMutator<productionStationQueueResponse>(getProductionStationQueueUrl(), {
     ...options,
     method: "GET",
   });

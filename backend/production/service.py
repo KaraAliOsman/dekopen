@@ -112,6 +112,22 @@ _STEP_CONSUMED_KINDS = {
     "GLAZE": {"PANEL"},
 }
 
+# Stations that physically work the sealed plan without consuming stock:
+# they must never START or COMPLETE against a missing/invalidated plan —
+# a machining cell running a dead program produces scrap, not just bad
+# bookkeeping. Stock settlement itself still lives in _STEP_CONSUMED_KINDS.
+_PLAN_REQUIRED_STATIONS = {"MACHINING", "PROFILE_CUT", "REINFORCEMENT_CUT"}
+
+# Steps where execution evidence is per-operation: COMPLETE must declare
+# every member machining op routed to the station (review: a machining
+# step completing with zero ops recorded is a status flip, not work).
+_OPS_EVIDENCE_STATIONS = {"MACHINING", "PROFILE_CUT", "REINFORCEMENT_CUT"}
+
+# The QC step is the check on everyone else's work — the operator who ran
+# the saw must not be the signature that verifies it (producer/verifier
+# separation).
+_QC_STEP_ACTORS = {"OWNER", "WORKSHOP_MANAGER"}
+
 # Glass and panel infills always carry a CUT_TO_SIZE purchase authority —
 # pieces no workshop sheet hosts are supplied finished, not short. Only an
 # unnesting reason outside the purchased-supply set may block completion.
@@ -140,6 +156,54 @@ _TRANSITIONS = {
     # change — the step still completes via COMPLETE/QC_FAILED.
     "QC_CHECK": (None, {"READY", "IN_PROGRESS", "BLOCKED"}),
 }
+
+
+def _member_ops_for_station(
+    *, org_id: UUID, order: dict[str, object], station: str
+) -> dict[str, str]:
+    """operation_id → human label (``M-07 · HANDLE_PREP``) for the member
+    machining ops the frozen routing assigns to ``station`` — the same
+    sealed derivation the operator card and ops export read. Empty when the
+    order has no derivable plan (the plan gates then refuse first)."""
+    from production import trace as production_trace
+
+    payload = _decoded(order.get("payload_json"))
+    optimization = payload.get("optimization")
+    if not isinstance(optimization, dict) or not optimization.get("bars"):
+        return {}
+    if not order.get("project_version_id"):
+        return {}
+    version_row = one(
+        """
+        SELECT snapshot_json::text AS snapshot_json
+        FROM public.project_versions WHERE id = %s AND org_id = %s
+        """,
+        [str(order["project_version_id"]), str(org_id)],
+        "work_order_missing_version",
+    )
+    version_snapshot = _decoded(version_row["snapshot_json"])
+    ops_doc = production_trace._trace_operations(
+        payload=payload,
+        optimization=optimization,
+        version_snapshot=version_snapshot,
+    )
+    try:
+        labels = _piece_labels(version_snapshot)
+    except DocumentaryError:
+        labels = {}
+    member_labels = {
+        **(labels.get("member") or {}),
+        **(labels.get("reinforcement") or {}),
+    }
+    expected: dict[str, str] = {}
+    for op in ops_doc.get("items", []):
+        if op.get("host_kind") != "MEMBER" or op.get("station") != station:
+            continue
+        code = member_labels.get(str(op.get("host"))) or str(
+            op.get("host") or op["operation_id"]
+        )
+        expected[str(op["operation_id"])] = f"{code} · {op.get('kind')}"
+    return expected
 
 
 def _ensure_work_centers(
@@ -1181,6 +1245,8 @@ def transition_step(
     qc_result: str | None = None,
     qc_check: dict[str, object] | None = None,
     qc_item: str | None = None,
+    actor_role: str | None = None,
+    ops_done: list[str] | None = None,
 ) -> dict[str, object]:
     if action not in _TRANSITIONS:
         raise DocumentaryError("step_action_unknown")
@@ -1221,7 +1287,8 @@ def transition_step(
         # this order serialize — the status aggregate then sees prior commits.
         order = one(
             """
-            SELECT id, status::text, payload_json FROM public.orders
+            SELECT id, status::text, payload_json, project_version_id
+            FROM public.orders
             WHERE id = %s AND org_id = %s AND order_type = 'WORKSHOP_OT'
             FOR UPDATE
             """,
@@ -1240,6 +1307,23 @@ def transition_step(
             [str(step_id), str(org_id)],
             "production_step_not_found",
         )
+        # Producer/verifier separation: the QC *decision* (COMPLETE, pass or
+        # fail) belongs to a supervisor — the operator who ran the station
+        # must not sign off on their own work. Recording a measurement
+        # (QC_CHECK) stays open so it can be logged mid-task.
+        if (
+            str(step["code"]) == "QC"
+            and action == "COMPLETE"
+            and actor_role not in _QC_STEP_ACTORS
+        ):
+            raise DocumentaryError(
+                "qc_requires_supervisor",
+                detail=(
+                    "El control de calidad solo lo firma un encargado "
+                    "(propietario o jefe de taller), no el operador que "
+                    "ejecutó el trabajo."
+                ),
+            )
         if str(order["status"]) == "INSTALLED":
             raise DocumentaryError("work_order_installed")
         if str(order["status"]) == "DISPATCHED":
@@ -1317,11 +1401,15 @@ def transition_step(
                     """,
                     [f"work_center_inactive:{kind}", str(order["id"])],
                 )
-        # Starting a material-consuming step without a usable cut plan is
-        # a trap: COMPLETE then refuses (no plan) while replan refuses
-        # (consuming step already in progress) — the order only escapes
-        # via block/unblock. You can't start the saw without a plan.
-        if action == "START" and str(step["code"]) in _STEP_CONSUMED_KINDS:
+        # Starting a station that physically works the sealed plan without
+        # a usable cut plan is a trap: COMPLETE then refuses (no plan)
+        # while replan refuses (a physical step already in progress) — the
+        # order only escapes via block/unblock. You can't start the saw —
+        # or the machining cell — without a live plan.
+        if action == "START" and (
+            str(step["code"]) in _STEP_CONSUMED_KINDS
+            or str(step["code"]) in _PLAN_REQUIRED_STATIONS
+        ):
             opt = _decoded(order.get("payload_json")).get("optimization") or {}
             if not opt or opt.get("invalidated"):
                 raise DocumentaryError(
@@ -1329,6 +1417,65 @@ def transition_step(
                     detail=(
                         "La orden no tiene un plan de corte vigente: "
                         "optimízala antes de iniciar este paso."
+                    ),
+                )
+        # Completing a member-op station carries per-operation evidence:
+        # every machining op routed to this station must be declared — the
+        # event records WHICH ops ran, not just that someone pressed done.
+        ops_executed: list[str] | None = None
+        if (
+            action == "COMPLETE"
+            and str(step["code"]) in _OPS_EVIDENCE_STATIONS
+        ):
+            expected = _member_ops_for_station(
+                org_id=org_id, order=order, station=str(step["code"])
+            )
+            if expected:
+                declared = {str(item) for item in (ops_done or [])}
+                unknown = sorted(declared - set(expected))
+                if unknown:
+                    raise DocumentaryError(
+                        "step_ops_unknown",
+                        detail=(
+                            "Se declararon operaciones que no pertenecen a "
+                            "esta estación: " + ", ".join(unknown)
+                        ),
+                    )
+                missing = [
+                    op_id for op_id in sorted(expected) if op_id not in declared
+                ]
+                if missing:
+                    raise DocumentaryError(
+                        "step_ops_incomplete",
+                        detail=(
+                            "Faltan operaciones por declarar en este paso: "
+                            + ", ".join(expected[op_id] for op_id in missing)
+                        ),
+                        extra={"missing_operations": missing},
+                    )
+                ops_executed = sorted(declared)
+        # A plan-only station must still refuse a dead plan at COMPLETE —
+        # stock-settling stations take the same check through
+        # _STEP_CONSUMED_KINDS below.
+        if (
+            new_status == "DONE"
+            and str(step["code"]) in _PLAN_REQUIRED_STATIONS
+        ):
+            opt_done = _decoded(order.get("payload_json")).get("optimization") or {}
+            if not opt_done:
+                raise DocumentaryError(
+                    "work_order_plan_missing",
+                    detail=(
+                        "La orden no tiene un plan de corte: optimízala "
+                        "antes de completar este paso."
+                    ),
+                )
+            if opt_done.get("invalidated"):
+                raise DocumentaryError(
+                    "work_order_plan_stale",
+                    detail=(
+                        "El plan de corte quedó invalidado: vuelve a "
+                        "optimizar la orden antes de completar este paso."
                     ),
                 )
         event_name = "QC_FAILED" if (
@@ -1401,6 +1548,11 @@ def transition_step(
                     **({"qc_result": qc_result} if qc_result else {}),
                     **({"qc_check": qc_check} if qc_check else {}),
                     **({"qc_item": qc_item} if qc_item else {}),
+                    **(
+                        {"ops_executed": ops_executed}
+                        if ops_executed is not None
+                        else {}
+                    ),
                 }),
             ],
         )
@@ -1673,6 +1825,9 @@ def create_remake(
         payload.pop("dxf_export", None)
         payload.pop("operations_export", None)
         payload.pop("packing", None)  # labels carry the source order code
+        # The source order's blockers were resolved there — a remake starts
+        # clean and re-derives its own (a deactivated center lands below).
+        payload.pop("blockers", None)
         payload["remake_of"] = str(source["id"])
         # Carry the QC failure forward: the remake order names WHICH unit
         # failed and why, so the floor doesn't re-derive it from the source
@@ -1742,6 +1897,36 @@ def create_remake(
             """,
             [str(org_id), str(remake["id"]), str(source["id"]), str(org_id)],
         )
+        # A copied step assignment pointing at a center deactivated since the
+        # source order must not silently route to a dead station: null it so
+        # the START-time adoption picks a live center (or names the missing
+        # kind), and carry the same blocker the release path would write.
+        dropped_centers = rows(
+            """
+            UPDATE public.production_steps s
+            SET work_center_id = NULL
+            FROM public.work_centers w
+            WHERE s.order_id = %s AND s.org_id = %s
+              AND s.work_center_id = w.id AND w.active = FALSE
+            RETURNING s.code
+            """,
+            [str(remake["id"]), str(org_id)],
+        )
+        if dropped_centers:
+            inactive_blockers = [
+                f"work_center_inactive:{_CENTER_KIND_FOR_STATION[str(row['code'])]}"
+                for row in dropped_centers
+                if row.get("code") and str(row["code"]) in _CENTER_KIND_FOR_STATION
+            ]
+            if inactive_blockers:
+                payload["blockers"] = inactive_blockers
+                rows(
+                    """
+                    UPDATE public.orders SET payload_json = %s::jsonb
+                    WHERE id = %s AND org_id = %s RETURNING id
+                    """,
+                    [json.dumps(payload), str(remake["id"]), str(org_id)],
+                )
         rows(
             """
             INSERT INTO public.production_step_events(
@@ -1823,11 +2008,17 @@ def _csv_cell(value: object) -> str:
     return f'"{escaped}"' if any(c in text for c in '",\n') else text
 
 
-def _cnc_bars_csv(optimization: dict[str, object]) -> str:
+def _cnc_bars_csv(
+    optimization: dict[str, object],
+    *,
+    cut_map: dict[tuple[str, ...], str] | None = None,
+) -> str:
     """DEKOPEN-CNC-BARS-V1: one row per cut placement, ordered by bar then
-    position inside the bar — deterministic output for the saw operator."""
+    position inside the bar — deterministic output for the saw operator.
+    ``piece_label`` carries the printed shop code (M-xx/R-xx) so the saw
+    file reconciles against a labeled stick without a second document."""
     rows_out = [
-        "bar_index,stock_sku,stock_length_mm,sequence_in_bar,piece_id,"
+        "bar_index,stock_sku,stock_length_mm,sequence_in_bar,piece_label,piece_id,"
         "cut_length_mm,angle_left_deg,angle_right_deg,"
         "unit_index,bay_id,leaf_id,source_position_id"
     ]
@@ -1847,6 +2038,7 @@ def _cnc_bars_csv(optimization: dict[str, object]) -> str:
                 bar.get("commercial_sku"),
                 bar.get("stock_length_mm"),
                 cut.get("sequence"),
+                (cut_map or {}).get(_cut_key(cut), ""),
                 cut.get("piece_id"),
                 cut.get("length_mm"),
                 cut.get("angle_left"),
@@ -1932,7 +2124,8 @@ def export_cnc_files(
     with transaction.atomic(), documentary_backend():
         order = one(
             """
-            SELECT id, order_code, status::text, payload_json FROM public.orders
+            SELECT id, order_code, status::text, payload_json,
+                   project_version_id FROM public.orders
             WHERE id = %s AND org_id = %s AND order_type = 'WORKSHOP_OT'
             FOR UPDATE
             """,
@@ -1943,18 +2136,43 @@ def export_cnc_files(
             raise DocumentaryError("work_order_installed")
         if str(order["status"]) == "DISPATCHED":
             raise DocumentaryError("work_order_dispatched")
+        if str(order["status"]) == "COMPLETED":
+            raise DocumentaryError("work_order_completed")
         payload = _decoded(order["payload_json"])
         optimization = payload.get("optimization")
         if not isinstance(optimization, dict) or not optimization.get("bars"):
             raise DocumentaryError("cnc_requires_optimization")
         if optimization.get("invalidated"):
             raise DocumentaryError("plan_invalidated")
-        files = {"bars.csv": _cnc_bars_csv(optimization)}
+        # Printed piece codes join the saw rows so a labeled stick finds its
+        # program line without a second file.
+        cnc_cut_map: dict[tuple[str, ...], str] = {}
+        if order.get("project_version_id"):
+            version_row = one(
+                """
+                SELECT snapshot_json::text AS snapshot_json
+                FROM public.project_versions WHERE id = %s AND org_id = %s
+                """,
+                [str(order["project_version_id"]), str(org_id)],
+                "work_order_missing_version",
+            )
+            cnc_snapshot = _decoded(version_row["snapshot_json"])
+            try:
+                cnc_labels = _piece_labels(cnc_snapshot)
+                cnc_cut_map = _cut_member_map(cnc_snapshot, cnc_labels)
+            except DocumentaryError:
+                cnc_cut_map = {}
+        fingerprint = _optimization_fingerprint(optimization)
+        header = (
+            f"# dekopen order={order['order_code']} plan={fingerprint[:12]}"
+            f" emitted={datetime.now(timezone.utc).isoformat()}\n"
+        )
+        files = {"bars.csv": header + _cnc_bars_csv(optimization, cut_map=cnc_cut_map)}
         if optimization.get("sheets"):
-            files["sheets.csv"] = _cnc_sheets_csv(optimization)
+            files["sheets.csv"] = header + _cnc_sheets_csv(optimization)
         export = {
             "schema": "work_order_cnc_export_v2",
-            "optimization_fingerprint": _optimization_fingerprint(optimization),
+            "optimization_fingerprint": fingerprint,
             "exported_at": datetime.now(timezone.utc).isoformat(),
             "actor_id": str(actor_id),
             "files": files,
@@ -2007,19 +2225,34 @@ def cnc_file_content(
     payload = _decoded(order["payload_json"])
     export = payload.get("cnc_export") or {}
     optimization = payload.get("optimization")
+    # The file exists but its plan moved on — say STALE, not 'not found':
+    # a 'no file' answer sends the operator to re-download, a 'stale' answer
+    # sends them to re-optimize.
     if isinstance(optimization, dict) and optimization.get("invalidated"):
-        return None
+        raise DocumentaryError(
+            "cnc_file_stale",
+            detail="El plan de corte quedó invalidado: reoptimiza y re-exporta la orden.",
+        )
+    fingerprint = (
+        _optimization_fingerprint(optimization)
+        if isinstance(optimization, dict)
+        else ""
+    )
     if (
         export.get("optimization_fingerprint")
-        and _optimization_fingerprint(optimization if isinstance(optimization, dict) else {})
-        != export["optimization_fingerprint"]
+        and fingerprint != export["optimization_fingerprint"]
     ):
-        return None
+        raise DocumentaryError(
+            "cnc_file_stale",
+            detail="El archivo corresponde a un plan anterior: reoptimiza y re-exporta la orden.",
+        )
     files = export.get("files") or {}
     content = files.get(filename)
     if content is None:
         return None
-    return f"{order['order_code']}-{filename}", content
+    fp = str(export.get("optimization_fingerprint") or "")[:8]
+    prefix = f"{order['order_code']}-{fp}" if fp else str(order["order_code"])
+    return f"{prefix}-{filename}", content
 
 
 def _ops_source_fingerprint(
@@ -2074,6 +2307,8 @@ def export_operations(
             raise DocumentaryError("work_order_installed")
         if str(order["status"]) == "DISPATCHED":
             raise DocumentaryError("work_order_dispatched")
+        if str(order["status"]) == "COMPLETED":
+            raise DocumentaryError("work_order_completed")
         payload = _decoded(order["payload_json"])
         optimization = payload.get("optimization")
         if not isinstance(optimization, dict) or not optimization.get("bars"):
@@ -2124,13 +2359,37 @@ def export_operations(
                     piece_labels[str(cut["piece_id"])] = cut_map.get(
                         _cut_key(cut), ""
                     )
+        from production.trace import station_map_for
+
+        station_map = station_map_for(payload, list({op.kind.value for op in ops}))
         document = ops_document(
             ops,
             order_code=str(order["order_code"]),
             plan_seed=(optimization.get("bars") or {}).get("plan_seed"),
             piece_labels=piece_labels,
         )
-        files = NeutralOpsPostProcessor().render(document)
+        # The routing the frozen authority declares travels inside the
+        # document: a cell loading the file knows which station each op
+        # belongs to without re-deriving it.
+        document["station_map"] = station_map
+        for op_row in document["operations"]:
+            op_row["station"] = station_map.get(str(op_row["kind"]))
+        rendered = NeutralOpsPostProcessor().render(document)
+        files = {}
+        fp = str(_ops_source_fingerprint(
+            optimization,
+            _raw_fact_units(
+                version_snapshot, str(payload.get("position_id") or "") or None
+            ),
+        ))
+        ops_header = (
+            f"# dekopen order={order['order_code']} plan={fp[:12]}"
+            f" emitted={datetime.now(timezone.utc).isoformat()}\n"
+        )
+        for name, content in rendered.items():
+            files[name] = (
+                ops_header + content if name.endswith(".csv") else content
+            )
         manufacturing = _raw_fact_units(
             version_snapshot, str(payload.get("position_id") or "") or None
         )
@@ -2214,7 +2473,10 @@ def operations_file_content(
         version_snapshot, str(payload.get("position_id") or "") or None
     )
     if isinstance(optimization, dict) and optimization.get("invalidated"):
-        return None
+        raise DocumentaryError(
+            "ops_file_stale",
+            detail="El plan de corte quedó invalidado: reoptimiza y re-exporta la orden.",
+        )
     if (
         export.get("source_fingerprint")
         and _ops_source_fingerprint(
@@ -2223,12 +2485,17 @@ def operations_file_content(
         )
         != export["source_fingerprint"]
     ):
-        return None
+        raise DocumentaryError(
+            "ops_file_stale",
+            detail="El archivo corresponde a un plan anterior: reoptimiza y re-exporta la orden.",
+        )
     files = export.get("files") or {}
     content = files.get(filename)
     if content is None:
         return None
-    return f"{order['order_code']}-{filename}", content
+    fp = str(export.get("source_fingerprint") or "")[:8]
+    prefix = f"{order['order_code']}-{fp}" if fp else str(order["order_code"])
+    return f"{prefix}-{filename}", content
 
 
 def export_dxf_files(
@@ -2254,6 +2521,8 @@ def export_dxf_files(
             raise DocumentaryError("work_order_installed")
         if str(order["status"]) == "DISPATCHED":
             raise DocumentaryError("work_order_dispatched")
+        if str(order["status"]) == "COMPLETED":
+            raise DocumentaryError("work_order_completed")
         payload = _decoded(order["payload_json"])
         optimization = payload.get("optimization")
         if not isinstance(optimization, dict) or not (
@@ -2361,18 +2630,26 @@ def dxf_file_content(
     export = payload.get("dxf_export") or {}
     optimization = payload.get("optimization")
     if isinstance(optimization, dict) and optimization.get("invalidated"):
-        return None
+        raise DocumentaryError(
+            "dxf_file_stale",
+            detail="El plan de corte quedó invalidado: reoptimiza y re-exporta la orden.",
+        )
     if (
         export.get("optimization_fingerprint")
         and _optimization_fingerprint(optimization if isinstance(optimization, dict) else {})
         != export["optimization_fingerprint"]
     ):
-        return None
+        raise DocumentaryError(
+            "dxf_file_stale",
+            detail="El archivo corresponde a un plan anterior: reoptimiza y re-exporta la orden.",
+        )
     files = export.get("files") or {}
     content = files.get(filename)
     if content is None:
         return None
-    return f"{order['order_code']}-{filename}", content
+    fp = str(export.get("optimization_fingerprint") or "")[:8]
+    prefix = f"{order['order_code']}-{fp}" if fp else str(order["order_code"])
+    return f"{prefix}-{filename}", content
 
 
 def _label_code(order_code: str, unit: int) -> str:
@@ -3180,6 +3457,68 @@ def compare_optimization_strategies(
         }
 
 
+def station_queue(*, org_id: UUID) -> dict[str, object]:
+    """Group every live order's open steps by station code: what the saw
+    bench, the machining cell and the QC post each have queued right now.
+
+    A step shown as ``is_next`` is its order's first unfinished station —
+    the work that can actually start, not the whole backlog."""
+    step_rows = rows(
+        """
+        SELECT s.id::text, s.order_id::text, s.sequence, s.code::text AS code,
+               s.label, s.status::text AS status, s.note,
+               o.order_code, w.code AS work_center_code, w.name AS work_center_name
+        FROM public.production_steps s
+        JOIN public.orders o ON o.id = s.order_id AND o.org_id = s.org_id
+        LEFT JOIN public.work_centers w ON w.id = s.work_center_id
+        WHERE s.org_id = %s
+          AND o.status::text IN ('RELEASED', 'IN_PROGRESS', 'HOLD')
+        ORDER BY o.order_code, s.sequence
+        """,
+        [str(org_id)],
+    )
+    stations: dict[str, dict[str, object]] = {}
+    first_open: dict[str, str] = {}
+    for row in step_rows:
+        order_id = str(row["order_id"])
+        if row["status"] != "DONE" and order_id not in first_open:
+            first_open[order_id] = str(row["id"])
+        station = stations.setdefault(
+            str(row["code"]),
+            {"code": str(row["code"]), "label": row["label"], "entries": []},
+        )
+        if row["status"] == "DONE":
+            continue
+        station["entries"].append({
+            "step_id": row["id"],
+            "order_id": order_id,
+            "order_code": row["order_code"],
+            "sequence": row["sequence"],
+            "label": row["label"],
+            "status": row["status"],
+            "note": row["note"],
+            "work_center_code": row["work_center_code"],
+            "work_center_name": row["work_center_name"],
+        })
+    for station in stations.values():
+        for entry in station["entries"]:
+            entry["is_next"] = entry["step_id"] == first_open.get(
+                entry["order_id"]
+            )
+        station["pending"] = sum(
+            1 for e in station["entries"] if e["status"] in ("PENDING", "READY")
+        )
+        station["in_progress"] = sum(
+            1 for e in station["entries"] if e["status"] == "IN_PROGRESS"
+        )
+        station["blocked"] = sum(
+            1 for e in station["entries"] if e["status"] == "BLOCKED"
+        )
+    return {
+        "stations": [station for _, station in sorted(stations.items())]
+    }
+
+
 def optimize_work_order(
     *,
     org_id: UUID,
@@ -3223,13 +3562,17 @@ def optimize_work_order(
             """,
             [str(order_id), str(org_id)],
         )
+        # The replan guard covers every station that physically worked the
+        # plan — not only stock-consuming ones: a DONE PROFILE_CUT means
+        # real bars were already cut even though no reservation settled here.
+        physical_stations = set(_STEP_CONSUMED_KINDS) | _PLAN_REQUIRED_STATIONS
         if any(
-            str(row["code"]) in _STEP_CONSUMED_KINDS and row["status"] == "DONE"
+            str(row["code"]) in physical_stations and row["status"] == "DONE"
             for row in consuming_rows
         ):
             raise DocumentaryError("work_order_replan_after_consumption")
         if any(
-            str(row["code"]) in _STEP_CONSUMED_KINDS
+            str(row["code"]) in physical_stations
             for row in consuming_rows
         ):
             raise DocumentaryError("work_order_replan_step_in_progress")

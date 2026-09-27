@@ -28,6 +28,7 @@ import {
   productionPieceTrace,
   productionOrderTrace,
   productionPrep,
+  productionStationQueue,
   productionRelease,
   productionStepTransition,
 } from "../../api/generated/dekopen";
@@ -54,7 +55,21 @@ import { fmtMm, fmtPct } from "../../format";
 import { formatDate } from "../money";
 import { t, tDynamic } from "../../i18n/es-CL";
 import { useAssistantSurface } from "../assistant/assistantContext";
-import { STEP_STOCK_KINDS, cutRoleLabel } from "./labels";
+import { PLAN_REQUIRED_CODES, STEP_STOCK_KINDS, cutRoleLabel, stationCodeLabel } from "./labels";
+
+/** Narrow view over `production_station_queue` entries — the sidebar renders
+ * the server's open dict shape (same pattern as the trace payload). */
+type StationQueueGroup = {
+  code?: string;
+  entries?: Array<{
+    step_id?: string;
+    order_id?: string;
+    order_code?: string;
+    label?: string;
+    status?: string;
+    is_next?: boolean;
+  }>;
+};
 import { CutPlanView, type WorkOrderOptimization } from "./CutPlanView";
 import { CncPanel } from "./CncPanel";
 import { CncWorkspace } from "./CncWorkspace";
@@ -163,15 +178,18 @@ function actionErrorDetail(error: unknown): string {
         detail?: unknown;
         short_skus?: unknown;
         unmapped_stock_skus?: unknown;
+        missing_operations?: unknown;
       };
     } | null;
     const detail = payload?.error?.detail;
     if (typeof detail === "string" && detail.trim()) {
       const shortList = payload?.error?.short_skus;
       const unmappedList = payload?.error?.unmapped_stock_skus;
+      const missingOps = payload?.error?.missing_operations;
       const skus = [
         ...(Array.isArray(shortList) ? shortList : []),
         ...(Array.isArray(unmappedList) ? unmappedList : []),
+        ...(Array.isArray(missingOps) ? missingOps : []),
       ].filter((sku): sku is string => typeof sku === "string" && sku.length > 0);
       return skus.length ? `${detail} · ${skus.join(", ")}` : detail;
     }
@@ -197,11 +215,14 @@ function stepActions(step: ProductionStep): StepAction[] {
   }
 }
 
-/** Mirrors the backend START gate: a material-consuming step cannot begin
- * before the order carries a usable (non-invalidated) cut plan — otherwise the
+/** Mirrors the backend START gate: a station that consumes stock OR works
+ * the sealed plan (MACHINING/PROFILE_CUT/REINFORCEMENT_CUT) cannot begin
+ * before the order carries a usable (non-invalidated) plan — otherwise the
  * operator walks into the start-first, optimize-later trap. */
 function stepNeedsPlan(step: ProductionStep, detail: ProductionOrderDetail): boolean {
-  if (!STEP_STOCK_KINDS[step.code]?.length) return false;
+  if (!STEP_STOCK_KINDS[step.code]?.length && !PLAN_REQUIRED_CODES.has(step.code)) {
+    return false;
+  }
   const optimization = (detail.payload?.optimization ?? null) as {
     invalidated?: unknown;
   } | null;
@@ -234,9 +255,13 @@ export function ProductionPage(): JSX.Element {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [note, setNote] = useState("");
+  // Op-level execution evidence per step: which machining ops the operator
+  // declared done — sent as ops_done on COMPLETE for evidence stations.
+  const [opsDone, setOpsDone] = useState<Record<string, string[]>>({});
   const [optColor, setOptColor] = useState("");
   const [optStrategy, setOptStrategy] = useState("auto");
   const [labels, setLabels] = useState<PackingLabel[]>([]);
+  const [stationQueue, setStationQueue] = useState<StationQueueGroup[]>([]);
   const [delivery, setDelivery] = useState<Delivery | null>(null);
   const [deliveryForm, setDeliveryForm] = useState<DeliveryScheduleRequestRequest | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -302,11 +327,22 @@ export function ProductionPage(): JSX.Element {
   }, [selectedId, filteredOrders[0]?.id]);
 
   const loadOrders = useCallback(async () => {
-    const [response, prepResponse] = await Promise.all([productionOrders(), productionPrep()]);
+    const [response, prepResponse, queueResponse] = await Promise.all([
+      productionOrders(),
+      productionPrep(),
+      productionStationQueue(),
+    ]);
     if (response.status === 200) setOrders(response.data.orders);
     // §8: versions approved for production but not yet released surface here
     // — the workshop sees the approved work without waiting for a reminder.
     if (prepResponse.status === 200) setPrepVersions(prepResponse.data.versions);
+    if (queueResponse.status === 200) {
+      setStationQueue(
+        ((queueResponse.data.stations ?? []) as StationQueueGroup[]).filter(
+          (group) => (group.entries ?? []).length > 0,
+        ),
+      );
+    }
   }, []);
 
   const detailGeneration = useRef(0);
@@ -492,7 +528,9 @@ export function ProductionPage(): JSX.Element {
             note: sent ?? null,
             qc_item: qcFailItem || undefined,
           }
-        : { action: stepAction, note: sent ?? null };
+        : stepAction === "COMPLETE" && opsDone[stepId]?.length
+          ? { action: stepAction, note: sent ?? null, ops_done: opsDone[stepId] }
+          : { action: stepAction, note: sent ?? null };
     await action(productionStepTransition(stepId, body), orderId);
   }
 
@@ -925,9 +963,12 @@ export function ProductionPage(): JSX.Element {
     }
   }
 
-  const canAct = role === "OWNER" || role === "WORKSHOP_MANAGER" || role === "INSTALLER";
+  // INSTALLER is a field role — it confirms deliveries and installations,
+  // never station steps or work-order transitions (server enforces).
+  const canAct =
+    role === "OWNER" || role === "WORKSHOP_MANAGER" || role === "INSTALLER" || role === "OPERATOR";
   const canWrite = role === "OWNER" || role === "WORKSHOP_MANAGER";
-  const canStep = canWrite || role === "INSTALLER" || role === "OPERATOR";
+  const canStep = canWrite || role === "OPERATOR";
   if (!canAct) {
     return (
       <section className="production-page">
@@ -1039,9 +1080,54 @@ export function ProductionPage(): JSX.Element {
               </button>
             ) : null}
           </div>
+          {/* Station board (WM-3): every live order grouped by the station
+              where it physically waits — "qué está esperando en mi puesto"
+              without opening each order. */}
+          {stationQueue.length ? (
+            <section className="production-station-queue">
+              <h3>{t("production.stationQueue")}</h3>
+              <ul>
+                {stationQueue.map((group) => (
+                  <li key={group.code}>
+                    <strong>{stationCodeLabel(group.code)}</strong>
+                    <ul>
+                      {(group.entries ?? []).map((entry) => (
+                        <li key={entry.step_id}>
+                          <button
+                            type="button"
+                            className="production-order"
+                            onClick={() => entry.order_id && setParams({ order: entry.order_id })}
+                          >
+                            <span className="production-order-code">{entry.order_code ?? "—"}</span>
+                            <span className="production-order-line">
+                              {entry.label ?? stationCodeLabel(group.code)}
+                              {entry.is_next ? ` · ${t("production.stationQueueNext")}` : ""}
+                            </span>
+                            <span
+                              className={`production-order-status step-${String(
+                                entry.status ?? "",
+                              ).toLowerCase()}`}
+                            >
+                              {t(stepStatusKey[entry.status ?? ""] ?? "production.stepPending")}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
           {/* Piece in hand → find its order without opening one first
               (PM-M6). The lookup is org-wide; matches deep-link the order. */}
-          <div className="production-trace-lookup">
+          <form
+            className="production-trace-lookup"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void lookupPiece();
+            }}
+          >
             <label>
               {t("production.tracePieceLabel")}
               <input
@@ -1049,16 +1135,13 @@ export function ProductionPage(): JSX.Element {
                 value={pieceQuery}
                 onChange={(event) => setPieceQuery(event.target.value)}
                 placeholder={t("production.tracePiecePlaceholder")}
+                autoFocus
               />
             </label>
-            <button
-              type="button"
-              disabled={pieceBusy || !pieceQuery.trim()}
-              onClick={() => void lookupPiece()}
-            >
+            <button type="submit" disabled={pieceBusy || !pieceQuery.trim()}>
               {t("production.tracePieceLookup")}
             </button>
-          </div>
+          </form>
           {pieceReport ? (
             <TracePieceMatches
               report={pieceReport}
@@ -1628,21 +1711,36 @@ export function ProductionPage(): JSX.Element {
                             <>
                               <button
                                 type="button"
-                                disabled={busy}
+                                disabled={busy || Boolean(optimization.invalidated)}
+                                title={
+                                  optimization.invalidated
+                                    ? t("production.cutPackInvalidated")
+                                    : undefined
+                                }
                                 onClick={() => exportCnc(detail.id, detail.order_code)}
                               >
                                 {t("production.cncExportButton")}
                               </button>
                               <button
                                 type="button"
-                                disabled={busy}
+                                disabled={busy || Boolean(optimization.invalidated)}
+                                title={
+                                  optimization.invalidated
+                                    ? t("production.cutPackInvalidated")
+                                    : undefined
+                                }
                                 onClick={() => exportDxf(detail.id, detail.order_code)}
                               >
                                 {t("production.dxfExportButton")}
                               </button>
                               <button
                                 type="button"
-                                disabled={busy}
+                                disabled={busy || Boolean(optimization.invalidated)}
+                                title={
+                                  optimization.invalidated
+                                    ? t("production.cutPackInvalidated")
+                                    : undefined
+                                }
                                 onClick={() => exportOperations(detail.id, detail.order_code)}
                               >
                                 {t("production.opsExportButton")}
@@ -1654,6 +1752,10 @@ export function ProductionPage(): JSX.Element {
                               key={filename}
                               type="button"
                               className="production-cnc-file"
+                              disabled={Boolean(optimization.invalidated)}
+                              title={
+                                optimization.invalidated ? t("production.fileStale") : undefined
+                              }
                               onClick={() => downloadCnc(detail.order_code, filename, content)}
                             >
                               {filename}
@@ -1664,6 +1766,10 @@ export function ProductionPage(): JSX.Element {
                               key={filename}
                               type="button"
                               className="production-cnc-file"
+                              disabled={Boolean(optimization.invalidated)}
+                              title={
+                                optimization.invalidated ? t("production.fileStale") : undefined
+                              }
                               onClick={() => downloadCnc(detail.order_code, filename, content)}
                             >
                               {filename}
@@ -1679,6 +1785,10 @@ export function ProductionPage(): JSX.Element {
                               key={filename}
                               type="button"
                               className="production-cnc-file"
+                              disabled={Boolean(optimization.invalidated)}
+                              title={
+                                optimization.invalidated ? t("production.fileStale") : undefined
+                              }
                               onClick={() => downloadCnc(detail.order_code, filename, content)}
                             >
                               {filename}
@@ -2509,7 +2619,11 @@ export function ProductionPage(): JSX.Element {
                       {stepActions(nextStep).map((stepAction) =>
                         stepAction === "START" && stepNeedsPlan(nextStep, detail) ? (
                           <span className="production-step-hint" key={stepAction}>
-                            {t("production.stepNeedsPlan")}
+                            {t(
+                              canWrite
+                                ? "production.stepNeedsPlan"
+                                : "production.stepNeedsPlanWait",
+                            )}
                           </span>
                         ) : (
                           <button
@@ -2598,7 +2712,11 @@ export function ProductionPage(): JSX.Element {
                                 .map((stepAction) =>
                                   stepAction === "START" && stepNeedsPlan(step, detail) ? (
                                     <span className="production-step-hint" key={stepAction}>
-                                      {t("production.stepNeedsPlan")}
+                                      {t(
+                                        canWrite
+                                          ? "production.stepNeedsPlan"
+                                          : "production.stepNeedsPlanWait",
+                                      )}
                                     </span>
                                   ) : (
                                     <button
@@ -2624,6 +2742,18 @@ export function ProductionPage(): JSX.Element {
                         trace={trace}
                         traceBusy={traceBusy}
                         onQcCheck={(stepId, check) => qcCheck(stepId, check, detail.id)}
+                        opsCheckable={
+                          canStep &&
+                          operatorStep.status === "IN_PROGRESS" &&
+                          PLAN_REQUIRED_CODES.has(operatorStep.code)
+                        }
+                        opsDone={opsDone[operatorStep.id] ?? []}
+                        onOpsDoneChange={(ids) =>
+                          setOpsDone((current) => ({
+                            ...current,
+                            [operatorStep.id]: ids,
+                          }))
+                        }
                       />
                     ) : null}
                   </>

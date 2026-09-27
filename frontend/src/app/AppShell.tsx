@@ -108,7 +108,12 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
     if (to === "/catalogs/systems" || to === "/purchasing")
       return role === "OWNER" || role === "WORKSHOP_MANAGER";
     if (to === "/production")
-      return role === "OWNER" || role === "WORKSHOP_MANAGER" || role === "INSTALLER";
+      return (
+        role === "OWNER" ||
+        role === "WORKSHOP_MANAGER" ||
+        role === "INSTALLER" ||
+        role === "OPERATOR"
+      );
     if (to === "/dashboard" || to === "/projects" || to === "/clients") return role !== "INSTALLER";
     return true;
   }

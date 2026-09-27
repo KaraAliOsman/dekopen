@@ -68,6 +68,7 @@ from production.serializers import (
     ProductionOrderTraceSerializer,
     ProductionVersionTraceSerializer,
     ProductionPieceTraceSerializer,
+    ProductionStationQueueSerializer,
     ProductionOrderDetailSerializer,
     RemakeRequestSerializer,
     ProductionOrderListSerializer,
@@ -206,16 +207,18 @@ class ProductionStepTransitionView(APIView):
     def post(self, request, step_id: UUID):
         data = validate(StepTransitionRequestSerializer, request.data)
         with public_production_errors():
-            with documentary_scope(request, _WORKSHOP_STEP_ACTORS) as (token, _, org_id):
+            with documentary_scope(request, _WORKSHOP_STEP_ACTORS) as (token, tenant, org_id):
                 output = service.transition_step(
                     org_id=org_id,
                     step_id=step_id,
                     action=data["action"],
                     actor_id=token.user_id,
+                    actor_role=str(tenant.active_organization.role),
                     note=data.get("note"),
                     qc_result=data.get("qc_result"),
                     qc_check=data.get("qc_check"),
                     qc_item=data.get("qc_item"),
+                    ops_done=data.get("ops_done"),
                 )
         return Response(output)
 
@@ -843,6 +846,24 @@ class ProductionVersionTraceView(APIView):
         with public_production_errors():
             with documentary_scope(request, _READERS) as (_, _, org_id):
                 output = trace_version(org_id=org_id, version_id=version_id)
+        return Response(output)
+
+
+class ProductionStationQueueView(APIView):
+    """Cross-order floor view: open steps grouped by station — what each
+    bench/cell has queued, which one is next, which are blocked."""
+
+    @extend_schema(
+        operation_id="production_station_queue",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={200: ProductionStationQueueSerializer, **ERRORS},
+        tags=["production"],
+    )
+    def get(self, request):
+        with public_production_errors():
+            with documentary_scope(request, _READERS) as (_, _, org_id):
+                output = service.station_queue(org_id=org_id)
         return Response(output)
 
 

@@ -124,6 +124,11 @@ class StepTransitionRequestSerializer(StrictSerializer):
     qc_result = serializers.ChoiceField(choices=("PASS", "FAIL"), required=False, allow_null=True)
     qc_check = QcCheckSerializer(required=False, allow_null=True)
     qc_item = serializers.CharField(max_length=50, required=False, allow_blank=True, allow_null=True)
+    ops_done = serializers.ListField(
+        child=serializers.CharField(max_length=80),
+        required=False,
+        allow_null=True,
+    )
 
     def validate(self, data):
         data = super().validate(data)
@@ -142,6 +147,10 @@ class StepTransitionRequestSerializer(StrictSerializer):
         if data.get("qc_item") and data.get("qc_result") != "FAIL":
             raise serializers.ValidationError(
                 {"qc_item": "A failing item only applies to a QC rejection"}
+            )
+        if data.get("ops_done") and data["action"] != "COMPLETE":
+            raise serializers.ValidationError(
+                {"ops_done": "Operation evidence only applies to COMPLETE"}
             )
         return data
 
@@ -421,6 +430,10 @@ class ProductionVersionTraceSerializer(serializers.Serializer):
     version = serializers.DictField()
     project = serializers.DictField(allow_null=True)
     work_orders = serializers.ListField()
+
+
+class ProductionStationQueueSerializer(serializers.Serializer):
+    stations = serializers.ListField()
 
 
 class CncToolRequestSerializer(StrictSerializer):

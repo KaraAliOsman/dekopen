@@ -9,7 +9,15 @@ import { useState } from "react";
 
 import { fmtMm, formatDateTime } from "../../format";
 import { t, tOptional } from "../../i18n/es-CL";
-import { STEP_STOCK_KINDS, opKindLabel, stockKindLabel } from "./labels";
+import {
+  STEP_STOCK_KINDS,
+  opBasisLabel,
+  opFaceLabel,
+  opKindLabel,
+  opReferenceLabel,
+  stationCodeLabel,
+  stockKindLabel,
+} from "./labels";
 import type { ProductionOrderTrace, ProductionStep } from "../../api/generated/models";
 import { formatDate } from "../money";
 
@@ -45,11 +53,23 @@ type Op = {
   host?: string;
   x_mm?: string;
   y_mm?: string;
+  u_mm?: string;
+  reference?: string;
+  face?: string;
+  tool_id?: string;
+  sequence_no?: number;
+  station?: string;
   angle_left_deg?: string;
   angle_right_deg?: string;
   depth_mm?: string;
   basis?: string;
   detail?: Record<string, unknown>;
+};
+
+type UnclaimedOps = {
+  station?: string;
+  operation_count?: number;
+  kinds?: string[];
 };
 
 type CutPiece = {
@@ -138,11 +158,20 @@ export function OperatorStepCard({
   trace,
   traceBusy,
   onQcCheck,
+  opsCheckable = false,
+  opsDone = [],
+  onOpsDoneChange,
 }: {
   step: ProductionStep;
   trace: ProductionOrderTrace | null;
   traceBusy: boolean;
   onQcCheck?: (stepId: string, check: QcCheckInput) => void;
+  // Plan-evidence stations (MACHINING, PROFILE_CUT, REINFORCEMENT_CUT):
+  // COMPLETE must declare every routed member op — the card shows one
+  // checkbox per operation and reports the picked ids upward.
+  opsCheckable?: boolean;
+  opsDone?: string[];
+  onOpsDoneChange?: (ids: string[]) => void;
 }) {
   const kinds = STEP_STOCK_KINDS[step.code] ?? [];
   const reservations = trace ? _reservations(trace) : [];
@@ -167,8 +196,23 @@ export function OperatorStepCard({
   const unassignedOps = stationMap
     ? ops.filter((op) => !(String(op.kind ?? "") in stationMap))
     : [];
+  const unclaimedStations =
+    ((trace?.operations as { unclaimed?: UnclaimedOps[] } | undefined)?.unclaimed as
+      UnclaimedOps[] | undefined) ?? [];
+  const planInvalidated = Boolean(
+    (trace?.operations as { plan_invalidated?: boolean } | undefined)?.plan_invalidated,
+  );
   const sawOps = stepOps.filter((op) => op.kind === "SAW_CUT");
-  const memberOps = stepOps.filter((op) => op.kind !== "SAW_CUT");
+  const memberOps = stepOps
+    .filter((op) => op.kind !== "SAW_CUT")
+    .sort((a, b) => (a.sequence_no ?? 0) - (b.sequence_no ?? 0));
+  const toggleOp = (operationId: string): void => {
+    onOpsDoneChange?.(
+      opsDone.includes(operationId)
+        ? opsDone.filter((id) => id !== operationId)
+        : [...opsDone, operationId],
+    );
+  };
   // Stations that consume no stock (WELD, CLEAN, SASH_ASSEMBLE, CRIMP,
   // QC, PACK) still own the physical pieces — the sealed cut/sheet lists
   // are their work checklist, not a CUT-only artifact.
@@ -226,7 +270,11 @@ export function OperatorStepCard({
         </p>
       ) : (
         <div className="operator-card-body">
-          {blockers.length || (step.code === "CUT" && unmapped.length) || unassignedOps.length ? (
+          {blockers.length ||
+          (step.code === "CUT" && unmapped.length) ||
+          unassignedOps.length ||
+          unclaimedStations.length ||
+          planInvalidated ? (
             <p className="operator-blockers" role="alert">
               {blockers.length ? t("production.operatorBlockers") : ""}
               {unassignedOps.length
@@ -234,6 +282,15 @@ export function OperatorStepCard({
                     ...new Set(unassignedOps.map((op) => opKindLabel(op.kind))),
                   ].join(", ")}`
                 : ""}
+              {unclaimedStations.length
+                ? ` · ${t("production.operatorUnclaimedOps")}: ${unclaimedStations
+                    .map(
+                      (group) =>
+                        `${stationCodeLabel(group.station)} (${group.operation_count ?? 0})`,
+                    )
+                    .join(", ")}`
+                : ""}
+              {planInvalidated ? ` · ${t("production.operatorPlanStale")}` : ""}
               {unmapped.length && step.code === "CUT"
                 ? ` · ${t("production.operatorUnmapped")}: ${unmapped.join(", ")}`
                 : ""}
@@ -342,33 +399,80 @@ export function OperatorStepCard({
                     </table>
                   ) : null}
                   {memberOps.length ? (
-                    <table className="production-plan operator-ops">
-                      <thead>
-                        <tr>
-                          <th>{t("production.operatorOperation")}</th>
-                          <th>{t("production.operatorHost")}</th>
-                          <th>x/y (mm)</th>
-                          <th>{t("production.operatorDepth")}</th>
-                          <th>{t("production.operatorBasis")}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {memberOps.map((op) => (
-                          <tr key={op.operation_id}>
-                            <td>{opKindLabel(op.kind)}</td>
-                            <td title={op.host ?? ""}>
-                              {(op.host && labels[op.host]) ??
-                                String(op.detail?.role ?? op.host ?? "—")}
-                            </td>
-                            <td>
-                              {op.x_mm ?? "—"} / {op.y_mm ?? "—"}
-                            </td>
-                            <td>{op.depth_mm ?? "—"}</td>
-                            <td>{op.basis ?? "—"}</td>
+                    <>
+                      {opsCheckable && memberOps.length > 1 ? (
+                        <button
+                          type="button"
+                          className="operator-ops-all"
+                          onClick={() =>
+                            onOpsDoneChange?.(
+                              memberOps
+                                .map((op) => op.operation_id)
+                                .filter((id): id is string => Boolean(id)),
+                            )
+                          }
+                        >
+                          {t("production.opsDoneAll")}
+                        </button>
+                      ) : null}
+                      <table className="production-plan operator-ops">
+                        <thead>
+                          <tr>
+                            {opsCheckable ? (
+                              <th aria-label={t("production.opsDoneColumn")} />
+                            ) : null}
+                            <th>{t("production.operatorOperation")}</th>
+                            <th>{t("production.operatorHost")}</th>
+                            <th>u (mm)</th>
+                            <th>{t("production.operatorReference")}</th>
+                            <th>{t("production.operatorFace")}</th>
+                            <th>{t("production.operatorDepth")}</th>
+                            <th>{t("production.operatorTool")}</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {memberOps.map((op) => {
+                            const memberCode =
+                              (op.host && labels[op.host]) ??
+                              String(op.detail?.role ?? op.host ?? "—");
+                            const shareCount = memberCode.split("·").length;
+                            const opId = op.operation_id ?? "";
+                            return (
+                              <tr
+                                key={op.operation_id}
+                                className={
+                                  opsCheckable && opsDone.includes(opId) ? "operator-op-done" : ""
+                                }
+                              >
+                                {opsCheckable ? (
+                                  <td>
+                                    <input
+                                      type="checkbox"
+                                      aria-label={`${memberCode} · ${opKindLabel(op.kind)}`}
+                                      checked={opsDone.includes(opId)}
+                                      onChange={() => toggleOp(opId)}
+                                    />
+                                  </td>
+                                ) : null}
+                                <td>
+                                  {op.sequence_no ? `${op.sequence_no}. ` : ""}
+                                  {opKindLabel(op.kind)}
+                                </td>
+                                <td title={op.host ?? ""}>
+                                  {memberCode}
+                                  {shareCount > 1 ? ` · ×${shareCount}` : ""}
+                                </td>
+                                <td>{op.u_mm ?? "—"}</td>
+                                <td>{opReferenceLabel(op.reference)}</td>
+                                <td>{opFaceLabel(op.face)}</td>
+                                <td>{op.depth_mm ?? "—"}</td>
+                                <td title={opBasisLabel(op.basis)}>{op.tool_id ?? "—"}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </>
                   ) : null}
                 </>
               ) : (

@@ -116,6 +116,75 @@ export function stationCodeLabel(code: string | null | undefined): string {
     : code;
 }
 
+// Stations that physically work the sealed cut plan — mirrors
+// _PLAN_REQUIRED_STATIONS / _OPS_EVIDENCE_STATIONS in
+// backend/production/service.py: they can't start on a dead plan and must
+// declare every routed member op at COMPLETE.
+export const PLAN_REQUIRED_CODES: ReadonlySet<string> = new Set([
+  "MACHINING",
+  "PROFILE_CUT",
+  "REINFORCEMENT_CUT",
+]);
+
+// Member-local vocabulary — mirrors the machining pack's operator language
+// (backend/production/pack.py): the printed sheet and the screen name the
+// same datum identically, so a stick reconciles paper↔web without a map.
+const OP_REFERENCES: ReadonlyMap<string, string> = new Map([
+  ["member_start", "Ext. A"],
+  ["member_end", "Ext. B"],
+  ["bar_left_edge", "borde barra"],
+  ["sheet_top_left", "esquina lámina"],
+]);
+
+export function opReferenceLabel(reference: string | null | undefined): string {
+  if (reference === null || reference === undefined || reference === "") return "—";
+  return OP_REFERENCES.get(reference) ?? reference;
+}
+
+const OP_FACES: ReadonlyMap<string, string> = new Map([
+  ["OUTSIDE_FACE", "cara exterior"],
+  ["INSIDE_FACE", "cara interior"],
+  ["TOP_EDGE", "canto superior"],
+  ["BOTTOM_EDGE", "canto inferior"],
+  ["START_EDGE", "canto Ext. A"],
+  ["END_EDGE", "canto Ext. B"],
+]);
+
+export function opFaceLabel(face: string | null | undefined): string {
+  if (face === null || face === undefined || face === "") return "—";
+  return OP_FACES.get(face) ?? face;
+}
+
+const OP_BASES: ReadonlyMap<string, string> = new Map([
+  ["cut_plan.head_trim", "Plan de corte"],
+  ["cut_plan.placement", "Plan de corte"],
+  ["cut_plan.tail_trim", "Plan de corte"],
+  ["member_end_overlap", "Solape de extremo"],
+]);
+
+export function opBasisLabel(basis: string | null | undefined): string {
+  if (basis === null || basis === undefined || basis === "") return "—";
+  const mapped = OP_BASES.get(basis);
+  if (mapped) return mapped;
+  if (basis.startsWith("handle_requirement_policy:")) {
+    return `Política herraje ${basis.split(":", 2)[1] ?? ""}`;
+  }
+  if (basis.startsWith("handle_policy:")) {
+    return `Herraje ${(basis.split(":", 2)[1] ?? "").slice(0, 8)}`;
+  }
+  return basis;
+}
+
+const OP_BOUNDARIES: ReadonlyMap<string, string> = new Map([
+  ["HEAD_TRIM", "corte inicial"],
+  ["TAIL_TRIM", "corte final"],
+]);
+
+export function opBoundaryLabel(boundary: string | null | undefined): string {
+  if (boundary === null || boundary === undefined || boundary === "") return "—";
+  return OP_BOUNDARIES.get(boundary) ?? boundary;
+}
+
 const REMNANT_STATUSES: ReadonlySet<string> = new Set([
   "AVAILABLE",
   "RESERVED",

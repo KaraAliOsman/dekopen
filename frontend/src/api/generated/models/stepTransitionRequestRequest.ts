@@ -26,4 +26,10 @@ export interface StepTransitionRequestRequest {
    * @nullable
    */
   qc_item?: string | null;
+  /**
+   * @nullable
+   * @items.minLength 1
+   * @items.maxLength 80
+   */
+  ops_done?: string[] | null;
 }

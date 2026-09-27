@@ -1300,3 +1300,77 @@
   display: flex;
   gap: 0.5rem;
 }
+
+/* Member ops diagram — operator visual check before program generation. */
+.cnc-diagram {
+  margin: 0.35rem 0 0.6rem;
+}
+.cnc-diagram svg {
+  width: 100%;
+  max-width: 720px;
+  display: block;
+}
+.cnc-diagram-datum {
+  font-size: 10px;
+  fill: var(--theme-text-secondary);
+  font-weight: 600;
+}
+.cnc-diagram-datum-line {
+  stroke: var(--theme-text-secondary);
+  stroke-dasharray: 3 2;
+  stroke-width: 1;
+}
+.cnc-diagram-bar {
+  fill: var(--theme-surface-alt, #f1efe9);
+  stroke: var(--theme-border, #d8d4cd);
+  stroke-width: 1.5;
+}
+.cnc-diagram-op {
+  cursor: pointer;
+}
+.cnc-diagram-op .cnc-mark {
+  fill: #7a5af8;
+  stroke: #4c2fd1;
+  stroke-width: 1;
+}
+.cnc-diagram-op .cnc-mark-drill { fill: #2563eb; stroke: #1e40af; }
+.cnc-diagram-op .cnc-mark-drainage { fill: #0891b2; stroke: #0e7490; }
+.cnc-diagram-op .cnc-mark-ventilation { fill: #0891b2; stroke: #0e7490; }
+.cnc-diagram-op .cnc-mark-slot { fill: #7c3aed; stroke: #5b21b6; }
+.cnc-diagram-op .cnc-mark-routing { fill: #7c3aed; stroke: #5b21b6; }
+.cnc-diagram-op .cnc-mark-milling { fill: #9333ea; stroke: #6b21a8; }
+.cnc-diagram-op .cnc-mark-edge { fill: #64748b; stroke: #334155; }
+.cnc-diagram-op .cnc-mark-custom { fill: #64748b; stroke: #334155; }
+.cnc-diagram-op .cnc-mark-hardware circle,
+.cnc-diagram-op .cnc-mark-hardware line {
+  fill: none;
+  stroke: #b45309;
+  stroke-width: 1.6;
+}
+.cnc-diagram-op.is-selected .cnc-mark,
+.cnc-diagram-op.is-selected .cnc-mark-hardware circle,
+.cnc-diagram-op.is-selected .cnc-mark-hardware line {
+  stroke: #dc2626;
+  stroke-width: 2;
+}
+.cnc-diagram-seq {
+  font-size: 9px;
+  fill: var(--theme-text-secondary);
+  pointer-events: none;
+}
+.cnc-diagram-legend {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.78rem;
+  color: var(--theme-text-secondary);
+  margin: 0.15rem 0 0;
+}
+.cnc-diagram-missing {
+  color: #b45309;
+}
+.cnc-op-row {
+  cursor: pointer;
+}
+.cnc-op-row.is-selected td {
+  background: #fef3c7;
+}

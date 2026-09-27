@@ -399,6 +399,7 @@ export * from "./productionPieceTrace";
 export * from "./productionPrep";
 export * from "./productionPrepItem";
 export * from "./productionRelease";
+export * from "./productionStationQueue";
 export * from "./productionStep";
 export * from "./productionStepEvent";
 export * from "./productionStepEventPayload";

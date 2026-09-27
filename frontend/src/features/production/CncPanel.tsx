@@ -123,6 +123,7 @@ export function CncPanel({ orderId, canWrite }: { orderId: string; canWrite: boo
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [selectedOp, setSelectedOp] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -226,6 +227,8 @@ export function CncPanel({ orderId, canWrite }: { orderId: string; canWrite: boo
                           value === member.member_id ? null : member.member_id,
                         )
                       }
+                      selectedOp={selectedOp}
+                      onSelectOp={(id) => setSelectedOp(id)}
                       onGenerate={(machineId) => void generate(machineId, member.member_id)}
                     />
                   ))}
@@ -290,6 +293,8 @@ function CncMemberRow({
   busy,
   expanded,
   onToggle,
+  selectedOp,
+  onSelectOp,
   onGenerate,
 }: {
   member: CncMember;
@@ -298,6 +303,8 @@ function CncMemberRow({
   busy: boolean;
   expanded: boolean;
   onToggle: () => void;
+  selectedOp: string | null;
+  onSelectOp: (id: string | null) => void;
   onGenerate: (machineId: string) => void;
 }) {
   const byMachine = new Map(member.machines.map((verdict) => [verdict.machine_id, verdict]));
@@ -359,6 +366,11 @@ function CncMemberRow({
       {expanded ? (
         <tr className="cnc-member-ops">
           <td colSpan={2 + machines.length + 1}>
+            <MemberOpsDiagram
+              member={member}
+              selectedOp={selectedOp}
+              onSelectOp={onSelectOp}
+            />
             <table className="cnc-ops">
               <thead>
                 <tr>
@@ -373,7 +385,15 @@ function CncMemberRow({
               </thead>
               <tbody>
                 {member.operations.map((op, index) => (
-                  <tr key={op.operation_id}>
+                  <tr
+                    key={op.operation_id}
+                    className={
+                      selectedOp === op.operation_id ? "cnc-op-row is-selected" : "cnc-op-row"
+                    }
+                    onClick={() =>
+                      onSelectOp(selectedOp === op.operation_id ? null : op.operation_id)
+                    }
+                  >
                     <td>{index + 1}</td>
                     <td>{opKindLabel(op.kind)}</td>
                     <td>{op.u_mm ?? "—"}</td>
@@ -390,4 +410,164 @@ function CncMemberRow({
       ) : null}
     </>
   );
+}
+
+/**
+ * Machine-neutral member bar: every machining op placed on the member's own
+ * axis (u from the member START datum; member_end ops anchored at the end).
+ * Clicking a mark highlights the matching row — this is the human check the
+ * operator does before a program is generated.
+ */
+function MemberOpsDiagram({
+  member,
+  selectedOp,
+  onSelectOp,
+}: {
+  member: CncMember;
+  selectedOp: string | null;
+  onSelectOp: (id: string | null) => void;
+}) {
+  const lengthMm = Math.max(parseFloat(member.length_mm || "0") || 0, 1);
+  const W = 640;
+  const H = 86;
+  const pad = 26;
+  const barY = 42;
+  const barH = 14;
+  const ux = (uMm: number) => pad + (uMm / lengthMm) * (W - pad * 2);
+
+  function opX(op: CncOp): number | null {
+    if (op.u_mm != null) {
+      const u = parseFloat(op.u_mm);
+      return op.reference === "member_end" ? ux(lengthMm - u) : ux(u);
+    }
+    if (op.reference === "bar_left_edge") return pad + 3;
+    if (op.face === "START_EDGE") return pad;
+    if (op.face === "END_EDGE") return W - pad;
+    return null;
+  }
+
+  const unplaced = member.operations.filter((op) => opX(op) === null);
+
+  return (
+    <div className="cnc-diagram">
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={member.member_label}>
+        <text x={pad} y={14} className="cnc-diagram-datum">
+          {t("production.cncDiagramStart")}
+        </text>
+        <text x={W - pad} y={14} textAnchor="end" className="cnc-diagram-datum">
+          {t("production.cncDiagramEnd")} · {fmtMm(member.length_mm)}
+        </text>
+        <line x1={pad} y1={22} x2={pad} y2={barY - 4} className="cnc-diagram-datum-line" />
+        <line x1={W - pad} y1={22} x2={W - pad} y2={barY - 4} className="cnc-diagram-datum-line" />
+        <rect
+          x={pad}
+          y={barY}
+          width={W - pad * 2}
+          height={barH}
+          rx={2}
+          className="cnc-diagram-bar"
+        />
+        {member.operations.map((op, index) => {
+          const x = opX(op);
+          if (x === null) return null;
+          const selected = op.operation_id === selectedOp;
+          const cy = barY + barH / 2;
+          return (
+            <g
+              key={op.operation_id}
+              className={
+                selected ? "cnc-diagram-op is-selected" : "cnc-diagram-op"
+              }
+              onClick={() => onSelectOp(selected ? null : op.operation_id)}
+              role="button"
+              aria-label={`${index + 1} ${opKindLabel(op.kind)}`}
+            >
+              <title>
+                {`${index + 1} · ${opKindLabel(op.kind)} · u=${op.u_mm ?? "—"} · ${faceLabel(op.face)}`}
+              </title>
+              <OpMark kind={op.kind} x={x} cy={cy} />
+              <text x={x} y={barY - 6} textAnchor="middle" className="cnc-diagram-seq">
+                {index + 1}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      <p className="cnc-diagram-legend">
+        <span>{member.member_label}</span>
+        {unplaced.length > 0 ? (
+          <span className="cnc-diagram-missing">
+            {t("production.cncDiagramMissing")}:{" "}
+            {unplaced.map((op) => opKindLabel(op.kind)).join(", ")}
+          </span>
+        ) : null}
+      </p>
+    </div>
+  );
+}
+
+function OpMark({ kind, x, cy }: { kind: string; x: number; cy: number }) {
+  switch (kind) {
+    case "DRILL":
+    case "DRAINAGE":
+    case "VENTILATION":
+      return <circle cx={x} cy={cy} r={4.5} className={`cnc-mark cnc-mark-${kind.toLowerCase()}`} />;
+    case "SLOT":
+    case "ROUTING":
+      return (
+        <rect
+          x={x - 9}
+          y={cy - 3.5}
+          width={18}
+          height={7}
+          rx={3.5}
+          className={`cnc-mark cnc-mark-${kind.toLowerCase()}`}
+        />
+      );
+    case "HANDLE_PREP":
+    case "LOCK_PREP":
+    case "HINGE_PREP":
+    case "CYLINDER_PREP":
+    case "HARDWARE_PREP":
+      return (
+        <g className="cnc-mark cnc-mark-hardware">
+          <circle cx={x} cy={cy} r={5} />
+          <line x1={x - 7} y1={cy} x2={x + 7} y2={cy} />
+          <line x1={x} y1={cy - 7} x2={x} y2={cy + 7} />
+        </g>
+      );
+    case "END_MACHINING":
+    case "SAW_CUT":
+    case "SAW_REFERENCE":
+      return (
+        <rect
+          x={x - 3}
+          y={cy - 8}
+          width={6}
+          height={16}
+          className="cnc-mark cnc-mark-edge"
+        />
+      );
+    case "MILLING":
+      return (
+        <rect
+          x={x - 6}
+          y={cy - 5}
+          width={12}
+          height={10}
+          className="cnc-mark cnc-mark-milling"
+        />
+      );
+    default:
+      return (
+        <rect
+          x={x - 4}
+          y={cy - 4}
+          width={8}
+          height={8}
+          transform={`rotate(45 ${x} ${cy})`}
+          className="cnc-mark cnc-mark-custom"
+        />
+      );
+  }
 }
