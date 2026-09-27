@@ -1387,3 +1387,157 @@ def test_agent_customer_comms_drafts_message(monkeypatch):
     assert artifact["kind"] == "message"
     assert artifact["payload"]["to"] == "compras@andes.cl"
     assert artifact["references"] == [str(project_id)]
+
+
+def test_agent_approval_sticky_across_rounds(monkeypatch):
+    """A no-op follow-up must not flip a job whose earlier round still has a
+    gated step undecided — approvals are sticky, so the job stays
+    WAITING_FOR_APPROVAL until every proposed step has an outcome."""
+    _patch(
+        monkeypatch,
+        contexts={"position": {"surface": "position", "position": {"id": "p"}}},
+    )
+    job = {
+        "id": str(uuid4()),
+        "transcript": [
+            {"role": "user", "text": "haz todas 2F"},
+            {"role": "agent", "reply": "listo", "steps": [{"kind": "ops"}]},
+        ],
+        "outcomes": [],
+    }
+    result = agent.act(
+        org_id=uuid4(),
+        user_id=uuid4(),
+        surface="position",
+        refs={"position_id": str(uuid4()), "project_id": str(uuid4())},
+        goal="gracias",
+        product=None,
+        history=[],
+        operation_key="sticky-1",
+        job=job,
+    )
+    assert result["state"] == "WAITING_FOR_APPROVAL"
+
+
+def test_agent_approval_releases_once_every_gated_step_decided(monkeypatch):
+    _patch(
+        monkeypatch,
+        contexts={"position": {"surface": "position", "position": {"id": "p"}}},
+    )
+    job = {
+        "id": str(uuid4()),
+        "transcript": [
+            {"role": "user", "text": "haz todas 2F"},
+            {"role": "agent", "reply": "listo", "steps": [{"kind": "ops"}]},
+        ],
+        "outcomes": [{"turn_index": 1, "step_index": 0, "action": "applied"}],
+    }
+    result = agent.act(
+        org_id=uuid4(),
+        user_id=uuid4(),
+        surface="position",
+        refs={"position_id": str(uuid4())},
+        goal="otra cosa",
+        product=None,
+        history=[],
+        operation_key="sticky-2",
+        job=job,
+    )
+    assert result["state"] == "SUCCEEDED"
+
+
+def test_agent_product_sig_persisted_on_user_turn(monkeypatch):
+    """The fingerprint must ride the stored transcript — a restored ops
+    step applies only while the live product still matches it."""
+    finished = []
+    _patch(
+        monkeypatch,
+        contexts={"position": {"surface": "position", "position": {"id": "p"}}},
+    )
+    monkeypatch.setattr(
+        agent.jobs, "finish_job", lambda **kw: finished.append(kw) or {}
+    )
+    agent.act(
+        org_id=uuid4(),
+        user_id=uuid4(),
+        surface="position",
+        refs={"position_id": str(uuid4())},
+        goal="cambia el tirador",
+        product=None,
+        history=[],
+        operation_key="sig-1",
+        product_sig="a1b2c3d4",
+    )
+    user_turn = finished[0]["transcript"][0]
+    assert user_turn["role"] == "user"
+    assert user_turn["product_sig"] == "a1b2c3d4"
+
+
+def test_agent_untrusted_history_cannot_ground(monkeypatch):
+    """Client-supplied history never enters the grounding set — otherwise a
+    fabricated figure in it could be restated as fact."""
+    calls = _patch(
+        monkeypatch,
+        outputs=[_doc(reply="El total es $777.777."), _doc()],
+    )
+    result = agent.act(
+        org_id=uuid4(),
+        user_id=uuid4(),
+        surface="dashboard",
+        refs={},
+        goal="dime el total",
+        product=None,
+        history=[{"role": "user", "text": "total $777.777", "content": ""}],
+        operation_key="untrusted-1",
+    )
+    # The fabricated figure is not citable — the reground round fires and the
+    # settled reply carries the corrected answer, not the $777.777 the client
+    # history tried to inject.
+    assert "$777.777" not in result["reply"]
+    correction = calls[1]["input_payload"]["correction"]
+    assert correction["reason"] == "reply_ungrounded"
+
+
+def test_agent_resume_history_grounds_numbers(monkeypatch):
+    _patch(
+        monkeypatch,
+        outputs=[_doc(reply="El total es $777.777.")],
+    )
+    result = agent.act(
+        org_id=uuid4(),
+        user_id=uuid4(),
+        surface="dashboard",
+        refs={},
+        goal="dime el total",
+        product=None,
+        history=[{"role": "agent", "reply": "total $777.777"}],
+        operation_key="trusted-1",
+        history_trusted=True,
+    )
+    assert result["reply"] == "El total es $777.777."
+
+
+def test_agent_cancel_at_round_boundary_aborts_before_invoke(monkeypatch):
+    """A cancel that landed as a direct CANCELED write (row free between
+    commit windows, no signal row) must stop the loop before the first
+    provider call burns a round."""
+    calls = _patch(monkeypatch)
+    monkeypatch.setattr(agent.jobs, "cancel_requested", lambda **kw: True)
+    finished = []
+    monkeypatch.setattr(
+        agent.jobs, "finish_job", lambda **kw: finished.append(kw) or {}
+    )
+    with pytest.raises(agent.JobCanceledError):
+        agent.act(
+            org_id=uuid4(),
+            user_id=uuid4(),
+            surface="dashboard",
+            refs={},
+            goal="hola",
+            product=None,
+            history=[],
+            operation_key="cancel-1",
+            job={"id": str(uuid4()), "transcript": []},
+        )
+    assert calls == []
+    assert finished == []

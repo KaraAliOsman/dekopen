@@ -19,7 +19,7 @@ import type { AiJob } from "../../api/generated/models/aiJob";
 import type { AiJobDetail } from "../../api/generated/models/aiJobDetail";
 import type { AiJobLive } from "../../api/generated/models/aiJobLive";
 import type { DesignOp } from "../commands/types";
-import { describeDesignOp, designAssistProduct } from "../canvas/designOps";
+import { describeDesignOp, designAssistProduct, productFingerprint } from "../canvas/designOps";
 import type { ProductJson } from "../canvas/productEditing";
 import { useDesignOpsBridge } from "./assistantContext";
 import { AiMetricsCard } from "./AiMetricsCard";
@@ -298,6 +298,7 @@ function StepView({
     const ops = (step.ops ?? []).filter((item): item is DesignOp => typeof item.op === "string");
     if (!ops.length) return null;
     const positionId = typeof job.refs?.position_id === "string" ? job.refs.position_id : null;
+    const projectId = typeof job.refs?.project_id === "string" ? job.refs.project_id : null;
     const settledAction =
       decided?.action === "applied"
         ? t("agent.applied")
@@ -315,12 +316,12 @@ function StepView({
         </ul>
         {settledAction ? (
           <span className="aiws-step__settled">{settledAction}</span>
-        ) : positionId ? (
+        ) : positionId && projectId ? (
           <button
             type="button"
             className="aiws-action"
             title={t("aiws.opsReviewHint")}
-            onClick={() => navigate(`/positions/${positionId}`)}
+            onClick={() => navigate(`/projects/${projectId}/positions/${positionId}/edit`)}
           >
             {t("aiws.opsReview").replace("{count}", String(ops.length))}
           </button>
@@ -661,8 +662,14 @@ export function AssistantWorkspacePage(): JSX.Element {
   useEffect(() => {
     if (artifact !== null) return;
     if (artParam !== null) {
-      const shelf = (job?.artifacts as Artifact[] | undefined) ?? [];
-      const target = shelf[Number(artParam)];
+      // Turn-scoped coordinates (transcriptIndex:artifactIndex) resolve on the
+      // transcript — immune to the shelf's truncation; a bare number is the
+      // legacy flat-shelf index.
+      const coord = artParam.split(":");
+      const target =
+        coord.length === 2
+          ? (transcript[Number(coord[0])]?.artifacts?.[Number(coord[1])] as Artifact | undefined)
+          : ((job?.artifacts as Artifact[] | undefined) ?? [])[Number(artParam)];
       if (target) {
         setArtifact(target);
         return;
@@ -689,9 +696,18 @@ export function AssistantWorkspacePage(): JSX.Element {
           job.surface === "position" && bridge
             ? designAssistProduct(bridge.product as ProductJson)
             : null;
+        // Persisted on the turn — restored ops refuse onto a changed design.
+        const productSig = product ? productFingerprint(product) : null;
         const response = await aiJobMessageCreate(
           job.id,
-          { message, ...(product ? { product } : {}) },
+          {
+            message,
+            // Live refs refresh volatile pointers (the canvas selection) so a
+            // follow-up's "this" resolves to what's selected now.
+            refs: job.refs ?? {},
+            ...(product ? { product } : {}),
+            ...(productSig ? { product_sig: productSig } : {}),
+          },
           { headers: { ...headers.headers, "X-Operation-Key": operationKey.current.key } },
         );
         if (response.status !== 202) {

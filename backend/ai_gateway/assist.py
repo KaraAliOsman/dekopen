@@ -7,6 +7,7 @@ an unknown answer is refused rather than invented. """
 from __future__ import annotations
 
 import json
+import logging
 import re
 from decimal import Decimal
 from typing import Any
@@ -15,7 +16,12 @@ from uuid import UUID
 from django.db import connection
 
 from ai_gateway import service as gateway
-from ai_gateway.context import REQUIRED_REFS, _ContextError, build_context
+from ai_gateway.context import (
+    REQUIRED_REFS,
+    _ContextError,
+    build_context,
+    stable_refs,
+)
 from ai_gateway.jobs import _ai_backend
 from authentication.errors import contract_error
 from projects.design_assist import _BARE_NUMBER_RE, _MEASURE_RE, _parse_number
@@ -284,11 +290,14 @@ def ask(
         "credits_debited": envelope["credits_debited"],
         **validated,
     }
+    # The durable thread keys on the stable refs — a volatile pointer ref
+    # (selection) reaches the context but must not split the conversation
+    # into a new thread per canvas click.
     _record_turn(
         org_id=org_id,
         user_id=user_id,
         surface=surface,
-        refs=refs or {},
+        refs=stable_refs(refs or {}),
         question=question[:MAX_QUESTION],
         answer=result,
     )
@@ -326,17 +335,23 @@ def _record_turn(
                     ],
                 )
     except Exception:  # noqa: BLE001 — evidence must never break the answer
+        # But never silently: a persistent insert failure means restored
+        # threads diverge from what the user saw — operators need the log.
+        logging.getLogger(__name__).warning(
+            "ai_ask_turn persist failed", exc_info=True
+        )
         return
 
 
 def list_turns(
     *, org_id: UUID, user_id: UUID, surface: str, refs: dict
 ) -> list[dict]:
-    """The durable ask thread for (user, surface, refs) — newest-last so the
-    dock replays it as a conversation. Refs match exactly: a different
-    selection is a different thread."""
+    """The durable ask thread for (user, surface, stable refs) — newest-last
+    so the dock replays it as a conversation. Volatile pointer refs are
+    stripped before matching so a canvas click never orphans the thread."""
     if connection.vendor != "postgresql":
         return []
+    refs = stable_refs(refs)
     with connection.cursor() as cursor:
         cursor.execute(
             """
@@ -344,15 +359,18 @@ def list_turns(
             FROM public.ai_ask_turns
             WHERE org_id = %s AND user_id = %s AND surface = %s
               AND refs = %s::jsonb
-            ORDER BY created_at, id
+            ORDER BY created_at DESC, id DESC
             LIMIT 50
             """,
             [str(org_id), str(user_id), surface, json.dumps(refs)],
         )
         rows_out = cursor.fetchall()
+    # Newest-first read window, restored oldest-first so the dock replays
+    # the recent tail as a conversation — a >50-turn thread keeps its
+    # freshest context instead of permanently dropping the newest turns.
     return [
         {"question": q, "answer": a, "created_at": ts.isoformat() if ts else None}
-        for q, a, ts in rows_out
+        for q, a, ts in reversed(rows_out)
     ]
 
 

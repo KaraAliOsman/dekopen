@@ -140,12 +140,13 @@ def enqueue_job(*, org_id: UUID, user_id: UUID, surface: str,
             )
         existing = _decode(record[0])
         # The key binds the request itself: a retried POST replays to the
-        # same row, but a different goal or refs under a recycled key is a
-        # collision, not a replay — refusing it keeps one key from quietly
-        # running someone else's goal under an existing job.
+        # same row, but a different goal, refs or surface under a recycled
+        # key is a collision, not a replay — refusing it keeps one key from
+        # quietly running someone else's goal under an existing job.
         if (
             str(existing.get("goal") or "") != goal[:MAX_GOAL]
             or (existing.get("refs") or {}) != (refs or {})
+            or str(existing.get("surface") or "") != surface
         ):
             raise ValueError("ai_operation_key_conflict")
     return existing
@@ -219,15 +220,20 @@ def fail_queued_job(*, job_id: UUID, goal: str, error_code: str) -> dict | None:
 
 
 def cancel_requested(*, job_id: UUID) -> bool:
-    """Cooperative cancel read — the signals table has no row-lock coupling to
-    ai_jobs, so a cancel arrives while the run transaction still holds it."""
+    """Cooperative cancel read. Two channels: the signals table (a cancel
+    that found the row locked) and the job's own state — the row is NOT held
+    for the whole run, so a mid-loop cancel usually lands as a direct
+    CANCELED write with no signal row. Checking only the signals table would
+    let the loop burn every remaining provider round."""
     if connection.vendor != "postgresql":
         return False
     with _ai_backend():
         return bool(
             rows(
-                "SELECT 1 FROM public.ai_job_cancel_signals WHERE job_id = %s",
-                [str(job_id)],
+                "SELECT 1 FROM public.ai_job_cancel_signals WHERE job_id = %s"
+                " UNION ALL SELECT 1 FROM public.ai_jobs"
+                " WHERE id = %s AND state = 'CANCELED' LIMIT 1",
+                [str(job_id), str(job_id)],
             )
         )
 
@@ -270,8 +276,9 @@ def request_cancel(*, job_id: UUID, org_id: UUID, user_id: UUID) -> str:
                     )
                     if sqlstate != "55P03":
                         raise
-                    # The worker holds the row lock for the whole run —
-                    # signal instead of waiting out the provider call.
+                    # Lock timeout — the row was busy inside one of the
+                    # worker's short commit windows; the signal row asks it
+                    # to abort between rounds instead of waiting it out.
                     landed = False
                 if landed:
                     return "canceled"
@@ -412,35 +419,64 @@ def finish_job(*, job_id: UUID, state: str, transcript: list, plan: list,
     return {"id": str(record[0]["id"])}
 
 
-def mark_queued(*, job_id: UUID, org_id: UUID, user_id: UUID) -> bool:
+def mark_queued(*, job_id: UUID, org_id: UUID, user_id: UUID) -> str | None:
     """A follow-up was accepted and its worker run enqueued — flip the row to
     QUEUED in the request's own transaction so polls reflect the pending
     round immediately instead of the settled state until the worker claims
-    (the claim's own state write is invisible until it commits anyway)."""
+    (the claim's own state write is invisible until it commits anyway).
+    Returns the state the job was flipped FROM — the caller restores it if
+    the enqueue that follows fails, because this write commits in the
+    request's autocommit and an orphaned QUEUED would wedge the job — and
+    None when the atomic guard lost the race (already claimed)."""
+    with _ai_backend():
+        record = rows(
+            "WITH prev AS (SELECT id, state FROM public.ai_jobs"
+            " WHERE id = %s AND org_id = %s AND user_id = %s)"
+            " UPDATE public.ai_jobs SET state = 'QUEUED', updated_at = NOW()"
+            " FROM prev WHERE ai_jobs.id = prev.id AND ai_jobs.state IN"
+            " ('WAITING_FOR_USER','WAITING_FOR_APPROVAL',"
+            " 'FAILED_RETRYABLE','SUCCEEDED') RETURNING prev.state",
+            [str(job_id), str(org_id), str(user_id)],
+        )
+    return str(record[0]["state"]) if record else None
+
+
+def restore_queued(*, job_id: UUID, previous: str) -> bool:
+    """Compensate a mark_queued whose enqueue failed — put the job back in
+    the state it left. Guarded on still-QUEUED: once a worker claimed the
+    row, the run is real and the flip must stand."""
+    if previous not in (
+        "WAITING_FOR_USER",
+        "WAITING_FOR_APPROVAL",
+        "FAILED_RETRYABLE",
+        "SUCCEEDED",
+    ):
+        return False
     with _ai_backend():
         return bool(
             rows(
-                "UPDATE public.ai_jobs SET state = 'QUEUED', updated_at = NOW()"
-                " WHERE id = %s AND org_id = %s AND user_id = %s"
-                " AND state IN ('WAITING_FOR_USER','WAITING_FOR_APPROVAL',"
-                " 'FAILED_RETRYABLE','SUCCEEDED') RETURNING id",
-                [str(job_id), str(org_id), str(user_id)],
+                "UPDATE public.ai_jobs SET state = %s, updated_at = NOW()"
+                " WHERE id = %s AND state = 'QUEUED' RETURNING id",
+                [previous, str(job_id)],
             )
         )
 
 
 def resume_job(*, job_id: UUID, transcript: list, org_id: UUID, user_id: UUID) -> dict:
     """Claim a settled job for a new round. The UPDATE itself is the lock:
-    only WAITING_*/FAILED_RETRYABLE/SUCCEEDED states move to RUNNING, so a
-    follow-up racing a live round or a closed job gets a conflict instead of
-    silently writing its stale transcript over the other round's work."""
+    only the QUEUED mark the submitting request left can be claimed — a
+    resume must never steal a live PLANNING/RUNNING row (two provider loops
+    would then append to one transcript) nor resurrect a settled state
+    directly (the request's mark_queued is the single transition into a new
+    round). A stranded live row is recovered by cancel + new job, not by
+    double-running it."""
     with _ai_backend():
         record = rows(
             "UPDATE public.ai_jobs SET state = 'PLANNING',"
             " transcript = %s::jsonb, result = NULL, error_code = NULL,"
             " completed_at = NULL, updated_at = NOW()"
-            " WHERE id = %s AND org_id = %s AND user_id = %s AND state IN"
-            " ('QUEUED','PLANNING','RUNNING','WAITING_FOR_USER','WAITING_FOR_APPROVAL','FAILED_RETRYABLE','SUCCEEDED')"
+            " WHERE id = %s AND org_id = %s AND user_id = %s"
+            " AND state = 'QUEUED'"
             " RETURNING id",
             [_dump(transcript), str(job_id), str(org_id), str(user_id)],
         )

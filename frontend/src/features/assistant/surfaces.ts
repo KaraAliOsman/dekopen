@@ -20,6 +20,7 @@ export const SURFACE_LABELS: Record<string, string> = {
   production: "producción",
   work_order: "orden de trabajo",
   clients: "clientes",
+  client: "cliente",
   purchasing: "compras",
   settings: "configuración",
   assistant: "asistente",

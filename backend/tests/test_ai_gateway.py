@@ -2139,3 +2139,118 @@ def test_act_accumulates_artifacts_across_rounds(monkeypatch):
     assert calls["plan"] == [
         {"label": "Revisar estado"}, {"label": "Resumir"},
     ]
+
+
+def test_job_message_digest_shows_prior_proposals(monkeypatch):
+    """Follow-up history must carry what the agent already proposed — a
+    stripped transcript let the model re-emit a duplicate step as new."""
+    import contextlib
+
+    from ai_gateway import jobs
+    from jobs import service as job_service
+
+    client, _, org_id = _agent_client(monkeypatch)
+    job_id = uuid4()
+    transcript = [
+        {"role": "user", "text": "haz todas 2F"},
+        {
+            "role": "agent",
+            "reply": "Propongo tres cambios.",
+            "steps": [{"kind": "ops", "label": "3 vanos → abatible 2F"}],
+            "artifacts": [{"kind": "product_draft", "title": "Borrador A"}],
+        },
+    ]
+    seen: dict = {}
+    monkeypatch.setattr(
+        jobs, "get_job",
+        lambda **kw: {
+            "id": str(job_id), "surface": "position", "state": "SUCCEEDED",
+            "refs": {"position_id": "p1"}, "transcript": transcript,
+        },
+    )
+    monkeypatch.setattr(
+        job_service, "job_backend", lambda: contextlib.nullcontext()
+    )
+    monkeypatch.setattr(jobs, "mark_queued", lambda **kw: "SUCCEEDED")
+    monkeypatch.setattr(
+        job_service, "enqueue",
+        lambda **kw: seen.update(kw) or ({"id": uuid4()}, True),
+    )
+    response = _post_message(client, job_id, message="otra vez por favor")
+    assert response.status_code == 202
+    agent_turn = seen["payload"]["history"][-1]
+    assert agent_turn["role"] == "agent"
+    assert "propuso" in agent_turn["content"]
+    assert "3 vanos" in agent_turn["content"]
+    assert "Borrador A" in agent_turn["content"]
+    # Resume history was rebuilt server-side — it may ground the next round.
+    assert seen["payload"]["history_trusted"] is True
+
+
+def test_job_message_second_concurrent_submit_409s(monkeypatch):
+    """The mark_queued race loser must leave with a conflict — two parallel
+    act() loops on one job was the double-run finding."""
+    import contextlib
+
+    from ai_gateway import jobs
+    from jobs import service as job_service
+
+    client, _, _org = _agent_client(monkeypatch)
+    job_id = uuid4()
+    monkeypatch.setattr(
+        jobs, "get_job",
+        lambda **kw: {
+            "id": str(job_id), "surface": "position", "state": "SUCCEEDED",
+            "refs": {}, "transcript": [{"role": "user", "text": "hazlo"}],
+        },
+    )
+    monkeypatch.setattr(
+        job_service, "job_backend", lambda: contextlib.nullcontext()
+    )
+    # The atomic guard lost: another follow-up already moved the row.
+    monkeypatch.setattr(jobs, "mark_queued", lambda **kw: None)
+    enqueued = []
+    monkeypatch.setattr(
+        job_service, "enqueue", lambda **kw: enqueued.append(kw) or ({}, True)
+    )
+    response = _post_message(client, job_id, message="dale")
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "ai_job_running"
+    assert enqueued == []
+
+
+def test_job_message_enqueue_failure_restores_state(monkeypatch):
+    """An enqueue failure after the QUEUED flip must restore the settled
+    state — the flip commits in the request's autocommit, so a stranded
+    QUEUED would wedge the job with no live run."""
+    import contextlib
+
+    from ai_gateway import jobs
+    from jobs import service as job_service
+
+    client, _, _org = _agent_client(monkeypatch)
+    job_id = uuid4()
+    monkeypatch.setattr(
+        jobs, "get_job",
+        lambda **kw: {
+            "id": str(job_id), "surface": "position", "state": "SUCCEEDED",
+            "refs": {}, "transcript": [{"role": "user", "text": "hazlo"}],
+        },
+    )
+    monkeypatch.setattr(
+        job_service, "job_backend", lambda: contextlib.nullcontext()
+    )
+    monkeypatch.setattr(jobs, "mark_queued", lambda **kw: "SUCCEEDED")
+    restored = []
+    monkeypatch.setattr(
+        jobs, "restore_queued",
+        lambda **kw: restored.append(kw["previous"]) or True,
+    )
+
+    def boom(**kw):
+        raise job_service.JobServiceError("job_payload_invalid")
+
+    monkeypatch.setattr(job_service, "enqueue", boom)
+    response = _post_message(client, job_id, message="dale")
+    assert response.status_code == 409
+    assert restored == ["SUCCEEDED"]

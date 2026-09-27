@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { AiJobMessageRequestProduct } from "./aiJobMessageRequestProduct";
+import type { AiJobMessageRequestRefs } from "./aiJobMessageRequestRefs";
 
 export interface AiJobMessageRequest {
   /**
@@ -14,4 +15,10 @@ export interface AiJobMessageRequest {
    */
   message: string;
   product?: AiJobMessageRequestProduct;
+  refs?: AiJobMessageRequestRefs;
+  /**
+   * @minLength 1
+   * @maxLength 64
+   */
+  product_sig?: string;
 }

@@ -34,6 +34,7 @@ REQUIRED_REFS: dict[str, tuple[str, ...]] = {
     "production": (),
     "work_order": ("work_order_id",),
     "clients": (),
+    "client": ("client_id",),
     "purchasing": (),
     "settings": (),
     "morning_brief": (),
@@ -495,6 +496,16 @@ def _module_intent(module: dict) -> dict:
     return {"openings": openings, "glass_skus": glass_skus}
 
 
+# Refs that describe the user's current pointer rather than the conversation's
+# object — they reach the context projection but never identity a thread or
+# job, or every click on the canvas would orphan the dock.
+VOLATILE_REFS = frozenset({"selection"})
+
+
+def stable_refs(refs: dict) -> dict:
+    return {key: value for key, value in refs.items() if key not in VOLATILE_REFS}
+
+
 def _position(org_id: UUID, refs: dict) -> dict:
     result = rows(
         "SELECT p.id, p.project_id, p.position_index, p.location_tag, p.typology, "
@@ -528,6 +539,43 @@ def _position(org_id: UUID, refs: dict) -> dict:
                 "tree": tree,
             }
         ]
+    projected_modules = (
+        [
+            {
+                "id": _cut(m.get("id"), 40),
+                "width_mm": _cut(m.get("width_mm")),
+                "height_mm": _cut(m.get("height_mm")),
+                **_module_intent(m),
+                **({"single": True} if m.get("single") else {}),
+            }
+            for m in modules[:MAX_LIST]
+            if isinstance(m, dict)
+        ]
+        if isinstance(modules, list)
+        else None
+    )
+    # §11: the canvas publishes the selected element's id as `selection` —
+    # resolve it against the module list so "this sash" / "muévela" binds to
+    # a concrete element instead of the assistant guessing.
+    selection_id = refs.get("selection")
+    selected = None
+    if selection_id and projected_modules:
+        module_ids = {m["id"] for m in projected_modules}
+        head = str(selection_id).split("/", 1)[0]
+        if selection_id in module_ids:
+            selected = {"id": _cut(selection_id, 80), "kind": "module"}
+        elif head in module_ids:
+            # A sub-element (bay/sash) inside a module — keep the module
+            # scope visible so ops target the right container.
+            selected = {
+                "id": _cut(selection_id, 80),
+                "kind": "element",
+                "module_id": head,
+            }
+        elif isinstance(couplings, list) and any(
+            c.get("id") == selection_id for c in couplings if isinstance(c, dict)
+        ):
+            selected = {"id": _cut(selection_id, 80), "kind": "coupling"}
     return {
         "id": str(position["id"]),
         "project": {
@@ -545,22 +593,9 @@ def _position(org_id: UUID, refs: dict) -> dict:
         },
         "width_mm": _cut(position["width_mm"]),
         "height_mm": _cut(position["height_mm"]),
-        "modules": (
-            [
-                {
-                    "id": _cut(m.get("id"), 40),
-                    "width_mm": _cut(m.get("width_mm")),
-                    "height_mm": _cut(m.get("height_mm")),
-                    **_module_intent(m),
-                    **({"single": True} if m.get("single") else {}),
-                }
-                for m in modules[:MAX_LIST]
-                if isinstance(m, dict)
-            ]
-            if isinstance(modules, list)
-            else None
-        ),
+        "modules": projected_modules,
         "couplings": len(couplings) if isinstance(couplings, list) else None,
+        "selected": selected,
     }
 
 
@@ -1014,6 +1049,46 @@ def _clients(org_id: UUID) -> dict:
             for c in result
         ],
         "truncated": len(result) == MAX_LIST,
+    }
+
+
+def _client(org_id: UUID, refs: dict) -> dict:
+    """One client's desk: identity + their projects — the detail route's
+    assistant must answer about THIS client, not the org aggregate."""
+    client = rows(
+        "SELECT id, name, rut, email, phone, address, notes, is_active"
+        " FROM public.clients WHERE id=%s AND org_id=%s",
+        [refs["client_id"], org_id],
+    )
+    if not client:
+        raise _ContextError("ai_ref_not_found")
+    client = client[0]
+    projects = rows(
+        "SELECT id, code, name, status, current_revision"
+        " FROM public.projects WHERE client_id=%s AND org_id=%s"
+        " ORDER BY updated_at DESC LIMIT %s",
+        [refs["client_id"], org_id, MAX_LIST],
+    )
+    return {
+        "client": {
+            "id": str(client["id"]),
+            "name": _cut(client["name"]),
+            "rut": _cut(client["rut"]),
+            "email": _cut(client["email"]),
+            "phone": _cut(client["phone"]),
+            "address": _cut(client["address"]),
+            "active": bool(client["is_active"]),
+        },
+        "projects": [
+            {
+                "id": str(p["id"]),
+                "code": _cut(p["code"]),
+                "name": _cut(p["name"]),
+                "status": _cut(p["status"]),
+                "revision": _cut(p["current_revision"]),
+            }
+            for p in projects
+        ],
     }
 
 
@@ -1554,6 +1629,7 @@ _BUILDERS = {
     "production": _production,
     "work_order": _work_order,
     "clients": _clients,
+    "client": _client,
     "purchasing": _purchasing,
     "settings": _settings,
     "morning_brief": _brief,
@@ -1574,6 +1650,7 @@ _REF_BUILDERS = {
     "quotation",
     "work_order",
     "catalog",
+    "client",
     "quotation_complete",
     "project_from_documents",
     "customer_comms",

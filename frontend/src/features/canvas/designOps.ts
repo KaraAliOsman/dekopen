@@ -5,6 +5,19 @@ import type { ProductJson } from "./productEditing";
 
 export type { DesignOp };
 
+/** Content fingerprint (FNV-1a over the normalized wire payload) the backend
+ * persists on each turn — a restored ops step refuses to apply when the live
+ * product no longer matches the product its ops were validated against. */
+export function productFingerprint(product: unknown): string {
+  const text = JSON.stringify(product) ?? "";
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
 /** The product wire shape the design-ops contract validates against — stable
  * domain ids (modules/couplings refs), not the full ProductJson. AssistantPanel
  * and the agent share this projection so both apply against the same graph. */

@@ -24,6 +24,7 @@ import { t, tDynamic } from "../../i18n/es-CL";
 import { DeniedState } from "../../ui";
 import { type CanvasDesignInputs, useCanvasStore } from "../canvas/canvasStore";
 import { AssemblyEditor } from "../canvas/AssemblyEditor";
+import { useAssistantSurface } from "../assistant/assistantContext";
 import type { IntentNode, Opening } from "../canvas/intentEditing";
 import { starterContextSize, type StarterDefinition } from "../canvas/designLibrary";
 import { resolveMembers } from "../canvas/members";
@@ -278,6 +279,21 @@ function PositionWorkspace({
   const inputs = useCanvasStore((s) => s.inputs);
   const canUndo = useCanvasStore((s) => s.past.length > 0);
   const canRedo = useCanvasStore((s) => s.future.length > 0);
+  // The assistant's "this" is the user's current canvas selection — a
+  // volatile ref: it reaches the context projection but never keys the
+  // durable thread/job (VOLATILE_REFS strips it server-side, and the dock
+  // keys threads on stable refs).
+  const canvasSelection = useCanvasStore((s) => s.selection);
+  useAssistantSurface(
+    positionId ? "position" : null,
+    positionId
+      ? {
+          project_id: projectId,
+          position_id: positionId,
+          ...(canvasSelection ? { selection: canvasSelection } : {}),
+        }
+      : undefined,
+  );
   const systemId = inputs.systemId ?? "";
   const requestOptions = { headers: { "X-Organization-ID": orgId } };
 

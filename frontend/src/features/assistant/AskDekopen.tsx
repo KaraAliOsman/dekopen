@@ -7,7 +7,7 @@ import type { AiAskResponse } from "../../api/generated/models/aiAskResponse";
 import { t } from "../../i18n/es-CL";
 import { AgentBody, SURFACE_LABELS } from "./AgentBody";
 import { Orb, orbStateFor } from "./Orb";
-import { useAssistantContext } from "./assistantContext";
+import { stableRefs, useAssistantContext } from "./assistantContext";
 import "./assistant.css";
 
 type Thread = { question: string; answer: AiAskResponse }[];
@@ -23,10 +23,14 @@ const dockThreads = new Map<string, Thread>();
  * can suggest navigation; it can never execute a mutation. */
 export function AskDekopen({
   organizationId,
+  userId = null,
   openRequested = 0,
   hideTrigger = false,
 }: {
   organizationId: string | null;
+  /** Module-scope threads are keyed org+user — without it an org switch
+   * would render another tenant's conversation. */
+  userId?: string | null;
   /** Incremental open signal — the shell's persistent AI entry opens the dock
    * without the floating trigger. */
   openRequested?: number;
@@ -64,9 +68,13 @@ export function AskDekopen({
 
   // A surface switch invalidates in-flight requests — the answer belonged to
   // the previous context and must never surface under a different one. The
-  // stored thread survives: returning to the surface restores it.
-  const refsKey = JSON.stringify(refs);
-  const threadKey = `${surface}:${refsKey}`;
+  // stored thread survives: returning to the surface restores it. Volatile
+  // refs (a live canvas selection) reach the provider but never the thread
+  // key — clicking another bay must not reset the conversation.
+  const stableRefsKey = JSON.stringify(stableRefs(refs));
+  // The module map is shared across the whole SPA session — key it by the
+  // org AND user or an org switch would render another tenant's thread.
+  const threadKey = `${organizationId ?? ""}:${userId ?? ""}:${surface}:${stableRefsKey}`;
   const thread = threads.get(threadKey) ?? [];
   useEffect(() => {
     requestSeq.current += 1;
@@ -76,14 +84,14 @@ export function AskDekopen({
     // Durable conversation (§3): the module map survives SPA navigation, but
     // a reload or a later session restores from the server-side turns — the
     // thread for this (surface, refs) comes back exactly where it was left.
-    const key = `${surface}:${refsKey}`;
+    const key = `${organizationId ?? ""}:${userId ?? ""}:${surface}:${stableRefsKey}`;
     const seq = requestSeq.current;
     let cancelled = false;
     if (!organizationId) return;
     void (async () => {
       try {
         const list = await aiAskThread(
-          { surface, refs: refsKey },
+          { surface, refs: stableRefsKey },
           { headers: { "X-Organization-ID": organizationId } },
         );
         if (cancelled || seq !== requestSeq.current || list.status !== 200) return;
@@ -113,9 +121,10 @@ export function AskDekopen({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- refsKey is the
-    // stable serialization of refs; organizationId binds the tenant.
-  }, [surface, refsKey, organizationId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- stableRefsKey is
+    // the stable serialization of the identity refs; volatile refs (canvas
+    // selection) must not cancel the in-flight ask or reset the thread.
+  }, [surface, stableRefsKey, organizationId, userId]);
 
   if (!organizationId) return null;
   const orgId: string = organizationId;
@@ -239,7 +248,7 @@ export function AskDekopen({
           </header>
           {mode === "agent" ? (
             <AgentBody
-              key={`${surface}:${refsKey}`}
+              key={`${surface}:${stableRefsKey}`}
               organizationId={orgId}
               surface={surface}
               refs={refs}

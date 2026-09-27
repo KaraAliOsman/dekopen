@@ -16,9 +16,9 @@ import type { AiJobDetail } from "../../api/generated/models/aiJobDetail";
 import { t } from "../../i18n/es-CL";
 import { jobErrorKey } from "../jobs/jobError";
 import type { DesignOp } from "../commands/types";
-import { describeDesignOp, designAssistProduct } from "../canvas/designOps";
+import { describeDesignOp, designAssistProduct, productFingerprint } from "../canvas/designOps";
 import type { ProductJson } from "../canvas/productEditing";
-import { useDesignOpsBridge } from "./assistantContext";
+import { stableRefs, useDesignOpsBridge } from "./assistantContext";
 import { BatchOpsStep } from "./BatchOpsStep";
 import { SURFACE_LABELS } from "./surfaces";
 
@@ -49,9 +49,13 @@ type Turn = {
   result: TranscriptAgentTurn | null;
   errorCode: string | null;
   /** The product the ops steps were validated against — captured at
-   * send-time; turns resumed from storage lose it (the bridge re-validates
-   * at apply anyway). */
+   * send-time; turns resumed from storage lose it and carry the durable
+   * product_sig fingerprint instead (server-persisted on the user turn). */
   product: { [key: string]: unknown } | null;
+  /** Fingerprint of the product this round's ops were validated against —
+   * survives reload via the transcript so a restored apply still refuses
+   * onto a changed design. */
+  productSig: string | null;
   /** Position of this turn's agent/error entry inside the job transcript —
    * outcomes are keyed on that index, not the thread's. */
   transcriptIndex: number;
@@ -63,6 +67,7 @@ interface TranscriptAgentTurn {
   role?: string;
   text?: string;
   replay?: boolean;
+  product_sig?: string;
   reply?: string;
   queries?: { surface?: string; tool?: string; status?: string }[];
   claims?: { text?: string; evidence?: string[] }[];
@@ -78,12 +83,16 @@ interface TranscriptAgentTurn {
  * answers them; a trailing user entry is a round still in flight. */
 function threadFromJob(job: AiJobDetail): Turn[] {
   const turns: Turn[] = [];
-  let pending: { text: string; replay: boolean } | null = null;
+  let pending: { text: string; replay: boolean; sig: string | null } | null = null;
   const entries = (job.transcript ?? []) as TranscriptAgentTurn[];
   for (const [index, entry] of entries.entries()) {
     if (!entry || typeof entry !== "object") continue;
     if (entry.role === "user") {
-      pending = { text: String(entry.text ?? ""), replay: Boolean(entry.replay) };
+      pending = {
+        text: String(entry.text ?? ""),
+        replay: Boolean(entry.replay),
+        sig: typeof entry.product_sig === "string" ? entry.product_sig : null,
+      };
     } else if (entry.role === "agent") {
       turns.push({
         goal: pending?.text ?? "",
@@ -91,6 +100,7 @@ function threadFromJob(job: AiJobDetail): Turn[] {
         result: entry,
         errorCode: null,
         product: null,
+        productSig: pending?.sig ?? null,
         transcriptIndex: index,
         appliedOps: new Set(),
         declinedOps: new Set(),
@@ -103,6 +113,7 @@ function threadFromJob(job: AiJobDetail): Turn[] {
         result: null,
         errorCode: typeof entry.code === "string" ? entry.code : null,
         product: null,
+        productSig: pending?.sig ?? null,
         transcriptIndex: index,
         appliedOps: new Set(),
         declinedOps: new Set(),
@@ -117,6 +128,7 @@ function threadFromJob(job: AiJobDetail): Turn[] {
       result: null,
       errorCode: null,
       product: null,
+      productSig: pending.sig,
       transcriptIndex: entries.length - 1,
       appliedOps: new Set(),
       declinedOps: new Set(),
@@ -132,6 +144,7 @@ function threadFromJob(job: AiJobDetail): Turn[] {
       result: job.result as TranscriptAgentTurn,
       errorCode: null,
       product: null,
+      productSig: null,
       transcriptIndex: entries.length - 1,
       appliedOps: new Set(),
       declinedOps: new Set(),
@@ -219,7 +232,10 @@ export function AgentBody({
   const [offline, setOffline] = useState(false);
   const headers = { headers: { "X-Organization-ID": organizationId } };
 
-  const refsKey = JSON.stringify(refs);
+  // Continuity keys on the stable identity refs — a canvas selection change
+  // must not re-run the bind (it would churn the dock on every click), while
+  // the full refs still travel with each request for context.
+  const refsKey = JSON.stringify(stableRefs(refs));
 
   function clearPoll(): void {
     if (pollTimer.current !== null) {
@@ -255,7 +271,14 @@ export function AgentBody({
         const built = threadFromJob(next);
         if (product) {
           for (const turn of built) {
-            if (turn.product === null && turn.result?.steps?.some((step) => step.kind === "ops")) {
+            // Restored turns (productSig set) keep their durable fingerprint —
+            // backfilling the live product onto them would let stale ops
+            // apply onto a changed design.
+            if (
+              turn.product === null &&
+              turn.productSig === null &&
+              turn.result?.steps?.some((step) => step.kind === "ops")
+            ) {
               turn.product = product;
             }
           }
@@ -300,10 +323,19 @@ export function AgentBody({
         if (cancelled || seq !== requestSeq.current) return;
         if (list.status !== 200) return;
         const items = (list.data ?? []) as AiJobDetail[];
+        // Volatile refs (a live canvas selection) never key the durable job —
+        // match on the stable identity refs only.
+        const identity = stableRefs(refs);
+        // Symmetric match: a job stored with extra refs (e.g. the editor's
+        // project_id pair) must not bind to a bare-surface dock — subset
+        // matching re-keys a position job onto every position route.
         const match = items.find(
           (item) =>
             item.surface === surface &&
-            Object.entries(refs).every(([key, value]) => String(item.refs?.[key] ?? "") === value),
+            Object.keys(identity).length === Object.keys(item.refs ?? {}).length &&
+            Object.entries(identity).every(
+              ([key, value]) => String(item.refs?.[key] ?? "") === value,
+            ),
         );
         if (!match) return;
         const detail = await aiJobRetrieve(match.id, headers);
@@ -360,6 +392,11 @@ export function AgentBody({
     // The live product rides along only on the position surface — elsewhere
     // ops steps can't be validated and are dropped server-side anyway.
     const product = surface === "position" && bridge ? bridge.product : null;
+    // The sig persists on the user turn — a restored ops step applies only
+    // while the live product still matches what the ops validated against.
+    const productSig = product
+      ? productFingerprint(designAssistProduct(product as ProductJson))
+      : null;
     try {
       let jobId: string;
       if (followTarget) {
@@ -369,7 +406,11 @@ export function AgentBody({
           followTarget.id,
           {
             message: trimmed,
+            // Live refs refresh volatile pointers (the canvas selection) so
+            // a follow-up's "this" resolves to what's selected now.
+            refs,
             ...(product ? { product: designAssistProduct(product as ProductJson) } : {}),
+            ...(productSig ? { product_sig: productSig } : {}),
           },
           {
             headers: {
@@ -389,6 +430,7 @@ export function AgentBody({
             refs,
             goal: trimmed,
             ...(product ? { product: designAssistProduct(product as ProductJson) } : {}),
+            ...(productSig ? { product_sig: productSig } : {}),
             history: [],
             operation_key: operationKey.current.key,
           },
@@ -409,6 +451,7 @@ export function AgentBody({
           result: null,
           errorCode: null,
           product,
+          productSig,
           transcriptIndex: prev.length ? (prev[prev.length - 1]?.transcriptIndex ?? -1) + 1 : 0,
           appliedOps: new Set(),
           declinedOps: new Set(),
@@ -497,10 +540,19 @@ export function AgentBody({
   function applyOps(turnIndex: number, stepIndex: number, ops: DesignOp[]): void {
     const turn = thread[turnIndex];
     // The bridge must still close over the exact product the ops were
-    // validated against — a commit in between made them stale. Resumed
-    // turns carry no snapshot (product null); the bridge's own validation
-    // is the gate there.
-    if (!bridge || !turn || (turn.product !== null && turn.product !== bridge.product)) return;
+    // validated against — a commit in between made them stale. In-session
+    // turns identity-compare the snapshot; restored turns carry the durable
+    // product_sig the server persisted, so a reload doesn't reopen the
+    // apply-onto-changed-design hole.
+    if (!bridge || !turn) return;
+    if (turn.product !== null) {
+      if (turn.product !== bridge.product) return;
+    } else if (
+      turn.productSig !== null &&
+      turn.productSig !== productFingerprint(designAssistProduct(bridge.product as ProductJson))
+    ) {
+      return;
+    }
     try {
       bridge.apply(ops);
     } catch {
@@ -749,12 +801,10 @@ export function AgentBody({
                     <div className="ask-dock__artifacts">
                       {turn.result.artifacts.map((item, i) => {
                         const artifact = item as { kind?: string; title?: string };
-                        // Deep-link to THIS artifact on the job's flat shelf —
-                        // chips before it in earlier turns offset the index.
-                        const shelfIndex =
-                          thread
-                            .slice(0, turnIndex)
-                            .reduce((sum, t) => sum + (t.result?.artifacts?.length ?? 0), 0) + i;
+                        // Deep-link by transcript coordinates (turn:item) — the
+                        // flat shelf truncates to the newest entries, so a
+                        // shelf index would drift to the wrong artifact.
+                        const artRef = `${turn.transcriptIndex}:${i}`;
                         return (
                           <button
                             key={i}
@@ -762,9 +812,7 @@ export function AgentBody({
                             className="ask-dock__artifact"
                             title={t("aiws.openWorkspace")}
                             onClick={() =>
-                              job
-                                ? navigate(`/assistant?job=${job.id}&art=${shelfIndex}`)
-                                : undefined
+                              job ? navigate(`/assistant?job=${job.id}&art=${artRef}`) : undefined
                             }
                           >
                             {artifact.title ?? artifact.kind ?? t("aiws.inspector")}

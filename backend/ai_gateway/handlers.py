@@ -61,7 +61,6 @@ def ai_agent_run(
     ai_job_id = UUID(str(payload["ai_job_id"]))
     mode = str(payload["mode"])
     goal = str(payload["goal"])
-    replay = bool(payload.get("replay"))
     report(5)
 
     with transaction.atomic():
@@ -96,11 +95,9 @@ def ai_agent_run(
                 if prior is None:
                     raise _Unclaimable
                 transcript_before = list(prior.get("transcript") or [])
-                if replay:
-                    # A retry replays the job's original goal — not the
-                    # canned client text — so the run repeats what the
-                    # person actually asked for.
-                    goal = str(prior.get("goal") or goal)
+                # A retry replays the message of the FAILED round — the view
+                # resolves it from the transcript and sends it as the payload
+                # goal; replay only marks the transcript turn for the UI.
                 try:
                     claimed = jobs.resume_job(
                         job_id=ai_job_id,
@@ -146,6 +143,11 @@ def ai_agent_run(
                 operation_key=str(payload["operation_key"]),
                 job=claimed,
                 replay=bool(payload.get("replay")),
+                product_sig=str(payload.get("product_sig") or ""),
+                # Only a resume payload's history is trustworthy — the view
+                # rebuilt it from the stored transcript. First-run history
+                # is client input and must not enter the grounding set.
+                history_trusted=mode == "resume",
                 progress=report,
             )
         report(95)
@@ -167,6 +169,13 @@ def ai_agent_run(
         with transaction.atomic():
             with connection.cursor() as cursor:
                 _set_claims(cursor, context)
+            if jobs.job_state(job_id=ai_job_id) == "CANCELED":
+                # A mid-run cancel landed during the last provider call:
+                # finish_job then finds no RUNNING row. Report the user's
+                # cancel — not a phantom ai_job_terminal over a state the
+                # user already committed.
+                jobs.clear_cancel_signal(job_id=ai_job_id)
+                raise JobPermanentError("ai_job_canceled") from error
             if mode == "resume":
                 jobs.record_failure(
                     job_id=ai_job_id,

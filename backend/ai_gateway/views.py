@@ -13,7 +13,7 @@ from ai_gateway import service
 from ai_gateway import jobs
 from ai_gateway.metrics import ai_metrics
 from ai_gateway.assist import ask, list_turns
-from ai_gateway.context import _ContextError
+from ai_gateway.context import _ContextError, stable_refs
 from ai_gateway.providers import ProviderError
 from ai_gateway.serializers import (
     AiAgentAcceptedSerializer,
@@ -238,11 +238,15 @@ class AiAgentView(APIView):
                 )
             operation_key = str(data["operation_key"])
             try:
+                # The job row's refs are the conversation's identity —
+                # volatile pointer refs (a live canvas selection) stay in the
+                # run payload for context but never key the durable job, or
+                # every selection change would mint a new conversation.
                 job = jobs.enqueue_job(
                     org_id=org_id,
                     user_id=token.user_id,
                     surface=surface,
-                    refs=refs,
+                    refs=stable_refs(refs),
                     goal=str(data["goal"]),
                     operation_key=operation_key,
                 )
@@ -269,6 +273,7 @@ class AiAgentView(APIView):
                             "refs": refs,
                             "goal": str(data["goal"]),
                             "product": data.get("product"),
+                            "product_sig": str(data.get("product_sig") or ""),
                             "history": list(data.get("history") or []),
                             "operation_key": operation_key,
                         },
@@ -396,11 +401,41 @@ class AiJobMessagesView(APIView):
                         "ai_job_running",
                         "Ya hay una instrucción en curso en este trabajo.",
                     )
-                history = [
-                    {
+                def _history_entry(turn: dict) -> dict:
+                    content = str(
+                        turn.get("text") or turn.get("reply") or ""
+                    )
+                    if turn.get("role") == "agent":
+                        # The model must see what it already proposed —
+                        # stripped history let follow-ups re-emit a duplicate
+                        # ops/prepare step as if it were new.
+                        proposed = [
+                            str(step.get("label") or step.get("kind") or "")
+                            for step in (turn.get("steps") or [])
+                            if isinstance(step, dict)
+                        ][:6]
+                        artifacts = [
+                            str(art.get("title") or art.get("kind") or "")
+                            for art in (turn.get("artifacts") or [])
+                            if isinstance(art, dict)
+                        ][:6]
+                        digest = [
+                            item for item in (*proposed, *artifacts) if item
+                        ]
+                        if digest:
+                            content = (
+                                f"{content} [propuso: {'; '.join(digest)}]"
+                            )
+                    return {
                         "role": turn.get("role"),
-                        "content": turn.get("text") or turn.get("reply") or "",
+                        # Replies outlive the run serializer's per-turn cap —
+                        # truncate here or every later follow-up wedges the
+                        # job on job_payload_invalid.
+                        "content": content[:2000],
                     }
+
+                history = [
+                    _history_entry(turn)
                     for turn in job.get("transcript") or []
                     # Only roles the run serializer accepts; error turns and
                     # empty entries would otherwise reject the whole
@@ -418,9 +453,18 @@ class AiJobMessagesView(APIView):
                 # the worker polls job_runs continuously and would otherwise
                 # claim a run whose ai_job still reads SUCCEEDED, fail the
                 # claim, and leave this job wedged in QUEUED with no live run.
-                jobs.mark_queued(
+                # The flip is also the mutex: only the request that moves a
+                # settled state to QUEUED may enqueue — a loser that saw the
+                # same settled state leaves with a conflict, not a second run.
+                previous = jobs.mark_queued(
                     job_id=job_id, org_id=org_id, user_id=token.user_id
                 )
+                if previous is None:
+                    raise contract_error(
+                        409,
+                        "ai_job_running",
+                        "Ya hay una instrucción en curso en este trabajo.",
+                    )
                 try:
                     with job_service.job_backend():
                         queued, created = job_service.enqueue(
@@ -430,7 +474,10 @@ class AiJobMessagesView(APIView):
                                 "ai_job_id": str(job["id"]),
                                 "mode": "resume",
                                 "surface": str(job["surface"]),
-                                "refs": dict(job.get("refs") or {}),
+                                # Live refs from the caller refresh volatile
+                                # pointers (selection); the stored row keeps
+                                # stable identity refs only.
+                                "refs": dict(data.get("refs") or job.get("refs") or {}),
                                 "goal": str(data["message"]),
                                 # The product rides with each message — the
                                 # client sends the position's live
@@ -438,13 +485,20 @@ class AiJobMessagesView(APIView):
                                 # current design, never a snapshot stored at
                                 # job creation.
                                 "product": data.get("product"),
+                                "product_sig": str(data.get("product_sig") or ""),
                                 "history": history,
+                                # Server-rebuilt from the stored transcript —
+                                # its numbers may ground the follow-up.
+                                "history_trusted": True,
                                 "operation_key": operation_key,
                             },
                             idempotency_key=f"ai:{operation_key}",
                             created_by=token.user_id,
                         )
                 except job_service.JobServiceError as error:
+                    # The QUEUED mark committed in autocommit — restore the
+                    # pre-mark state or the job wedges QUEUED with no run.
+                    jobs.restore_queued(job_id=job_id, previous=previous)
                     raise contract_error(
                         409, error.code,
                         "No se pudo encolar la instrucción del agente.",
@@ -458,6 +512,7 @@ class AiJobMessagesView(APIView):
                     and queued.get("state") not in ("FAILED", "CANCELED")
                     and str(stored.get("goal") or "") != str(data["message"])
                 ):
+                    jobs.restore_queued(job_id=job_id, previous=previous)
                     raise contract_error(
                         409,
                         "operation_conflict",
@@ -476,8 +531,10 @@ class AiJobMessagesView(APIView):
 
 
 class AiJobRetryView(APIView):
-    """Re-run a retryable failed round. The goal is the job's own stored
-    goal — a retry never retypes a message — and the payload's replay flag
+    """Re-run a retryable failed round. The goal is the FAILED round's own
+    message — the last user turn in the transcript — not the job's original
+    goal, so a retry of a failed follow-up doesn't silently re-execute the
+    first request and emit a duplicate proposal. The payload's replay flag
     makes the transcript turn read as a re-run, not a new message."""
 
     @extend_schema(
@@ -501,11 +558,27 @@ class AiJobRetryView(APIView):
                     "ai_job_not_retryable",
                     "El trabajo no está en un estado reintentable.",
                 )
+            # The FAILED round's own message is what replays — the last
+            # user turn the transcript recorded before the error. The job
+            # row's goal is only the first round's request.
+            failed_message = next(
+                (
+                    str(turn.get("text") or "").strip()
+                    for turn in reversed(job.get("transcript") or [])
+                    if isinstance(turn, dict)
+                    and turn.get("role") == "user"
+                    and str(turn.get("text") or "").strip()
+                ),
+                str(job["goal"]),
+            )
             # Idempotent per attempt: mark_queued bumps updated_at, so the
             # derived key is unique per retry — a double POST of the same
             # click lands on one worker run.
-            if not jobs.mark_queued(
-                job_id=job_id, org_id=org_id, user_id=token.user_id
+            if (
+                jobs.mark_queued(
+                    job_id=job_id, org_id=org_id, user_id=token.user_id
+                )
+                is None
             ):
                 raise contract_error(
                     409,
@@ -523,7 +596,7 @@ class AiJobRetryView(APIView):
                             "mode": "resume",
                             "surface": str(job["surface"]),
                             "refs": dict(job.get("refs") or {}),
-                            "goal": str(job["goal"]),
+                            "goal": failed_message,
                             "history": [],
                             "operation_key": retry_key,
                             "replay": True,

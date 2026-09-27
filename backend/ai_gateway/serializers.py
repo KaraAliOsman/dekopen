@@ -112,6 +112,9 @@ class AiAgentRequestSerializer(serializers.Serializer):
     refs = _RefsDictField(required=False)
     goal = serializers.CharField(min_length=1, max_length=2000)
     product = _BoundedDictField(required=False)
+    # The client's fingerprint of the product payload — persisted on the
+    # turn so a restored ops step can refuse to apply onto a changed design.
+    product_sig = serializers.CharField(required=False, max_length=64, allow_blank=True)
     history = AiAgentHistorySerializer(many=True, required=False, max_length=6)
     operation_key = serializers.CharField(min_length=8, max_length=120)
 
@@ -160,6 +163,11 @@ class AiAgentRunSerializer(serializers.Serializer):
     # Retry replays the job's original goal — the marker travels so the
     # transcript turn reads "this was a re-run", not a retyped message.
     replay = serializers.BooleanField(required=False, default=False)
+    product_sig = serializers.CharField(required=False, max_length=64, allow_blank=True)
+    # Set by the resume path only: its history was rebuilt server-side from
+    # the stored transcript, so its numbers may ground a follow-up. A
+    # first-run payload's history is client-supplied and never trusted.
+    history_trusted = serializers.BooleanField(required=False, default=False)
 
 
 class AiAgentResultSerializer(serializers.Serializer):
@@ -185,6 +193,13 @@ class AiJobMessageSerializer(serializers.Serializer):
     # Follow-ups carry the position's live product so design ops evaluate
     # the current design — a stored snapshot would go stale between turns.
     product = _BoundedDictField(required=False)
+    # And the caller's live context refs — a volatile pointer (e.g. the
+    # canvas selection) refreshes what "this" means without re-keying the
+    # job, whose stored refs stay stable.
+    refs = _RefsDictField(required=False)
+    # The client's fingerprint of the product payload — persisted on the
+    # turn so a restored ops step can refuse to apply onto a changed design.
+    product_sig = serializers.CharField(required=False, max_length=64, allow_blank=True)
 
 
 class AiJobSerializer(serializers.Serializer):

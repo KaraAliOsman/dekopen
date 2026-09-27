@@ -324,6 +324,7 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
               openRequested={assistantRequest}
               hideTrigger
               organizationId={org?.id ?? null}
+              userId={auth.me?.user.id ?? null}
             />
           ) : null}
         </div>

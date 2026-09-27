@@ -63,6 +63,13 @@ const SURFACE_ROUTES: {
   { pattern: "/production", surface: "production", refs: () => ({}) },
   { pattern: "/purchasing", surface: "purchasing", refs: () => ({}) },
   { pattern: "/catalogs/*", surface: "catalog", refs: () => ({}) },
+  // Client detail binds its own surface — answering with the org-level
+  // aggregate on /clients/:id would be a wrong-object binding.
+  {
+    pattern: "/clients/:id",
+    surface: "client",
+    refs: (p) => ({ client_id: p.id ?? "" }),
+  },
   { pattern: "/clients", surface: "clients", refs: () => ({}) },
   { pattern: "/settings/*", surface: "settings", refs: () => ({}) },
   // Org-level commercial config surfaces answer through the organization
@@ -126,6 +133,16 @@ export function useAssistantSurface(surface: string | null, refs?: Record<string
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refsKey is the
     // stable serialization of refs; the raw object would re-fire per render.
   }, [setOverride, surface, refsKey]);
+}
+
+/** Refs that describe the user's current pointer rather than the
+ * conversation's object — they reach the context projection but never the
+ * thread/job identity, or every canvas click would orphan the dock. Mirrors
+ * VOLATILE_REFS in backend/ai_gateway/context.py. */
+export const VOLATILE_REFS = new Set(["selection"]);
+
+export function stableRefs(refs: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(refs).filter(([key]) => !VOLATILE_REFS.has(key)));
 }
 
 /** The canvas's design-ops bridge, when a position editor is mounted. */

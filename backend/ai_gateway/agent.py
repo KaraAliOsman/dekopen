@@ -508,7 +508,7 @@ def _prepare_path_valid(action: str, path: str) -> bool:
     return bool(re.fullmatch(pattern, path))
 
 
-def _key_grounded(key: Any, grounding: set) -> bool:
+def _key_grounded(key: Any, grounding: set, refs: frozenset[str]) -> bool:
     """A key composed only of numeric/money characters ("999999",
     "$ 60.000") renders as a number claim; identifier keys with letters
     ("item_2") stay structure."""
@@ -516,7 +516,7 @@ def _key_grounded(key: Any, grounding: set) -> bool:
         if re.search(r"[A-Za-z_]", key):
             return True
         return _grounded(key, grounding)
-    return _payload_grounded(key, grounding)
+    return _payload_grounded(key, grounding, refs)
 
 
 def _ungrounded_numbers(text: str, grounding: set) -> list[str]:
@@ -534,27 +534,32 @@ def _ungrounded_numbers(text: str, grounding: set) -> list[str]:
     return found[:8]
 
 
-def _payload_grounded(node: Any, grounding: set) -> bool:
+def _payload_grounded(node: Any, grounding: set, refs: frozenset[str]) -> bool:
     """An artifact payload is durable output — invented numbers inside a
-    quote or purchase plan render as fact. Every scalar carries the same
-    citable-numbers rule as the reply: literal numbers must sit inside the
-    grounding set, and strings face _grounded. A key that IS a number
-    ("total_999999" renders as text) is a claim, not structure — identifier
-    keys containing digits stay free."""
+    quote or purchase plan render as fact, and an invented entity id would
+    deep-link to nothing real. Every scalar carries the same citable-numbers
+    rule as the reply; strings must also only cite UUIDs the projections
+    actually returned. A key that IS a number ("total_999999" renders as
+    text) is a claim, not structure — identifier keys containing digits
+    stay free."""
     if isinstance(node, dict):
         return all(
-            _key_grounded(key, grounding) and _payload_grounded(value, grounding)
+            _key_grounded(key, grounding, refs)
+            and _payload_grounded(value, grounding, refs)
             for key, value in node.items()
         )
     if isinstance(node, list):
-        return all(_payload_grounded(item, grounding) for item in node)
+        return all(_payload_grounded(item, grounding, refs) for item in node)
     if isinstance(node, bool) or node is None:
         return True
     if isinstance(node, (int, float, Decimal)):
         return any(
             abs(Decimal(str(node)) - value) <= Decimal("0.5") for value in grounding
         )
-    return _grounded(str(node), grounding)
+    text = str(node)
+    if not all(ref in refs for ref in _PATH_UUID.findall(text)):
+        return False
+    return _grounded(text, grounding)
 
 
 def _step_out(item: dict, *, context_refs: frozenset[str]) -> dict | None:
@@ -759,6 +764,7 @@ def _act(
     product: Any,
     history: list,
     operation_key: str,
+    history_trusted: bool = False,
     job_id: UUID | None = None,
     progress: Any = None,
 ) -> dict:
@@ -780,9 +786,9 @@ def _act(
     model = ""
     document: Any = {}
     for round_index in range(MAX_ROUNDS):
-        # Cooperative cancel: the run transaction holds the ai_jobs row lock,
-        # so the cancel request lands in a separate signals table — checked
-        # here between provider rounds.
+        # Cooperative cancel, checked between provider rounds: a cancel that
+        # landed mid-run (direct CANCELED write or signal row) stops the
+        # loop before the next round burns another provider call.
         if job_id is not None and jobs.cancel_requested(job_id=job_id):
             raise JobCanceledError()
         _report(20 + round_index * 20)
@@ -868,12 +874,14 @@ def _act(
             "El agente devolvió una respuesta inválida.",
         )
     _report(80)
-    # Multi-turn grounding: numbers the user typed in earlier turns of this
-    # job (and text the agent already produced — its figures were grounded
-    # when emitted) stay citable; only fresh invention is rejected.
+    # Multi-turn grounding: numbers in earlier turns of this job stay
+    # citable — but only when the history was rebuilt server-side from the
+    # stored transcript (resume). A first-run history is arbitrary client
+    # input: letting it into the grounding set would let any fabricated
+    # figure be restated as fact.
     declared_text = goal + " " + " ".join(
         str(turn.get("text") or turn.get("content") or turn.get("reply") or "")
-        for turn in (history or [])
+        for turn in (history if history_trusted else [])
         if isinstance(turn, dict) and turn.get("role") in ("user", "agent")
     )
     grounding = _grounding_values(
@@ -1051,7 +1059,9 @@ def _act(
     validated_artifacts = []
     for artifact in jobs.artifacts(raw_artifacts, context_refs_all):
         # Ungrounded payloads are dropped, not displayed (review AI-02).
-        if not _payload_grounded(artifact.get("payload") or {}, grounding):
+        if not _payload_grounded(
+            artifact.get("payload") or {}, grounding, context_refs_all
+        ):
             dropped_ungrounded += 1
             continue
         validated_artifacts.append(
@@ -1148,6 +1158,8 @@ def act(
     operation_key: str,
     job: dict | None = None,
     replay: bool = False,
+    product_sig: str = "",
+    history_trusted: bool = False,
     progress: Any = None,
 ) -> dict:
     """§07-B — every agent run is a durable job. The transcript carries the
@@ -1161,9 +1173,14 @@ def act(
     )
     transcript = list(job.get("transcript") or [])
     turn: dict = {"role": "user", "text": goal[:MAX_GOAL]}
+    if product_sig:
+        # The design the ops validate against — persisted so a restored
+        # turn can still refuse to apply onto a changed canvas.
+        turn["product_sig"] = product_sig
     if replay:
-        # The retry endpoint re-runs the original goal — mark it so the UI
-        # shows a retry, not a message the user never wrote again.
+        # The retry endpoint re-runs the failed round's own message — mark
+        # it so the UI shows a retry, not a message the user never wrote
+        # again.
         turn["replay"] = True
     transcript.append(turn)
     result = _act(
@@ -1175,18 +1192,32 @@ def act(
         product=product,
         history=history,
         operation_key=operation_key,
+        history_trusted=history_trusted,
         job_id=UUID(job["id"]) if job.get("id") else None,
         progress=progress,
     )
 
-    has_actions = any(
+    # Approvals are sticky across rounds: a no-op follow-up must not flip a
+    # job whose earlier rounds still have gated steps awaiting a decision.
+    # Pending = every proposed gated step with no recorded outcome.
+    resolved = {
+        (int(o.get("turn_index", -1)), int(o.get("step_index", -1)))
+        for o in (job.get("outcomes") or [])
+        if isinstance(o, dict)
+    }
+    pending_approvals = any(
+        step.get("kind") in ("prepare", "ops", "batch_ops")
+        and (turn_index, step_index) not in resolved
+        for turn_index, turn_row in enumerate(transcript)
+        for step_index, step in enumerate(turn_row.get("steps") or [])
+    ) or any(
         step.get("kind") in ("prepare", "ops", "batch_ops")
         for step in result["steps"]
     )
     state = (
         "WAITING_FOR_USER"
         if result["questions"]
-        else "WAITING_FOR_APPROVAL" if has_actions else "SUCCEEDED"
+        else "WAITING_FOR_APPROVAL" if pending_approvals else "SUCCEEDED"
     )
     transcript.append(
         {

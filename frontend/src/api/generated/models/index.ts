@@ -49,6 +49,7 @@ export * from "./aiJobListParams";
 export * from "./aiJobLive";
 export * from "./aiJobMessageRequest";
 export * from "./aiJobMessageRequestProduct";
+export * from "./aiJobMessageRequestRefs";
 export * from "./aiJobOutcomeActionEnum";
 export * from "./aiJobOutcomeRequest";
 export * from "./aiJobOutcomeResponse";

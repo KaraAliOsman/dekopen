@@ -1049,8 +1049,10 @@ export const getAiJobRetryUrl = (jobId: string) => {
 };
 
 /**
- * Re-run a retryable failed round. The goal is the job's own stored
- * goal — a retry never retypes a message — and the payload's replay flag
+ * Re-run a retryable failed round. The goal is the FAILED round's own
+ * message — the last user turn in the transcript — not the job's original
+ * goal, so a retry of a failed follow-up doesn't silently re-execute the
+ * first request and emit a duplicate proposal. The payload's replay flag
  * makes the transcript turn read as a re-run, not a new message.
  */
 export const aiJobRetry = async (
