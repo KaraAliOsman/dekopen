@@ -2010,6 +2010,17 @@ export const messages = {
     "No se pudo confirmar la operación. Revisa la conexión y vuelve a cargar el catálogo antes de reintentar.",
   "catalog.uncertainCreate":
     "No recibimos la confirmación y el registro podría haberse creado. Conservamos tus datos. Antes de crear otro, cierra este formulario y vuelve a abrir el catálogo para comprobarlo.",
+  "catalog.errNotFound": "El registro ya no existe. Recarga el catálogo para ver el estado actual.",
+  "catalog.errReferenced":
+    "No se puede eliminar: otros registros del catálogo o proyectos lo están usando. Retíralo de esos registros primero.",
+  "catalog.errSectionFileMissing": "Adjunta el archivo de la sección antes de guardar.",
+  "catalog.errSectionFileName":
+    "El nombre del archivo no es válido. Usa solo letras, números, guiones y puntos.",
+  "catalog.errSectionFileSize": "El archivo supera el tamaño máximo permitido.",
+  "catalog.errSectionStorage":
+    "No se pudo guardar el archivo de la sección. Reintenta; si el problema sigue, revisa la conexión.",
+  "catalog.errStaleEdit":
+    "Este registro cambió mientras lo editabas. Recarga el catálogo y vuelve a intentarlo.",
   "catalog.contents": "Contenido del kit",
   "catalog.component": "Componente",
   "catalog.addComponent": "Agregar componente",

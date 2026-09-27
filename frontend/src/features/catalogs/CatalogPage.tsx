@@ -33,8 +33,21 @@ type Label = Parameters<typeof t>[0];
 const ct = (key: string) => t(`catalog.${key}` as Label);
 const resources: Resource[] = ["systems", "articles", "glazing", "hardware-kits"];
 
+const DETAIL_KEYS: Record<string, Label> = {
+  "catalogs.errors.not_found": "catalog.errNotFound",
+  "catalogs.errors.referenced": "catalog.errReferenced",
+  "catalogs.errors.section_file_missing": "catalog.errSectionFileMissing",
+  "catalogs.errors.section_file_name": "catalog.errSectionFileName",
+  "catalogs.errors.section_file_size": "catalog.errSectionFileSize",
+  "catalogs.errors.section_storage": "catalog.errSectionStorage",
+  "catalogs.errors.stale_edit": "catalog.errStaleEdit",
+};
+
 function failure(error: unknown): string {
   if (!(error instanceof ApiError)) return ct("errorNetwork");
+  const payload = error.payload as { error?: { detail?: unknown } } | null;
+  const detail = payload?.error?.detail;
+  if (typeof detail === "string" && DETAIL_KEYS[detail]) return t(DETAIL_KEYS[detail]);
   if (error.status === 401 || error.status === 403) return ct("errorPermission");
   if (error.status === 404) return ct("errorMissing");
   if (error.status === 409) return ct("errorConflict");
