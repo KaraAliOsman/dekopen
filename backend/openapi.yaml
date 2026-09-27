@@ -86,6 +86,86 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
   /api/v1/ai/ask/:
+    get:
+      operationId: ai_ask_thread
+      description: |-
+        The durable ask thread for this context — the dock restores it
+        after reload so a conversation survives instead of resetting.
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: query
+        name: refs
+        schema:
+          type: string
+        description: Context refs as a JSON object — the same identifier map the ask
+          call carries.
+        required: true
+      - in: query
+        name: surface
+        schema:
+          type: string
+        required: true
+      tags:
+      - ai
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AiAskTurn'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
     post:
       operationId: ai_ask
       description: |-
@@ -15404,6 +15484,23 @@ components:
       - credits_debited
       - model
       - warnings
+    AiAskTurn:
+      type: object
+      description: |-
+        One durable ask turn — the dock replays these to rebuild the
+        conversation for the current context after navigation or reload.
+      properties:
+        question:
+          type: string
+        answer:
+          $ref: '#/components/schemas/AiAskResponse'
+        created_at:
+          type: string
+          nullable: true
+      required:
+      - answer
+      - created_at
+      - question
     AiInvokeRequestRequest:
       type: object
       properties:

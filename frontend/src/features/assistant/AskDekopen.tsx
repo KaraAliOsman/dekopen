@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { ApiError } from "../../api/apiMutator";
-import { aiAsk } from "../../api/generated/dekopen";
+import { aiAsk, aiAskThread } from "../../api/generated/dekopen";
 import type { AiAskResponse } from "../../api/generated/models/aiAskResponse";
 import { t } from "../../i18n/es-CL";
 import { AgentBody, SURFACE_LABELS } from "./AgentBody";
@@ -47,6 +47,7 @@ export function AskDekopen({
   /** Agent mode: the bound job's lifecycle drives the header orb so a running
    * job reads alive even while the ask thread sits idle. */
   const [agentJobState, setAgentJobState] = useState<string | null>(null);
+  const [agentComposing, setAgentComposing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   /** One operation key per question — a retried submit replays the committed
    * call instead of debiting twice. */
@@ -72,9 +73,49 @@ export function AskDekopen({
     setBusy(false);
     setMessage("");
     operationKey.current = null;
+    // Durable conversation (§3): the module map survives SPA navigation, but
+    // a reload or a later session restores from the server-side turns — the
+    // thread for this (surface, refs) comes back exactly where it was left.
+    const key = `${surface}:${refsKey}`;
+    const seq = requestSeq.current;
+    let cancelled = false;
+    if (!organizationId) return;
+    void (async () => {
+      try {
+        const list = await aiAskThread(
+          { surface, refs: refsKey },
+          { headers: { "X-Organization-ID": organizationId } },
+        );
+        if (cancelled || seq !== requestSeq.current || list.status !== 200) return;
+        const restored = (list.data ?? [])
+          .map((turn) => ({
+            question: String(turn.question ?? ""),
+            answer: turn.answer as AiAskResponse,
+          }))
+          .filter((turn) => turn.question && turn.answer);
+        if (!restored.length) return;
+        setThreads((prev) => {
+          // Newer in-session turns win — a turn asked while the restore was
+          // in flight must never be replaced by the older snapshot.
+          const existing = prev.get(key) ?? [];
+          if (existing.length >= restored.length) return prev;
+          const next = new Map(prev);
+          next.set(key, restored);
+          dockThreads.clear();
+          for (const [k, v] of next) dockThreads.set(k, v);
+          return next;
+        });
+      } catch {
+        // A restore failure must never surface as an error — the dock simply
+        // opens on an empty thread.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refsKey is the
-    // stable serialization of refs.
-  }, [surface, refsKey]);
+    // stable serialization of refs; organizationId binds the tenant.
+  }, [surface, refsKey, organizationId]);
 
   if (!organizationId) return null;
   const orgId: string = organizationId;
@@ -144,10 +185,24 @@ export function AskDekopen({
             <Orb
               state={
                 mode === "agent"
-                  ? orbStateFor(agentJobState ?? undefined)
+                  ? agentJobState &&
+                    [
+                      "QUEUED",
+                      "PLANNING",
+                      "RUNNING",
+                      "WAITING_FOR_USER",
+                      "WAITING_FOR_APPROVAL",
+                      "FAILED_RETRYABLE",
+                    ].includes(agentJobState)
+                    ? orbStateFor(agentJobState)
+                    : agentComposing
+                      ? "input"
+                      : orbStateFor(agentJobState ?? undefined)
                   : busy
                     ? "thinking"
-                    : "idle"
+                    : question.trim()
+                      ? "input"
+                      : "idle"
               }
               size={26}
             />
@@ -189,6 +244,7 @@ export function AskDekopen({
               surface={surface}
               refs={refs}
               onJobState={setAgentJobState}
+              onComposing={setAgentComposing}
             />
           ) : (
             <>

@@ -178,12 +178,15 @@ export function AgentBody({
   surface,
   refs,
   onJobState,
+  onComposing,
 }: {
   organizationId: string;
   surface: string;
   refs: Record<string, string>;
   /** Lifts the bound job's lifecycle up to the dock header orb. */
   onJobState?: (state: string | null) => void;
+  /** Lifts composition state — while a goal is typed the orb reads INPUT. */
+  onComposing?: (composing: boolean) => void;
 }): JSX.Element {
   const navigate = useNavigate();
   const bridge = useDesignOpsBridge();
@@ -195,6 +198,9 @@ export function AgentBody({
   useEffect(() => {
     onJobState?.(job?.state ?? null);
   }, [job?.state, onJobState]);
+  useEffect(() => {
+    onComposing?.(!!goal.trim());
+  }, [goal, onComposing]);
   const [message, setMessage] = useState("");
   const [thread, setThread] = useState<Turn[]>([]);
   /** Instructions typed while a run is live — the backend can't interleave

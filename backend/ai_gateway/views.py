@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 from rest_framework import status
 from rest_framework.response import Response
@@ -10,7 +12,7 @@ from rest_framework.views import APIView
 from ai_gateway import service
 from ai_gateway import jobs
 from ai_gateway.metrics import ai_metrics
-from ai_gateway.assist import ask
+from ai_gateway.assist import ask, list_turns
 from ai_gateway.context import _ContextError
 from ai_gateway.providers import ProviderError
 from ai_gateway.serializers import (
@@ -18,6 +20,7 @@ from ai_gateway.serializers import (
     AiAgentRequestSerializer,
     AiAskRequestSerializer,
     AiAskResponseSerializer,
+    AiAskTurnSerializer,
     AiInvokeRequestSerializer,
     AiInvokeResponseSerializer,
     AiJobDetailSerializer,
@@ -141,6 +144,54 @@ class AiAskView(APIView):
                     error.code,
                     "El proveedor de IA no está disponible en este momento.",
                 ) from None
+
+    @extend_schema(
+        operation_id="ai_ask_thread",
+        parameters=[
+            ACTIVE_ORGANIZATION_HEADER,
+            OpenApiParameter(
+                "surface", OpenApiTypes.STR, OpenApiParameter.QUERY, required=True,
+            ),
+            OpenApiParameter(
+                "refs", OpenApiTypes.STR, OpenApiParameter.QUERY, required=True,
+                description="Context refs as a JSON object — the same "
+                "identifier map the ask call carries.",
+            ),
+        ],
+        responses={200: AiAskTurnSerializer(many=True), **ERRORS},
+        tags=["ai"],
+    )
+    def get(self, request):
+        """The durable ask thread for this context — the dock restores it
+        after reload so a conversation survives instead of resetting."""
+        with documentary_scope(request, _CALLERS) as (token, _, org_id):
+            surface = str(request.query_params.get("surface") or "")
+            raw_refs = str(request.query_params.get("refs") or "{}")
+            try:
+                refs = json.loads(raw_refs)
+            except json.JSONDecodeError:
+                raise contract_error(
+                    400, "ai_context_ref_invalid",
+                    "La referencia de contexto no es válida.",
+                ) from None
+            if not isinstance(refs, dict):
+                raise contract_error(
+                    400, "ai_context_ref_invalid",
+                    "La referencia de contexto no es válida.",
+                )
+            if surface not in AGENT_REQUIRED_REFS:
+                raise contract_error(
+                    400, "ai_surface_unknown",
+                    "La superficie indicada no existe.",
+                )
+            return Response(
+                list_turns(
+                    org_id=org_id,
+                    user_id=token.user_id,
+                    surface=surface,
+                    refs=refs,
+                )
+            )
 
 
 class AiAgentView(APIView):

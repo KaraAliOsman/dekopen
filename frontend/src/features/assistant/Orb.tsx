@@ -8,7 +8,15 @@ import "./orb.css";
  * the same hues as the state pills. No mouth, no glow — the eyes and the
  * ring carry the whole range the product needs. */
 export type OrbState =
-  "idle" | "queued" | "thinking" | "working" | "waiting" | "success" | "error" | "canceled";
+  | "idle"
+  | "input"
+  | "queued"
+  | "thinking"
+  | "working"
+  | "waiting"
+  | "success"
+  | "error"
+  | "canceled";
 
 /** Durable job lifecycle → orb state. Unknown future states degrade to idle —
  * never pass the API state through unmapped. */

@@ -12,8 +12,11 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+from django.db import connection
+
 from ai_gateway import service as gateway
 from ai_gateway.context import REQUIRED_REFS, _ContextError, build_context
+from ai_gateway.jobs import _ai_backend
 from authentication.errors import contract_error
 from projects.design_assist import _BARE_NUMBER_RE, _MEASURE_RE, _parse_number
 
@@ -275,12 +278,82 @@ def ask(
     validated["warnings"] = [
         item for item in validated["warnings"] if _grounded(item, values)
     ]
-    return {
+    result = {
         "audit_id": envelope["audit_id"],
         "model": envelope["model"],
         "credits_debited": envelope["credits_debited"],
         **validated,
     }
+    _record_turn(
+        org_id=org_id,
+        user_id=user_id,
+        surface=surface,
+        refs=refs or {},
+        question=question[:MAX_QUESTION],
+        answer=result,
+    )
+    return result
 
 
-__all__ = ["ask"]
+def _record_turn(
+    *,
+    org_id: UUID,
+    user_id: UUID,
+    surface: str,
+    refs: dict,
+    question: str,
+    answer: dict,
+) -> None:
+    """Persist the ask turn so the dock restores the conversation across
+    reload and later sessions (§3). Writes run under ``ai_backend`` — a
+    turn is committed evidence of what the assistant answered, so members
+    never mint or edit one through PostgREST. A persistence failure must
+    not break the reply the user is already reading."""
+    if connection.vendor != "postgresql":
+        return
+    try:
+        with _ai_backend():
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO public.ai_ask_turns
+                        (org_id, user_id, surface, refs, question, answer)
+                    VALUES (%s, %s, %s, %s::jsonb, %s, %s::jsonb)
+                    """,
+                    [
+                        str(org_id), str(user_id), surface,
+                        json.dumps(refs), question, json.dumps(answer),
+                    ],
+                )
+    except Exception:  # noqa: BLE001 — evidence must never break the answer
+        return
+
+
+def list_turns(
+    *, org_id: UUID, user_id: UUID, surface: str, refs: dict
+) -> list[dict]:
+    """The durable ask thread for (user, surface, refs) — newest-last so the
+    dock replays it as a conversation. Refs match exactly: a different
+    selection is a different thread."""
+    if connection.vendor != "postgresql":
+        return []
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT question, answer, created_at
+            FROM public.ai_ask_turns
+            WHERE org_id = %s AND user_id = %s AND surface = %s
+              AND refs = %s::jsonb
+            ORDER BY created_at, id
+            LIMIT 50
+            """,
+            [str(org_id), str(user_id), surface, json.dumps(refs)],
+        )
+        rows_out = cursor.fetchall()
+    return [
+        {"question": q, "answer": a, "created_at": ts.isoformat() if ts else None}
+        for q, a, ts in rows_out
+    ]
+
+
+__all__ = ["ask", "list_turns"]

@@ -12,6 +12,8 @@ import type {
   AiAgentRequestRequest,
   AiAskRequestRequest,
   AiAskResponse,
+  AiAskThreadParams,
+  AiAskTurn,
   AiInvokeRequestRequest,
   AiInvokeResponse,
   AiJob,
@@ -319,6 +321,91 @@ export const aiAgent = async (
     method: "POST",
     headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
     body: JSON.stringify(aiAgentRequestRequest),
+  });
+};
+
+export type aiAskThreadResponse200 = {
+  data: AiAskTurn[];
+  status: 200;
+};
+
+export type aiAskThreadResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type aiAskThreadResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type aiAskThreadResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type aiAskThreadResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type aiAskThreadResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type aiAskThreadResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type aiAskThreadResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type aiAskThreadResponseSuccess = aiAskThreadResponse200 & {
+  headers: Headers;
+};
+export type aiAskThreadResponseError = (
+  | aiAskThreadResponse400
+  | aiAskThreadResponse401
+  | aiAskThreadResponse403
+  | aiAskThreadResponse404
+  | aiAskThreadResponse409
+  | aiAskThreadResponse422
+  | aiAskThreadResponse503
+) & {
+  headers: Headers;
+};
+
+export type aiAskThreadResponse = aiAskThreadResponseSuccess | aiAskThreadResponseError;
+
+export const getAiAskThreadUrl = (params: AiAskThreadParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/ai/ask/?${stringifiedParams}` : `/api/v1/ai/ask/`;
+};
+
+/**
+ * The durable ask thread for this context — the dock restores it
+ * after reload so a conversation survives instead of resetting.
+ */
+export const aiAskThread = async (
+  params: AiAskThreadParams,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<aiAskThreadResponse> => {
+  return apiMutator<aiAskThreadResponse>(getAiAskThreadUrl(params), {
+    ...options,
+    method: "GET",
   });
 };
 

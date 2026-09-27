@@ -66,6 +66,15 @@ class AiAskResponseSerializer(serializers.Serializer):
     warnings = serializers.ListField(child=serializers.CharField())
 
 
+class AiAskTurnSerializer(serializers.Serializer):
+    """One durable ask turn — the dock replays these to rebuild the
+    conversation for the current context after navigation or reload."""
+
+    question = serializers.CharField()
+    answer = AiAskResponseSerializer()
+    created_at = serializers.CharField(allow_null=True)
+
+
 class _RefsDictField(serializers.DictField):
     """Identity refs are name → identifier only — anything payload-shaped is
     not an identity and is refused, mirroring the ask contract."""

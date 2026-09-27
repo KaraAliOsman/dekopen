@@ -81,6 +81,40 @@
   transform-origin: center;
 }
 
+/* ————— hover: the orb acknowledges the pointer — a small lift and the eyes
+ * sharpen; the face is alive before the user commits to a click ————— */
+.orb:hover .orb__tilt,
+.orb.is-hover .orb__tilt {
+  animation: none;
+  transform: translateY(-1.4px);
+  transition: transform 160ms ease-out;
+}
+.orb:hover .orb__eyes,
+.orb.is-hover .orb__eyes {
+  animation: none;
+  transform: scale(1.07);
+  transition: transform 160ms ease-out;
+}
+.orb__tilt,
+.orb__eyes {
+  transition: transform 160ms ease-out;
+}
+
+/* ————— input: the user is composing — attentive, still, eyes wide and a
+ * faint accent pulse on the ring: the assistant is listening ————— */
+.orb.is-input .orb__tilt {
+  animation: orb-breathe 3.2s ease-in-out infinite;
+}
+.orb.is-input .orb__eyes {
+  transform: scale(1.06);
+}
+.orb.is-input .orb__ring {
+  opacity: 1;
+  stroke: var(--theme-accent);
+  stroke-dasharray: 4 131;
+  animation: orb-ringpulse 2.4s ease-in-out infinite;
+}
+
 /* ————— idle: slow breath + occasional blink ————— */
 .orb.is-idle .orb__tilt {
   animation: orb-breathe 4.6s ease-in-out infinite;

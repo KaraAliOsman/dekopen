@@ -36,6 +36,8 @@ export * from "./aiAskAction";
 export * from "./aiAskRequestRequest";
 export * from "./aiAskRequestRequestRefs";
 export * from "./aiAskResponse";
+export * from "./aiAskThreadParams";
+export * from "./aiAskTurn";
 export * from "./aiInvokeRequestRequest";
 export * from "./aiInvokeRequestRequestInputPayload";
 export * from "./aiInvokeResponse";
