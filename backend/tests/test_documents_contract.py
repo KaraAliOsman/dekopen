@@ -7,7 +7,7 @@ import pytest
 
 from dekopen_engine.documentary_canonical import file_sha256
 from documents.artifacts import _require_document_role
-from documents.renderers import _doc01, _doc03, _doc06, _doc07, render_pdf_document
+from documents.renderers import _doc01, _doc02, _doc03, _doc06, _doc07, render_pdf_document
 from documents.repository import DocumentaryError
 from documents.serializers import HandleIntentSerializer
 from documents.storage import SIGNED_URL_TTL_SECONDS, SupabaseDocumentStorage
@@ -456,6 +456,19 @@ def test_xlsx_is_deterministic_exact_text_and_no_formula_authority(
         assert profile_workbook["Pedido de perfiles"]["F8"].value == "5800.00"
     finally:
         profile_workbook.close()
+
+
+def test_doc02_pdf_is_the_supplier_facing_glass_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("WEASYPRINT_DLL_DIRECTORIES", "C:\\msys64\\ucrt64\\bin")
+    snapshot = order_snapshot("SUPPLIER_GLASS_PO")
+    content, media_type = render_pdf_document(
+        "DOC-02", snapshot, pdf_identifier="c" * 64
+    )
+    assert content.startswith(b"%PDF-")
+    assert media_type == "application/pdf"
+    with pytest.raises(DocumentaryError) as error:
+        _doc02(order_snapshot("SUPPLIER_PROFILE_PO"))
+    assert error.value.code == "document_scope_mismatch"
 
 
 def test_doc08_generic_order_covers_hardware_and_panel_only() -> None:

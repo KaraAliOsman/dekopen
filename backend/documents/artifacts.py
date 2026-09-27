@@ -116,9 +116,7 @@ def generate_artifact(
         scope = "PROJECT_REVISION"
         scope_id = project_version_id
     elif document_type in _ORDER_DOCUMENTS:
-        if order_id is None or (document_type == "DOC-02" and file_format != "XLSX"):
-            raise DocumentaryError("document_scope_mismatch")
-        if document_type in ("DOC-04", "DOC-08") and file_format not in ("PDF", "XLSX"):
+        if order_id is None or file_format not in ("PDF", "XLSX"):
             raise DocumentaryError("document_scope_mismatch")
         scope = "ORDER"
         scope_id = order_id

@@ -279,7 +279,10 @@ type DocumentAction = { type: string; format: string; label: Parameters<typeof t
 function orderDocuments(order: Order, role: string): DocumentAction[] {
   let docs: DocumentAction[] = [];
   if (order.order_type === "SUPPLIER_GLASS_PO")
-    docs = [{ type: "DOC-02", format: "XLSX", label: "purchasing.doc02" }];
+    docs = [
+      { type: "DOC-02", format: "PDF", label: "purchasing.doc02Pdf" },
+      { type: "DOC-02", format: "XLSX", label: "purchasing.doc02" },
+    ];
   else if (order.order_type === "SUPPLIER_PROFILE_PO")
     docs = [
       { type: "DOC-04", format: "PDF", label: "purchasing.doc04Pdf" },

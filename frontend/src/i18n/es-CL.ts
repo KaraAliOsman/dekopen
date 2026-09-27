@@ -1406,6 +1406,7 @@ export const messages = {
   "purchasing.openDocument": "Generar / abrir",
   "purchasing.doc01": "DOC-01 · Cotización cliente (PDF)",
   "purchasing.doc02": "DOC-02 · Pedido de vidrio (XLSX)",
+  "purchasing.doc02Pdf": "DOC-02 · Pedido de vidrio (PDF)",
   "purchasing.doc03": "DOC-03 · Matriz de ensamble (PDF)",
   "purchasing.doc04Pdf": "DOC-04 · Pedido de perfiles (PDF)",
   "purchasing.doc04Xlsx": "DOC-04 · Pedido de perfiles (XLSX)",

@@ -1950,6 +1950,64 @@ def _doc04(snapshot: dict[str, object]) -> str:
     return body
 
 
+def _doc02(snapshot: dict[str, object]) -> str:
+    """Supplier-facing glass order PDF — the same sealed order payload the
+    DOC-02 XLSX renders, composed as a professional PO rather than a grid."""
+    order = _object(snapshot.get("order"), "invalid_order_snapshot")
+    revision = _object(snapshot.get("revision"), "invalid_order_snapshot")
+    if order.get("order_type") != "SUPPLIER_GLASS_PO":
+        raise DocumentaryError("document_scope_mismatch")
+    lines = [_object(item, "invalid_order_line")
+             for item in _array(snapshot.get("lines"), "invalid_order_snapshot")]
+    pseudo_revision = {
+        "project": {"code": order.get("project_code")},
+        "revision": revision.get("revision_code"),
+        "sealed_at": order.get("confirmed_at"),
+        "bom_hash": revision.get("bom_hash"),
+        "organization": snapshot.get("organization"),
+    }
+    rows_data: list[list[object]] = []
+    total_area = Decimal("0")
+    for line in lines:
+        spec = _object(line.get("specification"), "invalid_order_line")
+        polishing = _object(spec.get("polishing"), "invalid_order_line")
+        quantity = int(line["quantity"])
+        width = Decimal(_value(spec.get("oriented_width_mm")))
+        height = Decimal(_value(spec.get("oriented_height_mm")))
+        area = width * height * quantity / Decimal("1000000")
+        total_area += area
+        rows_data.append([
+            line.get("purchasing_sku"),
+            spec.get("composition"),
+            ", ".join(_value(item) for item in _array(
+                line.get("technical_skus"), "invalid_order_line")),
+            f"{_value(spec.get('oriented_width_mm'))} × {_value(spec.get('oriented_height_mm'))}",
+            quantity,
+            line.get("unit"),
+            "/".join(
+                edge.upper() for edge in ("top", "right", "bottom", "left")
+                if polishing.get(edge) is True
+            ) or "SIN PULIDO",
+            spec.get("location_tag"),
+            format(area.normalize(), "f"),
+        ])
+    rows_data.append(
+        ["TOTAL", "—", "—", "—", "—", "—", "—", "—",
+         format(total_area.normalize(), "f")]
+    )
+    body, _ = _revision_header(pseudo_revision, "Pedido de vidrios", "DOC-02", workshop=True)
+    body += (
+        _po_parties(order, snapshot)
+        + _table(
+            ["SKU compra", "Composición", "SKU taller", "Medidas (mm)",
+             "Cantidad", "Unidad", "Pulido", "Ubicación", "Área m²"],
+            rows_data, ["", "", "", "dimension", "dimension", "", "", "", "dimension"],
+        )
+        + "</main>"
+    )
+    return body
+
+
 def _doc08(snapshot: dict[str, object]) -> str:
     order = _object(snapshot.get("order"), "invalid_order_snapshot")
     revision = _object(snapshot.get("revision"), "invalid_order_snapshot")
@@ -1997,6 +2055,8 @@ def render_pdf_document(
 
     if document_type == "DOC-01":
         body = _doc01(snapshot)
+    elif document_type == "DOC-02":
+        body = _doc02(snapshot)
     elif document_type == "DOC-03":
         body = _doc03(snapshot)
     elif document_type == "DOC-04":
