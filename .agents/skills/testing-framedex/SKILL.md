@@ -28,6 +28,7 @@ description: Local dev-stack recipe for DEKOPEN E2E testing — Supabase CLI sta
 - Glass SKUs come from `glass_purchase_mappings.technical_sku` (DEMO_60 has GLASS-BASE). Panel SKUs from `infill_articles` (DEMO_60 has PANEL-SANDWICH-DEMO-24).
 - DEMO_60 system_id: `3067da09-3119-5ad0-a1d5-498cd2dfd753` (global demo, quote_ready).
 - psql isn't installed on the host — use `docker exec supabase_db_dekopen psql -U postgres -d postgres`.
+- pgTAP: `supabase test db` only works from the MAIN repo dir (`cd /home/ubuntu/repos/framedex`), but the test file path may point into a worktree. NEVER run `supabase db reset` to clean a dirty DB when working from a worktree: the CLI is bound to the main repo, so the reset applies only the main checkout's migrations and wipes every newer worktree migration + fixture. Repair instead by applying the missing migrations manually in order (`docker exec -i supabase_db_dekopen psql -v ON_ERROR_STOP=1 -U postgres -d postgres -f /dev/stdin < <file>`) and recording each version in `supabase_migrations.schema_migrations`.
 
 ## Gotchas
 
