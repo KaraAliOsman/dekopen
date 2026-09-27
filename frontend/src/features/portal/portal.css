@@ -650,3 +650,42 @@
   background: var(--theme-warning, #b45309);
   color: #fff;
 }
+
+/* The proposal is the one page the client opens on a phone — decision must
+   stay reachable and readable at handset width (§20). */
+@media (max-width: 640px) {
+  .portal-proposal__head {
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+  .portal-proposal__refs {
+    text-align: left;
+  }
+  .portal-totals,
+  .portal-payment {
+    flex-wrap: wrap;
+    gap: var(--space-4);
+    text-align: left;
+  }
+  .portal-position {
+    grid-template-columns: 1fr;
+  }
+  .portal-position__thumb {
+    max-width: 16rem;
+  }
+  .portal-steps {
+    flex-direction: column;
+  }
+  .portal-card {
+    padding: var(--space-4);
+  }
+  .portal-proposal__hero svg,
+  .portal-proposal__hero img,
+  .portal-proposal__hero canvas {
+    max-height: 220px;
+  }
+  .portal-page .projects-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
