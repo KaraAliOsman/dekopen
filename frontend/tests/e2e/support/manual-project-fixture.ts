@@ -45,7 +45,7 @@ async function authenticate(
   await page.goto("/login");
   await page.getByLabel("Correo", { exact: true }).fill(email);
   await page.getByRole("button", { name: "Enviar enlace de acceso", exact: true }).click();
-  await expect(page.getByRole("status")).toContainText("Revisa el buzón local");
+  await expect(page.getByRole("status")).toContainText("Revisa tu correo para continuar");
 
   const message = await waitForMagicLink({
     baseUrl: mailpitUrl,

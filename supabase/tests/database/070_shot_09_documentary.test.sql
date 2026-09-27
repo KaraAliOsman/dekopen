@@ -45,6 +45,7 @@ SELECT lives_ok($$INSERT INTO position_documentary_inputs(position_id,project_id
  FROM manufacturing_placement_policies placement,handle_requirement_policies handles,reinforcement_cut_policies steel
  WHERE placement.system_id=handles.system_id AND handles.system_id=steel.system_id
    AND placement.org_id IS NULL AND handles.org_id IS NULL AND steel.org_id IS NULL
+   AND handles.version=(SELECT max(h2.version) FROM handle_requirement_policies h2 WHERE h2.system_id=handles.system_id AND h2.org_id IS NULL)
    AND placement.system_id=(SELECT id FROM profile_systems WHERE code='DEMO_60')$$,'typed position inputs accept global scoped policies');
 INSERT INTO manufacturing_placement_policies(id,system_id,org_id,version,authority)
  SELECT '88690000-0000-4000-8000-000000000009',id,'88600000-0000-4000-8000-000000000002',1,
@@ -54,6 +55,7 @@ SELECT throws_ok($$INSERT INTO position_documentary_inputs(position_id,project_i
  SELECT '88630000-0000-4000-8000-000000000003','88620000-0000-4000-8000-000000000003','88600000-0000-4000-8000-000000000001','88690000-0000-4000-8000-000000000009',handles.id,steel.id,'[]','[]','[]','[]','{"coverage":"NONE_REQUIRED","items":[]}','88610000-0000-4000-8000-000000000001'
  FROM handle_requirement_policies handles,reinforcement_cut_policies steel
  WHERE handles.system_id=steel.system_id AND handles.org_id IS NULL AND steel.org_id IS NULL
+   AND handles.version=(SELECT max(h2.version) FROM handle_requirement_policies h2 WHERE h2.system_id=handles.system_id AND h2.org_id IS NULL)
    AND handles.system_id=(SELECT id FROM profile_systems WHERE code='DEMO_60')$$,'23503','documentary_policy_scope_mismatch','foreign tenant policy cannot bind');
 
 SELECT throws_ok($$INSERT INTO project_versions(project_id,org_id,revision_code,snapshot_json,emitted_by,pricing_operation_id,canonical_version,bom_hash,snapshot_sha256,production_allowed,documentary_complete)

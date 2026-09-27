@@ -185,7 +185,9 @@ def _seed_project(
             "JOIN public.handle_requirement_policies handles ON handles.system_id=system.id "
             "JOIN public.reinforcement_cut_policies steel ON steel.system_id=system.id "
             "WHERE system.id=%s AND placement.org_id IS NULL AND handles.org_id IS NULL "
-            "AND steel.org_id IS NULL",
+            "AND steel.org_id IS NULL "
+            "AND handles.version=(SELECT max(h2.version) FROM public.handle_requirement_policies h2 "
+            "WHERE h2.system_id=handles.system_id AND h2.org_id IS NULL) ",
             [system_id],
         )
         annotations = ([{

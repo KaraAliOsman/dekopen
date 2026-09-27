@@ -381,8 +381,9 @@ function SceneContent({
       {mode === "commercial" && <directionalLight position={[0, -2000, 2500]} intensity={0.25} />}
       {/* Inside/outside: the assembly (centered on the scene origin by the
        * inner group) rotates 180° so the room face or the street face
-       * points at the default camera. */}
-      <group rotation={[0, inside ? Math.PI : 0, 0]}>
+       * points at the default camera. World +z is the room face, so the
+       * street view is the rotated one. */}
+      <group rotation={[0, inside ? 0 : Math.PI, 0]}>
         <group position={[-scene.center[0], -scene.center[1], -scene.center[2]]}>
           {scene.modules.map((module) => (
             <group

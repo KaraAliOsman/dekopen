@@ -35,13 +35,19 @@ export function solidToGeometry(solid: Solid3D): THREE.ExtrudeGeometry | null {
   if (solid.kind === "profile") {
     // Declared section (u face direction, v interior-positive) extruded
     // along the member run axis: a vertical post maps (u,v,a)→(u,a,v),
-    // a horizontal rail →(a,u,v).
+    // a horizontal rail →(a,u,v). `mirrorU` reflects the section inside its
+    // own u-extent so asymmetric sections face the aperture consistently.
     const span = solid.a1 - solid.a0;
     if (span <= 0) return null;
     const flipped = solid.axis === "y";
-    const shape = new THREE.Shape(
-      solid.outline.map(([u, v]) => new THREE.Vector2(u, flipped ? -v : v)),
-    );
+    let outline = solid.outline;
+    if (solid.mirrorU) {
+      const us = outline.map(([u]) => u);
+      const lo = Math.min(...us);
+      const hi = Math.max(...us);
+      outline = outline.map(([u, v]) => [lo + hi - u, v] as [number, number]);
+    }
+    const shape = new THREE.Shape(outline.map(([u, v]) => new THREE.Vector2(u, flipped ? -v : v)));
     const geo = new THREE.ExtrudeGeometry(shape, {
       depth: span,
       bevelEnabled: false,

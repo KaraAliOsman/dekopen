@@ -83,6 +83,10 @@ export interface ProfileSolid {
   a1: number;
   u0: number;
   v0: number;
+  /** Flips the section across its own u-extent — asymmetric sections on
+   * right posts / top rails face the aperture the same way the left/bottom
+   * runs do instead of extruding the mirror image of the real profile. */
+  mirrorU?: boolean;
   /** Never set on profile solids — a declared section is never approximate;
    * the field exists so the union keeps one schema. */
   approximate?: boolean;
@@ -381,11 +385,62 @@ export function normalizedSection(
   };
 }
 
-/** Four-member ring inside a region (long sides full span, caps between).
- * A declared catalog section extrudes each side as the real profile —
+/** One member run: a declared catalog section extrudes the real profile —
  * straight-cut ends meet at corners (the miter is a fabrication detail,
  * not a visual one). Without a section the member stays an explicitly
- * approximate box, never a fabricated declaration. */
+ * approximate box, never a fabricated declaration. `mirrorU` flips the
+ * section across its own u-extent so an asymmetric profile faces the
+ * aperture on the right post / top rail the same way it does on the
+ * left post / bottom rail — the real orientation, not a reflection. */
+function memberBar(
+  solids: Solid3D[],
+  owner: string,
+  surface: SolidKind,
+  spec: MemberSpec,
+  axis: "x" | "y",
+  a0: number,
+  a1: number,
+  uCenter: number,
+  uSize: number,
+  z0: number,
+  depth: number,
+  mirrorU = false,
+): void {
+  if (a1 - a0 <= 0) return;
+  const section = normalizedSection(spec);
+  if (section !== null) {
+    solids.push({
+      kind: "profile",
+      owner,
+      surface,
+      material: spec.material,
+      outline: section.outline,
+      axis,
+      a0,
+      a1,
+      u0: uCenter - section.width / 2,
+      v0: z0,
+      ...(mirrorU ? { mirrorU: true } : {}),
+    });
+    return;
+  }
+  solids.push({
+    ...box(
+      owner,
+      surface,
+      spec.material,
+      axis === "x" ? a0 : uCenter - uSize / 2,
+      axis === "x" ? uCenter - uSize / 2 : a0,
+      z0,
+      axis === "x" ? a1 - a0 : uSize,
+      axis === "x" ? uSize : a1 - a0,
+      depth,
+    ),
+    approximate: true,
+  });
+}
+
+/** Four-member ring inside a region (long sides full span, caps between). */
 function memberBarRing(
   solids: Solid3D[],
   owner: string,
@@ -398,90 +453,59 @@ function memberBarRing(
 ): void {
   const w = Math.min(barW, region.w / 2);
   const h = Math.min(barW, region.h / 2);
-  const section = normalizedSection(spec);
-  if (section !== null) {
-    const uCenter = section.width / 2;
-    const runs: { axis: "x" | "y"; a0: number; a1: number; u0: number }[] = [
-      {
-        axis: "y",
-        a0: region.y,
-        a1: region.y + region.h,
-        u0: region.x + w / 2 - uCenter,
-      },
-      {
-        axis: "y",
-        a0: region.y,
-        a1: region.y + region.h,
-        u0: region.x + region.w - w / 2 - uCenter,
-      },
-      {
-        axis: "x",
-        a0: region.x + w,
-        a1: region.x + region.w - w,
-        u0: region.y + h / 2 - uCenter,
-      },
-      {
-        axis: "x",
-        a0: region.x + w,
-        a1: region.x + region.w - w,
-        u0: region.y + region.h - h / 2 - uCenter,
-      },
-    ];
-    for (const run of runs) {
-      if (run.a1 - run.a0 <= 0) continue;
-      solids.push({
-        kind: "profile",
-        owner,
-        surface,
-        material: spec.material,
-        outline: section.outline,
-        axis: run.axis,
-        a0: run.a0,
-        a1: run.a1,
-        u0: run.u0,
-        v0: z0,
-      });
-    }
-    return;
-  }
-  const fallback = { approximate: true };
-  solids.push(
-    {
-      ...box(owner, surface, spec.material, region.x, region.y, z0, w, region.h, depth),
-      ...fallback,
-    },
-    {
-      ...box(
-        owner,
-        surface,
-        spec.material,
-        region.x + region.w - w,
-        region.y,
-        z0,
-        w,
-        region.h,
-        depth,
-      ),
-      ...fallback,
-    },
-    {
-      ...box(owner, surface, spec.material, region.x + w, region.y, z0, region.w - 2 * w, h, depth),
-      ...fallback,
-    },
-    {
-      ...box(
-        owner,
-        surface,
-        spec.material,
-        region.x + w,
-        region.y + region.h - h,
-        z0,
-        region.w - 2 * w,
-        h,
-        depth,
-      ),
-      ...fallback,
-    },
+  memberBar(
+    solids,
+    owner,
+    surface,
+    spec,
+    "y",
+    region.y,
+    region.y + region.h,
+    region.x + w / 2,
+    w,
+    z0,
+    depth,
+  );
+  memberBar(
+    solids,
+    owner,
+    surface,
+    spec,
+    "y",
+    region.y,
+    region.y + region.h,
+    region.x + region.w - w / 2,
+    w,
+    z0,
+    depth,
+    true,
+  );
+  memberBar(
+    solids,
+    owner,
+    surface,
+    spec,
+    "x",
+    region.x + w,
+    region.x + region.w - w,
+    region.y + h / 2,
+    h,
+    z0,
+    depth,
+  );
+  memberBar(
+    solids,
+    owner,
+    surface,
+    spec,
+    "x",
+    region.x + w,
+    region.x + region.w - w,
+    region.y + region.h - h / 2,
+    h,
+    z0,
+    depth,
+    true,
   );
 }
 
@@ -550,16 +574,15 @@ function leafHingeSide(bay: IntentNode): "LEFT" | "RIGHT" | null {
 }
 
 /** A lever handle on the leaf's free stile: escutcheon rose standing
- * proud of the interior sash face, spindle block, lever ~120 mm pointing
- * toward the hinge side. `faceZ` is the leaf's interior face; every piece
- * protrudes +z (room side) from it. */
+ * proud of the interior sash face, spindle block, lever ~120 mm hanging
+ * down (the EN closed pose). `faceZ` is the leaf's interior face; every
+ * piece protrudes +z (room side) from it. */
 function leverHandle(
   solids: Solid3D[],
   owner: string,
   x: number,
   y: number,
   faceZ: number,
-  leverToward: "LEFT" | "RIGHT",
   cylinder: boolean,
 ): void {
   const roseW = 26;
@@ -567,43 +590,25 @@ function leverHandle(
   const leverLen = 120;
   const leverH = 16;
   solids.push(
-    box(owner, "handle", "STEEL", x, y - roseH / 2, faceZ + 2, roseW, roseH, 10),
+    box(owner, "handle", "STEEL", x, y - roseH / 2, faceZ, roseW, roseH, 10),
+    box(owner, "handle", "STEEL", x + (roseW - 20) / 2, y - 10, faceZ + 10, 20, 20, 22),
+    // Lever hangs down from the rose — the EN closed pose; a horizontal
+    // lever pointing at the hinges reads mid-operation.
     box(
       owner,
       "handle",
       "STEEL",
-      x + (roseW - 20) / 2,
-      y - 10,
-      faceZ + 12,
-      20,
-      20,
-      22,
-    ),
-    box(
-      owner,
-      "handle",
-      "STEEL",
-      leverToward === "RIGHT" ? x + roseW / 2 : x + roseW / 2 - leverLen,
-      y - leverH / 2,
+      x + roseW / 2 - leverH / 2,
+      y - leverLen,
       faceZ + 30,
-      leverLen,
       leverH,
+      leverLen,
       leverH,
     ),
   );
   if (cylinder) {
     solids.push(
-      box(
-        owner,
-        "handle",
-        "STEEL",
-        x + (roseW - 14) / 2,
-        y - roseH / 2 - 46,
-        faceZ + 2,
-        14,
-        36,
-        9,
-      ),
+      box(owner, "handle", "STEEL", x + (roseW - 14) / 2, y - roseH / 2 - 46, faceZ, 14, 36, 9),
     );
   }
 }
@@ -616,11 +621,16 @@ function hardwareSolids(
   solids: Solid3D[],
   owner: string,
   bay: IntentNode,
-  region: Region,
+  leafRegion: Region,
   sashW: number,
   zInterior: number,
+  sashD: number,
 ): void {
   const opening = bay.opening_type;
+  // Rebate hardware lives in the cavity between the sash's outer face and
+  // the aperture edge — buried in neither member, hidden head-on, visible
+  // in the gap at a three-quarter view exactly like the real fitting.
+  const rebateZ = zInterior - sashD - 6;
   if (opening === "AWNING") {
     // Top-hung: two hinge barrels along the head plus a centre handle at
     // the bottom stile (the leaf's free edge).
@@ -630,9 +640,9 @@ function hardwareSolids(
           owner,
           "hinge",
           "STEEL",
-          region.x + region.w * frac - HINGE_MM / 2,
-          region.y + region.h - sashW * 0.9,
-          zInterior - 6,
+          leafRegion.x + leafRegion.w * frac - HINGE_MM / 2,
+          leafRegion.y + leafRegion.h - sashW * 0.9,
+          rebateZ,
           HINGE_MM,
           sashW * 0.7,
           10,
@@ -644,8 +654,8 @@ function hardwareSolids(
         owner,
         "handle",
         "STEEL",
-        region.x + region.w / 2 - 8,
-        region.y + 30,
+        leafRegion.x + leafRegion.w / 2 - 8,
+        leafRegion.y + 30,
         zInterior,
         16,
         24,
@@ -658,19 +668,22 @@ function hardwareSolids(
   if (!hinge) return;
   const door = opening === "DOOR_ENTRY";
   const tiltTurn = opening === "TILT_TURN_LEFT" || opening === "TILT_TURN_RIGHT";
-  const hingeX = hinge === "LEFT" ? region.x + 2 : region.x + region.w - HINGE_MM - 2;
-  const hingeFracs = door ? [0.15, 0.5, 0.85] : [0.12, 0.88];
-  for (const frac of hingeFracs) {
+  const hingeX = hinge === "LEFT" ? leafRegion.x + 2 : leafRegion.x + leafRegion.w - HINGE_MM - 2;
+  // Taller leaves carry more hinges — the fitting schedule scales with
+  // the leaf, not a fixed two/three per opening type.
+  const hingeCount = door ? (leafRegion.h > 2200 ? 4 : 3) : leafRegion.h > 1700 ? 3 : 2;
+  for (let index = 0; index < hingeCount; index += 1) {
+    const frac = 0.14 + (0.86 - 0.14) * (index / (hingeCount - 1));
     solids.push(
       box(
         owner,
         "hinge",
         "STEEL",
         hingeX,
-        region.y + region.h * frac,
-        zInterior - 6,
+        leafRegion.y + leafRegion.h * frac,
+        rebateZ,
         HINGE_MM,
-        Math.min(region.h * 0.1, door ? 130 : 110),
+        Math.min(leafRegion.h * 0.1, door ? 130 : 110),
         10,
       ),
     );
@@ -683,28 +696,34 @@ function hardwareSolids(
         owner,
         "hinge",
         "STEEL",
-        hinge === "LEFT" ? region.x + 2 : region.x + region.w - Math.min(region.w * 0.42, 340),
-        region.y + region.h - 16,
-        zInterior - 4,
-        Math.min(region.w * 0.42, 340),
+        hinge === "LEFT"
+          ? leafRegion.x + 2
+          : leafRegion.x + leafRegion.w - Math.min(leafRegion.w * 0.42, 340),
+        leafRegion.y + leafRegion.h - 16,
+        rebateZ + 4,
+        Math.min(leafRegion.w * 0.42, 340),
         10,
         8,
       ),
     );
   }
   const declaredHandle = Number(bay.handle_height_mm);
-  const handleY =
-    region.y +
-    Math.min(
+  // Module space measures up from the module's outer bottom edge — the
+  // same OUTER_BOTTOM datum the manufacturing authority resolves. Clamp
+  // onto the leaf so a stale value still lands on its free stile.
+  const handleY = Math.min(
+    Math.max(
       Number.isFinite(declaredHandle) && declaredHandle > 0 ? declaredHandle : HANDLE_HEIGHT_MM,
-      region.h - 40,
-    );
+      leafRegion.y + 40,
+    ),
+    leafRegion.y + leafRegion.h - 40,
+  );
   // The handle mounts on the stile OPPOSITE the hinges, offset inward.
   const roseX =
     hinge === "LEFT"
-      ? region.x + region.w - HANDLE_OFFSET_MM - 26
-      : region.x + HANDLE_OFFSET_MM;
-  leverHandle(solids, owner, roseX, handleY, zInterior, hinge, door);
+      ? leafRegion.x + leafRegion.w - HANDLE_OFFSET_MM - 26
+      : leafRegion.x + HANDLE_OFFSET_MM;
+  leverHandle(solids, owner, roseX, handleY, zInterior, door);
 }
 
 /** Split walk that emits both divider bars and leaf bays — the same layout
@@ -871,10 +890,10 @@ function leafSolids(
         );
         return;
       }
-      const leafX = Math.min(
-        Math.max(slotX - interlock / 2, region.x),
-        region.x + region.w - leafW,
-      );
+      // The engine gives each leaf its slot plus the full central overlap
+      // to the right — the renderer draws the same coverage, clamped inside
+      // the bay for the last leaf whose slot has no room left.
+      const leafX = Math.min(Math.max(slotX, region.x), region.x + region.w - leafW);
       const paneRegion: Region = { x: leafX, y: region.y, w: leafW, h: region.h };
       const leafId = `${bay.id}:${index}`;
       const leafFrom = solids.length;
@@ -889,12 +908,16 @@ function leafSolids(
         sashD,
         Math.max(z0 - sashD, 0),
       );
+      // The glazing seats inside the sash from its interior face — a pane
+      // never sits proud of the sash that carries it.
+      const glassRecess = Math.max(2, Math.min(6, sashD - glassT));
+      const leafGlassZ = Math.max(z0 - sashD + 2, z0 - glassRecess - glassT);
       glassInfill(
         solids,
         owner,
         paneRegion.x + sashW,
         paneRegion.y + sashW,
-        z0,
+        leafGlassZ,
         Math.max(leafW - 2 * sashW, 1),
         Math.max(paneRegion.h - 2 * sashW, 1),
         glassT,
@@ -906,18 +929,14 @@ function leafSolids(
         paneRegion,
         sashW,
         z0,
-        glassT,
-        depth,
+        leafGlassZ + glassT,
         members.beadSpecFor(bay.glass_thickness_mm ?? null),
       );
-      tagLeaf(solids, leafFrom, leafId);
       // Pull on the meeting stile — the same convention the handle policy
-      // seeds for manufacturing (L1 right, every later leaf left). It sits
-      // proud of the leaf's interior face at handle height.
-      const pullX =
-        index === 0
-          ? leafX + leafW - sashW + 6
-          : leafX + sashW - 22;
+      // seeds for manufacturing (L1 right, every later leaf left). It stands
+      // proud of the leaf's interior face at handle height, never deeper
+      // than the track step so it can't punch the leaf on the next rail.
+      const pullX = index === 0 ? leafX + leafW - sashW + 6 : leafX + sashW - 22;
       const pullH = Math.min(360, Math.max(region.h * 0.4, 140));
       const pullY =
         region.y +
@@ -929,18 +948,29 @@ function leafSolids(
         ) -
         pullH / 2;
       solids.push(
-        // The pull protrudes +z beyond the leaf's glass face — recessed
-        // flush with the sash it would hide behind its own glazing.
-        box(owner, "handle", "STEEL", pullX, pullY, z0 + 2, 16, pullH, glassT + 12),
+        box(
+          owner,
+          "handle",
+          "STEEL",
+          pullX,
+          pullY,
+          z0,
+          16,
+          pullH,
+          Math.min(glassT + 12, Math.max(trackStep - 1, 6)),
+        ),
       );
-      // Presentation only: adjacent leaves fan apart — the direction is a
-      // readability convention since the product declares no leaf travel.
+      tagLeaf(solids, leafFrom, leafId);
+      // Presentation only: a leaf slides toward its neighbouring slot(s),
+      // capped to stay inside the bay — the product declares no travel.
+      const dir = index * 2 < sliding.panels.length ? 1 : -1;
+      const room = dir > 0 ? region.x + region.w - leafX - leafW : leafX - region.x;
       leaves.push({
         leafId,
         kind: "slide",
         pivot: 0,
-        dir: index % 2 === 0 ? -1 : 1,
-        travel: Math.min(leafW * 0.55, region.w * 0.45),
+        dir,
+        travel: Math.max(0, Math.min(pitch, room)),
       });
     });
     // Sliding leaves ride rails — the track channels at the sill plane are
@@ -952,7 +982,7 @@ function leafSolids(
           "track",
           "ALUMINIUM",
           region.x,
-          region.y - 2,
+          region.y,
           Math.min(glassZ + (sliding.tracks - 1 - track) * trackStep, depth - glassT),
           region.w,
           TRACK_MM,
@@ -985,20 +1015,34 @@ function leafSolids(
     const leafFrom = solids.length;
     const sashW = Math.min(members.sash.faceWidthMm, region.w / 3, region.h / 3);
     const sashD = depth * 0.45;
-    memberBarRing(solids, owner, "sash", members.sash, region, sashW, sashD, depth - sashD);
-    // An operable bay's infill sits inside its sash — an opaque panel for
-    // panel doors, glazing otherwise (the front view wraps both the same).
+    // The sash overhangs the aperture onto the frame face by the rebate
+    // overlap, and its interior face stands a step proud of the frame's —
+    // no coplanar z-fight, and the closed leaf reads as a leaf seated in a
+    // frame, not geometry inscribed inside a hole.
+    const overlap = Math.min(10, sashW * 0.25);
+    const leafRegion: Region = {
+      x: region.x - overlap,
+      y: region.y - overlap,
+      w: region.w + overlap * 2,
+      h: region.h + overlap * 2,
+    };
+    const sashFace = depth + 2;
+    memberBarRing(solids, owner, "sash", members.sash, leafRegion, sashW, sashD, sashFace - sashD);
+    // Glazing seats inside the sash from its interior face — recessed a
+    // few millimetres, never proud of the sash and never coplanar with it.
+    const glassRecess = Math.max(2, Math.min(6, sashD - glassT));
+    const leafGlassZ = Math.max(sashFace - sashD + 1, sashFace - glassRecess - glassT);
     if (bay.panel_article_sku) {
       solids.push(
         box(
           owner,
           "panel",
           members.frame.material,
-          region.x + sashW,
-          region.y + sashW,
-          glassZ,
-          Math.max(region.w - 2 * sashW, 1),
-          Math.max(region.h - 2 * sashW, 1),
+          leafRegion.x + sashW,
+          leafRegion.y + sashW,
+          leafGlassZ,
+          Math.max(leafRegion.w - 2 * sashW, 1),
+          Math.max(leafRegion.h - 2 * sashW, 1),
           glassT,
         ),
       );
@@ -1006,11 +1050,11 @@ function leafSolids(
       glassInfill(
         solids,
         owner,
-        region.x + sashW,
-        region.y + sashW,
-        glassZ,
-        Math.max(region.w - 2 * sashW, 1),
-        Math.max(region.h - 2 * sashW, 1),
+        leafRegion.x + sashW,
+        leafRegion.y + sashW,
+        leafGlassZ,
+        Math.max(leafRegion.w - 2 * sashW, 1),
+        Math.max(leafRegion.h - 2 * sashW, 1),
         glassT,
         bay.glass_spec,
       );
@@ -1018,50 +1062,13 @@ function leafSolids(
     gasketAndBead(
       solids,
       owner,
-      region,
+      leafRegion,
       sashW,
-      glassZ,
-      glassT,
-      depth,
+      sashFace,
+      leafGlassZ + glassT,
       members.beadSpecFor(bay.glass_thickness_mm ?? null),
     );
-    hardwareSolids(solids, owner, bay, region, sashW, depth);
-    // A door opening closes on a low threshold, not the frame's bottom
-    // profile — the declared threshold member sits at the sill plane, its
-    // real section extruded when the catalog carries one.
-    if (bay.opening_type === "DOOR_ENTRY" && members.threshold !== null) {
-      const thresholdW = Math.min(members.threshold.faceWidthMm, region.w);
-      const thresholdSection = normalizedSection(members.threshold);
-      if (thresholdSection !== null) {
-        solids.push({
-          kind: "profile",
-          owner,
-          surface: "threshold",
-          material: members.threshold.material,
-          outline: thresholdSection.outline,
-          axis: "x",
-          a0: region.x,
-          a1: region.x + region.w,
-          u0: region.y - thresholdW / 2 - thresholdSection.width / 2,
-          v0: 0,
-        });
-      } else {
-        solids.push({
-          ...box(
-            owner,
-            "threshold",
-            members.threshold.material,
-            region.x,
-            region.y - thresholdW,
-            0,
-            region.w,
-            thresholdW,
-            depth,
-          ),
-          approximate: true,
-        });
-      }
-    }
+    hardwareSolids(solids, owner, bay, leafRegion, sashW, sashFace, sashD);
     tagLeaf(solids, leafFrom, leafId);
     // Hinge conventions mirror hardwareSolids: TURN_LEFT/DOOR hinge on the
     // leaf's left edge, TURN_RIGHT on the right; TILT_TURN tips the top in
@@ -1071,7 +1078,7 @@ function leafSolids(
       leaves.push({
         leafId,
         kind: "tilt",
-        pivot: region.y + region.h,
+        pivot: leafRegion.y + leafRegion.h,
         dir: 1,
         travel: 0,
       });
@@ -1083,10 +1090,10 @@ function leafSolids(
       leaves.push({
         leafId,
         kind: "tilt_turn",
-        pivot: hinge === "RIGHT" ? region.x + region.w : region.x,
+        pivot: hinge === "RIGHT" ? leafRegion.x + leafRegion.w : leafRegion.x,
         dir: hinge === "RIGHT" ? 1 : -1,
         travel: 0,
-        tiltPivot: region.y,
+        tiltPivot: leafRegion.y,
       });
     } else {
       const hinge = leafHingeSide(bay);
@@ -1094,7 +1101,7 @@ function leafSolids(
       leaves.push({
         leafId,
         kind: "swing",
-        pivot: hingeLeft ? region.x : region.x + region.w,
+        pivot: hingeLeft ? leafRegion.x : leafRegion.x + leafRegion.w,
         dir: hingeLeft ? -1 : 1,
         travel: 0,
       });
@@ -1118,62 +1125,56 @@ function leafSolids(
     owner,
     region,
     bead,
-    glassZ,
-    glassT,
     depth,
+    glassZ + glassT,
     members.beadSpecFor(bay.glass_thickness_mm ?? null),
   );
 }
 
-/** The glazing seat around a pane — the bead bars at the aperture edge
- * plus the rubber line hugging the glass. `inset` is the member face that
- * already frames the pane (sash width on operable leaves, bead elsewhere). */
+/** The glazing seat around a pane: the bead ring straddles the glass edge
+ * on the member's interior face (half its width lands on the sash/frame
+ * face, half covers the glass perimeter — the real glazing-bead geometry),
+ * and the gasket line hugs the glass just behind it. `inset` is the member
+ * face that frames the pane, `faceZ` the member's interior face, and
+ * `glassTopZ` the pane's interior plane. */
 function gasketAndBead(
   solids: Solid3D[],
   owner: string,
   region: Region,
   inset: number,
-  glassZ: number,
-  glassT: number,
-  depth: number,
+  faceZ: number,
+  glassTopZ: number,
   beadSpec?: MemberSpec | null,
 ): void {
   const beadW = Math.max(Math.min(inset * 0.45, 20), 10);
-  const beadZ = Math.min(glassZ + glassT, depth);
-  const beadDepth = Math.min(BEAD_DEPTH_MM, Math.max(depth - glassZ - glassT, 0));
+  const ring: Region = {
+    x: region.x + inset - beadW / 2,
+    y: region.y + inset - beadW / 2,
+    w: Math.max(region.w - inset * 2 + beadW, beadW * 2),
+    h: Math.max(region.h - inset * 2 + beadW, beadW * 2),
+  };
+  const beadZ = faceZ - 1;
+  const beadDepth = Math.min(BEAD_DEPTH_MM, 9);
   // A declared bead section extrudes the real profile; anything else stays
   // the explicitly-approximate thin ring.
   if (beadSpec && normalizedSection(beadSpec) !== null) {
-    memberBarRing(
-      solids,
-      owner,
-      "bead",
-      beadSpec,
-      region,
-      Math.min(beadW, inset),
-      beadDepth,
-      beadZ,
-    );
+    memberBarRing(solids, owner, "bead", beadSpec, ring, beadW, beadDepth, beadZ);
   } else {
-    thinRing(
-      solids,
-      owner,
-      "bead",
-      "PVC",
-      { x: region.x, y: region.y, w: region.w, h: region.h },
-      Math.min(beadW, inset),
-      beadZ,
-      beadDepth,
-    );
+    thinRing(solids, owner, "bead", "PVC", ring, beadW, beadZ, beadDepth);
   }
   thinRing(
     solids,
     owner,
     "gasket",
     "GASKET",
-    { x: region.x + inset, y: region.y + inset, w: region.w - inset * 2, h: region.h - inset * 2 },
+    {
+      x: region.x + inset - GASKET_MM / 2,
+      y: region.y + inset - GASKET_MM / 2,
+      w: region.w - inset * 2 + GASKET_MM,
+      h: region.h - inset * 2 + GASKET_MM,
+    },
     GASKET_MM,
-    Math.min(glassZ + glassT - GASKET_MM, Math.max(depth - GASKET_MM, 0)),
+    Math.min(glassTopZ, beadZ) - GASKET_MM,
     GASKET_MM,
   );
 }
@@ -1264,16 +1265,37 @@ function framelessSolids(
     }
   }
   const size = FITTING_BLOCK_MM * 0.6;
+  // Same conventional layout the front view draws: patches cycle the
+  // corners, locks mount on the right edge, hinges the left, connectors
+  // top, clamps/supports bottom.
+  const fittingIndex = new Map<string, number>();
+  const edgeRun = (edge: "left" | "right" | "top" | "bottom", index: number, count = 3) => {
+    const frac = ((index % count) + 0.75) / (count + 0.5);
+    return edge === "left"
+      ? { x: 0, y: (h - size) * frac }
+      : edge === "right"
+        ? { x: w - size, y: (h - size) * frac }
+        : edge === "top"
+          ? { x: (w - size) * frac, y: h - size }
+          : { x: (w - size) * frac, y: 0 };
+  };
   for (const fitting of spec.fittings) {
+    const index = fittingIndex.get(fitting.kind) ?? 0;
+    fittingIndex.set(fitting.kind, index + 1);
     if (fitting.kind === "PATCH_FITTING") {
+      const corner = [
+        { x: 0, y: 0 },
+        { x: w - size, y: 0 },
+        { x: 0, y: h - size },
+        { x: w - size, y: h - size },
+      ][index % 4]!;
       solids.push(
-        box(owner, "fitting", "STEEL", 0, 0, depth * 0.3, size, size, SUPPORT_CHANNEL_MM * 2),
         box(
           owner,
           "fitting",
           "STEEL",
-          w - size,
-          0,
+          corner.x,
+          corner.y,
           depth * 0.3,
           size,
           size,
@@ -1283,16 +1305,57 @@ function framelessSolids(
     } else if (fitting.kind === "LOCK") {
       const lockY = Math.min(1000, h * 0.7);
       solids.push(
-        box(owner, "fitting", "STEEL", 0, lockY, depth * 0.3, size, size, SUPPORT_CHANNEL_MM * 2),
+        box(
+          owner,
+          "fitting",
+          "STEEL",
+          w - size,
+          lockY + index * size,
+          depth * 0.3,
+          size,
+          size,
+          SUPPORT_CHANNEL_MM * 2,
+        ),
       );
-    } else {
+    } else if (fitting.kind === "HINGE") {
+      const spot = edgeRun("left", index);
       solids.push(
         box(
           owner,
           "fitting",
           "STEEL",
-          w / 2 - size / 2,
-          0,
+          spot.x,
+          spot.y,
+          depth * 0.3,
+          size,
+          size,
+          SUPPORT_CHANNEL_MM * 2,
+        ),
+      );
+    } else if (fitting.kind === "CONNECTOR" || fitting.kind === "SEAL") {
+      const spot = edgeRun("top", index);
+      solids.push(
+        box(
+          owner,
+          "fitting",
+          "STEEL",
+          spot.x,
+          spot.y,
+          depth * 0.3,
+          size,
+          size,
+          SUPPORT_CHANNEL_MM * 2,
+        ),
+      );
+    } else {
+      const spot = edgeRun("bottom", index + 1);
+      solids.push(
+        box(
+          owner,
+          "fitting",
+          "STEEL",
+          spot.x,
+          spot.y,
           depth * 0.3,
           size,
           size,
@@ -1407,17 +1470,6 @@ export function buildScene3D(
         primaryBay?.glass_spec,
       );
     } else {
-      memberBarRing(
-        solids,
-        module.id,
-        "frame",
-        members.frame,
-        { x: 0, y: 0, w, h },
-        frameT,
-        depth,
-        0,
-      );
-
       const out = {
         bars: [] as { node: IntentNode; region: Region; vertical: boolean }[],
         leaves: [] as NodeRegion[],
@@ -1431,6 +1483,140 @@ export function buildScene3D(
         members,
         out,
       );
+
+      // A leaf touching the sill owns its bottom member: a door leaf
+      // closes on the declared threshold (the engine models the door frame
+      // as 3-sided — the threshold IS its bottom member), anything else
+      // sits on the frame's bottom profile. Posts run full height and the
+      // head spans between them.
+      const sillLeaves = out.leaves
+        .filter((leaf) => leaf.region.y <= frameT + 0.5)
+        .sort((a, b) => a.region.x - b.region.x);
+      if (sillLeaves.some((leaf) => leaf.node.opening_type === "DOOR_ENTRY")) {
+        const thresholdW = Math.min(members.threshold?.faceWidthMm ?? frameT, h / 4);
+        const thresholdSpec = members.threshold ?? members.frame;
+        memberBar(
+          solids,
+          module.id,
+          "frame",
+          members.frame,
+          "y",
+          0,
+          h,
+          frameT / 2,
+          frameT,
+          0,
+          depth,
+        );
+        memberBar(
+          solids,
+          module.id,
+          "frame",
+          members.frame,
+          "y",
+          0,
+          h,
+          w - frameT / 2,
+          frameT,
+          0,
+          depth,
+          true,
+        );
+        memberBar(
+          solids,
+          module.id,
+          "frame",
+          members.frame,
+          "x",
+          frameT,
+          w - frameT,
+          h - frameT / 2,
+          frameT,
+          0,
+          depth,
+          true,
+        );
+        let cursor = frameT;
+        for (const leaf of sillLeaves) {
+          if (leaf.region.x > cursor) {
+            memberBar(
+              solids,
+              module.id,
+              "frame",
+              members.frame,
+              "x",
+              cursor,
+              leaf.region.x,
+              frameT / 2,
+              frameT,
+              0,
+              depth,
+            );
+          }
+          if (leaf.node.opening_type === "DOOR_ENTRY") {
+            memberBar(
+              solids,
+              module.id,
+              "threshold",
+              thresholdSpec,
+              "x",
+              leaf.region.x,
+              leaf.region.x + leaf.region.w,
+              thresholdW / 2,
+              thresholdW,
+              0,
+              depth,
+            );
+            leaf.region = {
+              x: leaf.region.x,
+              y: thresholdW,
+              w: leaf.region.w,
+              h: leaf.region.y + leaf.region.h - thresholdW,
+            };
+          } else {
+            memberBar(
+              solids,
+              module.id,
+              "frame",
+              members.frame,
+              "x",
+              leaf.region.x,
+              leaf.region.x + leaf.region.w,
+              frameT / 2,
+              frameT,
+              0,
+              depth,
+            );
+          }
+          cursor = Math.max(cursor, leaf.region.x + leaf.region.w);
+        }
+        if (cursor < w - frameT) {
+          memberBar(
+            solids,
+            module.id,
+            "frame",
+            members.frame,
+            "x",
+            cursor,
+            w - frameT,
+            frameT / 2,
+            frameT,
+            0,
+            depth,
+          );
+        }
+      } else {
+        memberBarRing(
+          solids,
+          module.id,
+          "frame",
+          members.frame,
+          { x: 0, y: 0, w, h },
+          frameT,
+          depth,
+          0,
+        );
+      }
       for (const bar of out.bars) {
         const mullion = bar.vertical ? members.mullionV : members.mullionH;
         const mullionSection = mullion !== null ? normalizedSection(mullion) : null;

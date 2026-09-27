@@ -408,9 +408,9 @@ describe("buildScene3D", () => {
     expect(solids.filter((solid) => solid.surface === "sash")).toHaveLength(4);
     const panels = solids.filter((solid) => solid.surface === "panel") as BoxSolid[];
     expect(panels).toHaveLength(1);
-    // the slab is inset by the sash face, not the bead — sash 72 into a
-    // 60..840 aperture puts the panel's left edge at 132
-    expect(panels[0]!.center[0] - panels[0]!.size[0] / 2).toBeCloseTo(132, 5);
+    // the slab is inset by the sash face — the sash overlaps the aperture
+    // by 10, so its left edge is 50 and the panel's left edge lands at 122
+    expect(panels[0]!.center[0] - panels[0]!.size[0] / 2).toBeCloseTo(122, 5);
   });
 
   it("extrudes the frameless pane at the declared glass thickness", () => {

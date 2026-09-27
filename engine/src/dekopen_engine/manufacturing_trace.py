@@ -63,6 +63,11 @@ class SemanticLeafTraceV1(EngineModel):
     door_handedness: Literal["LEFT", "RIGHT"] | None = None
     placement_domain: Literal[PlacementDomain.DIRECT, PlacementDomain.SLIDING_LEAF]
     reference_rect: TraceRectV1
+    # Sliding bays only: the floored slot pitch the geometry walk assigned,
+    # so the placement policy's per-slot x_pitches multiplier resolves to
+    # real millimetres here — the policy declares the multiple, geometry
+    # owns the pitch.
+    slot_pitch_mm: Decimal | None = Field(default=None, gt=Decimal("0"))
     finished_width_mm: Decimal = Field(gt=Decimal("0"))
     finished_height_mm: Decimal = Field(gt=Decimal("0"))
     direct_rect: TraceRectV1 | None = None
@@ -73,6 +78,8 @@ class SemanticLeafTraceV1(EngineModel):
             raise ValueError("Direct leaf trace requires its exact rectangle")
         if self.placement_domain is PlacementDomain.SLIDING_LEAF and self.direct_rect is not None:
             raise ValueError("Sliding leaf placement belongs to policy authority")
+        if self.placement_domain is PlacementDomain.SLIDING_LEAF and self.slot_pitch_mm is None:
+            raise ValueError("Sliding leaf trace requires its slot pitch")
         return self
 
 

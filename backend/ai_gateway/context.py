@@ -1476,8 +1476,8 @@ def _settings(org_id: UUID) -> dict:
         [org_id],
     )
     cafs = rows(
-        "SELECT dte_type, folio_desde, folio_hasta, folio_actual"
-        " FROM public.sii_cafs WHERE org_id=%s ORDER BY dte_type LIMIT %s",
+        "SELECT tipo_dte, folio_desde, folio_hasta, folio_actual"
+        " FROM public.sii_cafs WHERE org_id=%s ORDER BY tipo_dte LIMIT %s",
         [org_id, MAX_LIST],
     )
     return {
@@ -1486,7 +1486,7 @@ def _settings(org_id: UUID) -> dict:
         "sii_certificates": int(cert[0]["n"]) if cert else 0,
         "caf_pools": [
             {
-                "dte_type": _cut(c["dte_type"]),
+                "dte_type": str(c["tipo_dte"]),
                 "from": str(c["folio_desde"]),
                 "to": str(c["folio_hasta"]),
                 "current": str(c["folio_actual"]),

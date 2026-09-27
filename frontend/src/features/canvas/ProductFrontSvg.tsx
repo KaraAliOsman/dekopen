@@ -131,12 +131,14 @@ export function OpeningGlyph({
   y,
   w,
   h,
+  doorHinge,
 }: {
   opening: string | null | undefined;
   x: number;
   y: number;
   w: number;
   h: number;
+  doorHinge?: "left" | "right";
 }): JSX.Element {
   const padX = w * 0.2;
   const padY = h * 0.2;
@@ -182,7 +184,25 @@ export function OpeningGlyph({
             );
           });
         })()}
-      {kind === "DOOR_ENTRY" && <line x1={left} y1={top} x2={right} y2={bottom} opacity={0.35} />}
+      {/* A door glyph shows its swing: quarter-arc centred on the bottom
+       * hinge corner plus a jamb tick on the hinge side. */}
+      {kind === "DOOR_ENTRY" &&
+        (() => {
+          const hingeX = doorHinge === "right" ? right : left;
+          const sweepTo =
+            doorHinge === "right" ? right - Math.min(w, h) * 0.8 : left + Math.min(w, h) * 0.8;
+          const arcR = Math.min(w, h) * 0.8;
+          const sweep = doorHinge === "right" ? 1 : 0;
+          return (
+            <>
+              <line x1={hingeX} y1={top} x2={hingeX} y2={bottom} opacity={0.5} />
+              <path
+                d={`M ${sweepTo} ${bottom} A ${arcR} ${arcR} 0 0 ${sweep} ${hingeX} ${bottom - arcR}`}
+                fill="none"
+              />
+            </>
+          );
+        })()}
       {kind === "FIXED" && <line x1={left} y1={top} x2={right} y2={bottom} opacity={0.18} />}
     </g>
   );
@@ -455,12 +475,16 @@ function Bay({
   members,
   selected = false,
   onSelect,
+  moduleBottom,
 }: {
   node: IntentNode;
   region: Region;
   members: MemberGeometry;
   selected?: boolean;
   onSelect?(): void;
+  /** Sheet-space y of the module's outer bottom edge — the datum the
+   * declared handle height measures up from (OUTER_BOTTOM authority). */
+  moduleBottom?: number;
 }): JSX.Element {
   const opening = node.opening_type ?? "FIXED";
   const bead = members.beadFor(node.glass_thickness_mm ?? null);
@@ -723,7 +747,14 @@ function Bay({
         />
       )}
       {pane.w > 60 && pane.h > 60 && (
-        <OpeningGlyph opening={node.opening_type} x={pane.x} y={pane.y} w={pane.w} h={pane.h} />
+        <OpeningGlyph
+          opening={node.opening_type}
+          x={pane.x}
+          y={pane.y}
+          w={pane.w}
+          h={pane.h}
+          doorHinge={node.door_handedness === "RIGHT" ? "right" : "left"}
+        />
       )}
       {handleSide && operable && (
         <HandleLever
@@ -732,7 +763,19 @@ function Bay({
               ? sashArea.x + sashArea.w - sashT * 0.55
               : sashArea.x + sashT * 0.55
           }
-          y={sashArea.y + sashArea.h * 0.55}
+          // The lever mounts at the declared height measured up from the
+          // module's outer bottom edge — the OUTER_BOTTOM datum the
+          // manufacturing authority resolves (1050 mm when undeclared).
+          // Clamped onto the sash so a stale value still lands on the leaf.
+          y={(() => {
+            const declared = Number(node.handle_height_mm);
+            const heightMm = Number.isFinite(declared) && declared > 0 ? declared : 1050;
+            const datum =
+              moduleBottom !== undefined
+                ? moduleBottom - heightMm
+                : sashArea.y + sashArea.h - heightMm;
+            return Math.min(Math.max(datum, sashArea.y + 60), sashArea.y + sashArea.h - 60);
+          })()}
           side={handleSide}
         />
       )}
@@ -786,6 +829,7 @@ function ModuleTree({
   selectedDivisionId = null,
   onSelectDivision,
   showSplitDims = false,
+  moduleBottom,
 }: {
   node: IntentNode;
   region: Region;
@@ -808,6 +852,9 @@ function ModuleTree({
   selectedDivisionId?: string | null;
   onSelectDivision?: (divisionId: string) => void;
   showSplitDims?: boolean;
+  /** Sheet-space y of the module's outer bottom edge, threaded to bays for
+   * the declared handle datum. */
+  moduleBottom?: number;
 }): JSX.Element {
   if (node.type === "ROOT" && node.children?.length === 1 && node.children[0]) {
     return (
@@ -825,6 +872,7 @@ function ModuleTree({
         selectedDivisionId={selectedDivisionId}
         onSelectDivision={onSelectDivision}
         showSplitDims={showSplitDims}
+        moduleBottom={moduleBottom}
       />
     );
   }
@@ -883,6 +931,7 @@ function ModuleTree({
           selectedDivisionId={selectedDivisionId}
           onSelectDivision={onSelectDivision}
           showSplitDims={showSplitDims}
+          moduleBottom={moduleBottom}
         />
         <Member
           x={bar.x}
@@ -950,6 +999,7 @@ function ModuleTree({
           onSelectBay={onSelectBay}
           selectedDivisionId={selectedDivisionId}
           onSelectDivision={onSelectDivision}
+          moduleBottom={moduleBottom}
           showSplitDims={showSplitDims}
         />
       </>
@@ -962,6 +1012,7 @@ function ModuleTree({
       members={members}
       selected={selectedBayId === node.id}
       onSelect={onSelectBay ? () => onSelectBay(node.id) : undefined}
+      moduleBottom={moduleBottom}
     />
   );
 }
@@ -1816,6 +1867,7 @@ export function ProductFrontContent({
                       h: h - frameT * 2,
                     }}
                     localOrigin={{ x, y: top }}
+                    moduleBottom={top + h}
                     members={members}
                     liveOffsets={liveOffsets}
                     hitMm={hitMm}

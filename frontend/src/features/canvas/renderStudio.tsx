@@ -185,7 +185,8 @@ export function renderStudioImage(
   scene.add(rim);
 
   const root = buildThreeScene(scene3d);
-  if (options.inside) root.rotation.y = Math.PI;
+  // World +z is the room face; the street view rotates the model 180°.
+  if (!options.inside) root.rotation.y = Math.PI;
   scene.add(root);
   scene.background = new THREE.Color(tokenColor("--model3d-backdrop", "rgb(238,241,242)"));
 

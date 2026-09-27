@@ -158,7 +158,9 @@ def test_invalid_annotation_target_fails_closed(documentary_tenant):
             "JOIN public.manufacturing_placement_policies placement ON placement.system_id=system.id "
             "JOIN public.handle_requirement_policies handles ON handles.system_id=system.id "
             "JOIN public.reinforcement_cut_policies steel ON steel.system_id=system.id "
-            "WHERE placement.org_id IS NULL AND handles.org_id IS NULL AND steel.org_id IS NULL LIMIT 1"
+            "WHERE placement.org_id IS NULL AND handles.org_id IS NULL AND steel.org_id IS NULL "
+        "AND handles.version=(SELECT max(h2.version) FROM public.handle_requirement_policies h2 "
+        "WHERE h2.system_id=handles.system_id AND h2.org_id IS NULL) LIMIT 1"
         )
         # Invalid bay_id "B99" that does not exist in single bay geometry
         with pytest.raises(DocumentaryError) as exc_info:

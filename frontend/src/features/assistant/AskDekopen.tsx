@@ -43,9 +43,7 @@ export function AskDekopen({
    * to another surface must not delete the conversation that produced it.
    * The store is module-level: the dock mounts inside the per-route shell,
    * so component state dies on every navigation while this map survives. */
-  const [threads, setThreads] = useState<Map<string, Thread>>(
-    () => new Map(dockThreads),
-  );
+  const [threads, setThreads] = useState<Map<string, Thread>>(() => new Map(dockThreads));
   /** Agent mode: the bound job's lifecycle drives the header orb so a running
    * job reads alive even while the ask thread sits idle. */
   const [agentJobState, setAgentJobState] = useState<string | null>(null);

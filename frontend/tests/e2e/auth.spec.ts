@@ -109,7 +109,7 @@ async function requestMagicLink(page: Page, email: string): Promise<void> {
   await page.goto("/login");
   await page.getByLabel("Correo").fill(email);
   await page.getByRole("button", { name: "Enviar enlace de acceso" }).click();
-  await expect(page.getByRole("status")).toContainText("Revisa el buzón local");
+  await expect(page.getByRole("status")).toContainText("Revisa tu correo para continuar");
 }
 
 async function accessToken(page: Page): Promise<string> {

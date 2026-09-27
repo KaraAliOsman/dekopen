@@ -36,6 +36,10 @@ class VerticalReference(str, Enum):
 class PlacementOffsetV1(EngineModel):
     x_mm: Decimal
     y_mm: Decimal
+    # Slot-pitch multiplier: sliding leaf origins scale with the bay, so
+    # the authority declares the slot multiple and the trace's slot_pitch_mm
+    # resolves it to millimetres. x = x_mm + x_pitches · pitch.
+    x_pitches: Decimal = Decimal("0")
 
 
 class ManufacturingPlacementPolicyV1(EngineModel):
@@ -73,8 +77,10 @@ class HandleSlotRuleV1(EngineModel):
     # with no handedness is a wildcard; declared-handedness rules win over
     # it when both would match.
     leaf_handedness: Literal["LEFT", "RIGHT"] | None = None
-    host_member_side: Literal[MemberSide.LEFT, MemberSide.RIGHT]
-    horizontal_reference: Literal["HOST_MEMBER_AXIS"] = "HOST_MEMBER_AXIS"
+    host_member_side: Literal[MemberSide.LEFT, MemberSide.RIGHT, MemberSide.BOTTOM]
+    horizontal_reference: Literal["HOST_MEMBER_AXIS", "HOST_MEMBER_CENTER"] = (
+        "HOST_MEMBER_AXIS"
+    )
     horizontal_offset_mm: Decimal
     permitted_vertical_references: list[VerticalReference] = Field(min_length=1)
     mounting_min_from_leaf_top_mm: Decimal = Field(ge=Decimal("0"))
@@ -261,8 +267,16 @@ def _segment_for_side(rect: TraceRectV1, side: MemberSide) -> TraceSegmentV1:
 
 
 def _offset_rect(rect: TraceRectV1, offset: PlacementOffsetV1,
-                 width_mm: Decimal, height_mm: Decimal) -> TraceRectV1:
-    return TraceRectV1(x_mm=rect.x_mm + offset.x_mm, y_mm=rect.y_mm + offset.y_mm,
+                 width_mm: Decimal, height_mm: Decimal,
+                 slot_pitch_mm: Decimal | None = None) -> TraceRectV1:
+    x = rect.x_mm + offset.x_mm
+    if offset.x_pitches != 0:
+        if slot_pitch_mm is None:
+            raise ManufacturingAuthorityError(
+                "Placement authority needs the leaf's slot pitch"
+            )
+        x += offset.x_pitches * slot_pitch_mm
+    return TraceRectV1(x_mm=x, y_mm=rect.y_mm + offset.y_mm,
                        width_mm=width_mm, height_mm=height_mm)
 
 
@@ -354,6 +368,7 @@ def project_manufacturing_facts_v1(
                 _one_offset(placement_policy.sliding_leaf_offsets, leaf.leaf_slot, "sliding leaf"),
                 leaf.finished_width_mm,
                 leaf.finished_height_mm,
+                leaf.slot_pitch_mm,
             )
         leaf_rects[leaf.semantic_leaf_id] = rect
         target = (leaf.bay_id, leaf.leaf_id)
@@ -605,7 +620,10 @@ def project_manufacturing_facts_v1(
             maximum = leaf_rect.y_mm + handle_rule.mounting_max_from_leaf_top_mm
             if y_mm < minimum or y_mm > maximum:
                 raise ManufacturingAuthorityError("Handle point is outside its mounting region")
-            x_mm = host.start.x_mm + handle_rule.horizontal_offset_mm
+            if handle_rule.horizontal_reference == "HOST_MEMBER_CENTER":
+                x_mm = (host.start.x_mm + host.end.x_mm) / Decimal("2") + handle_rule.horizontal_offset_mm
+            else:
+                x_mm = host.start.x_mm + handle_rule.horizontal_offset_mm
             handle_id = documentary_sha256_v1({
                 "kind": "handle", **scope, "position_id": position_id,
                 "position_index": position_index, "repetition_index": repetition_index,

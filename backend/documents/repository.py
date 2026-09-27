@@ -158,7 +158,11 @@ def _authority_row(table: str, policy_id: UUID, system_id: UUID, org_id: UUID) -
 def _offset(value: object) -> PlacementOffsetV1:
     if not isinstance(value, dict):
         raise DocumentaryError("invalid_placement_policy")
-    return PlacementOffsetV1(x_mm=_decimal(value.get("x_mm")), y_mm=_decimal(value.get("y_mm")))
+    return PlacementOffsetV1(
+        x_mm=_decimal(value.get("x_mm")),
+        y_mm=_decimal(value.get("y_mm")),
+        x_pitches=_decimal(value.get("x_pitches", "0")),
+    )
 
 
 def _placement_policy(value: object) -> ManufacturingPlacementPolicyV1:
@@ -194,14 +198,21 @@ def _handle_policy(value: object) -> HandleRequirementPolicyV1:
         for item in raw["slots"]:
             if not isinstance(item, dict):
                 raise DocumentaryError("invalid_handle_policy")
-            if item.get("horizontal_reference") != "HOST_MEMBER_AXIS":
+            if item.get("horizontal_reference") not in (
+                "HOST_MEMBER_AXIS", "HOST_MEMBER_CENTER",
+            ):
+                raise DocumentaryError("invalid_handle_policy")
+            if item.get("leaf_handedness") is not None and item["leaf_handedness"] not in (
+                "LEFT", "RIGHT",
+            ):
                 raise DocumentaryError("invalid_handle_policy")
             slots.append(HandleSlotRuleV1(
                 opening_type=BayOpeningType(str(item["opening_type"])),
                 leaf_slot=None if item.get("leaf_slot") is None else str(item["leaf_slot"]),
+                leaf_handedness=item.get("leaf_handedness"),
                 handle_domain_slot=str(item["handle_domain_slot"]),
                 host_member_side=MemberSide(str(item["host_member_side"])),
-                horizontal_reference="HOST_MEMBER_AXIS",
+                horizontal_reference=item["horizontal_reference"],
                 horizontal_offset_mm=_decimal(item["horizontal_offset_mm"]),
                 permitted_vertical_references=[
                     VerticalReference(str(reference))

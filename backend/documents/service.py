@@ -32,6 +32,7 @@ from dekopen_engine.manufacturing import (
     HandleRequirementPolicyV1,
     ManufacturingFactsV1,
     ManufacturingPlacementPolicyV1,
+    VerticalReference,
     project_manufacturing_facts_v1,
 )
 from dekopen_engine.manufacturing_trace import (
@@ -342,13 +343,49 @@ def _handle_policy_requirements(
     return requirements
 
 
-def _tree_has_legacy_handle(value: object) -> bool:
-    if not isinstance(value, dict):
-        return False
-    if value.get("handle_height_mm") is not None:
-        return True
-    children = value.get("children", [])
-    return isinstance(children, list) and any(_tree_has_legacy_handle(child) for child in children)
+def _synthesized_handle_intents(
+    module_tree: object,
+    trace: GeometryManufacturingTraceV1,
+    intents: list[HandleIntentV1],
+) -> list[HandleIntentV1]:
+    """A bay's `handle_height_mm` is the editor's declared handle datum,
+    measured up from the product's sill line — it IS product intent, not a
+    legacy flag, so the freeze synthesizes the same intent the preparation
+    UI would produce: one PRIMARY intent per leaf of that bay that does not
+    already carry an explicit one. Explicit intents always win."""
+    declared: dict[str, Decimal] = {}
+    stack = [module_tree]
+    while stack:
+        node = stack.pop()
+        if not isinstance(node, dict):
+            continue
+        value = node.get("handle_height_mm")
+        if value is not None and isinstance(node.get("id"), str):
+            try:
+                declared[str(node["id"])] = Decimal(str(value))
+            except InvalidOperation:
+                pass
+        children = node.get("children")
+        if isinstance(children, list):
+            stack.extend(children)
+    if not declared:
+        return intents
+    covered = {
+        (item.bay_id, item.leaf_id, item.handle_domain_slot) for item in intents
+    }
+    merged = list(intents)
+    for leaf in trace.leaves:
+        height = declared.get(leaf.bay_id)
+        if height is None or (leaf.bay_id, leaf.leaf_id, "PRIMARY") in covered:
+            continue
+        merged.append(HandleIntentV1(
+            bay_id=leaf.bay_id,
+            leaf_id=leaf.leaf_id,
+            handle_domain_slot="PRIMARY",
+            requested_height_mm=height,
+            vertical_reference=VerticalReference.OUTER_BOTTOM,
+        ))
+    return merged
 
 
 def _same_documentary_value(left: object, right: object) -> bool:
@@ -1222,8 +1259,10 @@ def freeze_revision_a(
             quantity = int(position["quantity"])
             unit_models: list[tuple[str | None, ManufacturingFactsV1]] = []
             for module_id, computation, module_tree in calculations:
-                scoped_intents = _module_scoped(
-                    intents, module_id, "bay_id", "leaf_id"
+                scoped_intents = _synthesized_handle_intents(
+                    module_tree,
+                    computation.manufacturing_trace,
+                    _module_scoped(intents, module_id, "bay_id", "leaf_id"),
                 )
                 if is_assembly and _missing_handle_intents(
                     computation.manufacturing_trace,
@@ -1247,10 +1286,7 @@ def freeze_revision_a(
                             reinforcement_policy=policies.reinforcement,
                             handle_intents=scoped_intents,
                             resolved_reinforcement_skus=cutting.reinforcement_skus,
-                            legacy_handle_height_present=_tree_has_legacy_handle(module_tree),
-                            legacy_handle_migration_confirmed=bool(
-                                position["legacy_handle_migration_confirmed"]
-                            ),
+
                             module_id=module_id,
                         ),
                     ))

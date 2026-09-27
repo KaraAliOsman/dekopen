@@ -694,6 +694,7 @@ def _append_leaf(
     sash: SashGeometry,
     params: SystemParams,
     clearance_mm: Decimal,
+    slot_pitch_mm: Decimal | None = None,
 ) -> None:
     if node.opening_type is None:
         raise ValueError("Physical leaf requires an opening type")
@@ -723,6 +724,7 @@ def _append_leaf(
             ),
             placement_domain=placement_domain,
             reference_rect=_trace_rect(reference_rect),
+            slot_pitch_mm=slot_pitch_mm,
             finished_width_mm=sash.finished_width_mm,
             finished_height_mm=sash.finished_height_mm,
             direct_rect=None if direct_rect is None else _trace_rect(direct_rect),
@@ -1091,6 +1093,7 @@ def _append_sliding(
                 sash=sash,
                 params=params,
                 clearance_mm=clearance_mm,
+                slot_pitch_mm=pitch,
             )
         else:
             slot_rect = _Rect(
