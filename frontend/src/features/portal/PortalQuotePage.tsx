@@ -539,6 +539,30 @@ export function PortalQuotePage(): JSX.Element {
           </a>
         ) : null}
 
+        <ol className="portal-steps" aria-label={t("portal.stepsLabel")}>
+          <li className="portal-step" data-state="done">
+            {t("portal.stepProposal")}
+          </li>
+          <li
+            className="portal-step"
+            data-state={
+              quote.approval_status === "APPROVED"
+                ? "done"
+                : quote.approval_status === "DECLINED"
+                  ? "declined"
+                  : "current"
+            }
+          >
+            {t("portal.stepDecision")}
+          </li>
+          <li
+            className="portal-step"
+            data-state={quote.approval_status === "APPROVED" ? "current" : "pending"}
+          >
+            {t("portal.stepProduction")}
+          </li>
+        </ol>
+
         {decided ? (
           <div
             className="portal-decided"

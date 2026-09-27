@@ -1194,8 +1194,13 @@ function OperationDecision({
       ? Number(((netCents - costCents) * 10000n) / netCents) / 100
       : null;
   const objective = Number(operation.rules?.default_margin_pct ?? NaN);
+  // Compare at the displayed precision (marginText renders toFixed(1)):
+  // a realized 34.9998% shows as "35.0 %" — flagging it "below objective"
+  // next to that readout would contradict the number on screen.
   const marginBelow =
-    realizedPct !== null && Number.isFinite(objective) && realizedPct < objective * 100;
+    realizedPct !== null &&
+    Number.isFinite(objective) &&
+    Math.round(realizedPct * 10) / 10 < objective * 100;
   return (
     <article className="operation-decision">
       <header className="operation-decision__head">

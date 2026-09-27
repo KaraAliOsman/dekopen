@@ -1117,6 +1117,10 @@ export const messages = {
     "Recibimos la confirmación de tu pago. El taller emitirá tu comprobante y lo enviará al correo que usaste para pagar.",
   "paymentReturn.close": "Ya puedes cerrar esta ventana.",
   "portal.brand": "Generado con DEKOPEN",
+  "portal.stepsLabel": "Estado de la propuesta",
+  "portal.stepProposal": "Propuesta",
+  "portal.stepDecision": "Tu decisión",
+  "portal.stepProduction": "Producción",
   "portal.wasApproved": "Propuesta aprobada",
   "portal.wasDeclined": "Propuesta rechazada",
   "portal.wasApprovedDetail":
