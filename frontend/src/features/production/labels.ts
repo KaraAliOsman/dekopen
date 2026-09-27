@@ -41,6 +41,16 @@ export function opKindLabel(kind: string | null | undefined): string {
   return OP_KINDS.has(kind) ? t(`production.opKind.${kind}` as Parameters<typeof t>[0]) : kind;
 }
 
+// Mirrors _STEP_CONSUMED_KINDS in backend/production/service.py — which stock
+// kinds a station physically consumes. A consuming step cannot START until the
+// order carries a usable cut plan (backend also enforces it).
+export const STEP_STOCK_KINDS: Record<string, string[]> = {
+  CUT: ["BAR", "SHEET"],
+  ASSEMBLE: ["HARDWARE_KIT", "FITTING"],
+  HARDWARE: ["HARDWARE_KIT", "FITTING"],
+  GLAZE: ["PANEL"],
+};
+
 const STOCK_KINDS: ReadonlySet<string> = new Set([
   "BAR",
   "SHEET",

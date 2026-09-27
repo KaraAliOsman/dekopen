@@ -168,6 +168,16 @@ def test_golden_path_emit_release_optimize_steps_dispatch(
             production_service.generate_packing_manifest(
                 org_id=org, order_id=order_id, actor_id=wm
             )
+            # A guía is only emitted against a real destination: the delivery
+            # must be scheduled (or a hand-off note recorded) before dispatch.
+            production_service.schedule_delivery(
+                org_id=org,
+                order_id=order_id,
+                actor_id=wm,
+                scheduled_date="2030-01-15",
+                time_window="AM",
+                address="Obra P-1, parcela 12",
+            )
             dispatched = production_service.dispatch_work_order(
                 org_id=org, order_id=order_id, actor_id=wm
             )

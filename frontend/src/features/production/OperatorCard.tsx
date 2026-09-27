@@ -8,8 +8,8 @@
 import { useState } from "react";
 
 import { fmtMm, formatDateTime } from "../../format";
-import { t } from "../../i18n/es-CL";
-import { opKindLabel, stockKindLabel } from "./labels";
+import { t, tOptional } from "../../i18n/es-CL";
+import { STEP_STOCK_KINDS, opKindLabel, stockKindLabel } from "./labels";
 import type { ProductionOrderTrace, ProductionStep } from "../../api/generated/models";
 import { formatDate } from "../money";
 
@@ -77,16 +77,6 @@ type SheetPiece = {
   unit_index?: number;
   workshop_sku?: string;
   code?: string;
-};
-
-/** Stock kinds each routing step physically consumes — mirrors the backend's
- * consume mapping (bars/sheets at CUT, kits/fittings at ASSEMBLE/HARDWARE,
- * panels at GLAZE); QC, PACK and the process steps reserve nothing. */
-const STEP_STOCK_KINDS: Record<string, string[]> = {
-  CUT: ["BAR", "SHEET"],
-  ASSEMBLE: ["HARDWARE_KIT", "FITTING"],
-  HARDWARE: ["HARDWARE_KIT", "FITTING"],
-  GLAZE: ["PANEL"],
 };
 
 function _reservations(trace: ProductionOrderTrace): Reservation[] {
@@ -206,6 +196,14 @@ export function OperatorStepCard({
       }
     }
   }
+  // Glass/panels that no declared sheet could host (shaped outlines,
+  // oversized pieces) never appear inside a sheet layout — at GLAZE they'd
+  // be invisible without this list, so the operator would cut only part of
+  // the order's glass.
+  const unnestedPanes: Array<Record<string, unknown>> = showPieces
+    ? (((trace?.plan as Record<string, unknown> | undefined)?.unnested as
+        Array<Record<string, unknown>> | undefined) ?? [])
+    : [];
   const totalPieces =
     bars.reduce((count, bar) => count + ((bar.cuts as unknown[] | undefined) ?? []).length, 0) +
     sheetPieces.length;
@@ -390,8 +388,10 @@ export function OperatorStepCard({
                     </tr>
                   </thead>
                   <tbody>
-                    {cutPieces.map((piece) => (
-                      <tr key={piece.piece_id ?? `${piece.barIndex}-${piece.sequence}`}>
+                    {cutPieces.map((piece, index) => (
+                      <tr
+                        key={`${piece.piece_id ?? "x"}-${piece.unit_index ?? 0}-${piece.barIndex}-${piece.sequence}-${index}`}
+                      >
                         <td>
                           {piece.code ? <strong>{piece.code} · </strong> : null}
                           {piece.sequence ?? "—"}
@@ -434,7 +434,7 @@ export function OperatorStepCard({
                 </thead>
                 <tbody>
                   {sheetPieces.map((piece, index) => (
-                    <tr key={piece.piece_id ?? index}>
+                    <tr key={`${piece.piece_id ?? "x"}-${index}`}>
                       <td>
                         {piece.code ?? "—"}
                         {piece.workshop_sku ? ` · ${piece.workshop_sku}` : ""}
@@ -451,11 +451,48 @@ export function OperatorStepCard({
             </div>
           ) : null}
 
+          {unnestedPanes.length ? (
+            <div className="operator-section">
+              <h4>{t("production.operatorUnnested")}</h4>
+              <table className="production-plan operator-pieces">
+                <thead>
+                  <tr>
+                    <th>{t("production.operatorRole")}</th>
+                    <th>{t("production.optimizeSize")}</th>
+                    <th>{t("production.operatorOrigin")}</th>
+                    <th>{t("production.operatorUnnestedReason")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {unnestedPanes.map((pane, index) => (
+                    <tr key={index}>
+                      <td>
+                        {String(pane.group ?? "—")}
+                        {pane.quantity ? ` ×${pane.quantity}` : ""}
+                      </td>
+                      <td>
+                        {pane.width_mm ? fmtMm(String(pane.width_mm)) : "—"} ×{" "}
+                        {pane.height_mm ? fmtMm(String(pane.height_mm)) : "—"}
+                      </td>
+                      <td>{_loc(labels, pane as { bay_id?: string; leaf_id?: string }) || "—"}</td>
+                      <td>
+                        {pane.reason
+                          ? (tOptional(`production.unnestedReason.${pane.reason}`) ??
+                            String(pane.reason))
+                          : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+
           {step.code === "QC" ? (
             <QcCheckSection step={step} trace={trace} onQcCheck={onQcCheck} />
           ) : null}
 
-          {!consumesStock && !cutPieces.length && !sheetPieces.length ? (
+          {!consumesStock && !cutPieces.length && !sheetPieces.length && !unnestedPanes.length ? (
             <p className="operator-summary">
               {t("production.operatorNoStock")} · {totalPieces}{" "}
               {t("production.operatorPiecesTotal")}

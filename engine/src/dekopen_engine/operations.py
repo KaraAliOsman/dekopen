@@ -303,9 +303,19 @@ def operations_from_plan(
         ops.extend(_saw_ops(bar))
     for unit in fact_units:
         ops.extend(_member_ops(unit))
+    # bar hosts sort numerically — "bar:10" must not precede "bar:2" on a saw
+    # sequence; every other host stays lexicographic and stable.
+    def host_key(host: str) -> tuple[int, object]:
+        if host.startswith("bar:"):
+            try:
+                return (0, int(host[4:]))
+            except ValueError:
+                return (0, 0)
+        return (1, host)
+
     ops.sort(
         key=lambda op: (
-            op.host,
+            host_key(op.host),
             op.kind.value,
             str(op.x_mm or Decimal("0")),
             str(op.y_mm or Decimal("0")),

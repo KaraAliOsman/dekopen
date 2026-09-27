@@ -27,6 +27,8 @@ const order = {
 };
 const detail = {
   ...order,
+  // Consuming steps show START only when a live cut plan exists.
+  payload: { optimization: { plan: { bars: [] } } },
   steps: [
     {
       id: "step-1",

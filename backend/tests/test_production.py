@@ -618,7 +618,13 @@ def _transition_fakes(step: dict, order_status: str):
         if "SELECT order_id FROM public.production_steps" in query:
             return {"order_id": step["order_id"]}
         if "FROM public.orders" in query:
-            return {"id": step["order_id"], "status": order_status}
+            return {
+                "id": step["order_id"],
+                "status": order_status,
+                # Consuming steps refuse to START without a live cut plan —
+                # give the stub order a valid one.
+                "payload_json": {"optimization": {"plan": {"bars": []}}},
+            }
         if "sequence < %s" in query:
             return {"remaining": 0}
         if "FOR UPDATE OF s" in query:
@@ -759,7 +765,11 @@ def test_unassigned_step_adopts_a_later_activated_center() -> None:
         if "FROM public.production_steps" in query:
             return {"total": 2, "done": 0, "blocked": 0, "in_progress": 1}
         if "UPDATE public.orders" in query or "FROM public.orders" in query:
-            return {"id": step["order_id"], "status": "IN_PROGRESS"}
+            return {
+                "id": step["order_id"],
+                "status": "IN_PROGRESS",
+                "payload_json": {"optimization": {"plan": {"bars": []}}},
+            }
         raise AssertionError(query)
 
     def fake_rows(query, params=(), code=None):
@@ -2126,6 +2136,9 @@ def test_create_remake_clones_order_and_steps(monkeypatch) -> None:
     def fake_rows(sql_text: str, params: object = ()) -> list[dict]:
         lowered = " ".join(sql_text.lower().split())
         writes.append((lowered, list(params)))
+        # The remake carries the QC failure that motivated it.
+        if "production_step_events" in lowered and "qc_result" in lowered:
+            return [{"payload": {"qc_item": "V-02", "note": "vidrio rayado"}}]
         return [{"id": str(remake_id)}]
 
     monkeypatch.setattr("production.service.one", fake_one)
@@ -2144,6 +2157,7 @@ def test_create_remake_clones_order_and_steps(monkeypatch) -> None:
     payload = json.loads(order_insert[3])
     assert "optimization" not in payload
     assert payload["remake_of"] == str(order_id)
+    assert payload["remake_reason"] == {"qc_item": "V-02", "note": "vidrio rayado"}
     assert order_insert[2] == "OT-P-AAA-01-RM-02"
     steps_copy = next(
         s2 for s2, _ in writes if "insert into public.production_steps" in s2 and "select" in s2
@@ -2627,6 +2641,32 @@ def test_dispatch_requires_completed_and_is_idempotent(monkeypatch) -> None:
     event_payload = json.loads(updates[0][1][3])
     assert event_payload["dispatch_note"] == "GD-0001"
     assert out2["order"]["status"] == "DISPATCHED"
+
+
+def test_dispatch_requires_delivery_or_note(monkeypatch) -> None:
+    org_id, order_id = uuid4(), uuid4()
+
+    def fake_one(sql_text: str, params: list, code: str = "not_found") -> dict:
+        return {
+            "id": str(order_id),
+            "order_code": "OT-1",
+            "status": "COMPLETED",
+            "payload_json": {"packing": {"units": [{"code": "U-1"}]}},
+            "project_id": str(uuid4()),
+        }
+
+    def fake_rows(sql_text: str, params: list) -> list:
+        lowered = " ".join(sql_text.lower().split())
+        if "from public.deliveries" in lowered:
+            return []
+        return [{"id": "ok"}]
+
+    monkeypatch.setattr("production.service.one", fake_one)
+    monkeypatch.setattr("production.service.rows", fake_rows)
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ), pytest.raises(DocumentaryError, match="dispatch_requires_delivery"):
+        service.dispatch_work_order(org_id=org_id, order_id=order_id, actor_id=uuid4())
 
 
 def test_dispatch_note_void_reverts_order_and_records_event(monkeypatch) -> None:

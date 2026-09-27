@@ -302,11 +302,17 @@ def design_batch_preview(org_id, _actor, request):
         raise PricingError('commercial_revision_required')
     # Mirror editable(): a version row on the current revision means it is
     # sealed — positions can no longer change, so a batch preview is moot.
-    if rows(
-        "SELECT id FROM public.project_versions WHERE org_id=%s AND project_id=%s "
-        "AND revision_code=%s LIMIT 1",
-        [org_id, project['id'], project['current_revision']],
-    ):
+    # project_versions is role-denied to `authenticated` (rbac_repair), so the
+    # check must run as documentary_backend like every other reader does.
+    from documents.repository import documentary_backend
+
+    with documentary_backend():
+        sealed = rows(
+            "SELECT id FROM public.project_versions WHERE org_id=%s AND project_id=%s "
+            "AND revision_code=%s LIMIT 1",
+            [org_id, project['id'], project['current_revision']],
+        )
+    if sealed:
         raise PricingError('commercial_revision_required')
     rules = one('SELECT * FROM public.pricing_rules WHERE org_id=%s',[org_id],'pricing_rules_not_found')
     organization = one('SELECT currency FROM public.tenancy_organizations WHERE id=%s',[org_id])

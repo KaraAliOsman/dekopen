@@ -11,6 +11,7 @@ type Remnant = {
   id: string;
   kind: "BAR" | "SHEET";
   stock_authority_id: string | null;
+  article_sku?: string | null;
   sheet_workshop_sku: string | null;
   material: string | null;
   color: string | null;
@@ -470,6 +471,7 @@ export function InventorySection({
         <table className="inventory-remnants">
           <thead>
             <tr>
+              <th>{t("inventory.remnantCode")}</th>
               <th>{t("inventory.remnantKind")}</th>
               <th>{t("inventory.identity")}</th>
               <th>{t("inventory.dims")}</th>
@@ -483,11 +485,15 @@ export function InventorySection({
           <tbody>
             {visible.map((r) => (
               <tr key={r.id}>
+                <td className="inventory-remnant-code">
+                  {`RET-${r.id.slice(0, 8).toUpperCase()}`}
+                </td>
                 <td>{remnantKindLabel(r.kind)}</td>
                 <td>
                   {r.kind === "SHEET"
                     ? (r.sheet_workshop_sku ?? "—")
-                    : (authorityNames.get(r.stock_authority_id ?? "") ??
+                    : (r.article_sku ??
+                      authorityNames.get(r.stock_authority_id ?? "") ??
                       ([r.material, r.color].filter(Boolean).join(" · ") || "—"))}
                   {r.notes ? <span className="purchasing-hint"> — {r.notes}</span> : null}
                 </td>

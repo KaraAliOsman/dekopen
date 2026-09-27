@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import type { OptimizeStrategyStats } from "../../api/generated/models";
 import { cutRoleLabel } from "./labels";
 import { fmtMm } from "../../format";
-import { t } from "../../i18n/es-CL";
+import { t, tOptional } from "../../i18n/es-CL";
 
 // Full engine payload contract (backend/production/service.py →
 // dekopen_engine.cutting + nesting, model_dump(mode="json") — every
@@ -81,6 +81,9 @@ export type UnnestedPiece = {
   width_mm: string;
   height_mm: string;
   quantity: number;
+  bay_id?: string | null;
+  leaf_id?: string | null;
+  reason?: string;
 };
 export type OptimizationMetrics = {
   bars?: number;
@@ -207,7 +210,11 @@ function CutPlanBarSvg({
   const tail = num(bar.tail_trim_mm);
   const kerf = num(bar.kerf_mm);
   const scaled = (mm: number) => (mm / stock) * 1000;
-  const barH = 56;
+  // The strip is the thing a saw operator reads — it has to stay legible at
+  // arm's length, so the band itself carries most of the height and the
+  // labels stay large inside it (narrow pieces keep their identity in the
+  // legend below, mirroring the printed pack's leader list).
+  const barH = 96;
   let cursor = head;
   const pieces = bar.cuts.map((cut, index) => {
     const x = cursor;
@@ -240,32 +247,30 @@ function CutPlanBarSvg({
           }
         }}
       >
-        <rect x={xSc} y={8} width={Math.max(wSc, 1)} height={barH - 16} rx={2} />
-        {wSc > 52 ? (
-          <text x={mid} y={30} textAnchor="middle" className="cutplan-cut-id">
+        <rect x={xSc} y={10} width={Math.max(wSc, 1)} height={barH - 20} rx={2} />
+        {wSc > 60 ? (
+          <text x={mid} y={42} textAnchor="middle" className="cutplan-cut-id">
             {shopCode ?? pieceLabel(cut, code)}
           </text>
         ) : null}
-        {wSc > 40 ? (
-          <text x={mid} y={46} textAnchor="middle" className="cutplan-cut-len">
+        {wSc > 44 ? (
+          <text x={mid} y={68} textAnchor="middle" className="cutplan-cut-len">
             {fmtMm(cut.length_mm)}
           </text>
         ) : null}
         {angleL ? (
-          <text x={xSc + 4} y={30} className="cutplan-miter-mark" aria-hidden>
-            ◧
-          </text>
+          <polygon
+            className="cutplan-miter-notch"
+            points={`${xSc + 2},10 ${xSc + 16},10 ${xSc + 2},30`}
+            aria-hidden
+          />
         ) : null}
         {angleR ? (
-          <text
-            x={xSc + wSc - 4}
-            y={30}
-            textAnchor="end"
-            className="cutplan-miter-mark"
+          <polygon
+            className="cutplan-miter-notch"
+            points={`${xSc + wSc - 2},10 ${xSc + wSc - 16},10 ${xSc + wSc - 2},30`}
             aria-hidden
-          >
-            ◨
-          </text>
+          />
         ) : null}
       </g>
     );
@@ -286,9 +291,9 @@ function CutPlanBarSvg({
         <rect
           className="cutplan-frame"
           x={0}
-          y={8}
+          y={10}
           width={1000}
-          height={barH - 16}
+          height={barH - 20}
           rx={2}
           pointerEvents="none"
         />
@@ -296,9 +301,9 @@ function CutPlanBarSvg({
           <rect
             className="cutplan-trim"
             x={0}
-            y={8}
+            y={10}
             width={Math.max(scaled(head), 1.5)}
-            height={barH - 16}
+            height={barH - 20}
           />
         ) : null}
         {pieces}
@@ -306,18 +311,18 @@ function CutPlanBarSvg({
           <rect
             className="cutplan-remainder"
             x={scaled(usedEnd)}
-            y={8}
+            y={10}
             width={Math.max(scaled(remainder), 1)}
-            height={barH - 16}
+            height={barH - 20}
           />
         ) : null}
         {tail > 0 ? (
           <rect
             className="cutplan-trim"
             x={scaled(stock - tail)}
-            y={8}
+            y={10}
             width={Math.max(scaled(tail), 1.5)}
-            height={barH - 16}
+            height={barH - 20}
           />
         ) : null}
       </svg>
@@ -342,7 +347,7 @@ function CutPlanBarSvg({
               >
                 {cut.sequence ?? index + 1} · {shopCode ?? pieceLabel(cut, code)} ·{" "}
                 {fmtMm(cut.length_mm)}mm
-                {angleL !== null || angleR !== null ? ` · ◧${angleL ?? 90}° ◨${angleR ?? 90}°` : ""}
+                {angleL !== null || angleR !== null ? ` · ${angleL ?? 90}°/${angleR ?? 90}°` : ""}
               </button>
             </li>
           );
@@ -464,6 +469,7 @@ export function CutPlanView({
   const [selected, setSelected] = useState<PieceRef | null>(null);
   const bars = optimization.bars?.workshop_cut_plan ?? [];
   const sheets = optimization.sheets ?? [];
+  const unnested = optimization.unnested ?? [];
   const selectedMember = selected ? memberKey(selected.piece) : null;
 
   const detail = useMemo(() => {
@@ -557,6 +563,34 @@ export function CutPlanView({
                 />
               </figure>
             ))}
+          </div>
+        ) : null}
+        {unnested.length ? (
+          <div className="cutplan-unnested">
+            <h4>{t("production.operatorUnnested")}</h4>
+            <table className="production-plan">
+              <thead>
+                <tr>
+                  <th>{t("production.cutplanPiece")}</th>
+                  <th>{t("production.optimizeSize")}</th>
+                  <th>{t("production.operatorUnnestedReason")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {unnested.map((pane, index) => (
+                  <tr key={index}>
+                    <td>
+                      {pane.group ?? "—"}
+                      {pane.quantity > 1 ? ` ×${pane.quantity}` : ""}
+                    </td>
+                    <td>
+                      {fmtMm(pane.width_mm)}×{fmtMm(pane.height_mm)} mm
+                    </td>
+                    <td>{tOptional(`production.unnestedReason.${pane.reason}`) ?? pane.reason}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         ) : null}
       </div>

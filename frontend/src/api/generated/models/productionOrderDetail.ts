@@ -35,6 +35,8 @@ export interface ProductionOrderDetail {
   events: ProductionStepEvent[];
   making?: ProductionOrderMaking | null;
   /** @nullable */
+  delivery_address?: string | null;
+  /** @nullable */
   dispatch_note_code?: string | null;
   dispatch_note_voided: boolean;
   /** @nullable */

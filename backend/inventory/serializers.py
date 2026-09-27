@@ -149,6 +149,7 @@ class RemnantSerializer(serializers.Serializer):
     notes = serializers.CharField(allow_null=True)
     reserved_order_code = serializers.CharField(allow_null=True, required=False)
     origin_order_code = serializers.CharField(allow_null=True, required=False)
+    article_sku = serializers.CharField(allow_null=True, required=False)
     created_at = serializers.DateTimeField()
     updated_at = serializers.DateTimeField()
 

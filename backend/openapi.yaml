@@ -21311,6 +21311,9 @@ components:
           allOf:
           - $ref: '#/components/schemas/ProductionOrderMaking'
           nullable: true
+        delivery_address:
+          type: string
+          nullable: true
         dispatch_note_code:
           type: string
           nullable: true
@@ -22643,6 +22646,9 @@ components:
         origin_order_code:
           type: string
           nullable: true
+        article_sku:
+          type: string
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -23491,6 +23497,10 @@ components:
           allOf:
           - $ref: '#/components/schemas/QcCheckRequest'
           nullable: true
+        qc_item:
+          type: string
+          nullable: true
+          maxLength: 50
       required:
       - action
     StockKindEnum:

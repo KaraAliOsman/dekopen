@@ -21,4 +21,9 @@ export interface StepTransitionRequestRequest {
     | (typeof StepTransitionRequestRequestQcResult)[keyof typeof StepTransitionRequestRequestQcResult]
     | null;
   qc_check?: QcCheckRequest | null;
+  /**
+   * @maxLength 50
+   * @nullable
+   */
+  qc_item?: string | null;
 }

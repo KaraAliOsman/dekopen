@@ -202,6 +202,7 @@ class ProductionStepTransitionView(APIView):
                     note=data.get("note"),
                     qc_result=data.get("qc_result"),
                     qc_check=data.get("qc_check"),
+                    qc_item=data.get("qc_item"),
                 )
         return Response(output)
 

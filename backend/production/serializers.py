@@ -102,6 +102,7 @@ class ProductionOrderDetailSerializer(ProductionOrderSerializer):
     steps = ProductionStepSerializer(many=True)
     events = ProductionStepEventSerializer(many=True)
     making = ProductionOrderMakingSerializer(allow_null=True, required=False)
+    delivery_address = serializers.CharField(allow_null=True, required=False)
     dispatch_note_code = serializers.CharField(allow_null=True, required=False)
     dispatch_note_voided = serializers.BooleanField()
     dispatch_note_dte = serializers.DictField(allow_null=True, required=False)
@@ -122,6 +123,7 @@ class StepTransitionRequestSerializer(StrictSerializer):
     note = serializers.CharField(required=False, allow_null=True, max_length=500)
     qc_result = serializers.ChoiceField(choices=("PASS", "FAIL"), required=False, allow_null=True)
     qc_check = QcCheckSerializer(required=False, allow_null=True)
+    qc_item = serializers.CharField(max_length=50, required=False, allow_blank=True, allow_null=True)
 
     def validate(self, data):
         data = super().validate(data)
@@ -136,6 +138,10 @@ class StepTransitionRequestSerializer(StrictSerializer):
         if data.get("qc_check") and data["action"] != "QC_CHECK":
             raise serializers.ValidationError(
                 {"qc_check": "QC check payload only applies to QC_CHECK"}
+            )
+        if data.get("qc_item") and data.get("qc_result") != "FAIL":
+            raise serializers.ValidationError(
+                {"qc_item": "A failing item only applies to a QC rejection"}
             )
         return data
 

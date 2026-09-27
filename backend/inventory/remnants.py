@@ -119,6 +119,25 @@ def list_remnants(
     for entry in remnants:
         entry["reserved_order_code"] = codes.get(entry["reserved_order_id"])
         entry["origin_order_code"] = codes.get(entry["origin_order_id"])
+    # Resolve the bar authority into the commercial SKU a rack worker reads —
+    # a remnant with no article identity is just an anonymous drop. Sheet
+    # remnants already carry sheet_workshop_sku.
+    authority_ids = [
+        entry["stock_authority_id"] for entry in remnants if entry["stock_authority_id"]
+    ]
+    skus: dict[str, object] = {}
+    if authority_ids:
+        for table in ("profile_purchase_mappings", "reinforcement_articles"):
+            for row in rows(
+                f"SELECT id::text AS id, commercial_sku FROM public.{table} "
+                "WHERE id = ANY(%s::uuid[])",
+                [authority_ids],
+            ):
+                skus[str(row["id"])] = row["commercial_sku"]
+    for entry in remnants:
+        entry["article_sku"] = (
+            skus.get(entry["stock_authority_id"]) if entry["stock_authority_id"] else None
+        )
     return {"remnants": remnants}
 
 

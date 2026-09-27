@@ -1065,7 +1065,13 @@ def get_work_order(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
                 [str(order["project_version_id"]), str(org_id)],
                 "work_order_not_found",
             )
-        sealed_positions = _decoded(snapshot.get("snapshot_json")).get("positions") or []
+        sealed_snapshot = _decoded(snapshot.get("snapshot_json"))
+        sealed_positions = sealed_snapshot.get("positions") or []
+        # The sealed project's delivery address prefills the delivery form —
+        # workshop data only; the commercial fields stay out of the payload.
+        output["delivery_address"] = (
+            sealed_snapshot.get("project") or {}
+        ).get("delivery_address")
         sealed = next(
             (
                 pos
@@ -1172,9 +1178,14 @@ def transition_step(
     note: str | None,
     qc_result: str | None = None,
     qc_check: dict[str, object] | None = None,
+    qc_item: str | None = None,
 ) -> dict[str, object]:
     if action not in _TRANSITIONS:
         raise DocumentaryError("step_action_unknown")
+    if qc_item is not None:
+        qc_item = str(qc_item).strip()[:50] or None
+        if qc_item and qc_result != "FAIL":
+            raise DocumentaryError("qc_item_requires_fail")
     if action == "NOTE" and not (note or "").strip():
         raise DocumentaryError("step_note_required")
     if action == "BLOCK" and not (note or "").strip():
@@ -1208,7 +1219,7 @@ def transition_step(
         # this order serialize — the status aggregate then sees prior commits.
         order = one(
             """
-            SELECT id, status::text FROM public.orders
+            SELECT id, status::text, payload_json FROM public.orders
             WHERE id = %s AND org_id = %s AND order_type = 'WORKSHOP_OT'
             FOR UPDATE
             """,
@@ -1263,8 +1274,8 @@ def transition_step(
         # silently progress. When a center of the required kind has since been
         # activated the step adopts it here and the order's payload blocker
         # clears; otherwise the transition refuses and the blocker stays the
-        # shop's to-do. An IN_PROGRESS step already had a center at START, so
-        # deeper validations (e.g. the cut plan) still surface first.
+        # shop's to-do. Station assignment surfaces before the cut-plan gate:
+        # "no saw bench" is the earlier answer to give.
         if (
             action in ("START", "COMPLETE")
             and str(step["status"]) in ("READY", "PENDING")
@@ -1303,6 +1314,20 @@ def transition_step(
                     WHERE id = %s
                     """,
                     [f"work_center_inactive:{kind}", str(order["id"])],
+                )
+        # Starting a material-consuming step without a usable cut plan is
+        # a trap: COMPLETE then refuses (no plan) while replan refuses
+        # (consuming step already in progress) — the order only escapes
+        # via block/unblock. You can't start the saw without a plan.
+        if action == "START" and str(step["code"]) in _STEP_CONSUMED_KINDS:
+            opt = _decoded(order.get("payload_json")).get("optimization") or {}
+            if not opt or opt.get("invalidated"):
+                raise DocumentaryError(
+                    "work_order_plan_missing",
+                    detail=(
+                        "La orden no tiene un plan de corte vigente: "
+                        "optimízala antes de iniciar este paso."
+                    ),
                 )
         event_name = "QC_FAILED" if (
             action == "COMPLETE" and qc_result == "FAIL"
@@ -1373,6 +1398,7 @@ def transition_step(
                     **({"note": note.strip()} if note else {}),
                     **({"qc_result": qc_result} if qc_result else {}),
                     **({"qc_check": qc_check} if qc_check else {}),
+                    **({"qc_item": qc_item} if qc_item else {}),
                 }),
             ],
         )
@@ -1646,6 +1672,27 @@ def create_remake(
         payload.pop("operations_export", None)
         payload.pop("packing", None)  # labels carry the source order code
         payload["remake_of"] = str(source["id"])
+        # Carry the QC failure forward: the remake order names WHICH unit
+        # failed and why, so the floor doesn't re-derive it from the source
+        # order's history (review PM-H3).
+        failure_rows = rows(
+            """
+            SELECT payload FROM public.production_step_events
+            WHERE org_id = %s AND order_id = %s
+              AND payload->>'qc_result' = 'FAIL'
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            [str(org_id), str(source["id"])],
+        )
+        if failure_rows:
+            failure_payload = _decoded(failure_rows[0].get("payload"))
+            reason = {
+                "qc_item": failure_payload.get("qc_item"),
+                "note": failure_payload.get("note"),
+            }
+            if reason["qc_item"] or reason["note"]:
+                payload["remake_reason"] = reason
         prior = one(
             """
             SELECT COUNT(*) AS n FROM public.orders
@@ -1708,6 +1755,7 @@ def create_remake(
                     "remake_of": str(source["id"]),
                     "source_order_code": source["order_code"],
                     "note": (note or "").strip() or None,
+                    "qc_item": (payload.get("remake_reason") or {}).get("qc_item"),
                 }),
             ],
         )
@@ -2509,6 +2557,14 @@ def dispatch_work_order(
         payload = _decoded(order["payload_json"]) or {}
         if not (payload.get("packing") or {}).get("units"):
             raise DocumentaryError("dispatch_requires_packing_manifest")
+        # A guía is the legal shipping document — emitting it with no planned
+        # delivery ships a truck to nowhere. Schedule the delivery first, or
+        # record the hand-off reason in the note (retiro en taller, ...).
+        if not rows(
+            "SELECT id FROM public.deliveries WHERE order_id = %s AND org_id = %s",
+            [str(order_id), str(org_id)],
+        ) and not (note or "").strip():
+            raise DocumentaryError("dispatch_requires_delivery")
         rows(
             """
             UPDATE public.orders SET status = 'DISPATCHED', updated_at = %s

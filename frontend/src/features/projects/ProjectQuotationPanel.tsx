@@ -770,20 +770,32 @@ export function ProjectQuotationPanel({
 
   async function emit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
+    if (!preparation || !confirmed) return;
+    // A silent early-return reads as a dead button (review PM-C3): name the
+    // first missing gate instead of swallowing the click.
+    if (!project.current_pricing_operation_id) {
+      setMessage(t("quotation.emitNeedsPricing"));
+      return;
+    }
+    if (!preparation.quotation_valid_until) {
+      setMessage(t("quotation.emitNeedsValidUntil"));
+      return;
+    }
+    if (preparation.positions.some((position) => !position.location_tag.trim())) {
+      setMessage(t("quotation.emitNeedsLocation"));
+      return;
+    }
     if (
-      !preparation ||
-      !confirmed ||
-      !project.current_pricing_operation_id ||
-      !preparation.quotation_valid_until ||
       preparation.positions.some(
         (position) =>
-          !position.location_tag.trim() ||
           !position.manufacturing_placement_policy_id ||
           !position.handle_requirement_policy_id ||
           !position.reinforcement_cut_policy_id,
       )
-    )
+    ) {
+      setMessage(t("quotation.emitNeedsPolicies"));
       return;
+    }
     // A generated midpoint is a suggestion, not a choice: it can only seal
     // after the estimator accepts it (one click per position) or edits it.
     if (
@@ -1433,7 +1445,23 @@ export function ProjectQuotationPanel({
                 </div>
               )}
               {position.workshop_targets && (
-                <details className="workshop-inputs">
+                <details
+                  className="workshop-inputs"
+                  /* Inspector failures name the exact bay/leaf that needs
+                     workshop data — auto-open the editor that fixes it
+                     (hostile H1: the <details> hid the required fields). */
+                  open={inspectorFailures.some(
+                    (failure) =>
+                      (failure.bay_id != null &&
+                        position.workshop_targets.bays.some(
+                          (bay) => bay.bay_id === failure.bay_id,
+                        )) ||
+                      (failure.leaf_id != null &&
+                        position.workshop_targets.leaves.some(
+                          (leaf) => leaf.leaf_id === failure.leaf_id,
+                        )),
+                  )}
+                >
                   <summary>{t("quotation.workshopData")}</summary>
                   {position.workshop_targets.bays.map((bay) => {
                     const annotation = position.workshop_annotations.find(

@@ -66,6 +66,8 @@ type PieceMatch = {
       leaf_id?: string;
       code?: string;
       unit_index?: number;
+      sequence?: number;
+      x_mm?: number | string;
     };
   };
   steps?: Array<{ sequence?: number; code?: string; label?: string; status?: string }>;
@@ -185,34 +187,66 @@ export function TraceStock({ stock }: { stock: ProductionOrderTraceStock }) {
   );
 }
 
-export function TracePieceMatches({ report }: { report: ProductionPieceTrace }) {
+export function TracePieceMatches({
+  report,
+  onSelectOrder,
+}: {
+  report: ProductionPieceTrace;
+  onSelectOrder?: (orderId: string) => void;
+}) {
   const matches = (report.matches as PieceMatch[] | undefined) ?? [];
   if (!matches.length) {
     return <p className="production-trace-empty">{t("production.tracePieceNone")}</p>;
   }
   return (
     <ul className="production-trace-matches">
-      {matches.map((match, index) => (
-        <li key={`${match.work_order?.id ?? "wo"}-${index}`}>
-          <strong>{match.work_order?.order_code ?? "—"}</strong>
-          {" · "}
-          {stockKindLabel(match.location?.kind)}
-          {match.location?.kind === "BAR"
-            ? ` · ${t("production.traceBar")} ${match.location.bar_index ?? "—"}`
-            : ` · ${t("production.traceSheet")} ${match.location?.sheet_index ?? "—"}`}
-          {match.location?.piece?.code ? ` · ${match.location.piece.code}` : ""}
-          {match.location?.piece?.unit_index != null
-            ? ` · u${match.location.piece.unit_index}`
-            : ""}
-          {match.location?.position_code ? ` · ${match.location.position_code}` : ""}
-          {match.location?.location_code ? ` · ${match.location.location_code}` : ""}
-          {match.location?.piece?.role ? ` · ${match.location.piece.role}` : ""}
-          {match.location?.piece?.length_mm ? ` · ${fmtMm(match.location.piece.length_mm)} mm` : ""}
-          {match.steps?.length
-            ? ` · ${match.steps.filter((s) => s.status === "DONE").length}/${match.steps.length} ${t("production.stepsShort")}`
-            : ""}
-        </li>
-      ))}
+      {matches.map((match, index) => {
+        const body = (
+          <>
+            <strong>{match.work_order?.order_code ?? "—"}</strong>
+            {" · "}
+            {stockKindLabel(match.location?.kind)}
+            {match.location?.kind === "BAR"
+              ? ` · ${t("production.traceBar")} ${match.location.bar_index ?? "—"}`
+              : ` · ${t("production.traceSheet")} ${match.location?.sheet_index ?? "—"}`}
+            {match.location?.kind === "BAR" && match.location?.piece?.sequence != null
+              ? ` · #${match.location.piece.sequence}`
+              : ""}
+            {match.location?.kind === "BAR" && match.location?.piece?.x_mm != null
+              ? ` · x ${fmtMm(match.location.piece.x_mm)}`
+              : ""}
+            {match.location?.piece?.code ? ` · ${match.location.piece.code}` : ""}
+            {match.location?.piece?.unit_index != null
+              ? ` · u${match.location.piece.unit_index}`
+              : ""}
+            {match.location?.position_code ? ` · ${match.location.position_code}` : ""}
+            {match.location?.location_code ? ` · ${match.location.location_code}` : ""}
+            {match.location?.piece?.role ? ` · ${match.location.piece.role}` : ""}
+            {match.location?.piece?.length_mm
+              ? ` · ${fmtMm(match.location.piece.length_mm)} mm`
+              : ""}
+            {match.steps?.length
+              ? ` · ${match.steps.filter((s) => s.status === "DONE").length}/${match.steps.length} ${t("production.stepsShort")}`
+              : ""}
+          </>
+        );
+        const orderId = match.work_order?.id;
+        return (
+          <li key={`${orderId ?? "wo"}-${index}`}>
+            {orderId && onSelectOrder ? (
+              <button
+                type="button"
+                className="production-trace-match"
+                onClick={() => onSelectOrder(orderId)}
+              >
+                {body}
+              </button>
+            ) : (
+              body
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }

@@ -54,7 +54,7 @@ import { fmtMm, fmtPct } from "../../format";
 import { formatDate } from "../money";
 import { t, tDynamic } from "../../i18n/es-CL";
 import { useAssistantSurface } from "../assistant/assistantContext";
-import { cutRoleLabel } from "./labels";
+import { STEP_STOCK_KINDS, cutRoleLabel } from "./labels";
 import { CutPlanView, type WorkOrderOptimization } from "./CutPlanView";
 import {
   GlassSummary,
@@ -194,6 +194,17 @@ function stepActions(step: ProductionStep): StepAction[] {
   }
 }
 
+/** Mirrors the backend START gate: a material-consuming step cannot begin
+ * before the order carries a usable (non-invalidated) cut plan — otherwise the
+ * operator walks into the start-first, optimize-later trap. */
+function stepNeedsPlan(step: ProductionStep, detail: ProductionOrderDetail): boolean {
+  if (!STEP_STOCK_KINDS[step.code]?.length) return false;
+  const optimization = (detail.payload?.optimization ?? null) as {
+    invalidated?: unknown;
+  } | null;
+  return !optimization || Boolean(optimization.invalidated);
+}
+
 const actionLabel: Record<StepAction, Parameters<typeof t>[0]> = {
   START: "production.actionStart",
   COMPLETE: "production.actionComplete",
@@ -242,6 +253,7 @@ export function ProductionPage(): JSX.Element {
   const [pieceQuery, setPieceQuery] = useState("");
   const [pieceReport, setPieceReport] = useState<ProductionPieceTrace | null>(null);
   const [pieceBusy, setPieceBusy] = useState(false);
+  const [qcFailItem, setQcFailItem] = useState("");
   const sigRef = useRef<SignaturePadHandle | null>(null);
   const labelsGeneration = useRef(0);
   const selectedIdRef = useRef("");
@@ -270,6 +282,11 @@ export function ProductionPage(): JSX.Element {
       (!dispatchReadyOnly || order.dispatch_ready),
   );
   const listFiltered = statusFilter !== "" || shortageOnly || dispatchReadyOnly || blockedOnly;
+  // QC rejections bind to a physical unit — the piece labels the order's
+  // trace already computed are the picker options (review PM-H2).
+  const qcItemOptions = trace
+    ? [...new Set(Object.values(trace.labels ?? {}).map(String))].sort()
+    : [];
 
   // A workspace leads with the work — pin the top-priority order into the
   // detail pane instead of leaving it empty waiting for a click.
@@ -429,25 +446,51 @@ export function ProductionPage(): JSX.Element {
     void action(productionStepTransition(stepId, { action: "QC_CHECK", qc_check: check }), orderId);
   }
 
-  function transition(stepId: string, stepAction: StepAction, orderId: string): void {
+  async function transition(
+    stepId: string,
+    stepAction: StepAction,
+    orderId: string,
+  ): Promise<void> {
     // BLOCK and QC_FAIL must carry a reason — the step can't be understood or
-    // remediated without it. NOTE is the reason by definition.
+    // remediated without it. NOTE is the reason by definition. The shared note
+    // field sits below the fold: ask inline instead of refusing silently.
+    let noteValue = note;
     if (
       (stepAction === "NOTE" || stepAction === "BLOCK" || stepAction === "QC_FAIL") &&
-      !note.trim()
+      !noteValue.trim()
     ) {
-      setMessage(t("production.stepNoteRequired"));
-      return;
+      const entered = await prompt({
+        title: t(
+          stepAction === "QC_FAIL"
+            ? "production.qcFailReasonTitle"
+            : stepAction === "BLOCK"
+              ? "production.blockReasonTitle"
+              : "production.noteReasonTitle",
+        ),
+        input: { label: t("production.reasonLabel") },
+      });
+      if (entered === null) return;
+      if (!entered.trim()) {
+        setMessage(t("production.stepNoteRequired"));
+        return;
+      }
+      noteValue = entered;
+      setNote(entered);
     }
-    const noteValue =
+    const sent =
       stepAction === "NOTE" || stepAction === "BLOCK" || stepAction === "QC_FAIL"
-        ? note || undefined
+        ? noteValue || undefined
         : undefined;
     const body =
       stepAction === "QC_FAIL"
-        ? { action: "COMPLETE" as const, qc_result: "FAIL" as const, note: noteValue ?? null }
-        : { action: stepAction, note: noteValue ?? null };
-    void action(productionStepTransition(stepId, body), orderId);
+        ? {
+            action: "COMPLETE" as const,
+            qc_result: "FAIL" as const,
+            note: sent ?? null,
+            qc_item: qcFailItem || undefined,
+          }
+        : { action: stepAction, note: sent ?? null };
+    await action(productionStepTransition(stepId, body), orderId);
   }
 
   function release(versionId: string): void {
@@ -519,16 +562,44 @@ export function ProductionPage(): JSX.Element {
       });
   }
 
-  function exportCnc(orderId: string): void {
-    void action(productionOrderCncExport(orderId), orderId);
+  // Exports generate the machine file AND hand it to the operator in one
+  // click — a generate-then-click-the-chip flow reads as a dead button
+  // (review PM-M2).
+  async function exportAndDownload(
+    orderId: string,
+    orderCode: string,
+    task: Promise<{ status: number; data: unknown }>,
+  ): Promise<void> {
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await task;
+      if (response.status !== 200 && response.status !== 201)
+        throw new ApiError(response.status, response.data);
+      const files = (response.data as { files?: Record<string, string> } | undefined)?.files ?? {};
+      for (const [filename, content] of Object.entries(files)) {
+        downloadCnc(orderCode, filename, content);
+      }
+      const reloads = [loadDetail(orderId), loadOrders()];
+      if (trace) reloads.push(loadTrace(orderId).catch(() => undefined));
+      await Promise.all(reloads);
+    } catch (error) {
+      if (mounted.current) setMessage(actionErrorDetail(error));
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
   }
 
-  function exportDxf(orderId: string): void {
-    void action(productionOrderDxfExport(orderId), orderId);
+  function exportCnc(orderId: string, orderCode: string): void {
+    void exportAndDownload(orderId, orderCode, productionOrderCncExport(orderId));
   }
 
-  function exportOperations(orderId: string): void {
-    void action(productionOrderOpsExport(orderId), orderId);
+  function exportDxf(orderId: string, orderCode: string): void {
+    void exportAndDownload(orderId, orderCode, productionOrderDxfExport(orderId));
+  }
+
+  function exportOperations(orderId: string, orderCode: string): void {
+    void exportAndDownload(orderId, orderCode, productionOrderOpsExport(orderId));
   }
 
   async function showLabels(orderId: string): Promise<void> {
@@ -592,10 +663,15 @@ export function ProductionPage(): JSX.Element {
   }
 
   function openDeliveryForm(existing: Delivery | null): void {
+    // A fresh schedule defaults to tomorrow — dispatch work is booked ahead,
+    // and an empty date field makes the operator type the obvious (PM-M3).
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const defaultDate = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
     setDeliveryForm({
-      scheduled_date: existing?.scheduled_date ?? "",
+      scheduled_date: existing?.scheduled_date ?? defaultDate,
       time_window: (existing?.time_window as DeliveryScheduleRequestRequest["time_window"]) ?? "AM",
-      address: existing?.address ?? "",
+      address: existing?.address ?? detail?.delivery_address ?? "",
       contact_name: existing?.contact_name ?? "",
       contact_phone: existing?.contact_phone ?? "",
       installer_name: existing?.installer_name ?? "",
@@ -608,6 +684,14 @@ export function ProductionPage(): JSX.Element {
   }
 
   function dispatch(orderId: string): void {
+    // Despachar emite la guía legal: without a scheduled delivery the truck
+    // has no destination, so route the operator to the delivery form first —
+    // a hand-off note (retiro en taller) also satisfies the gate.
+    if (!delivery && !note.trim()) {
+      setMessage(t("production.dispatchNeedsDelivery"));
+      openDeliveryForm(null);
+      return;
+    }
     void action(productionOrderDispatch(orderId, { note: note || undefined }), orderId);
   }
 
@@ -642,13 +726,28 @@ export function ProductionPage(): JSX.Element {
     setConfirmOpen(true);
   }
 
+  // Typed-mode signatures render live — typing a name with no visible ink
+  // reads as a dead field (review PM-M4).
+  useEffect(() => {
+    if (!confirmOpen || signatureMode !== "typed") return;
+    const name = confirmName.trim();
+    if (name) {
+      sigRef.current?.renderTyped(name);
+    } else {
+      sigRef.current?.clear();
+    }
+  }, [confirmOpen, signatureMode, confirmName]);
+
   async function submitConfirmation(orderId: string): Promise<void> {
     if (!confirmName.trim()) return;
     if (signatureMode === "typed") {
       sigRef.current?.renderTyped(confirmName.trim());
     }
     const dataUrl = sigRef.current?.dataURL();
-    if (!dataUrl) return;
+    if (!dataUrl) {
+      setMessage(t("production.deliverySignatureRequired"));
+      return;
+    }
     setBusy(true);
     try {
       const response = await productionOrderDeliveryConfirm(orderId, {
@@ -937,6 +1036,32 @@ export function ProductionPage(): JSX.Element {
               </button>
             ) : null}
           </div>
+          {/* Piece in hand → find its order without opening one first
+              (PM-M6). The lookup is org-wide; matches deep-link the order. */}
+          <div className="production-trace-lookup">
+            <label>
+              {t("production.tracePieceLabel")}
+              <input
+                type="text"
+                value={pieceQuery}
+                onChange={(event) => setPieceQuery(event.target.value)}
+                placeholder={t("production.tracePiecePlaceholder")}
+              />
+            </label>
+            <button
+              type="button"
+              disabled={pieceBusy || !pieceQuery.trim()}
+              onClick={() => void lookupPiece()}
+            >
+              {t("production.tracePieceLookup")}
+            </button>
+          </div>
+          {pieceReport ? (
+            <TracePieceMatches
+              report={pieceReport}
+              onSelectOrder={(id) => setParams({ order: id })}
+            />
+          ) : null}
           {orders.length === 0 ? <p>{t("production.empty")}</p> : null}
           {listFiltered && orders.length > 0 && filteredOrders.length === 0 ? (
             <p>{t("production.emptyFilter")}</p>
@@ -1197,11 +1322,20 @@ export function ProductionPage(): JSX.Element {
                   (order) => String(order.payload?.remake_of ?? "") === detail.id,
                 );
                 if (!source && !remakes.length) return null;
+                const remakeReason = (detail.payload?.remake_reason ?? null) as {
+                  qc_item?: unknown;
+                  note?: unknown;
+                } | null;
+                const reasonBits = [
+                  remakeReason?.qc_item ? String(remakeReason.qc_item) : "",
+                  remakeReason?.note ? String(remakeReason.note) : "",
+                ].filter(Boolean);
                 return (
                   <p className="production-remake-provenance">
                     {source ? (
                       <>
                         {t("production.remakeOf")} <strong>{source.order_code}</strong>
+                        {reasonBits.length ? ` — ${reasonBits.join(" · ")}` : ""}
                         {remakes.length ? " · " : ""}
                       </>
                     ) : null}
@@ -1491,21 +1625,21 @@ export function ProductionPage(): JSX.Element {
                               <button
                                 type="button"
                                 disabled={busy}
-                                onClick={() => exportCnc(detail.id)}
+                                onClick={() => exportCnc(detail.id, detail.order_code)}
                               >
                                 {t("production.cncExportButton")}
                               </button>
                               <button
                                 type="button"
                                 disabled={busy}
-                                onClick={() => exportDxf(detail.id)}
+                                onClick={() => exportDxf(detail.id, detail.order_code)}
                               >
                                 {t("production.dxfExportButton")}
                               </button>
                               <button
                                 type="button"
                                 disabled={busy}
-                                onClick={() => exportOperations(detail.id)}
+                                onClick={() => exportOperations(detail.id, detail.order_code)}
                               >
                                 {t("production.opsExportButton")}
                               </button>
@@ -2350,16 +2484,37 @@ export function ProductionPage(): JSX.Element {
                         : ""}
                     </span>
                     <span className="production-step-actions">
-                      {stepActions(nextStep).map((stepAction) => (
-                        <button
-                          key={stepAction}
-                          type="button"
-                          disabled={busy}
-                          onClick={() => transition(nextStep.id, stepAction, detail.id)}
+                      {nextStep.code === "QC" && stepActions(nextStep).includes("QC_FAIL") ? (
+                        <select
+                          className="production-qc-item"
+                          aria-label={t("production.qcItem")}
+                          value={qcFailItem}
+                          onChange={(event) => setQcFailItem(event.target.value)}
                         >
-                          {t(actionLabel[stepAction])}
-                        </button>
-                      ))}
+                          <option value="">{t("production.qcItemAny")}</option>
+                          {qcItemOptions.map((code) => (
+                            <option key={code} value={code}>
+                              {code}
+                            </option>
+                          ))}
+                        </select>
+                      ) : null}
+                      {stepActions(nextStep).map((stepAction) =>
+                        stepAction === "START" && stepNeedsPlan(nextStep, detail) ? (
+                          <span className="production-step-hint" key={stepAction}>
+                            {t("production.stepNeedsPlan")}
+                          </span>
+                        ) : (
+                          <button
+                            key={stepAction}
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void transition(nextStep.id, stepAction, detail.id)}
+                          >
+                            {t(actionLabel[stepAction])}
+                          </button>
+                        ),
+                      )}
                     </span>
                   </div>
                 );
@@ -2410,6 +2565,21 @@ export function ProductionPage(): JSX.Element {
                           detail.status !== "DISPATCHED" &&
                           detail.status !== "INSTALLED" ? (
                             <div className="production-step-actions">
+                              {step.code === "QC" && stepActions(step).includes("QC_FAIL") ? (
+                                <select
+                                  className="production-qc-item"
+                                  aria-label={t("production.qcItem")}
+                                  value={qcFailItem}
+                                  onChange={(event) => setQcFailItem(event.target.value)}
+                                >
+                                  <option value="">{t("production.qcItemAny")}</option>
+                                  {qcItemOptions.map((code) => (
+                                    <option key={code} value={code}>
+                                      {code}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : null}
                               {stepActions(step)
                                 // START only exists on the earliest open step —
                                 // the backend sequence gate rejects every other
@@ -2418,16 +2588,24 @@ export function ProductionPage(): JSX.Element {
                                   (stepAction) =>
                                     stepAction !== "START" || step.id === nextStep?.id,
                                 )
-                                .map((stepAction) => (
-                                  <button
-                                    key={stepAction}
-                                    type="button"
-                                    disabled={busy}
-                                    onClick={() => transition(step.id, stepAction, detail.id)}
-                                  >
-                                    {t(actionLabel[stepAction])}
-                                  </button>
-                                ))}
+                                .map((stepAction) =>
+                                  stepAction === "START" && stepNeedsPlan(step, detail) ? (
+                                    <span className="production-step-hint" key={stepAction}>
+                                      {t("production.stepNeedsPlan")}
+                                    </span>
+                                  ) : (
+                                    <button
+                                      key={stepAction}
+                                      type="button"
+                                      disabled={busy}
+                                      onClick={() =>
+                                        void transition(step.id, stepAction, detail.id)
+                                      }
+                                    >
+                                      {t(actionLabel[stepAction])}
+                                    </button>
+                                  ),
+                                )}
                             </div>
                           ) : null}
                         </li>
@@ -2475,31 +2653,13 @@ export function ProductionPage(): JSX.Element {
                     {trace.stock ? <TraceStock stock={trace.stock} /> : null}
                   </div>
                 ) : null}
-                <div className="production-trace-lookup">
-                  <label>
-                    {t("production.tracePieceLabel")}
-                    <input
-                      type="text"
-                      value={pieceQuery}
-                      onChange={(event) => setPieceQuery(event.target.value)}
-                      placeholder={t("production.tracePiecePlaceholder")}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    disabled={pieceBusy || !pieceQuery.trim()}
-                    onClick={() => void lookupPiece()}
-                  >
-                    {t("production.tracePieceLookup")}
-                  </button>
-                </div>
-                {pieceReport ? <TracePieceMatches report={pieceReport} /> : null}
               </section>
               <section className="production-events" aria-label={t("production.events")}>
                 <h3>{t("production.events")}</h3>
                 <ol>
                   {detail.events.map((event) => {
                     const eventNote = (event.payload as { note?: unknown } | undefined)?.note;
+                    const eventItem = (event.payload as { qc_item?: unknown } | undefined)?.qc_item;
                     const eventStep = detail.steps.find((step) => step.id === event.step_id);
                     const stepName = event.step_code ?? eventStep?.label ?? eventStep?.code;
                     return (
@@ -2507,6 +2667,9 @@ export function ProductionPage(): JSX.Element {
                         <time dateTime={event.created_at}>{formatDateTime(event.created_at)}</time>
                         {stepName ? <strong>{stepName} · </strong> : null}
                         <span>{t(eventKey[event.event] ?? "production.eventNote")}</span>
+                        {typeof eventItem === "string" && eventItem.trim() ? (
+                          <strong className="production-event-item"> · {eventItem}</strong>
+                        ) : null}
                         {event.actor_label ? <span> · {event.actor_label}</span> : null}
                         {typeof eventNote === "string" && eventNote.trim() ? (
                           <em className="production-event-note">{eventNote}</em>
