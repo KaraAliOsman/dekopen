@@ -326,6 +326,24 @@ export function CanvasViewport({
         >
           +
         </button>
+        {/* Fit lives on the island, not only in the % menu — after wheel-pan
+         * the product can sit fully off-canvas and Encajar is the recovery. */}
+        <button
+          type="button"
+          className="viewport-button"
+          aria-label={t("canvas.fit")}
+          title={t("canvas.fit")}
+          onClick={fit}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+            <path
+              d="M1 4.5V1h3.5M7.5 1H11v3.5M11 7.5V11H7.5M4.5 11H1V7.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.4"
+            />
+          </svg>
+        </button>
         {menuOpen && (
           <div className="viewport-menu">
             {menu.map((item, index) => (

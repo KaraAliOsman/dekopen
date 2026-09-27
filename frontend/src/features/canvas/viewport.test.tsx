@@ -86,7 +86,8 @@ it("renders the island controls and opens the zoom menu", () => {
   // Pre-fit state renders at 100%.
   expect(screen.getByLabelText("Opciones de zoom").textContent).toBe(`${Math.round(100)}%`);
   fireEvent.click(screen.getByLabelText("Opciones de zoom"));
-  expect(screen.getByRole("button", { name: /Ajustar a la vista/ })).toBeTruthy();
+  // The island fit button plus the menu's item both carry this name.
+  expect(screen.getAllByRole("button", { name: /Ajustar a la vista/ }).length).toBe(2);
   const selection = screen.getByRole("button", { name: /Ajustar a la selección/ });
   expect((selection as HTMLButtonElement).disabled).toBe(true);
 });
