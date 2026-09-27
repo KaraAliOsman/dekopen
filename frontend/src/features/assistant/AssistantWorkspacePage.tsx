@@ -874,7 +874,7 @@ export function AssistantWorkspacePage(): JSX.Element {
         ) : null}
         {job && WAITING_STATES.has(job.state) ? (
           <p className="aiws-waiting" role="status">
-            <Orb state="waiting" size={20} />
+            <Orb state={job.state === "WAITING_FOR_APPROVAL" ? "approval" : "waiting"} size={20} />
             {job.state === "WAITING_FOR_APPROVAL"
               ? t("aiws.waitingApprovalBanner")
               : t("aiws.waitingUserBanner")}
