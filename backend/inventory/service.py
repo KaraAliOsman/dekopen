@@ -8,18 +8,51 @@ quantity; order status advances through PARTIALLY_RECEIVED / FULFILLED."""
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from decimal import Decimal
 import json
 from typing import Any
 from uuid import UUID
 
 from django.db import transaction
 
+from dekopen_engine.documentary_canonical import documentary_sha256_v1
 from documents.repository import DocumentaryError, documentary_backend, one, rows
 from pricing.repository import json_text
 
 
 def _decode_snapshot(value: object) -> dict[str, object]:
     return value if isinstance(value, dict) else json.loads(str(value))
+
+
+# Categories whose SKU underdetermines the physical unit — a finished glass is
+# made per opening, so the ordered spec is the fungible identity. Everything
+# else is fungible by SKU alone. PANEL stays SKU-keyed deliberately: work-order
+# panel needs (unit_stock_needs) reserve by SKU, and a spec hash there would
+# strand the reservation.
+_SPEC_KEYED_CATEGORIES = frozenset({"GLASS"})
+
+
+def stock_variant_key(
+    physical_stock_identity: object,
+    specification: object,
+    category: object = None,
+) -> str:
+    """Physical stock bucket for (sku, variant). Bar authority carries an
+    explicit physical stock identity; made-to-measure units carry none — their
+    fungible identity is the ordered spec itself, minus the destination tag
+    (two equal units are interchangeable even when they mount in different
+    openings)."""
+    if physical_stock_identity:
+        return str(physical_stock_identity)
+    if str(category or "") in _SPEC_KEYED_CATEGORIES and isinstance(
+        specification, dict
+    ) and specification:
+        identity = {
+            key: value for key, value in specification.items()
+            if key != "location_tag"
+        }
+        return "SPEC:" + documentary_sha256_v1(identity)
+    return ""
 
 
 def _line_item_identity(line_snapshot: dict[str, object]) -> dict[str, str]:
@@ -35,7 +68,11 @@ def _line_item_identity(line_snapshot: dict[str, object]) -> dict[str, str]:
         "name": name,
         "category": str(line_snapshot.get("category") or "UNSPECIFIED"),
         "unit": str(line_snapshot.get("unit") or "unit"),
-        "variant_key": str(line_snapshot.get("physical_stock_identity") or ""),
+        "variant_key": stock_variant_key(
+            line_snapshot.get("physical_stock_identity"),
+            specification,
+            line_snapshot.get("category"),
+        ),
     }
 
 
@@ -44,7 +81,6 @@ def list_stock(*, org_id: UUID) -> dict[str, object]:
         """
         SELECT inventory_stock.item_id, sku, name, category, unit, variant_key,
                on_hand_qty, reserved_qty, (on_hand_qty - reserved_qty) AS available_qty,
-               COALESCE(inc.incoming_qty, 0) AS incoming_qty,
                loc.racks
         FROM public.inventory_stock
         LEFT JOIN (
@@ -56,29 +92,51 @@ def list_stock(*, org_id: UUID) -> dict[str, object]:
               AND rack_location <> ''
             GROUP BY item_id
         ) loc ON loc.item_id = public.inventory_stock.item_id
-        LEFT JOIN (
-            SELECT stock.item_id,
-                   SUM(l.quantity - COALESCE(r.received_qty, 0)) AS incoming_qty
-            FROM public.order_requirement_lines l
-            JOIN public.orders o
-                ON o.id = l.order_id AND o.org_id = l.org_id
-                AND o.status IN ('SENT', 'PARTIALLY_RECEIVED')
-            LEFT JOIN (
-                SELECT order_line_id, SUM(received_qty) AS received_qty
-                FROM public.order_receipt_lines
-                GROUP BY order_line_id
-            ) r ON r.order_line_id = l.id
-            JOIN public.inventory_stock stock
-                ON stock.org_id = l.org_id
-                AND stock.variant_key = l.line_snapshot->>'physical_stock_identity'
-            WHERE l.org_id = %s
-            GROUP BY stock.item_id
-        ) inc ON inc.item_id = public.inventory_stock.item_id
         WHERE inventory_stock.org_id = %s
         ORDER BY sku, variant_key
         """,
-        [str(org_id), str(org_id), str(org_id)],
+        [str(org_id), str(org_id)],
     )
+    for item in items:
+        item["incoming_qty"] = Decimal(0)
+    # Incoming needs Python-side matching: a line's stock bucket derives from
+    # psi-or-spec-hash (stock_variant_key), which SQL cannot express without
+    # duplicating the canonical hash.
+    incoming: dict[tuple[str, str], object] = {}
+    for line in rows(
+        """
+        SELECT l.line_snapshot,
+               l.quantity - COALESCE(r.received_qty, 0) AS open_qty
+        FROM public.order_requirement_lines l
+        JOIN public.orders o
+            ON o.id = l.order_id AND o.org_id = l.org_id
+            AND o.status IN ('SENT', 'PARTIALLY_RECEIVED')
+        LEFT JOIN (
+            SELECT order_line_id, SUM(received_qty) AS received_qty
+            FROM public.order_receipt_lines
+            GROUP BY order_line_id
+        ) r ON r.order_line_id = l.id
+        WHERE l.org_id = %s AND l.released_at IS NULL
+        """,
+        [str(org_id)],
+    ):
+        if Decimal(str(line["open_qty"])) <= 0:
+            continue
+        snapshot = _decode_snapshot(line["line_snapshot"])
+        key = (
+            str(snapshot.get("purchasing_sku") or ""),
+            stock_variant_key(
+                snapshot.get("physical_stock_identity"),
+                snapshot.get("specification"),
+                snapshot.get("category"),
+            ),
+        )
+        incoming[key] = incoming.get(key, Decimal(0)) + Decimal(str(line["open_qty"]))
+    keys = {(str(item["sku"]), str(item["variant_key"])): item for item in items}
+    for (sku, variant_key), qty in incoming.items():
+        item = keys.get((sku, variant_key))
+        if item is not None:
+            item["incoming_qty"] = qty
     return {"items": items}
 
 

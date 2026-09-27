@@ -73,6 +73,9 @@ type Requirement = {
   specification: Record<string, unknown>;
   source_trace: Array<string | Record<string, unknown>>;
   source_trace_labels?: Array<string | null>;
+  // True while a live order line claims this requirement; released when the
+  // order is cancelled so the line can be bought again.
+  claimed?: boolean;
 };
 type Eligibility = {
   id: string;
@@ -513,7 +516,17 @@ function PurchasingWorkspace({
   const blockers = state?.blockers ?? [];
   const coverage = state?.coverage;
   const coverageLines = coverage?.lines ?? [];
-  const confirmedTypes = new Set(orders.map((order) => order.order_type));
+  const confirmedTypes = new Set(
+    requirements.length > 0
+      ? ORDER_TYPES.filter(
+          (orderType) =>
+            requirements.some((item) => item.order_type === orderType) &&
+            requirements
+              .filter((item) => item.order_type === orderType)
+              .every((item) => item.claimed === true),
+        )
+      : orders.filter((order) => order.status !== "CANCELLED").map((order) => order.order_type),
+  );
 
   return (
     <section className="purchasing-page">
@@ -567,7 +580,7 @@ function PurchasingWorkspace({
           const shortLines = coverageLines.filter((line) => line.shortage !== "0");
           const recommended = coverageLines.filter((line) => line.recommended_purchase !== "0");
           const openOrders = orders.filter(
-            (order) => order.status === "SENT" || order.status === "PARTIALLY_RECEIVED",
+            (order) => order.status !== "FULFILLED" && order.status !== "CANCELLED",
           );
           const nextExpected = openOrders
             .map((order) => order.expected_at)
@@ -828,8 +841,10 @@ function RequirementSection({
 }): JSX.Element {
   const [attested, setAttested] = useState(false);
   const allocatedIds = new Set(allocations.map((item) => item.requirement_line_id));
-  const allAllocated =
-    requirements.length > 0 && requirements.every((item) => allocatedIds.has(item.id));
+  // Only lines released from a cancelled order need allocating again — claimed
+  // lines already sit on a live order.
+  const pending = requirements.filter((item) => item.claimed !== true);
+  const allAllocated = pending.length > 0 && pending.every((item) => allocatedIds.has(item.id));
   return (
     <section className="purchasing-type">
       <h2>
@@ -858,7 +873,6 @@ function RequirementSection({
                   item.eligible_requirement_keys.includes(requirement.requirement_key),
                 )}
                 allocation={allocations.find((item) => item.requirement_line_id === requirement.id)}
-                confirmed={confirmed}
                 canWrite={canWrite}
                 busy={busy}
                 request={request}
@@ -881,7 +895,7 @@ function RequirementSection({
             suppliers={suppliers}
             suppliersFailed={suppliersFailed}
           />
-          {requirements.length > 0 && (
+          {pending.length > 0 && (
             <form
               className="purchasing-confirm"
               onSubmit={(event) => {
@@ -920,7 +934,6 @@ function RequirementRow({
   requirement,
   eligibilities,
   allocation,
-  confirmed,
   canWrite,
   busy,
   request,
@@ -929,7 +942,6 @@ function RequirementRow({
   requirement: Requirement;
   eligibilities: Eligibility[];
   allocation: Allocation | undefined;
-  confirmed: boolean;
   canWrite: boolean;
   busy: boolean;
   request: RequestFn;
@@ -958,7 +970,7 @@ function RequirementRow({
         {purchaseUnitLabel(requirement.unit, qtyNumber(requirement.quantity))}
       </td>
       <td>
-        {confirmed || !canWrite ? (
+        {requirement.claimed === true || !canWrite ? (
           (allocated?.supplier_name ?? "—")
         ) : (
           <select
@@ -1344,7 +1356,10 @@ function SupplierDirectory({
             <div className="purchasing-directory-contact">
               {supplier.details?.email ? <span>{supplier.details.email}</span> : null}
               {supplier.details?.phone ? <span>{supplier.details.phone}</span> : null}
-              {!supplier.details?.email && !supplier.details?.phone ? (
+              {supplier.details?.address ? <span>{supplier.details.address}</span> : null}
+              {!supplier.details?.email &&
+              !supplier.details?.phone &&
+              !supplier.details?.address ? (
                 <span className="purchasing-directory-empty">—</span>
               ) : null}
             </div>

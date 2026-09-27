@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from decimal import Decimal
+import json
 from types import SimpleNamespace
 from unittest.mock import patch
 from uuid import uuid4
@@ -17,23 +18,65 @@ from inventory import service, views as inventory_views
 
 def test_list_stock_returns_view_rows() -> None:
     org_id = uuid4()
-    with patch("inventory.service.rows") as mock_rows:
-        mock_rows.return_value = [
-            {
-                "item_id": uuid4(),
-                "sku": "UMBRAL-ALU",
-                "name": "Umbral",
-                "category": "PROFILE",
-                "unit": "MM",
-                "variant_key": "",
-                "on_hand_qty": Decimal("1200.00"),
-                "reserved_qty": Decimal("400.00"),
-                "available_qty": Decimal("800.00"),
-            }
-        ]
+    stock_row = {
+        "item_id": uuid4(),
+        "sku": "UMBRAL-ALU",
+        "name": "Umbral",
+        "category": "PROFILE",
+        "unit": "MM",
+        "variant_key": "",
+        "on_hand_qty": Decimal("1200.00"),
+        "reserved_qty": Decimal("400.00"),
+        "available_qty": Decimal("800.00"),
+        "racks": "A-01",
+    }
+
+    def fake_rows(query, params=()):
+        if "order_requirement_lines" in query:
+            return []
+        return [stock_row]
+
+    with patch("inventory.service.rows", side_effect=fake_rows):
         output = service.list_stock(org_id=org_id)
     assert output["items"][0]["available_qty"] == Decimal("800.00")
-    mock_rows.assert_called_once()
+    assert output["items"][0]["incoming_qty"] == Decimal(0)
+
+
+def test_list_stock_incoming_keys_by_spec_variant() -> None:
+    # A made-to-measure glass line lands incoming on the spec-keyed bucket, not
+    # the raw purchasing SKU row.
+    org_id = uuid4()
+    stock_row = {
+        "item_id": uuid4(),
+        "sku": "GLASS-BUY",
+        "name": "Vidrio",
+        "category": "GLASS",
+        "unit": "EA",
+        "variant_key": "SPEC:deadbeef",
+        "on_hand_qty": Decimal(0),
+        "reserved_qty": Decimal(0),
+        "available_qty": Decimal(0),
+        "racks": None,
+    }
+    line_snapshot = json.dumps(
+        {
+            "purchasing_sku": "GLASS-BUY",
+            "physical_stock_identity": None,
+            "category": "GLASS",
+            "specification": {"width_mm": 1000, "height_mm": 800},
+        }
+    )
+
+    def fake_rows(query, params=()):
+        if "order_requirement_lines" in query:
+            return [{"line_snapshot": line_snapshot, "open_qty": Decimal(2)}]
+        return [stock_row]
+
+    with patch("inventory.service.rows", side_effect=fake_rows), patch(
+        "inventory.service.stock_variant_key", return_value="SPEC:deadbeef"
+    ):
+        output = service.list_stock(org_id=org_id)
+    assert output["items"][0]["incoming_qty"] == Decimal(2)
 
 
 def test_order_receiving_computes_outstanding() -> None:
@@ -513,6 +556,71 @@ def test_cancel_order_idempotent_replay() -> None:
     assert output["status"] == "CANCELLED"
 
 
+def test_cancel_order_releases_line_claims() -> None:
+    # The cancelled order keeps its rows as evidence but stamps released_at —
+    # the same requirements claim into the retry batch's orders.
+    from purchasing import service as purchasing_service
+
+    org_id, order_id = uuid4(), uuid4()
+    draft = {
+        "id": order_id,
+        "order_code": "PO-1",
+        "order_type": "SUPPLIER_GLASS_PO",
+        "status": "DRAFT",
+        "supplier_name": "Vendor",
+        "order_snapshot_hash": "a" * 64,
+        "cancelled_by": None,
+        "cancelled_at": None,
+        "expected_at": None,
+    }
+    cancelled = dict(draft, status="CANCELLED", cancelled_at="2026-09-26")
+    reads = iter([draft, cancelled])
+    with patch(
+        "purchasing.service.one", side_effect=lambda *a, **k: next(reads)
+    ), patch(
+        "purchasing.service.documentary_backend", return_value=_atomic()
+    ), patch("purchasing.service.write", return_value=1) as mock_write:
+        output = purchasing_service.cancel_order(
+            org_id=org_id, actor_id=uuid4(), order_id=order_id, confirmed=True
+        )
+    assert output["status"] == "CANCELLED"
+    assert mock_write.call_count == 1
+    statement, params = mock_write.call_args[0]
+    assert "released_at" in statement and "released_at IS NULL" in statement
+    assert params[1] == order_id
+
+
+def test_unclaimed_requirements_excludes_live_claims() -> None:
+    from purchasing import service as purchasing_service
+
+    org_id, version_id = uuid4(), uuid4()
+    held_id, free_id = uuid4(), uuid4()
+
+    def fake_rows(query, params=()):
+        if "order_requirement_lines" in query and "EXISTS" in query:
+            return [{"id": held_id}]
+        if "inventory_stock" in query:
+            return []
+        if "FROM public.purchase_requirement_lines" in query:
+            return [
+                {"id": held_id, "requirement_key": "a" * 64, "order_type": "SUPPLIER_GLASS_PO",
+                 "category": "GLASS", "purchasing_sku": "GLASS-BUY",
+                 "physical_stock_identity": None, "unit": "EA", "quantity": 2,
+                 "specification": None, "source_trace": "[]"},
+                {"id": free_id, "requirement_key": "b" * 64, "order_type": "SUPPLIER_GLASS_PO",
+                 "category": "GLASS", "purchasing_sku": "GLASS-BUY-2",
+                 "physical_stock_identity": None, "unit": "EA", "quantity": 1,
+                 "specification": None, "source_trace": "[]"},
+            ]
+        raise AssertionError(query)
+
+    with patch("purchasing.service.rows", side_effect=fake_rows):
+        result = purchasing_service._unclaimed_requirements(
+            version_id, org_id, "SUPPLIER_GLASS_PO"
+        )
+    assert [str(item["id"]) for item in result] == [str(free_id)]
+
+
 def test_orders_index_projects_orders_with_received_totals() -> None:
     from purchasing import service as purchasing_service
 
@@ -795,10 +903,14 @@ def test_remnant_label_returns_qr_and_identity() -> None:
     with patch(
         "inventory.remnants.one",
         side_effect=lambda query, params=(), code=None: _remnant_row(remnant_id, order_id),
+    ), patch(
+        "inventory.remnants.rows",
+        return_value=[{"commercial_sku": "PROF-60-W"}],
     ):
         output = remnants.remnant_label(org_id=org_id, remnant_id=remnant_id)
 
-    assert output["identity"] == "AUTH-1"
+    # Identity is the authority's commercial SKU, not the internal psi UUID.
+    assert output["identity"] == "PROF-60-W"
     assert f"DEKOPEN|REMNANT|{remnant_id}" == output["qr_payload"]
     assert "<svg" in output["qr_svg"]
     assert output["remnant"]["id"] == str(remnant_id)

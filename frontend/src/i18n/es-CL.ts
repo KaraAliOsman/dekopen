@@ -1413,6 +1413,9 @@ export const messages = {
   "inventory.actions": "Acciones",
   "inventory.release": "Liberar",
   "inventory.scrap": "Desechar",
+  "inventory.scrapConfirmTitle": "¿Desechar este retazo?",
+  "inventory.scrapConfirmBody":
+    "El retazo quedará como desechado y dejará de estar disponible para el optimizador.",
   "inventory.noRemnants": "No hay retazos en este estado.",
   "inventory.remnantCreateError": "No pudimos registrar el retazo.",
   "inventory.remnantReleaseError": "No pudimos liberar el retazo.",

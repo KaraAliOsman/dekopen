@@ -195,7 +195,10 @@ def catalog_task(
     system_id = UUID(str(payload["system_id"]))
     with authenticated_rls_context(_job_claims(context)):
         system = one(
-            "SELECT name FROM public.profile_systems WHERE id=%s AND org_id=%s",
+            # Positions may reference global catalog systems (org_id IS NULL) —
+            # a task on one is still this org's work.
+            "SELECT name FROM public.profile_systems "
+            "WHERE id=%s AND (org_id=%s OR org_id IS NULL)",
             [str(system_id), str(context.org_id)],
             "system_not_found",
         )

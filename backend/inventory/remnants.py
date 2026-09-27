@@ -545,7 +545,27 @@ def remnant_label(*, org_id: UUID, remnant_id: UUID) -> dict[str, object]:
         "remnant_not_found",
     )
     remnant = _remnant_row(row)
-    identity = remnant["sheet_workshop_sku"] or remnant["physical_stock_identity"] or "—"
+    identity = remnant["sheet_workshop_sku"]
+    if not identity and remnant["stock_authority_id"]:
+        for table in ("profile_purchase_mappings", "reinforcement_articles"):
+            found = rows(
+                f"SELECT commercial_sku FROM public.{table} WHERE id = %s",
+                [remnant["stock_authority_id"]],
+            )
+            if found:
+                identity = str(found[0]["commercial_sku"])
+                break
+    if not identity:
+        # An anonymous drop still gets a printable identity — material · color
+        # before the raw identity UUID.
+        identity = (
+            " · ".join(
+                part for part in (remnant.get("material"), remnant.get("color"))
+                if part
+            )
+            or remnant["physical_stock_identity"]
+            or "—"
+        )
     payload = f"DEKOPEN|REMNANT|{remnant['id']}"
     return {
         "remnant": remnant,

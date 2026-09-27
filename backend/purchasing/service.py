@@ -17,8 +17,9 @@ from dekopen_engine.documentary_canonical import (
 )
 
 from documents.renderers import _piece_labels
-from documents.repository import DocumentaryError, decoded, documentary_backend, json_text, one, rows
+from documents.repository import DocumentaryError, decoded, documentary_backend, json_text, one, rows, write
 from inventory.production_stock import coverage_for_version
+from inventory.service import stock_variant_key
 from projects import org_branding
 
 
@@ -137,22 +138,62 @@ def _requirements(version_id: UUID, org_id: UUID,
     parameters: list[object] = [version_id, org_id]
     if order_type is not None:
         parameters.append(order_type)
-    return rows(
+    result = rows(
         "SELECT line.id,line.requirement_key,line.project_id,line.project_version_id,"
         "line.org_id,line.order_type::text AS order_type,"
         "line.category,line.technical_identity::text,line.purchasing_sku,"
         "line.physical_stock_identity,line.unit,"
-        "line.quantity,line.specification::text,line.source_trace::text,"
-        "stock.sku AS physical_stock_sku,stock.name AS physical_stock_name "
+        "line.quantity,line.specification::text,line.source_trace::text "
         "FROM public.purchase_requirement_lines line "
-        "LEFT JOIN public.inventory_stock stock "
-        "ON stock.org_id = line.org_id "
-        "AND stock.variant_key = line.physical_stock_identity::text "
         "WHERE line.project_version_id=%s AND line.org_id=%s"
         + condition
         + " ORDER BY line.order_type,line.category,line.purchasing_sku,line.requirement_key",
         parameters,
     )
+    # Stock display identity resolves the same bucket the receiver writes
+    # (psi, else the spec hash for made-to-measure glass) — a SQL join on psi
+    # alone can never reach a spec-keyed row.
+    stock_names = {
+        (str(item["sku"]), str(item["variant_key"])): item
+        for item in rows(
+            "SELECT sku, name, variant_key FROM public.inventory_stock "
+            "WHERE org_id = %s",
+            [org_id],
+        )
+    }
+    for line in result:
+        specification = line.get("specification")
+        variant = stock_variant_key(
+            line.get("physical_stock_identity"),
+            json.loads(str(specification)) if specification else None,
+            line.get("category"),
+        )
+        item = stock_names.get((str(line["purchasing_sku"]), variant))
+        line["physical_stock_sku"] = item["sku"] if item else None
+        line["physical_stock_name"] = item["name"] if item else None
+    return result
+
+
+def _unclaimed_requirements(version_id: UUID, org_id: UUID,
+                            order_type: str) -> list[dict[str, object]]:
+    """Requirement lines not held by a live order line — a cancelled order's
+    claims are stamped released_at, so they come back here."""
+    claimed = {
+        str(row["id"]) for row in rows(
+            "SELECT line.id FROM public.purchase_requirement_lines line "
+            "WHERE line.project_version_id=%s AND line.org_id=%s AND line.order_type=%s "
+            "AND EXISTS ("
+            "    SELECT 1 FROM public.order_requirement_lines held "
+            "    WHERE held.requirement_line_id = line.id "
+            "    AND held.released_at IS NULL"
+            ")",
+            [version_id, org_id, order_type],
+        )
+    }
+    return [
+        item for item in _requirements(version_id, org_id, order_type)
+        if str(item["id"]) not in claimed
+    ]
 
 
 def purchasing_state(org_id: UUID, version_id: UUID | None = None) -> dict[str, object]:
@@ -218,6 +259,15 @@ def purchasing_state(org_id: UUID, version_id: UUID | None = None) -> dict[str, 
             [version_id, org_id],
         )
         allocated = {str(item["requirement_line_id"]) for item in allocations}
+        claimed_lines = {
+            str(item["requirement_line_id"]) for item in rows(
+                "SELECT requirement_line_id FROM public.order_requirement_lines "
+                "WHERE project_version_id=%s AND org_id=%s AND released_at IS NULL",
+                [version_id, org_id],
+            )
+        }
+        for item in requirements:
+            item["claimed"] = item["id"] in claimed_lines
         covered_keys = {
             (str(item["order_type"]), str(key))
             for item in eligibilities
@@ -396,22 +446,36 @@ def confirm_order_type_batch(
                 [f"{version_id}:{order_type}"],
             )
         existing_batch = rows(
-            "SELECT id FROM public.order_allocation_batches "
-            "WHERE project_version_id=%s AND org_id=%s AND order_type=%s",
+            "SELECT id,attempt FROM public.order_allocation_batches "
+            "WHERE project_version_id=%s AND org_id=%s AND order_type=%s "
+            "ORDER BY attempt DESC",
             [version_id, org_id, order_type],
         )
+        # Requirements already claimed by a live order line stay claimed — a
+        # re-confirm only covers lines released by a cancellation.
+        requirement_rows = _unclaimed_requirements(version_id, org_id, order_type)
+        attempt = 1
         if existing_batch:
-            existing_orders = rows(
-                "SELECT id,order_code,order_type::text,status::text,supplier_name,order_snapshot_hash "
-                "FROM public.orders WHERE allocation_batch_id=%s ORDER BY supplier_name,id",
-                [existing_batch[0]["id"]],
-            )
-            return (
-                [_public(item) for item in existing_orders],
-                False,
-            )
-        requirement_rows = _requirements(version_id, org_id, order_type)
-        if not requirement_rows:
+            # Idempotent while the batch covers the type and nothing was
+            # released. When cancelled orders released requirement lines, the
+            # buyer confirms a new attempt — a fresh batch, never a mutation
+            # of the cancelled one. The response lists every live order of the
+            # type, across attempts.
+            if not requirement_rows:
+                return (
+                    [
+                        _public(item) for item in rows(
+                            "SELECT id,order_code,order_type::text,status::text,supplier_name,order_snapshot_hash "
+                            "FROM public.orders "
+                            "WHERE project_version_id=%s AND org_id=%s AND order_type=%s "
+                            "AND status <> 'CANCELLED' ORDER BY supplier_name,id",
+                            [version_id, org_id, order_type],
+                        )
+                    ],
+                    False,
+                )
+            attempt = int(existing_batch[0]["attempt"]) + 1
+        elif not requirement_rows:
             raise DocumentaryError("order_type_has_no_requirements")
         allocations = rows(
             "SELECT allocation.id,allocation.requirement_line_id,allocation.supplier_eligibility_id,"
@@ -464,16 +528,19 @@ def confirm_order_type_batch(
             "schema_version": 1,
             "project_version_id": version_id,
             "order_type": order_type,
+            "attempt": attempt,
             "allocations": allocation_preimage,
         })
         confirmed_at = datetime.now(timezone.utc)
         batch = one(
             "INSERT INTO public.order_allocation_batches("
             "project_id,project_version_id,org_id,bom_hash,snapshot_sha256,order_type,"
-            "allocation_hash,confirmed_by,confirmed_at) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+            "allocation_hash,attempt,confirmed_by,confirmed_at) "
+            "VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
             "RETURNING id",
             [version["project_id"], version_id, org_id, version["bom_hash"],
-             version["snapshot_sha256"], order_type, allocation_hash, actor_id, confirmed_at],
+             version["snapshot_sha256"], order_type, allocation_hash, attempt,
+             actor_id, confirmed_at],
         )
         batch_id = UUID(str(batch["id"]))
         projection = one(
@@ -645,6 +712,13 @@ def cancel_order(
             "status::text,supplier_name,order_snapshot_hash,cancelled_by,"
             "cancelled_at,expected_at",
             [actor_id, cancelled_at, cancelled_at, order_id, org_id],
+        )
+        # Release the line claims so the same requirements can be ordered again:
+        # the cancelled order's rows remain as evidence, stamped released_at.
+        write(
+            "UPDATE public.order_requirement_lines SET released_at=%s "
+            "WHERE order_id=%s AND org_id=%s AND released_at IS NULL",
+            [cancelled_at, order_id, org_id],
         )
         return _public(updated)
 

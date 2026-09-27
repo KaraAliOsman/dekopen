@@ -18,6 +18,7 @@ from uuid import UUID
 
 
 from documents.repository import one, rows
+from inventory.service import stock_variant_key
 
 
 def _dec(value: Any) -> Decimal:
@@ -478,10 +479,11 @@ def coverage_for_version(org_id: UUID, version_id: UUID) -> dict[str, Any]:
             FROM public.order_requirement_lines lines
             JOIN public.orders o ON o.id = lines.order_id
             WHERE lines.org_id = %s AND lines.requirement_line_id = ANY(%s::uuid[])
-              -- Only committed orders are inbound supply: a DRAFT may never
-              -- be sent and a CANCELLED one never arrives — counting either
-              -- would suppress purchases the workshop still needs.
-              AND o.status IN ('SENT', 'PARTIALLY_RECEIVED', 'FULFILLED')
+              AND lines.released_at IS NULL
+              -- Every live order is a decision already made: a DRAFT may not
+              -- be sent yet, but it still means "do not buy this again" — and
+              -- a CANCELLED order's lines are released, not counted.
+              AND o.status <> 'CANCELLED'
             GROUP BY lines.requirement_line_id
             """,
             [str(org_id), line_ids],
@@ -566,15 +568,23 @@ def coverage_for_version(org_id: UUID, version_id: UUID) -> dict[str, Any]:
     for line in lines:
         sku = str(line["purchasing_sku"])
         psi = line.get("physical_stock_identity") or ""
+        # Same bucket identity the receiver assigns: psi, else the spec hash —
+        # a cut-glass line must see its own stock row, not collide on "".
+        spec = line.get("specification")
+        variant = stock_variant_key(
+            psi,
+            json.loads(spec) if isinstance(spec, str) else spec,
+            line.get("category"),
+        )
         required = _dec(line["quantity"])
-        stock_row = stock.get((sku, str(psi)))
+        stock_row = stock.get((sku, variant))
         on_hand = _dec(stock_row["on_hand_qty"]) if stock_row else Decimal("0")
         reserved = _dec(stock_row["reserved_qty"]) if stock_row else Decimal("0")
-        pool = allocated.get((sku, str(psi)))
+        pool = allocated.get((sku, variant))
         if pool is None:
             pool = max(on_hand - reserved, Decimal("0"))
         covered = min(required, max(pool, Decimal("0")))
-        allocated[(sku, str(psi))] = pool - covered
+        allocated[(sku, variant)] = pool - covered
         available = pool
         bought = ordered.get(str(line["id"]), Decimal("0"))
         arrived = received.get(str(line["id"]), Decimal("0"))

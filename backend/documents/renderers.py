@@ -235,6 +235,19 @@ def _value(value: object) -> str:
     raise DocumentaryError("pdf_value_not_scalar")
 
 
+def _spec_value(value: object) -> str:
+    """Order-line spec detail — nested structures flatten to 'k=v' pairs so a
+    structured spec never crashes the renderer."""
+    if isinstance(value, dict):
+        return "; ".join(
+            f"{key}={_spec_value(val)}"
+            for key, val in sorted(value.items(), key=lambda pair: str(pair[0]))
+        )
+    if isinstance(value, list):
+        return ", ".join(_spec_value(item) for item in value)
+    return _value(value)
+
+
 def _pct(value: object) -> str:
     """Yield percentages print at one decimal — 93.5%, not 93.4667%."""
     if value is None:
@@ -2114,7 +2127,12 @@ def _doc04(snapshot: dict[str, object]) -> str:
             ["SKU compra", "Descripción", "SKU taller", "Acabado", "Largo barra (mm)",
              "Cantidad", "Unidad", "Origen"],
             [[line.get("purchasing_sku"),
-              line.get("physical_stock_name") or _value(line.get("physical_stock_sku")),
+              (line.get("physical_stock_name")
+               or _value(line.get("physical_stock_sku"))
+               if line.get("physical_stock_name") or line.get("physical_stock_sku")
+               else (_object(line.get("specification"), "invalid_order_line").get("description")
+                     or _object(line.get("specification"), "invalid_order_line").get("manufacturer_name")
+                     or "—")),
               ", ".join(_value(item) for item in _array(line.get("technical_skus"), "invalid_order_line")),
               _object(line.get("specification"), "invalid_order_line").get("color"),
               _object(line.get("specification"), "invalid_order_line").get("stock_length_mm"),
@@ -2213,7 +2231,7 @@ def _doc08(snapshot: dict[str, object]) -> str:
               ", ".join(_value(item) for item in _array(line.get("technical_skus"), "invalid_order_line")),
               line.get("quantity"), line.get("unit"),
               "; ".join(
-                  f"{key}={_value(value)}"
+                  f"{key}={_spec_value(value)}"
                   for key, value in sorted(
                       _object(line.get("specification"), "invalid_order_line").items()
                   )

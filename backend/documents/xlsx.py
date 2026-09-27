@@ -38,6 +38,19 @@ def _text(value: object) -> str:
     raise DocumentaryError("xlsx_value_not_exact_text")
 
 
+def _spec_text(value: object) -> str:
+    """Spec detail cell — nested structures flatten to 'k=v' pairs so a
+    structured spec never crashes the sheet."""
+    if isinstance(value, dict):
+        return "; ".join(
+            f"{key}={_spec_text(val)}"
+            for key, val in sorted(value.items(), key=lambda pair: str(pair[0]))
+        )
+    if isinstance(value, list):
+        return ", ".join(_spec_text(item) for item in value)
+    return _text(value)
+
+
 def _normalize_archive(content: bytes) -> bytes:
     source = BytesIO(content)
     target = BytesIO()
@@ -149,7 +162,7 @@ def render_order_xlsx(document_type: str, snapshot: dict[str, object]) -> tuple[
         for line in lines:
             specification = _object(line.get("specification"), "invalid_order_line")
             detail = "; ".join(
-                f"{key}={_text(value)}"
+                f"{key}={_spec_text(value)}"
                 for key, value in sorted(specification.items())
             )
             data.append([

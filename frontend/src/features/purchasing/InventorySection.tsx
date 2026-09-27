@@ -4,6 +4,7 @@ import { ApiError } from "../../api/apiMutator";
 import { fmtMm } from "../../format";
 import { t } from "../../i18n/es-CL";
 import { formatDateTime } from "../../format";
+import { useConfirm } from "../../ui";
 
 type RequestFn = <T>(path: string, method?: string, body?: unknown) => Promise<T>;
 
@@ -125,6 +126,7 @@ export function InventorySection({
   canWrite: boolean;
   stockItems: StockIdentity[];
 }): JSX.Element {
+  const confirm = useConfirm();
   const [remnants, setRemnants] = useState<Remnant[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
   const [statusFilter, setStatusFilter] = useState("AVAILABLE");
@@ -208,7 +210,7 @@ export function InventorySection({
     event.preventDefault();
     const authority = authorities.find((a) => a.id === form.stock_authority_id);
     void run(
-      request("inventory/remnants/create/", "POST", {
+      request("inventory/remnants/", "POST", {
         kind: form.kind,
         stock_authority_id: form.kind === "BAR" ? form.stock_authority_id : null,
         physical_stock_identity:
@@ -230,7 +232,7 @@ export function InventorySection({
     event.preventDefault();
     if (!adjustItem) return;
     void run(
-      request("inventory/movements/record/", "POST", {
+      request("inventory/movements/", "POST", {
         item_id: adjustItem,
         movement_type: adjustForm.movement_type,
         quantity: adjustForm.quantity,
@@ -537,10 +539,18 @@ export function InventorySection({
                       className="secondary"
                       disabled={busy}
                       onClick={() =>
-                        void run(
-                          request(`inventory/remnants/${r.id}/scrap/`, "POST", {}),
-                          "inventory.remnantScrapError",
-                        )
+                        void confirm({
+                          title: t("inventory.scrapConfirmTitle"),
+                          body: t("inventory.scrapConfirmBody"),
+                          confirmLabel: t("inventory.scrap"),
+                          danger: true,
+                        }).then((ok) => {
+                          if (!ok) return;
+                          void run(
+                            request(`inventory/remnants/${r.id}/scrap/`, "POST", {}),
+                            "inventory.remnantScrapError",
+                          );
+                        })
                       }
                     >
                       {t("inventory.scrap")}

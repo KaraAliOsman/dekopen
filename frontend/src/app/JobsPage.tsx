@@ -181,7 +181,10 @@ export function JobsPage(): JSX.Element {
                 {job.state === "FAILED" && failure !== null && failureKey !== null && (
                   <p className="job-row-error">
                     {t(failureKey)}
-                    {failureKey === "jobs.fail.generic" && (
+                    {/* A snake_case domain code is a useful diagnostic tail;
+                        exception text (IntegrityError:, tracebacks) is not —
+                        it never reaches the user. */}
+                    {/^[a-z0-9_]+$/.test(failure.detail) && failure.detail !== failureKey && (
                       <>
                         {" "}
                         <code className="job-row-code">{failure.detail}</code>
