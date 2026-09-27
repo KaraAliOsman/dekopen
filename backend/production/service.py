@@ -1098,7 +1098,9 @@ def get_work_order(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
             "event": event["event"],
             "actor_id": str(event["actor_id"]) if event["actor_id"] else None,
             "actor_label": event.get("actor_label"),
-            "payload": event["payload"],
+            # JSONB may surface as a raw string through this cursor — decode so
+            # the client reads payload.qc_item / payload.note, not a blob.
+            "payload": _decoded(event["payload"]),
             "created_at": event["created_at"],
         }
         for event in events

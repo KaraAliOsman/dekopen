@@ -109,3 +109,46 @@ description: Local dev-stack recipe for DEKOPEN E2E testing — Supabase CLI sta
 - `--noreload` Django serves stale bytecode — restart it after any backend edit or you'll test old code (a `decide_quote` label drifted mid-session because of this).
 - Decided/superseded: `approval_status≠PENDING` renders the decided banner; `superseded` (current_revision≠version.revision_code) renders `portal.superseded`; a second decision on a decided deal → `quote_already_decided`/`quote_link_stale` (409, handled gracefully by re-fetch). `decided_by`/`decided_note` are intentionally NULL in the public payload.
 - Rasterize DOC-01 PDFs locally: fetch `quote_pdf_url` (signed Supabase storage URL) then `pymupdf` → `pg.get_pixmap(matrix=fitz.Matrix(2,2))` per page.
+
+## Production page / workshop surfaces (hostile-review batches)
+
+- Sidebar piece-trace lookup sits between the status filters and the order list;
+  match chips deep-link to the order. A work order's detail route is
+  `/production/orders/{id}` (order_code like OT-…-01; remix orders suffixed `-RM-NN`).
+- Work-order events (`Historial`) come from `production_step_events`. The QC_FAIL
+  row only renders `qc_item`/`note` if `event.payload` is a parsed object — one
+  regression mode is the backend emitting `payload` as a raw jsonb string (check
+  `typeof payload` in `GET /production/orders/{id}/`; a `str` means the serializer
+  skipped `json.loads`). The remake card's `remake_reason.qc_item` is a separate,
+  decoded path.
+- CSV / DXF / Operaciones buttons should generate+download in ONE click — assert a
+  browser download fires (watch `chrome.downloads`/`page.on('download')` or the
+  Downloads dir), not just that an event is appended.
+- Dispatch "Agendar entrega": date defaults to tomorrow, address from the sealed
+  project's delivery_address. Typed-signature mode should draw the canvas live on
+  `input` (not on blur).
+
+## Position-editor save gating + dead-click / door-position trap
+
+- Guardar `disabled = uncertainCreate || busy || !result || assemblyUnsaveable`;
+  `save()` early-returns on a SUPERSET (adds mutationLock/color/product/systemId/
+  quantity). So a REAL click on a `disabled` button is swallowed by the browser,
+  and a synthetic `dispatchEvent('click')` bypasses `disabled` to reach the handler
+  but still no-ops in `save()` — a "programmatic click works, real click dead"
+  report usually means the design was unsaveable/in-flight, not an overlay. Verify
+  with `elementFromPoint` at the button (it returns the button — no coverer) and
+  check `disabled` + the `.handle-pending` hint before calling it a dead click.
+- The "Puerta + lateral" (`doorSide`) starter emits BARE bays — door missing
+  `panel_article_sku`, sidelight missing glass, coupling missing
+  `coupler_profile_sku` — so the position is UNSAVEABLE out of the box (eval =
+  `MANUFACTURING_INCOMPLETE`, Guardar disabled, no save POST). To reach a save POST
+  you must assign panel + sidelight glass + a coupler (e.g. COPLE-60) AND give the
+  door leaf a real size. There is no single-door starter — doors come via the
+  "Puerta de acceso" aperture on a lone unit or this coupled template.
+- A 400 "missing node id" is NOT a literal backend string — the only trigger is
+  `parse_parametric_node` "Every node requires string id and type" → generic
+  `validation_error` ("El diseño no es válido…"/"Request validation failed"), and
+  the frontend always emits uuid `id`s (walkIntent throws client-side first). An
+  eval issue reason like `DOOR_ENTRY <uuid> requires panel_article_sku` embeds a
+  node id and can be misread as "missing node id". Capture `POST
+  /engine/assembly/calculate/` for the real product-v2 payload.

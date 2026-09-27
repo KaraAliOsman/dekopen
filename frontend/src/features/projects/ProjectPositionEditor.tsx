@@ -579,8 +579,10 @@ function PositionWorkspace({
         >
           {t("projects.save")}
         </button>
-        {loaded && (assemblyUnsaveable || result === null) && (
-          <span className="handle-pending">{t("projects.saveBlocked")}</span>
+        {loaded && (busy || assemblyUnsaveable || result === null) && (
+          <span className="handle-pending">
+            {busy ? t("projects.savingBusy") : t("projects.saveBlocked")}
+          </span>
         )}
       </header>
       {message && <p role="status">{message}</p>}

@@ -285,6 +285,7 @@ export const messages = {
   "projects.savedState": "Guardado",
   "projects.saveBlocked":
     "No se puede guardar todavía — el motor no completó la evaluación (datos de fabricación incompletos). Revisa las observaciones marcadas en el inspector.",
+  "projects.savingBusy": "Guardando / calculando… espera un momento",
   "projects.unsaved": "Cambios sin guardar",
   "projects.saveError":
     "No se guardó el cambio. Conservamos tu trabajo; revisa si otra persona editó el vano o si la revisión ya está cerrada.",
@@ -2432,7 +2433,8 @@ export const messages = {
   "production.deliverySignatureLabel": "Área para dibujar la firma del receptor",
   "production.deliverySignatureHint": "Dibuja la firma aquí",
   "production.deliverySignatureClear": "Limpiar firma",
-  "production.deliverySignatureRequired": "Se necesita la firma del receptor (dibújala o escribe el nombre)",
+  "production.deliverySignatureRequired":
+    "Se necesita la firma del receptor (dibújala o escribe el nombre)",
   "production.signatureModeDraw": "Dibujar firma",
   "production.signatureModeType": "Firmar con el nombre",
   "production.signatureTypedHint":

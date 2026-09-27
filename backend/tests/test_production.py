@@ -3371,3 +3371,49 @@ def test_public_order_surfaces_workflow_flags() -> None:
     # under version_shortage while shortage stays the order's reservations.
     assert output["shortage"] == 0
     assert output["version_shortage"] == 2
+
+
+def test_get_work_order_decodes_event_payload_strings(monkeypatch) -> None:
+    """JSONB can surface as a raw string — Historial reads payload.qc_item."""
+    org_id, order_id, version_id = uuid4(), uuid4(), uuid4()
+
+    def fake_one(sql_text: str, params: list, code: str = "not_found") -> dict:
+        lowered = " ".join(sql_text.lower().split())
+        if "from public.project_versions" in lowered:
+            return {"snapshot_json": json.dumps({"project": {"delivery_address": "x"}})}
+        return {
+            "id": str(order_id),
+            "order_code": "OT-1",
+            "order_type": "WORKSHOP_OT",
+            "status": "IN_PROGRESS",
+            "payload_json": {},
+            "project_version_id": str(version_id),
+            "created_at": "2026-09-23T00:00:00Z",
+            "steps_total": 1,
+            "steps_done": 0,
+            "next_step_code": "CUT",
+            "has_dispatch_note": False,
+        }
+
+    def fake_rows(sql_text: str, params: object = ()) -> list[dict]:
+        lowered = " ".join(sql_text.lower().split())
+        if "production_step_events" in lowered:
+            return [
+                {
+                    "id": str(uuid4()),
+                    "step_id": str(uuid4()),
+                    "event": "QC_FAILED",
+                    "actor_id": None,
+                    "actor_label": "ops",
+                    "payload": json.dumps({"qc_item": "M-03", "qc_result": "FAIL"}),
+                    "created_at": "2026-09-23T00:00:00Z",
+                    "step_code": "QC",
+                }
+            ]
+        return []
+
+    monkeypatch.setattr("production.service.one", fake_one)
+    monkeypatch.setattr("production.service.rows", fake_rows)
+    with patch("production.service.documentary_backend", side_effect=_atomic):
+        output = service.get_work_order(org_id=org_id, order_id=order_id)
+    assert output["events"][0]["payload"] == {"qc_item": "M-03", "qc_result": "FAIL"}
