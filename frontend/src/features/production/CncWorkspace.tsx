@@ -109,8 +109,24 @@ const FACE_LABELS: Record<string, string> = {
   END_EDGE: "production.cncFaceEnd",
 };
 
+/** Tool-machine kinds (SAW_BLADE, DRILL_BIT, …) are a different enum than
+ * operation kinds — separate label map so neither leaks raw. */
+const TOOL_KIND_LABELS: Record<string, string> = {
+  SAW_BLADE: "production.cncToolKindSaw",
+  DRILL_BIT: "production.cncToolKindDrill",
+  END_MILL: "production.cncToolKindEndMill",
+  ROUTER_BIT: "production.cncToolKindRouter",
+  PUNCH: "production.cncToolKindPunch",
+  MARKING: "production.cncToolKindMarking",
+  CUSTOM: "production.cncToolKindCustom",
+};
+
 function kindLabel(kind: string): string {
   return tOptional(KIND_LABELS[kind] ?? "") ?? kind;
+}
+
+function toolKindLabel(kind: string): string {
+  return tOptional(TOOL_KIND_LABELS[kind] ?? "") ?? kind;
 }
 
 function faceLabel(face: string): string {
@@ -559,7 +575,7 @@ export function CncWorkspace() {
                             <strong>{tool.code}</strong>
                           </td>
                           <td>{tool.name}</td>
-                          <td>{tool.kind}</td>
+                          <td>{toolKindLabel(tool.kind)}</td>
                           <td>{tool.diameter_mm ?? "—"}</td>
                           <td>{tool.max_depth_mm ?? "—"}</td>
                           <td>
@@ -627,7 +643,7 @@ export function CncWorkspace() {
                         >
                           {TOOL_KINDS.map((kind) => (
                             <option key={kind} value={kind}>
-                              {kind}
+                              {toolKindLabel(kind)}
                             </option>
                           ))}
                         </select>

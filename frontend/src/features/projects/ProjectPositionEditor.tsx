@@ -20,7 +20,7 @@ import { useAuthSession } from "../../auth/AuthSessionProvider";
 import { ApiError } from "../../api/apiMutator";
 import { UnsavedChangesGuard } from "../../app/UnsavedChangesGuard";
 import { useShellLeaf } from "../../app/shellLeaf";
-import { t, tDynamic } from "../../i18n/es-CL";
+import { t, tDynamic, tOptional } from "../../i18n/es-CL";
 import { DeniedState } from "../../ui";
 import { type CanvasDesignInputs, useCanvasStore } from "../canvas/canvasStore";
 import { useProject } from "./useProject";
@@ -927,7 +927,7 @@ export function ProjectBom({ result }: { result: EngineCalculateResponse }): JSX
               {(result.fittings ?? []).map((item, index) => (
                 <tr key={index}>
                   <td>{item.sku}</td>
-                  <td>{item.kind}</td>
+                  <td>{tOptional(`assembly.fittingKind.${item.kind}`) ?? item.kind}</td>
                   <td>{item.qty}</td>
                 </tr>
               ))}

@@ -53,7 +53,7 @@ import { formatDateTime } from "../../format";
 import { DeniedState, usePrompt } from "../../ui";
 import { fmtMm, fmtPct } from "../../format";
 import { formatDate } from "../money";
-import { t, tDynamic } from "../../i18n/es-CL";
+import { t, tDynamic, tOptional } from "../../i18n/es-CL";
 import { useAssistantSurface } from "../assistant/assistantContext";
 import { PLAN_REQUIRED_CODES, STEP_STOCK_KINDS, cutRoleLabel, stationCodeLabel } from "./labels";
 
@@ -2176,7 +2176,7 @@ export function ProductionPage(): JSX.Element {
                             {unnested
                               .map(
                                 (piece) =>
-                                  `${piece.kind} ${fmtMm(piece.width_mm)}×${fmtMm(piece.height_mm)} mm ×${piece.quantity} (${piece.group})`,
+                                  `${tOptional(`production.pieceKind.${piece.kind}`) ?? piece.kind} ${fmtMm(piece.width_mm)}×${fmtMm(piece.height_mm)} mm ×${piece.quantity} (${piece.group})`,
                               )
                               .join(" · ")}
                           </p>
