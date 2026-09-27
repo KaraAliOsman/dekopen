@@ -2529,7 +2529,10 @@ export const messages = {
   "assembly.levelTechnical": "Técnica",
   "assembly.bay": "Paño",
   "assembly.bayCount": "Paños",
-  "assembly.doorTopOnly": "La puerta solo va en el paño superior",
+  "assembly.doorTopOnly":
+    "La puerta debe ser el paño principal del módulo — quita el travesaño primero",
+  "assembly.starterSearch": "Buscar diseño",
+  "assembly.starterNoMatch": "Ningún diseño coincide con la búsqueda",
   "assembly.hingeSide": "Lado de bisagras",
   "assembly.hingeLeft": "Izquierda",
   "assembly.hingeRight": "Derecha",

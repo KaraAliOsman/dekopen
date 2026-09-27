@@ -512,6 +512,32 @@
   }
 }
 
+/* Tablet portrait (~768px): a three-column grid leaves the canvas a sliver.
+ * Stack instead — tools + full-width canvas on top, inspector below, the
+ * page scrolls rather than squeezing the product. */
+@media (max-width: 820px) {
+  .assembly-editor,
+  .assembly-editor--tree-closed {
+    grid-template-columns: 3rem minmax(0, 1fr);
+    grid-template-rows: minmax(20rem, 55dvh) auto auto;
+    grid-template-areas:
+      "tools canvas"
+      "tools side"
+      "status status";
+    height: auto;
+    min-height: 0;
+  }
+
+  .canvas-viewport {
+    height: 100%;
+    min-height: 20rem;
+  }
+
+  .assembly-side {
+    overflow-y: visible;
+  }
+}
+
 /* Left tool rail */
 .assembly-tools {
   align-content: start;

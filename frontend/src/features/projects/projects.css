@@ -750,6 +750,22 @@ p.handle-pending {
 .starter-library[open] > summary::before {
   transform: rotate(90deg);
 }
+.starter-gallery-wrap {
+  padding: 0.25rem 0.75rem 0.75rem;
+}
+.starter-search {
+  display: block;
+  margin-bottom: 0.5rem;
+  max-width: 22rem;
+}
+.starter-search input {
+  width: 100%;
+}
+.starter-empty {
+  color: var(--theme-text-secondary, #727d82);
+  font-size: 0.8125rem;
+  margin: 0.5rem 0;
+}
 .starter-gallery {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
@@ -760,7 +776,7 @@ p.handle-pending {
    * undiscoverable; the enclosing <details> already owns the vertical
    * budget, so showing every starter costs the user nothing. */
   overflow-x: visible;
-  padding: 0.25rem 0.75rem 0.75rem;
+  padding: 0;
 }
 .starter-card {
   display: flex;

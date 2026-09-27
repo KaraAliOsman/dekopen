@@ -901,14 +901,18 @@ function BayInspector({
       <ProvenanceStrip
         items={[
           { label: t("assembly.opening"), state: "DECLARED" },
-          {
-            label: t("assembly.glass"),
-            state: bay.glass_article_sku
-              ? "VERIFIED"
-              : opening === "FIXED" || isDoor
-                ? "UNKNOWN"
-                : "BLOCKED",
-          },
+          // A panelled door leaf is complete without glass — name the panel,
+          // not a "Sin definir Vidrio" chip for a leaf that has none.
+          isDoor && bay.panel_article_sku
+            ? { label: t("assembly.panel"), state: "VERIFIED" as const }
+            : {
+                label: t("assembly.glass"),
+                state: bay.glass_article_sku
+                  ? ("VERIFIED" as const)
+                  : opening === "FIXED" || isDoor
+                    ? ("UNKNOWN" as const)
+                    : ("BLOCKED" as const),
+              },
           {
             label: t("assembly.glassThickness"),
             state: bay.glass_thickness_mm ? "DECLARED" : "UNKNOWN",
@@ -2206,6 +2210,13 @@ export function AssemblyEditor({
             onSelect={(id) => {
               if (id !== null && modules.some((module) => module.id === id)) pickModule(id);
               else select(id);
+            }}
+            onContextMenu={(id, pos) => {
+              // The tree is an editing surface too — right-click selects the
+              // object and opens the same command menu the canvas offers.
+              if (modules.some((module) => module.id === id)) pickModule(id);
+              else select(id);
+              setContextMenu(pos);
             }}
             title={t("tree.title")}
           />

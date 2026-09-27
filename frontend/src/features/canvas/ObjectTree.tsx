@@ -18,11 +18,13 @@ function TreeRow({
   depth,
   selection,
   onSelect,
+  onContextMenu,
 }: {
   node: TreeNode;
   depth: number;
   selection: string | null;
   onSelect(selectId: string): void;
+  onContextMenu?(selectId: string, pos: { x: number; y: number }): void;
 }): JSX.Element {
   const [open, setOpen] = useState(true);
   const selected = node.selectId !== null && node.selectId === selection;
@@ -55,6 +57,23 @@ function TreeRow({
           onClick={() => {
             if (node.selectId !== null) onSelect(node.selectId);
           }}
+          onContextMenu={(event) => {
+            if (node.selectId === null || !onContextMenu) return;
+            event.preventDefault();
+            onContextMenu(node.selectId, { x: event.clientX, y: event.clientY });
+          }}
+          onKeyDown={(event) => {
+            // Same keyboard menu trigger as the canvas (ContextMenu/Shift+F10),
+            // anchored on the row so the object under it is unambiguous.
+            if (node.selectId === null || !onContextMenu) return;
+            if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+            event.preventDefault();
+            const rect = event.currentTarget.getBoundingClientRect();
+            onContextMenu(node.selectId, {
+              x: Math.round(rect.left + rect.width / 2),
+              y: Math.round(rect.top + rect.height / 2),
+            });
+          }}
         >
           <span className="tree-label__text">{node.label}</span>
           {node.detail && <span className="tree-label__detail">{node.detail}</span>}
@@ -75,6 +94,7 @@ function TreeRow({
               depth={depth + 1}
               selection={selection}
               onSelect={onSelect}
+              onContextMenu={onContextMenu}
             />
           ))}
         </ul>
@@ -87,11 +107,13 @@ export function ObjectTree({
   root,
   selection,
   onSelect,
+  onContextMenu,
   title,
 }: {
   root: TreeNode;
   selection: string | null;
   onSelect(selectId: string): void;
+  onContextMenu?(selectId: string, pos: { x: number; y: number }): void;
   title: string;
 }): JSX.Element {
   return (
@@ -99,7 +121,14 @@ export function ObjectTree({
       <h3 className="object-tree__title">{title}</h3>
       <ul role="tree" className="tree-root">
         {root.children.map((node) => (
-          <TreeRow key={node.id} node={node} depth={0} selection={selection} onSelect={onSelect} />
+          <TreeRow
+            key={node.id}
+            node={node}
+            depth={0}
+            selection={selection}
+            onSelect={onSelect}
+            onContextMenu={onContextMenu}
+          />
         ))}
       </ul>
     </nav>
