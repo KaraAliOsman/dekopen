@@ -22,6 +22,7 @@ import {
   equalizeModuleWidths,
   insertModuleBetween,
   moduleGlassThicknessMm,
+  moduleNeighbors,
   modulePanelSku,
   removeModuleBay,
   removeModuleDivision,
@@ -39,6 +40,7 @@ import {
   setModulePanel,
   setModuleTree,
   setModuleWidth,
+  swapModules,
   type ProductJson,
   type ProductModuleJson,
 } from "./productEditing";
@@ -635,6 +637,34 @@ export const ASSEMBLY_COMMANDS: CommandSpec[] = [
     },
     describe: () => "duplicar unidad",
     ai: { op: "duplicate_module", decode: decodeModule },
+  },
+  {
+    id: "module.move-left",
+    title: "cmd.moveModuleLeft",
+    keywords: ["mover", "izquierda", "reordenar", "orden", "intercambiar"],
+    applicable: (ctx) =>
+      selectedModule(ctx) !== null &&
+      moduleNeighbors(ctx.product, selectedModule(ctx)!.id).left !== null,
+    apply: (ctx) => {
+      const module = selectedModule(ctx);
+      const left = module ? moduleNeighbors(ctx.product, module.id).left : null;
+      return module && left ? swapModules(ctx.product, module.id, left) : ctx.product;
+    },
+    describe: () => "intercambiar con la unidad de la izquierda",
+  },
+  {
+    id: "module.move-right",
+    title: "cmd.moveModuleRight",
+    keywords: ["mover", "derecha", "reordenar", "orden", "intercambiar"],
+    applicable: (ctx) =>
+      selectedModule(ctx) !== null &&
+      moduleNeighbors(ctx.product, selectedModule(ctx)!.id).right !== null,
+    apply: (ctx) => {
+      const module = selectedModule(ctx);
+      const right = module ? moduleNeighbors(ctx.product, module.id).right : null;
+      return module && right ? swapModules(ctx.product, module.id, right) : ctx.product;
+    },
+    describe: () => "intercambiar con la unidad de la derecha",
   },
   {
     id: "module.stack-above",

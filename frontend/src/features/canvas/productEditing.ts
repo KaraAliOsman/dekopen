@@ -697,6 +697,61 @@ export function duplicateModule(product: ProductJson, moduleId: string): Product
   };
 }
 
+/** Horizontal neighbours of a module through INLINE couplings — left/right
+ * follow each member's slot in the declared module order (the same order
+ * `elevationLayoutMm` draws), not the coupling declaration order. */
+export function moduleNeighbors(
+  product: ProductJson,
+  moduleId: string,
+): { left: string | null; right: string | null } {
+  const modules = product.assembly.modules;
+  const index = modules.findIndex((module) => module.id === moduleId);
+  if (index === -1) return { left: null, right: null };
+  const result: { left: string | null; right: string | null } = { left: null, right: null };
+  for (const { pair, kind } of resolveCouplings(product)) {
+    if (kind !== "INLINE") continue;
+    const [a, b] = pair;
+    const other = a === moduleId ? b : b === moduleId ? a : null;
+    if (other === null) continue;
+    const otherIndex = modules.findIndex((module) => module.id === other);
+    if (otherIndex === -1) continue;
+    if (otherIndex < index) result.left = other;
+    else if (otherIndex > index) result.right = other;
+  }
+  return result;
+}
+
+/** Move a module into another member's slot: exchange both ids across every
+ * coupling endpoint AND the declared module order — together they are what
+ * "reorder" means: joints keep kind/angle/coupler, connectivity and the
+ * drawn column order stay consistent. `edges[]` needs no swap — each entry
+ * names a spatial side of modules[i], so [A,B]/[right,left] rewritten as
+ * [B,A]/[right,left] describes the same physical seam after the move. */
+export function swapModules(product: ProductJson, moduleA: string, moduleB: string): ProductJson {
+  if (moduleA === moduleB) return product;
+  const modules = product.assembly.modules;
+  const indexA = modules.findIndex((module) => module.id === moduleA);
+  const indexB = modules.findIndex((module) => module.id === moduleB);
+  if (indexA === -1 || indexB === -1) return product;
+  const nextModules = [...modules];
+  nextModules[indexA] = modules[indexB]!;
+  nextModules[indexB] = modules[indexA]!;
+  const couplings = materializeCouplings(product).map((coupling) => {
+    const pair = coupling.modules;
+    if (!pair || pair.length !== 2 || (!pair.includes(moduleA) && !pair.includes(moduleB))) {
+      return coupling;
+    }
+    return {
+      ...coupling,
+      modules: pair.map((id) => (id === moduleA ? moduleB : id === moduleB ? moduleA : id)) as [
+        string,
+        string,
+      ],
+    };
+  });
+  return { ...product, assembly: { modules: nextModules, couplings } };
+}
+
 /** Wrap a classic parametric tree as a degenerate one-module product so the
  * compositional editor can edit legacy positions without a mode switch. */
 export function wrapTreeAsProduct(

@@ -2931,6 +2931,8 @@ export const messages = {
   "cmd.splitHorizontal": "Dividir horizontal (travesaño)",
   "cmd.duplicateModule": "Duplicar unidad",
   "cmd.stackAbove": "Agregar unidad apilada encima",
+  "cmd.moveModuleLeft": "Mover unidad a la izquierda",
+  "cmd.moveModuleRight": "Mover unidad a la derecha",
   "cmd.copySpec": "Copiar especificación de la unidad",
   "cmd.applySpec": "Aplicar especificación a la unidad",
   "cmd.copyBaySpec": "Copiar especificación del paño",

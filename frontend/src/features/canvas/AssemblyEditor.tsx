@@ -1832,7 +1832,10 @@ export function AssemblyEditor({
   const [view3dOpen, setView3dOpen] = useState(false);
   /** Queued prompt for the assistant — "" means focus only. Every "…with
    * DEKOPEN" affordance funnels here; the human always confirms. */
-  const [assistantDraft, setAssistantDraft] = useState<string | null>(null);
+  const [assistantDraft, setAssistantDraft] = useState<{
+    text: string;
+    submit?: boolean;
+  } | null>(null);
   const assistantSectionRef = useRef<HTMLDivElement>(null);
   const issuesListRef = useRef<HTMLUListElement>(null);
   /** Canvas context menu — cursor position, closed on action/outside/Escape. */
@@ -1863,9 +1866,9 @@ export function AssemblyEditor({
 
   /** Every "…with DEKOPEN" affordance: scroll the assistant into view and
    * hand it a prompt draft — "" focuses the field untouched. */
-  function askAssistant(prompt: string): void {
+  function askAssistant(prompt: string, submit = false): void {
     assistantSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    setAssistantDraft(prompt);
+    setAssistantDraft({ text: prompt, submit });
   }
 
   useEffect(() => {
@@ -2458,6 +2461,7 @@ export function AssemblyEditor({
                   onClick={() =>
                     askAssistant(
                       `${t("assistant.fixPrompt")} ${issueText(issue, modules, couplings)}`,
+                      true,
                     )
                   }
                 >

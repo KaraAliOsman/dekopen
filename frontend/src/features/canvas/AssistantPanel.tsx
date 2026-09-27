@@ -40,9 +40,10 @@ export function AssistantPanel({
   product: ProductJson;
   disabled: boolean;
   /** A queued prompt from an external affordance ("Fix with DEKOPEN",
-   * context menus): "" focuses the field, text replaces the draft. The
-   * human always confirms — nothing here calls the provider on its own. */
-  draft: string | null;
+   * context menus): "" focuses the field, text replaces the draft.
+   * `submit` sends it straight to the provider — the human still confirms
+   * the returned ops, so no product mutation ever applies on its own. */
+  draft: { text: string; submit?: boolean } | null;
   onDraftHandled(): void;
   onApply(ops: DesignOp[]): void;
 }): JSX.Element {
@@ -61,13 +62,15 @@ export function AssistantPanel({
     if (draft === null) return;
     requestSeq.current += 1;
     setBusy(false);
-    if (draft) setPrompt(draft);
+    if (draft.text) setPrompt(draft.text);
     setMessage("");
     setPreview(null);
     setDetailsOpen(true);
     // Focus after the (possibly closed) details re-renders open.
     requestAnimationFrame(() => promptRef.current?.focus());
+    if (draft.submit && draft.text.trim()) void generate(draft.text);
     onDraftHandled();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- generate is defined below; draft is the trigger
   }, [draft, onDraftHandled]);
 
   /** A product commit or system switch invalidates anything in flight —
@@ -86,12 +89,12 @@ export function AssistantPanel({
     systemId: string | null;
   } | null>(null);
 
-  async function generate(): Promise<void> {
-    if (!positionId || !systemId || !prompt.trim()) return;
+  async function generate(rawPrompt?: string): Promise<void> {
+    const trimmed = (rawPrompt ?? prompt).trim();
+    if (!positionId || !systemId || !trimmed) return;
     setBusy(true);
     setMessage("");
     setPreview(null);
-    const trimmed = prompt.trim();
     if (
       !operationKey.current ||
       operationKey.current.prompt !== trimmed ||
