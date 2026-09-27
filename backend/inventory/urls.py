@@ -6,6 +6,7 @@ from inventory.views import (
     InventoryStockView,
     OrderReceiptCreateView,
     OrderReceivingView,
+    RemnantLabelView,
     RemnantListView,
     RemnantReleaseView,
     RemnantScrapView,
@@ -19,6 +20,11 @@ urlpatterns = [
         "bar-authorities/",
         BarAuthorityListView.as_view(),
         name="inventory-bar-authorities",
+    ),
+    path(
+        "remnants/<uuid:remnant_id>/label/",
+        RemnantLabelView.as_view(),
+        name="inventory-remnant-label",
     ),
     path(
         "remnants/<uuid:remnant_id>/scrap/",

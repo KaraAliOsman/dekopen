@@ -481,3 +481,28 @@ def record_produced_remnants(
         )
         inserted += 1
     return inserted
+
+
+def remnant_label(*, org_id: UUID, remnant_id: UUID) -> dict[str, object]:
+    """Printable rack tag for one remnant — §5 barcode readiness.
+
+    The QR payload encodes the remnant's stable identity the same way the
+    cut-pack and unit labels do; a floor scanner resolves it to this row.
+    Rendering (sheet vs bar dimensions) happens on the client — this returns
+    the raw fields plus the pre-rendered QR SVG."""
+    import segno
+
+    row = one(
+        f"{_SELECT} WHERE id = %s AND org_id = %s",
+        [str(remnant_id), str(org_id)],
+        "remnant_not_found",
+    )
+    remnant = _remnant_row(row)
+    identity = remnant["sheet_workshop_sku"] or remnant["physical_stock_identity"] or "—"
+    payload = f"DEKOPEN|REMNANT|{remnant['id']}"
+    return {
+        "remnant": remnant,
+        "identity": identity,
+        "qr_payload": payload,
+        "qr_svg": segno.make(payload, error="m").svg_inline(border=2, scale=6),
+    }

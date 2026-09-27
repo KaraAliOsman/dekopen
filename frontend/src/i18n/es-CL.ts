@@ -1331,11 +1331,14 @@ export const messages = {
   "purchasing.stockOnHand": "En bodega",
   "purchasing.stockReserved": "Reservado",
   "purchasing.stockAvailable": "Disponible",
+  "purchasing.stockIncoming": "Por llegar",
   "inventory.title": "Inventario",
   "inventory.remnants": "Retazos y sobras",
   "inventory.remnantsHint":
     "Sobras reutilizables de barras y planchas; el optimizador los consume antes que material nuevo.",
   "inventory.filter": "Filtrar por estado",
+  "inventory.label": "Etiqueta",
+  "inventory.labelPrint": "Imprimir etiqueta",
   "inventory.remnantCreate": "Registrar retazo",
   "inventory.remnantSheetOnly":
     "Solo planchas: los retazos de barra los genera producción automáticamente.",

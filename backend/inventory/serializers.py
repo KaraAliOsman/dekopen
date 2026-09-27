@@ -24,6 +24,9 @@ class InventoryStockItemSerializer(serializers.Serializer):
     on_hand_qty = serializers.DecimalField(max_digits=14, decimal_places=2)
     reserved_qty = serializers.DecimalField(max_digits=14, decimal_places=2)
     available_qty = serializers.DecimalField(max_digits=14, decimal_places=2)
+    incoming_qty = serializers.DecimalField(
+        max_digits=14, decimal_places=2, required=False, default="0"
+    )
 
 
 class InventoryStockSerializer(serializers.Serializer):
@@ -208,3 +211,10 @@ class RemnantCreateSerializer(StrictSerializer):
                     "Sheet remnants need sheet_workshop_sku and positive width/height"
                 )
         return data
+
+
+class RemnantLabelSerializer(serializers.Serializer):
+    remnant = RemnantSerializer()
+    identity = serializers.CharField()
+    qr_payload = serializers.CharField()
+    qr_svg = serializers.CharField()

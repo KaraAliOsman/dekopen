@@ -784,3 +784,32 @@ def test_bar_authorities_view_uses_inventory_readers(monkeypatch) -> None:
     assert response.status_code == 200
     assert response.data == {"authorities": [{"commercial_sku": "KOMM-MARCO"}]}
     assert seen["org_id"] == org_id
+
+
+def test_remnant_label_returns_qr_and_identity() -> None:
+    # §5 rack label: the printed tag carries the remnant's stable QR so a
+    # floor scanner resolves the physical drop back to this row.
+    from inventory import remnants
+
+    org_id, remnant_id, order_id = uuid4(), uuid4(), uuid4()
+    with patch(
+        "inventory.remnants.one",
+        side_effect=lambda query, params=(), code=None: _remnant_row(remnant_id, order_id),
+    ):
+        output = remnants.remnant_label(org_id=org_id, remnant_id=remnant_id)
+
+    assert output["identity"] == "AUTH-1"
+    assert f"DEKOPEN|REMNANT|{remnant_id}" == output["qr_payload"]
+    assert "<svg" in output["qr_svg"]
+    assert output["remnant"]["id"] == str(remnant_id)
+
+
+def test_remnant_label_missing_remant_raises() -> None:
+    from inventory import remnants
+
+    def missing(query, params=(), code=None):
+        raise DocumentaryError("remnant_not_found")
+
+    with patch("inventory.remnants.one", side_effect=missing):
+        with pytest.raises(DocumentaryError):
+            remnants.remnant_label(org_id=uuid4(), remnant_id=uuid4())

@@ -19,4 +19,6 @@ export interface InventoryStockItem {
   reserved_qty: string;
   /** @pattern ^-?\d{0,12}(?:\.\d{0,2})?$ */
   available_qty: string;
+  /** @pattern ^-?\d{0,12}(?:\.\d{0,2})?$ */
+  incoming_qty?: string;
 }

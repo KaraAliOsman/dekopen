@@ -432,6 +432,7 @@ export * from "./reinforcementRow";
 export * from "./remakeRequestRequest";
 export * from "./remnant";
 export * from "./remnantCreateRequest";
+export * from "./remnantLabel";
 export * from "./remnantList";
 export * from "./remnantOriginEnum";
 export * from "./remnantStatusEnum";

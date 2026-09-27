@@ -114,6 +114,22 @@ svg:not(.miter) { max-width: 100%; height: auto; display: block; } svg text { fo
 .figures .figdim { font-family: 'IBM Plex Mono', monospace; font-size: 7.5pt; }
 .workshop-figure svg { max-height: 170mm; }
 
+/* ── Supplier-facing purchase order (DOC-04/DOC-08) ─────────────────
+   A PO is a contract document between two parties: buyer block and
+   supplier block side by side, then the order meta strip. Table stays
+   in workshop register — it is a technical order, not a proposal. */
+.po-parties { display: flex; gap: 6mm; margin: 2mm 0 3mm; }
+.po-party { flex: 1; border: 0.9pt solid #465158; padding: 2.5mm 3mm; break-inside: avoid; }
+.po-party .po-party-role { font: 600 6pt 'IBM Plex Mono', monospace; text-transform: uppercase; letter-spacing: 0.9pt; color: #727D82; margin-bottom: 1.2mm; }
+.po-party .po-party-name { font: 700 10.5pt 'IBM Plex Sans', sans-serif; margin-bottom: 0.8mm; }
+.po-party .po-party-line { font-size: 7.5pt; color: #465158; line-height: 1.5; }
+.po-meta { display: flex; border: 0.9pt solid #465158; border-top: none; margin: -3mm 0 3mm; }
+.po-meta .tb-cell { display: table-cell; border-left: 0.5pt solid #CDD5D6; padding: 1.6mm 2mm; vertical-align: top; flex: 1; }
+.po-meta .tb-cell:first-child { border-left: none; }
+.po-meta .tb-label { display: block; font: 600 6pt 'IBM Plex Mono', monospace; text-transform: uppercase; letter-spacing: 0.7pt; color: #727D82; margin-bottom: 0.6mm; }
+.po-meta .tb-value { font-size: 9pt; font-weight: 600; }
+.po-meta .tb-value.po-needed { color: #991B1B; font-weight: 700; }
+
 /* ── Commercial proposal language (DOC-01) ───────────────────────────
    Same type family and tokens, different composition: a real cover, a
    stat-level summary, product cards instead of a data table, and a
@@ -1841,6 +1857,64 @@ def _doc07(snapshot: dict[str, object]) -> str:
     return body
 
 
+def _po_parties(order: dict[str, object], snapshot: dict[str, object]) -> str:
+    """Buyer ↔ supplier party blocks + order meta strip (§3).
+
+    The supplier reads: who is buying (org identity + delivery address),
+    who they are (sealed eligibility contact), and the order facts —
+    code, project, issue date, and the needed-by date set at send time."""
+    details = _object(order.get("supplier_details") or {}, "invalid_order_snapshot")
+    supplier_lines = "".join(
+        f'<div class="po-party-line">{escape(_value(value))}</div>'
+        for value in (
+            details.get("tax_id") and f"RUT {_value(details['tax_id'])}",
+            details.get("address"),
+            details.get("phone"),
+            details.get("email"),
+        )
+        if value
+    )
+    organization = snapshot.get("organization")
+    org = organization if isinstance(organization, dict) else {}
+    buyer_lines = "".join(
+        f'<div class="po-party-line">{escape(_value(value))}</div>'
+        for value in (
+            org.get("tax_id") and f"RUT {_value(org['tax_id'])}",
+            org.get("brand_address"),
+            org.get("brand_phone"),
+            org.get("brand_email"),
+        )
+        if value
+    )
+    buyer_name = _value(org.get("commercial_name"))
+    if buyer_name == "—":
+        buyer_name = _value(org.get("name"))
+    needed = _value(order.get("expected_at"))
+    needed_html = (
+        f'<div class="tb-cell"><span class="tb-label">Requerida para</span>'
+        f'<span class="tb-value po-needed">{escape(_cldate(needed))}</span></div>'
+        if needed != "—"
+        else ""
+    )
+    return (
+        '<div class="po-parties">'
+        f'<div class="po-party"><div class="po-party-role">Emisor / Entregar a</div>'
+        f'<div class="po-party-name">{escape(buyer_name)}</div>{buyer_lines}</div>'
+        f'<div class="po-party"><div class="po-party-role">Proveedor</div>'
+        f'<div class="po-party-name">{escape(_value(order.get("supplier_name")))}</div>'
+        f"{supplier_lines}</div></div>"
+        '<div class="po-meta">'
+        f'<div class="tb-cell"><span class="tb-label">Orden</span>'
+        f'<span class="tb-value">{escape(_value(order.get("order_code")))}</span></div>'
+        f'<div class="tb-cell"><span class="tb-label">Proyecto</span>'
+        f'<span class="tb-value">{escape(_value(order.get("project_code")))}</span></div>'
+        f'<div class="tb-cell"><span class="tb-label">Emitida</span>'
+        f'<span class="tb-value">{escape(_cldate(_value(order.get("confirmed_at"))))}</span></div>'
+        f"{needed_html}"
+        "</div>"
+    )
+
+
 def _doc04(snapshot: dict[str, object]) -> str:
     order = _object(snapshot.get("order"), "invalid_order_snapshot")
     revision = _object(snapshot.get("revision"), "invalid_order_snapshot")
@@ -1857,20 +1931,19 @@ def _doc04(snapshot: dict[str, object]) -> str:
     }
     body, _ = _revision_header(pseudo_revision, "Pedido de perfiles", "DOC-04", workshop=True)
     body += (
-        f"<p><strong>Orden:</strong> {escape(_value(order.get('order_code')))} · "
-        f"<strong>Proveedor:</strong> {escape(_value(order.get('supplier_name')))}</p>"
+        _po_parties(order, snapshot)
         + _table(
-            ["Requisito", "Categoría", "SKU taller", "SKU compra", "Largo barra (mm)",
-             "Cantidad", "Unidad", "Perfil de corte", "Trazabilidad"],
-            [[_value(line.get("requirement_key")),
-              _CATEGORY_ES.get(_value(line.get("category")), line.get("category")),
+            ["SKU compra", "SKU taller", "Categoría", "Acabado", "Largo barra (mm)",
+             "Cantidad", "Unidad", "Perfil de corte", "Requisito"],
+            [[line.get("purchasing_sku"),
               ", ".join(_value(item) for item in _array(line.get("technical_skus"), "invalid_order_line")),
-              line.get("purchasing_sku"),
+              _CATEGORY_ES.get(_value(line.get("category")), line.get("category")),
+              _object(line.get("specification"), "invalid_order_line").get("color"),
               _object(line.get("specification"), "invalid_order_line").get("stock_length_mm"),
               line.get("quantity"), line.get("unit"),
               _object(line.get("specification"), "invalid_order_line").get("cutting_profile_id"),
-              ", ".join(_value(item) for item in _array(line.get("source_trace"), "invalid_order_line"))]
-             for line in lines], ["hash", "", "", "", "dimension", "dimension", "", "", ""],
+              _value(line.get("requirement_key"))[:8]]
+             for line in lines], ["", "", "", "", "dimension", "dimension", "", "", "hash"],
         )
         + "</main>"
     )
@@ -1893,24 +1966,24 @@ def _doc08(snapshot: dict[str, object]) -> str:
     }
     body, _ = _revision_header(pseudo_revision, "Orden de compra", "DOC-08", workshop=True)
     body += (
-        f"<p><strong>Orden:</strong> {escape(_value(order.get('order_code')))} · "
-        f"<strong>Proveedor:</strong> {escape(_value(order.get('supplier_name')))}</p>"
+        _po_parties(order, snapshot)
         + _table(
-            ["Requisito", "Categoría", "SKU taller", "SKU compra",
-             "Cantidad", "Unidad", "Detalle", "Trazabilidad"],
-            [[_value(line.get("requirement_key")),
-              _CATEGORY_ES.get(_value(line.get("category")), line.get("category")),
+            ["SKU compra", "Descripción", "SKU taller",
+             "Cantidad", "Unidad", "Detalle", "Requisito"],
+            [[line.get("purchasing_sku"),
+              _object(line.get("specification"), "invalid_order_line").get("description")
+              or _object(line.get("specification"), "invalid_order_line").get("manufacturer_name"),
               ", ".join(_value(item) for item in _array(line.get("technical_skus"), "invalid_order_line")),
-              line.get("purchasing_sku"),
               line.get("quantity"), line.get("unit"),
               "; ".join(
                   f"{key}={_value(value)}"
                   for key, value in sorted(
                       _object(line.get("specification"), "invalid_order_line").items()
                   )
+                  if key not in ("description", "manufacturer_name")
               ),
-              ", ".join(_value(item) for item in _array(line.get("source_trace"), "invalid_order_line"))]
-             for line in lines], ["hash", "", "", "", "dimension", "", "", ""],
+              _value(line.get("requirement_key"))[:8]]
+             for line in lines], ["", "", "", "dimension", "", "", "hash"],
         )
         + "</main>"
     )

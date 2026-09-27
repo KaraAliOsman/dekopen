@@ -135,6 +135,13 @@ export function InventorySection({
     notes: "",
   });
   const [authorities, setAuthorities] = useState<BarAuthority[]>([]);
+  const [label, setLabel] = useState<{
+    remnant_id: string;
+    identity: string;
+    qr_svg: string;
+    dims: string;
+    rack: string;
+  } | null>(null);
 
   const load = useCallback(() => {
     void request<{ remnants?: Remnant[] }>("inventory/remnants/")
@@ -218,6 +225,24 @@ export function InventorySection({
   }
 
   const adjustTarget = stockItems.find((s) => s.item_id === adjustItem);
+
+  function showLabel(remnant: Remnant): void {
+    void request<{
+      remnant: Remnant;
+      identity: string;
+      qr_svg: string;
+    }>(`inventory/remnants/${remnant.id}/label/`)
+      .then((data) =>
+        setLabel({
+          remnant_id: remnant.id.slice(0, 8).toUpperCase(),
+          identity: data.identity,
+          qr_svg: data.qr_svg,
+          dims: remnantDims(remnant),
+          rack: remnant.rack_location ?? "—",
+        }),
+      )
+      .catch(() => setLabel(null));
+  }
 
   return (
     <section className="purchasing-stock" aria-label={t("inventory.title")}>
@@ -427,7 +452,7 @@ export function InventorySection({
               <th>{t("inventory.rack")}</th>
               <th>{t("inventory.origin")}</th>
               <th>{t("inventory.registered")}</th>
-              {canWrite ? <th>{t("inventory.actions")}</th> : null}
+              <th>{t("inventory.actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -445,40 +470,41 @@ export function InventorySection({
                 <td>{r.rack_location ?? "—"}</td>
                 <td>{remnantOriginLabel(r.origin)}</td>
                 <td>{formatDateTime(r.created_at)}</td>
-                {canWrite ? (
-                  <td>
-                    {r.status === "RESERVED" ? (
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={busy}
-                        onClick={() =>
-                          void run(
-                            request(`inventory/remnants/${r.id}/release/`, "POST", {}),
-                            "inventory.remnantReleaseError",
-                          )
-                        }
-                      >
-                        {t("inventory.release")}
-                      </button>
-                    ) : null}
-                    {r.status === "AVAILABLE" ? (
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={busy}
-                        onClick={() =>
-                          void run(
-                            request(`inventory/remnants/${r.id}/scrap/`, "POST", {}),
-                            "inventory.remnantScrapError",
-                          )
-                        }
-                      >
-                        {t("inventory.scrap")}
-                      </button>
-                    ) : null}
-                  </td>
-                ) : null}
+                <td>
+                  <button type="button" className="secondary" onClick={() => showLabel(r)}>
+                    {t("inventory.label")}
+                  </button>
+                  {canWrite && r.status === "RESERVED" ? (
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={busy}
+                      onClick={() =>
+                        void run(
+                          request(`inventory/remnants/${r.id}/release/`, "POST", {}),
+                          "inventory.remnantReleaseError",
+                        )
+                      }
+                    >
+                      {t("inventory.release")}
+                    </button>
+                  ) : null}
+                  {canWrite && r.status === "AVAILABLE" ? (
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={busy}
+                      onClick={() =>
+                        void run(
+                          request(`inventory/remnants/${r.id}/scrap/`, "POST", {}),
+                          "inventory.remnantScrapError",
+                        )
+                      }
+                    >
+                      {t("inventory.scrap")}
+                    </button>
+                  ) : null}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -486,6 +512,22 @@ export function InventorySection({
       ) : (
         <p className="purchasing-hint">{t("inventory.noRemnants")}</p>
       )}
+      {label ? (
+        <div className="inventory-label" role="figure" aria-label={t("inventory.label")}>
+          <div className="qr" dangerouslySetInnerHTML={{ __html: label.qr_svg }} />
+          <div>
+            <p className="inventory-label-id">RET-{label.remnant_id}</p>
+            <p className="inventory-label-name">{label.identity}</p>
+            <p className="inventory-label-dims">{label.dims}</p>
+            <p className="inventory-label-rack">
+              {t("inventory.rack")}: {label.rack}
+            </p>
+            <button type="button" className="secondary" onClick={() => window.print()}>
+              {t("inventory.labelPrint")}
+            </button>
+          </div>
+        </div>
+      ) : null}
       {movements.length > 0 ? (
         <details className="inventory-movements">
           <summary>{t("inventory.movements")}</summary>

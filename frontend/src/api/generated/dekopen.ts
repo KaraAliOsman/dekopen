@@ -181,6 +181,7 @@ import type {
   RemakeRequestRequest,
   Remnant,
   RemnantCreateRequest,
+  RemnantLabel,
   RemnantList,
   ResetPricingRequest,
   RevisionCompareResponse,
@@ -6290,6 +6291,78 @@ export const inventoryRemnantCreate = async (
     method: "POST",
     headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
     body: JSON.stringify(remnantCreateRequest),
+  });
+};
+
+export type inventoryRemnantLabelResponse200 = {
+  data: RemnantLabel;
+  status: 200;
+};
+
+export type inventoryRemnantLabelResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type inventoryRemnantLabelResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type inventoryRemnantLabelResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type inventoryRemnantLabelResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type inventoryRemnantLabelResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type inventoryRemnantLabelResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type inventoryRemnantLabelResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type inventoryRemnantLabelResponseSuccess = inventoryRemnantLabelResponse200 & {
+  headers: Headers;
+};
+export type inventoryRemnantLabelResponseError = (
+  | inventoryRemnantLabelResponse400
+  | inventoryRemnantLabelResponse401
+  | inventoryRemnantLabelResponse403
+  | inventoryRemnantLabelResponse404
+  | inventoryRemnantLabelResponse409
+  | inventoryRemnantLabelResponse422
+  | inventoryRemnantLabelResponse503
+) & {
+  headers: Headers;
+};
+
+export type inventoryRemnantLabelResponse =
+  inventoryRemnantLabelResponseSuccess | inventoryRemnantLabelResponseError;
+
+export const getInventoryRemnantLabelUrl = (remnantId: string) => {
+  return `/api/v1/inventory/remnants/${remnantId}/label/`;
+};
+
+export const inventoryRemnantLabel = async (
+  remnantId: string,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<inventoryRemnantLabelResponse> => {
+  return apiMutator<inventoryRemnantLabelResponse>(getInventoryRemnantLabelUrl(remnantId), {
+    ...options,
+    method: "GET",
   });
 };
 

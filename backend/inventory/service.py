@@ -43,12 +43,31 @@ def list_stock(*, org_id: UUID) -> dict[str, object]:
     items = rows(
         """
         SELECT item_id, sku, name, category, unit, variant_key,
-               on_hand_qty, reserved_qty, (on_hand_qty - reserved_qty) AS available_qty
+               on_hand_qty, reserved_qty, (on_hand_qty - reserved_qty) AS available_qty,
+               COALESCE(inc.incoming_qty, 0) AS incoming_qty
         FROM public.inventory_stock
+        LEFT JOIN (
+            SELECT stock.item_id,
+                   SUM(l.quantity - COALESCE(r.received_qty, 0)) AS incoming_qty
+            FROM public.order_requirement_lines l
+            JOIN public.orders o
+                ON o.id = l.order_id AND o.org_id = l.org_id
+                AND o.status IN ('SENT', 'PARTIALLY_RECEIVED')
+            LEFT JOIN (
+                SELECT order_line_id, SUM(received_qty) AS received_qty
+                FROM public.order_receipt_lines
+                GROUP BY order_line_id
+            ) r ON r.order_line_id = l.id
+            JOIN public.inventory_stock stock
+                ON stock.org_id = l.org_id
+                AND stock.variant_key = l.line_snapshot->>'physical_stock_identity'
+            WHERE l.org_id = %s
+            GROUP BY stock.item_id
+        ) inc ON inc.item_id = public.inventory_stock.item_id
         WHERE org_id = %s
         ORDER BY sku, variant_key
         """,
-        [str(org_id)],
+        [str(org_id), str(org_id)],
     )
     return {"items": items}
 

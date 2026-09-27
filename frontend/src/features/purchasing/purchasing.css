@@ -276,3 +276,52 @@
   color: var(--theme-danger);
   border-color: var(--theme-danger);
 }
+.inventory-label {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.6rem 0.9rem;
+  border: 2px solid var(--theme-text, #1b1d21);
+  border-radius: 0.35rem;
+  background: var(--theme-surface, #fff);
+  width: fit-content;
+  margin: 0.5rem 0 0.75rem;
+}
+.inventory-label .qr svg {
+  width: 26mm;
+  height: 26mm;
+  display: block;
+}
+.inventory-label .inventory-label-id {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  color: var(--theme-text-secondary, #667085);
+}
+.inventory-label .inventory-label-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.inventory-label .inventory-label-dims {
+  font-size: 1.35rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.inventory-label .inventory-label-rack {
+  font-size: 0.85rem;
+}
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .inventory-label,
+  .inventory-label * {
+    visibility: visible;
+  }
+  .inventory-label {
+    position: absolute;
+    top: 0;
+    left: 0;
+    margin: 0;
+  }
+}

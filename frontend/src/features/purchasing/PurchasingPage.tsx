@@ -156,6 +156,7 @@ type StockItem = {
   on_hand_qty: string;
   reserved_qty: string;
   available_qty: string;
+  incoming_qty?: string;
 };
 type VersionItem = {
   id: string;
@@ -681,6 +682,7 @@ function PurchasingWorkspace({
                 <th>{t("purchasing.stockOnHand")}</th>
                 <th>{t("purchasing.stockReserved")}</th>
                 <th>{t("purchasing.stockAvailable")}</th>
+                <th>{t("purchasing.stockIncoming")}</th>
               </tr>
             </thead>
             <tbody>
@@ -693,6 +695,13 @@ function PurchasingWorkspace({
                   <td>{item.on_hand_qty}</td>
                   <td>{item.reserved_qty}</td>
                   <td>{item.available_qty}</td>
+                  <td>
+                    {item.incoming_qty && item.incoming_qty !== "0" ? (
+                      <strong className="purchasing-coverage-received">{item.incoming_qty}</strong>
+                    ) : (
+                      "0"
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

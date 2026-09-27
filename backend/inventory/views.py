@@ -29,6 +29,7 @@ from inventory.serializers import (
     OrderReceivingSerializer,
     RemnantCreateSerializer,
     RemnantListQuerySerializer,
+    RemnantLabelSerializer,
     RemnantListSerializer,
     RemnantSerializer,
 )
@@ -257,3 +258,20 @@ class RemnantReleaseView(_RemnantTransitionView):
     )
     def post(self, request, remnant_id: UUID):
         return super().post(request, remnant_id)
+
+
+class RemnantLabelView(APIView):
+    @extend_schema(
+        operation_id="inventory_remnant_label",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={200: RemnantLabelSerializer, **ERRORS},
+        tags=["inventory"],
+    )
+    def get(self, request, remnant_id: UUID):
+        with public_inventory_errors():
+            with documentary_scope(request, _READERS) as (_, _, org_id):
+                output = remnants_service.remnant_label(
+                    org_id=org_id, remnant_id=remnant_id,
+                )
+        return Response(output)
