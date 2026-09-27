@@ -992,6 +992,7 @@ export function AssistantWorkspacePage(): JSX.Element {
               ))}
             </select>
           ) : null}
+          <Orb state={live ? orbStateFor(job?.state) : draft.trim() ? "input" : "idle"} size={20} />
           <textarea
             value={draft}
             rows={2}
