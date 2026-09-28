@@ -15,7 +15,7 @@ import {
   opBasisLabel,
   opBoundaryLabel,
   opFaceLabel,
-  opKindLabel,
+  opLabel,
   opReferenceLabel,
   stationCodeLabel,
   stockKindLabel,
@@ -146,7 +146,7 @@ function MemberOpsStrip({
           return (
             <g key={op.operation_id ?? index}>
               <title>
-                {`${index + 1} · ${opKindLabel(op.kind)} · u=${op.u_mm ?? "—"} · ${opFaceLabel(op.face)}`}
+                {`${index + 1} · ${opLabel(op)} · u=${op.u_mm ?? "—"} · ${opFaceLabel(op.face)}`}
               </title>
               <line
                 x1={x}
@@ -167,7 +167,7 @@ function MemberOpsStrip({
         {locationCode ? ` · ${locationCode}` : ""}
         {unplaced.length > 0
           ? ` · ${t("production.operatorNoPosition")}: ${unplaced
-              .map((op) => opKindLabel(op.kind))
+              .map((op) => opLabel(op))
               .join(", ")}`
           : ""}
       </figcaption>
@@ -392,7 +392,7 @@ export function OperatorStepCard({
               {blockers.length ? t("production.operatorBlockers") : ""}
               {unassignedOps.length
                 ? ` · ${t("production.operatorUnassignedOps")}: ${[
-                    ...new Set(unassignedOps.map((op) => opKindLabel(op.kind))),
+                    ...new Set(unassignedOps.map((op) => opLabel(op))),
                   ].join(", ")}`
                 : ""}
               {unclaimedStations.length
@@ -595,7 +595,7 @@ export function OperatorStepCard({
                                   <td>
                                     <input
                                       type="checkbox"
-                                      aria-label={`${memberCode} · ${opKindLabel(op.kind)}`}
+                                      aria-label={`${memberCode} · ${opLabel(op)}`}
                                       checked={opsDone.includes(opId)}
                                       onChange={() => toggleOp(opId)}
                                     />
@@ -603,7 +603,7 @@ export function OperatorStepCard({
                                 ) : null}
                                 <td>
                                   {op.sequence_no ? `${op.sequence_no}. ` : ""}
-                                  {opKindLabel(op.kind)}
+                                  {opLabel(op)}
                                 </td>
                                 <td title={op.host ?? ""}>
                                   {memberCode}

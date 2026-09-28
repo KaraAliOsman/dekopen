@@ -1731,6 +1731,8 @@ export const messages = {
     "Sistema de coordenadas no soportado por la máquina",
   "production.cncBlock_face_undeclared": "La operación no declara en qué cara trabaja",
   "production.cncBlock_feature_point_only": "Posición sin patrón de perforación declarado",
+  "production.cncBlock_depth_undeclared": "Sin profundidad autorizada para ejecutar",
+  "production.cncBlock_tool_undeclared": "La operación no declara herramienta",
   "production.cncIssue_boundary_conflict":
     "Conflicto de ángulos — un solo corte no puede dejar caras distintas en cada pieza",
   "production.cncIssue_tail_sliver":
@@ -3187,6 +3189,7 @@ export const messages = {
   "production.opKind.ROUTING": "Ruteado",
   "production.opKind.GASKET_MARK": "Marca de junta",
   "production.opKind.CUSTOM": "Operación especial",
+  "production.opMountingRef": "Ref. montaje",
   "production.stockKindValue.BAR": "Barra",
   "production.stockKindValue.SHEET": "Plancha",
   "production.stockKindValue.KIT": "Kit",

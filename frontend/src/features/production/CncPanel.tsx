@@ -7,6 +7,7 @@ import {
 import { apiFetchBlob } from "../../api/apiMutator";
 import { fmtMm } from "../../format";
 import { t, tOptional } from "../../i18n/es-CL";
+import { opLabel } from "./labels";
 
 type CncOp = {
   operation_id: string;
@@ -437,7 +438,7 @@ function CncMemberRow({
                     }
                   >
                     <td>{index + 1}</td>
-                    <td>{opKindLabel(op.kind)}</td>
+                    <td>{opLabel(op)}</td>
                     <td>{op.u_mm ?? "—"}</td>
                     <td>{faceLabel(op.face)}</td>
                     <td>{op.reference ?? "—"}</td>
@@ -520,10 +521,10 @@ function MemberOpsDiagram({
               className={selected ? "cnc-diagram-op is-selected" : "cnc-diagram-op"}
               onClick={() => onSelectOp(selected ? null : op.operation_id)}
               role="button"
-              aria-label={`${index + 1} ${opKindLabel(op.kind)}`}
+              aria-label={`${index + 1} ${opLabel(op)}`}
             >
               <title>
-                {`${index + 1} · ${opKindLabel(op.kind)} · u=${op.u_mm ?? "—"} · ${faceLabel(op.face)}`}
+                {`${index + 1} · ${opLabel(op)} · u=${op.u_mm ?? "—"} · ${faceLabel(op.face)}`}
               </title>
               <OpMark kind={op.kind} x={x} cy={cy} />
               <text x={x} y={barY - 6} textAnchor="middle" className="cnc-diagram-seq">
@@ -537,8 +538,7 @@ function MemberOpsDiagram({
         <span>{member.member_label}</span>
         {unplaced.length > 0 ? (
           <span className="cnc-diagram-missing">
-            {t("production.cncDiagramMissing")}:{" "}
-            {unplaced.map((op) => opKindLabel(op.kind)).join(", ")}
+            {t("production.cncDiagramMissing")}: {unplaced.map((op) => opLabel(op)).join(", ")}
           </span>
         ) : null}
       </p>

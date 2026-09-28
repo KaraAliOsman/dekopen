@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from datetime import date, datetime
+import hashlib
 import json
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -2581,7 +2582,24 @@ def test_export_operations_seals_machine_neutral_document(monkeypatch) -> None:
         out = service.export_operations(
             org_id=org_id, order_id=order_id, actor_id=uuid4()
         )
-    assert sorted(out["files"]) == ["operations.csv", "operations.json"]
+    assert sorted(out["files"]) == [
+        "manifest.json",
+        "operations.csv",
+        "operations.json",
+    ]
+    manifest = json.loads(out["files"]["manifest.json"])
+    assert manifest["schema"] == "dekopen_export_manifest_v1"
+    assert manifest["kind"] == "ops_export"
+    assert manifest["order_code"] == "OT-OPS-01"
+    # The manifest's per-file hash must verify the shipped content — the
+    # operator checks identity without opening each file.
+    for name in ("operations.csv", "operations.json"):
+        entry = manifest["files"][name]
+        assert (
+            hashlib.sha256(out["files"][name].encode("utf-8")).hexdigest()
+            == entry["sha256"]
+        )
+        assert entry["bytes"] == len(out["files"][name].encode("utf-8"))
     update = next(p for s, p in writes if "update public.orders" in s)
     stored = json.loads(update[0])["operations_export"]
     assert stored["schema"] == "work_order_ops_export_v1"

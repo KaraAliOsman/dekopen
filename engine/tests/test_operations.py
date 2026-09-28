@@ -720,3 +720,69 @@ def test_mirrored_door_mirrors_machining_host() -> None:
     assert prep_on_left.x_mm == Decimal("60")
     assert prep_on_right.x_mm == Decimal("940")
     assert prep_on_left.operation_id != prep_on_right.operation_id
+
+
+def _op(**overrides: object) -> ManufacturingOperation:
+    base: dict[str, object] = {
+        "operation_id": "op-test",
+        "kind": OperationKind.DRILL,
+        "host_kind": "MEMBER",
+        "host": "a" * 64,
+        "coordinate_system": CoordinateSystem.MEMBER_PLAN,
+        "x_mm": Decimal("500"),
+        "y_mm": Decimal("600"),
+        "u_mm": Decimal("300"),
+        "reference": "member_start",
+        "face": MemberFace.INSIDE_FACE,
+        "depth_mm": Decimal("12"),
+        "tool_id": "drill",
+        "basis": "handle_policy:hp-1@v3",
+    }
+    base.update(overrides)
+    return ManufacturingOperation(**base)
+
+
+def test_drill_without_authorized_depth_is_an_exact_blocker() -> None:
+    """Mandate: a missing parameter produces a named blocker — never a depth
+    guessed so the export "works"."""
+    machine = _cnc_machine(
+        tools=[Tool(tool_id="drill", kind=ToolKind.DRILL_BIT, name="Broca")]
+    )
+    verdicts = validate_operations([_op(depth_mm=None)], machine)
+    assert len(verdicts) == 1
+    assert verdicts[0].level == "BLOCK"
+    assert verdicts[0].code == "depth_undeclared"
+    assert verdicts[0].detail["kind"] == "DRILL"
+
+
+def test_member_op_without_tool_is_blocked() -> None:
+    """A machining op that names no tool cannot run unattended."""
+    machine = _cnc_machine(
+        tools=[Tool(tool_id="drill", kind=ToolKind.DRILL_BIT, name="Broca")]
+    )
+    verdicts = validate_operations([_op(tool_id=None)], machine)
+    assert verdicts[0].level == "BLOCK"
+    assert verdicts[0].code == "tool_undeclared"
+
+
+def test_point_prep_is_reference_not_depth_blocked() -> None:
+    """HANDLE_PREP's authority is a mounting point — it warns
+    (feature_point_only), it does not pretend to be an executable drill."""
+    ops = _member_ops()
+    machine = _cnc_machine(
+        tools=[Tool(tool_id="drill", kind=ToolKind.DRILL_BIT, name="Broca")]
+    )
+    codes = {v.code for v in validate_operations(ops, machine)}
+    assert "depth_undeclared" not in codes
+    assert "feature_point_only" in codes
+
+
+def test_manual_custom_op_passes_with_declared_datum() -> None:
+    """A manual op is valid when it carries datum/face/basis — 'manual' is a
+    route, not a way to ignore the operation."""
+    machine = _cnc_machine()
+    verdicts = validate_operations(
+        [_op(kind=OperationKind.CUSTOM, tool_id=None, depth_mm=None)],
+        machine,
+    )
+    assert verdicts[0].level == "PASS"

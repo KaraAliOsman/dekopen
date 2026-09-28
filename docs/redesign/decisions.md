@@ -306,3 +306,11 @@ La pantalla declara los insumos antes de correr (stock, retazos, largos, máquin
 ## D42 — Trazabilidad del piso vía autoridad documental, no vía política ancha
 
 `project_manual_read` sólo concede lectura de `projects` a roles comerciales. En vez de abrir la política, las lecturas de cabecera en `trace_*` y `_order_ops` corren bajo `documentary_backend` y proyectan sólo campos blancos (código/nombre). Los tests `_BackendGate` fijan la frontera: una lectura a tabla denegada fuera del contexto falla la prueba. Ampliar usabilidad no amplió permisos de otras organizaciones — el filtro `org_id` permanece en cada consulta.
+
+## D43 — El programa CNC amarra plan + máquina; el parámetro faltante bloquea con nombre
+
+`cnc_programs.input_fingerprint` antes cubría sólo los insumos sellados (plan + hechos manufacturero) — una máquina reconfigurada dejaba vigente un archivo generado contra otra configuración. Ahora el fingerprint guardado es `plan_fp + machine_fp` donde `machine_fp` es el hash del `MachineProfile` resuelto (herramientas, límites, mordazas, postprocesador). `list_programs` y `program_file` recalculan el esperado por máquina — editar sujeción/herramientas/postprocesador deja el archivo SUPERSEDED conservando su identidad (los programas anteriores a esta regla también quedan SUPERSEDED: nunca estuvieron ligados a la máquina).
+
+Operación sin autoridad = bloqueo exacto, nunca supuesto: `depth_undeclared` (BLOCK) para las clases que cortan material sin `depth_mm`, `tool_undeclared` (BLOCK) para mecanizado de miembro sin herramienta declarada. `HANDLE_PREP` declarado como `feature=point_prep` no es mecanizado ejecutable: sigue WARN `feature_point_only` y se lee "Ref. montaje" (montaje) en pack, tarjeta de estación y panel CNC — nunca "Prep. herraje" con diámetro/profundidad inventados. El pack de taller ahora dice la verdad sobre el datum: "Dist." se mide desde Ext. A (u=0) sobre la pieza, con marcas de datum en la tira — el texto anterior decía "plano del conjunto" para una columna que ya era local del miembro.
+
+Todo export (ops neutras y programa por pieza) lleva `manifest.json`: esquema, identidad, fingerprint, archivos con sha256+bytes verificables, conteos, hora y responsable. El CSV de operaciones gana `sequence_no` explícito.

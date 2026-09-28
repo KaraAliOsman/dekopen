@@ -41,6 +41,16 @@ export function opKindLabel(kind: string | null | undefined): string {
   return OP_KINDS.has(kind) ? t(`production.opKind.${kind}` as Parameters<typeof t>[0]) : kind;
 }
 
+/** Op label that never oversells authority: a feature declared only as a
+ * mounting point reads "referencia de montaje", not an executable prep. */
+export function opLabel(op: {
+  kind?: string | null;
+  detail?: Record<string, unknown> | null;
+}): string {
+  if (op?.detail?.feature === "point_prep") return t("production.opMountingRef");
+  return opKindLabel(op?.kind);
+}
+
 // Mirrors _STEP_CONSUMED_KINDS in backend/production/service.py — which stock
 // kinds a station physically consumes. A consuming step cannot START until the
 // order carries a usable cut plan (backend also enforces it).

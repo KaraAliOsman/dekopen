@@ -701,7 +701,7 @@ class NeutralOpsPostProcessor:
     processor_id = "neutral-ops-v1"
 
     _CSV_HEADER = (
-        "operation_id,kind,host_kind,host,coordinate_system,reference,face,"
+        "sequence_no,operation_id,kind,host_kind,host,coordinate_system,reference,face,"
         "x_mm,y_mm,u_mm,angle_left_deg,angle_right_deg,depth_mm,tool_id,basis,"
         "piece_id,piece_label,unit_index,sequence,bar_sku"
     )
@@ -724,8 +724,8 @@ class NeutralOpsPostProcessor:
                 ",".join(
                     _cell(op.get(key))
                     for key in (
-                        "operation_id", "kind", "host_kind", "host",
-                        "coordinate_system", "reference", "face",
+                        "sequence_no", "operation_id", "kind", "host_kind",
+                        "host", "coordinate_system", "reference", "face",
                         "x_mm", "y_mm", "u_mm",
                         "angle_left_deg", "angle_right_deg", "depth_mm",
                         "tool_id", "basis",
@@ -782,6 +782,30 @@ _FACE_REQUIRED_KINDS = {
     OperationKind.MILLING,
     OperationKind.ROUTING,
 }
+
+# Kinds whose geometry is a cut into the profile — without an authorized
+# depth a machine cannot run them, so a missing ``depth_mm`` is a BLOCK,
+# not a gap to fill with a guess. HANDLE_PREP is excluded on purpose: today
+# its authority is a mounting *point*, and ``feature_point_only`` already
+# reports that honestly instead of pretending an executable drill.
+_DEPTH_REQUIRED_KINDS = {
+    OperationKind.DRILL,
+    OperationKind.SLOT,
+    OperationKind.DRAINAGE,
+    OperationKind.VENTILATION,
+    OperationKind.LOCK_PREP,
+    OperationKind.HINGE_PREP,
+    OperationKind.CORNER_CONNECTOR,
+    OperationKind.T_CONNECTOR,
+    OperationKind.MILLING,
+    OperationKind.ROUTING,
+}
+
+# Machining kinds that must name a tool — an op that physically removes or
+# marks material cannot run on an unspecified instrument. SAW_CUT and
+# END_MACHINING always bind their tool at derivation; CUSTOM is exempt (a
+# manual op documents its own route).
+_TOOL_REQUIRED_KINDS = _FACE_REQUIRED_KINDS | _DEPTH_REQUIRED_KINDS
 
 
 def validate_operations(
@@ -937,6 +961,34 @@ def validate_operations(
         # Authority gaps surface only once the machine-capable gates pass —
         # a workshop needs to know the op CAN'T RUN before it needs to know
         # the data is thin.
+        if verdict is None and (
+            op.tool_id is None
+            and op.host_kind == "MEMBER"
+            and op.kind in _TOOL_REQUIRED_KINDS
+        ):
+            verdict = OperationValidation(
+                operation_id=op.operation_id,
+                level="BLOCK",
+                code="tool_undeclared",
+                detail={
+                    "host": host_label,
+                    "kind": op.kind.value,
+                    "reason": "op names no tool to run on",
+                },
+            )
+        if verdict is None and (
+            op.depth_mm is None and op.kind in _DEPTH_REQUIRED_KINDS
+        ):
+            verdict = OperationValidation(
+                operation_id=op.operation_id,
+                level="BLOCK",
+                code="depth_undeclared",
+                detail={
+                    "host": host_label,
+                    "kind": op.kind.value,
+                    "reason": "op carries no authorized depth",
+                },
+            )
         if verdict is None and (
             op.face is None
             and op.host_kind == "MEMBER"

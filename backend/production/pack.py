@@ -124,9 +124,17 @@ def _member_svg(member: dict[str, object], ops: list[dict[str, object]]) -> str:
     # reads ~8mm on paper regardless of the member's real proportions.
     height = span * Decimal("0.13")
     half = height / 2
+    datum_font = max(height * Decimal("0.26"), Decimal("2.4"))
     svg = [
         f'<svg class="member-svg" viewBox="0 0 {span} {height * Decimal("1.6")}" '
         'preserveAspectRatio="xMinYMid meet" xmlns="http://www.w3.org/2000/svg">',
+        # Datum marks: the strip's left edge is the member's Ext. A, the
+        # u=0 every Dist. column measures from.
+        f'<text x="0" y="{datum_font}" fill="#075F5A" font-size="{datum_font}" '
+        'font-weight="700">Ext. A (u=0)</text>'
+        f'<text x="{span}" y="{datum_font}" fill="#075F5A" '
+        f'font-size="{datum_font}" font-weight="700" text-anchor="end">'
+        "Ext. B</text>",
         f'<rect x="0" y="{height}" width="{span}" height="{half}" '
         'fill="#E6F4F2" stroke="#075F5A" stroke-width="2"/>',
     ]
@@ -253,6 +261,15 @@ _BASIS_LABELS = {
 }
 
 _EDGE_LABELS = {"START": "Ext. A", "END": "Ext. B"}
+
+
+def _op_label(op) -> str:
+    """Op label that never oversells authority: a point-only feature is a
+    mounting reference, not an executable machining op."""
+    detail = op.detail if isinstance(getattr(op, "detail", None), dict) else {}
+    if detail.get("feature") == "point_prep":
+        return "Ref. montaje"
+    return _OP_LABELS.get(op.kind.value, op.kind.value)
 
 
 def _op_reference(detail: dict[str, object]) -> str:
@@ -726,10 +743,12 @@ def _pack_html(
         )
     else:
         body += (
-            '<p class="muted">Operaciones secundarias por miembro '
-            "(coordenadas en plano del conjunto, origen esquina superior "
-            "izquierda del marco nominal). Datos sin autoridad declarada "
-            "nunca se emiten.</p>"
+            '<p class="muted">Operaciones secundarias por miembro. La '
+            "distancia (Dist.) se mide sobre la pieza desde el extremo A — "
+            "la izquierda de la tira. Las operaciones que solo declaran un "
+            'punto aparecen como <strong>Ref. montaje</strong>: no son '
+            "mecanizados ejecutables. Datos sin autoridad declarada nunca "
+            "se emiten.</p>"
         )
         members_by_id = {
             member.member_id: member for unit in fact_units for member in unit.members
@@ -765,7 +784,7 @@ def _pack_html(
                     [
                         [
                             index + 1,
-                            _OP_LABELS.get(op.kind.value, op.kind.value),
+                            _op_label(op),
                             _value(
                                 _op_anchor(member_dict, op_dicts[index])
                             ),

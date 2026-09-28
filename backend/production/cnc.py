@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
+import hashlib
 import json
 from uuid import UUID
 
@@ -700,6 +701,52 @@ def cnc_readiness(
     }
 
 
+def _machine_fingerprint(profile: MachineProfile) -> str:
+    """Content hash of the resolved machine profile — tools, limits, clamps,
+    postprocessor. A machine-config change stales the programs generated
+    against the previous profile, exactly like a plan change does."""
+    return hashlib.sha256(
+        json.dumps(
+            profile.model_dump(mode="json"), sort_keys=True, default=str
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def _program_input(plan_fingerprint: str, machine_fingerprint: str) -> str:
+    return f"{plan_fingerprint}+{machine_fingerprint}"
+
+
+def _expected_program_input(
+    *, org_id: UUID, order_id: UUID, machine_id: str | None,
+) -> str | None:
+    """The fingerprint a CURRENT program for this machine would carry today:
+    sealed plan inputs + the machine profile as it exists now. None when the
+    plan or the machine can't be resolved (everything then reads stale)."""
+    if not machine_id:
+        return None
+    try:
+        bundle = _order_ops(org_id=org_id, order_id=order_id)
+        machine_row = rows(
+            """
+            SELECT id, code, name, manufacturer, model, controller_family,
+                   coordinate_systems, supported_kinds, supported_faces,
+                   max_member_length_mm, safe_margin_mm, clamp_zones, tool_ids,
+                   postprocessor_id, postprocessor_version, units, encoding,
+                   active
+            FROM public.cnc_machines WHERE id = %s AND org_id = %s
+            """,
+            [str(machine_id), str(org_id)],
+        )
+    except DocumentaryError:
+        return None
+    if not machine_row:
+        return None
+    machine_fp = _machine_fingerprint(
+        _machine_profile(machine_row[0], _tools_by_id(org_id=org_id))
+    )
+    return _program_input(str(bundle["input_fingerprint"]), machine_fp)
+
+
 def _program_no(*, order_code: str, member_label: str, machine_code: str, seq: int) -> str:
     label = "".join(ch for ch in member_label if ch.isalnum())[:12] or "M"
     return f"{order_code}-{label}-{machine_code}-{seq:02d}"
@@ -778,6 +825,20 @@ def generate_program(
         ),
         None,
     )
+    seq_row = one(
+        """
+        SELECT COUNT(*) + 1 AS seq FROM public.cnc_programs
+        WHERE org_id = %s AND work_order_id = %s AND machine_id = %s AND member_id = %s
+        """,
+        [str(org_id), str(order_id), str(machine_id), member_id],
+        "cnc_program_invalid",
+    )
+    program_no = _program_no(
+        order_code=str(bundle["order"]["order_code"]),
+        member_label=str(document["identity"]["member_label"]),
+        machine_code=str(machine_row["code"]),
+        seq=int(seq_row["seq"]),
+    )
     files = NeutralOpsPostProcessor().render(
         {
             "schema": "dekopen_ops_v1",
@@ -834,14 +895,45 @@ def generate_program(
             "operations": document["operations"],
         }
     )
-    seq_row = one(
-        """
-        SELECT COUNT(*) + 1 AS seq FROM public.cnc_programs
-        WHERE org_id = %s AND work_order_id = %s AND machine_id = %s AND member_id = %s
-        """,
-        [str(org_id), str(order_id), str(machine_id), member_id],
-        "cnc_program_invalid",
+    # The stored fingerprint binds plan inputs AND the machine profile — a
+    # machine-config change invalidates the program like a plan change does.
+    program_input = _program_input(
+        str(bundle["input_fingerprint"]), _machine_fingerprint(profile)
     )
+    # Export manifest: which files this program ships, byte-identical hashes
+    # to verify them against, and who generated it — the operator can check
+    # what goes to which machine without opening each file.
+    files["manifest.json"] = json.dumps(
+        {
+            "schema": "dekopen_export_manifest_v1",
+            "kind": "cnc_program",
+            "program_no": program_no,
+            "identity": document["identity"],
+            "verdict": document["verdict"],
+            "fingerprint": document["fingerprint"],
+            "input_fingerprint": program_input,
+            "machine": {
+                "id": str(machine_row["id"]),
+                "code": machine_row["code"],
+                "postprocessor_id": profile.postprocessor_id,
+                "postprocessor_version": profile.postprocessor_version,
+            },
+            "files": {
+                name: {
+                    "sha256": hashlib.sha256(content.encode("utf-8")).hexdigest(),
+                    "bytes": len(content.encode("utf-8")),
+                }
+                for name, content in files.items()
+            },
+            "operation_count": document["operation_count"],
+            "counts_by_kind": document["counts_by_kind"],
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_by": str(actor_id),
+        },
+        indent=2,
+        sort_keys=True,
+        default=str,
+    ) + "\n"
     with transaction.atomic(), documentary_backend():
         write(
             """
@@ -866,16 +958,11 @@ def generate_program(
                 str(machine_id),
                 member_id,
                 document["identity"]["member_label"],
-                _program_no(
-                    order_code=str(bundle["order"]["order_code"]),
-                    member_label=str(document["identity"]["member_label"]),
-                    machine_code=str(machine_row["code"]),
-                    seq=int(seq_row["seq"]),
-                ),
+                program_no,
                 int(document["operation_count"]),
                 str(document["verdict"]),
                 str(document["fingerprint"]),
-                str(bundle["input_fingerprint"]),
+                program_input,
                 json.dumps(document["identity"]),
                 json.dumps(files),
                 str(actor_id),
@@ -934,16 +1021,39 @@ def list_programs(*, org_id: UUID, order_id: UUID) -> list[dict[str, object]]:
         return []
     # Fresh staleness: a program whose inputs changed since generation is
     # reported stale even if it still reads CURRENT (lazy supersede on
-    # read — operators see the truth without a background job).
+    # read — operators see the truth without a background job). Inputs now
+    # include the machine profile, so editing clamps/tools/postprocessor
+    # also stales the file.
     try:
         bundle = _order_ops(org_id=org_id, order_id=order_id)
-        current_input = str(bundle["input_fingerprint"])
+        current_plan_input = str(bundle["input_fingerprint"])
     except DocumentaryError:
-        current_input = ""
+        current_plan_input = ""
+    tools_by_id = _tools_by_id(org_id=org_id)
+    machine_rows = rows(
+        """
+        SELECT id, code, name, manufacturer, model, controller_family,
+               coordinate_systems, supported_kinds, supported_faces,
+               max_member_length_mm, safe_margin_mm, clamp_zones, tool_ids,
+               postprocessor_id, postprocessor_version, units, encoding,
+               active
+        FROM public.cnc_machines WHERE org_id = %s
+        """,
+        [str(org_id)],
+    )
+    expected_by_machine = {
+        str(row["id"]): _program_input(
+            current_plan_input,
+            _machine_fingerprint(_machine_profile(row, tools_by_id)),
+        )
+        for row in machine_rows
+    }
     output: list[dict[str, object]] = []
     for row in program_rows:
-        stale = row["input_fingerprint"] != current_input or bool(
-            row["status"] == "SUPERSEDED"
+        stale = (
+            row["input_fingerprint"]
+            != expected_by_machine.get(str(row["machine_id"]), "")
+            or bool(row["status"] == "SUPERSEDED")
         )
         output.append(
             {
@@ -968,7 +1078,7 @@ def program_file(
     program = one(
         """
         SELECT p.program_no, p.files::text, p.input_fingerprint, p.status,
-               p.work_order_id::text
+               p.work_order_id::text, p.machine_id::text
         FROM public.cnc_programs p
         WHERE p.id = %s AND p.org_id = %s
         """,
@@ -977,8 +1087,12 @@ def program_file(
     )
     if program["status"] == "SUPERSEDED":
         raise DocumentaryError("cnc_program_superseded")
-    bundle = _order_ops(org_id=org_id, order_id=UUID(str(program["work_order_id"])))
-    if str(bundle["input_fingerprint"]) != str(program["input_fingerprint"]):
+    expected_input = _expected_program_input(
+        org_id=org_id,
+        order_id=UUID(str(program["work_order_id"])),
+        machine_id=str(program["machine_id"]),
+    )
+    if expected_input is None or str(program["input_fingerprint"]) != expected_input:
         # The plan moved under the program — flip it so downloads stop
         # pretending this file is current.
         with documentary_backend():

@@ -203,6 +203,9 @@ def _member_ops_for_station(
             continue
         code = member_labels.get(str(op.get("host"))) or f"pieza {len(expected) + 1}"
         kind_label = _OP_LABELS.get(str(op.get("kind")), str(op.get("kind")))
+        detail = op.get("detail")
+        if isinstance(detail, dict) and detail.get("feature") == "point_prep":
+            kind_label = "Ref. montaje"
         expected[str(op["operation_id"])] = f"{code} · {kind_label}"
     return expected
 
@@ -2779,6 +2782,39 @@ def export_operations(
             files[name] = (
                 ops_header + content if name.endswith(".csv") else content
             )
+        # Export manifest: shipped files with byte-identical hashes, counts,
+        # identity, time and responsible — the reviewer can check what file
+        # goes to which machine without opening each one.
+        fp_manifest = str(_ops_source_fingerprint(
+            optimization,
+            _raw_fact_units(
+                version_snapshot, str(payload.get("position_id") or "") or None
+            ),
+        ))
+        files["manifest.json"] = json.dumps(
+            {
+                "schema": "dekopen_export_manifest_v1",
+                "kind": "ops_export",
+                "order_code": order["order_code"],
+                "machine_id": document["machine"].get("machine_id"),
+                "source_fingerprint": fp_manifest,
+                "files": {
+                    name: {
+                        "sha256": hashlib.sha256(content.encode("utf-8")).hexdigest(),
+                        "bytes": len(content.encode("utf-8")),
+                    }
+                    for name, content in files.items()
+                },
+                "operation_count": document["operation_count"],
+                "counts_by_kind": document["counts_by_kind"],
+                "unemitted_kinds": document["unemitted_kinds"],
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "generated_by": str(actor_id),
+            },
+            indent=2,
+            sort_keys=True,
+            default=str,
+        ) + "\n"
         manufacturing = _raw_fact_units(
             version_snapshot, str(payload.get("position_id") or "") or None
         )
