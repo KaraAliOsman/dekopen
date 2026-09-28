@@ -137,3 +137,49 @@ Las filas del dashboard refluyen a nombre+estado / cliente+código; las tarjetas
 KPI bajan un tier tipográfico; la grilla móvil es `minmax(0,1fr)` para que el
 contenido haga ellipsis en vez de scroll horizontal. Criterio verificado:
 `scrollWidth = 390` en dashboard.
+
+## D15 — Hardware visual vinculado a autoridad, no a proporciones
+
+Cada hoja resuelve un `HardwareVisualSpec` (`hardwareVisual.ts`) desde dos
+fuentes reales: `hardware_kits.contents` (líneas categorizadas
+HANDLE/HINGE/LOCK/ROLLER/FITTING con cantidades) y
+`handle_requirement_policies` (miembro anfitrión, banda de montaje
+superior→inferior, referencias verticales permitidas). Cuando el kit
+declara un conteo de bisagras, ese conteo gobierna; cuando falta, el
+heurístico por altura dibuja `approximate` (aristas visibles) y reporta
+`hardware_convention`. Cuando el sku no resuelve o el kit no declara línea
+HANDLE, el render informa `kit_unknown` en vez de asumir piezas.
+
+Las manillas se diferencian por familia — batiente/oscilobatiente lleva
+roseta+collar+palanca cónica; puerta, escudo largo de 240mm en ambas caras
+con cilindro cuando el kit lo declara; corredera, uñero embutido por
+defecto con tirador superficial solo en la hoja de la pista interior
+(ninguna pieza atraviesa la hoja vecina); proyectante, manilla central en
+el riel inferior. Tamaños físicos fijos del herraje — jamás porcentaje
+del alto de la ventana.
+
+El datum de manilla (`handle_height_mm`, referencia `OUTER_BOTTOM`) se
+traza sin ocultar incompatibilidades: una altura declarada fuera de la
+hoja o fuera de la banda de la política dibuja la pieza en posición
+clamped **y** emite `handle_out_of_range`/`handle_datum_unsupported` —
+chips en el viewport 3D y anillo de advertencia en el elevado 2D. Nada de
+clamp silencioso.
+
+## D16 — Colores físicos independientes del tema de interfaz
+
+Los tokens `--mat-*` viven en `:root` sin tema y los consumen los
+renderers 2D/3D; el bloque `[data-theme="dark"]` no los sobrescribe. El
+viewport 3D añade un escenario neutro dedicado
+(`--theme-viewport-stage`/`--theme-viewport-ground`, sí por tema) con
+suelo y sombra de contacto — el acabado físico queda idéntico en ambos
+temas; solo cambia el telón de fondo del estudio. PVC blanco se mantiene
+blanco; antracita permanece antracita.
+
+## D17 — El movimiento es presentación, no fabricación
+
+Los estados Abrir/Abatir/Despiece son poses ilustrativas: pivotes por
+familia (lateral para giro, inferior para oscilar), hoja+vidrio+herraje
+mueven juntos y cada frame escribe transformaciones absolutas — cambiar
+de modo no acumula desplazamiento. Cuando un producto no declara
+recorrido autorizado, el viewport muestra el caption "Posición
+ilustrativa" en vez de insinuar un límite de apertura real.

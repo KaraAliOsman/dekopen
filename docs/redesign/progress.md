@@ -140,3 +140,62 @@ externa, ver `blocked-inputs.md`).
   (migración incremental deliberada — el sistema ya existe para fases 02+).
 - Los `title` del rail compacto de Studio solo aparecen en hover (tradeoff
   estándar de icon-rail; AT recibe `aria-label`).
+
+# Fase 03 — Corregir el producto visual (SHA b8bc600)
+
+## Herrajes por familia
+
+- **hecho/probado** `hardwareVisual.ts`: contrato por hoja (kit contents +
+  política de manilla + convención marcada); tests de resolución, datum,
+  mano y familia (20 tests nuevos).
+- **hecho/probado** emitters por familia en `Product3DScene.ts`: palanca
+  batiente (roseta 30×64 + collar + palanca cónica), puerta (escudo 240mm
+  doble cara + cilindro + pulsador), proyectante (manilla central riel
+  inferior + compases + bisagras de testero), corredera (uñero embutido /
+  tirador superficial / elevable por nombre de kit; tamaño físico fijo —
+  el defecto del tirador proporcional al alto está eliminado).
+- **hecho/probado** bisagras: barril + aleta + tapas; conteo desde línea
+  HINGE del kit cuando existe; convención marcada `approximate` en caso
+  contrario. Herrajes de sin-marco marcados esquemáticos.
+- **hecho/probado** sólo la hoja de la pista interior puede llevar tirador
+  sobresaliente — ninguna pieza atraviesa la hoja vecina.
+
+## Datum, mano y diagnósticos
+
+- **hecho/probado** altura declarada trazada desde `OUTER_BOTTOM`; fuera
+  de hoja o fuera de la banda de política → `handle_out_of_range` /
+  `handle_datum_unsupported` visibles (chips 3D + anillo punteado en 2D),
+  nunca clamp silencioso.
+- **hecho/probado** mano desde la vista declarada: `TURN_LEFT` dibuja
+  bisagras izquierda / palanca derecha; puerta lee `door_handedness`.
+  Hoja pasiva no hereda herrajes de la activa.
+
+## Escenario 3D y materiales
+
+- **hecho/probado** `--theme-viewport-stage/ground` por tema + suelo +
+  sombra de contacto; colores `--mat-*` físicos inalterables por tema.
+- **hecho/probado** vidrio: opacidad 0.30/0.38, depthWrite off, espesor
+  real, junquillos/juntas separados.
+- **hecho** arcos con error de cuerda ≤0.4mm (`arcSteps`) en lugar de
+  acordes fijos de 5mm — sin facetas poligonales en radios cerrados.
+
+## Contrato API + datos
+
+- **hecho/probado** `kitChoice.contents` (sku/name/qty/unit/category) y
+  `designOptions.handle_policy` (slots con host/mount band/refs) —
+  openapi regenerado, fixtures actualizados.
+- **hecho/probado** seed: 14 kits DEMO_60/ALU_65/GLASS_45 con contents
+  categorizados; `handle_requirement_policies` v2 ya poblada y leída.
+
+## Rendimiento
+
+- **hecho/probado** signature de `MemberGeometry` incluye contents de kits
+  + política — un cambio de conteo invalida la escena cacheada (test).
+- **hecho** fallback sin WebGL + estado de carga + caption ilustrativo.
+
+## Pendiente
+
+- Capturas de matriz + close-ups + video (testing agent en curso —
+  `docs/redesign/captures/phase03/`).
+- pgTAP/`make test-db` para la migración (pendiente del stack; el seed ya
+  aplicó limpio en reset local).

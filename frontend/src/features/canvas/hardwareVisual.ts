@@ -113,7 +113,7 @@ function policySlotFor(
 /** DIN convention: the opening name is the hinge side; the door carries
  * `door_handedness` (hinge side). Returns the hinge side — the handle
  * mounts opposite. */
-function hingeSide(bay: IntentNode): "LEFT" | "RIGHT" | null {
+export function hingeSide(bay: IntentNode): "LEFT" | "RIGHT" | null {
   const opening = bay.opening_type;
   if (opening === "TURN_LEFT" || opening === "TILT_TURN_LEFT") return "LEFT";
   if (opening === "TURN_RIGHT" || opening === "TILT_TURN_RIGHT") return "RIGHT";

@@ -7,7 +7,7 @@ import { insetContourPoints } from "./contourGeometry";
 import { frontLayout } from "./ProductFrontSvg";
 import type { MemberGeometry, MemberSpec } from "./members";
 import type { HandleKind, SceneDiagnostic } from "./hardwareVisual";
-import { resolveHardwareVisual } from "./hardwareVisual";
+import { hingeSide, resolveHardwareVisual } from "./hardwareVisual";
 
 /** Pure 3D scene builder — the §16 view derives every solid from the SAME
  * product model the 2D elevation renders (front layout, bay tree, catalog
@@ -574,18 +574,8 @@ function thinRing(
   );
 }
 
-/** DIN hinge side per leaf: the opening name carries it for windows;
- * a door carries it as declared `door_handedness` (hinge side — the
- * handle mounts opposite). Undeclared doors default to LEFT, the same
- * convention the intent layer seeds, so editor 3D never silently mirrors
- * a product the freeze path would refuse. */
-function leafHingeSide(bay: IntentNode): "LEFT" | "RIGHT" | null {
-  const opening = bay.opening_type;
-  if (opening === "TURN_LEFT" || opening === "TILT_TURN_LEFT") return "LEFT";
-  if (opening === "TURN_RIGHT" || opening === "TILT_TURN_RIGHT") return "RIGHT";
-  if (opening === "DOOR_ENTRY") return bay.door_handedness === "RIGHT" ? "RIGHT" : "LEFT";
-  return null;
-}
+// hingeSide — imported from hardwareVisual so hardware and motion
+// pivots can never disagree on a leaf's hand.
 
 /** Rounded-corner plate outline centred at the origin — the rose /
  * escutcheon silhouette a real handle mounts on instead of a bare box. */
@@ -876,7 +866,7 @@ function hardwareSolids(
   const rebateZ = zInterior - sashD - 6;
   const zExterior = zInterior - sashD;
   const door = spec.family === "DOOR";
-  const hinge = leafHingeSide(bay);
+  const hinge = hingeSide(bay);
 
   if (spec.family === "AWNING") {
     // Top-hung: hinge barrels along the head plus stays at the jambs and a
@@ -1372,7 +1362,7 @@ function leafSolids(
       // Both motions exist on the same leaf: TURN swings on the side
       // hinge, TILT tips the top in on the bottom pivot. The view poses
       // the leaf — CLOSED/TURN/TILT are presentation states only.
-      const hinge = leafHingeSide(bay);
+      const hinge = hingeSide(bay);
       leaves.push({
         leafId,
         kind: "tilt_turn",
@@ -1382,7 +1372,7 @@ function leafSolids(
         tiltPivot: leafRegion.y,
       });
     } else {
-      const hinge = leafHingeSide(bay);
+      const hinge = hingeSide(bay);
       const hingeLeft = hinge !== "RIGHT";
       leaves.push({
         leafId,
