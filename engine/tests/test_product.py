@@ -1221,3 +1221,94 @@ class TestSlidingTopologyEvaluation:
         ]
         assert module.issues[0].severity is Severity.ERROR
         assert "sliding_layout" in module.issues[0].params["reason"]
+
+
+class TestStockLength:
+    """A member longer than the bar its article sells in cannot be produced —
+    the catalog's commercial_length_mm is the authority, the issue is a
+    warning (splice/order is a human call) not an invalidation."""
+
+    @staticmethod
+    def _module(module_id: str, width: str, height: str) -> ProductModule:
+        return ProductModule(
+            id=module_id,
+            width_mm=Decimal(width),
+            height_mm=Decimal(height),
+            tree=ParametricNode(
+                id=module_id,
+                type=NodeType.BAY,
+                opening_type=BayOpeningType.FIXED,
+                glass_thickness_mm=GLASS_4_MM,
+                glass_spec=GLASS_4_SPEC,
+            ),
+        )
+
+    @staticmethod
+    def _params_with_stock(
+        params: SystemParams, stock: str | None
+    ) -> SystemParams:
+        articles = {
+            role: article.model_copy(
+                update={"commercial_length_mm": Decimal(stock) if stock else None}
+            )
+            for role, article in params.effective_profile_articles.items()
+        }
+        return params.model_copy(update={"effective_profile_articles": articles})
+
+    def test_member_longer_than_stock_flags_warning(
+        self, demo_60_params: SystemParams
+    ) -> None:
+        params = self._params_with_stock(demo_60_params, "6000")
+        product = ProductModel(
+            version="product-v2",
+            assembly=CoupledAssembly(
+                modules=[self._module("wide", "7000", "1500")], couplings=[]
+            ),
+        )
+        evaluation = evaluate_product(product, params)
+        warnings = [
+            issue
+            for issue in evaluation.issues
+            if issue.code == IssueCode.MEMBER_EXCEEDS_STOCK.value
+        ]
+        assert warnings
+        assert all(issue.severity is Severity.WARNING for issue in warnings)
+        assert Decimal(warnings[0].params["stock_mm"]) == Decimal("6000")
+        assert Decimal(warnings[0].params["length_mm"]) > Decimal("6000")
+        assert evaluation.status is ProductStatus.MANUFACTURING_INCOMPLETE
+
+    def test_undeclared_stock_does_not_flag(
+        self, demo_60_params: SystemParams
+    ) -> None:
+        # No commercial_length_mm anywhere → UNKNOWN, not infinite bars: the
+        # check stays silent instead of inventing a bound.
+        params = self._params_with_stock(demo_60_params, None)
+        product = ProductModel(
+            version="product-v2",
+            assembly=CoupledAssembly(
+                modules=[self._module("wide", "7000", "1500")], couplings=[]
+            ),
+        )
+        evaluation = evaluate_product(product, params)
+        assert not [
+            issue
+            for issue in evaluation.issues
+            if issue.code == IssueCode.MEMBER_EXCEEDS_STOCK.value
+        ]
+
+    def test_member_within_stock_passes_clean(
+        self, demo_60_params: SystemParams
+    ) -> None:
+        params = self._params_with_stock(demo_60_params, "6000")
+        product = ProductModel(
+            version="product-v2",
+            assembly=CoupledAssembly(
+                modules=[self._module("normal", "2000", "1500")], couplings=[]
+            ),
+        )
+        evaluation = evaluate_product(product, params)
+        assert not [
+            issue
+            for issue in evaluation.issues
+            if issue.code == IssueCode.MEMBER_EXCEEDS_STOCK.value
+        ]

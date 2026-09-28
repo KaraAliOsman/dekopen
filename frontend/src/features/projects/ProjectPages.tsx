@@ -32,7 +32,7 @@ import type {
 import { useAuthSession } from "../../auth/AuthSessionProvider";
 import { t, type TranslationKey } from "../../i18n/es-CL";
 import { formatDate, formatMoney } from "../money";
-import { fmtMm, formatDateTime, formatRevision } from "../../format";
+import { fmtMm, formatDateTime, formatRevision, isValidEmail, isValidRut } from "../../format";
 import { projectNameWrite } from "./projectNames";
 import { useProjectView } from "./useProject";
 import "./projects.css";
@@ -222,12 +222,18 @@ function ProjectMetadataForm({
   onSave(): void;
   onCancel(): void;
 }): JSX.Element {
+  const fieldError = !isValidRut(draft.value.client_rut ?? "")
+    ? "projects.rutInvalid"
+    : !isValidEmail(draft.value.client_email ?? "")
+      ? "projects.emailInvalid"
+      : null;
   return (
     <form
       className="project-metadata-form"
+      noValidate
       onSubmit={(event) => {
         event.preventDefault();
-        if (!disabled) onSave();
+        if (!disabled && fieldError === null) onSave();
       }}
     >
       <fieldset disabled={disabled}>
@@ -322,12 +328,29 @@ function ProjectMetadataForm({
               <label key={name}>
                 {t(label)}
                 {type === "textarea" ? <textarea {...props} /> : <input {...props} type={type} />}
+                {name === "client_rut" && props.value !== "" && !isValidRut(props.value) ? (
+                  <span className="field-hint" role="alert">
+                    {t("projects.rutInvalid")}
+                  </span>
+                ) : null}
+                {name === "client_email" && props.value !== "" && !isValidEmail(props.value) ? (
+                  <span className="field-hint" role="alert">
+                    {t("projects.emailInvalid")}
+                  </span>
+                ) : null}
               </label>
             );
           })}
         </details>
+        {fieldError && (
+          <p className="field-hint" role="alert">
+            {t(fieldError)}
+          </p>
+        )}
         <div className="form-actions">
-          <button type="submit">{t("projects.save")}</button>
+          <button type="submit" disabled={disabled || fieldError !== null}>
+            {t("projects.save")}
+          </button>
           <button type="button" disabled={disabled} onClick={onCancel}>
             {t("projects.cancel")}
           </button>

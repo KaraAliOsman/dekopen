@@ -17,7 +17,7 @@ import { useAuthSession } from "../../auth/AuthSessionProvider";
 import { t } from "../../i18n/es-CL";
 import { DeniedState, useConfirm } from "../../ui";
 import "./projects.css";
-import { isValidRut } from "../../format";
+import { isValidEmail, isValidRut } from "../../format";
 import { formatDate } from "../money";
 
 const clientFields = [
@@ -185,6 +185,10 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
       setError(t("clients.rutInvalid"));
       return;
     }
+    if (!isValidEmail(draft.value.email ?? "")) {
+      setError(t("clients.emailInvalid"));
+      return;
+    }
     setBusy(true);
     setError("");
     setNotice("");
@@ -310,6 +314,7 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
       {draft ? (
         <form
           className="project-metadata-form"
+          noValidate
           onSubmit={(event) => {
             event.preventDefault();
             if (!busy) void save();
@@ -345,6 +350,11 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
                   {name === "rut" && props.value !== "" && !isValidRut(props.value) ? (
                     <span className="field-hint" role="alert">
                       {t("clients.rutInvalid")}
+                    </span>
+                  ) : null}
+                  {name === "email" && props.value !== "" && !isValidEmail(props.value) ? (
+                    <span className="field-hint" role="alert">
+                      {t("clients.emailInvalid")}
                     </span>
                   ) : null}
                 </label>

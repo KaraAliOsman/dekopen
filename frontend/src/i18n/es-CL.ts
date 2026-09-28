@@ -107,6 +107,9 @@ export const messages = {
   "clients.name": "Nombre",
   "clients.rut": "RUT",
   "clients.rutInvalid": "RUT inválido — revisa el dígito verificador (ej. 12.345.678-5)",
+  "clients.emailInvalid": "Correo inválido — revisa el formato (ej. nombre@empresa.cl)",
+  "projects.rutInvalid": "RUT inválido — revisa el dígito verificador (ej. 12.345.678-5)",
+  "projects.emailInvalid": "Correo inválido — revisa el formato (ej. nombre@empresa.cl)",
   "clients.email": "Correo",
   "clients.phone": "Teléfono",
   "clients.address": "Dirección",
@@ -2091,6 +2094,7 @@ export const messages = {
     "No se pudo aplicar el cambio. El registro puede haber cambiado o tener referencias protegidas o un código repetido. Conservamos tus datos; recarga el catálogo antes de reemplazar cambios de otra persona.",
   "catalog.errorValidation":
     "Revisa los campos, las medidas y las referencias seleccionadas; luego vuelve a guardar.",
+  "catalog.fieldRequired": "Falta completar",
   "catalog.errorNetwork":
     "No se pudo confirmar la operación. Revisa la conexión y vuelve a cargar el catálogo antes de reintentar.",
   "catalog.uncertainCreate":
@@ -2418,6 +2422,8 @@ export const messages = {
     "El panel {sku} no se apoya en vidrio sin marco — el paño es solo vidrio",
   "assembly.issue.framelessArticleUnknown":
     "El canal {sku} de {target} no existe en el catálogo — elige un artículo declarado",
+  "assembly.issue.memberExceedsStock":
+    "Un corte de {sku} mide {length_mm} mm pero la barra comercial es de {stock_mm} mm — la serie no permite producirlo así",
   "assembly.frameless": "Vidrio sin marco",
   "assembly.framelessHint":
     "Paño de vidrio estructural: soportes, herrajes y bordes expuestos — sin perfiles de marco.",

@@ -50,6 +50,12 @@ class GlassSpecChoiceSerializer(serializers.Serializer):
     spec = serializers.CharField(allow_null=True)
 
 
+class PanelChoiceSerializer(serializers.Serializer):
+    sku = serializers.CharField()
+    name = serializers.CharField()
+    thickness_mm = serializers.CharField()
+
+
 class DesignOptionsSerializer(serializers.Serializer):
     profiles = ProfileChoiceSerializer(many=True)
     glazing_thicknesses = serializers.ListField(child=serializers.CharField())
@@ -61,6 +67,7 @@ class DesignOptionsSerializer(serializers.Serializer):
     coupler_profiles = CouplerChoiceSerializer(many=True)
     glazing_beads = GlazingBeadChoiceSerializer(many=True)
     panel_skus = serializers.ListField(child=serializers.CharField())
+    panel_choices = PanelChoiceSerializer(many=True)
     rebate_depth_mm = serializers.CharField()
     sash_overlap_mm = serializers.CharField()
     depth_mm = serializers.CharField()
@@ -138,6 +145,17 @@ class DesignOptionsView(APIView):
                         for thickness, rule in sorted(params.glazing_bead_rules.items())
                     ],
                     "panel_skus": sorted(params.available_panel_rules),
+                    "panel_choices": [
+                        {
+                            "sku": item.sku,
+                            "name": item.name,
+                            "thickness_mm": str(item.thickness_mm),
+                        }
+                        for item in sorted(
+                            params.available_panel_rules.values(),
+                            key=lambda panel: panel.sku,
+                        )
+                    ],
                     "rebate_depth_mm": str(params.rebate_depth_mm),
                     "sash_overlap_mm": str(params.sash_overlap_mm),
                     "depth_mm": str(params.depth_mm),

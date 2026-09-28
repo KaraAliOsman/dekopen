@@ -86,6 +86,7 @@ def _article_from_row(row: Sequence[object], *, offset: int = 0) -> EffectivePro
         weight_kg_m=_decimal_or_none(row[offset + 5]),
         steel_weight_kg_m=_decimal_or_none(row[offset + 6]),
         reinforcement_sku=(str(row[offset + 7]) if row[offset + 7] is not None else None),
+        commercial_length_mm=_decimal_or_none(row[offset + 10]),
     )
 
 
@@ -191,7 +192,8 @@ class SystemParamsRepository:
                 """
                 SELECT sku, role::text, face_width_mm, welding_loss_mm,
                        reinforcement_gap_mm, weight_kg_m, steel_weight_kg_m,
-                       reinforcement_sku, material::text, section::text
+                       reinforcement_sku, material::text, section::text,
+                       commercial_length_mm
                 FROM public.profile_articles
                 WHERE system_id = %s AND (org_id = %s OR (org_id IS NULL AND system_id IN (SELECT id FROM public.profile_systems WHERE org_id IS NULL AND is_global)))
                 ORDER BY sku
@@ -226,7 +228,8 @@ class SystemParamsRepository:
                 """
                 SELECT sku, role::text, face_width_mm, welding_loss_mm,
                        reinforcement_gap_mm, weight_kg_m, steel_weight_kg_m,
-                       reinforcement_sku, material::text, section::text
+                       reinforcement_sku, material::text, section::text,
+                       commercial_length_mm
                 FROM public.profile_articles
                 WHERE system_id = %s AND (org_id = %s OR (org_id IS NULL AND system_id IN (SELECT id FROM public.profile_systems WHERE org_id IS NULL AND is_global)))
                   AND role = 'COUPLER'
@@ -270,7 +273,7 @@ class SystemParamsRepository:
                        article.welding_loss_mm, article.reinforcement_gap_mm,
                        article.weight_kg_m, article.steel_weight_kg_m,
                        article.reinforcement_sku, article.material::text,
-                       article.section::text
+                       article.section::text, article.commercial_length_mm
                 FROM public.glazing_bead_matrix AS matrix
                 JOIN public.profile_articles AS article
                   ON article.id = matrix.bead_article_id

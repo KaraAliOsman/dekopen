@@ -27,6 +27,7 @@ const CATALOG: DesignOptions = {
     { glass_thickness_mm: "28.00", bead_width_mm: "15.00", sku: "BEAD-28" },
   ],
   panel_skus: [],
+  panel_choices: [],
   colors: ["WHITE"],
   rebate_depth_mm: "20.00",
   sash_overlap_mm: "8.00",

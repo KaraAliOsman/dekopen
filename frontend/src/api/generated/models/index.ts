@@ -334,6 +334,7 @@ export * from "./packingLabel";
 export * from "./packingLabels";
 export * from "./packingManifest";
 export * from "./packingManifestPacking";
+export * from "./panelChoice";
 export * from "./panelPiece";
 export * from "./patchedArticleWriteRequest";
 export * from "./patchedBeadWriteRequest";

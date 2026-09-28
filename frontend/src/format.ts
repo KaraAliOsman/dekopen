@@ -64,6 +64,15 @@ export function isValidRut(candidate: string): boolean {
   return digit === expected;
 }
 
+/** Contact email — pragmatic shape check, not full RFC 5322. Empty is valid
+ * (the field is optional); the point is rejecting obvious garbage before the
+ * browser's English-only type=email bubble does it for us. */
+export function isValidEmail(candidate: string): boolean {
+  const text = candidate.trim();
+  if (text === "") return true;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(text);
+}
+
 const BUSINESS_TZ = "America/Santiago";
 
 /** Operator-facing timestamp: business timezone and minute precision — the

@@ -282,6 +282,9 @@ class EffectiveProfileArticle(EngineModel):
     weight_kg_m: Decimal | None
     steel_weight_kg_m: Decimal | None
     reinforcement_sku: str | None = None
+    # Bar length the article sells in — None means the catalog never
+    # declared one and no stock-length check can run (UNKNOWN, not infinite).
+    commercial_length_mm: Decimal | None = None
 
 
 class GlazingBeadRule(EngineModel):

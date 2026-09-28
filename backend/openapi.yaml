@@ -18242,6 +18242,10 @@ components:
           type: array
           items:
             type: string
+        panel_choices:
+          type: array
+          items:
+            $ref: '#/components/schemas/PanelChoice'
         rebate_depth_mm:
           type: string
         sash_overlap_mm:
@@ -18258,6 +18262,7 @@ components:
       - glazing_beads
       - glazing_thicknesses
       - hardware_kits
+      - panel_choices
       - panel_skus
       - profiles
       - rebate_depth_mm
@@ -20697,37 +20702,39 @@ components:
         commercial:
           type: array
           items:
-            type: object
-            properties:
-              currency:
-                type: string
-              quoted:
-                type: string
-              booked:
-                type: string
-              collected:
-                type: string
-            required:
-            - booked
-            - collected
-            - currency
-            - quoted
+            $ref: '#/components/schemas/OperationalSummaryCommercialItem'
         recent_events:
           type: array
           items: {}
       required:
       - avg_release_to_dispatch_hours
+      - commercial
       - deliveries
       - documents
       - inventory
       - prep
       - projects
-      - commercial
       - recent_events
       - schema
       - supplier_orders
       - throughput_30d
       - work_orders
+    OperationalSummaryCommercialItem:
+      type: object
+      properties:
+        currency:
+          type: string
+        quoted:
+          type: string
+        booked:
+          type: string
+        collected:
+          type: string
+      required:
+      - booked
+      - collected
+      - currency
+      - quoted
     OpsExport:
       type: object
       properties:
@@ -21216,6 +21223,19 @@ components:
       - order_code
       - order_id
       - packing
+    PanelChoice:
+      type: object
+      properties:
+        sku:
+          type: string
+        name:
+          type: string
+        thickness_mm:
+          type: string
+      required:
+      - name
+      - sku
+      - thickness_mm
     PanelPiece:
       type: object
       properties:

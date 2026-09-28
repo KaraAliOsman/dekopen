@@ -625,6 +625,30 @@ function CatalogEditor({
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (readOnly || inFlight.current || noBeads || uncertainCreate) return;
+    // noValidate suppresses the browser's English bubbles; name the first
+    // empty/malformed required field in es-CL and land focus on its control.
+    const fields = schemas[resource].flatMap((group) => group.fields);
+    const missing = fields.find(
+      (field) => !field.optional && (draft[field.name] ?? "").trim() === "",
+    );
+    const malformed = fields.find((field) => {
+      const raw = (draft[field.name] ?? "").trim();
+      if (raw === "") return false;
+      if (field.kind === "decimal")
+        return !new RegExp(`^-?[0-9]+([.,][0-9]{1,${field.places ?? 2}})?$`).test(raw);
+      if (field.kind === "integer") return !/^-?\d+$/.test(raw);
+      return false;
+    });
+    const failed = missing ?? malformed;
+    if (failed) {
+      setError(
+        missing
+          ? `${ct("fieldRequired")} — ${ct(`field.${failed.name}`)}`
+          : `${ct("errorValidation")} — ${ct(`field.${failed.name}`)}`,
+      );
+      document.getElementById(`catalog-${resource}-${failed.name}`)?.focus();
+      return;
+    }
     let body;
     try {
       body = writeFromDraft(resource, draft, contents, sectionDraft);
@@ -777,7 +801,7 @@ function CatalogEditor({
   }
 
   return (
-    <form className="catalog-editor" onSubmit={submit} aria-busy={busy}>
+    <form className="catalog-editor" onSubmit={submit} aria-busy={busy} noValidate>
       <UnsavedChangesGuard dirty={dirty} message={ct("discard")} />
       <header className="catalog-toolbar">
         <h3 ref={firstControl} tabIndex={-1}>

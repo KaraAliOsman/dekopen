@@ -9,6 +9,7 @@ import type { CouplerChoice } from "./couplerChoice";
 import type { GlassSpecChoice } from "./glassSpecChoice";
 import type { GlazingBeadChoice } from "./glazingBeadChoice";
 import type { KitChoice } from "./kitChoice";
+import type { PanelChoice } from "./panelChoice";
 import type { ProfileChoice } from "./profileChoice";
 
 export interface DesignOptions {
@@ -22,6 +23,7 @@ export interface DesignOptions {
   coupler_profiles: CouplerChoice[];
   glazing_beads: GlazingBeadChoice[];
   panel_skus: string[];
+  panel_choices: PanelChoice[];
   rebate_depth_mm: string;
   sash_overlap_mm: string;
   depth_mm: string;

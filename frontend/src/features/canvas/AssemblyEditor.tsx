@@ -7,6 +7,7 @@ import type {
   DesignOptions,
   EngineAssemblyCalculateResponse,
   GlassSpecChoice,
+  PanelChoice,
   ProductIssue,
 } from "../../api/generated/models";
 import { t, type TranslationKey } from "../../i18n/es-CL";
@@ -125,6 +126,7 @@ const ISSUE_KEYS: Record<string, TranslationKey> = {
   frameless_opening_unsupported: "assembly.issue.framelessOpening",
   frameless_panel_unsupported: "assembly.issue.framelessPanel",
   frameless_article_unknown: "assembly.issue.framelessArticleUnknown",
+  member_exceeds_stock: "assembly.issue.memberExceedsStock",
   hardware_kit_incompatible: "assembly.issue.hardwareKitIncompatible",
   hardware_kit_overweight: "assembly.issue.hardwareKitOverweight",
   hardware_undecidable: "assembly.issue.hardwareUndecidable",
@@ -227,6 +229,19 @@ function normalizeRange(candidate: string, min: number, max: number): string | n
   const value = parseLocaleNumber(candidate);
   if (value === null || value < min || value >= max) return null;
   return value.toFixed(2);
+}
+
+/* Pickers label an option the way an estimator reads the catalog — the
+ * composition/panel name first, the SKU as the qualifier. A bare SKU
+ * ("GLASS-BASE") forces decoding shorthand mid-design. */
+function glassLabel(sku: string, specs: GlassSpecChoice[]): string {
+  const spec = specs.find((item) => item.sku === sku)?.spec;
+  return spec ? `${spec} · ${sku}` : sku;
+}
+
+function panelLabel(sku: string, choices: PanelChoice[]): string {
+  const name = choices.find((item) => item.sku === sku)?.name;
+  return name ? `${name} · ${sku}` : sku;
 }
 
 type DraftFieldProps = {
@@ -846,6 +861,7 @@ function BayInspector({
   glassSpecs,
   glazingThicknesses,
   panelSkus,
+  panelChoices,
   busy,
   commit,
   onAskAssistant,
@@ -857,6 +873,7 @@ function BayInspector({
   glassSpecs: GlassSpecChoice[];
   glazingThicknesses: string[];
   panelSkus: string[];
+  panelChoices: PanelChoice[];
   busy: boolean;
   commit(next: ProductJson): void;
   onAskAssistant?(): void;
@@ -1017,7 +1034,7 @@ function BayInspector({
               <option value="">{t("assembly.noGlass")}</option>
               {glassSkus.map((sku) => (
                 <option key={sku} value={sku}>
-                  {sku}
+                  {glassLabel(sku, glassSpecs)}
                 </option>
               ))}
             </select>
@@ -1087,7 +1104,7 @@ function BayInspector({
               <option value="">{t("assembly.noPanel")}</option>
               {panelSkus.map((sku) => (
                 <option key={sku} value={sku}>
-                  {sku}
+                  {panelLabel(sku, panelChoices)}
                 </option>
               ))}
             </select>
@@ -1430,6 +1447,7 @@ function ModuleInspector({
   glassSpecs,
   glazingThicknesses,
   panelSkus,
+  panelChoices,
   mullionSkus,
   couplerSkus,
   busy,
@@ -1443,6 +1461,7 @@ function ModuleInspector({
   glassSpecs: GlassSpecChoice[];
   glazingThicknesses: string[];
   panelSkus: string[];
+  panelChoices: PanelChoice[];
   mullionSkus: Partial<Record<SplitType, string>>;
   couplerSkus: string[];
   busy: boolean;
@@ -1650,7 +1669,7 @@ function ModuleInspector({
             <option value="">{t("assembly.noGlass")}</option>
             {glassSkus.map((sku) => (
               <option key={sku} value={sku}>
-                {sku}
+                {glassLabel(sku, glassSpecs)}
               </option>
             ))}
           </select>
@@ -1669,7 +1688,7 @@ function ModuleInspector({
               <option value="">{t("assembly.noPanel")}</option>
               {panelSkus.map((sku) => (
                 <option key={sku} value={sku}>
-                  {sku}
+                  {panelLabel(sku, panelChoices)}
                 </option>
               ))}
             </select>
@@ -2600,6 +2619,7 @@ export function AssemblyEditor({
             glassSpecs={options?.glass_specs ?? []}
             glazingThicknesses={options?.glazing_thicknesses ?? []}
             panelSkus={panelSkus}
+            panelChoices={options?.panel_choices ?? []}
             mullionSkus={mullionSkus}
             couplerSkus={couplerSkus}
             busy={busy}
@@ -2619,6 +2639,7 @@ export function AssemblyEditor({
             glassSpecs={options?.glass_specs ?? []}
             glazingThicknesses={options?.glazing_thicknesses ?? []}
             panelSkus={panelSkus}
+            panelChoices={options?.panel_choices ?? []}
             busy={busy}
             commit={commit}
             onAskAssistant={

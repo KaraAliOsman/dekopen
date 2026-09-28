@@ -122,6 +122,7 @@ class IssueCode(str, Enum):
     FRAMELESS_PANEL_UNSUPPORTED = "frameless_panel_unsupported"
     FRAMELESS_CONTOUR_UNSUPPORTED = "frameless_contour_unsupported"
     FRAMELESS_ARTICLE_UNKNOWN = "frameless_article_unknown"
+    MEMBER_EXCEEDS_STOCK = "member_exceeds_stock"
     HARDWARE_KIT_INCOMPATIBLE = "hardware_kit_incompatible"
     HARDWARE_KIT_OVERWEIGHT = "hardware_kit_overweight"
     HARDWARE_UNDECIDABLE = "hardware_undecidable"
@@ -2085,6 +2086,44 @@ def evaluate_product(
 
     bom: EngineResult | None = None
     if aggregated or coupler_cuts:
+        all_cuts = [cut for r in aggregated for cut in r.profile_cuts] + coupler_cuts
+        # Stock-length feasibility: a member longer than the bar its catalog
+        # article sells in cannot be produced. Warning, not error — splicing
+        # or a made-to-order bar remains a human call, but "Geometría válida"
+        # must not stand next to a member no stock length can cut. One issue
+        # per distinct (article, length) keeps repeat pieces readable.
+        article_by_sku: dict[str, EffectiveProfileArticle] = {
+            article.sku: article for article in params.effective_profile_articles.values()
+        }
+        article_by_sku.update(coupler_articles)
+        article_by_sku.update(
+            {
+                rule.bead_article.sku: rule.bead_article
+                for rule in params.glazing_bead_rules.values()
+            }
+        )
+        flagged: set[tuple[str, Decimal]] = set()
+        for cut in all_cuts:
+            article = article_by_sku.get(cut.sku)
+            if article is None or article.commercial_length_mm is None:
+                continue
+            if cut.length_mm > article.commercial_length_mm and (
+                cut.sku,
+                cut.length_mm,
+            ) not in flagged:
+                flagged.add((cut.sku, cut.length_mm))
+                issues.append(
+                    ProductIssue(
+                        code=IssueCode.MEMBER_EXCEEDS_STOCK.value,
+                        severity=Severity.WARNING,
+                        target=f"piece:{cut.sku}",
+                        params={
+                            "sku": cut.sku,
+                            "length_mm": str(cut.length_mm),
+                            "stock_mm": str(article.commercial_length_mm),
+                        },
+                    )
+                )
         bom = EngineResult(
             profile_cuts=[
                 cut for r in aggregated for cut in r.profile_cuts

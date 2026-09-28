@@ -6,9 +6,8 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export interface OperationalSummaryCommercialItem {
-  currency: string;
-  quoted: string;
-  booked: string;
-  collected: string;
+export interface PanelChoice {
+  sku: string;
+  name: string;
+  thickness_mm: string;
 }
