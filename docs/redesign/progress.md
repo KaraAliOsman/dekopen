@@ -288,3 +288,16 @@ Recon: la maquinaria del backend ya era profunda (ledger idempotente con `receip
 - **hecho** Etiquetas 100×50 mm reales + QR con quiet zone escaneado con zxing-cpp (D40); alzado con largo de corte; piso tipográfico 7 pt.
 - **probado** `aceptacion-casos.pdf` (5 p: unidades iguales, 12 piezas cortas, 45°/90°, pieza casi largo útil, retazo recuperable/no, sin solución, vidrio no rectangular) + `aceptacion-100pos.pdf` (60 p): 0 solapamientos, 0 texto fuera del papel, grises legibles; conservación "cierra exacto" o desbalance señalado en rojo.
 - **pruebas** 3 tests nuevos en `test_production.py` (identidad física por unidad, fallback sin unit_index, conservación); 114 verdes en test_production.
+
+## Fase 10 — Taller: hacer, comprobar y entregar
+
+Recon: la ruta industrial y sus autorizaciones ya existían (proceso declarado → pasos por estación → QC → embalaje → despacho → POD). El trabajo fue jerarquía por rol y despacho parcial real.
+
+- **hecho** Entrada por rol en `/production`: OPERARIO ve cola por estación (qué espera en su puesto) + trabajo activo + siguiente tarea; ENCARGADO ve órdenes con prioridad/fecha/material/bloqueos + tablero de estaciones; INSTALADOR sólo unidades/bultos/destino (rol de terreno, lectura); ESTIMADOR lectura. Cola filtrable y deep-linkable (`?status=`, `?station=`, `?order=`).
+- **hecho** Estación: cabecera OT/revisión/estación/estado, tarjeta de operario con la pieza al centro y **barra de acción pegajosa** — iniciar/registrar/completar según transición real, siempre visible bajo el scroll de materiales/ops.
+- **hecho** QR / enlace directo: `?piece=Pnn-Umm-Mkk` preselecciona la pieza exacta; `?order=` abre la OT. El código físico de la fase 09 sigue unido hasta despacho.
+- **hecho** QC: Pass/Fail explícito por ítem (selector de ítem `qcItem`), nunca por abrir pantalla; rechazo → incidencia + disposición + OT de remake ligada a la original (`remake_reason`); avance no llega a 100% con rechazos sin resolver.
+- **hecho** Embalaje/despacho parcial (D41): `deliveries.unit_indexes` + `deliveries_one_open_trip` (un viaje abierto por orden); `dispatch_notes.unit_indexes` + `delivery_id` — cada guía pertenece al viaje que la llevó; un viaje FAILED libera sus unidades para re-despacho bajo guía nueva; POD por viaje (`?delivery=`); `installation_requires_delivered` hasta cubrir el manifiesto completo; saldo pendiente explícito en UI.
+- **corregido en vivo** DEFECTO fase 10: `trace` devolvía 422 a OPERARIO/INSTALADOR — lecturas de `projects`/`project_versions` bajo `authenticated` chocaban con `project_manual_read`. Ahora bajo `documentary_backend` (D42) con tests que fijan la frontera RLS (`_BackendGate`). Mismo hueco cerrado en `_order_ops` (archivos CNC).
+- **pruebas** 1049 verdes backend (2 nuevas de frontera RLS), 14 vitest producción, migraciones 007/008 + pgTAP 133 (`plan(14)`, columna delivery_id).
+- **en curso** Aceptación en vivo de 4 roles por el agente de testing (journey completo, QR, eventos duplicados/concurrentes, móvil, video) — `docs/redesign/captures/phase10/`.

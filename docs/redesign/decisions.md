@@ -298,3 +298,11 @@ La pantalla declara los insumos antes de correr (stock, retazos, largos, máquin
 ## D40 — Etiquetas de bulto a tamaño real + QR escaneable
 
 `.unit-label` pasa a 100×50 mm reales (`box-sizing: border-box`), código grande, relación con unidad, QR `segno` con borde de silencio (border=3) — verificado decodificando el PNG renderizado con zxing-cpp: `DEKOPEN|<orden>|PACK|<huella-corta>`, sin credenciales ni URLs con secreto. El alzado de armado gana largo de corte por miembro y la tabla de operaciones sube a 7 pt (piso tipográfico: cuerpo ≥9.5 pt, rótulos ≥7 pt — antes había 6.3–6.5 pt en ops, firmas y pie).
+
+## D41 — Despacho parcial: la guía pertenece al viaje que la llevó
+
+`deliveries.unit_indexes` (NULL = toda la orden; lista explícita = viaje parcial) con índice único parcial `deliveries_one_open_trip` (sólo un SCHEDULED/ON_ROUTE por orden). `dispatch_notes.unit_indexes` sella qué unidades llevó cada guía y `delivery_id` la liga al viaje: una guía cuyo viaje FAILED deja de cubrir (`LEFT JOIN … d.status <> 'FAILED'`), así sus unidades vuelven al saldo pendiente y se redespachan bajo una guía nueva — nunca se suma dos veces ni se pierde en un limbo "cubierto". `unit_indexes=None` al despachar = `manifiesto − cubierto`; un subconjunto fuera del viaje abierto → `dispatch_units_not_on_trip`. El POD se emite por viaje (`?delivery=`) y `installation` espera a que TODO el manifiesto esté DELIVERED — emitir una guía nunca afirma instalación.
+
+## D42 — Trazabilidad del piso vía autoridad documental, no vía política ancha
+
+`project_manual_read` sólo concede lectura de `projects` a roles comerciales. En vez de abrir la política, las lecturas de cabecera en `trace_*` y `_order_ops` corren bajo `documentary_backend` y proyectan sólo campos blancos (código/nombre). Los tests `_BackendGate` fijan la frontera: una lectura a tabla denegada fuera del contexto falla la prueba. Ampliar usabilidad no amplió permisos de otras organizaciones — el filtro `org_id` permanece en cada consulta.

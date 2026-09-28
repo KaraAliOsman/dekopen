@@ -232,3 +232,14 @@ SHA del paquete: `6c61859` (+ capturas en este commit). Fixtures: `scripts/dev_f
 | `backend/production/service.py` + `serializers.py` | `productive_length_mm` en stats; `reason` en unnested shaped-glass |
 | `frontend/src/features/production/` | insumos declarados, hints de estrategia, cantidades separadas, compare honesto, causas legibles |
 | decisión D37–D40 | identidad, bloque indivisible, honestidad del optimizador, etiquetas reales |
+
+## Fase 10 (workspace HEAD)
+
+| Archivo / evidencia | Qué prueba |
+|---|---|
+| `supabase/migrations/20261228000007_partial_deliveries.sql` + `…08` | `deliveries.unit_indexes`, `deliveries_one_open_trip`, `dispatch_notes.unit_indexes` + `delivery_id` (D41) |
+| `backend/production/service.py`, `dispatch_notes.py`, `confirmations.py`, `views.py` | cobertura por guías vivas (FAILED libera), subconjunto ⊆ viaje abierto, POD/guía por entidad, resumen `dispatch_notes` con id+unidades |
+| `backend/production/trace.py` + `cnc.py` | lecturas denegadas bajo `documentary_backend` — operario/instalador trazan su OT (D42) |
+| `backend/tests/test_production_trace.py` | `_BackendGate` fija la frontera RLS — lectura fuera del contexto falla |
+| `frontend/src/features/production/` | cola por estación del operario, `?piece=` deep link, barra de acción pegajosa, viajes + saldo pendiente + selector de unidades, guía por viaje |
+| `docs/redesign/captures/phase10/` | aceptación 4 roles en vivo (en curso) |
