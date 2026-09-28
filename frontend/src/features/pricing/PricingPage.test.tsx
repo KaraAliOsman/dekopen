@@ -2,7 +2,7 @@ import { StrictMode } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { apiMutator } from "../../api/apiMutator";
+import { apiMutator, ApiError } from "../../api/apiMutator";
 import { t } from "../../i18n/es-CL";
 import { CommercialPricingPage, PricingPage } from "./PricingPage";
 import { formatMoney } from "../money";
@@ -25,8 +25,18 @@ vi.mock("../../api/generated/dekopen", () => ({
     status: 200,
     data: {
       id: "project-a",
+      current_revision: "REV-A",
       positions: [
-        { position_index: 1, location_tag: "Living", quantity: 2 },
+        {
+          position_index: 1,
+          location_tag: "Living",
+          quantity: 2,
+          design: {
+            parametric_tree: { type: "BAY", opening_type: "FIXED" },
+            nominal_width_mm: "1000",
+            nominal_height_mm: "1000",
+          },
+        },
         { position_index: 2, location_tag: "Dormitorio", quantity: 1 },
       ],
     },
@@ -866,4 +876,63 @@ it("keeps FX authority available for a bound foreign-currency project quote", as
     currency: "USD",
     fx_snapshot_id: "fx-snapshot-a",
   });
+});
+
+it("shows unit price, per-line discount and the position thumbnail on the decision table", async () => {
+  vi.mocked(apiMutator)
+    .mockResolvedValueOnce({ data: { items: [] } })
+    .mockResolvedValueOnce({
+      data: {
+        ...result("A"),
+        project_id: "project-a",
+        lines: [
+          {
+            position_index: 1,
+            line_net: "90000",
+            quantity: 3,
+            unit_price: "31578.9474",
+            discount_pct: "0.05",
+          },
+        ],
+        cost_lines: [{ position_index: 1, line_cost: "70000" }],
+      },
+    });
+  render(
+    <MemoryRouter initialEntries={["/projects/project-a/pricing"]}>
+      <Routes>
+        <Route path="/projects/:id/pricing" element={<CommercialPricingPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  submitPreview();
+  // line_net is a position TOTAL — unit price and discount sit next to it.
+  await screen.findByText(t("pricing.unitPrice"));
+  expect(screen.getByText(formatMoney("31578.9474", "CLP"))).toBeInTheDocument();
+  expect(screen.getByText("−5 %")).toBeInTheDocument();
+  expect(screen.getByText(formatMoney("90000", "CLP"))).toBeInTheDocument();
+  // A legible drawing of the position, not a generic icon.
+  expect(document.querySelector(".operation-lines__vano svg")).not.toBeNull();
+});
+
+it("keeps the positioned backend reason and links to the resolver surface", async () => {
+  const failure = new ApiError();
+  Object.assign(failure, {
+    payload: {
+      error: {
+        code: "missing_glass_authority",
+        detail: "P04 · no hay precio registrado para el vidrio seleccionado.",
+      },
+    },
+  });
+  vi.mocked(apiMutator)
+    .mockResolvedValueOnce({ data: { items: [] } })
+    .mockRejectedValueOnce(failure);
+  render(page(<CommercialPricingPage />));
+  submitPreview();
+  await screen.findByRole("alert");
+  expect(screen.getByRole("alert")).toHaveTextContent("P04 ·");
+  expect(screen.getByRole("link", { name: t("pricing.fixInCostLists") })).toHaveAttribute(
+    "href",
+    "/pricing/cost-lists",
+  );
 });

@@ -10,6 +10,7 @@ import { apiMutator, ApiError } from "../../api/apiMutator";
 import { actionErrorDetail } from "../errors";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
 import { DeniedState, PageHeader, Tabs } from "../../ui";
+import { PositionThumb } from "../projects/PositionThumb";
 import { t } from "../../i18n/es-CL";
 import { useCanvasStore } from "../canvas/canvasStore";
 import "./pricing.css";
@@ -76,10 +77,36 @@ const ERROR_KEYS: Record<string, Parameters<typeof t>[0]> = {
 function pricingError(error: unknown, fallback: Parameters<typeof t>[0]): string {
   if (error instanceof ApiError) {
     const payload = error.payload as { error?: { code?: unknown; detail?: unknown } } | null;
+    // The backend detail names the failing position ("P04 · falta precio…")
+    // — keep that context; the mapped copy only serves when the payload
+    // carries a bare code.
+    const detail = payload?.error?.detail;
+    if (typeof detail === "string" && detail.trim() !== "") return detail;
     const code = payload?.error?.code;
     if (typeof code === "string" && ERROR_KEYS[code]) return t(ERROR_KEYS[code]);
   }
   return actionErrorDetail(error, t(fallback));
+}
+
+/** Contract codes whose fix lives in the pricing admin surface — the
+ * blocker links the estimator to the missing data instead of stopping at
+ * a red sentence. */
+const FIXABLE_CODES = new Set([
+  "missing_glass_authority",
+  "missing_cost",
+  "ambiguous_cost_list",
+  "ambiguous_authority",
+  "cost_list_not_found",
+  "incompatible_cost_unit",
+  "missing_fx_authority",
+  "pricing_rules_not_found",
+  "pricing_configuration_not_found",
+]);
+function pricingFixCode(error: unknown): string | null {
+  if (!(error instanceof ApiError)) return null;
+  const payload = error.payload as { error?: { code?: unknown } } | null;
+  const code = payload?.error?.code;
+  return typeof code === "string" && FIXABLE_CODES.has(code) ? code : null;
 }
 /** The seeded DEFAULT context is a real value, not a display string — render
  * the operator-facing label everywhere it surfaces (review m2). */
@@ -1318,6 +1345,8 @@ function OperationDecision({
             <th scope="col">#</th>
             <th scope="col">{t("projects.location")}</th>
             <th scope="col">{t("pricing.quantity")}</th>
+            <th scope="col">{t("pricing.unitPrice")}</th>
+            <th scope="col">{t("pricing.lineDiscount")}</th>
             <th scope="col">{t("pricing.lineCost")}</th>
             <th scope="col">{t("pricing.net")}</th>
             <th scope="col">{t("pricing.marginNet")}</th>
@@ -1328,14 +1357,32 @@ function OperationDecision({
           {(operation.lines ?? []).map((line) => {
             const position = positions.get(line.position_index);
             const breakdown = breakdowns.get(line.position_index);
+            const lineDiscount = line.discount_pct ? Number(line.discount_pct) : null;
             return (
               <Fragment key={line.position_index}>
                 <tr>
-                  <td>{line.position_index}</td>
-                  <td>{position?.location_tag || "—"}</td>
-                  <td>{position?.quantity ?? "—"}</td>
-                  <td>{formatMoney(costs.get(line.position_index) ?? "0", operation.currency)}</td>
                   <td>
+                    <span className="operation-lines__vano">
+                      {position?.design && <PositionThumb design={position.design} />}
+                      {line.position_index}
+                    </span>
+                  </td>
+                  <td>{position?.location_tag || "—"}</td>
+                  <td>{line.quantity ?? position?.quantity ?? "—"}</td>
+                  <td className="operation-lines__money">
+                    {line.unit_price != null
+                      ? formatMoney(line.unit_price, operation.currency)
+                      : "—"}
+                  </td>
+                  <td>
+                    {lineDiscount !== null && lineDiscount > 0
+                      ? `−${pctDisplay(lineDiscount)} %`
+                      : "—"}
+                  </td>
+                  <td className="operation-lines__money">
+                    {formatMoney(costs.get(line.position_index) ?? "0", operation.currency)}
+                  </td>
+                  <td className="operation-lines__money">
                     {discount > 0 && position?.quantity ? (
                       <>
                         {formatMoney(line.line_net, operation.currency)}
@@ -1353,7 +1400,7 @@ function OperationDecision({
                       formatMoney(line.line_net, operation.currency)
                     )}
                   </td>
-                  <td>
+                  <td className="operation-lines__money">
                     {marginText(
                       line.line_net,
                       costs.get(line.position_index) ?? "0",
@@ -1361,7 +1408,7 @@ function OperationDecision({
                     )}
                   </td>
                   {canLineDelta && (
-                    <td className="operation-lines__delta">
+                    <td className="operation-lines__delta operation-lines__money">
                       {position?.price_net != null
                         ? (() => {
                             const lineDelta = Number(line.line_net) - Number(position.price_net);
@@ -1380,7 +1427,7 @@ function OperationDecision({
                 </tr>
                 {breakdown && (
                   <tr className="operation-lines__detail">
-                    <td colSpan={canLineDelta ? 7 : 6}>
+                    <td colSpan={canLineDelta ? 9 : 8}>
                       <details>
                         <summary>{t("pricing.costComposition")}</summary>
                         <CostComposition
@@ -1487,6 +1534,7 @@ function CommercialOperations({
 }): JSX.Element {
   const [operation, setOperation] = useState<Operation | null>(null);
   const [error, setError] = useState("");
+  const [fixCode, setFixCode] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [reason, setReason] = useState("");
   const [confirmed, setConfirmed] = useState(false);
@@ -1633,6 +1681,7 @@ function CommercialOperations({
     generation.current += 1;
     setBusy(false);
     setError("");
+    setFixCode(null);
     setConfirmed(false);
   }
   async function runCurrent<T>(
@@ -1643,6 +1692,7 @@ function CommercialOperations({
     const current = ++generation.current;
     setBusy(true);
     setError("");
+    setFixCode(null);
     try {
       const value = await action();
       if (generation.current !== current) return false;
@@ -1652,7 +1702,10 @@ function CommercialOperations({
       // An aborted request (unmount, StrictMode remount) is not an error
       // worth showing — the next load owns the surface.
       const aborted = error instanceof DOMException && error.name === "AbortError";
-      if (generation.current === current && !aborted) setError(pricingError(error, errorKey));
+      if (generation.current === current && !aborted) {
+        setError(pricingError(error, errorKey));
+        setFixCode(pricingFixCode(error));
+      }
       return false;
     } finally {
       if (generation.current === current) setBusy(false);
@@ -1799,6 +1852,9 @@ function CommercialOperations({
               ))}
           </select>
         </label>
+        {selectedMode === "COST_PLUS_MARGIN" && (
+          <p className="field-hint">{t("pricing.mode1Hint")}</p>
+        )}
         <label>
           {t("pricing.context")}
           <input
@@ -1967,7 +2023,22 @@ function CommercialOperations({
         </label>
         <button disabled={busy}>{t("pricing.preview")}</button>
       </form>
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <p role="alert">
+          {error}
+          {fixCode &&
+            (owner ? (
+              <>
+                {" "}
+                <Link className="pricing-fix" to="/pricing/cost-lists">
+                  {t("pricing.fixInCostLists")}
+                </Link>
+              </>
+            ) : (
+              <span className="pricing-fix"> {t("pricing.fixAskOwner")}</span>
+            ))}
+        </p>
+      )}
       {operation && (
         <OperationDecision
           boundProject={boundProject}

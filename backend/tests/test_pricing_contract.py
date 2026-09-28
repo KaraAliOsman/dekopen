@@ -238,6 +238,33 @@ def test_public_response_uses_line_total_strings():
                              'project_tax':Decimal('0'),'project_gross':Decimal('2')})
     assert result['lines']==[{'position_index':1,'line_net':'2'}]
     assert result['project_net']=='2'
+    assert 'line_detail' not in result
+
+
+def test_public_response_merges_line_selling_detail():
+    """line_net is a position TOTAL (unit × qty × (1−discount)) — the
+    decision surface must also see the unit price authority, the quantity
+    and the applied discount, or it would divide the total back itself."""
+    result = price_response({
+        'lines': ((1, Decimal('90000')), (2, Decimal('76500'))),
+        'line_detail': [
+            {'position_index': 1, 'quantity': 3, 'unit_price': '31578.9474',
+             'discount_pct': '0.05'},
+            {'position_index': 2, 'quantity': 1, 'unit_price': '76500',
+             'discount_pct': '0'},
+        ],
+        'project_net': Decimal('166500'), 'project_tax': Decimal('0'),
+        'project_gross': Decimal('166500')})
+    assert result['lines'] == [
+        {'position_index': 1, 'line_net': '90000', 'quantity': 3,
+         'unit_price': '31578.9474', 'discount_pct': '0.05'},
+        {'position_index': 2, 'line_net': '76500', 'quantity': 1,
+         'unit_price': '76500', 'discount_pct': '0'},
+    ]
+    assert 'line_detail' not in result
+    # unit × qty × (1−discount) must reconstruct the line total.
+    assert (Decimal('31578.9474') * 3 * (Decimal('1') - Decimal('0.05'))
+            ).quantize(Decimal('1')) == Decimal('90000')
 
 
 def test_design_batch_preview_prices_before_and_after(monkeypatch):

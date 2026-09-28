@@ -238,3 +238,15 @@ Búsqueda (`?q=`), filtro de estado (`?status=`) y orden (`?sort=`) se guardan e
 ## D25 — Cronología = evidencia persistida, nunca actividad inferida
 
 La sección "Actividad" del proyecto compone eventos sólo desde filas reales: `versions.emitted_at` (cotización emitida), `quote_links.created_at/decided_at/revoked_at` (envío/aprobación/cambios/revocación), `payments.recorded_at/voided_at` + `recorded_by`, `invoices`/`credit_notes.created_at`, y `positions.updated_at` (top-5 recientes). Sin fila, no hay evento — ningún "visto" o "abierto" fabricado. La sección monta sus queries al abrirse (react-query dedup por key con el header).
+
+## D26 — Margen es sobre venta; recargo sobre costo no comparte el nombre
+
+`COST_PLUS_MARGIN` (modo 1) siempre calculó `costo / (1 − margen)` — margen sobre venta — pero la UI lo etiquetaba "Costo más margen", que lee como recargo. El label pasa a "Margen sobre venta" con hint que muestra la fórmula con los números del mandato (100 → 133,33 a 25%). El test `test_mode_one_is_margin_on_sale_not_markup` congela la semántica (133,33 ≠ 125). Otros modos no tocan esta fórmula: PRICE_PER_M2 usa precios de lista, no márgenes.
+
+## D27 — Detalle de venta por línea viaja en el resultado sellado
+
+El `lines` público histórico sólo llevaba `(position_index, net)` — importe de línea, nunca unitario (el contrato del mandato: "un precio por posición no es necesariamente un precio por unidad"). `preview`/`apply` ahora persisten `line_detail` dentro del `result` jsonb (inmutable con la operación): `quantity`, `unit_price` (exact_unit_price engine cuantizado a 0.0001 — en modo TARGET el unitario asignado), `discount_pct` (fracción del contrato). La respuesta pública lo funde por position_index en las líneas; operaciones antiguas simplemente omiten los campos (nullable). La UI nunca deriva unitarios — los lee.
+
+## D28 — Error de pricing posicionado en texto, con enlace de acción por rol
+
+El backend ya producía "P04 · Falta precio de vidrio 4/12/4…" via `PRICING_ERROR_DETAILS`; el frontend renderizaba el primer término como clave i18n y perdía el posicionamiento. Ahora el alerta usa `payload.error.detail` y un mapa `FIXABLE_CODES` enlaza a `/pricing/cost-lists` (OWNER) o muestra "Pídele al administrador…" (ESTIMATOR, que no puede editar catálogo). El código i18n queda como resumen, no como única salida.

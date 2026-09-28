@@ -135,7 +135,14 @@ def _preview_with_retry(token, claims, organization_header, data, service=previe
 
 
 def price_response(value):
-    return {**value,'lines':[{'position_index':index,'line_net':str(amount)} for index,amount in value['lines']],
+    # Each line carries its selling detail (unit price authority, quantity,
+    # applied discount) so the decision surface never divides a line total
+    # back into a unit price itself. Operations stored before the detail
+    # existed simply omit it.
+    detail = {entry['position_index']:entry for entry in value.get('line_detail') or []}
+    return {**{key:item for key,item in value.items() if key != 'line_detail'},
+            'lines':[{**detail.get(index,{}),'position_index':index,'line_net':str(amount)}
+                             for index,amount in value['lines']],
             'extras':value.get('extras') or [],'extras_net':str(value.get('extras_net') or '0'),
             'project_net':str(value['project_net']),'project_tax':str(value['project_tax']),
             'project_gross':str(value['project_gross'])}

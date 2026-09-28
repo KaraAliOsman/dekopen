@@ -518,3 +518,31 @@
 .operation-lines__delta [data-negative] {
   color: var(--theme-accent-ink);
 }
+
+/* A pricing row: a small live thumbnail next to the position index — the
+ * estimator recognizes the vano without opening the editor. */
+.operation-lines__vano {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.5rem;
+}
+
+.operation-lines__vano .position-thumb {
+  flex: none;
+  height: 2.5rem;
+  width: auto;
+}
+
+/* Amounts are single-line data — a wrapped net or unit price reads as two
+ * different numbers (phase-06 mandate). */
+.operation-lines__money {
+  white-space: nowrap;
+}
+
+.operation-lines__money small {
+  white-space: nowrap;
+}
+
+.pricing-fix {
+  font-weight: 600;
+}

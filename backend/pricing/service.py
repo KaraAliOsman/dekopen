@@ -305,6 +305,25 @@ def preview(org_id, actor, request):
         output = (target_project(cost_lines,request['target_margin'],request['currency'],rules['tax_rate_pct'],extra_amounts)
                   if mode == PricingMode.TARGET_GROSS_MARGIN_PROJECT
                   else finish_lines(priced_lines,request['currency'],rules['tax_rate_pct'],extra_amounts))
+    # Per-line selling detail so the decision screen can show unit price,
+    # quantity and discount next to the line total — a line net is a per-
+    # position TOTAL (unit × qty × (1−discount)), never a unit price. The
+    # authority stays in the engine: exact_unit_price is the pre-discount
+    # computed unit; the target-margin mode has no per-line discount, so
+    # its unit readout is the allocated line net over quantity.
+    quantities = {position['position_index']: int(position['quantity']) for position in positions}
+    if mode == PricingMode.TARGET_GROSS_MARGIN_PROJECT:
+        line_detail = [
+            {'position_index': index, 'quantity': quantities[index],
+             'unit_price': str((D(str(net)) / quantities[index]).quantize(D('0.0001'))),
+             'discount_pct': '0'}
+            for index, net in output.lines]
+    else:
+        line_detail = [
+            {'position_index': line.position_index, 'quantity': quantities[line.position_index],
+             'unit_price': str(line.exact_unit_price.quantize(D('0.0001'))),
+             'discount_pct': str(line.discount)}
+            for line in priced_lines]
     audit_reason(request['reason'])
     record = one(
         'INSERT INTO public.pricing_operations(org_id,project_id,requested_by,requested_by_email,'
@@ -313,7 +332,7 @@ def preview(org_id, actor, request):
         [org_id,project['id'],request['_actor_id'],request.get('_actor_email'),
          json_text({key:value for key,value in request.items() if not key.startswith('_')}),
          json_text({'rules':rules,'authorities':repo.authorities,'positions':technical,'cost_lines':cost_lines}),
-         json_text(asdict(output)),source_revision(project,positions),project['current_revision'],
+         json_text({**asdict(output),'line_detail':line_detail}),source_revision(project,positions),project['current_revision'],
          'PENDING' if state=='PENDING' else 'PREVIEW',request['reason']])
     costs = [(index, D(str(cost))) for index, cost in cost_lines]
     breakdown = [{
@@ -337,6 +356,7 @@ def preview(org_id, actor, request):
             'pricing_mode':request.get('pricing_mode') or '',
             'segment':request.get('segment') or '',
             'currency':request['currency'],**asdict(output),
+            'line_detail':line_detail,
             'extras':[{'label':item['label'],'kind':item['kind'],
                        'amount':str(item['amount'])}
                       for item in request.get('extras') or []],

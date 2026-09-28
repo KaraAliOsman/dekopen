@@ -135,6 +135,9 @@ class WithdrawSerializer(StrictSerializer):
 class LineResponseSerializer(serializers.Serializer):
     position_index = serializers.IntegerField()
     line_net = serializers.CharField()
+    quantity = serializers.IntegerField(allow_null=True, required=False)
+    unit_price = serializers.CharField(allow_null=True, required=False)
+    discount_pct = serializers.CharField(allow_null=True, required=False)
 
 
 class CostLineResponseSerializer(serializers.Serializer):

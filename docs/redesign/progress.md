@@ -248,3 +248,11 @@ El picker de kits era inalcanzable: `GET /api/v1/projects/design-options/<system
 
 - **probado** Aceptación en vivo (`docs/redesign/captures/phase05/`, video del recorrido): crear cliente (sin email + nombre 110 chars) → proyecto → 3 posiciones → duplicar (banner "Copia de P1…", nueva identidad P4, original intacta) → cantidad inline recalcula → Studio → volver (contexto intacto) → precio/revisión. WORKSHOP_MANAGER lectura pura sin controles de edición; OPERATOR "Sin acceso" por diseño; obra de 100 posiciones sin overflow a 1440 ni 390.
 - **corregido** Defectos de la corrida: `.position-row` reflows a dos filas bajo 640px (scrollWidth 521→390); Guardar nombra el bloqueo real cuando falta vidrio/panel (`glazingMissing`); summary "Importar" renombrado "Documentos de origen" (leía como acción habilitada en roles de lectura — el upload ya estaba gateado por canWrite).
+
+## Fase 06 — Decisión de precio confiable
+
+- **hecho/probado** Tabla de decisión gana columnas Unitario y Desc. por línea (desde `line_detail` sellado, no derivado), miniatura real de la posición (`PositionThumb` — dibujo SVG, no icono), importes con `white-space:nowrap` para que ningún monto se parta.
+- **hecho/probado** Modo 1 renombrado "Margen sobre venta" + hint con fórmula (D26); test engine congela `costo/(1−margen)` → 133,33 sobre costo 100, y `gross_margin_pct` lee 0.25 del precio resultante.
+- **hecho/probado** Bloqueo posicionado "P04 · …" en alerta con enlace `?focus=glass` a cost-lists (owner) o instrucción para estimador (D28); FIXABLE_CODES cubre las 9 causas de catálogo.
+- **hecho/probado** Contrato `line_detail` probado end-to-end: preview→apply→response con cantidad 3, unitario exacto y descuento 5% ⇒ neto línea 90000 cuantizado; operaciones legacy sin el campo responden `lines` idénticas a antes.
+- **pendiente-capturas** evidencia en vivo (margen editado, comparación, bloqueo+resolución, paridad pantalla/PDF/portal) vía testing agent.

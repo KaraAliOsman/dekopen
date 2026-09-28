@@ -7,6 +7,7 @@ from random import Random
 
 import pytest
 
+from dekopen_engine.pricing import gross_margin_pct
 from dekopen_engine.commercial import (
     CommercialLine, PricingError, PricingMode, convert_cost, direct_cost,
     discount_state, finish_lines, matrix_price, quantize_currency,
@@ -79,6 +80,18 @@ def test_mode_one_materials_fx_and_no_early_rounding() -> None:
     price = unit_price(PricingMode.COST_PLUS_MARGIN, cost=D('100000'), margin=D('0.35'),
                        area=D('1'), width=D('1000'), height=D('1000'))
     assert finish_lines([CommercialLine(1, 1, D('100000'), price)], 'CLP', D('0')).project_net == D('153846')
+
+
+def test_mode_one_is_margin_on_sale_not_markup() -> None:
+    """The label «Margen sobre venta» is contractual: cost ÷ (1−margin).
+    Cost 100 at 25 % sells at ≈133.33 — a 25 % MARKUP would sell at 125.
+    The two semantics must never be conflated in labels or math."""
+    price = unit_price(PricingMode.COST_PLUS_MARGIN, cost=D('100'),
+                       margin=D('0.25'), area=D('1'), width=D('1000'), height=D('1000'))
+    assert price.quantize(D('0.01')) == D('133.33')
+    assert price != D('100') * D('1.25')
+    # Gross-margin read-back is the same convention: (net−cost)/net.
+    assert gross_margin_pct(D('100'), price) == D('0.25')
 
 
 @pytest.mark.parametrize('foil,selected,expected', [
