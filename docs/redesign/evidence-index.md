@@ -115,3 +115,33 @@ python backend/manage.py runjobs --poll 0.5   # worker de artifacts
 # fixture sintético
 SUPABASE_SERVICE_ROLE_KEY=<status -o env> python scripts/dev_fixture.py
 ```
+
+# Índice de evidencia — fase 01
+
+SHA del paquete: `6c61859` (+ capturas en este commit). Fixtures: `scripts/dev_fixture.py`
+(vivienda congelada/REV-A + OT optimizadas, obra grande, incompleta). Cuentas:
+`demo-owner` (aal2) y `demo-operator` (magic link).
+
+## Capturas (todas en `docs/redesign/captures/phase01/`)
+
+| Superficie                                                             | Capturas                                                      | Contraste con 00                                                      |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Dashboard, Proyectos, Clientes, Compras, Producción, Precios, Catálogo | `*-1440.png`, `*-1280.png`                                    | PageHeader unificado, rail con iconos, tema claro cálido              |
+| Proyecto vivienda (congelado)                                          | `project-vivienda-{1440,1280}.png`                            | —                                                                     |
+| Studio editable                                                        | `studio-light-{1440,1280}.png`, `studio-dark-{1440,1280}.png` | rail 64px icon-only; materiales físicos idénticos en ambos temas (D7) |
+| Móvil                                                                  | `m-dashboard-390.png`, `m-projects-390.png`                   | scrollWidth=390 verificado; rows refluyen                             |
+| Roles                                                                  | `operator-denied-catalogs.png`                                | enlace directo OPERATOR → catálogo/precio = "Sin acceso" útil         |
+| Extras                                                                 | `settings/jobs/billing/assistant-1440.png`                    | —                                                                     |
+| Defecto QA (corregido)                                                 | `defect-stale-error-clients-1440.png`                         | banner de validación persistía tras cancelar — fix `73f5620`          |
+
+## Verificaciones ejecutadas
+
+| Mandato                                              | Método                                       | Resultado                                   |
+| ---------------------------------------------------- | -------------------------------------------- | ------------------------------------------- |
+| Jerarquía a zoom 100%                                | recorrido visual de las capturas vs baseline | jerarquía legible; sin overflow             |
+| Teclado: crear/editar, tab, menú, error, cancelación | QA con teclado real (Tab, ⌘K, flechas, Esc)  | pasa; banner post-cancel corregido          |
+| Contraste ambos temas                                | ratios computados WCAG                       | AA superado (≥4.5 texto)                    |
+| Roles por enlace directo                             | OPERATOR navega directo a rutas vetadas      | denied-state útil, sin crash                |
+| Componentes migrados                                 | `ui/` + migraciones en páginas reales        | ver `decisions.md` D7–D14                   |
+| Pruebas de comportamiento                            | vitest                                       | 436/436 + 11 nuevas del kit                 |
+| Studio/impresión/bot no subordinados al tema         | `--mat-*` en `:root` sin tematizar           | documentado D7; capturas Studio ambos temas |

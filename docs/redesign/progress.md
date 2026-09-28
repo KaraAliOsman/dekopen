@@ -79,3 +79,64 @@ externa, ver `blocked-inputs.md`).
 
 - Catálogo real con autoridad de fabricación → `blocked-inputs.md`.
 - Credenciales externas (Flow, SII CAF/cert, provider IA) → `blocked-inputs.md`.
+
+# Fase 01 — Lenguaje visual y navegación (cerrada en `6c61859`)
+
+## Sistema visual
+
+- **hecho/probado** tokens de tres capas en `tokens.css` (ver `decisions.md` D7):
+  `--theme-*` interfaz, estructura, `--mat-*` físicos invariantes de tema.
+  Tema claro cálido (`#f7f6f3` canvas), grafitos legibles en oscuro.
+- **hecho** escala tipográfica y de espacios del mandato + densidades
+  28/36/44px (`decisions.md` D8).
+- **hecho/probado** guard de estilos verde (`scripts/check_guards.py` PASS) —
+  los colores directos migraron a tokens sin desactivar el guard.
+
+## Componentes (`frontend/src/ui/`)
+
+- **hecho/probado** Button (variantes, loading con ancho estable, protección
+  doble envío, `disabledReason`), Field (etiqueta persistente + ayuda + error
+  asociado), TextInput (prefijo/sufijo), NumberField (precisión veraz),
+  SelectField (mensaje de incompatibilidad), Tabs (semántica real + teclado),
+  PageHeader, TechDetails (diagnóstico colapsado + copiar), Toast.
+  Pruebas de comportamiento: `Controls.test.tsx` + `Tabs.test.tsx` (11 tests).
+
+## Navegación
+
+- **hecho/probado** rail con iconos + etiquetas; en Studio 64px icon-only
+  verificado en el editor real (D9). Sin menús duplicados.
+- **hecho/probado** matriz de roles por enlace directo: OPERATOR →
+  `/pricing/commercial` y `/catalogs/systems` devuelven "Sin acceso" con
+  retorno útil (evidencia `phase01/operator-denied-catalogs.png`).
+
+## Migración de superficies reales
+
+- **hecho** headers migrados a PageHeader en dashboard, proyectos (lista +
+  detalle), clientes, compras, producción, precios, catálogo, facturación,
+  ajustes, jobs. Tabla de proyectos a `ui-table` con cifras alineadas.
+  Navegaciones de precios y catálogo a `Tabs`.
+
+## Verificación (QA sobre stack real, fixtures de 00)
+
+- **hecho/probado** 30 PNG en `docs/redesign/captures/phase01/` — mismas
+  superficies que 00 a 1440×900/1280×800/390×844, Studio claro+oscuro.
+- **hecho/probado** recorrido de teclado: skip-link → rail → contenido;
+  ⌘K con flechas/filtro/Esc; tablists con flechas auto-activan; foco
+  visible 2px+4px teal en ambos temas.
+- **hecho/probado** contraste AA en ambos temas (claro h1 13.6 / muted 6.24 /
+  primario 6.35; oscuro 15.8 / 8.44 / 7.18).
+- **hecho/probado** 390px sin scroll horizontal en dashboard (`scrollWidth=390`)
+  tras corregir min-content de KPI/rows/activity.
+- **hecho/probado** defecto de QA corregido: banner de validación ya no
+  persiste tras cancelar en clientes/proyectos.
+
+## Gates
+
+- **hecho/probado** tsc estricto, vitest 436/436, prettier, guard de estilos.
+
+## Pendiente conocido
+
+- Las listas de clientes y algunos paneles internos conservan markup propio
+  (migración incremental deliberada — el sistema ya existe para fases 02+).
+- Los `title` del rail compacto de Studio solo aparecen en hover (tradeoff
+  estándar de icon-rail; AT recibe `aria-label`).
