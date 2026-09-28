@@ -9,7 +9,7 @@ import { formatMoney } from "../money";
 import { apiMutator, ApiError } from "../../api/apiMutator";
 import { actionErrorDetail } from "../errors";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
-import { DeniedState } from "../../ui";
+import { DeniedState, PageHeader } from "../../ui";
 import { t } from "../../i18n/es-CL";
 import { useCanvasStore } from "../canvas/canvasStore";
 import "./pricing.css";
@@ -312,9 +312,7 @@ function CommercialWorkspace({
           {t("projects.back")}
         </Link>
       )}
-      <header>
-        <h1>{t("crumb.pricingCommercial")}</h1>
-      </header>
+      <PageHeader title={t("crumb.pricingCommercial")} />
       <CommercialOperations request={request} owner={owner} boundProjectId={projectId} />
     </section>
   );
@@ -455,10 +453,7 @@ function PricingWorkspace({ orgId }: { orgId: string }): JSX.Element {
 
   return (
     <section className="pricing-page">
-      <header>
-        <h1>{t("pricing.title")}</h1>
-        <p>{t("pricing.subtitle")}</p>
-      </header>
+      <PageHeader context={t("pricing.subtitle")} title={t("pricing.title")} />
       <nav aria-label={t("pricing.sections")} className="pricing-tabs">
         {sections.map((name, index) => (
           <button

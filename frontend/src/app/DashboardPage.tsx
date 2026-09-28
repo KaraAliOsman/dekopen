@@ -8,6 +8,7 @@ import { useAuthSession } from "../auth/AuthSessionProvider";
 import { formatDateTime } from "../format";
 import { formatMoney } from "../features/money";
 import { t, type TranslationKey } from "../i18n/es-CL";
+import { PageHeader } from "../ui";
 import { attentionEntries, attentionLabel } from "./attention";
 
 const WO_STATUSES = [
@@ -106,17 +107,18 @@ export function DashboardPage(): JSX.Element {
 
   return (
     <section className="dashboard" aria-labelledby="page-title">
-      <header className="dashboard-head">
-        <div>
-          <h1 id="page-title">{t("page.dashboard")}</h1>
-          <p className="dashboard-sub">{org?.name ?? t("org.none")}</p>
-        </div>
-        {canWrite && (
-          <Link className="primary-action" to="/projects">
-            {t("projects.create")}
-          </Link>
-        )}
-      </header>
+      <PageHeader
+        actions={
+          canWrite ? (
+            <Link className="ui-button ui-button--primary" to="/projects">
+              {t("projects.create")}
+            </Link>
+          ) : undefined
+        }
+        context={org?.name ?? t("org.none")}
+        headingId="page-title"
+        title={t("page.dashboard")}
+      />
 
       {query.isError && <p role="alert">{t("projects.uncertain")}</p>}
 

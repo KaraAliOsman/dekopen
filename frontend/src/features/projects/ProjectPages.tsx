@@ -41,7 +41,7 @@ import { ProjectBom } from "./ProjectPositionEditor";
 import { ProjectQuotationPanel } from "./ProjectQuotationPanel";
 import { ProjectImportsPanel } from "./ProjectImportsPanel";
 import { ProjectPaymentsPanel } from "./ProjectPaymentsPanel";
-import { DeniedState, EmptyState, useConfirm } from "../../ui";
+import { Button, DeniedState, EmptyState, PageHeader, useConfirm } from "../../ui";
 
 const fields = [
   ["name", "projects.name", "text", 255],
@@ -1344,6 +1344,22 @@ function ProjectWorkspace({
         dirty={draft !== null || quotationDirty || paymentsDirty || importsDirty}
         message={t("projects.leaveUnsaved")}
       />
+      {!project && (
+        <PageHeader
+          actions={
+            canWrite ? (
+              <Button
+                disabled={disabled || draft !== null}
+                onClick={() => setDraft({ value: metadata() })}
+                variant="primary"
+              >
+                {t("projects.create")}
+              </Button>
+            ) : undefined
+          }
+          title={t("projects.title")}
+        />
+      )}
       {project ? (
         <ProjectHeader
           canWrite={canWrite}
@@ -1356,9 +1372,7 @@ function ProjectWorkspace({
           onShareQuote={() => void shareQuote()}
           project={project}
         />
-      ) : (
-        <h1>{t("projects.title")}</h1>
-      )}
+      ) : null}
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
       {mustReload && (
@@ -1380,13 +1394,11 @@ function ProjectWorkspace({
             });
           }}
         />
-      ) : (
+      ) : project ? (
         <div className="projects-actions">
-          {project && (
-            <Link className="ui-backlink ui-backlink--back" to="/projects">
-              {t("projects.back")}
-            </Link>
-          )}
+          <Link className="ui-backlink ui-backlink--back" to="/projects">
+            {t("projects.back")}
+          </Link>
           {editable && (
             <button
               disabled={disabled}
@@ -1400,18 +1412,13 @@ function ProjectWorkspace({
               {t("projects.edit")}
             </button>
           )}
-          {project && canWrite && (
+          {canWrite && (
             <button disabled={disabled} onClick={() => void clone(project)}>
               {t("projects.cloneDraft")}
             </button>
           )}
-          {!project && canWrite && (
-            <button disabled={disabled} onClick={() => setDraft({ value: metadata() })}>
-              {t("projects.create")}
-            </button>
-          )}
         </div>
-      )}
+      ) : null}
 
       {project ? (
         /* data-facts-open widens the facts column while a workflow section
@@ -1723,12 +1730,19 @@ function ProjectWorkspace({
         </div>
       ) : (
         <>
-          <label>
-            {t("projects.search")}
-            <input value={search} onChange={(event) => setSearch(event.target.value)} />
-          </label>
-          <div className="projects-table">
-            <table>
+          <div className="ui-field projects-search">
+            <label className="ui-field__label" htmlFor="projects-search">
+              {t("projects.search")}
+            </label>
+            <input
+              className="ui-field__input"
+              id="projects-search"
+              onChange={(event) => setSearch(event.target.value)}
+              value={search}
+            />
+          </div>
+          <div className="ui-table-wrap projects-table">
+            <table className="ui-table">
               <caption>{t("projects.title")}</caption>
               <thead>
                 <tr>
@@ -1759,11 +1773,11 @@ function ProjectWorkspace({
                         {t(statuses[item.status])}
                       </span>
                     </td>
-                    <td>{item.position_count}</td>
+                    <td className="ui-table__num">{item.position_count}</td>
                     <td>
                       <time dateTime={item.updated_at}>{formatDateTime(item.updated_at)}</time>
                     </td>
-                    <td>
+                    <td className="ui-table__num">
                       {item.pricing_current
                         ? formatMoney(item.total_price_gross, item.currency)
                         : t("projects.unpriced")}

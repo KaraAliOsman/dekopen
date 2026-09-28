@@ -52,7 +52,7 @@ import type {
 import { ApiError, apiFetchBlob } from "../../api/apiMutator";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
 import { formatDateTime } from "../../format";
-import { DeniedState, usePrompt } from "../../ui";
+import { DeniedState, PageHeader, usePrompt } from "../../ui";
 import { fmtMm, fmtPct } from "../../format";
 import { formatDate } from "../money";
 import { t, tDynamic, tOptional } from "../../i18n/es-CL";
@@ -1063,7 +1063,7 @@ export function ProductionPage(): JSX.Element {
   if (!canAct) {
     return (
       <section className="production-page">
-        <h1>{t("production.title")}</h1>
+        <PageHeader title={t("production.title")} />
         <DeniedState reason={t("production.denied")} />
       </section>
     );
@@ -1071,10 +1071,7 @@ export function ProductionPage(): JSX.Element {
 
   return (
     <section className="production-page">
-      <header>
-        <h1>{t("production.title")}</h1>
-        <p>{t("production.subtitle")}</p>
-      </header>
+      <PageHeader context={t("production.subtitle")} title={t("production.title")} />
       {message ? <p role="alert">{message}</p> : null}
       <div className="production-layout">
         <aside className="production-orders" aria-label={t("production.orders")}>

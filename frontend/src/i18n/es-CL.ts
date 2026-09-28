@@ -3186,6 +3186,11 @@ export const messages = {
   "ui.retry": "Reintentar",
   "ui.deniedTitle": "Sin acceso",
   "ui.backToDashboard": "Volver al panel",
+  "ui.loading": "Cargando",
+  "ui.details": "Detalles técnicos",
+  "ui.copyDiagnostics": "Copiar diagnóstico",
+  "ui.copied": "Copiado",
+  "ui.showMore": "Ver más",
   "benchmark.title": "Referencia visual de render",
   "benchmark.subtitle":
     "Mismo producto proyectado a alzado, comercial y 3D — revisión manual del estándar físico por material.",

@@ -17,6 +17,7 @@ import { AssistantSurfaceProvider } from "../features/assistant/assistantContext
 import { AttentionBell } from "./AttentionBell";
 import { OrgSwitcher } from "./OrgSwitcher";
 import { ProjectSwitcher } from "./ProjectSwitcher";
+import { RailIcon } from "./railIcons";
 import { ShellCrumbs, crumbsFor, useProjectName } from "./ShellCrumbs";
 import { ShellLeafContext } from "./shellLeaf";
 import { contextItemActive, roleLabel, type ContextNavItem } from "./shellUtils";
@@ -216,7 +217,8 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
                       <p className="rail-group__title">{t(group.title)}</p>
                       {items.map((item) => (
                         <NavLink key={item.to} to={item.to} className="rail-item">
-                          {t(item.label)}
+                          <RailIcon to={item.to} />
+                          <span>{t(item.label)}</span>
                         </NavLink>
                       ))}
                     </div>

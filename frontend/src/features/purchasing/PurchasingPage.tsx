@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 
 import { apiMutator, ApiError } from "../../api/apiMutator";
-import { useConfirm } from "../../ui";
+import { PageHeader, useConfirm } from "../../ui";
 import { documentaryArtifactAccess } from "../../api/generated/dekopen";
 import type { OrderIndexItem } from "../../api/generated/models";
 import { InventorySection } from "./InventorySection";
@@ -530,13 +530,11 @@ function PurchasingWorkspace({
 
   return (
     <section className="purchasing-page">
-      <header>
-        <h1>{t("purchasing.title")}</h1>
-        <p>{t("purchasing.subtitle")}</p>
-        <Link className="ui-backlink ui-backlink--back" to="/projects">
-          {t("purchasing.workshop")}
-        </Link>
-      </header>
+      <PageHeader
+        crumbs={[{ label: t("nav.projects"), to: "/projects" }, { label: t("purchasing.title") }]}
+        context={t("purchasing.subtitle")}
+        title={t("purchasing.title")}
+      />
       {message && <p role="alert">{message}</p>}
       {busy && <p role="status">{t("purchasing.loading")}</p>}
       {!busy && versions.length === 0 && <p>{t("purchasing.empty")}</p>}

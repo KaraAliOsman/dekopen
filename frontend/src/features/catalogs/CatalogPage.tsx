@@ -9,7 +9,7 @@ import { CatalogImportsPanel } from "./CatalogImportsPanel";
 import { SystemWorkspaceView } from "./SystemWorkspace";
 import { SectionPreviewSvg } from "../canvas/SectionPreviewSvg";
 import { SectionImportPanel } from "./SectionImportPanel";
-import { DeniedState, useConfirm } from "../../ui";
+import { Button, DeniedState, PageHeader, useConfirm } from "../../ui";
 import type { ProcessProfileOption } from "../../api/generated/models";
 import {
   HARDWARE_COMPONENT_CATEGORIES,
@@ -247,24 +247,24 @@ function CatalogWorkspace({ orgId, role }: { orgId: string; role: string }): JSX
 
   return (
     <section className="catalog">
-      <header className="catalog-heading">
-        <div>
-          <h1>{ct("title")}</h1>
-          <p>{ct("subtitle")}</p>
-        </div>
-        {canEdit && (
-          <button
-            type="button"
-            disabled={editor !== null}
-            onClick={() => {
-              setNotice("");
-              setEditor({ resource: "systems" });
-            }}
-          >
-            {ct("newSystem")}
-          </button>
-        )}
-      </header>
+      <PageHeader
+        actions={
+          canEdit ? (
+            <Button
+              disabled={editor !== null}
+              onClick={() => {
+                setNotice("");
+                setEditor({ resource: "systems" });
+              }}
+              variant="primary"
+            >
+              {ct("newSystem")}
+            </Button>
+          ) : undefined
+        }
+        context={ct("subtitle")}
+        title={ct("title")}
+      />
 
       <p className="catalog-status" role="status" aria-live="polite">
         {notice}

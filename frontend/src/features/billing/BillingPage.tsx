@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { billingRetrieve } from "../../api/generated/dekopen";
 import type { Billing } from "../../api/generated/models";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
-import { DeniedState } from "../../ui";
+import { Button, DeniedState, PageHeader } from "../../ui";
 import { t } from "../../i18n/es-CL";
 import "./billing.css";
 import { CommercePanel } from "./CommercePanel";
@@ -41,14 +41,15 @@ function BillingWorkspace({ orgId }: { orgId: string }): JSX.Element {
   }, [orgId, revision]);
   return (
     <section className="billing-page" aria-labelledby="page-title">
-      <header className="dashboard-head">
-        <div>
-          <h1 id="page-title">{t("billing.title")}</h1>
-        </div>
-        <button type="button" onClick={() => setRevision((value) => value + 1)}>
-          {t("wallet.refresh")}
-        </button>
-      </header>
+      <PageHeader
+        actions={
+          <Button onClick={() => setRevision((value) => value + 1)} variant="secondary">
+            {t("wallet.refresh")}
+          </Button>
+        }
+        headingId="page-title"
+        title={t("billing.title")}
+      />
       {failed && <p role="alert">{t("wallet.error")}</p>}
       {!billing && !failed && <p role="status">{t("wallet.loading")}</p>}
       {billing && (

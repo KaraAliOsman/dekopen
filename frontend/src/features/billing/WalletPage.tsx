@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { walletRetrieve } from "../../api/generated/dekopen";
 import type { Wallet } from "../../api/generated/models";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
-import { DeniedState } from "../../ui";
+import { Button, DeniedState, PageHeader } from "../../ui";
 import { t } from "../../i18n/es-CL";
 import "./billing.css";
 
@@ -40,14 +40,15 @@ function WalletWorkspace({ orgId }: { orgId: string }): JSX.Element {
   const number = (value: number) => new Intl.NumberFormat("es-CL").format(value);
   return (
     <section className="billing-page" aria-labelledby="page-title">
-      <header className="dashboard-head">
-        <div>
-          <h1 id="page-title">{t("wallet.title")}</h1>
-        </div>
-        <button type="button" onClick={() => setRevision((value) => value + 1)}>
-          {t("wallet.refresh")}
-        </button>
-      </header>
+      <PageHeader
+        actions={
+          <Button onClick={() => setRevision((value) => value + 1)} variant="secondary">
+            {t("wallet.refresh")}
+          </Button>
+        }
+        headingId="page-title"
+        title={t("wallet.title")}
+      />
       {failed && <p role="alert">{t("wallet.error")}</p>}
       {!wallet && !failed && <p role="status">{t("wallet.loading")}</p>}
       {wallet && (

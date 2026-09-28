@@ -15,7 +15,7 @@ import type { ClientResponse, ProjectResponse } from "../../api/generated/models
 import type { PatchedClientUpdateRequest } from "../../api/generated/models/patchedClientUpdateRequest";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
 import { t } from "../../i18n/es-CL";
-import { DeniedState, useConfirm } from "../../ui";
+import { Button, DeniedState, Field, PageHeader, useConfirm } from "../../ui";
 import "./projects.css";
 import { isValidEmail, isValidRut } from "../../format";
 import { formatDate } from "../money";
@@ -289,25 +289,25 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
   return (
     <section className="projects-page" aria-busy={busy || query.isFetching}>
       <UnsavedChangesGuard dirty={draft !== null} message={t("projects.leaveUnsaved")} />
-      <header className="dashboard-head">
-        <div>
-          <h1 id="page-title">{t("clients.title")}</h1>
-        </div>
-        {canWrite && !creating && (
-          <button
-            className="primary-action"
-            disabled={busy}
-            onClick={() => {
-              setCreating(true);
-              setEditing(null);
-              selectClient(null);
-              setDraft(empty());
-            }}
-          >
-            {t("clients.new")}
-          </button>
-        )}
-      </header>
+      <PageHeader
+        actions={
+          canWrite && !creating ? (
+            <Button
+              disabled={busy}
+              onClick={() => {
+                setCreating(true);
+                setEditing(null);
+                selectClient(null);
+                setDraft(empty());
+              }}
+              variant="primary"
+            >
+              {t("clients.new")}
+            </Button>
+          ) : undefined
+        }
+        title={t("clients.title")}
+      />
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
 
@@ -383,10 +383,13 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
       ) : (
         <div className="clients-desk">
           <div className="clients-list">
-            <label className="ui-field">
-              <span>{t("clients.search")}</span>
-              <input value={search} onChange={(event) => setSearch(event.target.value)} />
-            </label>
+            <Field label={t("clients.search")}>
+              <input
+                className="ui-field__input"
+                onChange={(event) => setSearch(event.target.value)}
+                value={search}
+              />
+            </Field>
             <ul>
               {visible.map((item) => {
                 const clientProjects = projectsByClient.get(item.id) ?? [];

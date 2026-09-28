@@ -12,10 +12,10 @@
 }
 
 .catalog h1 {
-  font-size: 1.375rem;
+  font-size: var(--text-display);
 }
 .catalog h2 {
-  font-size: 1.125rem;
+  font-size: var(--text-title);
 }
 .catalog h3 {
   font-size: 0.95rem;

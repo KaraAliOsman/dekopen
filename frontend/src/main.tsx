@@ -7,7 +7,7 @@ import { AuthSessionProvider } from "./auth/AuthSessionProvider";
 import "./index.css";
 import "./styles/tokens.css";
 import { ThemeProvider } from "./theme/ThemeProvider";
-import { ConfirmProvider } from "./ui";
+import { ConfirmProvider, ToastProvider } from "./ui";
 import "./ui/ui.css";
 
 const container = document.getElementById("root");
@@ -29,7 +29,9 @@ createRoot(container).render(
       <ThemeProvider>
         <AuthSessionProvider>
           <ConfirmProvider>
-            <App />
+            <ToastProvider>
+              <App />
+            </ToastProvider>
           </ConfirmProvider>
         </AuthSessionProvider>
       </ThemeProvider>

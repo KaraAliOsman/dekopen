@@ -184,7 +184,7 @@
 
 .operation-total--gross dd {
   color: var(--theme-accent-ink, var(--theme-accent));
-  font-size: 1.125rem;
+  font-size: var(--text-title);
 }
 
 .operation-total dd[data-negative] {

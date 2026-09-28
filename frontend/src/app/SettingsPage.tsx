@@ -24,6 +24,7 @@ import type {
   SiiCaf,
   SiiCertificate,
 } from "../api/generated/models";
+import { PageHeader } from "../ui";
 import { useAuthSession } from "../auth/AuthSessionProvider";
 import { formatDate } from "../features/money";
 import { t, type TranslationKey } from "../i18n/es-CL";
@@ -641,12 +642,11 @@ export function SettingsPage(): JSX.Element {
 
   return (
     <section className="settings" aria-labelledby="page-title">
-      <header className="dashboard-head">
-        <div>
-          <h1 id="page-title">{t("settings.title")}</h1>
-          <p className="dashboard-sub">{org?.name ?? t("org.none")}</p>
-        </div>
-      </header>
+      <PageHeader
+        context={org?.name ?? t("org.none")}
+        headingId="page-title"
+        title={t("settings.title")}
+      />
 
       <section aria-labelledby="settings-group-account" className="settings-group">
         <h2 id="settings-group-account" className="settings-group__title">

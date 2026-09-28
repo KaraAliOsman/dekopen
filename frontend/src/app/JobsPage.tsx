@@ -8,7 +8,7 @@ import type { JobRun } from "../api/generated/models";
 import { useAuthSession } from "../auth/AuthSessionProvider";
 import { jobErrorKey } from "../features/jobs/jobError";
 import { formatDateTime } from "../format";
-import { EmptyState } from "../ui";
+import { EmptyState, PageHeader } from "../ui";
 import { t, tDynamic, type TranslationKey } from "../i18n/es-CL";
 
 const STATE_KEYS: Record<string, TranslationKey> = {
@@ -115,31 +115,33 @@ export function JobsPage(): JSX.Element {
   const hasMore = items.length === pages * PAGE_SIZE;
   return (
     <section className="dashboard jobs-page" aria-labelledby="page-title">
-      <header className="dashboard-head">
-        <div>
-          <h1 id="page-title">{t("jobs.title")}</h1>
-          <p className="dashboard-sub">{t("jobs.subtitle")}</p>
-        </div>
-        <label className="ui-field jobs-filter">
-          <span className="ui-field__label">{t("jobs.filter.state")}</span>
-          <select
-            value={stateFilter}
-            onChange={(event) => {
-              const next = new URLSearchParams(params);
-              if (event.target.value === "") next.delete("state");
-              else next.set("state", event.target.value);
-              setParams(next, { replace: true });
-            }}
-          >
-            <option value="">{t("jobs.filter.all")}</option>
-            {Object.keys(STATE_KEYS).map((state) => (
-              <option key={state} value={state}>
-                {t(STATE_KEYS[state] ?? "jobs.state.QUEUED")}
-              </option>
-            ))}
-          </select>
-        </label>
-      </header>
+      <PageHeader
+        actions={
+          <label className="ui-field jobs-filter">
+            <span className="ui-field__label">{t("jobs.filter.state")}</span>
+            <select
+              className="ui-field__input"
+              value={stateFilter}
+              onChange={(event) => {
+                const next = new URLSearchParams(params);
+                if (event.target.value === "") next.delete("state");
+                else next.set("state", event.target.value);
+                setParams(next, { replace: true });
+              }}
+            >
+              <option value="">{t("jobs.filter.all")}</option>
+              {Object.keys(STATE_KEYS).map((state) => (
+                <option key={state} value={state}>
+                  {t(STATE_KEYS[state] ?? "jobs.state.QUEUED")}
+                </option>
+              ))}
+            </select>
+          </label>
+        }
+        context={t("jobs.subtitle")}
+        headingId="page-title"
+        title={t("jobs.title")}
+      />
 
       {notice !== "" && <p role="status">{notice}</p>}
       {query.isPending ? (
