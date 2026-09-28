@@ -3214,6 +3214,8 @@ export const messages = {
   "benchmark.fixture.tiltTurn": "Oscilobatiente",
   "benchmark.fixture.twoSash": "Dos hojas",
   "benchmark.fixture.sliding": "Corredera",
+  "benchmark.fixture.sliding3": "Corredera 3 hojas",
+  "benchmark.fixture.awning": "Proyectante",
   "benchmark.fixture.door": "Puerta",
   "benchmark.fixture.corner": "Esquina 90°",
   "benchmark.fixture.bow": "Bow",

@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 
+import type { HandlePolicy, KitChoice } from "../../api/generated/models";
 import { t, type TranslationKey } from "../../i18n/es-CL";
 import { STARTER_DEFINITIONS, starterNominalSize, type StarterKey } from "../canvas/designLibrary";
+import type { IntentNode } from "../canvas/intentEditing";
 import { FALLBACK_MEMBERS, type MemberGeometry, type MemberSpec } from "../canvas/members";
 import Model3DView from "../canvas/Model3DView";
 import { ProductFrontSvg } from "../canvas/ProductFrontSvg";
@@ -167,6 +169,16 @@ const FIXTURES: Fixture[] = [
     labelKey: "benchmark.fixture.sliding",
     build: () => starterProduct("sliding2"),
   },
+  {
+    key: "sliding3",
+    labelKey: "benchmark.fixture.sliding3",
+    build: () => starterProduct("sliding3"),
+  },
+  {
+    key: "awning",
+    labelKey: "benchmark.fixture.awning",
+    build: () => starterProduct("awning"),
+  },
   { key: "door", labelKey: "benchmark.fixture.door", build: () => starterProduct("doorSide") },
   { key: "corner", labelKey: "benchmark.fixture.corner", build: cornerProduct },
   { key: "bow", labelKey: "benchmark.fixture.bow", build: () => starterProduct("bow3") },
@@ -183,14 +195,243 @@ const FIXTURES: Fixture[] = [
   { key: "arch", labelKey: "benchmark.fixture.arch", build: () => starterProduct("arch") },
 ];
 
+/** Demo-catalog hardware authority — mirrors the seeded DEMO_60 kits so
+ * the benchmark renders the kit-bound path, not just conventions. */
+const BENCH_KITS: KitChoice[] = [
+  {
+    sku: "KIT-TURN",
+    name: "Kit Practicable Demo 60",
+    opening_type: "TURN",
+    contents: [
+      {
+        sku: "DEMO-BIS-60",
+        name: "Bisagra practicable",
+        qty: "3",
+        unit: "unit",
+        category: "HINGE",
+      },
+      { sku: "DEMO-MAN-PRACT", name: "Manilla roseta", qty: "1", unit: "unit", category: "HANDLE" },
+      { sku: "DEMO-CREM-60", name: "Cremona", qty: "1", unit: "set", category: "LOCK" },
+    ],
+  } as KitChoice,
+  {
+    sku: "KIT-TILT-TURN",
+    name: "Kit Vorne OB 100kg",
+    opening_type: "TILT_TURN",
+    contents: [
+      {
+        sku: "DEMO-BIS-OB",
+        name: "Bisagra oscilobatiente",
+        qty: "4",
+        unit: "unit",
+        category: "HINGE",
+      },
+      {
+        sku: "DEMO-MAN-OB",
+        name: "Manilla oscilobatiente",
+        qty: "1",
+        unit: "unit",
+        category: "HANDLE",
+      },
+      { sku: "DEMO-CREM-OB", name: "Cremona multipunto", qty: "1", unit: "set", category: "LOCK" },
+    ],
+  } as KitChoice,
+  {
+    sku: "KIT-SLIDING",
+    name: "Kit Corredera uñero embutido",
+    opening_type: "SLIDING",
+    contents: [
+      {
+        sku: "DEMO-CARR-60",
+        name: "Carro doble rueda",
+        qty: "2",
+        unit: "unit",
+        category: "ROLLER",
+      },
+      { sku: "DEMO-UNERO-60", name: "Uñero embutido", qty: "1", unit: "unit", category: "HANDLE" },
+      { sku: "DEMO-CIERRE-60", name: "Cierre embutido", qty: "1", unit: "unit", category: "LOCK" },
+    ],
+  } as KitChoice,
+  {
+    sku: "KIT-AWNING-16",
+    name: 'Kit Proyectante Compás 16" 45kg',
+    opening_type: "AWNING",
+    contents: [
+      {
+        sku: "DEMO-STAY-16",
+        name: 'Compás a fricción 16"',
+        qty: "2",
+        unit: "unit",
+        category: "FITTING",
+      },
+      { sku: "DEMO-MAN-PROY", name: "Manilla central", qty: "1", unit: "unit", category: "HANDLE" },
+    ],
+  } as KitChoice,
+  {
+    sku: "KIT-DOOR-MULTIPOINT",
+    name: "Kit Puerta Entrada Multipunto Demo 60",
+    opening_type: "DOOR",
+    contents: [
+      {
+        sku: "DEMO-LOCK-MULTIPOINT",
+        name: "Cerradura multipunto",
+        qty: "1",
+        unit: "unit",
+        category: "LOCK",
+      },
+      {
+        sku: "DEMO-BIS-PUERTA",
+        name: "Bisagra puerta reforzada",
+        qty: "3",
+        unit: "unit",
+        category: "HINGE",
+      },
+      {
+        sku: "DEMO-MAN-PUERTA",
+        name: "Par manilla puerta + cilindro",
+        qty: "1",
+        unit: "set",
+        category: "HANDLE",
+      },
+    ],
+  } as KitChoice,
+];
+
+/** The seeded DEMO_60 handle policy (handle_requirement_policies v2) —
+ * host member + mounting band per opening type. */
+const BENCH_HANDLE_POLICY: HandlePolicy = {
+  policy_id: "DEMO_60_HANDLES_V2",
+  version: 2,
+  slots: [
+    {
+      opening_type: "TURN_LEFT",
+      host_member_side: "RIGHT",
+      leaf_slot: null,
+      leaf_handedness: null,
+      handle_domain_slot: "PRIMARY",
+      horizontal_offset_mm: "-10.00",
+      horizontal_reference: "HOST_MEMBER_AXIS",
+      mounting_min_from_leaf_top_mm: "0",
+      mounting_max_from_leaf_top_mm: "3000",
+      permitted_vertical_references: ["OUTER_TOP", "OUTER_BOTTOM", "LEAF_TOP", "LEAF_BOTTOM"],
+    },
+    {
+      opening_type: "TURN_RIGHT",
+      host_member_side: "LEFT",
+      leaf_slot: null,
+      leaf_handedness: null,
+      handle_domain_slot: "PRIMARY",
+      horizontal_offset_mm: "10.00",
+      horizontal_reference: "HOST_MEMBER_AXIS",
+      mounting_min_from_leaf_top_mm: "0",
+      mounting_max_from_leaf_top_mm: "3000",
+      permitted_vertical_references: ["OUTER_TOP", "OUTER_BOTTOM", "LEAF_TOP", "LEAF_BOTTOM"],
+    },
+    {
+      opening_type: "TILT_TURN_LEFT",
+      host_member_side: "RIGHT",
+      leaf_slot: null,
+      leaf_handedness: null,
+      handle_domain_slot: "PRIMARY",
+      horizontal_offset_mm: "-10.00",
+      horizontal_reference: "HOST_MEMBER_AXIS",
+      mounting_min_from_leaf_top_mm: "0",
+      mounting_max_from_leaf_top_mm: "3000",
+      permitted_vertical_references: ["OUTER_TOP", "OUTER_BOTTOM", "LEAF_TOP", "LEAF_BOTTOM"],
+    },
+    {
+      opening_type: "TILT_TURN_RIGHT",
+      host_member_side: "LEFT",
+      leaf_slot: null,
+      leaf_handedness: null,
+      handle_domain_slot: "PRIMARY",
+      horizontal_offset_mm: "10.00",
+      horizontal_reference: "HOST_MEMBER_AXIS",
+      mounting_min_from_leaf_top_mm: "0",
+      mounting_max_from_leaf_top_mm: "3000",
+      permitted_vertical_references: ["OUTER_TOP", "OUTER_BOTTOM", "LEAF_TOP", "LEAF_BOTTOM"],
+    },
+    {
+      opening_type: "AWNING",
+      host_member_side: "BOTTOM",
+      leaf_slot: null,
+      leaf_handedness: null,
+      handle_domain_slot: "PRIMARY",
+      horizontal_offset_mm: "0",
+      horizontal_reference: "HOST_MEMBER_CENTER",
+      mounting_min_from_leaf_top_mm: "0",
+      mounting_max_from_leaf_top_mm: "3000",
+      permitted_vertical_references: ["OUTER_TOP", "OUTER_BOTTOM", "LEAF_TOP", "LEAF_BOTTOM"],
+    },
+    {
+      opening_type: "DOOR_ENTRY",
+      host_member_side: "RIGHT",
+      leaf_slot: null,
+      leaf_handedness: "LEFT",
+      handle_domain_slot: "PRIMARY",
+      horizontal_offset_mm: "-10.00",
+      horizontal_reference: "HOST_MEMBER_AXIS",
+      mounting_min_from_leaf_top_mm: "0",
+      mounting_max_from_leaf_top_mm: "3000",
+      permitted_vertical_references: ["OUTER_TOP", "OUTER_BOTTOM", "LEAF_TOP", "LEAF_BOTTOM"],
+    },
+    {
+      opening_type: "DOOR_ENTRY",
+      host_member_side: "LEFT",
+      leaf_slot: null,
+      leaf_handedness: "RIGHT",
+      handle_domain_slot: "PRIMARY",
+      horizontal_offset_mm: "10.00",
+      horizontal_reference: "HOST_MEMBER_AXIS",
+      mounting_min_from_leaf_top_mm: "0",
+      mounting_max_from_leaf_top_mm: "3000",
+      permitted_vertical_references: ["OUTER_TOP", "OUTER_BOTTOM", "LEAF_TOP", "LEAF_BOTTOM"],
+    },
+  ],
+} as HandlePolicy;
+
+/** Stamp the bay's kit selection by opening family — the same binding the
+ * editor makes when the user picks a hardware set. */
+const KIT_BY_OPENING: Record<string, string> = {
+  TURN_LEFT: "KIT-TURN",
+  TURN_RIGHT: "KIT-TURN",
+  TILT_TURN_LEFT: "KIT-TILT-TURN",
+  TILT_TURN_RIGHT: "KIT-TILT-TURN",
+  AWNING: "KIT-AWNING-16",
+  DOOR_ENTRY: "KIT-DOOR-MULTIPOINT",
+};
+
+function bindKits(product: ProductJson): ProductJson {
+  const stamp = (node: IntentNode): void => {
+    const opening = node.opening_type ?? "";
+    if (opening.startsWith("SLIDING")) node.hardware_set_sku = "KIT-SLIDING";
+    else if (KIT_BY_OPENING[opening]) node.hardware_set_sku = KIT_BY_OPENING[opening];
+    for (const child of node.children ?? []) stamp(child);
+  };
+  for (const module of product.assembly?.modules ?? []) {
+    if (module.tree) stamp(module.tree);
+  }
+  return product;
+}
+
 const MATERIAL_ORDER: BenchMaterialKey[] = ["pvc", "pvcFoil", "aluAnthracite"];
 
 export function BenchmarkPage(): JSX.Element {
   const [materialKey, setMaterialKey] = useState<BenchMaterialKey>("pvc");
   const members = MATERIALS[materialKey].members;
   const fixtures = useMemo(
-    () => FIXTURES.map((fixture) => ({ ...fixture, product: fixture.build() })),
+    () => FIXTURES.map((fixture) => ({ ...fixture, product: bindKits(fixture.build()) })),
     [],
+  );
+  // Hardware fixtures bind to the demo catalog so the render is kit-bound
+  // instead of pure convention — mirrors what the editor resolves.
+  const kitMembers = useMemo<MemberGeometry>(
+    () => ({
+      ...members,
+      kitFor: (sku) => BENCH_KITS.find((kit) => kit.sku === sku) ?? null,
+      handlePolicy: BENCH_HANDLE_POLICY,
+    }),
+    [members],
   );
   return (
     <div className="benchmark-page">
@@ -224,7 +465,7 @@ export function BenchmarkPage(): JSX.Element {
                 <div className="benchmark-capture__body">
                   <ProductFrontSvg
                     product={fixture.product}
-                    members={members}
+                    members={kitMembers}
                     selectedId={null}
                     issues={[]}
                     disabled
@@ -250,7 +491,7 @@ export function BenchmarkPage(): JSX.Element {
                 <div className="benchmark-capture__body benchmark-capture__body--studio">
                   <StudioImage
                     product={fixture.product}
-                    members={members}
+                    members={kitMembers}
                     options={{ width: 380, height: 280 }}
                     alt={t(fixture.labelKey)}
                   />
@@ -260,7 +501,7 @@ export function BenchmarkPage(): JSX.Element {
                 <figcaption>{t("benchmark.view3d")}</figcaption>
                 <LazyThree
                   product={fixture.product}
-                  members={members}
+                  members={kitMembers}
                   label={t(fixture.labelKey)}
                 />
               </figure>
