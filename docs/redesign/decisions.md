@@ -222,3 +222,19 @@ no optimiza. `bayEnvelopeMm` reproduce la particion de `frontLayout`
 ## D21 — Autoridad JSONB: el parseo canónico vive en el motor
 
 El contrato estricto (`EngineModel strict=True`) no puede validar JSONB crudo: JSON no produce instancias de enum ni `Decimal`, así que `model_validate` sobre `authority` era insatisfiable — `design-options` devolvía 422 en todas las series. En vez de relajar el modelo, el motor ahora exporta `handle_policy_from_json` / `placement_policy_from_json` / `reinforcement_policy_from_json` (manufacturing.py): coerción campo a campo (str→enum, str/number→Decimal, rechaza bool/NaN/no-finito) y luego el modelo estricto valida el resultado. `engine_api` y `documents` usan el mismo parser; el parseo tolerante ya no puede divergir del contrato. Los valores numéricos históricos almacenados como string se corrigen por nueva versión (`20261228000002`), nunca por UPDATE — la inmutabilidad de autoridad se respeta incluso en la reparación. El `version` embebido en el payload se sincroniza con la versión de fila.
+
+## D22 — Estado de la lista de proyectos vive en la URL
+
+Búsqueda (`?q=`), filtro de estado (`?status=`) y orden (`?sort=`) se guardan en los search params con `replace` — volver de un detalle conserva contexto sin store paralelo y el dashboard puede deeplink (`/projects?status=QUOTED`). La posición de scroll va en `sessionStorage` por org y se restaura solo cuando las filas existen. La columna "Siguiente paso" usa sólo `status` (el listado no trae cobranza/aprobaciones); la acción precisa vive en `projectNextAction` del detalle. Revisión se muestra como columna propia (`current_revision`) — estado comercial y referencia de revisión no comparten badge.
+
+## D23 — Reordenar posiciones no rekeya identidad industrial
+
+`position_index` es la clave emitida: congelación, compare, packs de corte y documentos la referencian. Una UI de reordenar implicaría renumerar posiciones ya emitidas — identidad industrial mutable. No se ofrece reorden; el orden nuevo de trabajo se expresa creando/duplicando posiciones (código nuevo, P4, P5…). Documentado aquí porque el mandato exige que el reorden "no cambie claves industriales ya emitidas": sin UI de reorden, la invariante no puede violarse.
+
+## D24 — Duplicar = intención editable con identidad nueva, explicada
+
+`/positions/new?copy=<id>` ya cargaba el diseño fuente sin baseline (siempre dirty, guarda como posición nueva). Ahora el editor muestra un banner explícito — "Copia de P{n}: conserva diseño, sistema, acabado, vidrio y ubicación; al guardar se crea una posición nueva con código propio" — para que el origen no sea ambiguo. La fuente nunca se toca.
+
+## D25 — Cronología = evidencia persistida, nunca actividad inferida
+
+La sección "Actividad" del proyecto compone eventos sólo desde filas reales: `versions.emitted_at` (cotización emitida), `quote_links.created_at/decided_at/revoked_at` (envío/aprobación/cambios/revocación), `payments.recorded_at/voided_at` + `recorded_by`, `invoices`/`credit_notes.created_at`, y `positions.updated_at` (top-5 recientes). Sin fila, no hay evento — ningún "visto" o "abierto" fabricado. La sección monta sus queries al abrirse (react-query dedup por key con el header).

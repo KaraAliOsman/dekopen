@@ -30,7 +30,7 @@ import type {
   RevisionCompareResponse,
 } from "../../api/generated/models";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
-import { t, type TranslationKey } from "../../i18n/es-CL";
+import { t, tOptional, type TranslationKey } from "../../i18n/es-CL";
 import { formatDate, formatMoney } from "../money";
 import { fmtMm, formatDateTime, formatRevision, isValidEmail, isValidRut } from "../../format";
 import { projectNameWrite } from "./projectNames";
@@ -66,10 +66,18 @@ const statuses: Record<ProjectResponse["status"], TranslationKey> = {
   CANCELLED: "projects.cancelled",
 };
 
-/** Derived per-position progression — the estimator reads "where in the
- * job" each vano is: drafted → engine-evaluated → priced → sealed into a
- * revision → released to production. It is derived, never stored: the
- * project's own state machine is the authority. */
+/** Status-only next step for the list row — the list payload has no
+ * payments/approvals, so this stays a coarse hint; the detail header runs the
+ * full `projectNextAction` once those queries exist. */
+const listNextKeys: Record<ProjectResponse["status"], TranslationKey> = {
+  DRAFT: "projects.nextDraft",
+  QUOTED: "projects.nextQuoted",
+  APPROVED: "projects.nextApproved",
+  IN_PRODUCTION: "projects.nextInProduction",
+  COMPLETED: "projects.nextCompleted",
+  CANCELLED: "projects.nextCancelled",
+};
+
 const typologyKeys: Record<string, TranslationKey> = {
   FIXED: "typology.fixed",
   TURN: "typology.turn",
@@ -82,6 +90,10 @@ const typologyKeys: Record<string, TranslationKey> = {
   COMPOSITE: "typology.composite",
 };
 
+/** Derived per-position progression — the estimator reads "where in the
+ * job" each vano is: drafted → engine-evaluated → priced → sealed into a
+ * revision → released to production. It is derived, never stored: the
+ * project's own state machine is the authority. */
 function positionStatusKey(
   project: ProjectResponse,
   position: PositionResponse,
@@ -1002,6 +1014,156 @@ function RevisionComparePanel({ project }: { project: ProjectResponse }): JSX.El
   );
 }
 
+type ActivityItem = {
+  key: string;
+  at: string;
+  labelKey: TranslationKey;
+  detail?: string;
+};
+
+/** The section mounts its queries on first open — a collapsed details shouldn't
+ * cost payments/approvals fetches. */
+function ProjectActivitySection({
+  project,
+  orgId,
+}: {
+  project: ProjectResponse;
+  orgId: string;
+}): JSX.Element {
+  const [opened, setOpened] = useState(false);
+  return (
+    <details
+      className="project-facts__section"
+      onToggle={(event) => {
+        if (event.currentTarget.open) setOpened(true);
+      }}
+    >
+      <summary>{t("projects.activityTitle")}</summary>
+      {opened && <ProjectActivity project={project} orgId={orgId} />}
+    </details>
+  );
+}
+
+function ProjectActivity({
+  project,
+  orgId,
+}: {
+  project: ProjectResponse;
+  orgId: string;
+}): JSX.Element {
+  // Same keys and queryFn as the header — react-query dedupes, so opening the
+  // section after the header costs zero extra requests.
+  const payments = useQuery({
+    queryKey: ["projects", "payments-summary", orgId, project.id],
+    queryFn: async () => {
+      const response = await projectPaymentsList(project.id);
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      return response.data;
+    },
+  });
+  const approvals = useQuery({
+    queryKey: ["projects", "quote-approvals", orgId, project.id],
+    queryFn: async () => {
+      const response = await projectQuoteLinksList(project.id);
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      return response.data;
+    },
+  });
+
+  const events: ActivityItem[] = [];
+  for (const version of project.versions ?? []) {
+    events.push({
+      key: `rev-${version.id}`,
+      at: version.emitted_at,
+      labelKey: "projects.activityEmitted",
+      detail: formatRevision(version.revision_code),
+    });
+  }
+  for (const link of approvals.data ?? []) {
+    events.push({
+      key: `link-${link.id}-sent`,
+      at: link.created_at,
+      labelKey: "projects.activityLinkSent",
+      detail: formatRevision(link.revision_code),
+    });
+    if (link.decided_at) {
+      events.push({
+        key: `link-${link.id}-decided`,
+        at: link.decided_at,
+        labelKey:
+          link.status === "APPROVED"
+            ? "projects.activityApproved"
+            : "projects.activityChangesAsked",
+        detail: link.decided_note ?? formatRevision(link.revision_code),
+      });
+    }
+    if (link.revoked_at) {
+      events.push({
+        key: `link-${link.id}-revoked`,
+        at: link.revoked_at,
+        labelKey: "projects.activityLinkRevoked",
+        detail: formatRevision(link.revision_code),
+      });
+    }
+  }
+  for (const payment of payments.data?.payments ?? []) {
+    events.push({
+      key: `payment-${payment.id}`,
+      at: payment.voided_at ?? payment.recorded_at,
+      labelKey: payment.voided_at ? "projects.activityPaymentVoided" : "projects.activityPayment",
+      detail: `${formatMoney(payment.amount, payments.data?.currency ?? project.currency)}${
+        payment.recorded_by ? ` · ${payment.recorded_by}` : ""
+      }`,
+    });
+  }
+  for (const invoice of payments.data?.invoices ?? []) {
+    events.push({
+      key: `invoice-${invoice.id}`,
+      at: invoice.created_at,
+      labelKey: "projects.activityInvoice",
+      detail: invoice.invoice_code,
+    });
+    if (invoice.credit_note) {
+      events.push({
+        key: `nc-${invoice.id}`,
+        at: invoice.credit_note.created_at,
+        labelKey: "projects.activityCreditNote",
+        detail: invoice.credit_note.credit_code,
+      });
+    }
+  }
+  const edited = [...(project.positions ?? [])]
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+    .slice(0, 5);
+  for (const position of edited) {
+    events.push({
+      key: `pos-${position.id}`,
+      at: position.updated_at,
+      labelKey: "projects.activityPosition",
+      detail: `P${position.position_index}${
+        position.location_tag ? ` · ${position.location_tag}` : ""
+      }`,
+    });
+  }
+  events.sort((a, b) => b.at.localeCompare(a.at));
+
+  return (
+    <ul className="project-activity">
+      {events.length === 0 ? (
+        <li className="project-activity__empty">{t("projects.activityEmpty")}</li>
+      ) : (
+        events.slice(0, 14).map((event) => (
+          <li key={event.key}>
+            <span className="project-activity__label">{t(event.labelKey)}</span>
+            {event.detail && <span className="project-activity__detail">{event.detail}</span>}
+            <time dateTime={event.at}>{formatDateTime(event.at)}</time>
+          </li>
+        ))
+      )}
+    </ul>
+  );
+}
+
 export function ProjectPages(): JSX.Element {
   const auth = useAuthSession();
   const { id } = useParams();
@@ -1053,8 +1215,7 @@ function ProjectWorkspace({
   const [quotationDirty, setQuotationDirty] = useState(false);
   const [paymentsDirty, setPaymentsDirty] = useState(false);
   const [importsDirty, setImportsDirty] = useState(false);
-  const [search, setSearch] = useState("");
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [factsCollapsed, setFactsCollapsed] = useState(false);
   const [openSection, setOpenSection] = useState<FactsSection | null>(null);
@@ -1273,6 +1434,20 @@ function ProjectWorkspace({
     }
   }
 
+  // Scroll restoration: the list remounts on every return, so the scroll
+  // offset rides sessionStorage keyed by the org — restored once the rows
+  // exist, never on first paint of a shorter list. Lives above the early
+  // returns so the hook order stays constant.
+  useEffect(() => {
+    if (id || !query.data?.items?.length) return;
+    const saved = window.sessionStorage.getItem(`projects-scroll:${orgId}`);
+    if (saved) window.scrollTo(0, Number.parseInt(saved, 10) || 0);
+    const onScroll = () =>
+      window.sessionStorage.setItem(`projects-scroll:${orgId}`, String(window.scrollY));
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [id, orgId, query.data]);
+
   if (query.isPending) return <p role="status">{t("projects.loading")}</p>;
   if (query.isError) {
     return (
@@ -1293,6 +1468,21 @@ function ProjectWorkspace({
   const { project, items } = query.data;
   const disabled = busy || query.isFetching || mustReload;
   const editable = canWrite && project?.status === "DRAFT" && !project.pricing_current;
+  // List state lives in the URL — search, status filter and sort survive a
+  // back-navigation from a project detail without a bespoke store.
+  const search = params.get("q") ?? "";
+  const setSearch = (value: string) => {
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        if (value) next.set("q", value);
+        else next.delete("q");
+        return next;
+      },
+      { replace: true },
+    );
+  };
+  const sortKey = params.get("sort") ?? "updated";
   const needle = search.toLocaleLowerCase("es-CL");
 
   // The header's "Enviar al cliente" CTA performs the share itself — mint
@@ -1332,11 +1522,17 @@ function ProjectWorkspace({
   // Deep-linkable triage filter — the dashboard attention queue lands on
   // /projects?status=QUOTED so the promised list is already filtered.
   const statusFilter = params.get("status") ?? "";
-  const visible = items.filter(
-    (item) =>
-      (statusFilter === "" || item.status === statusFilter) &&
-      `${item.code} ${item.name} ${item.client_name}`.toLocaleLowerCase("es-CL").includes(needle),
-  );
+  const visible = items
+    .filter(
+      (item) =>
+        (statusFilter === "" || item.status === statusFilter) &&
+        `${item.code} ${item.name} ${item.client_name}`.toLocaleLowerCase("es-CL").includes(needle),
+    )
+    .sort((a, b) => {
+      if (sortKey === "name") return (a.name || a.code).localeCompare(b.name || b.code, "es-CL");
+      if (sortKey === "code") return a.code.localeCompare(b.code, "es-CL");
+      return b.updated_at.localeCompare(a.updated_at);
+    });
 
   return (
     <section className="projects-page" aria-busy={busy || query.isFetching}>
@@ -1577,6 +1773,7 @@ function ProjectWorkspace({
                   <summary>{t("projects.compareTitle")}</summary>
                   <RevisionComparePanel project={project} />
                 </details>
+                <ProjectActivitySection project={project} orgId={orgId} />
               </>
             </div>
           </aside>
@@ -1629,6 +1826,14 @@ function ProjectWorkspace({
                     <span className="position-row__dims">
                       {fmtMm(position.design.nominal_width_mm)} ×{" "}
                       {fmtMm(position.design.nominal_height_mm)}
+                    </span>
+                    <span className="position-row__spec">
+                      {typologyKeys[position.typology]
+                        ? t(typologyKeys[position.typology]!)
+                        : position.typology}
+                      {position.design.color
+                        ? ` · ${tOptional(`projects.color.${position.design.color}`) ?? position.design.color}`
+                        : ""}
                     </span>
                     {Number(position.price_net) > 0 && (
                       <span className="position-row__net">
@@ -1733,16 +1938,71 @@ function ProjectWorkspace({
         </div>
       ) : (
         <>
-          <div className="ui-field projects-search">
-            <label className="ui-field__label" htmlFor="projects-search">
-              {t("projects.search")}
-            </label>
-            <input
-              className="ui-field__input"
-              id="projects-search"
-              onChange={(event) => setSearch(event.target.value)}
-              value={search}
-            />
+          <div className="projects-list-bar">
+            <div className="ui-field projects-search">
+              <label className="ui-field__label" htmlFor="projects-search">
+                {t("projects.search")}
+              </label>
+              <input
+                className="ui-field__input"
+                id="projects-search"
+                onChange={(event) => setSearch(event.target.value)}
+                value={search}
+              />
+            </div>
+            <div className="ui-field">
+              <label className="ui-field__label" htmlFor="projects-status">
+                {t("projects.status")}
+              </label>
+              <select
+                className="ui-field__input"
+                id="projects-status"
+                onChange={(event) =>
+                  setParams(
+                    (current) => {
+                      const next = new URLSearchParams(current);
+                      if (event.target.value) next.set("status", event.target.value);
+                      else next.delete("status");
+                      return next;
+                    },
+                    { replace: true },
+                  )
+                }
+                value={statusFilter}
+              >
+                <option value="">{t("projects.filterAll")}</option>
+                {(Object.keys(statuses) as ProjectResponse["status"][]).map((status) => (
+                  <option key={status} value={status}>
+                    {t(statuses[status])}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="ui-field">
+              <label className="ui-field__label" htmlFor="projects-sort">
+                {t("projects.sortLabel")}
+              </label>
+              <select
+                className="ui-field__input"
+                id="projects-sort"
+                onChange={(event) =>
+                  setParams(
+                    (current) => {
+                      const next = new URLSearchParams(current);
+                      if (event.target.value === "updated") next.delete("sort");
+                      else next.set("sort", event.target.value);
+                      return next;
+                    },
+                    { replace: true },
+                  )
+                }
+                value={sortKey}
+              >
+                <option value="updated">{t("projects.sortUpdated")}</option>
+                <option value="name">{t("projects.sortName")}</option>
+                <option value="code">{t("projects.sortCode")}</option>
+              </select>
+            </div>
           </div>
           <div className="ui-table-wrap projects-table">
             <table className="ui-table">
@@ -1752,9 +2012,11 @@ function ProjectWorkspace({
                   <th scope="col">{t("projects.name")}</th>
                   <th scope="col">{t("projects.client")}</th>
                   <th scope="col">{t("projects.status")}</th>
+                  <th scope="col">{t("projects.revision")}</th>
                   <th scope="col">{t("projects.positions")}</th>
                   <th scope="col">{t("projects.updated")}</th>
                   <th scope="col">{t("projects.total")}</th>
+                  <th scope="col">{t("projects.nextStep")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1776,6 +2038,15 @@ function ProjectWorkspace({
                         {t(statuses[item.status])}
                       </span>
                     </td>
+                    <td>
+                      {item.current_revision ? (
+                        <span className="projects-row__rev">
+                          {formatRevision(item.current_revision)}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
                     <td className="ui-table__num">{item.position_count}</td>
                     <td>
                       <time dateTime={item.updated_at}>{formatDateTime(item.updated_at)}</time>
@@ -1785,6 +2056,7 @@ function ProjectWorkspace({
                         ? formatMoney(item.total_price_gross, item.currency)
                         : t("projects.unpriced")}
                     </td>
+                    <td className="projects-row__next">{t(listNextKeys[item.status])}</td>
                   </tr>
                 ))}
               </tbody>

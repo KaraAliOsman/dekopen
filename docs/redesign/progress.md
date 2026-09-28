@@ -236,3 +236,12 @@ externa, ver `blocked-inputs.md`).
 ### phase-04 · cierre de bloqueo design-options (422)
 
 El picker de kits era inalcanzable: `GET /api/v1/projects/design-options/<system>` devolvía 422 `technical_authority_required` en las tres series sembradas. Causa doble: (a) los `authority` JSONB guardaban numéricos como strings y los `EngineModel strict` rechazan la coerción str→Decimal/str→enum; (b) `load_handle_policy` hacía `model_validate` directo — insatisfiable por construcción para cualquier payload con enums. Se corrigió el loader (no solo los datos): parsers canónicos en `dekopen_engine.manufacturing` compartidos por `engine_api` y `documents`. Migración `20261228000002` inserta nuevas versiones con numéricos nativos y `version` embebido sincronizado; `seed.sql` y las tres migraciones históricas quedaron reparadas para instalaciones frescas. pgTAP 174 guarda el invariante (latest-version sin numéricos string, versión embebida consistente). Verificado: 200 HTTP con token tenant real en DEMO_60/ALU_65/GLASS_45 (`kits=5`, `handle_policy` presente), 248 tests backend verdes, 467 engine, pgTAP 172–174 verdes, `db reset` limpio de 130 migraciones.
+
+### phase-05 · unificar trabajo comercial
+
+- **hecho/probado** Lista de proyectos: búsqueda `?q=` por código/nombre/cliente, filtro `?status=` con UI propia, orden `?sort=` (reciente/nombre/código), columna Revisión (`current_revision`, mono), columna "Siguiente paso" por estado comercial, scroll restaurado al volver. Test e2e-dom: params en URL + navegación detalle→lista conserva valores.
+- **hecho/probado** Cronología humana en el proyecto: sección "Actividad" (lazy) con cotización emitida, enlace enviado/aprobado/cambios/revocado, pagos y anulaciones con autor, facturas/NC, posiciones modificadas — ordenada por fecha, sin eventos fabricados. Test dom verifica los tres tipos.
+- **hecho/probado** Duplicar posición explica lo conservado: banner "Copia de P{n}…" en el editor al llegar por `?copy=`; la posición nueva guarda con identidad propia (cubierto por tests existentes del copy flow).
+- **hecho** Filas de posición ganan resumen tipología+acabado; qty inline ya recalcula vía `positionsUpdate` + refetch (totales y producción futura desde backend).
+- **documentado** Sin UI de reorden (D23): `position_index` es clave industrial emitida. Sin edición en lote: no existe endpoint; el mandato conserva endpoints.
+- **pendiente-capturas** captures desktop/mobile + video del recorrido de aceptación vía testing agent.

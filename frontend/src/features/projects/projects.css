@@ -1035,6 +1035,14 @@ p.handle-pending {
   white-space: nowrap;
 }
 
+.position-row__spec {
+  color: var(--theme-text-muted);
+  font-size: 0.8125rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .position-row__qty-input {
   max-width: 4.25rem;
 }
@@ -1133,6 +1141,73 @@ p.handle-pending {
   font-size: 0.75rem;
   margin-left: 0.5rem;
   white-space: nowrap;
+}
+
+.projects-row__rev {
+  font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.projects-row__next {
+  color: var(--theme-text-muted);
+  font-size: 0.8125rem;
+  max-width: 14rem;
+}
+
+.projects-list-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+  margin-bottom: 0.75rem;
+}
+
+.projects-list-bar .ui-field {
+  margin-bottom: 0;
+  min-width: 10rem;
+}
+
+.projects-list-bar .projects-search {
+  flex: 1 1 14rem;
+  max-width: 24rem;
+}
+
+.project-activity {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.project-activity li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--theme-border);
+  font-size: 0.8125rem;
+}
+
+.project-activity li:last-child {
+  border-bottom: 0;
+}
+
+.project-activity__label {
+  font-weight: 500;
+}
+
+.project-activity__detail {
+  color: var(--theme-text-muted);
+}
+
+.project-activity time {
+  color: var(--theme-text-muted);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.project-activity__empty {
+  color: var(--theme-text-muted);
 }
 
 .project-head__code {

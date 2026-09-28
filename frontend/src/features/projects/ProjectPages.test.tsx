@@ -1367,3 +1367,123 @@ it("explicitly retires current draft pricing with an audit reason before editing
   );
   expect(await screen.findByRole("link", { name: t("projects.addPosition") })).toBeInTheDocument();
 });
+
+it("persists list search/status/sort in the URL across back navigation", async () => {
+  const quoted = makeProject({
+    id: "project-b",
+    code: "P-002",
+    name: "Casa B",
+    status: "QUOTED",
+    current_revision: "REV-A",
+    updated_at: "2026-09-19T09:00:00Z",
+  });
+  const draft = makeProject({
+    id: "project-a",
+    code: "P-001",
+    name: "Casa A",
+    status: "DRAFT",
+    current_revision: "REV-A",
+    updated_at: "2026-09-20T09:00:00Z",
+  });
+  vi.mocked(projectsList).mockResolvedValue(response(200, { items: [quoted, draft] }));
+
+  const router = mount("/projects");
+  await screen.findByRole("link", { name: "Casa B" });
+  fireEvent.change(screen.getByLabelText(t("projects.search")), {
+    target: { value: "casa" },
+  });
+  fireEvent.change(screen.getByLabelText(t("projects.status")), {
+    target: { value: "QUOTED" },
+  });
+  fireEvent.change(screen.getByLabelText(t("projects.sortLabel")), {
+    target: { value: "code" },
+  });
+
+  const search = router.state.location.search;
+  expect(search).toContain("q=casa");
+  expect(search).toContain("status=QUOTED");
+  expect(search).toContain("sort=code");
+  expect(screen.queryByRole("link", { name: "Casa A" })).not.toBeInTheDocument();
+
+  // Leave for a detail and come back — controls keep their state because
+  // they read the URL, not component memory.
+  vi.mocked(projectsRetrieve).mockResolvedValue(response(200, quoted));
+  fireEvent.click(screen.getByRole("link", { name: "Casa B" }));
+  await screen.findByRole("heading", { name: "Casa B" });
+  await router.navigate(-1);
+  await screen.findByLabelText(t("projects.search"));
+  expect(screen.getByLabelText(t("projects.search"))).toHaveValue("casa");
+  expect(screen.getByLabelText(t("projects.status"))).toHaveValue("QUOTED");
+});
+
+it("lists human timeline events once the activity section opens", async () => {
+  const emitted = makeProject({
+    status: "QUOTED",
+    versions: [
+      {
+        id: "version-a",
+        revision_code: "REV-A",
+        authority_version: "1",
+        bom_hash: null,
+        snapshot_sha256: null,
+        production_allowed: null,
+        documentary_complete: null,
+        emitted_at: "2026-09-19T15:00:00Z",
+      },
+    ],
+  });
+  vi.mocked(projectsRetrieve).mockResolvedValue(response(200, emitted));
+  vi.mocked(projectQuoteLinksList).mockResolvedValue(
+    response(200, [
+      {
+        id: "link-a",
+        status: "APPROVED",
+        revision_code: "REV-A",
+        decided_by: "cliente@correo.cl",
+        decided_at: "2026-09-20T10:00:00Z",
+        decided_note: null,
+        expires_at: "2026-10-01T00:00:00Z",
+        created_at: "2026-09-19T16:00:00Z",
+        revoked_at: null,
+        view_count: 3,
+        last_viewed_at: null,
+      },
+    ]),
+  );
+  vi.mocked(projectPaymentsList).mockResolvedValue(
+    response(200, {
+      payments: [
+        {
+          id: "payment-a",
+          receipt_id: null,
+          receipt_code: null,
+          kind: "ANTICIPO",
+          amount: "500000",
+          method: "TRANSFER",
+          reference: null,
+          note: null,
+          recorded_by: "estimador@taller.cl",
+          recorded_at: "2026-09-21T09:00:00Z",
+          voided_at: null,
+          void_reason: null,
+          created_at: "2026-09-21T09:00:00Z",
+        },
+      ],
+      invoices: [],
+      collected: "500000",
+      quote_total_gross: "3000000",
+      balance: "2500000",
+      currency: "CLP",
+      status: "PARTIAL",
+      sealed_revision: "REV-A",
+    }),
+  );
+
+  mount();
+  fireEvent.click(await screen.findByText(t("projects.activityTitle")));
+
+  expect(await screen.findByText(t("projects.activityEmitted"))).toBeInTheDocument();
+  expect(screen.getByText(t("projects.activityApproved"))).toBeInTheDocument();
+  expect(screen.getByText(t("projects.activityPayment"))).toBeInTheDocument();
+  expect(screen.getAllByText(/REV-A/).length).toBeGreaterThan(0);
+});

@@ -338,6 +338,9 @@ function PositionWorkspace({
   // A pending draft is offered back explicitly — never auto-applied.
   const draftKey = positionDraftKey(orgId, positionId || null, copyId || null);
   const [pendingDraft, setPendingDraft] = useState<PositionDraft | null>(null);
+  // When opened via ?copy=<id>, the source vano's index for the banner that
+  // explains what's conserved — the copy is intent, not identity.
+  const [copiedFrom, setCopiedFrom] = useState<string | null>(null);
   // New positions open on the design library (the start point); saved ones go
   // straight to the canvas — picking a starter collapses it.
   const [libraryOpen, setLibraryOpen] = useState(!positionId && !copyId);
@@ -452,6 +455,7 @@ function PositionWorkspace({
             product,
           };
           useCanvasStore.getState().loadDesign(loadedInputs);
+          setCopiedFrom(copyId ? `P${item.position_index}` : null);
           setSaved(copyId ? null : item);
           setBaseline(
             copyId
@@ -771,6 +775,11 @@ function PositionWorkspace({
         </p>
       )}
       {message && <p role="status">{message}</p>}
+      {copyId && loaded && copiedFrom && (
+        <div className="draft-banner" role="status">
+          <span>{t("projects.copyNotice").replace("{src}", copiedFrom)}</span>
+        </div>
+      )}
       {pendingDraft !== null && (
         <div className="draft-banner" role="status">
           <span>
