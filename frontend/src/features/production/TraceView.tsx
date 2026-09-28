@@ -57,7 +57,7 @@ type TraceRemnant = {
   rack_location?: string;
 };
 
-type PieceMatch = {
+export type PieceMatch = {
   work_order?: { id?: string; order_code?: string; status?: string };
   location?: {
     kind?: string;

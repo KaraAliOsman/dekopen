@@ -87,6 +87,7 @@ import {
 import SignaturePad, { type SignaturePadHandle } from "./SignaturePad";
 import { OperatorStepCard, type QcCheckInput } from "./OperatorCard";
 import { TracePieceMatches, TracePlan, TraceStock } from "./TraceView";
+import type { PieceMatch } from "./TraceView";
 import "./production.css";
 
 type WorkOrderMaterials = {
@@ -486,13 +487,19 @@ export function ProductionPage(): JSX.Element {
     if (!resolvedOrder && orders.length === 0 && !/^[0-9a-f-]{32,}$/i.test(selectedParam)) return;
     setTrace(null);
     setOperatorStepId(null);
-    setPieceQuery("");
+    // A live ?piece= deep link owns the trace panel — re-runs caused by the
+    // orders list resolving must not wipe its in-flight result.
+    const deepPiece = params.get("piece");
+    if (!deepPiece) {
+      setPieceQuery("");
+      setPieceReport(null);
+    }
     // Keep pendingStepCode — it survives the async detail load so a scan
     // lands on the piece's station. It resolves once below.
     setStrategyCompare(null);
-    setPieceReport(null);
     void loadDetail(selectedId).catch(() => setMessage(t("production.loadError")));
     void loadTrace();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId, selectedParam, resolvedOrder, orders.length, loadDetail, loadTrace]);
 
   // Resolve a scan deep-link: piece → station code → step id on this order.
@@ -555,6 +562,27 @@ export function ProductionPage(): JSX.Element {
     void lookupPiece(deep);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params]);
+
+  // A scan that resolves to exactly one order lands on it — the piece's
+  // station preselects the operator card. Ambiguous hits stay a list.
+  useEffect(() => {
+    if (!params.get("piece") || !pieceReport) return;
+    const matches = (pieceReport.matches as PieceMatch[] | undefined) ?? [];
+    const orderIds = [
+      ...new Set(
+        matches.map((match) => match.work_order?.id).filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    if (orderIds.length !== 1) return;
+    const match = matches.find((entry) => entry.work_order?.id === orderIds[0]);
+    const station = match?.operations?.find((op) => op.station)?.station;
+    setPendingStepCode(station ?? null);
+    const next = new URLSearchParams(params);
+    next.delete("piece");
+    next.set("order", orderIds[0]!);
+    setParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pieceReport]);
 
   async function action(task: Promise<unknown>, orderId: string): Promise<void> {
     setBusy(true);
