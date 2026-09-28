@@ -245,3 +245,6 @@ El picker de kits era inalcanzable: `GET /api/v1/projects/design-options/<system
 - **hecho** Filas de posición ganan resumen tipología+acabado; qty inline ya recalcula vía `positionsUpdate` + refetch (totales y producción futura desde backend).
 - **documentado** Sin UI de reorden (D23): `position_index` es clave industrial emitida. Sin edición en lote: no existe endpoint; el mandato conserva endpoints.
 - **pendiente-capturas** captures desktop/mobile + video del recorrido de aceptación vía testing agent.
+
+- **probado** Aceptación en vivo (`docs/redesign/captures/phase05/`, video del recorrido): crear cliente (sin email + nombre 110 chars) → proyecto → 3 posiciones → duplicar (banner "Copia de P1…", nueva identidad P4, original intacta) → cantidad inline recalcula → Studio → volver (contexto intacto) → precio/revisión. WORKSHOP_MANAGER lectura pura sin controles de edición; OPERATOR "Sin acceso" por diseño; obra de 100 posiciones sin overflow a 1440 ni 390.
+- **corregido** Defectos de la corrida: `.position-row` reflows a dos filas bajo 640px (scrollWidth 521→390); Guardar nombra el bloqueo real cuando falta vidrio/panel (`glazingMissing`); summary "Importar" renombrado "Documentos de origen" (leía como acción habilitada en roles de lectura — el upload ya estaba gateado por canWrite).
