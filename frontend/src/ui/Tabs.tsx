@@ -118,7 +118,6 @@ function routeActive(item: TabItem, pathname: string): boolean {
   return (
     matchPath({ path: item.to, end: item.end ?? true }, pathname) !== null ||
     // Nested-mount safety: match a trailing segment too.
-    matchPath({ path: `*/${item.to.replace(/^\//, "")}`, end: item.end ?? true }, pathname) !==
-      null
+    matchPath({ path: `*/${item.to.replace(/^\//, "")}`, end: item.end ?? true }, pathname) !== null
   );
 }

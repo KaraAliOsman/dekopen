@@ -40,10 +40,7 @@ describe("Tabs", () => {
 
   it("roves focus and activates with arrow keys, skipping disabled", () => {
     renderTabs();
-    const [first, second] = screen.getAllByRole("tab") as [
-      HTMLElement,
-      HTMLElement,
-    ];
+    const [first, second] = screen.getAllByRole("tab") as [HTMLElement, HTMLElement];
     const list = screen.getByRole("tablist");
     first.focus();
     fireEvent.keyDown(list, { key: "ArrowRight" });
