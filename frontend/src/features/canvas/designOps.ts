@@ -42,6 +42,10 @@ export function designAssistProduct(product: ProductJson): {
       id: module.id,
       width_mm: module.width_mm,
       height_mm: module.height_mm,
+      /* The tree carries intra-module structure — a "divide this module" edit
+       * leaves dims/couplings untouched but must still stale a pending ops
+       * card, so the fingerprint has to see bay splits and openings. */
+      tree: module.tree,
       ...(module.contour ? { contour: module.contour } : {}),
       ...(module.frameless ? { frameless: module.frameless } : {}),
     })),

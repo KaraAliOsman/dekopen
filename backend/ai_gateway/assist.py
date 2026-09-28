@@ -370,10 +370,19 @@ def list_turns(
     # Newest-first read window, restored oldest-first so the dock replays
     # the recent tail as a conversation — a >50-turn thread keeps its
     # freshest context instead of permanently dropping the newest turns.
-    return [
-        {"question": q, "answer": a, "created_at": ts.isoformat() if ts else None}
-        for q, a, ts in reversed(rows_out)
-    ]
+    turns = []
+    for q, a, ts in reversed(rows_out):
+        # Drivers that don't register jsonb return it as a raw JSON string —
+        # the client contract is an object, so decode it back before serving.
+        if isinstance(a, str):
+            try:
+                a = json.loads(a)
+            except (json.JSONDecodeError, TypeError):
+                continue  # a corrupt turn can't render; skip, don't crash the thread
+        turns.append(
+            {"question": q, "answer": a, "created_at": ts.isoformat() if ts else None}
+        )
+    return turns
 
 
 __all__ = ["ask", "list_turns"]

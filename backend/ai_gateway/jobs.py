@@ -617,13 +617,25 @@ def record_outcome(
             "UPDATE public.ai_jobs SET outcomes = outcomes || %s::jsonb,"
             " updated_at = NOW()"
             " WHERE id = %s AND org_id = %s AND user_id = %s"
-            " AND NOT outcomes @> %s::jsonb RETURNING id",
+            " AND NOT outcomes @> %s::jsonb"
+            # A terminal decision (applied/declined) can't be contradicted by a
+            # second one on the same step — a race or a stale card must never
+            # record 'applied' and 'declined' together. apply_failed is not
+            # terminal: retrying a failed apply is the whole point.
+            " AND (%s NOT IN ('applied','declined') OR NOT EXISTS ("
+            "   SELECT 1 FROM jsonb_array_elements(outcomes) o"
+            "   WHERE (o->>'turn_index')::int = %s AND (o->>'step_index')::int = %s"
+            "     AND o->>'action' IN ('applied','declined')))"
+            " RETURNING id",
             [
                 _dump([recorded]),
                 str(job_id),
                 str(org_id),
                 str(user_id),
                 _dump(dedupe),
+                recorded["action"],
+                recorded["turn_index"],
+                recorded["step_index"],
             ],
         )
         if found and job.get("state") == "WAITING_FOR_APPROVAL":
