@@ -320,7 +320,8 @@ beforeEach(() => {
         { sku: "GLASS-A", spec: "4-16-4" },
         { sku: "GLASS-B", spec: null },
       ],
-      hardware_kits: [{ sku: "KIT-B", name: "Kit B", opening_type: "TURN" }],
+      handle_policy: null,
+      hardware_kits: [{ sku: "KIT-B", name: "Kit B", opening_type: "TURN", contents: [] }],
       coupler_skus: ["ACOPLE-60"],
       coupler_profiles: [
         { sku: "ACOPLE-60", name: "Coplana 60", material: "PVC", face_width_mm: "90.00" },
@@ -469,6 +470,7 @@ it("fills glass defaults when the catalog has a single glazing thickness", async
     ok({
       profiles: [],
       glazing_thicknesses: ["4.00"],
+      handle_policy: null,
       hardware_kits: [],
       glass_skus: ["GLASS-A"],
       glass_specs: [{ sku: "GLASS-A", spec: "4" }],

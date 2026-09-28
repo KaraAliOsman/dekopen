@@ -18366,6 +18366,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/KitChoice'
+        handle_policy:
+          allOf:
+          - $ref: '#/components/schemas/HandlePolicy'
+          nullable: true
         glass_skus:
           type: array
           items:
@@ -18413,6 +18417,7 @@ components:
       - glass_specs
       - glazing_beads
       - glazing_thicknesses
+      - handle_policy
       - hardware_kits
       - panel_choices
       - panel_skus
@@ -19646,6 +19651,21 @@ components:
       - leaf_height_mm
       - leaf_top_from_outer_top_mm
       - placement_policy_id
+    HandlePolicy:
+      type: object
+      properties:
+        policy_id:
+          type: string
+        version:
+          type: integer
+        slots:
+          type: array
+          items:
+            $ref: '#/components/schemas/HandleSlot'
+      required:
+      - policy_id
+      - slots
+      - version
     HandlePolicyRequirements:
       type: object
       properties:
@@ -19712,6 +19732,44 @@ components:
       - mounting_min_from_leaf_top_mm
       - opening_type
       - outer_height_mm
+      - permitted_vertical_references
+    HandleSlot:
+      type: object
+      properties:
+        opening_type:
+          type: string
+        leaf_slot:
+          type: string
+          nullable: true
+        leaf_handedness:
+          type: string
+          nullable: true
+        handle_domain_slot:
+          type: string
+        host_member_side:
+          type: string
+        horizontal_reference:
+          type: string
+        horizontal_offset_mm:
+          type: string
+        permitted_vertical_references:
+          type: array
+          items:
+            type: string
+        mounting_min_from_leaf_top_mm:
+          type: string
+        mounting_max_from_leaf_top_mm:
+          type: string
+      required:
+      - handle_domain_slot
+      - horizontal_offset_mm
+      - horizontal_reference
+      - host_member_side
+      - leaf_handedness
+      - leaf_slot
+      - mounting_max_from_leaf_top_mm
+      - mounting_min_from_leaf_top_mm
+      - opening_type
       - permitted_vertical_references
     HardwareComponent:
       type: object
@@ -20343,10 +20401,34 @@ components:
           type: string
         opening_type:
           type: string
+        contents:
+          type: array
+          items:
+            $ref: '#/components/schemas/KitComponent'
       required:
+      - contents
       - name
       - opening_type
       - sku
+    KitComponent:
+      type: object
+      properties:
+        sku:
+          type: string
+        name:
+          type: string
+        qty:
+          type: string
+        unit:
+          type: string
+        category:
+          type: string
+      required:
+      - category
+      - name
+      - qty
+      - sku
+      - unit
     KitList:
       type: object
       properties:

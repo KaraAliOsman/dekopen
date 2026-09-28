@@ -740,6 +740,58 @@
   min-height: 0;
 }
 
+/* Scene-build diagnostics — the physical truth the drawing could not
+ * honour: undeclared kit skus, impossible handle datums, visual-only
+ * hinge conventions. Shown as chips over the viewport, never a toast. */
+.model3d-diagnostics {
+  border-bottom: 1px solid var(--theme-border-subtle);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 0.3rem 0.5rem;
+}
+
+.model3d-diag {
+  background: var(--theme-warning-soft, var(--theme-surface-card));
+  border: 1px solid var(--theme-warning, var(--theme-border-strong));
+  border-radius: var(--radius-sm);
+  color: var(--theme-text-secondary);
+  cursor: help;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.08rem 0.4rem;
+}
+
+.model3d-diag--handle_out_of_range,
+.model3d-diag--handle_datum_unsupported,
+.model3d-diag--kit_unknown {
+  border-color: var(--theme-danger, var(--theme-border-strong));
+}
+
+.model3d-illustrative {
+  border-bottom: 1px solid var(--theme-border-subtle);
+  color: var(--theme-text-muted);
+  font-size: 0.66rem;
+  margin: 0;
+  padding: 0.22rem 0.5rem;
+}
+
+.model3d-fallback {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-height: 12rem;
+}
+
+.model3d-fallback__text {
+  color: var(--theme-text-secondary);
+  font-size: 0.85rem;
+  margin: 0;
+  max-width: 22rem;
+  text-align: center;
+}
+
 .model3d-loading {
   align-items: center;
   color: var(--theme-text-muted);
@@ -1206,6 +1258,20 @@
 .handle-lever line {
   stroke: var(--theme-accent-ink);
   vector-effect: non-scaling-stroke;
+}
+
+/* Declared handle datum that lands off the leaf: the flag ring warns —
+ * the lever still draws at its clamped display position. */
+.handle-lever .handle-datum-flag {
+  fill: none;
+  stroke: var(--theme-danger);
+  stroke-dasharray: 3 2;
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+}
+
+.handle-lever.is-datum-invalid line {
+  stroke: var(--theme-danger);
 }
 
 /* Material-family interior detail: the soft chamber rebate of a PVC profile

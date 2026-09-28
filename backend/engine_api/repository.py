@@ -23,6 +23,7 @@ from dekopen_engine import (
     RailType,
     SystemParams,
 )
+from dekopen_engine.manufacturing import HandleRequirementPolicyV1
 
 
 class SystemNotFound(LookupError):
@@ -297,6 +298,36 @@ class SystemParamsRepository:
             )
             for row in rows
         }
+
+    def load_handle_policy(
+        self, system_id: UUID, active_org_id: UUID
+    ) -> HandleRequirementPolicyV1 | None:
+        """Latest declared handle-mounting authority for the system — the org
+        row wins over the global default, then the highest version. The design
+        surface reads it to place handles on the declared datum instead of
+        silently clamping inside the leaf."""
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT authority::text
+                FROM public.handle_requirement_policies
+                WHERE system_id = %s AND (org_id = %s OR org_id IS NULL)
+                ORDER BY org_id NULLS LAST, version DESC
+                LIMIT 1
+                """,
+                [system_id, active_org_id],
+            )
+            row = cursor.fetchone()
+        if row is None:
+            return None
+        if not isinstance(row[0], str):
+            raise UnsupportedCatalogContract("Handle policy must be raw JSON text")
+        try:
+            return HandleRequirementPolicyV1.model_validate(
+                json.loads(row[0], parse_float=Decimal, parse_int=Decimal)
+            )
+        except (ValueError, TypeError) as error:
+            raise UnsupportedCatalogContract("invalid_handle_policy") from error
 
     def _load_hardware_kits(self, system_id: UUID, active_org_id: UUID) -> list[HardwareKitRule]:
         with connection.cursor() as cursor:

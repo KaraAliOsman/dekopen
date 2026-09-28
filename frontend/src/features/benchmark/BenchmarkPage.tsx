@@ -89,6 +89,8 @@ function benchMembers(profile: "pvc" | "alu", material: string): MemberGeometry 
     beadFor: () => FALLBACK_MEMBERS.bead,
     beadSpecFor: () => null,
     couplerFor: () => spec(material, coupler),
+    kitFor: () => null,
+    handlePolicy: null,
     rebateMm: FALLBACK_MEMBERS.rebate,
     sashOverlapMm: FALLBACK_MEMBERS.sashOverlap,
   };

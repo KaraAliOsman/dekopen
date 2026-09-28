@@ -5,11 +5,11 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
-import type { KitComponent } from "./kitComponent";
 
-export interface KitChoice {
+export interface KitComponent {
   sku: string;
   name: string;
-  opening_type: string;
-  contents: KitComponent[];
+  qty: string;
+  unit: string;
+  category: string;
 }

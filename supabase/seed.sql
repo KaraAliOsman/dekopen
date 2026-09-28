@@ -381,6 +381,32 @@ FROM public.profile_systems AS system
 WHERE kit.system_id = system.id AND system.code = 'DEMO_60' AND system.is_global = TRUE
   AND kit.sku IN ('KIT-TURN', 'KIT-TILT-TURN', 'KIT-SLIDING');
 
+-- Categorized kit contents: the visual renderer and readiness reads bind
+-- handle/hinge/lock counts to these declared lines instead of heuristics.
+-- Quantities are synthetic fixture data, not a manufacturer bill of parts.
+UPDATE public.hardware_kits AS kit
+SET contents = CASE kit.sku
+    WHEN 'KIT-TURN' THEN '[
+        {"sku":"DEMO-BIS-60","name":"Bisagra practicable Demo 60","qty":3,"unit":"unit","category":"HINGE"},
+        {"sku":"DEMO-MAN-PRACT","name":"Manilla roseta practicable Demo","qty":1,"unit":"unit","category":"HANDLE"},
+        {"sku":"DEMO-CREM-60","name":"Cremona + ganchos Demo 60","qty":1,"unit":"set","category":"LOCK"}
+      ]'::JSONB
+    WHEN 'KIT-TILT-TURN' THEN '[
+        {"sku":"DEMO-BIS-OB","name":"Bisagra oscilobatiente Demo (tijera+esquina)","qty":4,"unit":"unit","category":"HINGE"},
+        {"sku":"DEMO-MAN-OB","name":"Manilla oscilobatiente Demo","qty":1,"unit":"unit","category":"HANDLE"},
+        {"sku":"DEMO-CREM-OB","name":"Cremona multipunto Demo","qty":1,"unit":"set","category":"LOCK"}
+      ]'::JSONB
+    WHEN 'KIT-SLIDING' THEN '[
+        {"sku":"DEMO-CARR-60","name":"Carro doble rueda corredera Demo","qty":2,"unit":"unit","category":"ROLLER"},
+        {"sku":"DEMO-UNERO-60","name":"Uñero embutido corredera Demo","qty":1,"unit":"unit","category":"HANDLE"},
+        {"sku":"DEMO-CIERRE-60","name":"Cierre embutido corredera Demo","qty":1,"unit":"unit","category":"LOCK"}
+      ]'::JSONB
+    ELSE kit.contents
+  END
+FROM public.profile_systems AS system
+WHERE kit.system_id = system.id AND system.code = 'DEMO_60' AND system.is_global = TRUE
+  AND kit.sku IN ('KIT-TURN', 'KIT-TILT-TURN', 'KIT-SLIDING');
+
 INSERT INTO public.profile_articles (
     id, system_id, org_id, sku, name, role, material,
     face_width_mm, commercial_length_mm, welding_loss_mm, reinforcement_gap_mm,
@@ -448,10 +474,13 @@ FROM public.profile_systems AS system
 CROSS JOIN (VALUES
     ('KIT-AWNING-16', 'Kit Proyectante Compás 16" 45kg', 'AWNING',
      400.00, 1200.00, 400.00, 1000.00, 45.00, 2,
-     '[{"sku":"DEMO-STAY-16","name":"Compás a fricción 16\"","qty":2,"unit":"unit"}]'::JSONB),
+     '[{"sku":"DEMO-STAY-16","name":"Compás a fricción 16\"","qty":2,"unit":"unit","category":"FITTING"},
+       {"sku":"DEMO-MAN-PROY","name":"Manilla central proyectante Demo","qty":1,"unit":"unit","category":"HANDLE"}]'::JSONB),
     ('KIT-DOOR-MULTIPOINT', 'Kit Puerta Entrada Multipunto Demo 60', 'DOOR',
      700.00, 1200.00, 1800.00, 2400.00, 120.00, 0,
-     '[{"sku":"DEMO-LOCK-MULTIPOINT","name":"Cerradura multipunto Demo","qty":1,"unit":"unit"}]'::JSONB)
+     '[{"sku":"DEMO-LOCK-MULTIPOINT","name":"Cerradura multipunto Demo","qty":1,"unit":"unit","category":"LOCK"},
+       {"sku":"DEMO-BIS-PUERTA","name":"Bisagra puerta reforzada Demo","qty":3,"unit":"unit","category":"HINGE"},
+       {"sku":"DEMO-MAN-PUERTA","name":"Par manilla puerta + cilindro Demo","qty":1,"unit":"set","category":"HANDLE"}]'::JSONB)
 ) AS fixture(sku, name, opening_type, min_w, max_w, min_h, max_h, max_weight, stays, contents)
 WHERE system.code = 'DEMO_60' AND system.is_global = TRUE
 ON CONFLICT (id) DO UPDATE SET
@@ -745,15 +774,29 @@ INSERT INTO public.hardware_kits (
 )
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/ALU_65/' || kit.sku), s.id, NULL,
  kit.sku, kit.name, kit.opening_type, kit.min_w, kit.max_w, kit.min_h, kit.max_h,
- kit.max_weight, kit.rail, kit.carriages, kit.stays, 2.50, '[]'::JSONB
+ kit.max_weight, kit.rail, kit.carriages, kit.stays, 2.50, kit.contents
 FROM public.profile_systems s
 CROSS JOIN (VALUES
-    ('KIT-A-TURN','Kit practicable Aluminio 65','TURN',400,1100,500,2200,60,'dual',0,0),
-    ('KIT-A-TILT-TURN','Kit oscilobatiente Aluminio 65','TILT_TURN',450,1300,600,2200,90,'dual',0,1),
-    ('KIT-A-SLIDING','Kit corredera Aluminio 65','SLIDING',500,1800,600,2400,100,'dual',2,0),
-    ('KIT-A-AWNING','Kit proyectante Aluminio 65','AWNING',450,1400,400,1200,50,'dual',0,2),
-    ('KIT-A-DOOR','Kit puerta multipunto Aluminio 65','DOOR',750,1200,1900,2400,90,'dual',0,0)
-) AS kit(sku, name, opening_type, min_w, max_w, min_h, max_h, max_weight, rail, carriages, stays)
+    ('KIT-A-TURN','Kit practicable Aluminio 65','TURN',400,1100,500,2200,60,'dual',0,0,
+     '[{"sku":"ALU-BIS-65","name":"Bisagra practicable Aluminio 65","qty":3,"unit":"unit","category":"HINGE"},
+       {"sku":"ALU-MAN-PRACT","name":"Manilla roseta Aluminio","qty":1,"unit":"unit","category":"HANDLE"},
+       {"sku":"ALU-CREM-65","name":"Cremona multipunto Aluminio 65","qty":1,"unit":"set","category":"LOCK"}]'::JSONB),
+    ('KIT-A-TILT-TURN','Kit oscilobatiente Aluminio 65','TILT_TURN',450,1300,600,2200,90,'dual',0,1,
+     '[{"sku":"ALU-BIS-OB","name":"Bisagra oscilobatiente Aluminio 65","qty":4,"unit":"unit","category":"HINGE"},
+       {"sku":"ALU-MAN-OB","name":"Manilla oscilobatiente Aluminio","qty":1,"unit":"unit","category":"HANDLE"},
+       {"sku":"ALU-CREM-OB","name":"Cremona multipunto Aluminio 65","qty":1,"unit":"set","category":"LOCK"}]'::JSONB),
+    ('KIT-A-SLIDING','Kit corredera Aluminio 65','SLIDING',500,1800,600,2400,100,'dual',2,0,
+     '[{"sku":"ALU-CARR-65","name":"Carro doble rueda corredera Aluminio","qty":2,"unit":"unit","category":"ROLLER"},
+       {"sku":"ALU-TIRADOR-65","name":"Tirador superficial corredera Aluminio","qty":1,"unit":"unit","category":"HANDLE"},
+       {"sku":"ALU-CIERRE-65","name":"Cierre corredera Aluminio","qty":1,"unit":"unit","category":"LOCK"}]'::JSONB),
+    ('KIT-A-AWNING','Kit proyectante Aluminio 65','AWNING',450,1400,400,1200,50,'dual',0,2,
+     '[{"sku":"ALU-STAY-65","name":"Compás a fricción Aluminio 65","qty":2,"unit":"unit","category":"FITTING"},
+       {"sku":"ALU-MAN-PROY","name":"Manilla central proyectante Aluminio","qty":1,"unit":"unit","category":"HANDLE"}]'::JSONB),
+    ('KIT-A-DOOR','Kit puerta multipunto Aluminio 65','DOOR',750,1200,1900,2400,90,'dual',0,0,
+     '[{"sku":"ALU-BIS-PUERTA","name":"Bisagra puerta Aluminio 65","qty":3,"unit":"unit","category":"HINGE"},
+       {"sku":"ALU-LOCK-PUERTA","name":"Cerradura multipunto Aluminio","qty":1,"unit":"unit","category":"LOCK"},
+       {"sku":"ALU-MAN-PUERTA","name":"Par manilla puerta + cilindro Aluminio","qty":1,"unit":"set","category":"HANDLE"}]'::JSONB)
+) AS kit(sku, name, opening_type, min_w, max_w, min_h, max_h, max_weight, rail, carriages, stays, contents)
 WHERE s.code = 'ALU_65' AND s.is_global = TRUE
 ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name, opening_type = EXCLUDED.opening_type,
@@ -770,15 +813,29 @@ INSERT INTO public.hardware_kits (
 )
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/GLASS_45/' || kit.sku), s.id, NULL,
  kit.sku, kit.name, kit.opening_type, kit.min_w, kit.max_w, kit.min_h, kit.max_h,
- kit.max_weight, kit.rail, kit.carriages, kit.stays, 2.50, '[]'::JSONB
+ kit.max_weight, kit.rail, kit.carriages, kit.stays, 2.50, kit.contents
 FROM public.profile_systems s
 CROSS JOIN (VALUES
-    ('KIT-G-TURN','Kit practicable Vidrio 45','TURN',400,1000,500,2100,50,'dual',0,0),
-    ('KIT-G-TILT-TURN','Kit oscilobatiente Vidrio 45','TILT_TURN',450,1200,600,2100,70,'dual',0,1),
-    ('KIT-G-SLIDING','Kit corredera Vidrio 45','SLIDING',600,1600,700,2300,80,'dual',2,0),
-    ('KIT-G-AWNING','Kit proyectante Vidrio 45','AWNING',500,1600,400,1100,45,'dual',0,2),
-    ('KIT-G-DOOR','Kit puerta Vidrio 45','DOOR',800,1100,1950,2300,70,'dual',0,0)
-) AS kit(sku, name, opening_type, min_w, max_w, min_h, max_h, max_weight, rail, carriages, stays)
+    ('KIT-G-TURN','Kit practicable Vidrio 45','TURN',400,1000,500,2100,50,'dual',0,0,
+     '[{"sku":"GLASS-BIS-45","name":"Bisagra vidrio-perfil 45","qty":3,"unit":"unit","category":"HINGE"},
+       {"sku":"GLASS-MAN-45","name":"Manilla acero pulido vidrio 45","qty":1,"unit":"unit","category":"HANDLE"},
+       {"sku":"GLASS-CIERRE-45","name":"Cierre magnético vidrio 45","qty":1,"unit":"unit","category":"LOCK"}]'::JSONB),
+    ('KIT-G-TILT-TURN','Kit oscilobatiente Vidrio 45','TILT_TURN',450,1200,600,2100,70,'dual',0,1,
+     '[{"sku":"GLASS-BIS-OB","name":"Bisagra oscilobatiente vidrio 45","qty":4,"unit":"unit","category":"HINGE"},
+       {"sku":"GLASS-MAN-OB","name":"Manilla oscilobatiente vidrio 45","qty":1,"unit":"unit","category":"HANDLE"},
+       {"sku":"GLASS-CIERRE-OB","name":"Cierre magnético vidrio 45","qty":1,"unit":"unit","category":"LOCK"}]'::JSONB),
+    ('KIT-G-SLIDING','Kit corredera Vidrio 45','SLIDING',600,1600,700,2300,80,'dual',2,0,
+     '[{"sku":"GLASS-CARR-45","name":"Carro corredera vidrio 45","qty":2,"unit":"unit","category":"ROLLER"},
+       {"sku":"GLASS-TIRADOR-45","name":"Tirador barra vidrio 45","qty":1,"unit":"unit","category":"HANDLE"},
+       {"sku":"GLASS-LOCK-45","name":"Cerradura corredera vidrio 45","qty":1,"unit":"unit","category":"LOCK"}]'::JSONB),
+    ('KIT-G-AWNING','Kit proyectante Vidrio 45','AWNING',500,1600,400,1100,45,'dual',0,2,
+     '[{"sku":"GLASS-STAY-45","name":"Compás proyectante vidrio 45","qty":2,"unit":"unit","category":"FITTING"},
+       {"sku":"GLASS-MAN-PROY","name":"Manilla central vidrio 45","qty":1,"unit":"unit","category":"HANDLE"}]'::JSONB),
+    ('KIT-G-DOOR','Kit puerta Vidrio 45','DOOR',800,1100,1950,2300,70,'dual',0,0,
+     '[{"sku":"GLASS-BIS-PUERTA","name":"Bisagra puerta vidrio 45","qty":3,"unit":"unit","category":"HINGE"},
+       {"sku":"GLASS-LOCK-PUERTA","name":"Cerradura puerta vidrio 45","qty":1,"unit":"unit","category":"LOCK"},
+       {"sku":"GLASS-MAN-PUERTA","name":"Par manilla puerta vidrio + cilindro","qty":1,"unit":"set","category":"HANDLE"}]'::JSONB)
+) AS kit(sku, name, opening_type, min_w, max_w, min_h, max_h, max_weight, rail, carriages, stays, contents)
 WHERE s.code = 'GLASS_45' AND s.is_global = TRUE
 ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name, opening_type = EXCLUDED.opening_type,

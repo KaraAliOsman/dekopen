@@ -8,6 +8,7 @@
 import type { CouplerChoice } from "./couplerChoice";
 import type { GlassSpecChoice } from "./glassSpecChoice";
 import type { GlazingBeadChoice } from "./glazingBeadChoice";
+import type { HandlePolicy } from "./handlePolicy";
 import type { KitChoice } from "./kitChoice";
 import type { PanelChoice } from "./panelChoice";
 import type { ProfileChoice } from "./profileChoice";
@@ -16,6 +17,7 @@ export interface DesignOptions {
   profiles: ProfileChoice[];
   glazing_thicknesses: string[];
   hardware_kits: KitChoice[];
+  handle_policy: HandlePolicy | null;
   glass_skus: string[];
   glass_specs: GlassSpecChoice[];
   colors: string[];

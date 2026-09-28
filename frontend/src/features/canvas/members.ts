@@ -1,4 +1,9 @@
-import type { DesignOptions, ProfileSection } from "../../api/generated/models";
+import type {
+  DesignOptions,
+  HandlePolicy,
+  KitChoice,
+  ProfileSection,
+} from "../../api/generated/models";
 
 /** Drawing hierarchy resolved from the catalog: member face widths and the
  * system's rebate/overlap geometry. Everything optional — the demo/DOM paths
@@ -29,6 +34,13 @@ export interface MemberGeometry {
    * Null when the thickness resolves to the neutral convention only. */
   beadSpecFor(glassThicknessMm: string | null): MemberSpec | null;
   couplerFor(sku: string | null): MemberSpec | null;
+  /** Declared hardware kit by sku — contents carry the real component
+   * counts (hinges, handles, locks) the visuals bind to. Null when the
+   * sku is not in the system's kit list. */
+  kitFor(sku: string | null): KitChoice | null;
+  /** The system's declared handle-mounting policy, or null when none is
+   * on file — callers must not silently invent datum conventions. */
+  handlePolicy: HandlePolicy | null;
   rebateMm: number;
   sashOverlapMm: number;
   /** Serializable digest of the lookup tables the functions close over —
@@ -89,9 +101,18 @@ export function resolveMembers(options: DesignOptions | undefined): MemberGeomet
       });
     }
   }
+  const kits = new Map<string, KitChoice>();
+  for (const item of options?.hardware_kits ?? []) {
+    kits.set(item.sku, item);
+  }
   const signature = JSON.stringify({
     beads: [...beads.entries()],
     couplers: [...couplers.entries()],
+    // The kit's declared contents, not just its sku — a contents update
+    // (hinge count, handle lines) must invalidate every visual that bound
+    // to it.
+    kits: [...kits.values()].map((item) => [item.sku, item.contents]),
+    handlePolicy: options?.handle_policy ?? null,
   });
   const rebate = Number(options?.rebate_depth_mm);
   const sashOverlap = Number(options?.sash_overlap_mm);
@@ -125,6 +146,10 @@ export function resolveMembers(options: DesignOptions | undefined): MemberGeomet
       // coupler; ambiguity returns unresolved so the drawing stays neutral.
       return couplers.size === 1 ? (couplers.values().next().value ?? null) : null;
     },
+    kitFor(sku) {
+      return sku ? (kits.get(sku) ?? null) : null;
+    },
+    handlePolicy: options?.handle_policy ?? null,
     rebateMm: Number.isFinite(rebate) && rebate > 0 ? rebate : FALLBACK.rebate,
     sashOverlapMm:
       Number.isFinite(sashOverlap) && sashOverlap >= 0 ? sashOverlap : FALLBACK.sashOverlap,

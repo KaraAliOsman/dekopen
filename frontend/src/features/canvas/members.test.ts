@@ -17,6 +17,7 @@ const CATALOG: DesignOptions = {
     },
   ],
   glazing_thicknesses: ["24.00", "28.00"],
+  handle_policy: null,
   hardware_kits: [],
   glass_skus: [],
   glass_specs: [],
@@ -121,4 +122,51 @@ it("carries a declared catalog section through to the member spec", () => {
   expect(members.frame.section?.source).toBe("POLYGON");
   expect(members.frame.section?.polygon).toHaveLength(4);
   expect(members.sash.section).toBeNull();
+});
+
+it("signature invalidates on kit contents and handle-policy changes, not on shape alone", () => {
+  const base = resolveMembers({
+    ...CATALOG,
+    hardware_kits: [
+      {
+        sku: "K1",
+        name: "Kit",
+        opening_type: "TURN",
+        contents: [{ sku: "H", name: "hinge", qty: "3", unit: "unit", category: "HINGE" }],
+      },
+    ],
+  });
+  const same = resolveMembers({
+    ...CATALOG,
+    hardware_kits: [
+      {
+        sku: "K1",
+        name: "Kit",
+        opening_type: "TURN",
+        contents: [{ sku: "H", name: "hinge", qty: "3", unit: "unit", category: "HINGE" }],
+      },
+    ],
+  });
+  const moreHinges = resolveMembers({
+    ...CATALOG,
+    hardware_kits: [
+      {
+        sku: "K1",
+        name: "Kit",
+        opening_type: "TURN",
+        contents: [{ sku: "H", name: "hinge", qty: "4", unit: "unit", category: "HINGE" }],
+      },
+    ],
+  });
+  const withPolicy = resolveMembers({
+    ...CATALOG,
+    handle_policy: {
+      policy_id: "p1",
+      version: 1,
+      slots: [],
+    } as never,
+  });
+  expect(base.signature).toBe(same.signature);
+  expect(base.signature).not.toBe(moreHinges.signature);
+  expect(base.signature).not.toBe(withPolicy.signature);
 });

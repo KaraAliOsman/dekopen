@@ -267,3 +267,24 @@ export function solidMaterial(solid: Solid3D, mode: MaterialMode): SolidMaterial
     }
   }
 }
+
+/** Radial contact-shadow texture for the 3D stage — soft dark ellipse
+ * under the product so it reads grounded, not floating in a void. One
+ * shared texture, never disposed. */
+let shadowTexture: THREE.Texture | null = null;
+export function contactShadowTexture(): THREE.Texture {
+  if (shadowTexture) return shadowTexture;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 256;
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    const gradient = ctx.createRadialGradient(128, 128, 8, 128, 128, 126);
+    gradient.addColorStop(0, "rgba(20,24,22,0.38)");
+    gradient.addColorStop(0.55, "rgba(20,24,22,0.16)");
+    gradient.addColorStop(1, "rgba(20,24,22,0)");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 256, 256);
+  }
+  shadowTexture = new THREE.CanvasTexture(canvas);
+  return shadowTexture;
+}

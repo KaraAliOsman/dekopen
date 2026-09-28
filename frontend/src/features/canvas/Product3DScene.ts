@@ -6,6 +6,8 @@ import { resolvedSlidingLayout } from "./intentEditing";
 import { insetContourPoints } from "./contourGeometry";
 import { frontLayout } from "./ProductFrontSvg";
 import type { MemberGeometry, MemberSpec } from "./members";
+import type { HandleKind, SceneDiagnostic } from "./hardwareVisual";
+import { resolveHardwareVisual } from "./hardwareVisual";
 
 /** Pure 3D scene builder — the §16 view derives every solid from the SAME
  * product model the 2D elevation renders (front layout, bay tree, catalog
@@ -154,6 +156,14 @@ export interface Scene3D {
   /** Camera-fit volume over the whole scene. */
   center: Vec3;
   radius: number;
+  /** World-space bounds of every emitted solid — the stage grounds the
+   * product on `min[1]` instead of guessing from the bounding sphere. */
+  bounds: { min: Vec3; max: Vec3 };
+  /** Build diagnostics the view must surface: impossible declared datums,
+   * unknown kit selections, visual-only conventions standing in for
+   * authority. The drawing still renders — the incompatibility is shown,
+   * never hidden by a silent clamp. */
+  diagnostics: SceneDiagnostic[];
 }
 
 /** Neutral drawing depth when no authority declares one — the plan carries
@@ -166,8 +176,6 @@ const FITTING_BLOCK_MM = 90;
 const GASKET_MM = 3;
 const BEAD_DEPTH_MM = 10;
 const HANDLE_HEIGHT_MM = 1050;
-const HANDLE_OFFSET_MM = 14;
-const HINGE_MM = 14;
 const TRACK_MM = 10;
 
 type Region = { x: number; y: number; w: number; h: number };
@@ -579,50 +587,276 @@ function leafHingeSide(bay: IntentNode): "LEFT" | "RIGHT" | null {
   return null;
 }
 
-/** A lever handle on the leaf's free stile: escutcheon rose standing
- * proud of the interior sash face, spindle block, lever ~120 mm hanging
- * down (the EN closed pose). `faceZ` is the leaf's interior face; every
- * piece protrudes +z (room side) from it. */
-function leverHandle(
+/** Rounded-corner plate outline centred at the origin — the rose /
+ * escutcheon silhouette a real handle mounts on instead of a bare box. */
+function plateOutline(w: number, h: number, r: number): Pt2[] {
+  const radius = Math.min(r, w / 2, h / 2);
+  const pts: Pt2[] = [];
+  const corner = (cx: number, cy: number, a0: number, a1: number): void => {
+    for (let i = 0; i <= 4; i += 1) {
+      const a = a0 + ((a1 - a0) * i) / 4;
+      pts.push([cx + radius * Math.cos(a), cy + radius * Math.sin(a)]);
+    }
+  };
+  corner(-w / 2 + radius, h / 2 - radius, Math.PI, Math.PI / 2);
+  corner(w / 2 - radius, h / 2 - radius, Math.PI / 2, 0);
+  corner(w / 2 - radius, -h / 2 + radius, 0, -Math.PI / 2);
+  corner(-w / 2 + radius, -h / 2 + radius, -Math.PI / 2, -Math.PI);
+  return pts;
+}
+
+/** Lever arm silhouette hanging −y from the spindle centre: hub, tapered
+ * neck, rounded tip — proportioned like a real ~135 mm window lever. */
+function leverOutline(length: number): Pt2[] {
+  const tipR = 5.5;
+  const L = Math.max(length, 40);
+  const pts: Pt2[] = [
+    [-10, -2],
+    [-8.5, -16],
+    [-6, -L + tipR],
+  ];
+  // Rounded tip — a semicircle under the arm.
+  for (let i = 0; i <= 6; i += 1) {
+    const a = Math.PI + (Math.PI * i) / 6;
+    pts.push([tipR * Math.cos(a), -L + tipR + tipR * Math.sin(a)]);
+  }
+  pts.push([6, -L + tipR], [8.5, -16], [10, -2], [7.5, 5], [0, 9], [-7.5, 5]);
+  return pts;
+}
+
+/** Extrude a centred outline onto a face plane: `dir` > 0 protrudes +z
+ * (interior/room face), < 0 protrudes −z (exterior/street face). */
+function facePlate(
   solids: Solid3D[],
   owner: string,
-  x: number,
-  y: number,
+  material: string,
+  outline: Pt2[],
+  cx: number,
+  cy: number,
   faceZ: number,
-  cylinder: boolean,
+  depth: number,
+  dir: 1 | -1,
+  approximate = false,
 ): void {
-  const roseW = 26;
-  const roseH = 56;
-  const leverLen = 120;
-  const leverH = 16;
-  solids.push(
-    box(owner, "handle", "STEEL", x, y - roseH / 2, faceZ, roseW, roseH, 10),
-    box(owner, "handle", "STEEL", x + (roseW - 20) / 2, y - 10, faceZ + 10, 20, 20, 22),
-    // Lever hangs down from the rose — the EN closed pose; a horizontal
-    // lever pointing at the hinges reads mid-operation.
-    box(
-      owner,
-      "handle",
-      "STEEL",
-      x + roseW / 2 - leverH / 2,
-      y - leverLen,
-      faceZ + 30,
-      leverH,
-      leverLen,
-      leverH,
-    ),
+  solids.push({
+    kind: "shape",
+    owner,
+    surface: "handle",
+    material,
+    outline: outline.map(([x, y]) => [cx + x, cy + y] as Pt2),
+    holes: [],
+    z0: dir > 0 ? faceZ : faceZ - depth,
+    depth,
+    approximate,
+  });
+}
+
+/** A casement/tilt-turn lever on one face: rounded rose plate, collar
+ * boss, tapered lever hanging down (the EN closed pose — a lever pointing
+ * at the hinges reads as mid-operation). */
+function leverOnFace(
+  solids: Solid3D[],
+  owner: string,
+  cx: number,
+  cy: number,
+  faceZ: number,
+  dir: 1 | -1,
+  approximate: boolean,
+): void {
+  facePlate(solids, owner, "STEEL", plateOutline(30, 64, 9), cx, cy, faceZ, 4, dir, approximate);
+  const zCollar = dir > 0 ? faceZ + 4 : faceZ - 18;
+  solids.push({
+    ...box(owner, "handle", "STEEL", cx - 9, cy - 9, zCollar, 18, 18, 14),
+    approximate,
+  });
+  const zLever = dir > 0 ? faceZ + 18 : faceZ - 31;
+  facePlate(solids, owner, "STEEL", leverOutline(132), cx, cy, zLever, 13, dir, approximate);
+}
+
+/** Door lever set per the selection: escutcheon plate + lever on each
+ * face the contract declares, cylinder under the rose when the kit/leaf
+ * carries a lock, interior thumb turn opposite the keyhole. */
+function doorLeverSet(
+  solids: Solid3D[],
+  owner: string,
+  cx: number,
+  cy: number,
+  leafBottom: number,
+  zInterior: number,
+  zExterior: number,
+  cylinder: boolean,
+  approximate: boolean,
+): void {
+  // The escutcheon plate runs below the spindle so its tail carries the
+  // cylinder — clamped onto the leaf so a tall plate never punches the
+  // sill.
+  const plateH = 240;
+  const py = Math.max(cy - 92, leafBottom + plateH / 2 + 6);
+  facePlate(
+    solids,
+    owner,
+    "STEEL",
+    plateOutline(30, plateH, 10),
+    cx,
+    py,
+    zInterior,
+    4,
+    1,
+    approximate,
   );
+  facePlate(
+    solids,
+    owner,
+    "STEEL",
+    plateOutline(30, plateH, 10),
+    cx,
+    py,
+    zExterior,
+    4,
+    -1,
+    approximate,
+  );
+  leverOnFace(solids, owner, cx, cy, zInterior + 4, 1, approximate);
+  leverOnFace(solids, owner, cx, cy, zExterior - 4, -1, approximate);
   if (cylinder) {
+    const barrelY = py - plateH / 2 + 58;
+    // Exterior: the keyed barrel boss. Interior: the thumb-turn paddle.
     solids.push(
-      box(owner, "handle", "STEEL", x + (roseW - 14) / 2, y - roseH / 2 - 46, faceZ, 14, 36, 9),
+      {
+        ...box(owner, "handle", "STEEL", cx - 9, barrelY - 17, zExterior - 16, 18, 34, 16),
+        approximate,
+      },
+      {
+        ...box(owner, "handle", "STEEL", cx - 7, barrelY - 12, zInterior + 4, 14, 24, 12),
+        approximate,
+      },
     );
   }
 }
 
-/** Operable-leaf hardware: hinge barrels on the hinge edge (subtle —
- * closed casement hinges hide behind the rebate), a lever handle opposite
- * them at the declared handle height (the conventional 1050 mm when
- * undeclared — a presentation convention; the declared value wins). */
+/** A projectante/awning centre handle on the bottom rail — the fitting
+ * those leaves actually carry, not a side-stile window lever. */
+function centreLever(
+  solids: Solid3D[],
+  owner: string,
+  cx: number,
+  cy: number,
+  faceZ: number,
+  approximate: boolean,
+): void {
+  facePlate(solids, owner, "STEEL", plateOutline(34, 22, 7), cx, cy, faceZ, 5, 1, approximate);
+  const zLever = faceZ + 5;
+  solids.push({
+    ...box(owner, "handle", "STEEL", cx - 6, cy + 6, zLever, 12, 46, 14),
+    approximate,
+  });
+  solids.push({
+    ...box(owner, "handle", "STEEL", cx - 16, cy + 44, zLever, 32, 10, 14),
+    approximate,
+  });
+}
+
+/** Sliding pull families — sized by the fitting, never a percentage of
+ * the leaf height. `kind` comes from the selected kit's declared name. */
+function slidingPull(
+  solids: Solid3D[],
+  owner: string,
+  kind: HandleKind,
+  stileX: number,
+  cy: number,
+  faceZ: number,
+  sashW: number,
+  approximate: boolean,
+): void {
+  if (kind === "surface_pull" || kind === "lift_slide") {
+    // Stand-off grip: two feet + a vertical bar — 200 mm travel of hand,
+    // fixed regardless of leaf height.
+    for (const dy of [-82, 82]) {
+      solids.push({
+        ...box(owner, "handle", "STEEL", stileX - 7, cy + dy - 14, faceZ, 14, 28, 18),
+        approximate,
+      });
+    }
+    solids.push({
+      ...box(owner, "handle", "STEEL", stileX - 8, cy - 100, faceZ + 18, 16, 200, 16),
+      approximate,
+    });
+    if (kind === "lift_slide") {
+      leverOnFace(solids, owner, stileX, cy - 190, faceZ, 1, approximate);
+    }
+    return;
+  }
+  // Uñero / cierre embutido: a flush cup recessed into the meeting stile's
+  // interior face — dark cavity inside a thin metallic rim.
+  const cupW = Math.min(20, sashW - 8);
+  solids.push(
+    {
+      ...box(owner, "handle", "GASKET", stileX - cupW / 2, cy - 56, faceZ - 8, cupW, 112, 9),
+      approximate,
+    },
+    {
+      ...box(owner, "handle", "STEEL", stileX - 12, cy - 66, faceZ - 2, 24, 132, 4),
+      approximate,
+    },
+    // Finger lip over the cavity's centre.
+    {
+      ...box(owner, "handle", "STEEL", stileX - 8, cy - 22, faceZ - 2, 16, 44, 5),
+      approximate,
+    },
+  );
+}
+
+/** One rebate hinge: knuckle barrel on the sash's rebate edge, leaf flag
+ * folding inward across the cavity, end caps — enough silhouette to read
+ * as a hinge at close zoom while staying behind the galce head-on. */
+function hingeAt(
+  solids: Solid3D[],
+  owner: string,
+  hingeX: number,
+  y: number,
+  rebateZ: number,
+  len: number,
+  inward: 1 | -1,
+  door: boolean,
+  approximate: boolean,
+): void {
+  const barrelW = door ? 11 : 9;
+  const flagW = 13;
+  solids.push(
+    {
+      ...box(owner, "hinge", "STEEL", hingeX, y, rebateZ, barrelW, len, 11),
+      approximate,
+    },
+    {
+      ...box(
+        owner,
+        "hinge",
+        "STEEL",
+        inward > 0 ? hingeX + barrelW - 2 : hingeX - flagW + 2,
+        y + 4,
+        rebateZ + 1,
+        flagW,
+        len - 8,
+        4,
+      ),
+      approximate,
+    },
+    {
+      ...box(owner, "hinge", "STEEL", hingeX, y - 4, rebateZ + 1, barrelW, 5, 9),
+      approximate,
+    },
+    {
+      ...box(owner, "hinge", "STEEL", hingeX, y + len - 1, rebateZ + 1, barrelW, 5, 9),
+      approximate,
+    },
+  );
+}
+
+/** Operable-leaf hardware bound to the visual contract: hinge count comes
+ * from the selected kit's declared bill when present (heuristic otherwise,
+ * marked schematic); the handle's family, faces and datum come from
+ * `resolveHardwareVisual` — impossible declared positions draw clamped
+ * AND report a diagnostic, never silently corrected. */
 function hardwareSolids(
   solids: Solid3D[],
   owner: string,
@@ -631,74 +865,98 @@ function hardwareSolids(
   sashW: number,
   zInterior: number,
   sashD: number,
+  members: MemberGeometry,
+  diagnostics: SceneDiagnostic[],
 ): void {
-  const opening = bay.opening_type;
+  const spec = resolveHardwareVisual(bay, leafRegion, members, owner);
+  diagnostics.push(...spec.diagnostics);
   // Rebate hardware lives in the cavity between the sash's outer face and
   // the aperture edge — buried in neither member, hidden head-on, visible
   // in the gap at a three-quarter view exactly like the real fitting.
   const rebateZ = zInterior - sashD - 6;
-  if (opening === "AWNING") {
-    // Top-hung: two hinge barrels along the head plus a centre handle at
-    // the bottom stile (the leaf's free edge).
-    for (const frac of [0.2, 0.8]) {
-      solids.push(
-        box(
+  const zExterior = zInterior - sashD;
+  const door = spec.family === "DOOR";
+  const hinge = leafHingeSide(bay);
+
+  if (spec.family === "AWNING") {
+    // Top-hung: hinge barrels along the head plus stays at the jambs and a
+    // centre handle on the bottom rail (the leaf's free edge).
+    const count = spec.hinges?.count ?? 2;
+    const len = Math.min(140, sashW * 0.9);
+    for (let index = 0; index < count; index += 1) {
+      const frac = count === 1 ? 0.5 : 0.14 + 0.72 * (index / (count - 1));
+      solids.push({
+        ...box(
           owner,
           "hinge",
           "STEEL",
-          leafRegion.x + leafRegion.w * frac - HINGE_MM / 2,
-          leafRegion.y + leafRegion.h - sashW * 0.9,
+          leafRegion.x + leafRegion.w * frac - 5,
+          leafRegion.y + leafRegion.h - len * 0.75,
           rebateZ,
-          HINGE_MM,
-          sashW * 0.7,
           10,
+          len * 0.75,
+          11,
         ),
+        approximate: spec.hinges?.authority !== "kit",
+      });
+    }
+    // Scissor stays — the arms a top-hung leaf physically needs; positions
+    // are the presentation convention, flagged schematic.
+    for (const side of [0.08, 0.92]) {
+      solids.push({
+        ...box(
+          owner,
+          "hinge",
+          "STEEL",
+          leafRegion.x + leafRegion.w * side - 4,
+          leafRegion.y + leafRegion.h - 160,
+          rebateZ + 2,
+          8,
+          150,
+          7,
+        ),
+        approximate: true,
+      });
+    }
+    if (spec.handle) {
+      centreLever(
+        solids,
+        owner,
+        leafRegion.x + leafRegion.w / 2,
+        spec.handle.heightMm,
+        zInterior,
+        !spec.handle.kitBound,
       );
     }
-    solids.push(
-      box(
-        owner,
-        "handle",
-        "STEEL",
-        leafRegion.x + leafRegion.w / 2 - 8,
-        leafRegion.y + 30,
-        zInterior,
-        16,
-        24,
-        14,
-      ),
-    );
     return;
   }
-  const hinge = leafHingeSide(bay);
-  if (!hinge) return;
-  const door = opening === "DOOR_ENTRY";
-  const tiltTurn = opening === "TILT_TURN_LEFT" || opening === "TILT_TURN_RIGHT";
-  const hingeX = hinge === "LEFT" ? leafRegion.x + 2 : leafRegion.x + leafRegion.w - HINGE_MM - 2;
-  // Taller leaves carry more hinges — the fitting schedule scales with
-  // the leaf, not a fixed two/three per opening type.
-  const hingeCount = door ? (leafRegion.h > 2200 ? 4 : 3) : leafRegion.h > 1700 ? 3 : 2;
+
+  if (!hinge || spec.family === "SLIDING") return;
+  const tiltTurn = spec.family === "TILT_TURN";
+  const hingeX =
+    hinge === "LEFT" ? leafRegion.x + 2 : leafRegion.x + leafRegion.w - (door ? 13 : 11);
+  const inward = hinge === "LEFT" ? 1 : -1;
+  const hingeCount = spec.hinges?.count ?? (door ? 3 : 2);
+  const hingeLen = door ? 130 : 110;
   for (let index = 0; index < hingeCount; index += 1) {
-    const frac = 0.14 + (0.86 - 0.14) * (index / (hingeCount - 1));
-    solids.push(
-      box(
-        owner,
-        "hinge",
-        "STEEL",
-        hingeX,
-        leafRegion.y + leafRegion.h * frac,
-        rebateZ,
-        HINGE_MM,
-        Math.min(leafRegion.h * 0.1, door ? 130 : 110),
-        10,
-      ),
+    const frac = hingeCount === 1 ? 0.5 : 0.12 + (0.88 - 0.12) * (index / (hingeCount - 1));
+    hingeAt(
+      solids,
+      owner,
+      hingeX,
+      leafRegion.y + leafRegion.h * frac,
+      rebateZ,
+      hingeLen,
+      inward,
+      door,
+      spec.hinges?.authority !== "kit",
     );
   }
   if (tiltTurn) {
     // The top scissor stay runs from the hinge-side corner across the head
     // — the fitting a tilt-turn physically needs on top of its hinges.
-    solids.push(
-      box(
+    solids.push({
+      ...box(
         owner,
         "hinge",
         "STEEL",
@@ -711,25 +969,39 @@ function hardwareSolids(
         10,
         8,
       ),
-    );
+      approximate: true,
+    });
   }
-  const declaredHandle = Number(bay.handle_height_mm);
-  // Module space measures up from the module's outer bottom edge — the
-  // same OUTER_BOTTOM datum the manufacturing authority resolves. Clamp
-  // onto the leaf so a stale value still lands on its free stile.
-  const handleY = Math.min(
-    Math.max(
-      Number.isFinite(declaredHandle) && declaredHandle > 0 ? declaredHandle : HANDLE_HEIGHT_MM,
-      leafRegion.y + 40,
-    ),
-    leafRegion.y + leafRegion.h - 40,
-  );
-  // The handle mounts on the stile OPPOSITE the hinges, offset inward.
-  const roseX =
-    hinge === "LEFT"
-      ? leafRegion.x + leafRegion.w - HANDLE_OFFSET_MM - 26
-      : leafRegion.x + HANDLE_OFFSET_MM;
-  leverHandle(solids, owner, roseX, handleY, zInterior, door);
+
+  if (!spec.handle) return;
+  const handleY = spec.handle.heightMm;
+  // The handle mounts on the declared stile — opposite the hinges by the
+  // policy's host-member declaration or the DIN convention.
+  const stileX =
+    spec.handle.mountSide === "left"
+      ? leafRegion.x + sashW / 2
+      : spec.handle.mountSide === "right"
+        ? leafRegion.x + leafRegion.w - sashW / 2
+        : leafRegion.x + leafRegion.w / 2;
+  const approximate = !spec.handle.kitBound;
+  if (spec.handle.kind === "door_lever") {
+    doorLeverSet(
+      solids,
+      owner,
+      stileX,
+      handleY,
+      leafRegion.y,
+      zInterior,
+      zExterior,
+      spec.handle.cylinder,
+      approximate,
+    );
+  } else {
+    leverOnFace(solids, owner, stileX, handleY, zInterior, 1, approximate);
+    if (spec.handle.exterior) {
+      leverOnFace(solids, owner, stileX, handleY, zExterior, -1, approximate);
+    }
+  }
 }
 
 /** Split walk that emits both divider bars and leaf bays — the same layout
@@ -855,6 +1127,7 @@ function leafSolids(
   region: Region,
   members: MemberGeometry,
   depth: number,
+  diagnostics: SceneDiagnostic[],
 ): void {
   const owner = `${module.id}/${bay.id}`;
   const bead = members.beadFor(bay.glass_thickness_mm ?? null);
@@ -942,33 +1215,30 @@ function leafSolids(
         members.beadSpecFor(bay.glass_thickness_mm ?? null),
       );
       // Pull on the meeting stile — the same convention the handle policy
-      // seeds for manufacturing (L1 right, every later leaf left). It stands
-      // proud of the leaf's interior face at handle height, never deeper
-      // than the track step so it can't punch the leaf on the next rail.
-      const pullX = index === 0 ? leafX + leafW - sashW + 6 : leafX + sashW - 22;
-      const pullH = Math.min(360, Math.max(region.h * 0.4, 140));
-      const pullY =
-        region.y +
-        Math.min(
-          Number.isFinite(Number(bay.handle_height_mm)) && Number(bay.handle_height_mm) > 0
-            ? Number(bay.handle_height_mm)
-            : HANDLE_HEIGHT_MM,
-          region.h - pullH / 2,
-        ) -
-        pullH / 2;
-      solids.push(
-        box(
-          owner,
-          "handle",
-          "STEEL",
-          pullX,
-          pullY,
-          z0,
-          16,
-          pullH,
-          Math.min(glassT + 12, Math.max(trackStep - 1, 6)),
-        ),
+      // seeds for manufacturing (L1 right, every later leaf left). The
+      // pull family comes from the selected kit's declared name (uñero /
+      // tirador / elevable); its size is the fitting's real size, never a
+      // percentage of the leaf height, and it stays inside the track step
+      // so it can't punch the leaf on the next rail.
+      const visual = resolveHardwareVisual(
+        bay,
+        { x: leafX, y: region.y, w: leafW, h: region.h },
+        members,
+        owner,
       );
+      if (index === 0) diagnostics.push(...visual.diagnostics);
+      const stileX = index === 0 ? leafX + leafW - sashW / 2 : leafX + sashW / 2;
+      const pullCy = Math.min(
+        Math.max(visual.handle?.heightMm ?? region.y + HANDLE_HEIGHT_MM, region.y + 90),
+        region.y + region.h - 90,
+      );
+      if (visual.handle) {
+        // Only the room-side leaf's pull may stand proud of its face — a
+        // surface bar on an inner track would punch through the leaf that
+        // crosses in front of it; those always draw the flush cup.
+        const kind: HandleKind = index === 0 ? visual.handle.kind : "recessed_pull";
+        slidingPull(solids, owner, kind, stileX, pullCy, z0, sashW, !visual.handle.kitBound);
+      }
       tagLeaf(solids, leafFrom, leafId);
       // Presentation only: a leaf slides toward its neighbouring slot(s),
       // capped to stay inside the bay — the product declares no travel.
@@ -1084,7 +1354,7 @@ function leafSolids(
       leafGlassZ + glassT,
       members.beadSpecFor(bay.glass_thickness_mm ?? null),
     );
-    hardwareSolids(solids, owner, bay, leafRegion, sashW, sashFace, sashD);
+    hardwareSolids(solids, owner, bay, leafRegion, sashW, sashFace, sashD, members, diagnostics);
     tagLeaf(solids, leafFrom, leafId);
     // Hinge conventions mirror hardwareSolids: TURN_LEFT/DOOR hinge on the
     // leaf's left edge, TURN_RIGHT on the right; TILT_TURN tips the top in
@@ -1244,8 +1514,8 @@ function framelessSolids(
   for (const support of spec.supports) {
     const span = edgeSpan(support.edge);
     if (support.kind === "CHANNEL") {
-      solids.push(
-        box(
+      solids.push({
+        ...box(
           owner,
           "support",
           "ALUMINIUM",
@@ -1256,7 +1526,8 @@ function framelessSolids(
           span.h,
           SUPPORT_CHANNEL_MM * 2,
         ),
-      );
+        approximate: true,
+      });
       continue;
     }
     const qty = Math.max(Math.floor(support.qty) || 2, 1);
@@ -1265,8 +1536,8 @@ function framelessSolids(
       const t = qty === 1 ? 0.5 : i / (qty - 1);
       const cx = horizontal ? span.x + t * Math.max(span.w - FITTING_BLOCK_MM, 0) : span.x;
       const cy = horizontal ? span.y : span.y + t * Math.max(span.h - FITTING_BLOCK_MM, 0);
-      solids.push(
-        box(
+      solids.push({
+        ...box(
           owner,
           "support",
           "ALUMINIUM",
@@ -1277,7 +1548,8 @@ function framelessSolids(
           horizontal ? span.h : FITTING_BLOCK_MM,
           SUPPORT_CHANNEL_MM * 2,
         ),
-      );
+        approximate: true,
+      });
     }
   }
   const size = FITTING_BLOCK_MM * 0.6;
@@ -1305,8 +1577,8 @@ function framelessSolids(
         { x: 0, y: h - size },
         { x: w - size, y: h - size },
       ][index % 4]!;
-      solids.push(
-        box(
+      solids.push({
+        ...box(
           owner,
           "fitting",
           "STEEL",
@@ -1317,11 +1589,12 @@ function framelessSolids(
           size,
           SUPPORT_CHANNEL_MM * 2,
         ),
-      );
+        approximate: true,
+      });
     } else if (fitting.kind === "LOCK") {
       const lockY = Math.min(1000, h * 0.7);
-      solids.push(
-        box(
+      solids.push({
+        ...box(
           owner,
           "fitting",
           "STEEL",
@@ -1332,11 +1605,12 @@ function framelessSolids(
           size,
           SUPPORT_CHANNEL_MM * 2,
         ),
-      );
+        approximate: true,
+      });
     } else if (fitting.kind === "HINGE") {
       const spot = edgeRun("left", index);
-      solids.push(
-        box(
+      solids.push({
+        ...box(
           owner,
           "fitting",
           "STEEL",
@@ -1347,11 +1621,12 @@ function framelessSolids(
           size,
           SUPPORT_CHANNEL_MM * 2,
         ),
-      );
+        approximate: true,
+      });
     } else if (fitting.kind === "CONNECTOR" || fitting.kind === "SEAL") {
       const spot = edgeRun("top", index);
-      solids.push(
-        box(
+      solids.push({
+        ...box(
           owner,
           "fitting",
           "STEEL",
@@ -1362,11 +1637,12 @@ function framelessSolids(
           size,
           SUPPORT_CHANNEL_MM * 2,
         ),
-      );
+        approximate: true,
+      });
     } else {
       const spot = edgeRun("bottom", index + 1);
-      solids.push(
-        box(
+      solids.push({
+        ...box(
           owner,
           "fitting",
           "STEEL",
@@ -1377,7 +1653,8 @@ function framelessSolids(
           size,
           SUPPORT_CHANNEL_MM * 2,
         ),
-      );
+        approximate: true,
+      });
     }
   }
 }
@@ -1400,6 +1677,7 @@ export function buildScene3D(
   const moduleById = new Map(product.assembly.modules.map((module) => [module.id, module]));
   const moduleScenes: ModuleScene[] = [];
   const worldPoints: Vec3[] = [];
+  const diagnostics: SceneDiagnostic[] = [];
 
   const stacks = resolveStacks(product);
   // Declared-angle front chain for plan-less products — mirrors the engine's
@@ -1670,7 +1948,7 @@ export function buildScene3D(
         });
       }
       for (const leaf of out.leaves) {
-        leafSolids(solids, leaves, module, leaf.node, leaf.region, members, depth);
+        leafSolids(solids, leaves, module, leaf.node, leaf.region, members, depth, diagnostics);
       }
     }
 
@@ -1874,7 +2152,14 @@ export function buildScene3D(
   }
 
   if (worldPoints.length === 0) {
-    return { modules: moduleScenes, couplers, center: [0, 0, 0], radius: 1000 };
+    return {
+      modules: moduleScenes,
+      couplers,
+      center: [0, 0, 0],
+      radius: 1000,
+      bounds: { min: [0, 0, 0], max: [0, 0, 0] },
+      diagnostics,
+    };
   }
   const min: Vec3 = [Infinity, Infinity, Infinity];
   const max: Vec3 = [-Infinity, -Infinity, -Infinity];
@@ -1886,5 +2171,12 @@ export function buildScene3D(
   }
   const center: Vec3 = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
   const radius = Math.max(Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]) / 2, 200);
-  return { modules: moduleScenes, couplers, center, radius };
+  return {
+    modules: moduleScenes,
+    couplers,
+    center,
+    radius,
+    bounds: { min, max },
+    diagnostics,
+  };
 }

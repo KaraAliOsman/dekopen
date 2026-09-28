@@ -681,7 +681,7 @@ describe("buildScene3D", () => {
       expect(solids.filter((solid) => solid.surface === "gasket").length).toBe(4);
     });
 
-    it("emits hinges and a handle on an operable leaf", () => {
+    it("binds hardware to the declared hand: hinges on the named side, lever opposite at the datum", () => {
       const base = makeBowProduct({ moduleCount: 1, widthMm: 900, heightMm: 1400, angleDeg: 0 });
       const module = {
         ...base.assembly.modules[0]!,
@@ -690,8 +690,23 @@ describe("buildScene3D", () => {
       const product = { ...base, assembly: { modules: [module], couplings: [] } } as ProductJson;
       const scene = buildScene3D(product, members);
       const solids = scene.modules[0]!.solids;
-      expect(solids.filter((solid) => solid.surface === "hinge").length).toBe(2);
-      expect(solids.filter((solid) => solid.surface === "handle").length).toBe(3);
+      const hinges = solids.filter((solid) => solid.surface === "hinge");
+      const handle = solids.filter((solid) => solid.surface === "handle");
+      const xs = (solid: (typeof solids)[number]) =>
+        solid.kind === "box" ? solid.center[0] : Number.POSITIVE_INFINITY;
+      // TURN_LEFT declares hinges on the left — every hinge solid sits
+      // left of every handle solid (DIN: lever opposite the hinges).
+      expect(hinges.length).toBeGreaterThan(0);
+      expect(handle.length).toBeGreaterThan(0);
+      expect(Math.max(...hinges.map(xs))).toBeLessThan(Math.min(...handle.map(xs)));
+      // The lever cluster centres on the 1050mm convention datum, and the
+      // heuristic hinge count is reported as a visual convention — never
+      // presented as a kit-derived count.
+      const centre = handle.some(
+        (solid) => solid.kind === "box" && Math.abs(solid.center[1] - 1050) < 30,
+      );
+      expect(centre).toBe(true);
+      expect(scene.diagnostics.some((d) => d.code === "hardware_convention")).toBe(true);
     });
 
     it("emits one rail per declared sliding track", () => {

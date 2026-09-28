@@ -8,8 +8,16 @@ import type { ProductJson } from "./productEditing";
 import { useTheme } from "../../theme/ThemeProvider";
 import { buildScene3D, type LeafMotion, type Scene3D, type Solid3D } from "./Product3DScene";
 import { solidToGeometry } from "./scene3dGeometry";
-import { foilGrainTexture, runLength, solidMaterial, type MaterialMode } from "./materials3d";
+import {
+  contactShadowTexture,
+  foilGrainTexture,
+  runLength,
+  solidMaterial,
+  type MaterialMode,
+} from "./materials3d";
 import type { MemberGeometry } from "./members";
+import { webglAvailable } from "./webglAvailable";
+import type { SceneDiagnostic } from "./hardwareVisual";
 
 const SWING_RAD = (32 * Math.PI) / 180;
 const TILT_RAD = (13 * Math.PI) / 180;
@@ -139,6 +147,22 @@ function LeafGroup({
       </group>
     </group>
   );
+}
+
+/** Human-readable detail for one scene diagnostic — the values the
+ * message key can't interpolate through `t`. */
+function diagnosticDetail(item: SceneDiagnostic): string {
+  const values = item.values;
+  switch (item.code) {
+    case "kit_unknown":
+      return `${values.sku ?? ""}`;
+    case "handle_out_of_range":
+      return `${values.declared ?? ""} mm → ${values.min ?? ""}–${values.max ?? ""} mm`;
+    case "handle_datum_unsupported":
+      return `${values.refs ?? ""}`;
+    default:
+      return `${values.what ?? ""}`;
+  }
 }
 
 /** §16 synchronized 3D view (§05 physical renderer) — the scene derives
@@ -279,6 +303,42 @@ function CameraRig({ radius }: { radius: number }): null {
   return null;
 }
 
+/** The stage the product stands on: a neutral ground disc under the
+ * assembly's real lowest point plus a soft contact shadow. Keeps the
+ * product reading as a physical object in both themes — dark-theme
+ * canvases used to lose an anthracite frame against the page chrome. */
+function Stage({ scene, theme }: { scene: Scene3D; theme: string }): JSX.Element {
+  const ground = useMemo(
+    () => tokenColor("--theme-viewport-ground", "rgb(212,214,209)"),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [theme],
+  );
+  const spanX = Math.max(scene.bounds.max[0] - scene.bounds.min[0], 400);
+  const spanZ = Math.max(scene.bounds.max[2] - scene.bounds.min[2], 300);
+  const groundY = scene.bounds.min[1] - scene.center[1] - 1.5;
+  return (
+    <group rotation={[0, 0, 0]}>
+      {/* Ground disc — sits below the product, clipped to its footprint +
+       * breathing room. Rotates with the face toggle is wrong: the stage
+       * belongs to the room, so it lives OUTSIDE the flipping group. */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, groundY, 0]} renderOrder={-2}>
+        <circleGeometry args={[Math.max(spanX, spanZ) * 0.9, 48]} />
+        <meshStandardMaterial color={ground} roughness={0.95} metalness={0} />
+      </mesh>
+      {/* Soft contact shadow where the product meets the ground. */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, groundY + 0.4, 0]} renderOrder={-1}>
+        <planeGeometry args={[spanX * 1.5, Math.max(spanZ * 1.5 + 500, 900)]} />
+        <meshBasicMaterial
+          map={contactShadowTexture()}
+          transparent
+          opacity={0.9}
+          depthWrite={false}
+        />
+      </mesh>
+    </group>
+  );
+}
+
 function SceneContent({
   scene,
   selection,
@@ -319,6 +379,7 @@ function SceneContent({
   return (
     <>
       <ClipSetup />
+      <Stage scene={scene} theme={theme} />
       <ambientLight intensity={mode === "commercial" ? 0.55 : 0.85} />
       {/* Commercial mode gets studio key/fill; technical stays flat-lit. */}
       <directionalLight
@@ -432,6 +493,30 @@ export default function Model3DView({
     onSelectCoupling(owner);
   };
   const cameraDistance = scene.radius * 2.4;
+  const illustrating = open || tiltPose || explode;
+  const stageColor = useMemo(
+    () => tokenColor("--theme-viewport-stage", "rgb(228,230,227)"),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [theme],
+  );
+  // Diagnostics deduped by (code, owner, values) — a four-panel slider
+  // would otherwise print the same convention note per leaf.
+  const diagnostics = useMemo(() => {
+    const seen = new Set<string>();
+    return scene.diagnostics.filter((item) => {
+      const key = `${item.code}:${item.owner}:${JSON.stringify(item.values)}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [scene]);
+  if (!webglAvailable()) {
+    return (
+      <div className="model3d-view model3d-fallback">
+        <p className="model3d-fallback__text">{t("assembly.view3dNoWebgl")}</p>
+      </div>
+    );
+  }
   return (
     <div className="model3d-view">
       <div className="model3d-toolbar" role="toolbar" aria-label={t("assembly.view3d")}>
@@ -500,6 +585,32 @@ export default function Model3DView({
           {inside ? t("assembly.view3dInside") : t("assembly.view3dOutside")}
         </span>
       </div>
+      {illustrating && (
+        <p className="model3d-illustrative" role="note">
+          {t("assembly.view3dIllustrative")}
+        </p>
+      )}
+      {diagnostics.length > 0 && (
+        <div className="model3d-diagnostics" role="status">
+          {diagnostics.map((item, index) => (
+            <span
+              key={`${item.code}-${index}`}
+              className={`model3d-diag model3d-diag--${item.code}`}
+              title={diagnosticDetail(item)}
+            >
+              {t(
+                item.code === "kit_unknown"
+                  ? "assembly.diagKitUnknown"
+                  : item.code === "handle_out_of_range"
+                    ? "assembly.diagHandleOutOfRange"
+                    : item.code === "handle_datum_unsupported"
+                      ? "assembly.diagHandleDatum"
+                      : "assembly.diagHardwareConvention",
+              )}
+            </span>
+          ))}
+        </div>
+      )}
       <Canvas
         frameloop="demand"
         dpr={[1, 2]}
@@ -511,6 +622,10 @@ export default function Model3DView({
         }}
         className="model3d-canvas"
       >
+        {/* Neutral stage backdrop — a product photograph's seamless
+         * background, not the app's page color. Physical finishes stay
+         * readable in either theme. */}
+        <color attach="background" args={[stageColor]} />
         <SceneContent
           scene={scene}
           selection={selection}

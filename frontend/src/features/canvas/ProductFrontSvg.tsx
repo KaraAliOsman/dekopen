@@ -518,14 +518,28 @@ function HandleLever({
   x,
   y,
   side,
+  invalid,
+  declaredMm,
 }: {
   x: number;
   y: number;
   side: "left" | "right";
+  /** The declared datum landed off the leaf — the drawing shows the
+   * handle where it clamped AND flags it, never silently corrects. */
+  invalid?: boolean;
+  declaredMm?: number;
 }): JSX.Element {
   const dir = side === "left" ? 1 : -1;
   return (
-    <g className="handle-lever" aria-hidden="true">
+    <g className={`handle-lever${invalid ? " is-datum-invalid" : ""}`} aria-hidden={!invalid}>
+      {invalid && (
+        <>
+          <title>
+            {t("assembly.handleDatumOutOfRange").replace("{declared}", String(declaredMm ?? ""))}
+          </title>
+          <circle className="handle-datum-flag" cx={x} cy={y} r={11} />
+        </>
+      )}
       <line x1={x} y1={y - 10} x2={x} y2={y + 16} strokeWidth={5} strokeLinecap="round" />
       <line x1={x} y1={y} x2={x + dir * 18} y2={y} strokeWidth={5} strokeLinecap="round" />
     </g>
@@ -756,6 +770,17 @@ function Bay({
           ? "left"
           : "right"
         : null;
+  // OUTER_BOTTOM datum resolution shared with the 3D scene: a declared
+  // height that lands off the leaf is reported (is-datum-invalid flag),
+  // not silently clamped into a plausible-looking position.
+  const declaredRaw = Number(node.handle_height_mm);
+  const declaredMm = Number.isFinite(declaredRaw) && declaredRaw > 0 ? declaredRaw : null;
+  const heightMm = declaredMm ?? 1050;
+  const rawDatum =
+    moduleBottom !== undefined ? moduleBottom - heightMm : sashArea.y + sashArea.h - heightMm;
+  const datumInvalid =
+    declaredMm !== null && (rawDatum < sashArea.y || rawDatum > sashArea.y + sashArea.h);
+  const datumY = Math.min(Math.max(rawDatum, sashArea.y + 60), sashArea.y + sashArea.h - 60);
 
   return (
     <g
@@ -842,18 +867,13 @@ function Bay({
           }
           // The lever mounts at the declared height measured up from the
           // module's outer bottom edge — the OUTER_BOTTOM datum the
-          // manufacturing authority resolves (1050 mm when undeclared).
-          // Clamped onto the sash so a stale value still lands on the leaf.
-          y={(() => {
-            const declared = Number(node.handle_height_mm);
-            const heightMm = Number.isFinite(declared) && declared > 0 ? declared : 1050;
-            const datum =
-              moduleBottom !== undefined
-                ? moduleBottom - heightMm
-                : sashArea.y + sashArea.h - heightMm;
-            return Math.min(Math.max(datum, sashArea.y + 60), sashArea.y + sashArea.h - 60);
-          })()}
+          // manufacturing authority resolves (1050 mm when undeclared). A
+          // declared value that lands off the leaf draws clamped AND
+          // flagged — the incompatibility is shown, never hidden.
+          y={datumY}
           side={handleSide}
+          invalid={datumInvalid}
+          declaredMm={declaredMm ?? undefined}
         />
       )}
       {isDoor && operable && (
