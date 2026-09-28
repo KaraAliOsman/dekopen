@@ -1042,7 +1042,12 @@ p[role="alert"]:only-child::before {
   border-radius: 0.5rem;
   display: grid;
   gap: 0.25rem;
+  min-width: 0;
   padding: 0.875rem 1rem;
+}
+
+.metric-card > * {
+  min-width: 0;
 }
 
 .dashboard-money {
@@ -1244,7 +1249,10 @@ p[role="alert"]:only-child::before {
   color: var(--theme-text-primary);
   display: grid;
   gap: 0.125rem 1rem;
-  grid-template-columns: 1fr auto;
+  /* minmax(0,1fr): the nowrap name/meta columns may shrink to the card,
+     not the text's min-content — without it a long client name forces
+     page-level horizontal scroll. */
+  grid-template-columns: minmax(0, 1fr) auto;
   padding: 0.875rem 1rem;
   text-decoration: none;
 }
@@ -1756,6 +1764,12 @@ button.production-chip:hover {
 
   .dashboard-cards {
     grid-template-columns: 1fr;
+  }
+
+  /* Phone: headline KPIs step down a tier so big amounts fit the card —
+     amounts never break mid-figure. */
+  .metric-card strong {
+    font-size: var(--text-title);
   }
 
   .onboarding {
