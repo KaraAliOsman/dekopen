@@ -347,3 +347,21 @@ description: Local dev-stack recipe for DEKOPEN E2E testing — Supabase CLI sta
   `pricing-fix` span (ESTIMATOR), run a USD calc — no fx snapshot → `missing_fx_authority`.
 - **Amount parity:** emitted PDF = `POST /documents/artifacts/{id}/access/` → signed_url (storage);
   PyMuPDF (`fitz`) renders/extracts it. Portal = `/cotizacion/<token>` from "Compartir cotización".
+
+## Phase-07 proposal/portal-testing notes
+- **Emit a fresh DOC-01 on an already-quoted project:** `Crear nueva revisión`
+  (`start_successor` → DRAFT + next REV-x) → pricing page `Calcular y revisar` (preview) →
+  `Aprobar y aplicar precios` (APPLIED op) → detail `Preparar emisión` → check confirm →
+  `Emitir cotización`. Revisions reuse saved documentary inputs → emit form prefills
+  (only valid_until + confirm). `Abrir cotización emitida` lazily generates + downloads the PDF.
+- **Share link** = `POST /api/v1/projects/<id>/quote-link/` (OWNER/ESTIMATOR) → `{token,path}`.
+  Portal = `GET /cotizacion/<token>` (public). Decide = `POST /api/v1/portal/quotes/<token>/decide/`
+  `{decision:APPROVED|DECLINED, decided_by, decided_rut?, note?}` (note required for DECLINED).
+- **Decision states** live in `customer_approvals` (token hashed; keep the plaintext token at mint).
+  States: PENDING / APPROVED / DECLINED / REVOKED + superseded(`version != project.current_revision`)
+  + expired(`expires_at<now`). Idempotent: replays return sealed state, `WHERE status='PENDING'` write is atomic.
+- **Portal payment CTA is RLS-hidden** — `payment_url` reads `project_payment_links` under
+  `portal_backend` role; RLS keys on `auth.uid()` (null unauthenticated) → always null. To demo
+  the CTA a real Flow link must exist AND the role must see it — currently can't.
+- **Magic-link mint:** the mail's `verify?token=<long-hex>&type=magiclink` — GET it with
+  `allow_redirects=False`, read `#access_token` from the Location fragment; then GET `/user`.

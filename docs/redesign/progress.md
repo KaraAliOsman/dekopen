@@ -256,3 +256,15 @@ El picker de kits era inalcanzable: `GET /api/v1/projects/design-options/<system
 - **hecho/probado** Bloqueo posicionado "P04 · …" en alerta con enlace `?focus=glass` a cost-lists (owner) o instrucción para estimador (D28); FIXABLE_CODES cubre las 9 causas de catálogo.
 - **hecho/probado** Contrato `line_detail` probado end-to-end: preview→apply→response con cantidad 3, unitario exacto y descuento 5% ⇒ neto línea 90000 cuantizado; operaciones legacy sin el campo responden `lines` idénticas a antes.
 - **pendiente-capturas** evidencia en vivo (margen editado, comparación, bloqueo+resolución, paridad pantalla/PDF/portal) vía testing agent.
+
+## Fase 07 — Propuesta comercial que se entienda
+
+- **hecho/probado** Política editorial por contenido: `.cover` sólo cuando `len(groups) > 8`; el resto lleva `.dochead` compacto con identidad del emisor + cliente/proyecto + inversión. Cierre `.doc-duo` incondicional (Inversión | Condiciones | Aceptación en 3 columnas, `break-inside:avoid`). Páginas verificadas: 1pos=1, 5grp=3, 11grp=6, 100pos=31, puerta=1 — sin huérfana de firma.
+- **hecho/probado** Ficha de posición: dibujo ~35% + specs (Sistema, Apertura humana desde `parametric_tree` con mano, Vista=Exterior, Vidrio, Acabado, Incluye primeros 4 + "+N"), código+ubicación "P03 · Dormitorio", dims, qty, precio unitario/descuento/importe; `overflow-wrap:anywhere` en nombres largos; agrupación por unidades idénticas intacta; `.compact` >6 grupos.
+- **hecho/probado** Totales: extras sellados como nota "Incluye… — dentro del neto" (D30 — nunca sumados de nuevo); anticipo/cobrado/saldo y vigencia/plazo/condiciones del contrato existente preservados.
+- **hecho/probado** Share honesto: "Abrir en WhatsApp" / "Abrir correo" / "Copiar enlace" → "Enlace copiado al portapapeles"; evento de actividad "Enlace de aprobación creado" (nunca "correo enviado").
+- **hecho/probado** Otros documentos (NC/despacho/factura/comprobante/pedido) comparten masthead y lenguaje de referencia conservando reglas propias — NC parcial referencia partidas y origen sin alterarlo.
+- **hecho/probado** Portal en vivo (testing agent): header sobrio, ficha+imagen, inversión, condiciones, CTA; 390px una columna; estados borrador/emitida/aprobada/rechazada/vencida/sustituida; aprobar y pedir-cambios idempotentes (doble clic/refresh/reintento no duplican); enlace antiguo identifica y enruta; sin botones activos tras cambio de estado; token no expone costos/márgenes.
+- **corregido** Defecto real: `project_payment_links` invisible para `portal_backend` → "Pagar ahora" inalcanzable. Migración `20261228000003_portal_payment_link_read` (D32) verificada end-to-end con `portal_quote` — `payment_url` devuelto.
+- **documentado** Alternativas fuera del DOC-01 (D31); `missing` opcional → "—" sin "None"; Carta/A4 declarados con fuentes embebidas; legible en grises.
+- **pendiente honesto** `payment` state en portal devuelve `None` hasta que existe una fila `project_payments` — correcto (sin abono registrado no hay abono); banner de sustituida enlaza a la vigente.

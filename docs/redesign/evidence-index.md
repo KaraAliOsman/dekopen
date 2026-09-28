@@ -187,3 +187,17 @@ SHA del paquete: `6c61859` (+ capturas en este commit). Fixtures: `scripts/dev_f
 | `engine/tests/test_manufacturing_jsonb_parse.py` | Parsers aceptan nativo + legacy-string, rechazan payload malformado / enum inválido / side TOP | pytest 5/5 |
 | `supabase/migrations/20261228000002` | Reparación por nueva versión respetando `immutable_authority` | migración aplicada en reset |
 | `docs/redesign/captures/phase04/` | Recorrido catálogo + Fuentes + picker de kits + razones de incompatibilidad | 6 PNG + REPORT.md del agente de testing |
+
+## Fase 07 (commits `20b214b`, `e82e17e` + este commit)
+
+| Archivo / evidencia | Qué prueba |
+|---|---|
+| `backend/documents/renderers.py` `_doc01` | Política editorial por contenido: `.cover` >8 grupos, `.dochead` resto; `.doc-duo` de cierre incondicional; ficha dibujo+spec con apertura humana y mano desde `parametric_tree`; extras como nota dentro del neto |
+| `docs/redesign/captures/phase07/doc01-1pos-v4.pdf` + PNG | 1 posición = 1 página, sin portada vacía ni huérfana |
+| `docs/redesign/captures/phase07/doc01-5grp-v3.pdf` + PNGs | 5 grupos = 3 páginas bien continuadas |
+| `docs/redesign/captures/phase07/doc01-11grp-v3.pdf` + PNGs | 11 grupos = 6 páginas |
+| `docs/redesign/captures/phase07/doc01-100pos.pdf` | 100 posiciones = 31 páginas, banda de cierre integrada |
+| `docs/redesign/captures/phase07/doc01-door-extras.pdf` + PNG | Puerta estrecha + extras sellados "dentro del neto" |
+| `frontend/src/i18n/es-CL.ts` | Share honesto: abrir canal ≠ enviado; "Enlace copiado al portapapeles" |
+| `supabase/migrations/20261228000003_portal_payment_link_read.sql` | SELECT + policy org-scoped para `portal_backend` en `project_payment_links`; `portal_quote` devuelve `payment_url` real (verificado vía servicio) |
+| `docs/redesign/captures/phase07/live/` | 17 PNG + REPORT.md + video `rec-86d733b8-…-edited.mp4`: portal desktop/móvil, estados emitida/aprobada/rechazada/vencida/sustituida, aprobación idempotente, enlace antiguo→vigente, paridad UI/PDF/portal en misma revisión |

@@ -250,3 +250,19 @@ El `lines` público histórico sólo llevaba `(position_index, net)` — importe
 ## D28 — Error de pricing posicionado en texto, con enlace de acción por rol
 
 El backend ya producía "P04 · Falta precio de vidrio 4/12/4…" via `PRICING_ERROR_DETAILS`; el frontend renderizaba el primer término como clave i18n y perdía el posicionamiento. Ahora el alerta usa `payload.error.detail` y un mapa `FIXABLE_CODES` enlaza a `/pricing/cost-lists` (OWNER) o muestra "Pídele al administrador…" (ESTIMATOR, que no puede editar catálogo). El código i18n queda como resumen, no como única salida.
+
+## D29 — Portada editorial por contenido, no por regla universal
+
+`.cover { break-after: page }` imponía portada vacía a una cotización de una posición. La política nueva decide por contenido: `len(groups) > 8` → `.cover` completo; el resto → `.dochead` (banda compacta de identidad emisor + "Preparado para…" + inversión + pie del emisor). El bloque de cierre (Inversión | Condiciones | Aceptación) es una banda `.doc-duo` incondicional de 3 columnas con `break-inside:avoid` — ninguna propuesta termina en una página huérfana de dos líneas de firma (1pos=1p, 100pos=31p verificado).
+
+## D30 — Extras sellados se muestran dentro del neto, nunca sumados otra vez
+
+`pricing.request.extras` ya está dentro de `total_price_net`. Renderizarlos como filas aditivas los cobraría dos veces en pantalla. `_pricing_extras` los dibuja como nota de inversión — "Incluye {label} ($ amt | sin costo) — dentro del neto" — dentro del neto declarado, inequívoco como pide el mandato.
+
+## D31 — Las alternativas no existen en el snapshot comercial sellado
+
+Las alternativas viven sólo en el flujo AI de design-alternatives, fuera del `frozen_revision` que alimenta DOC-01. No hay sección de alternativas porque no hay datos sellados que mostrar — se documenta en vez de fabricar la sección. Si una alternativa se materializa, llega como nueva posición/revisión y entonces sí participa.
+
+## D32 — Portal lee `project_payment_links` bajo `app.portal_org_id`
+
+La policy `project_payment_links_isolation` usa `current_user_org_ids()` que devuelve vacío para `portal_backend` (auth.uid() nulo por diseño — el token es la única capacidad). Resultado: el portal nunca veía el link de pago y "Pagar ahora" era inalcanzable aunque hubiera link PENDING. La migración `20261228000003` otorga SELECT + policy org-scoped idéntica a la de `project_payments` (`20261207000000`) — el token acota la org por `app.portal_org_id`, ninguna otra org es visible. Verificado end-to-end: `portal_quote` devuelve `payment_url` real.
