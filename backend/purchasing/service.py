@@ -86,7 +86,8 @@ def _trace_labels(version_id: UUID, org_id: UUID) -> dict[str, str]:
 
 
 def _line_snapshot(row: dict[str, object],
-                   labels: dict[str, str] | None = None) -> dict[str, object]:
+                   labels: dict[str, str] | None = None,
+                   quantity_override=None) -> dict[str, object]:
     technical = _object(row["technical_identity"], "invalid_purchase_requirement")
     specification = _object(row["specification"], "invalid_purchase_requirement")
     source_trace = _array(row["source_trace"], "invalid_purchase_requirement")
@@ -98,8 +99,11 @@ def _line_snapshot(row: dict[str, object],
         raise DocumentaryError("invalid_purchase_requirement")
     if not all(isinstance(item, str) for item in source_trace):
         raise DocumentaryError("invalid_purchase_requirement")
-    quantity = Decimal(str(row["quantity"]))
-    if quantity != quantity.to_integral_value():
+    if quantity_override is not None:
+        quantity = Decimal(str(quantity_override))
+    else:
+        quantity = Decimal(str(row["quantity"]))
+    if quantity != quantity.to_integral_value() or quantity <= 0:
         raise DocumentaryError("invalid_purchase_requirement")
     return {
         "id": str(row["id"]),
@@ -176,24 +180,32 @@ def _requirements(version_id: UUID, org_id: UUID,
 
 def _unclaimed_requirements(version_id: UUID, org_id: UUID,
                             order_type: str) -> list[dict[str, object]]:
-    """Requirement lines not held by a live order line — a cancelled order's
-    claims are stamped released_at, so they come back here."""
-    claimed = {
-        str(row["id"]) for row in rows(
-            "SELECT line.id FROM public.purchase_requirement_lines line "
-            "WHERE line.project_version_id=%s AND line.org_id=%s AND line.order_type=%s "
-            "AND EXISTS ("
-            "    SELECT 1 FROM public.order_requirement_lines held "
-            "    WHERE held.requirement_line_id = line.id "
-            "    AND held.released_at IS NULL"
-            ")",
-            [version_id, org_id, order_type],
+    """Requirement lines not fully covered by order lines. Coverage is
+    quantity-aware: each order line covers `quantity - released_qty`, so a
+    cancellation releases the unreceived remainder (a partially-received
+    line keeps covering only what physically arrived) and the requirement
+    comes back here carrying its open quantity — never the full amount
+    again, which would re-order already-received goods."""
+    covered = {
+        str(row["requirement_line_id"]): Decimal(str(row["covered_qty"]))
+        for row in rows(
+            "SELECT requirement_line_id, SUM(quantity - released_qty) AS covered_qty "
+            "FROM public.order_requirement_lines "
+            "WHERE project_version_id=%s AND org_id=%s "
+            "GROUP BY requirement_line_id",
+            [version_id, org_id],
         )
     }
-    return [
-        item for item in _requirements(version_id, org_id, order_type)
-        if str(item["id"]) not in claimed
-    ]
+    result = []
+    for item in _requirements(version_id, org_id, order_type):
+        open_qty = (
+            Decimal(str(item["quantity"]))
+            - covered.get(str(item["id"]), Decimal(0))
+        )
+        if open_qty > 0:
+            item["open_qty"] = open_qty
+            result.append(item)
+    return result
 
 
 def purchasing_state(org_id: UUID, version_id: UUID | None = None) -> dict[str, object]:
@@ -245,7 +257,7 @@ def purchasing_state(org_id: UUID, version_id: UUID | None = None) -> dict[str, 
             "r.damaged_qty,r.receipt_count "
             "FROM public.orders o LEFT JOIN ("
             "SELECT order_id, COUNT(*) AS line_count, SUM(quantity) AS total_qty,"
-            " SUM(CASE WHEN released_at IS NOT NULL THEN quantity ELSE 0 END) AS released_qty,"
+            " SUM(COALESCE(released_qty, 0)) AS released_qty,"
             " jsonb_agg(jsonb_build_object('sku',line_snapshot->>'purchasing_sku',"
             " 'qty',quantity,'unit',line_snapshot->>'unit') ORDER BY id) AS lines_preview"
             " FROM public.order_requirement_lines WHERE org_id=%s GROUP BY order_id"
@@ -268,15 +280,21 @@ def purchasing_state(org_id: UUID, version_id: UUID | None = None) -> dict[str, 
             [version_id, org_id],
         )
         allocated = {str(item["requirement_line_id"]) for item in allocations}
-        claimed_lines = {
-            str(item["requirement_line_id"]) for item in rows(
-                "SELECT requirement_line_id FROM public.order_requirement_lines "
-                "WHERE project_version_id=%s AND org_id=%s AND released_at IS NULL",
+        coverage = {
+            str(row["requirement_line_id"]): Decimal(str(row["covered_qty"]))
+            for row in rows(
+                "SELECT requirement_line_id, SUM(quantity - released_qty) AS covered_qty "
+                "FROM public.order_requirement_lines "
+                "WHERE project_version_id=%s AND org_id=%s "
+                "GROUP BY requirement_line_id",
                 [version_id, org_id],
             )
         }
         for item in requirements:
-            item["claimed"] = item["id"] in claimed_lines
+            covered_qty = coverage.get(str(item["id"]), Decimal(0))
+            open_qty = Decimal(str(item["quantity"])) - covered_qty
+            item["claimed"] = open_qty <= 0
+            item["open_qty"] = int(open_qty) if open_qty > 0 else 0
         covered_keys = {
             (str(item["order_type"]), str(key))
             for item in eligibilities
@@ -562,7 +580,10 @@ def confirm_order_type_batch(
         for eligibility_id in sorted(grouped):
             values = grouped[eligibility_id]
             eligibility = values[0][1]
-            line_snapshots = [_line_snapshot(item, labels) for item, _ in values]
+            line_snapshots = [
+                _line_snapshot(item, labels, quantity=item.get("open_qty"))
+                for item, _ in values
+            ]
             order_id = uuid5(
                 NAMESPACE_URL,
                 f"https://dekopen.local/order/{batch_id}/{eligibility_id}",
@@ -693,10 +714,12 @@ def send_order(
 def cancel_order(
     *, org_id: UUID, actor_id: UUID, order_id: UUID, confirmed: bool
 ) -> dict[str, object]:
-    """Cancel an order while no goods arrived. Cancellation is a human,
-    consequential decision — it always requires the explicit attestation —
-    and it is honest only for DRAFT/SENT orders: the moment a receipt exists
-    the order is evidence of physical events and can never be cancelled."""
+    """Cancel an order. Cancellation is a human, consequential decision —
+    it always requires the explicit attestation. For DRAFT/SENT the whole
+    order releases; for PARTIALLY_RECEIVED the received (usable) quantities
+    remain covered by the received goods and only the unreceived remainder
+    returns to open demand. FULFILLED orders can never be cancelled — every
+    line is already evidence of physical events."""
     if not confirmed:
         raise DocumentaryError("order_cancel_confirmation_required")
     with documentary_backend():
@@ -711,7 +734,7 @@ def cancel_order(
             raise DocumentaryError("supplier_order_type_required")
         if order["status"] == "CANCELLED":
             return _public(order)
-        if order["status"] not in ("DRAFT", "SENT"):
+        if order["status"] not in ("DRAFT", "SENT", "PARTIALLY_RECEIVED"):
             raise DocumentaryError("order_state_invalid")
         cancelled_at = datetime.now(timezone.utc)
         updated = one(
@@ -722,11 +745,19 @@ def cancel_order(
             "cancelled_at,expected_at",
             [actor_id, cancelled_at, cancelled_at, order_id, org_id],
         )
-        # Release the line claims so the same requirements can be ordered again:
-        # the cancelled order's rows remain as evidence, stamped released_at.
+        # Release the line claims so the same requirements can be ordered
+        # again. The release is quantity-aware: each line releases only what
+        # was never received as usable goods (received - damaged keeps
+        # covering the requirement — that material physically arrived and is
+        # evidence, never re-ordered). The cancelled order's rows remain as
+        # evidence, stamped released_at.
         write(
-            "UPDATE public.order_requirement_lines SET released_at=%s "
-            "WHERE order_id=%s AND org_id=%s AND released_at IS NULL",
+            "UPDATE public.order_requirement_lines l SET released_at=%s,"
+            " released_qty = GREATEST(0, l.quantity - COALESCE(("
+            " SELECT SUM(g.received_qty - g.damaged_qty)"
+            " FROM public.order_receipt_lines g WHERE g.order_line_id = l.id"
+            " ),0)) "
+            "WHERE l.order_id=%s AND l.org_id=%s AND l.released_at IS NULL",
             [cancelled_at, order_id, org_id],
         )
         return _public(updated)
@@ -755,7 +786,7 @@ def orders_index(org_id: UUID, status: str | None = None) -> dict[str, object]:
             "LEFT JOIN public.projects p ON p.id=o.project_id AND p.org_id=o.org_id "
             "LEFT JOIN ("
             "SELECT order_id, COUNT(*) AS line_count, SUM(quantity) AS total_qty,"
-            " SUM(CASE WHEN released_at IS NOT NULL THEN quantity ELSE 0 END) AS released_qty "
+            " SUM(COALESCE(released_qty, 0)) AS released_qty "
             "FROM public.order_requirement_lines WHERE org_id=%s GROUP BY order_id"
             ") l ON l.order_id=o.id "
             "LEFT JOIN ("

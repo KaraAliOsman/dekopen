@@ -1377,7 +1377,7 @@ export const messages = {
   "purchasing.cancelOrder": "Cancelar orden",
   "purchasing.cancelTitle": "Cancelar esta orden",
   "purchasing.cancelBody":
-    "La orden queda cerrada y su material vuelve a figurar como por comprar. Solo se puede cancelar mientras no lleguen mercaderías.",
+    "La orden queda cerrada. Lo ya recibido se conserva como evidencia y solo lo no recibido vuelve a figurar como por comprar.",
   "purchasing.cancelConfirm": "Cancelar orden",
   "purchasing.indexTitle": "Todas las órdenes",
   "purchasing.indexFilter": "Filtrar por estado",
@@ -1388,6 +1388,7 @@ export const messages = {
   "purchasing.indexStatus": "Estado",
   "purchasing.indexOutstanding": "Pendiente",
   "purchasing.indexReceipts": "Recepciones",
+  "purchasing.pendingOf": "pendiente de",
   "purchasing.indexDamaged": "dañado",
   "purchasing.reorderCta": "Volver a pedir",
   "purchasing.reorderHint":

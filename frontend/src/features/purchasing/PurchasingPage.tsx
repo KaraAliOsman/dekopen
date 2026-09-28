@@ -73,9 +73,10 @@ type Requirement = {
   specification: Record<string, unknown>;
   source_trace: Array<string | Record<string, unknown>>;
   source_trace_labels?: Array<string | null>;
-  // True while a live order line claims this requirement; released when the
-  // order is cancelled so the line can be bought again.
+  // True while order lines cover the full required quantity; a cancelled
+  // order releases its unreceived remainder, which comes back as open_qty.
   claimed?: boolean;
+  open_qty?: number;
 };
 type Eligibility = {
   id: string;
@@ -998,8 +999,22 @@ function RequirementRow({
         )}
       </td>
       <td>
-        {requirement.quantity}{" "}
-        {purchaseUnitLabel(requirement.unit, qtyNumber(requirement.quantity))}
+        {requirement.open_qty !== undefined &&
+        requirement.open_qty > 0 &&
+        requirement.open_qty < qtyNumber(requirement.quantity) ? (
+          <>
+            {requirement.open_qty} {purchaseUnitLabel(requirement.unit, requirement.open_qty)}
+            <br />
+            <small>
+              {t("purchasing.pendingOf")} {requirement.quantity}
+            </small>
+          </>
+        ) : (
+          <>
+            {requirement.quantity}{" "}
+            {purchaseUnitLabel(requirement.unit, qtyNumber(requirement.quantity))}
+          </>
+        )}
       </td>
       <td>
         {requirement.claimed === true || !canWrite ? (
@@ -1356,7 +1371,7 @@ function OrderCard({
           </li>
         ))}
       </ul>
-      {canWrite && (order.status === "DRAFT" || order.status === "SENT") && (
+      {canWrite && order.status !== "FULFILLED" && order.status !== "CANCELLED" && (
         <CancelOrderButton order={order} busy={busy} request={request} action={action} />
       )}
       {canWrite && (order.status === "SENT" || order.status === "PARTIALLY_RECEIVED") && (

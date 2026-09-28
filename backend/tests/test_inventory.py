@@ -510,7 +510,7 @@ def test_cancel_order_requires_attestation() -> None:
     assert error.value.code == "order_cancel_confirmation_required"
 
 
-def test_cancel_order_rejects_orders_with_arrivals() -> None:
+def test_cancel_order_rejects_fulfilled_orders() -> None:
     from purchasing import service as purchasing_service
 
     org_id, order_id = uuid4(), uuid4()
@@ -520,7 +520,7 @@ def test_cancel_order_rejects_orders_with_arrivals() -> None:
             "id": order_id,
             "order_code": "PO-1",
             "order_type": "SUPPLIER_GLASS_PO",
-            "status": "PARTIALLY_RECEIVED",
+            "status": "FULFILLED",
             "supplier_name": "Vendor",
             "order_snapshot_hash": "a" * 64,
         },
@@ -532,6 +532,42 @@ def test_cancel_order_rejects_orders_with_arrivals() -> None:
                 org_id=org_id, actor_id=uuid4(), order_id=order_id, confirmed=True
             )
     assert error.value.code == "order_state_invalid"
+
+
+def test_cancel_order_partial_receipt_releases_only_unreceived() -> None:
+    # A partially-received order can be cancelled: the release stamps
+    # released_at AND computes released_qty = quantity - good received, so
+    # already-arrived material keeps covering the requirement while the
+    # unreceived remainder returns to open demand.
+    from purchasing import service as purchasing_service
+
+    org_id, order_id = uuid4(), uuid4()
+    partial = {
+        "id": order_id,
+        "order_code": "PO-1",
+        "order_type": "SUPPLIER_GLASS_PO",
+        "status": "PARTIALLY_RECEIVED",
+        "supplier_name": "Vendor",
+        "order_snapshot_hash": "a" * 64,
+        "cancelled_by": None,
+        "cancelled_at": None,
+        "expected_at": None,
+    }
+    cancelled = dict(partial, status="CANCELLED", cancelled_at="2026-09-28")
+    reads = iter([partial, cancelled])
+    with patch(
+        "purchasing.service.one", side_effect=lambda *a, **k: next(reads)
+    ), patch(
+        "purchasing.service.documentary_backend", return_value=_atomic()
+    ), patch("purchasing.service.write", return_value=1) as mock_write:
+        output = purchasing_service.cancel_order(
+            org_id=org_id, actor_id=uuid4(), order_id=order_id, confirmed=True
+        )
+    assert output["status"] == "CANCELLED"
+    statement, params = mock_write.call_args[0]
+    assert "released_qty" in statement
+    assert "received_qty" in statement and "damaged_qty" in statement
+    assert params[1] == order_id
 
 
 def test_cancel_order_idempotent_replay() -> None:
@@ -599,8 +635,8 @@ def test_unclaimed_requirements_excludes_live_claims() -> None:
     held_id, free_id = uuid4(), uuid4()
 
     def fake_rows(query, params=()):
-        if "order_requirement_lines" in query and "EXISTS" in query:
-            return [{"id": held_id}]
+        if "order_requirement_lines" in query and "covered_qty" in query:
+            return [{"requirement_line_id": held_id, "covered_qty": 2}]
         if "inventory_stock" in query:
             return []
         if "FROM public.purchase_requirement_lines" in query:
@@ -621,6 +657,38 @@ def test_unclaimed_requirements_excludes_live_claims() -> None:
             version_id, org_id, "SUPPLIER_GLASS_PO"
         )
     assert [str(item["id"]) for item in result] == [str(free_id)]
+    assert result[0]["open_qty"] == 1
+
+
+def test_unclaimed_requirements_reopen_partial_remainder() -> None:
+    # A requirement covered only partially (e.g. cancel after partial
+    # receipt) comes back with open_qty = required - covered, not the full
+    # quantity — re-ordering the covered part would duplicate demand.
+    from purchasing import service as purchasing_service
+
+    org_id, version_id = uuid4(), uuid4()
+    req_id = uuid4()
+
+    def fake_rows(query, params=()):
+        if "order_requirement_lines" in query and "covered_qty" in query:
+            return [{"requirement_line_id": req_id, "covered_qty": 3}]
+        if "inventory_stock" in query:
+            return []
+        if "FROM public.purchase_requirement_lines" in query:
+            return [
+                {"id": req_id, "requirement_key": "a" * 64, "order_type": "SUPPLIER_GLASS_PO",
+                 "category": "GLASS", "purchasing_sku": "GLASS-BUY",
+                 "physical_stock_identity": None, "unit": "EA", "quantity": 5,
+                 "specification": None, "source_trace": "[]"},
+            ]
+        raise AssertionError(query)
+
+    with patch("purchasing.service.rows", side_effect=fake_rows):
+        result = purchasing_service._unclaimed_requirements(
+            version_id, org_id, "SUPPLIER_GLASS_PO"
+        )
+    assert len(result) == 1
+    assert result[0]["open_qty"] == 2
 
 
 def test_orders_index_projects_orders_with_received_totals() -> None:
