@@ -43,18 +43,23 @@ views as WORKSHOP_MANAGER (read-only) and OPERATOR (excluded), and on the 100-po
 | WORKSHOP_MANAGER read-only | ✅ views list+detail, 0 edit controls, no qty inputs |
 | OPERATOR | ✅ fully "Sin acceso" (list + detail + editor) — by design |
 | 100-position list | ✅ uniform 40.9px rows, all spec lines, no h-overflow @1440 |
-| **Mobile 390 project detail/positions** | ❌ scrollWidth 521 (>390) — `.position-row` min-content ~513 doesn't reflow |
+| **Mobile 390 project detail/positions** | ✅ **fixed @ `ea12efd`** — scrollWidth 390; `.position-row` now reflows to a two-row grid under 640px |
+| Guardar missing-glass blocker | ✅ **fixed @ `ea12efd`** — now shows `projects.glazingMissing` hint ("Falta asignar vidrio o panel a una hoja…") |
+| Imports label | ✅ **fixed @ `ea12efd`** — `<summary>` renamed "Importar" → "Documentos de origen" |
 
 ## Defects found
-1. **Mobile overflow on project detail + positions list** — `.position-row` (index + ubicación +
-   dims + `.position-row__spec` + `.position-row__qty-input` + status) has ~513px min-content and
-   doesn't reflow at 390px → page h-scrolls ~131px. Dashboard and projects list fit fine.
-2. **Guardar silently no-ops when glass unassigned** — on `/positions/new`, clicking Guardar with
-   an unselected glass does nothing (no error shown, no save). Selecting espesor+vidrio unblocks it.
-   Users get no feedback about what's missing.
+1. ~~**Mobile overflow on project detail + positions list**~~ — **FIXED @ `ea12efd`.** `.position-row`
+   now collapses to a two-row grid (thumb + identity; spec/dims wrap) under 640px → scrollWidth 390,
+   no h-scroll on detail or the 100-position list. Re-captured `m-project-detail.png` /
+   `m-positions-list.png` at 390×844.
+2. ~~**Guardar silently no-ops when glass unassigned**~~ — **FIXED @ `ea12efd`.** Guardar on
+   `/positions/new` now surfaces `projects.glazingMissing` ("Falta asignar vidrio o panel a una hoja —
+   complétalo en el inspector para poder guardar") plus the engine diagnostic "un paño necesita
+   espesor y vidrio asignados". Captured `08-guardar-glazing-hint.png`.
 3. **"Importar documento" stays enabled for WORKSHOP_MANAGER** — a mutating affordance remains
    enabled on a read-only role (click opens no visible dialog; either a no-op or would 403 on
-   submit). The other edit controls are correctly hidden.
+   submit). The other edit controls are correctly hidden. *(Still open — label is now "Documentos de
+   origen" but the enabled state for read-only roles is unchanged.)*
 
 ## Notes
 - The projects list URL params apply on load AND persist through back-nav — verified both directions.
