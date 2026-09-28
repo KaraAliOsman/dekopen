@@ -56,37 +56,33 @@ emit/link ops; customer portal is unauthenticated.
 - **Expired** — link with `expires_at` in the past → "Esta cotización ya no está vigente;
   solicita un enlace nuevo." ✅ *(fixture-set via DB `expires_at` — none pre-seeded.)*
 
-### 3. Payment ⚠ BLOCKED — defect found
+### 3. Payment — CTA now reachable after the RLS fix ✅
 - `/pago/retorno` renders "Pago recibido" (static ack; Flow confirm settles async). ✅ captured.
-- **The "Pagar ahora" CTA is unreachable.** `portal.service.portal_quote` sets `payment_url`
-  from `project_payment_links` (PENDING + url + CLP), but that query runs under
-  `SET LOCAL ROLE portal_backend`. The table's RLS policy `project_payment_links_isolation`
-  requires `org_id IN current_user_org_ids()`, and `current_user_org_ids()` resolves via
-  `auth.uid()` — **null for the unauthenticated portal role**. `_scope_org` sets
-  `app.portal_org_id`, which `current_user_org_ids()` does not read.
-  **Result:** `portal_backend` sees `0` payment links (verified) → `payment_url` always `null`
-  → the CTA can never render, even with a minted Flow link. No Flow integration is configured
-  in the fixture either (`org_payment_integrations` empty), so this also can't be demoed live.
-  *Evidence:* inserted a real PENDING link row (`023f67a0`, url set) → portal still shows no CTA;
-  `SELECT … AS portal_backend` → `visible_links = 0`. The row is left in place as repro.
-  *(Also worth noting: if it were visible, the CTA would render on a DECLINED quote — the
-  `payment_url` gate checks superseded/expired but not the decision state.)*
+- **Fixed (follow-up):** the `portal_backend` role previously saw `0` `project_payment_links`
+  (RLS policy keyed on `auth.uid()`, null unauthenticated) → `payment_url` always null →
+  "Pagar ahora" unreachable. Migration `20261228000003_portal_payment_link_read.sql` grants
+  SELECT + an `app.portal_org_id`-scoped policy. Verified: `portal_backend` now sees the minted
+  link (`visible_links = 1`) and the fresh REV-C link renders **"Pagar ahora"** bound to
+  `https://sandbox.flow.cl/...?token=FIXTURE-DEMO` (`15-payment-cta.png`).
+- **Regression:** all other link states unchanged — APPROVED renders, DECLINED renders,
+  SUPERSEDED flagged, EXPIRED & REVOKED → 410.
+- *(edge remains)* the CTA is **not** gated on decision state — a **DECLINED** proposal still
+  renders "Pagar ahora" next to "Propuesta rechazada" (`16-declined-paycta.png`). `payment_url`
+  checks superseded/expired but not `approval_status`; worth gating so a declined quote isn't payable.
 
 ### 4. Parity ✅
 Same revision **REV-B**: quote panel **$423.515** = DOC-01 PDF **$423.515** = portal **$423.515**
 (neto $355.895 / impuesto $67.620). See `14-parity-trio.png`.
 
 ## Defects found
-1. **🔴 Portal payment CTA is structurally unreachable** — `project_payment_links` is invisible
-   to the `portal_backend` role under RLS (`current_user_org_ids()` uses `auth.uid()`, null for
-   token-only portal; `app.portal_org_id` isn't consulted). `payment_url` can never populate →
-   "Pagar ahora" never shows on the customer portal. Fix: scope the payment-link read by
-   `app.portal_org_id` (or give the portal path a non-RLS read on the minted-link projection).
+1. ~~🔴 **Portal payment CTA unreachable**~~ — **FIXED** by `20261228000003_portal_payment_link_read.sql`
+   (org-scoped policy via `app.portal_org_id`). Verified: "Pagar ahora" renders + binds the Flow
+   URL on a live link. No regression on other link states.
 2. **🟡 Superseded link gives no route to the current revision** — banner says "reemplazada por
    una revisión nueva" but offers no link/issuer-contact to reach the live revision. Architecturally
    the stale token can't mint the new link, so at minimum an issuer-contact affordance would help.
-3. **🟡 (edge)** If a payment link WERE reachable, the CTA would render even on a DECLINED
-   proposal — `payment_url` doesn't gate on decision state.
+3. **🟡 (confirmed edge)** A DECLINED proposal still renders "Pagar ahora" — `payment_url` gates
+   on superseded/expired but not `approval_status`. See `16-declined-paycta.png`.
 
 ## Honest notes
 - Flow integration not configured in the fixture (`org_payment_integrations` empty) — no real

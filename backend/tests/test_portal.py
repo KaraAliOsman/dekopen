@@ -420,6 +420,38 @@ def test_portal_quote_hides_payment_url_on_superseded(monkeypatch) -> None:
     monkeypatch.setattr("portal.service.rows", base_rows)
 
 
+def test_portal_quote_hides_payment_url_on_declined(monkeypatch) -> None:
+    """A rejected proposal must not offer a pay link — charging after the
+    client declined reads as billing a dead deal."""
+    _roles(monkeypatch)
+    approval = _approval(status="DECLINED")
+    sealed = _version(
+        snapshot={
+            "project": {
+                "currency": "CLP",
+                "total_price_gross": "1000000",
+            }
+        }
+    )
+    live = _live(status="QUOTED", revision="REV-A")
+    calls = _install_fakes(monkeypatch, approval, version=sealed, live=live)
+
+    def fake_rows(sql_text, params=()):
+        lowered = " ".join(sql_text.lower().split())
+        calls.append(lowered)
+        if "token_hash" in lowered:
+            return [approval]
+        if "project_payment_links" in lowered:
+            return [{"url": "https://pay.example/link"}]
+        return []
+
+    monkeypatch.setattr("portal.service.rows", fake_rows)
+    with patch("portal.service.SupabaseDocumentStorage"):
+        out = service.portal_quote("tok")
+    assert out["payment_url"] is None
+    assert not any("project_payment_links" in c for c in calls)
+
+
 def test_decide_rejects_expired_quote_validity(monkeypatch) -> None:
     _roles(monkeypatch)
     approval = _approval()

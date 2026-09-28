@@ -402,13 +402,14 @@ def portal_quote(token: str, *, track: bool = True) -> dict[str, object]:
         )
         # A live Flow link the estimator already minted is the proposal's next
         # step — only for CLP deals (the provider charges CLP), and never on a
-        # dead revision or lapsed validity: paying a superseded quote is worse
-        # than no button.
+        # dead revision, lapsed validity or a rejected proposal: charging a
+        # declined quote is worse than no button.
         payment_url = None
         if (
             str(sealed.get("currency") or "CLP") == "CLP"
             and not superseded
             and not validity_expired
+            and str(approval["status"]) != "DECLINED"
         ):
             live_link = rows(
                 "SELECT url FROM public.project_payment_links "
