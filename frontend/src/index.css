@@ -1726,6 +1726,26 @@ button.production-chip:hover {
     gap: 0.5rem;
   }
 
+  /* Phone: the header stack puts actions on their own line — no clipped
+     primary action, no page-level horizontal scroll. */
+  .ui-page-header__row {
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .ui-page-header__actions {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .attention-item a {
+    flex-wrap: wrap;
+  }
+
+  .attention-item .attention-cta {
+    margin-left: 0;
+  }
+
   .topbar-search span {
     display: none;
   }

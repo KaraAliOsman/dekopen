@@ -1390,7 +1390,10 @@ function ProjectWorkspace({
           onSave={() => void save()}
           onCancel={() => {
             void confirm({ title: t("projects.discard") }).then((ok) => {
-              if (ok) setDraft(null);
+              if (ok) {
+                setDraft(null);
+                setError("");
+              }
             });
           }}
         />

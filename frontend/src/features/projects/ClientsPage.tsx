@@ -371,6 +371,9 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
                       setDraft(null);
                       setEditing(null);
                       setCreating(false);
+                      // The form's validation banner belongs to the form —
+                      // it must not linger on the list after cancel.
+                      setError("");
                     }
                   });
                 }}
