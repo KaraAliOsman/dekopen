@@ -47,7 +47,7 @@ from documents.renderers import (
 from engine_api.cutting_repository import CuttingRepository
 from inventory import remnants as remnants_service
 from inventory import production_stock
-from production.confirmations import confirmation_summary
+from production.confirmations import _confirmation_public
 from production.dxf import dxf_files
 from production.dispatch_notes import issue_dispatch_note
 from projects import sii_envio
@@ -1051,11 +1051,20 @@ def confirm_installation(
             return get_work_order(org_id=org_id, order_id=order_id)
         if order["status"] != "DISPATCHED":
             raise DocumentaryError("installation_requires_dispatched")
-        delivery = rows(
-            "SELECT status FROM public.deliveries WHERE order_id = %s AND org_id = %s",
+        payload = _decoded(order["payload_json"]) or {}
+        manifest = _manifest_unit_indexes(payload)
+        deliveries = rows(
+            "SELECT status::text AS status, unit_indexes FROM public.deliveries "
+            "WHERE order_id = %s AND org_id = %s",
             [str(order_id), str(org_id)],
         )
-        if not delivery or str(delivery[0]["status"]) != "DELIVERED":
+        delivered: set[int] = set()
+        for delivery in deliveries:
+            if str(delivery["status"]) == "DELIVERED":
+                delivered |= _delivery_unit_set(delivery, manifest)
+        if manifest - delivered:
+            # Partial trips leave a saldo pendiente — installation claims the
+            # whole order only once every unit has its signed delivery.
             raise DocumentaryError("installation_requires_delivered")
         # DELIVERED is only stamped by confirm_delivery, so this should always
         # hold; verify anyway so a hand-edited row can't produce an installed
@@ -1348,7 +1357,8 @@ def get_work_order(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
         [str(order_id), str(org_id)],
     )
     dispatch_note = rows(
-        "SELECT id, note_code, voided_at FROM public.dispatch_notes "
+        "SELECT id, note_code, voided_at, voided_reason, unit_indexes, created_at "
+        "FROM public.dispatch_notes "
         "WHERE org_id=%s AND work_order_id=%s "
         "ORDER BY created_at DESC",
         [str(org_id), str(order_id)],
@@ -1356,9 +1366,25 @@ def get_work_order(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
     live_note = next((row for row in dispatch_note if row.get("voided_at") is None), None)
     output = _public_order(order, include_payload=True)
     output["dispatch_note_code"] = (
-        dispatch_note[0]["note_code"] if dispatch_note else None
+        live_note["note_code"] if live_note else None
     )
     output["dispatch_note_voided"] = bool(dispatch_note) and live_note is None
+    output["dispatch_notes"] = [
+        {
+            "id": str(row["id"]),
+            "note_code": row["note_code"],
+            "unit_indexes": (
+                sorted(int(i) for i in row["unit_indexes"])
+                if row.get("unit_indexes") is not None
+                else None
+            ),
+            "voided": row.get("voided_at") is not None,
+            "created_at": row["created_at"].isoformat()
+            if hasattr(row["created_at"], "isoformat")
+            else row["created_at"],
+        }
+        for row in dispatch_note
+    ]
     if live_note:
         dte = rows(
             "SELECT d.id, d.dte_type, d.folio, d.issued_at "
@@ -3182,11 +3208,18 @@ def packing_labels(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
 
 
 def dispatch_work_order(
-    *, org_id: UUID, order_id: UUID, actor_id: UUID, note: str | None = None
+    *,
+    org_id: UUID,
+    order_id: UUID,
+    actor_id: UUID,
+    note: str | None = None,
+    unit_indexes: list[int] | None = None,
 ) -> dict[str, object]:
-    """Ship the finished order: requires COMPLETED (all routing done); sets
-    DISPATCHED and records WO_DISPATCHED. Idempotent — re-dispatching an
-    already dispatched order returns its current state."""
+    """Ship (part of) the finished order: requires COMPLETED or already
+    DISPATCHED with units still pending; seals a guía covering exactly the
+    units of this trip and records WO_DISPATCHED. A retried call with an
+    already-covered subset replays the current state; a subset overlapping
+    previous trips partially is refused — one bulto never rides two guías."""
     with transaction.atomic(), documentary_backend():
         order = one(
             """
@@ -3198,13 +3231,53 @@ def dispatch_work_order(
             [str(order_id), str(org_id)],
             "work_order_not_found",
         )
-        if str(order["status"]) == "DISPATCHED":
-            return get_work_order(org_id=org_id, order_id=order_id)
-        if str(order["status"]) != "COMPLETED":
+        if str(order["status"]) not in ("COMPLETED", "DISPATCHED"):
             raise DocumentaryError("dispatch_requires_completed")
         payload = _decoded(order["payload_json"]) or {}
         if not (payload.get("packing") or {}).get("units"):
             raise DocumentaryError("dispatch_requires_packing_manifest")
+        manifest = _manifest_unit_indexes(payload)
+        covered: set[int] = set()
+        # A guía on a FAILED trip no longer commits its units: the load came
+        # back and a new trip can carry it under a fresh guía. DELIVERED and
+        # in-transit units stay committed.
+        for note_row in rows(
+            "SELECT dn.unit_indexes FROM public.dispatch_notes dn "
+            "LEFT JOIN public.deliveries d ON d.id = dn.delivery_id "
+            "WHERE dn.org_id=%s AND dn.work_order_id=%s AND dn.voided_at IS NULL "
+            "AND (d.id IS NULL OR d.status <> 'FAILED')",
+            [str(org_id), str(order_id)],
+        ):
+            indexes = note_row.get("unit_indexes")
+            covered |= set(manifest) if indexes is None else {int(i) for i in indexes}
+        if unit_indexes is not None:
+            subset = {int(i) for i in unit_indexes}
+            if not subset or not subset <= manifest:
+                raise DocumentaryError("dispatch_units_invalid")
+            if subset <= covered:
+                # Same-subset replay — the guía already exists.
+                return get_work_order(org_id=org_id, order_id=order_id)
+            if subset & covered:
+                raise DocumentaryError("dispatch_units_already_dispatched")
+        else:
+            subset = manifest - covered
+            if not subset:
+                # Nothing pending: a full-order replay returns current state.
+                return get_work_order(org_id=org_id, order_id=order_id)
+        # The guía seals onto the open trip: dispatching units the trip does
+        # not carry would print a manifest the truck never planned to load.
+        open_trip = next(
+            (row for row in rows(
+                "SELECT unit_indexes FROM public.deliveries "
+                "WHERE org_id=%s AND order_id=%s AND status IN ('SCHEDULED','ON_ROUTE')",
+                [str(org_id), str(order_id)],
+            )),
+            None,
+        )
+        if open_trip is not None and open_trip.get("unit_indexes") is not None:
+            trip_units = {int(i) for i in open_trip["unit_indexes"]}
+            if not subset <= trip_units:
+                raise DocumentaryError("dispatch_units_not_on_trip")
         # A guía is the legal shipping document — emitting it with no planned
         # delivery ships a truck to nowhere. Schedule the delivery first, or
         # record the hand-off reason in the note (retiro en taller, ...).
@@ -3213,20 +3286,22 @@ def dispatch_work_order(
             [str(order_id), str(org_id)],
         ) and not (note or "").strip():
             raise DocumentaryError("dispatch_requires_delivery")
-        rows(
-            """
-            UPDATE public.orders SET status = 'DISPATCHED', updated_at = %s
-            WHERE id = %s AND org_id = %s
-            RETURNING id
-            """,
-            [datetime.now(timezone.utc), str(order_id), str(org_id)],
-        )
+        if str(order["status"]) != "DISPATCHED":
+            rows(
+                """
+                UPDATE public.orders SET status = 'DISPATCHED', updated_at = %s
+                WHERE id = %s AND org_id = %s
+                RETURNING id
+                """,
+                [datetime.now(timezone.utc), str(order_id), str(org_id)],
+            )
         note_row = issue_dispatch_note(
             org_id=org_id,
             order=order,
             project=project_row(org_id, order["project_id"]),
             actor_id=actor_id,
             note=(note or "").strip() or None,
+            unit_indexes=sorted(subset),
         )
         rows(
             """
@@ -3242,6 +3317,7 @@ def dispatch_work_order(
                     "order_code": order["order_code"],
                     "note": (note or "").strip() or None,
                     "dispatch_note": note_row["note_code"],
+                    "unit_indexes": sorted(subset),
                 }),
             ],
         )
@@ -3277,6 +3353,7 @@ def void_dispatch_note(
             """
             SELECT id, note_code FROM public.dispatch_notes
             WHERE org_id=%s AND work_order_id=%s AND voided_at IS NULL
+            ORDER BY created_at DESC
             """,
             [org_id_s, order_id_s],
             "dispatch_note_not_found",
@@ -3301,13 +3378,20 @@ def void_dispatch_note(
             """,
             [now, str(actor_id), reason_text[:500], str(note["id"])],
         )
-        rows(
-            """
-            UPDATE public.orders SET status = 'COMPLETED', updated_at = %s
-            WHERE id = %s AND org_id = %s RETURNING id
-            """,
-            [now, order_id_s, org_id_s],
-        )
+        # Rewind to COMPLETED only when no other live guía remains — a
+        # voided partial note still leaves the rest of the order dispatched.
+        if not rows(
+            "SELECT id FROM public.dispatch_notes "
+            "WHERE org_id=%s AND work_order_id=%s AND voided_at IS NULL",
+            [org_id_s, order_id_s],
+        ):
+            rows(
+                """
+                UPDATE public.orders SET status = 'COMPLETED', updated_at = %s
+                WHERE id = %s AND org_id = %s RETURNING id
+                """,
+                [now, order_id_s, org_id_s],
+            )
         rows(
             """
             INSERT INTO public.production_step_events(org_id, order_id, event, actor_id, payload)
@@ -4173,13 +4257,38 @@ _DELIVERY_EVENT = {
 }
 
 
+def _manifest_unit_indexes(payload: dict) -> set[int]:
+    """Units an order ships: manifest indexes once packing exists, else the
+    order-quantity range (a delivery may be scheduled before PACK runs)."""
+    packing = (payload or {}).get("packing") or {}
+    units = {
+        int(unit["unit_index"])
+        for unit in packing.get("units") or []
+        if unit.get("unit_index") is not None
+    }
+    if units:
+        return units
+    quantity = int((payload or {}).get("quantity") or 1)
+    return set(range(1, quantity + 1))
+
+
+def _delivery_unit_set(delivery: dict, manifest: set[int]) -> set[int]:
+    """NULL unit_indexes keeps the pre-partial meaning: the whole order."""
+    indexes = delivery.get("unit_indexes")
+    if indexes is None:
+        return set(manifest)
+    return {int(i) for i in indexes}
+
+
 def _public_delivery(
     delivery: dict[str, object], *, confirmation: dict | None = None
 ) -> dict[str, object]:
+    indexes = delivery.get("unit_indexes")
     return {
         "id": str(delivery["id"]),
         "order_id": str(delivery["order_id"]),
         "order_code": str(delivery["order_code"]),
+        "unit_indexes": sorted(int(i) for i in indexes) if indexes is not None else None,
         "scheduled_date": str(delivery["scheduled_date"]),
         "time_window": str(delivery["time_window"]),
         "address": str(delivery["address"]),
@@ -4196,29 +4305,83 @@ def _public_delivery(
 
 
 def get_delivery(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
-    """Delivery for a valid WORKSHOP_OT — `delivery: null` only when the order
-    genuinely exists but was never scheduled; bad ids raise work_order_not_found."""
+    """Delivery trips for a valid WORKSHOP_OT. ``delivery`` is the open trip
+    (or the most recent resolved one); ``deliveries`` lists every trip and
+    the unit sets show what shipped vs what is still pending — the saldo
+    of a partial dispatch stays visible instead of disappearing."""
     with documentary_backend():
         found = rows(
             """
-            SELECT d.*, o.order_code FROM public.orders o
-            LEFT JOIN public.deliveries d ON d.order_id = o.id
+            SELECT o.id, o.order_code, o.payload_json::text AS payload_json
+            FROM public.orders o
             WHERE o.id = %s AND o.org_id = %s AND o.order_type = 'WORKSHOP_OT'
             """,
             [str(order_id), str(org_id)],
         )
         if not found:
             raise DocumentaryError("work_order_not_found")
-    delivery = found[0]
-    if not delivery.get("id"):
-        return {"delivery": None}
-    return {
-        "delivery": _public_delivery(
+        order = found[0]
+        deliveries = rows(
+            """
+            SELECT * FROM public.deliveries
+            WHERE order_id = %s AND org_id = %s ORDER BY created_at
+            """,
+            [str(order_id), str(org_id)],
+        )
+        confirmations = {
+            str(c["delivery_id"]): c
+            for c in rows(
+                "SELECT * FROM public.delivery_confirmations "
+                "WHERE org_id=%s AND order_id=%s",
+                [str(org_id), str(order_id)],
+            )
+        }
+    manifest = _manifest_unit_indexes(_decoded(order["payload_json"]))
+    for delivery in deliveries:
+        delivery["order_code"] = order["order_code"]
+    delivered: set[int] = set()
+    claimed: set[int] = set()
+    for delivery in deliveries:
+        status = str(delivery["status"])
+        if status == "FAILED":
+            continue
+        units = _delivery_unit_set(delivery, manifest)
+        claimed |= units
+        if status == "DELIVERED":
+            delivered |= units
+    pending = manifest - claimed
+    public = [
+        _public_delivery(
             delivery,
-            confirmation=confirmation_summary(
-                org_id=org_id, order_id=order_id
+            confirmation=(
+                _confirmation_public(confirmations[str(delivery["id"])])
+                if str(delivery["id"]) in confirmations
+                else None
             ),
         )
+        for delivery in deliveries
+    ]
+    open_trip = next(
+        (d for d in deliveries if str(d["status"]) in ("SCHEDULED", "ON_ROUTE")),
+        None,
+    )
+    current = open_trip or (deliveries[-1] if deliveries else None)
+    return {
+        "delivery": (
+            _public_delivery(
+                current,
+                confirmation=(
+                    _confirmation_public(confirmations[str(current["id"])])
+                    if str(current["id"]) in confirmations
+                    else None
+                ),
+            )
+            if current
+            else None
+        ),
+        "deliveries": public,
+        "pending_units": sorted(pending),
+        "delivered_units": sorted(delivered),
     }
 
 
@@ -4234,9 +4397,13 @@ def schedule_delivery(
     contact_phone: str | None = None,
     installer_name: str | None = None,
     notes: str | None = None,
+    unit_indexes: list[int] | None = None,
 ) -> dict[str, object]:
-    """Create or update the order's single delivery — rescheduling is an
-    upsert so retries and edits stay idempotent on the same row."""
+    """Create or update the order's delivery trip. An open trip (SCHEDULED)
+    is upserted so retries and edits stay idempotent on the same row; once
+    it resolves, a new schedule opens the next trip. ``unit_indexes`` scopes
+    the trip to manifest units for partial deliveries — already delivered
+    or on-route units cannot be claimed twice."""
     window = (time_window or "AM").strip().upper()
     if window not in _DELIVERY_WINDOWS:
         raise DocumentaryError("delivery_window_invalid")
@@ -4246,10 +4413,14 @@ def schedule_delivery(
         day = date.fromisoformat(str(scheduled_date))
     except (TypeError, ValueError):
         raise DocumentaryError("delivery_date_invalid")
+    requested = (
+        sorted({int(i) for i in unit_indexes}) if unit_indexes is not None else None
+    )
     with transaction.atomic(), documentary_backend():
         order = one(
             """
-            SELECT id, order_code, status::text FROM public.orders
+            SELECT id, order_code, status::text, payload_json::text AS payload_json
+            FROM public.orders
             WHERE id = %s AND org_id = %s AND order_type = 'WORKSHOP_OT'
             FOR UPDATE
             """,
@@ -4259,12 +4430,32 @@ def schedule_delivery(
         if str(order["status"]) not in ("COMPLETED", "DISPATCHED"):
             raise DocumentaryError("delivery_requires_completed")
         existing = rows(
-            "SELECT * FROM public.deliveries WHERE order_id = %s AND org_id = %s",
+            "SELECT * FROM public.deliveries WHERE order_id = %s AND org_id = %s "
+            "ORDER BY created_at",
             [str(order_id), str(org_id)],
         )
-        if existing and str(existing[0]["status"]) == "DELIVERED":
-            raise DocumentaryError("delivery_already_delivered")
-        if existing and str(existing[0]["status"]) == "ON_ROUTE":
+        manifest = _manifest_unit_indexes(_decoded(order["payload_json"]))
+        if requested is not None:
+            unknown = set(requested) - manifest
+            if unknown or not requested:
+                raise DocumentaryError("delivery_units_invalid")
+        sealed: set[int] = set()
+        open_trip = None
+        for row in existing:
+            status = str(row["status"])
+            if status == "DELIVERED":
+                sealed |= _delivery_unit_set(row, manifest)
+            elif status in ("SCHEDULED", "ON_ROUTE"):
+                open_trip = row
+        if requested is not None and set(requested) & sealed:
+            raise DocumentaryError("delivery_units_already_delivered")
+        if requested is None and sealed:
+            # Whole-order shorthand after a delivered trip means the saldo —
+            # delivered units are sealed facts, never re-scheduled.
+            requested = sorted(manifest - sealed)
+            if not requested:
+                raise DocumentaryError("delivery_nothing_pending")
+        if open_trip is not None and str(open_trip["status"]) == "ON_ROUTE":
             # A truck already moving can't be silently rewound to scheduled —
             # fail it first, then schedule the fresh attempt.
             raise DocumentaryError("delivery_already_on_route")
@@ -4276,47 +4467,68 @@ def schedule_delivery(
             "contact_phone": (contact_phone or "").strip() or None,
             "installer_name": (installer_name or "").strip() or None,
             "notes": (notes or "").strip() or None,
+            "unit_indexes": requested,
         }
-        if (
-            existing
-            and str(existing[0]["status"]) == "SCHEDULED"
-            and all(existing[0][key] == value for key, value in normalized.items())
-        ):
-            # Identical schedule replay — one row, no duplicate audit event.
-            return get_delivery(org_id=org_id, order_id=order_id)
-        delivery = one(
-            """
-            INSERT INTO public.deliveries(
-                org_id, order_id, scheduled_date, time_window, address,
-                contact_name, contact_phone, installer_name, notes, scheduled_by)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            ON CONFLICT (order_id) DO UPDATE SET
-                scheduled_date = EXCLUDED.scheduled_date,
-                time_window = EXCLUDED.time_window,
-                address = EXCLUDED.address,
-                contact_name = EXCLUDED.contact_name,
-                contact_phone = EXCLUDED.contact_phone,
-                installer_name = EXCLUDED.installer_name,
-                notes = EXCLUDED.notes,
-                scheduled_by = EXCLUDED.scheduled_by,
-                status = 'SCHEDULED',
-                updated_at = %s
-            RETURNING *
-            """,
-            [
-                str(org_id),
-                str(order_id),
-                str(day),
-                window,
-                address.strip(),
-                (contact_name or "").strip() or None,
-                (contact_phone or "").strip() or None,
-                (installer_name or "").strip() or None,
-                (notes or "").strip() or None,
-                str(actor_id),
-                datetime.now(timezone.utc),
-            ],
-        )
+        if open_trip is not None:
+            stored_units = (
+                sorted(int(i) for i in open_trip["unit_indexes"])
+                if open_trip.get("unit_indexes") is not None
+                else None
+            )
+            if all(
+                (open_trip[key] if key != "unit_indexes" else stored_units) == value
+                for key, value in normalized.items()
+            ):
+                # Identical schedule replay — one row, no duplicate audit event.
+                return get_delivery(org_id=org_id, order_id=order_id)
+            delivery = one(
+                """
+                UPDATE public.deliveries SET
+                    scheduled_date=%s, time_window=%s, address=%s,
+                    contact_name=%s, contact_phone=%s, installer_name=%s,
+                    notes=%s, unit_indexes=%s, scheduled_by=%s,
+                    status='SCHEDULED', updated_at=%s
+                WHERE id=%s AND org_id=%s RETURNING *
+                """,
+                [
+                    day,
+                    window,
+                    address.strip(),
+                    (contact_name or "").strip() or None,
+                    (contact_phone or "").strip() or None,
+                    (installer_name or "").strip() or None,
+                    (notes or "").strip() or None,
+                    requested,
+                    str(actor_id),
+                    datetime.now(timezone.utc),
+                    str(open_trip["id"]),
+                    str(org_id),
+                ],
+            )
+        else:
+            delivery = one(
+                """
+                INSERT INTO public.deliveries(
+                    org_id, order_id, scheduled_date, time_window, address,
+                    contact_name, contact_phone, installer_name, notes,
+                    scheduled_by, unit_indexes)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                RETURNING *
+                """,
+                [
+                    str(org_id),
+                    str(order_id),
+                    str(day),
+                    window,
+                    address.strip(),
+                    (contact_name or "").strip() or None,
+                    (contact_phone or "").strip() or None,
+                    (installer_name or "").strip() or None,
+                    (notes or "").strip() or None,
+                    str(actor_id),
+                    requested,
+                ],
+            )
         rows(
             """
             INSERT INTO public.production_step_events(org_id, order_id, event, actor_id, payload)
@@ -4332,6 +4544,7 @@ def schedule_delivery(
                     "scheduled_date": str(day),
                     "time_window": window,
                     "installer_name": delivery["installer_name"],
+                    "unit_indexes": requested,
                 }),
             ],
         )
@@ -4361,7 +4574,9 @@ def transition_delivery(
         delivery = one(
             """
             SELECT * FROM public.deliveries
-            WHERE order_id = %s AND org_id = %s FOR UPDATE
+            WHERE order_id = %s AND org_id = %s
+              AND status IN ('SCHEDULED', 'ON_ROUTE')
+            ORDER BY created_at FOR UPDATE
             """,
             [str(order_id), str(org_id)],
             "delivery_not_found",

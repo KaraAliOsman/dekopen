@@ -107,6 +107,9 @@ class ProductionOrderDetailSerializer(ProductionOrderSerializer):
     dispatch_note_code = serializers.CharField(allow_null=True, required=False)
     dispatch_note_voided = serializers.BooleanField()
     dispatch_note_dte = serializers.DictField(allow_null=True, required=False)
+    dispatch_notes = serializers.ListField(
+        child=serializers.DictField(), required=False
+    )
 
 
 class QcCheckSerializer(StrictSerializer):
@@ -187,6 +190,11 @@ class PackingManifestSerializer(serializers.Serializer):
 
 class DispatchRequestSerializer(serializers.Serializer):
     note = serializers.CharField(required=False, allow_blank=True, max_length=500)
+    unit_indexes = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+        allow_null=True,
+    )
 
 
 class InstallationRequestSerializer(serializers.Serializer):
@@ -376,6 +384,9 @@ class DeliverySerializer(serializers.Serializer):
     status = serializers.ChoiceField(
         choices=("SCHEDULED", "ON_ROUTE", "DELIVERED", "FAILED")
     )
+    unit_indexes = serializers.ListField(
+        child=serializers.IntegerField(), allow_null=True, required=False
+    )
     confirmation = DeliveryConfirmationSerializer(allow_null=True)
     scheduled_by = serializers.UUIDField(allow_null=True)
     created_at = serializers.DateTimeField()
@@ -384,6 +395,13 @@ class DeliverySerializer(serializers.Serializer):
 
 class DeliveryResponseSerializer(serializers.Serializer):
     delivery = DeliverySerializer(allow_null=True)
+    deliveries = DeliverySerializer(many=True, required=False)
+    pending_units = serializers.ListField(
+        child=serializers.IntegerField(), required=False
+    )
+    delivered_units = serializers.ListField(
+        child=serializers.IntegerField(), required=False
+    )
 
 
 class DeliveryScheduleRequestSerializer(StrictSerializer):
@@ -396,6 +414,11 @@ class DeliveryScheduleRequestSerializer(StrictSerializer):
     contact_phone = serializers.CharField(required=False, allow_blank=True, max_length=50)
     installer_name = serializers.CharField(required=False, allow_blank=True, max_length=200)
     notes = serializers.CharField(required=False, allow_blank=True, max_length=500)
+    unit_indexes = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+        allow_null=True,
+    )
 
 
 class DeliveryTransitionRequestSerializer(StrictSerializer):

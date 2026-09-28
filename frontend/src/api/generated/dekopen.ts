@@ -182,7 +182,9 @@ import type {
   PriceRequestRequest,
   PriceResponse,
   ProcessProfileOptionList,
+  ProductionOrderDeliveryConfirmationParams,
   ProductionOrderDetail,
+  ProductionOrderDispatchNoteParams,
   ProductionOrderList,
   ProductionOrderTrace,
   ProductionPieceTrace,
@@ -10435,16 +10437,32 @@ export type productionOrderDeliveryConfirmationResponse =
   | productionOrderDeliveryConfirmationResponseSuccess
   | productionOrderDeliveryConfirmationResponseError;
 
-export const getProductionOrderDeliveryConfirmationUrl = (orderId: string) => {
-  return `/api/v1/production/orders/${orderId}/delivery/confirmation/`;
+export const getProductionOrderDeliveryConfirmationUrl = (
+  orderId: string,
+  params?: ProductionOrderDeliveryConfirmationParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v1/production/orders/${orderId}/delivery/confirmation/?${stringifiedParams}`
+    : `/api/v1/production/orders/${orderId}/delivery/confirmation/`;
 };
 
 export const productionOrderDeliveryConfirmation = async (
   orderId: string,
+  params?: ProductionOrderDeliveryConfirmationParams,
   options?: Parameters<typeof apiMutator>[1],
 ): Promise<productionOrderDeliveryConfirmationResponse> => {
   return apiMutator<productionOrderDeliveryConfirmationResponse>(
-    getProductionOrderDeliveryConfirmationUrl(orderId),
+    getProductionOrderDeliveryConfirmationUrl(orderId, params),
     {
       ...options,
       method: "GET",
@@ -10680,16 +10698,32 @@ export type productionOrderDispatchNoteResponseError = (
 export type productionOrderDispatchNoteResponse =
   productionOrderDispatchNoteResponseSuccess | productionOrderDispatchNoteResponseError;
 
-export const getProductionOrderDispatchNoteUrl = (orderId: string) => {
-  return `/api/v1/production/orders/${orderId}/dispatch-note/`;
+export const getProductionOrderDispatchNoteUrl = (
+  orderId: string,
+  params?: ProductionOrderDispatchNoteParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v1/production/orders/${orderId}/dispatch-note/?${stringifiedParams}`
+    : `/api/v1/production/orders/${orderId}/dispatch-note/`;
 };
 
 export const productionOrderDispatchNote = async (
   orderId: string,
+  params?: ProductionOrderDispatchNoteParams,
   options?: Parameters<typeof apiMutator>[1],
 ): Promise<productionOrderDispatchNoteResponse> => {
   return apiMutator<productionOrderDispatchNoteResponse>(
-    getProductionOrderDispatchNoteUrl(orderId),
+    getProductionOrderDispatchNoteUrl(orderId, params),
     {
       ...options,
       method: "GET",

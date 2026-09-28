@@ -37,6 +37,11 @@ def _note_public(row) -> dict:
     return {
         "id": str(row["id"]),
         "note_code": row["note_code"],
+        "unit_indexes": (
+            sorted(int(i) for i in row["unit_indexes"])
+            if row.get("unit_indexes") is not None
+            else None
+        ),
         "work_order_id": str(row["work_order_id"]),
         "created_at": row["created_at"].isoformat()
         if hasattr(row["created_at"], "isoformat")
@@ -58,6 +63,7 @@ def _manifest_units(payload: dict) -> list[dict]:
     for unit in packing.get("units") or []:
         units.append(
             {
+                "unit_index": unit.get("unit_index"),
                 "label_code": unit.get("label_code"),
                 "profiles": unit.get("profiles"),
                 "reinforcements": unit.get("reinforcements"),
@@ -77,19 +83,33 @@ def issue_dispatch_note(
     project: dict,
     actor_id: UUID,
     note: str | None,
+    unit_indexes: list[int] | None = None,
 ) -> dict:
-    """Seal the guía de despacho for a freshly dispatched work order. Must
-    run inside the caller's transaction: an org-scoped advisory lock
-    serializes the note sequence, which is per-organization — the code must
-    satisfy UNIQUE (org_id, note_code) across every project."""
+    """Seal the guía de despacho for a dispatch trip. Must run inside the
+    caller's transaction: an org-scoped advisory lock serializes the note
+    sequence, which is per-organization — the code must satisfy UNIQUE
+    (org_id, note_code) across every project. ``unit_indexes`` scopes the
+    sealed units to the trip's subset (partial deliveries issue one guía
+    per trip); a live note covering the same subset replays it."""
     org_id_s, order_id_s = str(org_id), str(order["id"])
-    existing = rows(
-        "SELECT * FROM public.dispatch_notes "
-        "WHERE work_order_id=%s AND org_id=%s AND voided_at IS NULL",
-        [order_id_s, org_id_s],
+    subset = (
+        sorted({int(i) for i in unit_indexes}) if unit_indexes is not None else None
     )
-    if existing:
-        return _note_public(existing[0])
+    for existing in rows(
+        "SELECT dn.* FROM public.dispatch_notes dn "
+        "LEFT JOIN public.deliveries d ON d.id = dn.delivery_id "
+        "WHERE dn.work_order_id=%s AND dn.org_id=%s AND dn.voided_at IS NULL "
+        "AND (d.id IS NULL OR d.status <> 'FAILED') "
+        "ORDER BY dn.created_at",
+        [order_id_s, org_id_s],
+    ):
+        covered = (
+            sorted(int(i) for i in existing["unit_indexes"])
+            if existing.get("unit_indexes") is not None
+            else None
+        )
+        if covered == subset:
+            return _note_public(existing)
 
     one(
         "SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",
@@ -103,7 +123,11 @@ def issue_dispatch_note(
     )
     note_code = f"GD-{sequence + 1:04d}"
     order_payload = order["payload_json"] if isinstance(order["payload_json"], dict) else json.loads(order["payload_json"] or "{}")
-    units = _manifest_units(order_payload)
+    units = [
+        unit
+        for unit in _manifest_units(order_payload)
+        if subset is None or int(unit.get("unit_index") or 0) in subset
+    ]
     client_rut = project.get("client_rut")
     project_address = project.get("delivery_address")
     if project.get("client_id") and (not client_rut or not project_address):
@@ -115,9 +139,11 @@ def issue_dispatch_note(
             client_rut = client_rut or client[0].get("rut")
             project_address = project_address or client[0].get("address")
     delivery = rows(
-        "SELECT scheduled_date, time_window, address, contact_name, "
-        "contact_phone, installer_name FROM public.deliveries "
-        "WHERE order_id=%s AND org_id=%s",
+        "SELECT id, scheduled_date, time_window, address, contact_name, "
+        "contact_phone, installer_name, unit_indexes FROM public.deliveries "
+        "WHERE order_id=%s AND org_id=%s "
+        "ORDER BY CASE WHEN status IN ('SCHEDULED','ON_ROUTE') THEN 0 ELSE 1 END, "
+        "created_at DESC LIMIT 1",
         [order_id_s, org_id_s],
     )
     payload = {
@@ -138,6 +164,7 @@ def issue_dispatch_note(
         },
         "delivery": (
             {
+                "id": str(delivery[0]["id"]),
                 "scheduled_date": str(delivery[0]["scheduled_date"]),
                 "time_window": delivery[0]["time_window"],
                 "address": delivery[0]["address"],
@@ -163,6 +190,8 @@ def issue_dispatch_note(
         "dispatch": {
             "dispatched_by": str(actor_id),
             "note": note,
+            "unit_indexes": subset,
+            "partial": subset is not None,
         },
     }
     identifier = hashlib.sha256(
@@ -180,8 +209,9 @@ def issue_dispatch_note(
         row = one(
             "INSERT INTO public.dispatch_notes("
             "org_id,project_id,work_order_id,note_code,payload_json,storage_bucket,"
-            "storage_object_key,file_sha256,media_type,byte_size,created_by) "
-            "VALUES(%s,%s,%s,%s,%s,'documents',%s,%s,%s,%s,%s) RETURNING *",
+            "storage_object_key,file_sha256,media_type,byte_size,created_by,"
+            "unit_indexes,delivery_id) "
+            "VALUES(%s,%s,%s,%s,%s,'documents',%s,%s,%s,%s,%s,%s,%s) RETURNING *",
             [
                 org_id_s,
                 str(order["project_id"]),
@@ -193,6 +223,8 @@ def issue_dispatch_note(
                 media_type,
                 len(content),
                 str(actor_id),
+                subset,
+                str(delivery[0]["id"]) if delivery else None,
             ],
         )
     except Exception:
@@ -204,13 +236,20 @@ def issue_dispatch_note(
     return _note_public(row)
 
 
-def dispatch_note_access(*, org_id: UUID, order_id: UUID) -> dict:
+def dispatch_note_access(
+    *, org_id: UUID, order_id: UUID, note_id: UUID | None = None
+) -> dict:
     with documentary_backend():
+        params: list = [str(org_id), str(order_id)]
+        clause = ""
+        if note_id is not None:
+            clause = " AND id=%s"
+            params.append(str(note_id))
         note = rows(
             "SELECT * FROM public.dispatch_notes "
-            "WHERE org_id=%s AND work_order_id=%s "
+            f"WHERE org_id=%s AND work_order_id=%s{clause} "
             "ORDER BY created_at DESC",
-            [str(org_id), str(order_id)],
+            params,
         )
         if not note:
             raise contract_error(

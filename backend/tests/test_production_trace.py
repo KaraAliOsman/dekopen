@@ -181,6 +181,73 @@ def test_trace_piece_walks_backward() -> None:
     assert bar_match["steps"][0]["status"] == "DONE"
 
 
+def _physical_code_factories():
+    """Cut-pack fixtures on the trace harness: two identical units of one
+    position — scanning ``P02-U01-M02`` must resolve through the sealed
+    snapshot's physical labels, not fall through to a raw-id LIKE scan."""
+    from tests.test_production import _cutpack_optimization, _cutpack_snapshot
+
+    def fake_rows(query, params=None):
+        if "FROM public.orders" in query and "WHERE id" not in query:
+            return [{
+                "id": str(ORDER), "order_code": "OT-0001",
+                "status": "IN_PROGRESS",
+                "project_id": str(PROJECT),
+                "project_version_id": str(VERSION),
+                "payload_json": json.dumps(
+                    {"position_id": "pos-1",
+                     "optimization": _cutpack_optimization()}
+                ),
+            }]
+        if "FROM public.production_steps" in query:
+            return [{"sequence": 1, "code": "CUT", "label": "Corte",
+                     "status": "IN_PROGRESS"}]
+        raise AssertionError(query[:90])
+
+    def fake_one(query, params=None, missing=None):
+        if "FROM public.projects" in query:
+            return {"id": str(PROJECT), "code": "PR-1", "name": "Casa"}
+        if "FROM public.project_versions" in query:
+            return {"snapshot_json": json.dumps(_cutpack_snapshot())}
+        raise AssertionError(query[:80])
+
+    return fake_rows, fake_one
+
+
+def test_trace_piece_physical_code_resolves_spec() -> None:
+    fake_rows, fake_one = _physical_code_factories()
+    with patch("production.trace.rows", side_effect=fake_rows), \
+         patch("production.trace.one", side_effect=fake_one), \
+         patch("production.trace.documentary_backend"):
+        report = trace.trace_piece(org_id=ORG, piece_id="P02-U01-M02")
+
+    assert report["matches"], "printed P-U-M code must resolve to pieces"
+    for match in report["matches"]:
+        piece = match["location"]["piece"]
+        assert piece["workshop_sku"] == "MARCO-60"
+        assert piece["source_position_id"] == "pos-1"
+        assert match["location"]["position_code"] == "P02"
+    # The reinforcement of that member resolves too — same printed grammar.
+    fake_rows, fake_one = _physical_code_factories()
+    with patch("production.trace.rows", side_effect=fake_rows), \
+         patch("production.trace.one", side_effect=fake_one), \
+         patch("production.trace.documentary_backend"):
+        reinf = trace.trace_piece(org_id=ORG, piece_id="P02-U01-M02·R")
+    assert all(
+        match["location"]["piece"]["workshop_sku"] == "ACERO"
+        for match in reinf["matches"]
+    ) and reinf["matches"]
+
+
+def test_trace_piece_physical_code_unknown_returns_empty() -> None:
+    fake_rows, fake_one = _physical_code_factories()
+    with patch("production.trace.rows", side_effect=fake_rows), \
+         patch("production.trace.one", side_effect=fake_one), \
+         patch("production.trace.documentary_backend"):
+        report = trace.trace_piece(org_id=ORG, piece_id="P09-U09-M99")
+    assert report["matches"] == []
+
+
 def test_trace_piece_unknown_returns_empty() -> None:
     with patch("production.trace.rows", return_value=[]):
         report = trace.trace_piece(org_id=ORG, piece_id="nope")

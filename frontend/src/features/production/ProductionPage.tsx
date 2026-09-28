@@ -63,6 +63,9 @@ import { PLAN_REQUIRED_CODES, STEP_STOCK_KINDS, cutRoleLabel, stationCodeLabel }
  * the server's open dict shape (same pattern as the trace payload). */
 type StationQueueGroup = {
   code?: string;
+  pending?: number;
+  in_progress?: number;
+  blocked?: number;
   entries?: Array<{
     step_id?: string;
     order_id?: string;
@@ -292,6 +295,9 @@ export function ProductionPage(): JSX.Element {
   const [labels, setLabels] = useState<PackingLabel[]>([]);
   const [stationQueue, setStationQueue] = useState<StationQueueGroup[]>([]);
   const [delivery, setDelivery] = useState<Delivery | null>(null);
+  const [deliveries, setDeliveries] = useState<Delivery[]>([]);
+  const [pendingUnits, setPendingUnits] = useState<number[]>([]);
+  const [dispatchUnitsSel, setDispatchUnitsSel] = useState<number[]>([]);
   const [deliveryForm, setDeliveryForm] = useState<DeliveryScheduleRequestRequest | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmName, setConfirmName] = useState("");
@@ -411,6 +417,13 @@ export function ProductionPage(): JSX.Element {
         }
       }
       setDelivery(deliveryResponse.status === 200 ? deliveryResponse.data.delivery : null);
+      setDeliveries(
+        deliveryResponse.status === 200 ? (deliveryResponse.data.deliveries ?? []) : [],
+      );
+      setPendingUnits(
+        deliveryResponse.status === 200 ? (deliveryResponse.data.pending_units ?? []) : [],
+      );
+      setDispatchUnitsSel([]);
       setDeliveryForm(null);
       setConfirmOpen(false);
     }
@@ -459,6 +472,9 @@ export function ProductionPage(): JSX.Element {
       detailGeneration.current += 1;
       setDetail(null);
       setDelivery(null);
+      setDeliveries([]);
+      setPendingUnits([]);
+      setDispatchUnitsSel([]);
       setDeliveryForm(null);
       setConfirmOpen(false);
       return;
@@ -511,17 +527,34 @@ export function ProductionPage(): JSX.Element {
     return codes;
   }, [trace]);
 
-  const lookupPiece = useCallback(async () => {
-    const query = pieceQuery.trim();
-    if (!query) return;
-    setPieceBusy(true);
-    try {
-      const response = await productionPieceTrace(query);
-      if (response.status === 200) setPieceReport(response.data);
-    } finally {
-      setPieceBusy(false);
-    }
-  }, [pieceQuery]);
+  const lookupPiece = useCallback(
+    async (queryOverride?: string) => {
+      const query = (queryOverride ?? pieceQuery).trim();
+      if (!query) return;
+      setPieceBusy(true);
+      try {
+        const response = await productionPieceTrace(query);
+        if (response.status === 200) setPieceReport(response.data);
+      } finally {
+        setPieceBusy(false);
+      }
+    },
+    [pieceQuery],
+  );
+
+  // ?piece= deep link: a QR scan that arrives before login (or from outside
+  // the app) fires the lookup once the screen is up — the operator never
+  // retypes a code and never lands on a generic order. Fires once per value;
+  // the param stays in the URL so a refresh re-runs the same scan.
+  const lastDeepPiece = useRef<string | null>(null);
+  useEffect(() => {
+    const deep = params.get("piece");
+    if (!deep || lastDeepPiece.current === deep) return;
+    lastDeepPiece.current = deep;
+    setPieceQuery(deep);
+    void lookupPiece(deep);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
 
   async function action(task: Promise<unknown>, orderId: string): Promise<void> {
     setBusy(true);
@@ -802,11 +835,25 @@ export function ProductionPage(): JSX.Element {
       contact_phone: existing?.contact_phone ?? "",
       installer_name: existing?.installer_name ?? "",
       notes: existing?.notes ?? "",
+      // null = the whole pending balance; an explicit list = a partial trip
+      unit_indexes: existing?.unit_indexes ?? null,
     });
   }
 
   function pack(orderId: string): void {
     void action(productionOrderPacking(orderId), orderId);
+  }
+
+  // Packing unit codes (U01…) — the same labels the printed bulto labels carry.
+  function unitLabel(list?: number[] | null): string {
+    if (!list?.length) return t("production.deliveryUnitsAll");
+    const units = (detail?.payload?.packing as WorkOrderPacking | undefined)?.units ?? [];
+    return list
+      .map(
+        (i) =>
+          units.find((u) => u.unit_index === i)?.label_code ?? `U${String(i).padStart(2, "0")}`,
+      )
+      .join(" · ");
   }
 
   function dispatch(orderId: string): void {
@@ -818,7 +865,13 @@ export function ProductionPage(): JSX.Element {
       openDeliveryForm(null);
       return;
     }
-    void action(productionOrderDispatch(orderId, { note: note || undefined }), orderId);
+    void action(
+      productionOrderDispatch(orderId, {
+        note: note || undefined,
+        unit_indexes: dispatchUnitsSel.length ? dispatchUnitsSel : null,
+      }),
+      orderId,
+    );
   }
 
   async function voidNote(orderId: string): Promise<void> {
@@ -900,14 +953,17 @@ export function ProductionPage(): JSX.Element {
     }
   }
 
-  async function openConfirmation(orderId: string): Promise<void> {
+  async function openConfirmation(orderId: string, deliveryId?: string): Promise<void> {
     const tab = window.open("", "_blank");
     if (!tab) {
       setMessage(t("production.dispatchNoteError"));
       return;
     }
     try {
-      const response = await productionOrderDeliveryConfirmation(orderId);
+      const response = await productionOrderDeliveryConfirmation(
+        orderId,
+        deliveryId ? { delivery: deliveryId } : undefined,
+      );
       if (response.status !== 200) throw new Error("confirmation_error");
       tab.opener = null;
       tab.location.href = response.data.signed_url;
@@ -989,14 +1045,17 @@ export function ProductionPage(): JSX.Element {
     }
   }
 
-  async function openDispatchNote(orderId: string): Promise<void> {
+  async function openDispatchNote(orderId: string, noteId?: string): Promise<void> {
     const tab = window.open("", "_blank");
     if (!tab) {
       setMessage(t("production.dispatchNoteError"));
       return;
     }
     try {
-      const response = await productionOrderDispatchNote(orderId);
+      const response = await productionOrderDispatchNote(
+        orderId,
+        noteId ? { note: noteId } : undefined,
+      );
       if (response.status !== 200) throw new Error("dispatch_note_error");
       tab.opener = null;
       tab.location.href = response.data.signed_url;
@@ -1109,7 +1168,73 @@ export function ProductionPage(): JSX.Element {
               }}
             />
           ) : null}
-          {prepVersions.length > 0 ? (
+          {/* Station board first for the floor: the operator's authorized
+              queue — "qué está esperando en mi puesto" — leads the sidebar
+              before release/admin noise. Managers keep the release panel
+              on top; installers never see the station board at all. */}
+          {role === "OPERATOR" ? (
+            <>
+              {stationQueue.length ? (
+                <section className="production-station-queue">
+                  <h3>{t("production.stationQueue")}</h3>
+                  <ul>
+                    {stationQueue.map((group) => (
+                      <li key={group.code}>
+                        <strong>{stationCodeLabel(group.code)}</strong>
+                        <span className="production-station-counts">
+                          {t("production.stationQueueCounts")
+                            .replace("{ready}", String(group.pending ?? 0))
+                            .replace("{active}", String(group.in_progress ?? 0))
+                            .replace("{blocked}", String(group.blocked ?? 0))}
+                        </span>
+                        <ul>
+                          {(group.entries ?? []).map((entry) => (
+                            <li key={entry.step_id}>
+                              <button
+                                type="button"
+                                className="production-order"
+                                onClick={() =>
+                                  entry.order_id && setParams({ order: entry.order_id })
+                                }
+                              >
+                                <span className="production-order-code">
+                                  {entry.order_code ?? "—"}
+                                </span>
+                                <span className="production-order-line">
+                                  {entry.label ?? stationCodeLabel(group.code)}
+                                  {entry.is_next ? ` · ${t("production.stationQueueNext")}` : ""}
+                                </span>
+                                <span
+                                  className={`production-order-status step-${String(
+                                    entry.status ?? "",
+                                  ).toLowerCase()}`}
+                                >
+                                  {t(
+                                    entry.status === "READY" && !entry.is_next
+                                      ? "production.stepPending"
+                                      : (stepStatusKey[entry.status ?? ""] ??
+                                          "production.stepPending"),
+                                  )}
+                                </span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : orders.some((order) => !TERMINAL_ORDER_STATUSES.has(order.status)) ? (
+                <p className="production-station-empty">
+                  {t("production.stationQueueEmpty")}{" "}
+                  <button type="button" onClick={() => void loadOrders()}>
+                    {t("production.reload")}
+                  </button>
+                </p>
+              ) : null}
+            </>
+          ) : null}
+          {role !== "OPERATOR" && role !== "INSTALLER" && prepVersions.length > 0 ? (
             <section className="production-prep" aria-label={t("production.prepTitle")}>
               <h3>{t("production.prepTitle")}</h3>
               <ul>
@@ -1209,16 +1334,21 @@ export function ProductionPage(): JSX.Element {
               </button>
             ) : null}
           </div>
-          {/* Station board (WM-3): every live order grouped by the station
-              where it physically waits — "qué está esperando en mi puesto"
-              without opening each order. */}
-          {stationQueue.length ? (
+          {/* Station board for oversight roles — the operator already got
+              it at the top; installers work deliveries, not stations. */}
+          {role !== "OPERATOR" && role !== "INSTALLER" && stationQueue.length ? (
             <section className="production-station-queue">
               <h3>{t("production.stationQueue")}</h3>
               <ul>
                 {stationQueue.map((group) => (
                   <li key={group.code}>
                     <strong>{stationCodeLabel(group.code)}</strong>
+                    <span className="production-station-counts">
+                      {t("production.stationQueueCounts")
+                        .replace("{ready}", String(group.pending ?? 0))
+                        .replace("{active}", String(group.in_progress ?? 0))
+                        .replace("{blocked}", String(group.blocked ?? 0))}
+                    </span>
                     <ul>
                       {(group.entries ?? []).map((entry) => (
                         <li key={entry.step_id}>
@@ -1317,7 +1447,8 @@ export function ProductionPage(): JSX.Element {
               </li>
             ))}
           </ul>
-          <CncWorkspace />
+          {/* CNC is a workshop surface — installers never program machines. */}
+          {role !== "INSTALLER" ? <CncWorkspace /> : null}
         </aside>
         <article className="production-detail">
           {detail ? (
@@ -1383,21 +1514,37 @@ export function ProductionPage(): JSX.Element {
                     {t("production.installButton")}
                   </button>
                 ) : null}
-                {detail.dispatch_note_code ? (
-                  <button
-                    type="button"
-                    className={`production-dispatch production-note${
-                      detail.dispatch_note_voided ? " is-voided" : ""
-                    }`}
-                    title={
-                      detail.dispatch_note_voided ? t("production.dispatchNoteVoided") : undefined
-                    }
-                    onClick={() => void openDispatchNote(detail.id)}
-                  >
-                    {detail.dispatch_note_code}
-                    {detail.dispatch_note_voided ? ` · ${t("production.dispatchNoteVoided")}` : ""}
-                  </button>
-                ) : null}
+                {(detail.dispatch_notes?.length
+                  ? detail.dispatch_notes
+                  : detail.dispatch_note_code
+                    ? [
+                        {
+                          note_code: detail.dispatch_note_code,
+                          voided: detail.dispatch_note_voided,
+                        },
+                      ]
+                    : []
+                ).map((entry) => {
+                  const code = String(entry.note_code ?? "");
+                  const voided = entry.voided === true;
+                  const noteId = typeof entry.id === "string" ? entry.id : undefined;
+                  const units = Array.isArray(entry.unit_indexes)
+                    ? (entry.unit_indexes as number[])
+                    : null;
+                  return (
+                    <button
+                      key={noteId ?? code}
+                      type="button"
+                      className={`production-dispatch production-note${voided ? " is-voided" : ""}`}
+                      title={voided ? t("production.dispatchNoteVoided") : undefined}
+                      onClick={() => void openDispatchNote(detail.id, noteId)}
+                    >
+                      {code}
+                      {units ? ` · ${unitLabel(units)}` : ""}
+                      {voided ? ` · ${t("production.dispatchNoteVoided")}` : ""}
+                    </button>
+                  );
+                })}
                 {canWrite &&
                 detail.status === "DISPATCHED" &&
                 !detail.dispatch_note_dte &&
@@ -2429,13 +2576,20 @@ export function ProductionPage(): JSX.Element {
                           )}
                         </span>
                       ) : null}
-                      {!delivery && canSchedule && deliveryForm === null ? (
+                      {canSchedule &&
+                      deliveryForm === null &&
+                      (!delivery ||
+                        delivery.status === "DELIVERED" ||
+                        delivery.status === "FAILED") &&
+                      (deliveries.length === 0 || pendingUnits.length > 0) ? (
                         <button
                           type="button"
                           disabled={busy}
                           onClick={() => openDeliveryForm(null)}
                         >
-                          {t("production.deliverySchedule")}
+                          {deliveries.length
+                            ? t("production.deliveryScheduleNext")
+                            : t("production.deliverySchedule")}
                         </button>
                       ) : null}
                       {canWrite && delivery && delivery.status !== "DELIVERED" ? (
@@ -2481,7 +2635,7 @@ export function ProductionPage(): JSX.Element {
                         <button
                           type="button"
                           className="production-chip delivery-delivered"
-                          onClick={() => void openConfirmation(detail.id)}
+                          onClick={() => void openConfirmation(detail.id, delivery.id)}
                         >
                           {delivery.confirmation.confirmation_code}
                         </button>
@@ -2529,6 +2683,76 @@ export function ProductionPage(): JSX.Element {
                           </div>
                         ) : null}
                       </dl>
+                    ) : null}
+                    {deliveries.length > 1 ? (
+                      <ul className="production-delivery-trips">
+                        {deliveries.map((trip) => (
+                          <li key={trip.id} className="production-delivery-trip">
+                            <span
+                              className={`production-chip delivery-${trip.status.toLowerCase()}`}
+                            >
+                              {t(
+                                deliveryStatusKey[trip.status] ??
+                                  "production.deliveryStatusScheduled",
+                              )}
+                            </span>
+                            <span className="production-delivery-trip-date">
+                              {trip.scheduled_date}
+                            </span>
+                            <span className="production-delivery-trip-units">
+                              {unitLabel(trip.unit_indexes)}
+                            </span>
+                            {trip.confirmation ? (
+                              <button
+                                type="button"
+                                className="production-chip delivery-delivered"
+                                onClick={() => void openConfirmation(detail.id, trip.id)}
+                              >
+                                {trip.confirmation.confirmation_code}
+                              </button>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {deliveries.length > 0 && pendingUnits.length > 0 ? (
+                      <p className="production-delivery-pending">
+                        {t("production.deliveryUnitsPending")}: {unitLabel(pendingUnits)}
+                      </p>
+                    ) : null}
+                    {canWrite && detail.dispatch_ready && pendingUnits.length > 1 ? (
+                      <fieldset className="production-delivery-units">
+                        <legend>{t("production.dispatchUnits")}</legend>
+                        <div className="production-delivery-unit-chips">
+                          {pendingUnits.map((idx) => {
+                            const current = dispatchUnitsSel.length
+                              ? dispatchUnitsSel
+                              : pendingUnits;
+                            const active = current.includes(idx);
+                            return (
+                              <button
+                                type="button"
+                                key={idx}
+                                className={`chip${active ? " is-active" : ""}`}
+                                aria-pressed={active}
+                                onClick={() => {
+                                  const next = active
+                                    ? current.filter((i) => i !== idx)
+                                    : [...current, idx].sort((a, b) => a - b);
+                                  setDispatchUnitsSel(
+                                    next.length === pendingUnits.length ? [] : next,
+                                  );
+                                }}
+                              >
+                                {unitLabel([idx])}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className="production-delivery-units-hint">
+                          {t("production.dispatchUnitsHint")}
+                        </p>
+                      </fieldset>
                     ) : null}
                     {confirmOpen && canStep && delivery ? (
                       <form
@@ -2774,6 +2998,50 @@ export function ProductionPage(): JSX.Element {
                             }
                           />
                         </label>
+                        {(() => {
+                          // Partial trips: the pickable set is the pending
+                          // balance plus whatever this trip already carries
+                          // (delivered units are sealed and never offered).
+                          const allowed = [
+                            ...new Set([...pendingUnits, ...(deliveryForm.unit_indexes ?? [])]),
+                          ].sort((a, b) => a - b);
+                          if (allowed.length < 2) return null;
+                          const checked = deliveryForm.unit_indexes ?? allowed;
+                          return (
+                            <fieldset className="production-delivery-units production-delivery-wide">
+                              <legend>{t("production.deliveryUnitsTrip")}</legend>
+                              <div className="production-delivery-unit-chips">
+                                {allowed.map((idx) => {
+                                  const active = checked.includes(idx);
+                                  return (
+                                    <button
+                                      type="button"
+                                      key={idx}
+                                      className={`chip${active ? " is-active" : ""}`}
+                                      aria-pressed={active}
+                                      disabled={checked.length === 1 && active}
+                                      onClick={() => {
+                                        const next = active
+                                          ? checked.filter((i) => i !== idx)
+                                          : [...checked, idx].sort((a, b) => a - b);
+                                        setDeliveryForm({
+                                          ...deliveryForm,
+                                          unit_indexes:
+                                            next.length === allowed.length ? null : next,
+                                        });
+                                      }}
+                                    >
+                                      {unitLabel([idx])}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              <p className="production-delivery-units-hint">
+                                {t("production.deliveryUnitsAllHint")}
+                              </p>
+                            </fieldset>
+                          );
+                        })()}
                         <div className="production-delivery-actions">
                           <button type="submit" disabled={busy}>
                             {t("production.deliverySave")}
@@ -2863,6 +3131,62 @@ export function ProductionPage(): JSX.Element {
                 // later READY step reads "Pendiente", never "Lista".
                 const firstOpenStepId =
                   detail.steps.find((step) => step.status !== "DONE")?.id ?? null;
+                // One builder feeds both the step row and the operator
+                // card's sticky footer — the primary action (iniciar,
+                // registrar, completar) stays on screen while the card's
+                // materials and ops scroll beneath it.
+                const renderStepActionBar = (step: (typeof detail.steps)[number]) => {
+                  if (!canStep || TERMINAL_ORDER_STATUSES.has(detail.status)) return null;
+                  return (
+                    <div className="production-step-actions">
+                      {step.code === "QC" && stepActions(step).includes("QC_FAIL") ? (
+                        <select
+                          className="production-qc-item"
+                          aria-label={t("production.qcItem")}
+                          value={qcFailItem}
+                          onChange={(event) => setQcFailItem(event.target.value)}
+                        >
+                          <option value="">{t("production.qcItemAny")}</option>
+                          {qcItemOptions.map((code) => (
+                            <option key={code} value={code}>
+                              {code}
+                            </option>
+                          ))}
+                        </select>
+                      ) : null}
+                      {stepActions(step)
+                        // START only exists on the earliest open step —
+                        // the backend sequence gate rejects every other
+                        // one with a guaranteed 422.
+                        .filter((stepAction) => stepAction !== "START" || step.id === nextStep?.id)
+                        // UNBLOCK is a supervisor action — the backend
+                        // refuses it for operators
+                        // (unblock_requires_supervisor), so the button
+                        // would be a guaranteed error toast.
+                        .filter((stepAction) => stepAction !== "UNBLOCK" || canWrite)
+                        .map((stepAction) =>
+                          stepAction === "START" && stepNeedsPlan(step, detail) ? (
+                            <span className="production-step-hint" key={stepAction}>
+                              {t(
+                                canWrite
+                                  ? "production.stepNeedsPlan"
+                                  : "production.stepNeedsPlanWait",
+                              )}
+                            </span>
+                          ) : (
+                            <button
+                              key={stepAction}
+                              type="button"
+                              disabled={busy}
+                              onClick={() => void transition(step.id, stepAction, detail.id)}
+                            >
+                              {t(actionLabel[stepAction])}
+                            </button>
+                          ),
+                        )}
+                    </div>
+                  );
+                };
                 return (
                   <>
                     <ol className="production-steps">
@@ -2900,60 +3224,7 @@ export function ProductionPage(): JSX.Element {
                             </span>
                           </div>
                           {step.note ? <p className="production-step-note">{step.note}</p> : null}
-                          {canStep && !TERMINAL_ORDER_STATUSES.has(detail.status) ? (
-                            <div className="production-step-actions">
-                              {step.code === "QC" && stepActions(step).includes("QC_FAIL") ? (
-                                <select
-                                  className="production-qc-item"
-                                  aria-label={t("production.qcItem")}
-                                  value={qcFailItem}
-                                  onChange={(event) => setQcFailItem(event.target.value)}
-                                >
-                                  <option value="">{t("production.qcItemAny")}</option>
-                                  {qcItemOptions.map((code) => (
-                                    <option key={code} value={code}>
-                                      {code}
-                                    </option>
-                                  ))}
-                                </select>
-                              ) : null}
-                              {stepActions(step)
-                                // START only exists on the earliest open step —
-                                // the backend sequence gate rejects every other
-                                // one with a guaranteed 422.
-                                .filter(
-                                  (stepAction) =>
-                                    stepAction !== "START" || step.id === nextStep?.id,
-                                )
-                                // UNBLOCK is a supervisor action — the backend
-                                // refuses it for operators
-                                // (unblock_requires_supervisor), so the button
-                                // would be a guaranteed error toast.
-                                .filter((stepAction) => stepAction !== "UNBLOCK" || canWrite)
-                                .map((stepAction) =>
-                                  stepAction === "START" && stepNeedsPlan(step, detail) ? (
-                                    <span className="production-step-hint" key={stepAction}>
-                                      {t(
-                                        canWrite
-                                          ? "production.stepNeedsPlan"
-                                          : "production.stepNeedsPlanWait",
-                                      )}
-                                    </span>
-                                  ) : (
-                                    <button
-                                      key={stepAction}
-                                      type="button"
-                                      disabled={busy}
-                                      onClick={() =>
-                                        void transition(step.id, stepAction, detail.id)
-                                      }
-                                    >
-                                      {t(actionLabel[stepAction])}
-                                    </button>
-                                  ),
-                                )}
-                            </div>
-                          ) : null}
+                          {renderStepActionBar(step)}
                         </li>
                       ))}
                     </ol>
@@ -2962,6 +3233,7 @@ export function ProductionPage(): JSX.Element {
                         step={operatorStep}
                         trace={trace}
                         traceBusy={traceBusy}
+                        actionBar={renderStepActionBar(operatorStep)}
                         onQcCheck={
                           canStep ? (stepId, check) => qcCheck(stepId, check, detail.id) : undefined
                         }

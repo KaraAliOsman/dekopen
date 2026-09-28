@@ -2708,6 +2708,10 @@ def test_dispatch_requires_completed_and_is_idempotent(monkeypatch) -> None:
 
     def fake_rows_dispatch(sql_text: str, params: list) -> list:
         lowered = " ".join(sql_text.lower().split())
+        if "from public.dispatch_notes" in lowered:
+            # After the first dispatch the sealed guía covers unit 1 — a
+            # replay sees full coverage and returns without re-issuing.
+            return [{"unit_indexes": [1]}] if note_calls else []
         if "update public.orders set status" in lowered:
             captured_status["row"]["status"] = "DISPATCHED"
         if "insert into public.production_step_events" in lowered:
@@ -2758,7 +2762,7 @@ def test_dispatch_requires_delivery_or_note(monkeypatch) -> None:
 
     def fake_rows(sql_text: str, params: list) -> list:
         lowered = " ".join(sql_text.lower().split())
-        if "from public.deliveries" in lowered:
+        if "from public.deliveries" in lowered or "from public.dispatch_notes" in lowered:
             return []
         return [{"id": "ok"}]
 
@@ -2775,6 +2779,8 @@ def test_dispatch_note_void_reverts_order_and_records_event(monkeypatch) -> None
     captured_status: dict[str, dict] = {"row": {"status": "DISPATCHED"}}
     calls: list[tuple[str, list]] = []
 
+    voided = {"done": False}
+
     def fake_one(sql_text: str, params: list, code: str = "not_found") -> dict:
         lowered = " ".join(sql_text.lower().split())
         if "for update" in lowered:
@@ -2785,6 +2791,8 @@ def test_dispatch_note_void_reverts_order_and_records_event(monkeypatch) -> None
                 "payload_json": {},
                 "project_id": str(uuid4()),
             }
+        if "update public.dispatch_notes" in lowered:
+            voided["done"] = True
         return {
             "id": str(uuid4()),
             "note_code": "GD-0001",
@@ -2794,6 +2802,8 @@ def test_dispatch_note_void_reverts_order_and_records_event(monkeypatch) -> None
         lowered = " ".join(sql_text.lower().split())
         if "from public.deliveries" in lowered or "from public.project_dtes" in lowered:
             return []
+        if "from public.dispatch_notes" in lowered:
+            return [] if voided["done"] else [{"id": "live"}]
         if "update public.orders set status" in lowered:
             captured_status["row"]["status"] = "COMPLETED"
         if "insert into public.production_step_events" in lowered:
@@ -3185,18 +3195,31 @@ def test_delivery_schedule_upserts_and_records_event(monkeypatch) -> None:
         "updated_at": __import__("datetime").datetime(2026, 9, 23),
     }
 
+    inserted = {"done": False}
+
     def fake_one(sql_text: str, params: list, code: str = "not_found") -> dict:
         lowered = " ".join(sql_text.lower().split())
-        if "insert into public.deliveries" in lowered:
+        if "insert into public.deliveries" in lowered or "update public.deliveries" in lowered:
+            inserted["done"] = True
             return dict(delivery_row)
-        return {"id": str(order_id), "order_code": "OT-1", "status": "COMPLETED"}
+        return {
+            "id": str(order_id), "order_code": "OT-1", "status": "COMPLETED",
+            "payload_json": {},
+        }
 
     def fake_rows(sql_text: str, params: list) -> list:
         lowered = " ".join(sql_text.lower().split())
-        if "left join public.deliveries d" in lowered:
-            return [dict(delivery_row)]
-        if "from public.deliveries" in lowered:
+        if "from public.orders o" in lowered:
+            return [
+                {
+                    "id": str(order_id), "order_code": "OT-1",
+                    "payload_json": {},
+                }
+            ]
+        if "from public.delivery_confirmations" in lowered:
             return []
+        if "from public.deliveries" in lowered:
+            return [dict(delivery_row)] if inserted["done"] else []
         if "insert into public.production_step_events" in lowered:
             events.append((lowered, list(params)))
         return [{"id": "ok"}]
@@ -3233,7 +3256,16 @@ def test_delivery_schedule_replay_adds_no_duplicate_event(monkeypatch) -> None:
 
     def fake_rows(sql_text: str, params: list) -> list:
         lowered = " ".join(sql_text.lower().split())
-        if "left join public.deliveries d" in lowered or "from public.deliveries" in lowered:
+        if "from public.orders o" in lowered:
+            return [
+                {
+                    "id": str(order_id), "order_code": "OT-1",
+                    "payload_json": {},
+                }
+            ]
+        if "from public.delivery_confirmations" in lowered:
+            return []
+        if "from public.deliveries" in lowered:
             return [dict(stored)]
         if "insert into public.production_step_events" in lowered:
             events.append((lowered, list(params)))
@@ -3241,7 +3273,10 @@ def test_delivery_schedule_replay_adds_no_duplicate_event(monkeypatch) -> None:
 
     monkeypatch.setattr(
         "production.service.one",
-        lambda *_a, **_k: {"id": str(order_id), "order_code": "OT-1", "status": "DISPATCHED"},
+        lambda *_a, **_k: {
+            "id": str(order_id), "order_code": "OT-1", "status": "DISPATCHED",
+            "payload_json": {},
+        },
     )
     monkeypatch.setattr("production.service.rows", fake_rows)
     monkeypatch.setattr("production.confirmations.rows", lambda *_a, **_k: [])
@@ -3398,6 +3433,175 @@ def test_delivery_transition_fails_and_replays(monkeypatch) -> None:
     assert out["delivery"]["status"] == "FAILED"
     assert replay["delivery"]["status"] == "FAILED"
     assert len(events) == 1 and events[0][1][2] == "WO_DELIVERY_FAILED"
+
+
+_PACKING_TWO_UNITS = {
+    "quantity": 2,
+    "packing": {
+        "schema": "work_order_packing_v1",
+        "units": [
+            {"unit_index": 1, "label_code": "OT-1-U01"},
+            {"unit_index": 2, "label_code": "OT-1-U02"},
+        ],
+    },
+}
+
+
+def test_dispatch_partial_units_seals_trip_subset(monkeypatch) -> None:
+    """A partial dispatch seals one guía per trip; a subset already covered
+    replays, an overlapping subset refuses, and the saldo stays pending."""
+    org_id, order_id = uuid4(), uuid4()
+    state = {"status": "COMPLETED", "notes": []}
+    issued: list[dict] = []
+
+    def fake_one(sql_text: str, params: list, code: str = "not_found") -> dict:
+        return {
+            "id": str(order_id),
+            "order_code": "OT-1",
+            "status": state["status"],
+            "payload_json": dict(_PACKING_TWO_UNITS),
+            "project_id": str(uuid4()),
+        }
+
+    def fake_rows(sql_text: str, params: list) -> list:
+        lowered = " ".join(sql_text.lower().split())
+        if "from public.dispatch_notes" in lowered:
+            return list(state["notes"])
+        if "update public.orders set status" in lowered:
+            state["status"] = "DISPATCHED"
+        if "from public.deliveries" in lowered:
+            return [{"id": "d1"}]
+        return [{"id": "ok"}]
+
+    def fake_issue(**kwargs):
+        issued.append(kwargs)
+        row = {"note_code": f"GD-{len(issued):04d}", "unit_indexes": kwargs.get("unit_indexes")}
+        state["notes"].append(row)
+        return row
+
+    monkeypatch.setattr("production.service.one", fake_one)
+    monkeypatch.setattr("production.service.rows", fake_rows)
+    monkeypatch.setattr("production.service.issue_dispatch_note", fake_issue)
+    monkeypatch.setattr("production.service.project_row", lambda *a, **k: {"code": "P-1"})
+    monkeypatch.setattr(
+        "production.service.get_work_order",
+        lambda **kw: {"order": {"status": state["status"]}},
+    )
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ):
+        service.dispatch_work_order(
+            org_id=org_id, order_id=order_id, actor_id=uuid4(), unit_indexes=[1]
+        )
+        assert state["status"] == "DISPATCHED"
+        assert issued[0]["unit_indexes"] == [1]
+        # Replay of the covered subset — no new guía.
+        service.dispatch_work_order(
+            org_id=org_id, order_id=order_id, actor_id=uuid4(), unit_indexes=[1]
+        )
+        assert len(issued) == 1
+        # Partial overlap is refused: one bulto never rides two guías.
+        with pytest.raises(DocumentaryError, match="dispatch_units_already_dispatched"):
+            service.dispatch_work_order(
+                org_id=org_id, order_id=order_id, actor_id=uuid4(), unit_indexes=[1, 2]
+            )
+        # The saldo dispatches as a second trip sealing unit 2 only.
+        service.dispatch_work_order(org_id=org_id, order_id=order_id, actor_id=uuid4())
+        assert issued[1]["unit_indexes"] == [2]
+        # Nothing pending — default replay returns current state.
+        service.dispatch_work_order(org_id=org_id, order_id=order_id, actor_id=uuid4())
+        assert len(issued) == 2
+
+
+def test_delivery_schedule_pending_balance_and_trips(monkeypatch) -> None:
+    """Trip 2 defaults to the undelivered saldo; delivered units refuse."""
+    org_id, order_id = uuid4(), uuid4()
+    dt = __import__("datetime").datetime(2026, 9, 23)
+    delivered_trip = {
+        "id": uuid4(), "org_id": org_id, "order_id": order_id,
+        "scheduled_date": "2026-09-24", "time_window": "AM",
+        "address": "X 1", "contact_name": None, "contact_phone": None,
+        "installer_name": None, "notes": None, "status": "DELIVERED",
+        "unit_indexes": [1], "scheduled_by": uuid4(),
+        "created_at": dt, "updated_at": dt,
+    }
+    stored_rows: list[dict] = [dict(delivered_trip)]
+    inserted: list[dict] = []
+
+    def fake_one(sql_text: str, params: list, code: str = "not_found") -> dict:
+        lowered = " ".join(sql_text.lower().split())
+        if "insert into public.deliveries" in lowered:
+            row = dict(delivered_trip)
+            row.update(
+                id=uuid4(), status="SCHEDULED", unit_indexes=params[10],
+            )
+            inserted.append(row)
+            stored_rows.append(row)
+            return row
+        return {
+            "id": str(order_id), "order_code": "OT-1", "status": "DISPATCHED",
+            "payload_json": dict(_PACKING_TWO_UNITS),
+        }
+
+    def fake_rows(sql_text: str, params: list) -> list:
+        lowered = " ".join(sql_text.lower().split())
+        if "from public.orders o" in lowered:
+            return [
+                {
+                    "id": str(order_id), "order_code": "OT-1",
+                    "payload_json": json.dumps(dict(_PACKING_TWO_UNITS)),
+                }
+            ]
+        if "from public.delivery_confirmations" in lowered:
+            return []
+        if "from public.deliveries" in lowered:
+            return list(stored_rows)
+        return [{"id": "ok"}]
+
+    monkeypatch.setattr("production.service.one", fake_one)
+    monkeypatch.setattr("production.service.rows", fake_rows)
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ):
+        # Delivered units can't be scheduled again.
+        with pytest.raises(DocumentaryError, match="delivery_units_already_delivered"):
+            service.schedule_delivery(
+                org_id=org_id, order_id=order_id, actor_id=uuid4(),
+                scheduled_date="2026-09-26", time_window="AM", address="X 1",
+                unit_indexes=[1],
+            )
+        # Default scope after trip 1 = the pending saldo only.
+        out = service.schedule_delivery(
+            org_id=org_id, order_id=order_id, actor_id=uuid4(),
+            scheduled_date="2026-09-26", time_window="PM", address="X 1",
+        )
+        assert inserted[0]["unit_indexes"] == [2]
+        assert out["pending_units"] == []
+        assert out["delivered_units"] == [1]
+        assert len(out["deliveries"]) == 2
+
+
+def test_installation_requires_all_units_delivered(monkeypatch) -> None:
+    """Partial delivery must not close installation: the saldo is still out."""
+    org_id, order_id = uuid4(), uuid4()
+    monkeypatch.setattr(
+        "production.service.one",
+        lambda *_a, **_k: {
+            "id": str(order_id), "order_code": "OT-1", "status": "DISPATCHED",
+            "payload_json": json.dumps(dict(_PACKING_TWO_UNITS)),
+        },
+    )
+    monkeypatch.setattr(
+        "production.service.rows",
+        lambda *_a, **_k: [{"status": "DELIVERED", "unit_indexes": [1]}],
+    )
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ):
+        with pytest.raises(DocumentaryError, match="installation_requires_delivered"):
+            service.confirm_installation(
+                org_id=org_id, order_id=order_id, actor_id=uuid4()
+            )
 
 
 def test_prep_lists_approved_versions_without_orders(monkeypatch) -> None:

@@ -9,4 +9,7 @@ import type { Delivery } from "./delivery";
 
 export interface DeliveryResponse {
   delivery: Delivery | null;
+  deliveries?: Delivery[];
+  pending_units?: number[];
+  delivered_units?: number[];
 }

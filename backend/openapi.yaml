@@ -9310,6 +9310,12 @@ paths:
           format: uuid
         description: Active organization; validated against the JWT user's active
           memberships.
+      - in: query
+        name: delivery
+        schema:
+          type: string
+          format: uuid
+        description: Open a POD for a specific trip when the order has partial deliveries
       - in: path
         name: order_id
         schema:
@@ -9543,6 +9549,13 @@ paths:
           format: uuid
         description: Active organization; validated against the JWT user's active
           memberships.
+      - in: query
+        name: note
+        schema:
+          type: string
+          format: uuid
+        description: Open a specific dispatch note when the order has partial-delivery
+          notes
       - in: path
         name: order_id
         schema:
@@ -18189,6 +18202,11 @@ components:
           nullable: true
         status:
           $ref: '#/components/schemas/DeliveryStatusEnum'
+        unit_indexes:
+          type: array
+          items:
+            type: integer
+          nullable: true
         confirmation:
           allOf:
           - $ref: '#/components/schemas/DeliveryConfirmation'
@@ -18339,6 +18357,18 @@ components:
           allOf:
           - $ref: '#/components/schemas/Delivery'
           nullable: true
+        deliveries:
+          type: array
+          items:
+            $ref: '#/components/schemas/Delivery'
+        pending_units:
+          type: array
+          items:
+            type: integer
+        delivered_units:
+          type: array
+          items:
+            type: integer
       required:
       - delivery
     DeliveryScheduleRequestRequest:
@@ -18368,6 +18398,12 @@ components:
         notes:
           type: string
           maxLength: 500
+        unit_indexes:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+          nullable: true
       required:
       - address
       - scheduled_date
@@ -18783,6 +18819,12 @@ components:
         note:
           type: string
           maxLength: 500
+        unit_indexes:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+          nullable: true
     DocumentTypeEnum:
       enum:
       - DOC-01
@@ -23772,6 +23814,11 @@ components:
           type: object
           additionalProperties: {}
           nullable: true
+        dispatch_notes:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
       required:
       - created_at
       - dispatch_note_voided

@@ -9,7 +9,7 @@ from uuid import UUID
 from django.db import DatabaseError
 from django.http import HttpResponse
 from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -550,6 +550,7 @@ class ProductionOrderDispatchView(APIView):
                     order_id=order_id,
                     actor_id=token.user_id,
                     note=data.get("note"),
+                    unit_indexes=data.get("unit_indexes"),
                 )
         return Response(output)
 
@@ -578,15 +579,31 @@ class ProductionOrderDispatchNoteVoidView(APIView):
 class ProductionOrderDispatchNoteView(APIView):
     @extend_schema(
         operation_id="production_order_dispatch_note",
-        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        parameters=[
+            ACTIVE_ORGANIZATION_HEADER,
+            OpenApiParameter(
+                "note",
+                OpenApiTypes.UUID,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Open a specific dispatch note when the order has partial-delivery notes",
+            ),
+        ],
         request=None,
         responses={200: DispatchNoteAccessSerializer, **ERRORS},
         tags=["production"],
     )
     def get(self, request, order_id: UUID):
+        note_param = request.query_params.get("note")
+        try:
+            note_id = UUID(str(note_param)) if note_param else None
+        except ValueError:
+            raise DocumentaryError("dispatch_note_not_found")
         with public_production_errors():
             with documentary_scope(request, _READERS) as (_, _, org_id):
-                output = dispatch_note_access(org_id=org_id, order_id=order_id)
+                output = dispatch_note_access(
+                    org_id=org_id, order_id=order_id, note_id=note_id
+                )
         return Response(output)
 
 
@@ -791,6 +808,7 @@ class ProductionOrderDeliveryView(APIView):
                     contact_phone=data.get("contact_phone"),
                     installer_name=data.get("installer_name"),
                     notes=data.get("notes"),
+                    unit_indexes=data.get("unit_indexes"),
                 )
         return Response(output)
 
@@ -851,15 +869,31 @@ class ProductionOrderDeliveryConfirmView(APIView):
 class ProductionOrderDeliveryConfirmationView(APIView):
     @extend_schema(
         operation_id="production_order_delivery_confirmation",
-        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        parameters=[
+            ACTIVE_ORGANIZATION_HEADER,
+            OpenApiParameter(
+                "delivery",
+                OpenApiTypes.UUID,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Open a POD for a specific trip when the order has partial deliveries",
+            ),
+        ],
         request=None,
         responses={200: DeliveryConfirmationAccessSerializer, **ERRORS},
         tags=["production"],
     )
     def get(self, request, order_id: UUID):
+        delivery_param = request.query_params.get("delivery")
+        try:
+            delivery_id = UUID(str(delivery_param)) if delivery_param else None
+        except ValueError:
+            raise DocumentaryError("delivery_not_found")
         with public_production_errors():
             with documentary_scope(request, _READERS) as (_, _, org_id):
-                output = confirmation_access(org_id=org_id, order_id=order_id)
+                output = confirmation_access(
+                    org_id=org_id, order_id=order_id, delivery_id=delivery_id
+                )
         return Response(output)
 
 

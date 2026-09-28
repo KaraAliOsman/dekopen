@@ -6,12 +6,9 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export interface DispatchRequestRequest {
-  /** @maxLength 500 */
-  note?: string;
+export type ProductionOrderDispatchNoteParams = {
   /**
-   * @nullable
-   * @items.minimum 1
+   * Open a specific dispatch note when the order has partial-delivery notes
    */
-  unit_indexes?: number[] | null;
-}
+  note?: string;
+};

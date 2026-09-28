@@ -95,7 +95,7 @@ def _patch_env(monkeypatch, storage, *, existing=None, count=0):
     one_calls = []
 
     def fake_rows(sql, params=None):
-        if "FROM public.dispatch_notes WHERE work_order_id" in sql:
+        if "from public.dispatch_notes" in str(sql).lower():
             return [existing] if existing else []
         return []
 

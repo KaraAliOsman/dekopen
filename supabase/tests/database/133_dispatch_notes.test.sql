@@ -1,7 +1,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
 SET LOCAL search_path = public, private, auth, extensions, pg_temp;
-SELECT plan(13);
+SELECT plan(14);
 
 -- Tenants read but never write.
 SELECT ok(
@@ -26,15 +26,26 @@ SELECT has_column(
     'public', 'dispatch_notes', 'payload_json',
     'sealed payload column exists'
 );
+SELECT has_column(
+    'public', 'dispatch_notes', 'unit_indexes',
+    'guía seals the manifest units of its trip'
+);
+SELECT has_column(
+    'public', 'dispatch_notes', 'delivery_id',
+    'guía links to the trip that carried it — a FAILED trip frees its units'
+);
 SELECT ok(
-    EXISTS (
-        SELECT 1 FROM pg_indexes
-        WHERE schemaname = 'public' AND tablename = 'dispatch_notes'
-          AND indexname = 'uk_dispatch_note_live'
-          AND indexdef ILIKE '%UNIQUE%work_order_id%'
-          AND indexdef ILIKE '%voided_at IS NULL%'
+    NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'public.dispatch_notes'::regclass
+          AND contype = 'u'
+          AND conkey = (
+              SELECT ARRAY[attnum] FROM pg_attribute
+              WHERE attrelid = 'public.dispatch_notes'::regclass
+                AND attname = 'work_order_id'
+          )
     ),
-    'one live guía de despacho per work order — voided rows excluded'
+    'partial deliveries issue one live guía per trip — coverage is service-computed'
 );
 SELECT col_is_unique(
     'public', 'dispatch_notes', ARRAY['org_id', 'note_code'],

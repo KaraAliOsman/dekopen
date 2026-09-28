@@ -577,6 +577,57 @@
   display: flex;
   gap: 8px;
 }
+.production-delivery-trips {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+.production-delivery-trip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper-2, #faf9f7);
+}
+.production-delivery-trip-date {
+  font-weight: 600;
+}
+.production-delivery-trip-units {
+  color: var(--ink-muted);
+  font-size: var(--text-s, 12px);
+}
+.production-delivery-pending {
+  margin: 8px 0 0;
+  font-size: var(--text-s, 12px);
+  color: var(--ink-muted);
+}
+.production-delivery-units {
+  grid-column: 1 / -1;
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+}
+.production-delivery-units legend {
+  font-size: var(--text-s, 12px);
+  color: var(--ink-muted);
+  padding: 0 4px;
+}
+.production-delivery-unit-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.production-delivery-units-hint {
+  margin: 6px 0 0;
+  font-size: var(--text-xs, 11px);
+  color: var(--ink-muted);
+}
 
 .signature-pad {
   position: relative;
@@ -944,6 +995,30 @@
   flex-direction: column;
   gap: 0.75rem;
 }
+/* Persistent primary action: the step's live transitions stay pinned to the
+   bottom of the viewport while the card's materials/ops scroll beneath. */
+.operator-card-actions {
+  position: sticky;
+  bottom: 0;
+  margin: 0.75rem -1rem -1rem;
+  padding: 0.6rem 1rem;
+  border-top: 1px solid var(--line, #d9dce2);
+  border-radius: 0 0 8px 8px;
+  background: var(--surface-raised, #fbfcfe);
+  display: flex;
+  justify-content: flex-end;
+  z-index: 2;
+}
+.operator-card-actions .production-step-actions {
+  margin-left: 0;
+}
+.operator-card-actions .production-step-actions button {
+  min-height: 44px;
+  min-width: 110px;
+  padding: 0.55rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
 .operator-section h4 {
   margin: 0 0 0.375rem;
   font-size: 0.8125rem;
@@ -1025,6 +1100,62 @@
 .production-prep-release:disabled {
   opacity: 0.5;
   cursor: default;
+}
+.production-station-queue {
+  margin-bottom: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-card, 10px);
+}
+.production-station-queue h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--theme-text-secondary);
+}
+.production-station-queue > ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.production-station-queue li ul {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.production-station-counts {
+  display: block;
+  margin-left: 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--theme-text-secondary);
+}
+.production-station-empty {
+  margin: 0 0 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px dashed var(--theme-border-subtle);
+  border-radius: var(--radius-card, 10px);
+  font-size: 0.82rem;
+  color: var(--theme-text-secondary);
+}
+.production-station-empty button {
+  margin-left: 0.4rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--theme-accent);
+  background: transparent;
+  color: var(--theme-accent);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
 }
 .production-order-next {
   display: block;

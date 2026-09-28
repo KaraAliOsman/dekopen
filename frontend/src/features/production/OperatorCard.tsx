@@ -260,6 +260,7 @@ export function OperatorStepCard({
   step,
   trace,
   traceBusy,
+  actionBar,
   onQcCheck,
   opsCheckable = false,
   opsDone = [],
@@ -268,6 +269,9 @@ export function OperatorStepCard({
   step: ProductionStep;
   trace: ProductionOrderTrace | null;
   traceBusy: boolean;
+  // The step's live transitions rendered as a sticky footer — the operator's
+  // primary action stays reachable while materials and ops scroll by.
+  actionBar?: React.ReactNode;
   onQcCheck?: (stepId: string, check: QcCheckInput) => void;
   // Plan-evidence stations (MACHINING, PROFILE_CUT, REINFORCEMENT_CUT):
   // COMPLETE must declare every routed member op — the card shows one
@@ -750,6 +754,7 @@ export function OperatorStepCard({
           ) : null}
         </div>
       )}
+      {actionBar ? <footer className="operator-card-actions">{actionBar}</footer> : null}
     </section>
   );
 }

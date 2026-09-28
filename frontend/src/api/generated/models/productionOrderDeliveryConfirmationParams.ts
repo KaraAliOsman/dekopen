@@ -6,12 +6,9 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export interface DispatchRequestRequest {
-  /** @maxLength 500 */
-  note?: string;
+export type ProductionOrderDeliveryConfirmationParams = {
   /**
-   * @nullable
-   * @items.minimum 1
+   * Open a POD for a specific trip when the order has partial deliveries
    */
-  unit_indexes?: number[] | null;
-}
+  delivery?: string;
+};

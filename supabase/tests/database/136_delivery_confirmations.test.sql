@@ -34,9 +34,9 @@ SELECT col_is_unique(
     'public', 'delivery_confirmations', ARRAY['org_id', 'confirmation_code'],
     'confirmation code unique inside an org'
 );
-SELECT col_is_unique(
+SELECT col_isnt_unique(
     'public', 'delivery_confirmations', 'order_id',
-    'one confirmation per order makes confirm replay-idempotent'
+    'partial deliveries sign one comprobante per trip'
 );
 SELECT col_is_unique(
     'public', 'delivery_confirmations', 'delivery_id',

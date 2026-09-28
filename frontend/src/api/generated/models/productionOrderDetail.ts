@@ -7,6 +7,7 @@
  */
 import type { ProductionNextStep } from "./productionNextStep";
 import type { ProductionOrderDetailDispatchNoteDte } from "./productionOrderDetailDispatchNoteDte";
+import type { ProductionOrderDetailDispatchNotesItem } from "./productionOrderDetailDispatchNotesItem";
 import type { ProductionOrderDetailPayload } from "./productionOrderDetailPayload";
 import type { ProductionOrderDetailRemakeReason } from "./productionOrderDetailRemakeReason";
 import type { ProductionOrderMaking } from "./productionOrderMaking";
@@ -44,4 +45,5 @@ export interface ProductionOrderDetail {
   dispatch_note_voided: boolean;
   /** @nullable */
   dispatch_note_dte?: ProductionOrderDetailDispatchNoteDte;
+  dispatch_notes?: ProductionOrderDetailDispatchNotesItem[];
 }

@@ -24,6 +24,7 @@ from documents.repository import (
     rows,
 )
 from documents.renderers import (
+    _array,
     _cut_key,
     _cut_member_map,
     _cut_spec_index,
@@ -469,6 +470,13 @@ _CODE_RE = re.compile(r"^(MAN|M|R|I|V|H)-?(\d+)$|^P-?(\d+)$|^-?U(\d+)$", re.IGNO
 _QR_RE = re.compile(r"^DEKOPEN\|([^|]+)\|([^|]+)\|", re.IGNORECASE)
 _UNIT_SUFFIX_RE = re.compile(r"-?U(\d+)$", re.IGNORECASE)
 _UNIT_LABEL_RE = re.compile(r"^(.+)-U(\d+)$", re.IGNORECASE)
+# Physical piece codes printed since the operator pack rework:
+# ``P<pos>-U<unit>-M<member>`` plus ``·R`` (reinforcement), ``-I<nn>``
+# (infill) and ``-MAN<nn>`` (handle) suffixes. A scanned label must resolve
+# to the same frozen identities the paper carries.
+_PHYSICAL_RE = re.compile(
+    r"^P-?(\d+)-U-?(\d+)-((?:MAN)|M|I)-?(\d+)([·\-*_]?R)?$", re.IGNORECASE
+)
 
 
 def _scan_order_hint(query: str) -> str | None:
@@ -506,7 +514,11 @@ def _resolve_code(
     reinforcement, infill, bay, leaf and position ids — so a scanned
     M-03/I-02/-U01 hits the same pieces the paper label does. Returns the
     label maps plus the resolved id sets (empty dict when nothing resolves)."""
-    match = _CODE_RE.match(_normalize_query(query))
+    normalized = _normalize_query(query)
+    physical = _PHYSICAL_RE.match(normalized)
+    if physical:
+        return _resolve_physical(version_snapshot, physical)
+    match = _CODE_RE.match(normalized)
     if not match:
         return {}
     try:
@@ -566,13 +578,88 @@ def _resolve_code(
     return resolved
 
 
+def _resolve_physical(
+    version_snapshot: dict[str, Any], match: re.Match[str]
+) -> dict[str, Any]:
+    """Resolve a printed physical code ``Pnn-Umm-Mkk`` (and its ``·R``,
+    ``-I``, ``-MAN`` variants) through the label maps — the printed value
+    IS the label value, so an exact match hands back the frozen entity ids
+    without re-walking the manufacturing facts."""
+    position_digits, unit_digits, kind, seq_digits, reinf = match.groups()
+    suffix = "·R" if reinf else ""
+    canonical = (
+        f"P{int(position_digits):02d}-U{int(unit_digits):02d}-"
+        f"{kind.upper()}{int(seq_digits):02d}{suffix}"
+    )
+    try:
+        labels = _piece_labels(version_snapshot)
+    except DocumentaryError:
+        return {}
+    group = {
+        "M": "reinforcement" if reinf else "member",
+        "I": "infill",
+        "MAN": "handle",
+    }[kind.upper()]
+    resolved_ids = {
+        entity_id
+        for entity_id, code in labels[group].items()
+        if str(code) == canonical
+    }
+    if not resolved_ids:
+        return {}
+    resolved: dict[str, Any] = {
+        "spec_keys": set(),
+        "infill_keys": set(),
+        "bay_ids": set(),
+        "leaf_ids": set(),
+        "position_ids": set(),
+        "unit_index": None,
+        "cut_map": _cut_member_map(version_snapshot, labels),
+        "infill_map": _infill_code_map(version_snapshot, labels),
+    }
+    # Deliberately narrow: only spec/infill/location keys — widening by
+    # position or unit would make ``_piece_hits`` (OR semantics) report every
+    # piece of the unit, not the scanned stick. The physical code's P/U
+    # digits still identify the piece on the printed label; the trace stamps
+    # each hit with its position/location codes.
+    if group in ("member", "reinforcement"):
+        spec_index = _cut_spec_index(version_snapshot)
+        kind_tag = "PROFILE" if group == "member" else "REINFORCEMENT"
+        for key, ids in spec_index.items():
+            if key[0] == kind_tag and any(
+                entity_id in resolved_ids for entity_id in ids
+            ):
+                resolved["spec_keys"].add(key)
+    elif group == "infill":
+        infill_index = _infill_spec_index(version_snapshot)
+        for key, ids in infill_index.items():
+            if any(entity_id in resolved_ids for entity_id in ids):
+                resolved["infill_keys"].add(key)
+    else:  # handle — not a cut piece; surface its bay/leaf for context
+        for fact in _array(
+            version_snapshot.get("manufacturing"),
+            "invalid_manufacturing_fact",
+        ):
+            for item in _array(
+                fact.get("handles"), "invalid_manufacturing_fact"
+            ):
+                if item.get("handle_id") in resolved_ids:
+                    if item.get("bay_id") is not None:
+                        resolved["bay_ids"].add(str(item["bay_id"]))
+                    if item.get("leaf_id") is not None:
+                        resolved["leaf_ids"].add(str(item["leaf_id"]))
+    return resolved
+
+
 def trace_piece(*, org_id: UUID, piece_id: str) -> dict[str, Any]:
     """Backward lookup: which work order(s) and plan location carry a
     physical piece — walk from the piece back to order → version → project."""
     if not piece_id or len(piece_id) > 256:
         raise DocumentaryError("work_order_piece_invalid")
     normalized = _normalize_query(piece_id)
-    code_query = bool(_CODE_RE.match(normalized))
+    code_query = bool(
+        _CODE_RE.match(normalized) or _PHYSICAL_RE.match(normalized)
+    )
     # A printed code never appears inside payload_json, so the LIKE prefilter
     # only applies to raw piece_id scans — code lookups scan every order in
     # the org (bounded; an operator scan is a rare call). When the scanned
@@ -624,7 +711,8 @@ def trace_piece(*, org_id: UUID, piece_id: str) -> dict[str, Any]:
         # actually carries a hit (saves one read per non-matching order).
         if order["project_version_id"] and code_query:
             resolved = _resolve_code(
-                _snapshot(str(order["project_version_id"])), piece_id
+                _snapshot(str(order["project_version_id"])),
+                normalized,
             )
         hits = _piece_hits(
             order,
