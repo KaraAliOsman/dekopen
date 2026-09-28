@@ -1677,6 +1677,50 @@ button.production-chip:hover {
   }
 }
 
+/* Studio compact rail: on the position editor the domain rail contracts to
+ * a 64px icon strip so the canvas owns the viewport. Labels are removed
+ * visually but the links keep aria-label + title, so no affordance is lost;
+ * the desktop drawer behavior below still applies under 1024px. */
+@media (min-width: 1025px) {
+  .app-shell[data-studio] .app-rail {
+    align-items: stretch;
+    padding-inline: 0;
+    width: 4rem;
+  }
+
+  .app-shell[data-studio] .app-rail__brand {
+    padding-inline: 0;
+    text-align: center;
+  }
+
+  /* Compact mark: the wordmark collapses to its square glyph. */
+  .app-shell[data-studio] .app-rail__brand .brand {
+    font-size: 0;
+    justify-content: center;
+  }
+
+  .app-shell[data-studio] .org-switcher,
+  .app-shell[data-studio] .rail-group__title,
+  .app-shell[data-studio] .app-rail__identity,
+  .app-shell[data-studio] .rail-item > span {
+    display: none;
+  }
+
+  .app-shell[data-studio] .rail-item {
+    border-left-width: 2px;
+    border-radius: var(--radius-md);
+    justify-content: center;
+    margin-inline: auto;
+    padding-inline: 0;
+    width: 2.5rem;
+  }
+
+  .app-shell[data-studio] .rail-item__icon {
+    height: 18px;
+    width: 18px;
+  }
+}
+
 @media (max-width: 640px) {
   .app-topbar {
     gap: 0.5rem;

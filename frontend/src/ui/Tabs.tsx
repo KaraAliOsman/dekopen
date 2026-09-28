@@ -26,9 +26,19 @@ export function Tabs({
   onChange?: (id: string) => void;
   label: string;
 }): JSX.Element {
-  const listRef = useRef<HTMLDivElement>(null);
-  const { pathname } = useLocation();
+  // State-only tabs never touch the router, so the strip works in tests and
+  // embedded contexts that mount without one.
+  if (items.some((item) => item.to)) {
+    return <RoutedTabs items={items} label={label} />;
+  }
+  return <StateTabs items={items} label={label} onChange={onChange} value={value} />;
+}
 
+function useRovingFocus(): {
+  listRef: React.RefObject<HTMLDivElement>;
+  onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
+} {
+  const listRef = useRef<HTMLDivElement>(null);
   const onKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
     const tabs = Array.from(
@@ -45,47 +55,70 @@ export function Tabs({
     next?.focus();
     next?.click();
   }, []);
+  return { listRef, onKeyDown };
+}
 
+function StateTabs({
+  items,
+  value,
+  onChange,
+  label,
+}: {
+  items: TabItem[];
+  value?: string;
+  onChange?: (id: string) => void;
+  label: string;
+}): JSX.Element {
+  const { listRef, onKeyDown } = useRovingFocus();
   return (
     <div aria-label={label} className="ui-tabs" onKeyDown={onKeyDown} ref={listRef} role="tablist">
-      {items.map((item) =>
-        item.to ? (
-          <NavLink
-            aria-disabled={item.disabled || undefined}
-            aria-selected={routeActive(item, pathname)}
-            className={({ isActive }) => `ui-tab${isActive ? " is-active" : ""}`}
-            end={item.end ?? true}
-            key={item.id}
-            role="tab"
-            tabIndex={routeActive(item, pathname) ? 0 : -1}
-            to={item.to}
-          >
-            {item.label}
-          </NavLink>
-        ) : (
-          <button
-            aria-disabled={item.disabled || undefined}
-            aria-selected={value === item.id}
-            className={`ui-tab${value === item.id ? " is-active" : ""}`}
-            key={item.id}
-            onClick={() => onChange?.(item.id)}
-            role="tab"
-            tabIndex={value === item.id ? 0 : -1}
-            type="button"
-          >
-            {item.label}
-          </button>
-        ),
-      )}
+      {items.map((item) => (
+        <button
+          aria-disabled={item.disabled || undefined}
+          aria-selected={value === item.id}
+          className={`ui-tab${value === item.id ? " is-active" : ""}`}
+          key={item.id}
+          onClick={() => onChange?.(item.id)}
+          role="tab"
+          tabIndex={value === item.id ? 0 : -1}
+          type="button"
+        >
+          {item.label}
+        </button>
+      ))}
     </div>
   );
 }
 
-function routeActive(item: TabItem, pathname: string): boolean | undefined {
-  if (!item.to) return undefined;
+function RoutedTabs({ items, label }: { items: TabItem[]; label: string }): JSX.Element {
+  const { listRef, onKeyDown } = useRovingFocus();
+  const { pathname } = useLocation();
+  return (
+    <div aria-label={label} className="ui-tabs" onKeyDown={onKeyDown} ref={listRef} role="tablist">
+      {items.map((item) => (
+        <NavLink
+          aria-disabled={item.disabled || undefined}
+          aria-selected={routeActive(item, pathname)}
+          className={({ isActive }) => `ui-tab${isActive ? " is-active" : ""}`}
+          end={item.end ?? true}
+          key={item.id}
+          role="tab"
+          tabIndex={routeActive(item, pathname) ? 0 : -1}
+          to={item.to ?? ""}
+        >
+          {item.label}
+        </NavLink>
+      ))}
+    </div>
+  );
+}
+
+function routeActive(item: TabItem, pathname: string): boolean {
+  if (!item.to) return false;
   return (
     matchPath({ path: item.to, end: item.end ?? true }, pathname) !== null ||
-    // Hash-router style safety: match a trailing segment too.
-    matchPath({ path: `*/${item.to.replace(/^\//, "")}`, end: item.end ?? true }, pathname) !== null
+    // Nested-mount safety: match a trailing segment too.
+    matchPath({ path: `*/${item.to.replace(/^\//, "")}`, end: item.end ?? true }, pathname) !==
+      null
   );
 }

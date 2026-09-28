@@ -9,7 +9,7 @@ import { CatalogImportsPanel } from "./CatalogImportsPanel";
 import { SystemWorkspaceView } from "./SystemWorkspace";
 import { SectionPreviewSvg } from "../canvas/SectionPreviewSvg";
 import { SectionImportPanel } from "./SectionImportPanel";
-import { Button, DeniedState, PageHeader, useConfirm } from "../../ui";
+import { Button, DeniedState, PageHeader, Tabs, useConfirm } from "../../ui";
 import type { ProcessProfileOption } from "../../api/generated/models";
 import {
   HARDWARE_COMPONENT_CATEGORIES,
@@ -350,36 +350,35 @@ function CatalogWorkspace({ orgId, role }: { orgId: string; role: string }): JSX
             {currentSystem?.is_demo && <p>{ct("demoHelp")}</p>}
           </header>
 
-          <nav className="catalog-tabs" aria-label={ct("sections")}>
-            {currentSystem && (
-              <button
-                type="button"
-                aria-pressed={detailTab === "workspace"}
-                disabled={editor !== null}
-                onClick={() => {
-                  setDetailTab("workspace");
-                  setNotice("");
-                }}
-              >
-                {ct("workspaceTab")}
-              </button>
-            )}
-            {resources.map((kind) => (
-              <button
-                key={kind}
-                type="button"
-                aria-pressed={detailTab === "records" && resource === kind}
-                disabled={editor !== null || (selected === null && kind !== "hardware-kits")}
-                onClick={() => {
-                  setResource(kind);
-                  setDetailTab("records");
-                  setNotice("");
-                }}
-              >
-                {ct(kind)}
-              </button>
-            ))}
-          </nav>
+          <Tabs
+            items={[
+              ...(currentSystem
+                ? [
+                    {
+                      disabled: editor !== null,
+                      id: "workspace",
+                      label: ct("workspaceTab"),
+                    },
+                  ]
+                : []),
+              ...resources.map((kind) => ({
+                disabled: editor !== null || (selected === null && kind !== "hardware-kits"),
+                id: kind,
+                label: ct(kind),
+              })),
+            ]}
+            label={ct("sections")}
+            onChange={(id) => {
+              if (id === "workspace") {
+                setDetailTab("workspace");
+              } else {
+                setResource(id as (typeof resources)[number]);
+                setDetailTab("records");
+              }
+              setNotice("");
+            }}
+            value={detailTab === "workspace" ? "workspace" : resource}
+          />
 
           {currentSystem && detailTab === "workspace" ? (
             <SystemWorkspaceView

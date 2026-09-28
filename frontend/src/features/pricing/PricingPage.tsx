@@ -9,7 +9,7 @@ import { formatMoney } from "../money";
 import { apiMutator, ApiError } from "../../api/apiMutator";
 import { actionErrorDetail } from "../errors";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
-import { DeniedState, PageHeader } from "../../ui";
+import { DeniedState, PageHeader, Tabs } from "../../ui";
 import { t } from "../../i18n/es-CL";
 import { useCanvasStore } from "../canvas/canvasStore";
 import "./pricing.css";
@@ -454,19 +454,16 @@ function PricingWorkspace({ orgId }: { orgId: string }): JSX.Element {
   return (
     <section className="pricing-page">
       <PageHeader context={t("pricing.subtitle")} title={t("pricing.title")} />
-      <nav aria-label={t("pricing.sections")} className="pricing-tabs">
-        {sections.map((name, index) => (
-          <button
-            key={name}
-            type="button"
-            aria-pressed={resource === name}
-            disabled={busy}
-            onClick={() => setResource(name)}
-          >
-            {t(sectionLabels[index]!)}
-          </button>
-        ))}
-      </nav>
+      <Tabs
+        items={sections.map((name, index) => ({
+          disabled: busy,
+          id: name,
+          label: t(sectionLabels[index]!),
+        }))}
+        label={t("pricing.sections")}
+        onChange={setResource}
+        value={resource}
+      />
       {message && <p role="alert">{message}</p>}
       {busy && <p role="status">{t("pricing.loading")}</p>}
       <div className="pricing-grid">

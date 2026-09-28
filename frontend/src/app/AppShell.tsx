@@ -120,8 +120,17 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
         (version) => version.revision_code === lockedProject.current_revision,
       ) &&
       !lockedProject.current_pricing_operation_id);
-  const context: "project" | "production" | null =
-    projectId !== null ? "project" : parts[0] === "production" ? "production" : null;
+  // Studio (position editor): the project-context rail yields to a compact
+  // 64px global icon strip — the canvas owns the room and the topbar keeps
+  // the where-you-are breadcrumbs (mandate 01: Studio rail may be ~64px).
+  const isStudio = parts[0] === "projects" && parts[2] === "positions" && parts.length >= 4;
+  const context: "project" | "production" | null = isStudio
+    ? null
+    : projectId !== null
+      ? "project"
+      : parts[0] === "production"
+        ? "production"
+        : null;
   const projectName = useProjectName(projectId !== null && projectId !== "demo" ? projectId : null);
 
   // Browser tab title tracks the same crumbs the shell renders — tabs and
@@ -191,7 +200,11 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
   return (
     <ShellLeafContext.Provider value={leafContext}>
       <AssistantSurfaceProvider>
-        <div className={`app-shell${railOpen ? " rail-open" : ""}`} data-testid="app-shell">
+        <div
+          className={`app-shell${railOpen ? " rail-open" : ""}`}
+          data-studio={isStudio || undefined}
+          data-testid="app-shell"
+        >
           <a href="#workspace-main" className="skip-link">
             {t("shell.skipToContent")}
           </a>
@@ -216,9 +229,15 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
                     <div key={group.id} className="rail-group">
                       <p className="rail-group__title">{t(group.title)}</p>
                       {items.map((item) => (
-                        <NavLink key={item.to} to={item.to} className="rail-item">
+                        <NavLink
+                          aria-label={isStudio ? t(item.label) : undefined}
+                          className="rail-item"
+                          key={item.to}
+                          title={isStudio ? t(item.label) : undefined}
+                          to={item.to}
+                        >
                           <RailIcon to={item.to} />
-                          <span>{t(item.label)}</span>
+                          <span aria-hidden={isStudio || undefined}>{t(item.label)}</span>
                         </NavLink>
                       ))}
                     </div>
