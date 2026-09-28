@@ -446,7 +446,13 @@ function FramelessModule({
               y={rect.y}
               width={rect.w}
               height={rect.h}
-            />
+            >
+              <title>
+                {support.article_sku
+                  ? `${t("assembly.framelessKindChannel")} · ${support.article_sku}`
+                  : t("assembly.framelessKindChannel")}
+              </title>
+            </rect>
           );
         }
         return Array.from({ length: Math.max(support.qty, 1) }, (_, at) => {
@@ -459,7 +465,13 @@ function FramelessModule({
               y={rect.y}
               width={rect.w}
               height={rect.h}
-            />
+            >
+              <title>
+                {support.article_sku
+                  ? `${t("assembly.framelessKindClamps")} · ${support.article_sku}`
+                  : t("assembly.framelessKindClamps")}
+              </title>
+            </rect>
           );
         });
       })}
@@ -487,7 +499,13 @@ function FramelessModule({
                 y={rect.y}
                 width={rect.w}
                 height={rect.h}
-              />
+              >
+                <title>
+                  {fitting.sku
+                    ? `${t(`assembly.fittingKind.${fitting.kind}`)} · ${fitting.sku}`
+                    : t(`assembly.fittingKind.${fitting.kind}`)}
+                </title>
+              </rect>
             );
           });
         })}
@@ -1051,19 +1069,18 @@ function ModuleTree({
             }
           />
         )}
-        {(onDividerDown || onSelectDivision) &&
-          (vertical ? bar.h : bar.w) > grip * 1.6 && (
-            <g className="divider-grip-dots" pointerEvents="none" aria-hidden="true">
-              {[-1, 0, 1].map((slot) => (
-                <circle
-                  key={slot}
-                  cx={vertical ? axis : bar.x + bar.w / 2 + slot * grip * 0.22}
-                  cy={vertical ? bar.y + bar.h / 2 + slot * grip * 0.22 : axis}
-                  r={Math.max(grip * 0.07, 1.4)}
-                />
-              ))}
-            </g>
-          )}
+        {(onDividerDown || onSelectDivision) && (vertical ? bar.h : bar.w) > grip * 1.6 && (
+          <g className="divider-grip-dots" pointerEvents="none" aria-hidden="true">
+            {[-1, 0, 1].map((slot) => (
+              <circle
+                key={slot}
+                cx={vertical ? axis : bar.x + bar.w / 2 + slot * grip * 0.22}
+                cy={vertical ? bar.y + bar.h / 2 + slot * grip * 0.22 : axis}
+                r={Math.max(grip * 0.07, 1.4)}
+              />
+            ))}
+          </g>
+        )}
       </>
     );
   }
