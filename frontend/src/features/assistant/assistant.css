@@ -14,8 +14,8 @@
   right: 316px;
 }
 .ask-dock__trigger {
-  width: 52px;
-  height: 52px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   border: 0;
   background: transparent;
@@ -1148,4 +1148,14 @@
     width: calc(100vw - 16px);
     max-height: 72vh;
   }
+}
+
+/* Bot welcome — the figure on first-open empty states. */
+.ask-dock__welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem 0.75rem 0.75rem;
+  text-align: center;
 }

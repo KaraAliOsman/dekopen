@@ -6,6 +6,7 @@ import { aiAsk, aiAskThread } from "../../api/generated/dekopen";
 import type { AiAskResponse } from "../../api/generated/models/aiAskResponse";
 import { t } from "../../i18n/es-CL";
 import { AgentBody, SURFACE_LABELS } from "./AgentBody";
+import { BotFigure } from "./BotFigure";
 import { Orb, orbStateFor } from "./Orb";
 import { stableRefs, useAssistantContext } from "./assistantContext";
 import "./assistant.css";
@@ -38,7 +39,11 @@ export function AskDekopen({
 }): JSX.Element | null {
   const { surface, refs } = useAssistantContext();
   const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
+  /* The dock remembers its expanded state across navigation and refresh —
+   * closing it for one screen must not re-open on the next, and a running
+   * thread shouldn't collapse mid-journey. sessionStorage scopes it to the
+   * tab: a fresh session starts docked, a mid-work one keeps the panel. */
+  const [open, setOpen] = useState(() => sessionStorage.getItem("dk:askdock") === "1");
   const [mode, setMode] = useState<"ask" | "agent">("ask");
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
@@ -57,6 +62,10 @@ export function AskDekopen({
    * call instead of debiting twice. */
   const operationKey = useRef<{ key: string; question: string } | null>(null);
   const requestSeq = useRef(0);
+
+  useEffect(() => {
+    sessionStorage.setItem("dk:askdock", open ? "1" : "0");
+  }, [open]);
 
   useEffect(() => {
     if (openRequested > 0) setOpen(true);
@@ -259,7 +268,10 @@ export function AskDekopen({
             <>
               <div className="ask-dock__thread" aria-live="polite" role="log">
                 {thread.length === 0 ? (
-                  <p className="ask-dock__hint">{t("ask.hint")}</p>
+                  <div className="ask-dock__welcome">
+                    <BotFigure size={110} />
+                    <p className="ask-dock__hint">{t("ask.hint")}</p>
+                  </div>
                 ) : (
                   thread.map((turn, index) => (
                     <div key={index} className="ask-dock__turn">

@@ -25,6 +25,7 @@ import { useDesignOpsBridge } from "./assistantContext";
 import { AiMetricsCard } from "./AiMetricsCard";
 import { ArtifactDetail, type Artifact } from "./ArtifactDetail";
 import { BatchOpsStep } from "./BatchOpsStep";
+import { BotFigure } from "./BotFigure";
 import { Orb, orbStateFor } from "./Orb";
 import { STATE_LABELS } from "./states";
 import { SURFACE_LABELS } from "./surfaces";
@@ -928,7 +929,7 @@ export function AssistantWorkspacePage(): JSX.Element {
           {transcript.length === 0 && !job ? (
             <>
               <div className="aiws-hero">
-                <Orb state="idle" size={64} />
+                <BotFigure size={120} />
                 <div>
                   <h1 className="aiws-hero__title">{t("aiws.title")}</h1>
                   <AiMetricsCard organizationId={orgId ?? ""} />

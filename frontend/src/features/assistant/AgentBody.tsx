@@ -20,6 +20,7 @@ import { describeDesignOp, designAssistProduct, productFingerprint } from "../ca
 import type { ProductJson } from "../canvas/productEditing";
 import { stableRefs, useDesignOpsBridge } from "./assistantContext";
 import { BatchOpsStep } from "./BatchOpsStep";
+import { BotFigure } from "./BotFigure";
 import { SURFACE_LABELS } from "./surfaces";
 
 /** The durable worker can leave the job running far longer than a request
@@ -618,7 +619,10 @@ export function AgentBody({
     <>
       <div className="ask-dock__thread">
         {thread.length === 0 && !live ? (
-          <p className="ask-dock__hint">{t("agent.hint")}</p>
+          <div className="ask-dock__welcome">
+            <BotFigure size={110} />
+            <p className="ask-dock__hint">{t("agent.hint")}</p>
+          </div>
         ) : (
           thread.map((turn, turnIndex) => (
             <div key={turnIndex} className="ask-dock__turn">

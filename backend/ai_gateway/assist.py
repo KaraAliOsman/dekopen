@@ -20,6 +20,7 @@ from ai_gateway.context import (
     REQUIRED_REFS,
     _ContextError,
     build_context,
+    guarded,
     stable_refs,
 )
 from ai_gateway.jobs import _ai_backend
@@ -254,7 +255,8 @@ def ask(
         operation_key=operation_key,
         tool_name="context_assist",
         provider_options={
-            "system": ASK_SYSTEM + (CATALOG_SYSTEM_SUFFIX if surface == "catalog" else ""),
+            "system": guarded(ASK_SYSTEM)
+            + (CATALOG_SYSTEM_SUFFIX if surface == "catalog" else ""),
             "json_output": True,
         },
         input_payload={

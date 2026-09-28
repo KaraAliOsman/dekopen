@@ -34,6 +34,7 @@ from ai_gateway.context import (
     _cut,
     _jsonb,
     build_context,
+    guarded,
     rows,
 )
 from authentication.errors import contract_error
@@ -419,6 +420,17 @@ WORKFLOW_SYSTEM: dict[str, str] = {
     "catalog_compiler": COMPILER_SYSTEM,
     "customer_comms": COMMS_SYSTEM,
 }
+
+
+AGENT_SYSTEM = guarded(AGENT_SYSTEM)
+BRIEF_SYSTEM = guarded(BRIEF_SYSTEM)
+PURCHASE_SYSTEM = guarded(PURCHASE_SYSTEM)
+PRODUCTION_SYSTEM = guarded(PRODUCTION_SYSTEM)
+QUOTE_SYSTEM = guarded(QUOTE_SYSTEM)
+DOC_DRAFT_SYSTEM = guarded(DOC_DRAFT_SYSTEM)
+COMPILER_SYSTEM = guarded(COMPILER_SYSTEM)
+COMMS_SYSTEM = guarded(COMMS_SYSTEM)
+WORKFLOW_SYSTEM = {key: guarded(prompt) for key, prompt in WORKFLOW_SYSTEM.items()}
 
 
 def _query_key(surface: str, refs: dict) -> str:

@@ -1,7 +1,9 @@
-/* DEKOPEN orb identity — an anthracite sphere with twin casement-slot eyes.
- * Eyes carry life (pose, blink, gaze), the outer ring carries job status in
- * the same hues as the state pills. Animations are CSS-only: no timers,
- * free pause in background tabs, one reduced-motion query. */
+/* DEKOPEN Bot identity — reference: referencias/dekopen-bot-original.png.
+ * A graphite sphere with twin cyan capsule eyes and a thin cyan orbital
+ * ribbon that wraps front/behind the body. Eyes carry life (pose, blink,
+ * gaze), the outer ring carries job status, the ribbon is identity with
+ * subtle state tints. Animations are CSS-only: no timers, free pause in
+ * background tabs, one reduced-motion query. */
 
 .orb {
   /* Sphere palette tokens live in styles/tokens.css — the identity IS the
@@ -14,7 +16,27 @@
 
 .orb__ring {
   fill: none;
-  stroke-width: 1.8;
+  stroke-width: 1.6;
+  opacity: 0;
+}
+/* The orbital ribbon — thin, continuous, cyan. Back sweep is dimmed (it is
+ * the far side of the orbit); the front sweep is the identity stroke. */
+.orb__ribbon {
+  fill: none;
+  stroke: var(--orb-ribbon);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+.orb__ribbon--back {
+  stroke: var(--orb-ribbon-soft);
+  stroke-width: 1.2;
+}
+.orb__ribbon-run {
+  fill: none;
+  stroke: var(--orb-eye-hi);
+  stroke-width: 2.1;
+  stroke-linecap: round;
+  stroke-dasharray: 7 210;
   opacity: 0;
 }
 .orb__body {
@@ -32,6 +54,9 @@
 .orb__eye {
   fill: var(--orb-eye);
 }
+.orb__eye-glow {
+  fill: var(--orb-eye-glow);
+}
 .orb__glint {
   fill: var(--orb-glint);
   opacity: 0.85;
@@ -45,6 +70,16 @@
 .orb__eyes--worry rect,
 .orb__eyes--flat rect {
   fill: var(--orb-eye);
+}
+/* Consequential states tint the identity ribbon, not just the ring. */
+.orb.is-approval .orb__ribbon {
+  stroke: var(--theme-warning);
+}
+.orb.is-error .orb__ribbon {
+  stroke: var(--theme-danger);
+}
+.orb.is-success .orb__ribbon {
+  stroke: var(--theme-success);
 }
 /* Exactly one eye set per state — open by default. */
 .orb__eyes--joy,
@@ -64,14 +99,21 @@
 }
 
 /* Small silhouettes: drop the micro-details that muddy sub-28px renders,
- * and push the open eyes larger — at 22px the natural slots fall under
- * 3px wide and the face stops reading. */
+ * and push the open eyes larger — at 22px the capsules fall under 3px wide
+ * and the face stops reading. The ribbon stays: it IS the identity. */
 .orb--s .orb__glint,
-.orb--s .orb__bounce {
+.orb--s .orb__bounce,
+.orb--s .orb__eye-glow {
   display: none;
 }
 .orb--s .orb__eyes--open {
-  transform: scale(1.28);
+  transform: scale(1.22);
+}
+.orb--s .orb__ribbon {
+  stroke-width: 1.9;
+}
+.orb--s .orb__ribbon--back {
+  stroke-width: 1.5;
 }
 
 .orb__tilt,
@@ -140,7 +182,8 @@
   animation: orb-breathe 3.4s ease-in-out infinite;
 }
 
-/* ————— working: steady breath + accent arc orbiting ————— */
+/* ————— working: steady breath + accent arc orbiting + a bright segment
+ * runs the front ribbon — the orbit working ————— */
 .orb.is-working .orb__tilt {
   animation: orb-breathe 2.6s ease-in-out infinite;
 }
@@ -152,6 +195,10 @@
   stroke: var(--theme-accent);
   stroke-dasharray: 34 101;
   animation: orb-orbit 1.35s linear infinite;
+}
+.orb.is-working .orb__ribbon-run {
+  opacity: 1;
+  animation: orb-ribbonrun 1.5s linear infinite;
 }
 
 /* ————— waiting: raised eyes toward the human + accent arc pulse — the
@@ -278,6 +325,11 @@
     transform: rotate(360deg);
   }
 }
+@keyframes orb-ribbonrun {
+  to {
+    stroke-dashoffset: -217;
+  }
+}
 @keyframes orb-ringpulse {
   0%,
   100% {
@@ -315,6 +367,103 @@
   .orb .orb__tilt,
   .orb .orb__eyes,
   .orb .orb__ring {
+    animation: none !important;
+  }
+}
+
+/* ————— BotFigure — the 96–200px welcome/empty-state figure ————— */
+.bot-figure {
+  display: block;
+  margin-inline: auto;
+}
+.bot-figure__panes {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.bot-figure__shadow {
+  fill: rgba(10, 18, 22, 0.28);
+}
+:root[data-theme="dark"] .bot-figure__shadow {
+  fill: rgba(0, 0, 0, 0.5);
+}
+.bot-figure__body {
+  stroke: var(--orb-edge);
+  stroke-width: 1.4;
+}
+.bot-figure__spec {
+  fill: #e8f0f2;
+  opacity: var(--orb-spec-op);
+}
+.bot-figure__bounce {
+  fill: var(--orb-ribbon);
+  opacity: 0.12;
+}
+.bot-figure__eye-glow {
+  fill: var(--orb-eye-glow);
+}
+.bot-figure__ribbon {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.bot-figure__ribbon--back {
+  stroke: var(--orb-ribbon-soft);
+  stroke-width: 2.4;
+}
+.bot-figure__ribbon--front {
+  stroke: var(--orb-ribbon);
+}
+.bot-figure__ribbon-run {
+  fill: none;
+  stroke: var(--orb-eye-hi);
+  stroke-width: 4.5;
+  stroke-linecap: round;
+  stroke-dasharray: 26 850;
+  opacity: 0;
+}
+/* States on the figure ride the same grammar as the orb — subtle pose and
+ * light changes, no invented anatomy. */
+.bot-figure__tilt {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.bot-figure.is-idle .bot-figure__tilt,
+.bot-figure.is-input .bot-figure__tilt {
+  animation: orb-breathe 4.6s ease-in-out infinite;
+}
+.bot-figure.is-thinking .bot-figure__eyes,
+.bot-figure.is-working .bot-figure__eyes {
+  animation: orb-scan 1.9s ease-in-out infinite;
+}
+.bot-figure.is-working .bot-figure__ribbon-run {
+  opacity: 1;
+  animation: orb-figurerun 1.9s linear infinite;
+}
+.bot-figure.is-approval .bot-figure__ribbon,
+.bot-figure.is-waiting .bot-figure__ribbon {
+  stroke: var(--theme-warning);
+}
+.bot-figure.is-error .bot-figure__ribbon {
+  stroke: var(--theme-danger);
+}
+.bot-figure.is-success .bot-figure__ribbon {
+  stroke: var(--theme-success);
+}
+.bot-figure.is-canceled {
+  opacity: 0.55;
+}
+@keyframes orb-figurerun {
+  to {
+    stroke-dashoffset: -876;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bot-figure .bot-figure__tilt,
+  .bot-figure .bot-figure__eyes,
+  .bot-figure .bot-figure__ribbon-run {
+    animation: none !important;
+  }
+  .orb .orb__ribbon-run {
     animation: none !important;
   }
 }
