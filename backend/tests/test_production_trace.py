@@ -151,6 +151,74 @@ def test_trace_work_order_assembles_full_chain() -> None:
     assert report["stock"]["reservations"][0]["reserved"] == "1"
 
 
+class _BackendGate:
+    """Context manager double: remembers whether a read happened inside
+    the documentary authority so tests can pin the RLS boundary."""
+
+    def __init__(self, inside: dict[str, bool]) -> None:
+        self._inside = inside
+
+    def __enter__(self) -> "_BackendGate":
+        self._inside["on"] = True
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self._inside["on"] = False
+
+
+def test_trace_work_order_reads_denied_tables_via_documentary_backend() -> None:
+    """Regression: floor roles (OPERATOR/INSTALLER) have no SELECT on
+    projects/project_versions — every such read must run inside the
+    documentary authority or the endpoint 422s for the people who trace
+    their own work order."""
+    inside = {"on": False}
+    base_one = _one_factory()
+
+    def guarded_one(query, params=None, missing=None):
+        if "FROM public.projects" in query or "FROM public.project_versions" in query:
+            assert inside["on"], f"denied-table read outside backend: {query[:70]}"
+        return base_one(query, params, missing)
+
+    with patch("production.trace.one", side_effect=guarded_one), \
+         patch("production.trace.rows", side_effect=_rows_factory()), \
+         patch("production.trace.documentary_backend",
+               side_effect=lambda: _BackendGate(inside)):
+        report = trace.trace_work_order(org_id=ORG, order_id=ORDER)
+    assert report["project"]["code"] == "PR-1"
+    assert report["version"]["revision_code"] == "REV-A"
+
+
+def test_trace_version_reads_denied_tables_via_documentary_backend() -> None:
+    inside = {"on": False}
+
+    def guarded_one(query, params=None, missing=None):
+        if "FROM public.projects" in query or "FROM public.project_versions" in query:
+            assert inside["on"], f"denied-table read outside backend: {query[:70]}"
+            if "FROM public.projects" in query:
+                return {"id": str(PROJECT), "code": "PR-1",
+                        "name": "Casa", "client_name": "Ana"}
+            return {"id": str(VERSION), "project_id": str(PROJECT),
+                    "revision_code": "REV-A", "snapshot_sha256": "s" * 64,
+                    "bom_hash": "b" * 64, "emitted_at": "t0",
+                    "production_allowed": True}
+        raise AssertionError(query[:80])
+
+    def fake_rows(query, params=None):
+        if "FROM public.orders" in query and "project_version_id" in query:
+            return [{"id": str(ORDER), "order_code": "OT-0001",
+                     "status": "RELEASED", "order_type": "WORKSHOP_OT",
+                     "payload_json": json.dumps(_order_payload()),
+                     "created_at": "t0"}]
+        raise AssertionError(query[:90])
+
+    with patch("production.trace.one", side_effect=guarded_one), \
+         patch("production.trace.rows", side_effect=fake_rows), \
+         patch("production.trace.documentary_backend",
+               side_effect=lambda: _BackendGate(inside)):
+        report = trace.trace_version(org_id=ORG, version_id=VERSION)
+    assert report["project"]["code"] == "PR-1"
+
+
 def test_trace_piece_walks_backward() -> None:
     def fake_rows(query, params=None):
         if "FROM public.orders" in query and "LIKE" in query:
@@ -277,7 +345,8 @@ def test_trace_version_lists_orders_with_piece_counts() -> None:
         raise AssertionError(query[:90])
 
     with patch("production.trace.one", side_effect=fake_one), \
-         patch("production.trace.rows", side_effect=fake_rows):
+         patch("production.trace.rows", side_effect=fake_rows), \
+         patch("production.trace.documentary_backend"):
         report = trace.trace_version(org_id=ORG, version_id=VERSION)
 
     (wo,) = report["work_orders"]

@@ -540,10 +540,13 @@ def _order_ops(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
     input_fingerprint = _ops_source_fingerprint(optimization, manufacturing)
     project_code = ""
     if order.get("project_id"):
-        project = rows(
-            "SELECT code FROM public.projects WHERE id = %s AND org_id = %s",
-            [str(order["project_id"]), str(org_id)],
-        )
+        # project_manual_read excludes floor roles — the operator's CNC
+        # file must still carry the project code it was cut for.
+        with documentary_backend():
+            project = rows(
+                "SELECT code FROM public.projects WHERE id = %s AND org_id = %s",
+                [str(order["project_id"]), str(org_id)],
+            )
         project_code = str(project[0]["code"]) if project else ""
     return {
         "order": order,

@@ -153,14 +153,20 @@ def trace_work_order(*, org_id: UUID, order_id: UUID) -> dict[str, Any]:
 
     project = None
     if order["project_id"]:
-        project = one(
-            """
-            SELECT id::text, code, name, client_name, current_revision
-            FROM public.projects WHERE id = %s AND org_id = %s
-            """,
-            [order["project_id"], str(org_id)],
-            "work_order_not_found",
-        )
+        # project_manual_read only grants the commercial roles — floor
+        # roles (OPERATOR/INSTALLER) legitimately trace their own work
+        # order, so resolve the header via the documentary authority like
+        # the snapshot read below. Only the whitelisted header fields
+        # leave this function.
+        with documentary_backend():
+            project = one(
+                """
+                SELECT id::text, code, name, client_name, current_revision
+                FROM public.projects WHERE id = %s AND org_id = %s
+                """,
+                [order["project_id"], str(org_id)],
+                "work_order_not_found",
+            )
 
     version = None
     version_snapshot: dict[str, Any] = {}
@@ -832,23 +838,28 @@ def trace_piece(*, org_id: UUID, piece_id: str) -> dict[str, Any]:
 def trace_version(*, org_id: UUID, version_id: UUID) -> dict[str, Any]:
     """Forward chain from a frozen version to every work order released
     from it — plus, per order, the positions and piece counts its plan cut."""
-    version = one(
-        """
-        SELECT id::text, project_id::text, revision_code, snapshot_sha256,
-               bom_hash, emitted_at, production_allowed
-        FROM public.project_versions WHERE id = %s AND org_id = %s
-        """,
-        [str(version_id), str(org_id)],
-        "version_not_found",
-    )
-    project = one(
-        """
-        SELECT id::text, code, name, client_name
-        FROM public.projects WHERE id = %s AND org_id = %s
-        """,
-        [version["project_id"], str(org_id)],
-        "version_not_found",
-    )
+    # Floor roles are legitimate _READERS of the forward chain, so both
+    # lookups go through the documentary authority — the same whitelisted
+    # projections that trace_work_order emits leave here.
+    with documentary_backend():
+        version = one(
+            """
+            SELECT id::text, project_id::text, revision_code, snapshot_sha256,
+                   bom_hash, emitted_at, production_allowed
+            FROM public.project_versions WHERE id = %s AND org_id = %s
+            """,
+            [str(version_id), str(org_id)],
+            "version_not_found",
+        )
+    with documentary_backend():
+        project = one(
+            """
+            SELECT id::text, code, name, client_name
+            FROM public.projects WHERE id = %s AND org_id = %s
+            """,
+            [version["project_id"], str(org_id)],
+            "version_not_found",
+        )
     orders = rows(
         """
         SELECT id::text, order_code, status::text, order_type::text,
