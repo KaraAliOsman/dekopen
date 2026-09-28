@@ -563,16 +563,24 @@ function PositionWorkspace({
   const assemblyUnsaveable =
     assemblyEval?.status === "INVALID" ||
     (assemblyEval?.modules ?? []).some((module) => module.result == null);
+  // Only flag once the options payload actually arrived — an empty declared
+  // list pre-load is "unknown", not "undeclared".
+  const colorUndeclared =
+    options.data !== undefined && inputs.color !== null && !declaredColors.includes(inputs.color);
+  const quantityInvalid = !/^[1-9]\d*$/.test(quantity) || Number(quantity) > 2147483647;
   // A disabled Guardar must name the first real blocker ("la hoja queda bajo
   // el ancho mínimo del herraje"), not a generic "revisa los parámetros".
-  const saveBlockReason =
-    assemblyUnsaveable && assemblyEval !== null && assemblyEval.issues.length > 0
-      ? issueText(
-          assemblyEval.issues[0]!,
-          inputs.product?.assembly.modules ?? [],
-          inputs.product?.assembly.couplings ?? [],
-        )
-      : null;
+  const saveBlockReason = quantityInvalid
+    ? t("projects.qtyInvalid")
+    : colorUndeclared
+      ? t("projects.colorNotDeclared")
+      : assemblyUnsaveable && assemblyEval !== null && assemblyEval.issues.length > 0
+        ? issueText(
+            assemblyEval.issues[0]!,
+            inputs.product?.assembly.modules ?? [],
+            inputs.product?.assembly.couplings ?? [],
+          )
+        : null;
 
   async function save(): Promise<void> {
     if (
@@ -581,6 +589,7 @@ function PositionWorkspace({
       !result ||
       assemblyUnsaveable ||
       busy ||
+      !options.data ||
       !declaredColors.includes(inputs.color) ||
       inputs.product === null ||
       !systemId ||
@@ -630,6 +639,22 @@ function PositionWorkspace({
       if (epoch === generation.current) setBusy(false);
     }
   }
+
+  // Ctrl/⌘+S saves the position — without it the chord hits the browser's
+  // save-page dialog mid-edit. The ref keeps the listener on the freshest
+  // closure (save reads live state).
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        void saveRef.current();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   if (!loaded) return <p role={message ? "alert" : "status"}>{message || t("projects.loading")}</p>;
   const dirty = isDirty;
@@ -716,13 +741,21 @@ function PositionWorkspace({
         </button>
         <button
           className="primary-action"
-          disabled={uncertainCreate || busy || !result || assemblyUnsaveable}
+          disabled={
+            uncertainCreate ||
+            busy ||
+            !result ||
+            !options.data ||
+            assemblyUnsaveable ||
+            quantityInvalid ||
+            colorUndeclared
+          }
           title={
             saveBlockReason !== null
               ? `${t("projects.saveBlocked")}: ${saveBlockReason}`
               : !result || assemblyUnsaveable
                 ? t("projects.saveBlocked")
-                : undefined
+                : `${t("projects.save")} (Ctrl+S)`
           }
           onClick={() => void save()}
         >
@@ -732,7 +765,7 @@ function PositionWorkspace({
       {/* The blocked hint lives BELOW the header row — inside the flex it
        * pushed Deshacer/Guardar left whenever it appeared, and a click aimed
        * at Guardar landed on Deshacer (silent undo). */}
-      {loaded && (busy || assemblyUnsaveable || result === null) && (
+      {loaded && (busy || assemblyUnsaveable || result === null || saveBlockReason !== null) && (
         <p className="handle-pending" role="status">
           {busy ? t("projects.savingBusy") : (saveBlockReason ?? t("projects.saveBlocked"))}
         </p>

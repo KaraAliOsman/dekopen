@@ -295,6 +295,8 @@ export const messages = {
   "projects.loading": "Cargando proyecto…",
   "projects.loadError": "No pudimos cargar el proyecto. Vuelve a intentarlo.",
   "projects.qtyInvalid": "Cantidad inválida — debe ser un entero mayor que 0",
+  "projects.colorNotDeclared":
+    "El acabado guardado ya no existe en la serie — elige uno declarado para poder guardar",
   "projects.saved": "Cambios guardados.",
   "projects.savedState": "Guardado",
   "projects.saveBlocked":
