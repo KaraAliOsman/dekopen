@@ -445,7 +445,7 @@
 .production-dispatch {
   border: 1px solid var(--accent, #0f817a);
   background: var(--accent, #0f817a);
-  color: #fff;
+  color: var(--theme-surface-panel);
 }
 
 .production-dispatch.production-void {
@@ -590,6 +590,8 @@
   height: 160px;
   border: 1px solid var(--line, #d8dde2);
   border-radius: var(--radius-sm);
+  /* The pad is paper, not a theme surface: the captured PNG seals into the
+     printed POD, so it stays white with dark ink in either theme. */
   background: #fff;
   touch-action: none;
   cursor: crosshair;
@@ -1064,7 +1066,7 @@
 .qc-submit-pass {
   border: 1px solid var(--theme-success, #1a7f4b);
   background: var(--theme-success, #1a7f4b);
-  color: #fff;
+  color: var(--theme-surface-panel);
 }
 .qc-submit-fail {
   border: 1px solid var(--theme-danger, #b3261e);

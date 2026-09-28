@@ -53,7 +53,12 @@ test("SHOT-10 real project core path and visual evidence", async ({ page, manual
 
   const projectName = `E2E sintético ${crypto.randomUUID()}`;
   const save = () => page.getByRole("button", { name: "Guardar", exact: true }).click();
+  // Navigation uses the editor's own backlink ("Volver al proyecto"). React
+  // Query may serve the project from its fresh cache without a fetch, so the
+  // reload makes the backend round-trip (and in-memory reset) explicit.
   const back = () => page.getByRole("link", { name: /Volver al proyecto/ }).click();
+  const toProjects = () => page.getByRole("link", { name: /‹ Proyectos/ }).click();
+  const freshRead = () => page.reload();
 
   await page.goto("/projects");
   await expect(page.getByText("No hay proyectos que coincidan.", { exact: true })).toBeVisible();
@@ -226,8 +231,19 @@ test("SHOT-10 real project core path and visual evidence", async ({ page, manual
   });
 
   // Leave both editor and project; full reload removes in-memory UI state.
-  await responseTo(page, "GET", projectApi, 200, back);
   await back();
+  await expect(page).toHaveURL(new RegExp(`${projectPath}$`));
+  const projectResponse = await responseTo<ProjectResponse>(
+    page,
+    "GET",
+    projectApi,
+    200,
+    freshRead,
+  );
+  expect(projectResponse.status).toBe("DRAFT");
+  expect(projectResponse.pricing_current).toBe(false);
+  expect(projectResponse.position_count).toBe(1);
+  await toProjects();
   await expect(page).toHaveURL(/\/projects$/);
   await page.reload();
 
@@ -260,7 +276,8 @@ test("SHOT-10 real project core path and visual evidence", async ({ page, manual
   await bom.scrollIntoViewIfNeeded();
   await screenshot(page, info, "03-reopened-bom");
 
-  await responseTo(page, "GET", projectApi, 200, back);
+  await back();
+  await expect(page).toHaveURL(new RegExp(`${projectPath}$`));
   await responseTo(page, "GET", positionApi, 200, () =>
     card(page, "Cocina original", "Duplicar vano").then((link) => link.click()),
   );
@@ -280,7 +297,9 @@ test("SHOT-10 real project core path and visual evidence", async ({ page, manual
   await expect(page).toHaveURL(new RegExp(`${projectPath}/positions/${duplicate.id}/edit$`));
   await expect(page.getByText("Guardado", { exact: true })).toBeVisible();
 
-  const source = await responseTo<ProjectResponse>(page, "GET", projectApi, 200, back);
+  await back();
+  await expect(page).toHaveURL(new RegExp(`${projectPath}$`));
+  const source = await responseTo<ProjectResponse>(page, "GET", projectApi, 200, freshRead);
   expect(source.position_count).toBe(2);
   expect(source.positions!.find((item) => item.id === saved.id)).toEqual(saved);
 

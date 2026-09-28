@@ -1253,7 +1253,28 @@ class TestStockLength:
             )
             for role, article in params.effective_profile_articles.items()
         }
-        return params.model_copy(update={"effective_profile_articles": articles})
+        # Bead articles sit inside the rules — strip/set them too so the
+        # helper means "stock length everywhere", not just profile roles.
+        rules = {
+            thickness: rule.model_copy(
+                update={
+                    "bead_article": rule.bead_article.model_copy(
+                        update={
+                            "commercial_length_mm": Decimal(stock)
+                            if stock
+                            else None
+                        }
+                    )
+                }
+            )
+            for thickness, rule in params.glazing_bead_rules.items()
+        }
+        return params.model_copy(
+            update={
+                "effective_profile_articles": articles,
+                "glazing_bead_rules": rules,
+            }
+        )
 
     def test_member_longer_than_stock_flags_warning(
         self, demo_60_params: SystemParams

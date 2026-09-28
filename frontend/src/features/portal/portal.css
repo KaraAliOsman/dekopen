@@ -349,7 +349,7 @@
 
 .portal-view-toggle[data-active="true"] {
   background: var(--theme-accent);
-  color: #fff;
+  color: var(--theme-surface-panel);
 }
 
 .portal-position__count {
@@ -629,7 +629,7 @@
 .portal-step[data-state="done"]::before {
   content: "✓";
   background: var(--theme-accent);
-  color: #fff;
+  color: var(--theme-surface-panel);
 }
 .portal-step[data-state="current"] {
   border-color: var(--theme-accent);
@@ -639,7 +639,7 @@
 }
 .portal-step[data-state="current"]::before {
   background: var(--theme-accent);
-  color: #fff;
+  color: var(--theme-surface-panel);
 }
 .portal-step[data-state="declined"] {
   border-color: var(--theme-warning, #b45309);
@@ -648,7 +648,7 @@
 .portal-step[data-state="declined"]::before {
   content: "↺";
   background: var(--theme-warning, #b45309);
-  color: #fff;
+  color: var(--theme-surface-panel);
 }
 
 /* The proposal is the one page the client opens on a phone — decision must

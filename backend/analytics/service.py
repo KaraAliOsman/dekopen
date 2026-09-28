@@ -225,22 +225,36 @@ def _summary(org_id: UUID) -> dict[str, Any]:
         }
         for row in rows(
             """
-            SELECT p.currency,
+            SELECT cur.currency,
                 COALESCE(SUM(p.total_price_gross)
                     FILTER (WHERE p.status = 'QUOTED'), 0) AS quoted,
                 COALESCE(SUM(p.total_price_gross)
                     FILTER (WHERE p.status IN
                         ('APPROVED','IN_PRODUCTION','COMPLETED')), 0) AS booked,
-                (SELECT COALESCE(SUM(pp.amount), 0)
-                 FROM public.project_payments pp
-                 JOIN public.projects px
-                   ON px.id = pp.project_id AND px.org_id = pp.org_id
-                 WHERE pp.org_id = p.org_id AND pp.voided_at IS NULL
-                   AND px.currency = p.currency) AS collected
+                COALESCE(SUM(pay.collected), 0) AS collected
             FROM public.projects p
+            JOIN LATERAL (
+                -- A project's deal currency is the one sealed into its live
+                -- applied pricing operation (same authority the payments flow
+                -- reads); projects carries no currency column of its own.
+                SELECT o.request->>'currency' AS currency
+                FROM public.pricing_operations o
+                WHERE o.org_id = p.org_id AND o.project_id = p.id
+                  AND o.state = 'APPLIED'
+                  AND COALESCE(o.revision_code, 'REV-A') = p.current_revision
+                  AND (p.pricing_reset_at IS NULL
+                       OR o.approved_at > p.pricing_reset_at)
+                ORDER BY o.approved_at DESC, o.id DESC LIMIT 1
+            ) cur ON true
+            LEFT JOIN LATERAL (
+                SELECT SUM(pp.amount) AS collected
+                FROM public.project_payments pp
+                WHERE pp.org_id = p.org_id AND pp.project_id = p.id
+                  AND pp.voided_at IS NULL
+            ) pay ON true
             WHERE p.org_id = %s AND p.total_price_gross IS NOT NULL
-            GROUP BY p.currency
-            ORDER BY p.currency
+            GROUP BY cur.currency
+            ORDER BY cur.currency
             """,
             [str(org_id)],
         )

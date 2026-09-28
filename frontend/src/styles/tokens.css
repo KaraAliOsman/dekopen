@@ -288,7 +288,7 @@
   border-radius: 0.5rem;
   border: 1px solid var(--line, #d6dae2);
   background: var(--accent, #1b5cff);
-  color: #fff;
+  color: var(--theme-surface-panel);
   font-weight: 600;
   cursor: pointer;
 }

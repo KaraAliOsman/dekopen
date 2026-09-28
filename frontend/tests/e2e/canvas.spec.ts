@@ -263,7 +263,7 @@ for (const theme of ["light", "dark"] as const) {
       purchase_list: Array<{ commercial_sku: string }>;
       workshop_cut_plan: Array<{ cuts: Array<{ workshop_sku: string; length_mm: string }> }>;
     };
-    expect(cuts.purchase_list.map((line) => line.commercial_sku)).toContain("DEMO-BAR-MARCO");
+    expect(cuts.purchase_list.map((line) => line.commercial_sku)).toContain("COMPRA-MARCO");
     expect(
       cuts.workshop_cut_plan
         .flatMap((bar) => bar.cuts)
@@ -309,7 +309,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(modal.locator(".is-corrected")).toHaveCSS("animation-duration", "0.3s");
     await modal.getByRole("button", { name: "Corte 1D", exact: true }).click();
     await expect(modal.getByRole("heading", { name: "Pedido", exact: true })).toBeVisible();
-    await expect(modal.getByText("DEMO-BAR-MARCO", { exact: true })).toBeVisible();
+    await expect(modal.getByText("COMPRA-MARCO", { exact: true })).toBeVisible();
     await expect(modal.getByRole("heading", { name: "Plan de corte de taller" })).toBeVisible();
     await expect(modal.getByText("MARCO", { exact: true }).first()).toBeVisible();
     await modal.screenshot({ path: `test-results/shot07-${theme}.png` });
