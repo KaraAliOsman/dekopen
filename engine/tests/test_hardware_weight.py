@@ -3,7 +3,7 @@ from decimal import Decimal
 import pytest
 from pydantic import ValidationError
 
-from dekopen_engine import BayOpeningType, MaterialType, ParametricNode, ProfileRole, RailType, SystemParams, calculate_geometry
+from dekopen_engine import BayOpeningType, MaterialType, ParametricNode, ProductModel, ProfileRole, RailType, SystemParams, calculate_geometry
 from dekopen_engine.geometry import compute_geometry
 from dekopen_engine.hardware import AmbiguousHardwareKit, NoCompatibleHardwareKit, normalize_opening_type, resolve_hardware_kit
 from dekopen_engine.weight import ExactLeafWeight, base_leaf_weight, with_hardware_weight
@@ -183,9 +183,8 @@ def test_missing_geometry_authority_is_rejected(demo_60_params: SystemParams, fi
         SystemParams.model_validate(values)
 
 
-def _assembly_product(width_mm: str, opening: BayOpeningType):
+def _assembly_product(width_mm: str, opening: BayOpeningType) -> ProductModel:
     from dekopen_engine.models import NodeType
-    from dekopen_engine.product import ProductModel
 
     return ProductModel.model_validate(
         {

@@ -621,6 +621,7 @@ export function ProjectQuotationPanel({
   orgId,
   canWrite,
   canRelease = false,
+  sharedUrlSeed,
   onChanged,
   onDirtyChange,
 }: {
@@ -630,6 +631,9 @@ export function ProjectQuotationPanel({
   /** OWNER/WORKSHOP_MANAGER — releasing a sealed version creates workshop
    * orders, a warehouse-side authority estimators don't hold. */
   canRelease?: boolean;
+  /** A link minted by the workspace header lands here too — the share row
+   * (WhatsApp/mail/copy) must appear regardless of which button minted it. */
+  sharedUrlSeed?: string;
   onChanged(): Promise<unknown>;
   onDirtyChange?(dirty: boolean): void;
 }): JSX.Element {
@@ -641,6 +645,11 @@ export function ProjectQuotationPanel({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [sharedUrl, setSharedUrl] = useState("");
+  // Header-minted links flow in via sharedUrlSeed — without the sync the
+  // share row only ever appeared when THIS panel's button created the link.
+  useEffect(() => {
+    if (sharedUrlSeed) setSharedUrl(sharedUrlSeed);
+  }, [sharedUrlSeed]);
   // Inspector rules that blocked the last freeze attempt — the 422's
   // inspector_failures payload so the estimator sees WHAT failed (WB2).
   const [inspectorFailures, setInspectorFailures] = useState<InspectorFailure[]>([]);
@@ -1259,10 +1268,10 @@ export function ProjectQuotationPanel({
   ): boolean {
     return Boolean(
       position.location_tag.trim() &&
-        position.manufacturing_placement_policy_id &&
-        position.handle_requirement_policy_id &&
-        position.reinforcement_cut_policy_id &&
-        !(seededIntentKeys.current.get(String(position.position_id))?.size ?? 0),
+      position.manufacturing_placement_policy_id &&
+      position.handle_requirement_policy_id &&
+      position.reinforcement_cut_policy_id &&
+      !(seededIntentKeys.current.get(String(position.position_id))?.size ?? 0),
     );
   }
 
@@ -1974,8 +1983,7 @@ export function ProjectQuotationPanel({
                 {preparation.positions
                   .map((position, index) => ({ position, index }))
                   .filter(
-                    ({ position }) =>
-                      !position.production_ready && !positionFormComplete(position),
+                    ({ position }) => !position.production_ready && !positionFormComplete(position),
                   )
                   .map(({ index }) => `${t("quotation.position")} ${index + 1}`)
                   .join(" · ")}

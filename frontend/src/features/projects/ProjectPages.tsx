@@ -1061,6 +1061,7 @@ function ProjectWorkspace({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [sharedUrl, setSharedUrl] = useState("");
   const [mustReload, setMustReload] = useState(false);
   const lifetime = useRef<AbortController | null>(null);
   const locked = useRef(false);
@@ -1313,6 +1314,9 @@ function ProjectWorkspace({
       // a bare toast under the header reads as "nothing happened".
       setFactsCollapsed(false);
       setOpenSection("quote");
+      // The minted link stays on state so the estimator can also send it by
+      // mail from the notice — copying alone leaves the send step implicit.
+      setSharedUrl(url);
       try {
         await navigator.clipboard.writeText(url);
         // The notice carries the URL verbatim: some clipboards accept the
@@ -1512,6 +1516,7 @@ function ProjectWorkspace({
                     orgId={orgId}
                     canWrite={canWrite}
                     canRelease={canSendEnvio}
+                    sharedUrlSeed={sharedUrl}
                     onChanged={() => query.refetch()}
                     onDirtyChange={setQuotationDirty}
                   />
