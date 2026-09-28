@@ -1,0 +1,102 @@
+<!doctype html><meta charset="utf-8"><style>
+:root{--orb-hi:#4e5960;--orb-mid:#262e34;--orb-lo:#12171b;--orb-edge:rgba(18,24,28,.55);--orb-spec-op:.5;--orb-eye:#0fd8ea;--orb-eye-hi:#7cf3ff;--orb-eye-glow:rgba(15,216,234,.3);--orb-ribbon:#0fd8ea;--orb-ribbon-soft:rgba(15,216,234,.45);--orb-glint:rgba(255,255,255,.75);--theme-accent:#2f6f4f;--theme-warning:#b26a00;--theme-success:#1a7f4b;--theme-danger:#b3261e}
+body{background:#f3f1ed;font:14px/1.4 system-ui;margin:0;padding:24px;color:#333}
+.row{display:flex;gap:28px;align-items:flex-end;flex-wrap:wrap;margin-bottom:24px}
+.cell{text-align:center;font-size:11px;color:#666}
+.ref img{width:340px;border:1px solid #ddd}
+.orb{display:inline-block;vertical-align:middle}
+.orb__ring{fill:none;stroke-width:1.6;opacity:0}
+.orb__ribbon{fill:none;stroke:var(--orb-ribbon);stroke-width:1.5;stroke-linecap:round}
+.orb__ribbon--back{stroke:var(--orb-ribbon-soft);stroke-width:1.2}
+.orb__ribbon-run{fill:none;stroke:var(--orb-eye-hi);stroke-width:2.1;stroke-linecap:round;stroke-dasharray:7 210;opacity:0}
+.orb__body{stroke:var(--orb-edge);stroke-width:1}
+.orb__spec{fill:var(--orb-eye);opacity:var(--orb-spec-op)}
+.orb__bounce{fill:var(--theme-accent);opacity:.1}
+.orb__eye{fill:var(--orb-eye)}
+.orb__eye-glow{fill:var(--orb-eye-glow)}
+.orb__glint{fill:var(--orb-glint);opacity:.85}
+.orb__eyes--joy path{fill:none;stroke:var(--orb-eye);stroke-width:1.8;stroke-linecap:round}
+.orb__eyes--worry rect,.orb__eyes--flat rect{fill:var(--orb-eye)}
+.orb.is-approval .orb__ribbon{stroke:var(--theme-warning)}
+.orb.is-error .orb__ribbon{stroke:var(--theme-danger)}
+.orb.is-success .orb__ribbon{stroke:var(--theme-success)}
+.orb__eyes--joy,.orb__eyes--worry,.orb__eyes--flat{visibility:hidden}
+.orb.is-success .orb__eyes--joy,.orb.is-error .orb__eyes--worry,.orb.is-canceled .orb__eyes--flat{visibility:visible}
+.orb.is-success .orb__eyes--open,.orb.is-error .orb__eyes--open,.orb.is-canceled .orb__eyes--open{visibility:hidden}
+.orb--s .orb__glint,.orb--s .orb__bounce,.orb--s .orb__eye-glow{display:none}
+.orb--s .orb__eyes--open{transform:scale(1.22);transform-box:fill-box;transform-origin:center}
+.orb--s .orb__ribbon{stroke-width:1.9}.orb--s .orb__ribbon--back{stroke-width:1.5}
+.orb.is-working .orb__ring{opacity:1;stroke:var(--theme-accent);stroke-dasharray:34 101}
+.orb.is-working .orb__ribbon-run{opacity:1}
+.orb.is-waiting .orb__eyes{transform:translateY(-2.4px);transform-box:fill-box;transform-origin:center}
+.orb.is-waiting .orb__ring,.orb.is-approval .orb__ring{opacity:1;stroke-dasharray:30 105;stroke-dashoffset:15;transform:rotate(-90deg);transform-box:fill-box;transform-origin:center}
+.orb.is-waiting .orb__ring{stroke:var(--theme-accent)}
+.orb.is-approval .orb__ring{stroke:var(--theme-warning)}
+.orb.is-success .orb__ring{opacity:1;stroke:var(--theme-success);stroke-dasharray:30 105;stroke-dashoffset:15;transform:rotate(-90deg);transform-box:fill-box;transform-origin:center}
+.orb.is-error .orb__ring{opacity:1;stroke:var(--theme-danger);stroke-dasharray:30 105;stroke-dashoffset:15;transform:rotate(-90deg);transform-box:fill-box;transform-origin:center}
+.orb.is-queued .orb__eyes{transform:scaleY(.6);transform-box:fill-box;transform-origin:center}
+.orb.is-thinking .orb__eyes{transform:translateX(-2.4px) scaleX(.86);transform-box:fill-box;transform-origin:center}
+.orb.is-canceled{opacity:.5}
+.dark{background:#14181a;color:#ccc}
+.dark .cell{color:#8a9a96}
+.dark{--orb-hi:#5a666e;--orb-mid:#272f35;--orb-lo:#10151a;--orb-edge:rgba(233,242,241,.16);--orb-spec-op:.32;--orb-eye:#12ddf0;--orb-eye-hi:#86f5ff;--orb-eye-glow:rgba(18,221,240,.35);--orb-ribbon:#12ddf0;--orb-ribbon-soft:rgba(18,221,240,.5);--orb-glint:rgba(255,255,255,.8);--theme-accent:#45beb1}
+h2{font-size:13px;margin:24px 0 8px}
+</style>
+<h2>Referencia</h2>
+<div class="row"><div class="cell ref"><img src="/home/ubuntu/wt-commercial/referencias/dekopen-bot-original.png"><div>referencia del usuario</div></div></div>
+<div id="orbs"></div>
+<script>
+const STATES=["idle","input","queued","thinking","working","waiting","approval","success","error","canceled"];
+const SIZES=[16,22,28,38,48];
+function orb(state,size,uid){
+  const s=size<28?" orb--s":"";
+  return `<svg class="orb is-${state}${s}" viewBox="0 0 48 48" width="${size}" height="${size}">
+  <defs><radialGradient id="${uid}b" cx="36%" cy="26%" r="82%"><stop offset="0%" stop-color="var(--orb-hi)"/><stop offset="52%" stop-color="var(--orb-mid)"/><stop offset="100%" stop-color="var(--orb-lo)"/></radialGradient>
+  <linearGradient id="${uid}e" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--orb-eye-hi)"/><stop offset="100%" stop-color="var(--orb-eye)"/></linearGradient></defs>
+  <circle class="orb__ring" cx="24" cy="24" r="21.5"/>
+  <g class="orb__tilt">
+  <path class="orb__ribbon orb__ribbon--back" d="M2.07 30.47 A22.6 6.9 -14 0 0 45.93 19.53"/>
+  <circle class="orb__body" cx="24" cy="23.5" r="15.5" fill="url(#${uid}b)"/>
+  <ellipse class="orb__bounce" cx="28.5" cy="33.6" rx="6.4" ry="2.4" transform="rotate(-16 28.5 33.6)"/>
+  <ellipse class="orb__spec" cx="18.4" cy="15" rx="5.2" ry="2.9" transform="rotate(-24 18.4 15)"/>
+  <g class="orb__eyes orb__eyes--open">
+    <rect class="orb__eye-glow" x="14.9" y="16.4" width="8.2" height="14.4" rx="4.1"/>
+    <rect class="orb__eye-glow" x="25.1" y="16.4" width="8.2" height="14.4" rx="4.1"/>
+    <rect class="orb__eye" x="16.4" y="17.9" width="5.2" height="11.4" rx="2.6" fill="url(#${uid}e)"/>
+    <rect class="orb__eye" x="26.6" y="17.9" width="5.2" height="11.4" rx="2.6" fill="url(#${uid}e)"/>
+    <circle class="orb__glint" cx="18.2" cy="20" r="0.9"/><circle class="orb__glint" cx="28.4" cy="20" r="0.9"/>
+  </g>
+  <g class="orb__eyes orb__eyes--joy"><path d="M15.9 25.6 Q19 21.4 22.1 25.6"/><path d="M26.1 25.6 Q29.2 21.4 32.3 25.6"/></g>
+  <g class="orb__eyes orb__eyes--worry"><rect x="15.9" y="22.2" width="6.2" height="4.6" rx="2.3" transform="rotate(-9 19 24.5)"/><rect x="26" y="22.2" width="6.2" height="4.6" rx="2.3" transform="rotate(9 29.1 24.5)"/></g>
+  <g class="orb__eyes orb__eyes--flat"><rect x="15.9" y="22.6" width="6.2" height="3.6" rx="1.8"/><rect x="26" y="22.6" width="6.2" height="3.6" rx="1.8"/></g>
+  <path class="orb__ribbon orb__ribbon--front" d="M45.93 19.53 A22.6 6.9 -14 0 1 2.07 30.47"/>
+  <path class="orb__ribbon-run" d="M45.93 19.53 A22.6 6.9 -14 0 1 2.07 30.47"/>
+  </g></svg>`;
+}
+function fig(state,uid){
+  return `<svg class="bot-figure is-${state}" viewBox="0 0 200 200" width="140" height="140">
+  <defs><radialGradient id="${uid}fb" cx="36%" cy="25%" r="85%"><stop offset="0%" stop-color="var(--orb-hi)"/><stop offset="50%" stop-color="var(--orb-mid)"/><stop offset="100%" stop-color="var(--orb-lo)"/></radialGradient>
+  <linearGradient id="${uid}fe" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--orb-eye-hi)"/><stop offset="100%" stop-color="var(--orb-eye)"/></linearGradient>
+  <linearGradient id="${uid}fp" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="var(--orb-ribbon)" stop-opacity=".34"/><stop offset="100%" stop-color="var(--orb-ribbon)" stop-opacity=".08"/></linearGradient></defs>
+  <g transform="translate(148 20)"><path d="M6 4 L44 0 L44 96 L6 100 Z" fill="url(#${uid}fp)" stroke="var(--orb-ribbon)" stroke-opacity=".55" stroke-width="1.4"/><path d="M-14 12 L18 8 L18 92 L-14 96 Z" fill="url(#${uid}fp)" stroke="var(--orb-ribbon)" stroke-opacity=".4" stroke-width="1.2"/><path d="M-32 22 L-6 18 L-6 88 L-32 92 Z" fill="url(#${uid}fp)" stroke="var(--orb-ribbon)" stroke-opacity=".28" stroke-width="1"/></g>
+  <ellipse class="bot-figure__shadow" cx="96" cy="176" rx="52" ry="7.5" fill="rgba(10,18,22,.28)"/>
+  <g><path d="M4.06 119.55 A94 29 -12 0 0 187.94 80.45" fill="none" stroke="var(--orb-ribbon-soft)" stroke-width="2.4" stroke-linecap="round"/>
+  <circle cx="96" cy="98" r="62" fill="url(#${uid}fb)" stroke="var(--orb-edge)" stroke-width="1.4"/>
+  <ellipse cx="74" cy="62" rx="21" ry="12" transform="rotate(-24 74 62)" fill="#e8f0f2" opacity="var(--orb-spec-op)"/>
+  <ellipse cx="112" cy="136" rx="26" ry="9" transform="rotate(-16 112 136)" fill="var(--orb-ribbon)" opacity=".12"/>
+  <g class="bot-figure__eyes"><rect x="60" y="68" width="30" height="52" rx="15" fill="var(--orb-eye-glow)"/><rect x="102" y="68" width="30" height="52" rx="15" fill="var(--orb-eye-glow)"/><rect x="66" y="74" width="19" height="41" rx="9.5" fill="url(#${uid}fe)"/><rect x="108" y="74" width="19" height="41" rx="9.5" fill="url(#${uid}fe)"/></g>
+  <path d="M187.94 80.45 A94 29 -12 0 1 4.06 119.55" fill="none" stroke="var(--orb-ribbon)" stroke-width="3" stroke-linecap="round"/></g></svg>`;
+}
+let html="<h2>Tamaños (idle)</h2><div class='row'>";
+SIZES.forEach((s,i)=>{html+=`<div class="cell">${orb("idle",s,"a"+i)}<div>${s}px</div></div>`});
+html+=`<div class="cell">${fig("idle","f0")}<div>figura 140</div></div></div>`;
+html+="<h2>Estados (28px)</h2><div class='row'>";
+STATES.forEach((s,i)=>{html+=`<div class="cell">${orb(s,28,"s"+i)}<div>${s}</div></div>`});
+html+="</div><h2>Estados — figura</h2><div class='row'>";
+["idle","thinking","working","approval","success","error","canceled"].forEach((s,i)=>{html+=`<div class="cell">${fig(s,"g"+i)}<div>${s}</div></div>`});
+html+="</div>";
+html+="<div class='dark' style='padding:20px'><h2>Tema oscuro</h2><div class='row'>";
+["idle","working","approval","error"].forEach((s,i)=>{html+=`<div class="cell">${orb(s,38,"d"+i)}<div>${s}</div></div>`});
+html+=`<div class="cell">${fig("idle","df")}<div>figura</div></div></div></div>`;
+document.getElementById("orbs").innerHTML=html;
+</script>
