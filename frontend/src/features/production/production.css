@@ -14,6 +14,24 @@
 .production-page [role="alert"] {
   color: var(--theme-danger);
 }
+/* Action refusals (422 shortage/gate/role) surface where the operator is
+   looking — a fixed toast — not a banner scrolled off the top of a long
+   order detail. */
+.production-action-error {
+  position: fixed;
+  left: 50%;
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 60;
+  max-width: min(34rem, calc(100vw - 2rem));
+  margin: 0;
+  padding: 0.65rem 1rem;
+  border: 1px solid var(--theme-danger);
+  border-radius: var(--radius-md, 8px);
+  background: var(--theme-surface-panel);
+  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.18));
+  font-weight: 600;
+}
 .production-layout {
   display: grid;
   grid-template-columns: minmax(16rem, 22rem) 1fr;
@@ -22,6 +40,10 @@
 }
 .production-orders,
 .production-detail {
+  /* Grid items default to min-width:auto — a single wide child (the
+     scrollable filter row, a long mono code) would stretch the whole track
+     and overflow the page on narrow screens. */
+  min-width: 0;
   border: 1px solid var(--theme-border-subtle);
   border-radius: 0.5rem;
   padding: 1rem;

@@ -1163,7 +1163,11 @@ export function ProductionPage(): JSX.Element {
   return (
     <section className="production-page">
       <PageHeader context={t("production.subtitle")} title={t("production.title")} />
-      {message ? <p role="alert">{message}</p> : null}
+      {message ? (
+        <p className="production-action-error" role="alert">
+          {message}
+        </p>
+      ) : null}
       <div className="production-layout">
         <aside className="production-orders" aria-label={t("production.orders")}>
           <h2>{t("production.orders")}</h2>

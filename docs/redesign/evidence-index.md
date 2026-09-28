@@ -241,5 +241,6 @@ SHA del paquete: `6c61859` (+ capturas en este commit). Fixtures: `scripts/dev_f
 | `backend/production/service.py`, `dispatch_notes.py`, `confirmations.py`, `views.py` | cobertura por guías vivas (FAILED libera), subconjunto ⊆ viaje abierto, POD/guía por entidad, resumen `dispatch_notes` con id+unidades |
 | `backend/production/trace.py` + `cnc.py` | lecturas denegadas bajo `documentary_backend` — operario/instalador trazan su OT (D42) |
 | `backend/tests/test_production_trace.py` | `_BackendGate` fija la frontera RLS — lectura fuera del contexto falla |
-| `frontend/src/features/production/` | cola por estación del operario, `?piece=` deep link, barra de acción pegajosa, viajes + saldo pendiente + selector de unidades, guía por viaje |
-| `docs/redesign/captures/phase10/` | aceptación 4 roles en vivo (en curso) |
+| `frontend/src/features/production/` | cola por estación del operario, `?piece=` deep link + auto-navegación a orden única, barra de acción pegajosa, viajes + saldo pendiente + selector de unidades, guía por viaje, `canField` para terreno, toast de error de acción |
+| `supabase/migrations/20261228000009_dispatch_client_read.sql` | `documentary_backend` SELECT en `clients` — el despacho del piso resuelve destinatario sin ampliar `clients_member_read` |
+| `docs/redesign/captures/phase10/` | aceptación 4 roles en vivo — 53 archivos: 44 PNGs del journey completo (orden→material→corte→mecanizado→QC→rechazo→remake→embalaje→despacho parcial→entrega), `gd-0001..3.pdf` + `ce-0001..2.pdf` + `cut-pack-ot03.pdf` + `production-pack-ot03.pdf` reales, `labels-rm01.json`, `REPORT.md` |
