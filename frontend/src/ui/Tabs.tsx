@@ -77,6 +77,7 @@ function StateTabs({
           aria-disabled={item.disabled || undefined}
           aria-selected={value === item.id}
           className={`ui-tab${value === item.id ? " is-active" : ""}`}
+          disabled={item.disabled || undefined}
           key={item.id}
           onClick={() => onChange?.(item.id)}
           role="tab"

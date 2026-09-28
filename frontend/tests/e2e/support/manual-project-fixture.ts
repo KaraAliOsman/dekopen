@@ -280,10 +280,13 @@ export const test = base.extend<{
       expect(kits).toHaveLength(1);
       const kit = kits[0]!;
 
-      // Existing synthetic KIT-TURN contains no component quantities.
-      // Fail on authority changes instead of decoding exact JSONB decimals
-      // through JavaScript binary floating point.
-      expect(text(kit.contents).replaceAll(/\s/g, "")).toBe("[]");
+      // KIT-TURN carries categorized contents (hinge/lever/lock). Assert the
+      // component SKU set — not the exact decimal serialization, which
+      // JavaScript binary floating point cannot round-trip.
+      const contentsText = text(kit.contents);
+      for (const sku of ["DEMO-BIS-60", "DEMO-MAN-PRACT", "DEMO-CREM-60"]) {
+        expect(contentsText).toContain(sku);
+      }
       expect(kit.opening_type).toBe("TURN");
       await insert("hardware_kits", {
         ...kit,

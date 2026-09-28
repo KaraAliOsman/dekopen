@@ -58,6 +58,156 @@ class ManufacturingPlacementPolicyV1(EngineModel):
         return self
 
 
+def _json_decimal(value: object, field: str) -> Decimal:
+    """Coerce a JSONB numeric into Decimal — accepts native numbers and
+    decimal-formatted strings, rejects everything else (bool, NaN, dicts)."""
+    if isinstance(value, bool):
+        raise ManufacturingAuthorityError(f"{field} is not a number")
+    if isinstance(value, (int, Decimal, str)):
+        try:
+            parsed = Decimal(str(value))
+        except Exception as error:
+            raise ManufacturingAuthorityError(f"{field} is not a number") from error
+        if not parsed.is_finite():
+            raise ManufacturingAuthorityError(f"{field} is not a number")
+        return parsed
+    raise ManufacturingAuthorityError(f"{field} is not a number")
+
+
+def handle_policy_from_json(raw: object) -> HandleRequirementPolicyV1:
+    """Canonical JSONB → HandleRequirementPolicyV1 parse.
+
+    ``authority`` columns store plain JSON; strict model_validate cannot
+    accept it because JSON has no enum instances. This parser coerces each
+    declared field explicitly (str→enum, str/number→Decimal) and then lets
+    the strict model validate the assembled structure — malformed payloads
+    raise ``ManufacturingAuthorityError`` either way.
+    """
+    if not isinstance(raw, dict) or not isinstance(raw.get("slots"), list):
+        raise ManufacturingAuthorityError("invalid_handle_policy")
+    try:
+        slots = []
+        for item in raw["slots"]:
+            if not isinstance(item, dict):
+                raise ManufacturingAuthorityError("invalid_handle_policy")
+            if item.get("horizontal_reference") not in (
+                "HOST_MEMBER_AXIS", "HOST_MEMBER_CENTER",
+            ):
+                raise ManufacturingAuthorityError("invalid_handle_policy")
+            if item.get("leaf_handedness") is not None and item["leaf_handedness"] not in (
+                "LEFT", "RIGHT",
+            ):
+                raise ManufacturingAuthorityError("invalid_handle_policy")
+            side = MemberSide(str(item["host_member_side"]))
+            if side not in (MemberSide.LEFT, MemberSide.RIGHT, MemberSide.BOTTOM):
+                raise ManufacturingAuthorityError("invalid_handle_policy")
+            slots.append(HandleSlotRuleV1(
+                opening_type=BayOpeningType(str(item["opening_type"])),
+                leaf_slot=None if item.get("leaf_slot") is None else str(item["leaf_slot"]),
+                leaf_handedness=item.get("leaf_handedness"),
+                handle_domain_slot=str(item["handle_domain_slot"]),
+                host_member_side=side,
+                horizontal_reference=item["horizontal_reference"],
+                horizontal_offset_mm=_json_decimal(item["horizontal_offset_mm"],
+                                                   "horizontal_offset_mm"),
+                permitted_vertical_references=[
+                    VerticalReference(str(reference))
+                    for reference in item["permitted_vertical_references"]
+                ],
+                mounting_min_from_leaf_top_mm=_json_decimal(
+                    item["mounting_min_from_leaf_top_mm"],
+                    "mounting_min_from_leaf_top_mm"),
+                mounting_max_from_leaf_top_mm=_json_decimal(
+                    item["mounting_max_from_leaf_top_mm"],
+                    "mounting_max_from_leaf_top_mm"),
+            ))
+        if int(raw["schema_version"]) != 1:
+            raise ManufacturingAuthorityError("invalid_handle_policy")
+        return HandleRequirementPolicyV1(
+            schema_version=1, policy_id=str(raw["policy_id"]),
+            version=int(raw["version"]), slots=slots,
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        if isinstance(error, ManufacturingAuthorityError):
+            raise
+        raise ManufacturingAuthorityError("invalid_handle_policy") from error
+
+
+def _placement_offset_from_json(value: object) -> PlacementOffsetV1:
+    if not isinstance(value, dict):
+        raise ManufacturingAuthorityError("invalid_placement_policy")
+    return PlacementOffsetV1(
+        x_mm=_json_decimal(value.get("x_mm"), "x_mm"),
+        y_mm=_json_decimal(value.get("y_mm"), "y_mm"),
+        x_pitches=_json_decimal(value.get("x_pitches", "0"), "x_pitches"),
+    )
+
+
+def placement_policy_from_json(raw: object) -> ManufacturingPlacementPolicyV1:
+    """Canonical JSONB → ManufacturingPlacementPolicyV1 parse."""
+    if not isinstance(raw, dict):
+        raise ManufacturingAuthorityError("invalid_placement_policy")
+    try:
+        leaves = raw["sliding_leaf_offsets"]
+        infills = raw["sliding_infill_offsets"]
+        beads = raw["bead_offsets"]
+        if not isinstance(leaves, dict) or not isinstance(infills, dict) or not isinstance(beads, dict):
+            raise ManufacturingAuthorityError("invalid_placement_policy")
+        if int(raw["schema_version"]) != 1:
+            raise ManufacturingAuthorityError("invalid_placement_policy")
+        return ManufacturingPlacementPolicyV1(
+            schema_version=1,
+            policy_id=str(raw["policy_id"]),
+            version=int(raw["version"]),
+            sliding_leaf_offsets={str(key): _placement_offset_from_json(item)
+                                  for key, item in leaves.items()},
+            sliding_infill_offsets={str(key): _placement_offset_from_json(item)
+                                    for key, item in infills.items()},
+            bead_offsets={MemberSide(str(key)): _placement_offset_from_json(item)
+                          for key, item in beads.items()},
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        if isinstance(error, ManufacturingAuthorityError):
+            raise
+        raise ManufacturingAuthorityError("invalid_placement_policy") from error
+
+
+def reinforcement_policy_from_json(raw: object) -> ReinforcementCutPolicyV1:
+    """Canonical JSONB → ReinforcementCutPolicyV1 parse."""
+    if not isinstance(raw, dict) or not isinstance(raw.get("rules"), list):
+        raise ManufacturingAuthorityError("invalid_reinforcement_policy")
+    try:
+        rules = []
+        for item in raw["rules"]:
+            if not isinstance(item, dict) or item.get("length_authority") != "EXISTING_ENGINE":
+                raise ManufacturingAuthorityError("invalid_reinforcement_policy")
+            if item.get("compatible_with_existing_length") is not True:
+                raise ManufacturingAuthorityError("invalid_reinforcement_policy")
+            rules.append(ReinforcementCutRuleV1(
+                role=ProfileRole(str(item["role"])),
+                profile_angle_left=_json_decimal(item["profile_angle_left"],
+                                                 "profile_angle_left"),
+                profile_angle_right=_json_decimal(item["profile_angle_right"],
+                                                  "profile_angle_right"),
+                reinforcement_angle_left=_json_decimal(item["reinforcement_angle_left"],
+                                                       "reinforcement_angle_left"),
+                reinforcement_angle_right=_json_decimal(item["reinforcement_angle_right"],
+                                                        "reinforcement_angle_right"),
+                length_authority="EXISTING_ENGINE",
+                compatible_with_existing_length=True,
+            ))
+        if int(raw["schema_version"]) != 1:
+            raise ManufacturingAuthorityError("invalid_reinforcement_policy")
+        return ReinforcementCutPolicyV1(
+            schema_version=1, policy_id=str(raw["policy_id"]),
+            version=int(raw["version"]), rules=rules,
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        if isinstance(error, ManufacturingAuthorityError):
+            raise
+        raise ManufacturingAuthorityError("invalid_reinforcement_policy") from error
+
+
 class HandleIntentV1(EngineModel):
     schema_version: Literal[1] = 1
     bay_id: str

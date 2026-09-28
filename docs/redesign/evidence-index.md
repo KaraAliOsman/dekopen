@@ -177,3 +177,13 @@ SHA del paquete: `6c61859` (+ capturas en este commit). Fixtures: `scripts/dev_f
 | `frontend/src/features/canvas/kitCompatibility.ts` + test | ejes del engine replicados; compatible/indecidible/incompatible + `bayEnvelopeMm` |
 | `frontend/src/features/catalogs/SystemWorkspace.tsx` — sección Fuentes | evidencia visible por sistema + acciones de revision por rol |
 | `docs/redesign/captures/phase04/` | capturas de ambas experiencias (pendiente de la ejecución del agente) |
+
+### phase-04 · reparación de autoridad (design-options)
+
+| Evidencia | Qué prueba | Dónde |
+|---|---|---|
+| design-options 200 en DEMO_60/ALU_65/GLASS_45 | El bloqueo headline (422) está muerto; kits + handle_policy llegan al editor | verificación HTTP con token ESTIMATOR real sobre :8000 |
+| `supabase/tests/database/174_policy_authority_native_numerics.test.sql` | Latest-version authorities sin numéricos string; versión embebida = versión de fila | pgTAP 9/9 verde |
+| `engine/tests/test_manufacturing_jsonb_parse.py` | Parsers aceptan nativo + legacy-string, rechazan payload malformado / enum inválido / side TOP | pytest 5/5 |
+| `supabase/migrations/20261228000002` | Reparación por nueva versión respetando `immutable_authority` | migración aplicada en reset |
+| `docs/redesign/captures/phase04/` | Recorrido catálogo + Fuentes + picker de kits + razones de incompatibilidad | 6 PNG + REPORT.md del agente de testing |

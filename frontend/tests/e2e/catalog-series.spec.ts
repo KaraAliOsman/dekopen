@@ -126,11 +126,11 @@ function form(page: Page) {
 
 async function section(page: Page, resource: Resource): Promise<void> {
   await page
-    .getByRole("navigation", {
+    .getByRole("tablist", {
       name: t("catalog.sections"),
       exact: true,
     })
-    .getByRole("button", {
+    .getByRole("tab", {
       name: t(sectionKeys[resource]),
       exact: true,
     })

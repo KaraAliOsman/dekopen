@@ -218,3 +218,7 @@ desconocido) e incompatibles consultables con su razon — nunca elegibles
 como equivalentes. El engine revalida igual en el guardado; la UI informa,
 no optimiza. `bayEnvelopeMm` reproduce la particion de `frontLayout`
 (offset o mitad, menos media cara del premarco) para el tamano de hoja.
+
+## D21 — Autoridad JSONB: el parseo canónico vive en el motor
+
+El contrato estricto (`EngineModel strict=True`) no puede validar JSONB crudo: JSON no produce instancias de enum ni `Decimal`, así que `model_validate` sobre `authority` era insatisfiable — `design-options` devolvía 422 en todas las series. En vez de relajar el modelo, el motor ahora exporta `handle_policy_from_json` / `placement_policy_from_json` / `reinforcement_policy_from_json` (manufacturing.py): coerción campo a campo (str→enum, str/number→Decimal, rechaza bool/NaN/no-finito) y luego el modelo estricto valida el resultado. `engine_api` y `documents` usan el mismo parser; el parseo tolerante ya no puede divergir del contrato. Los valores numéricos históricos almacenados como string se corrigen por nueva versión (`20261228000002`), nunca por UPDATE — la inmutabilidad de autoridad se respeta incluso en la reparación. El `version` embebido en el payload se sincroniza con la versión de fila.

@@ -17,17 +17,15 @@ from psycopg import sql
 from dekopen_engine.cutting import CutMaterial, CuttingProfile
 from dekopen_engine.inspection_models import StructuralInput, WorkshopAnnotations
 from dekopen_engine.manufacturing import (
+    handle_policy_from_json,
+    placement_policy_from_json,
+    reinforcement_policy_from_json,
     HandleIntentV1,
     HandleRequirementPolicyV1,
-    HandleSlotRuleV1,
     ManufacturingPlacementPolicyV1,
-    PlacementOffsetV1,
     ReinforcementCutPolicyV1,
-    ReinforcementCutRuleV1,
     VerticalReference,
 )
-from dekopen_engine.manufacturing_trace import MemberSide
-from dekopen_engine.models import BayOpeningType, ProfileRole
 from dekopen_engine.purchasing import (
     AccessoryLineV1,
     AccessoryScheduleV1,
@@ -161,107 +159,24 @@ def _authority_row(table: str, policy_id: UUID, system_id: UUID, org_id: UUID) -
     return effective[0]
 
 
-def _offset(value: object) -> PlacementOffsetV1:
-    if not isinstance(value, dict):
-        raise DocumentaryError("invalid_placement_policy")
-    return PlacementOffsetV1(
-        x_mm=_decimal(value.get("x_mm")),
-        y_mm=_decimal(value.get("y_mm")),
-        x_pitches=_decimal(value.get("x_pitches", "0")),
-    )
-
-
 def _placement_policy(value: object) -> ManufacturingPlacementPolicyV1:
-    raw = decoded(value)
-    if not isinstance(raw, dict):
-        raise DocumentaryError("invalid_placement_policy")
     try:
-        leaves = raw["sliding_leaf_offsets"]
-        infills = raw["sliding_infill_offsets"]
-        beads = raw["bead_offsets"]
-        if not isinstance(leaves, dict) or not isinstance(infills, dict) or not isinstance(beads, dict):
-            raise DocumentaryError("invalid_placement_policy")
-        return ManufacturingPlacementPolicyV1(
-            schema_version=int(raw["schema_version"]),
-            policy_id=str(raw["policy_id"]),
-            version=int(raw["version"]),
-            sliding_leaf_offsets={str(key): _offset(item) for key, item in leaves.items()},
-            sliding_infill_offsets={str(key): _offset(item) for key, item in infills.items()},
-            bead_offsets={MemberSide(str(key)): _offset(item) for key, item in beads.items()},
-        )
+        return placement_policy_from_json(decoded(value))
     except (KeyError, TypeError, ValueError) as error:
-        if isinstance(error, DocumentaryError):
-            raise
         raise DocumentaryError("invalid_placement_policy") from error
 
 
 def _handle_policy(value: object) -> HandleRequirementPolicyV1:
-    raw = decoded(value)
-    if not isinstance(raw, dict) or not isinstance(raw.get("slots"), list):
-        raise DocumentaryError("invalid_handle_policy")
     try:
-        slots = []
-        for item in raw["slots"]:
-            if not isinstance(item, dict):
-                raise DocumentaryError("invalid_handle_policy")
-            if item.get("horizontal_reference") not in (
-                "HOST_MEMBER_AXIS", "HOST_MEMBER_CENTER",
-            ):
-                raise DocumentaryError("invalid_handle_policy")
-            if item.get("leaf_handedness") is not None and item["leaf_handedness"] not in (
-                "LEFT", "RIGHT",
-            ):
-                raise DocumentaryError("invalid_handle_policy")
-            slots.append(HandleSlotRuleV1(
-                opening_type=BayOpeningType(str(item["opening_type"])),
-                leaf_slot=None if item.get("leaf_slot") is None else str(item["leaf_slot"]),
-                leaf_handedness=item.get("leaf_handedness"),
-                handle_domain_slot=str(item["handle_domain_slot"]),
-                host_member_side=MemberSide(str(item["host_member_side"])),
-                horizontal_reference=item["horizontal_reference"],
-                horizontal_offset_mm=_decimal(item["horizontal_offset_mm"]),
-                permitted_vertical_references=[
-                    VerticalReference(str(reference))
-                    for reference in item["permitted_vertical_references"]
-                ],
-                mounting_min_from_leaf_top_mm=_decimal(item["mounting_min_from_leaf_top_mm"]),
-                mounting_max_from_leaf_top_mm=_decimal(item["mounting_max_from_leaf_top_mm"]),
-            ))
-        return HandleRequirementPolicyV1(
-            schema_version=int(raw["schema_version"]), policy_id=str(raw["policy_id"]),
-            version=int(raw["version"]), slots=slots,
-        )
+        return handle_policy_from_json(decoded(value))
     except (KeyError, TypeError, ValueError) as error:
-        if isinstance(error, DocumentaryError):
-            raise
         raise DocumentaryError("invalid_handle_policy") from error
 
 
 def _reinforcement_policy(value: object) -> ReinforcementCutPolicyV1:
-    raw = decoded(value)
-    if not isinstance(raw, dict) or not isinstance(raw.get("rules"), list):
-        raise DocumentaryError("invalid_reinforcement_policy")
     try:
-        rules = []
-        for item in raw["rules"]:
-            if not isinstance(item, dict) or item.get("length_authority") != "EXISTING_ENGINE":
-                raise DocumentaryError("invalid_reinforcement_policy")
-            rules.append(ReinforcementCutRuleV1(
-                role=ProfileRole(str(item["role"])),
-                profile_angle_left=_decimal(item["profile_angle_left"]),
-                profile_angle_right=_decimal(item["profile_angle_right"]),
-                reinforcement_angle_left=_decimal(item["reinforcement_angle_left"]),
-                reinforcement_angle_right=_decimal(item["reinforcement_angle_right"]),
-                length_authority="EXISTING_ENGINE",
-                compatible_with_existing_length=(item.get("compatible_with_existing_length") is True),
-            ))
-        return ReinforcementCutPolicyV1(
-            schema_version=int(raw["schema_version"]), policy_id=str(raw["policy_id"]),
-            version=int(raw["version"]), rules=rules,
-        )
+        return reinforcement_policy_from_json(decoded(value))
     except (KeyError, TypeError, ValueError) as error:
-        if isinstance(error, DocumentaryError):
-            raise
         raise DocumentaryError("invalid_reinforcement_policy") from error
 
 

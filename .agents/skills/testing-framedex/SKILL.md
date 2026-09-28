@@ -310,3 +310,24 @@ description: Local dev-stack recipe for DEKOPEN E2E testing — Supabase CLI sta
   "Altura de manilla fuera de rango"). Manilla inspector field = "Altura de manilla (mm)".
 - `--model3d-handle`(#4a5055)/`--model3d-steel`(#a9b2b8) use metalness≤0.9 with NO envMap
   → hardware renders near-black/flat. Metalness needs an `<Environment>`/HDRI to read metallic.
+
+## Phase-04 evidence + kit-picker recipes
+- **Estimator (aal1) token via magic link**: `POST :25321/auth/v1/otp {email,create_user:false}` →
+  read Mailpit `:25324/api/v1/message/<id>` → the email links `…/auth/v1/verify?token=XXX&type=magiclink&redirect_to=…`.
+  Do NOT `POST /verify` (returns `otp_expired`/`validation_failed`); instead GET that URL
+  **without following redirects** → `Location:` fragment carries `#access_token=…`. Save it for Bearer.
+- **Evidence endpoints** live under `/api/v1/catalogs/evidence/` (POST declare→PENDING, GET `?system_id=`,
+  POST `<id>/review/ {review_state:REVIEWED|REJECTED}`). Read roles can GET; write roles (OWNER,
+  WORKSHOP_MANAGER) needed for POST/review → ESTIMATOR gets `403 catalog_permission_denied`.
+- **Declaring evidence LOCKS the system**: it sets `profile_systems.technical_locked`, after which
+  `guard_referenced_catalog` blocks any further catalog-row INSERT/UPDATE on it. To clone a catalog
+  for testing, do the clone BEFORE declaring evidence on that system.
+- **Reaching the Studio kit picker**: `GET /api/v1/projects/design-options/<sys>` returns **422
+  `technical_authority_required`** if the system's `handle_requirement_policies.authority` JSONB
+  fails `HandleRequirementPolicyV1.model_validate` (strict EngineModel rejects string-typed enums/
+  Decimals). Seeded systems are all malformed → picker unreachable. Workaround: `POST /systems/` a
+  fresh ORG system with correct `finishes`, clone the whole catalog (articles, bead matrix, kits,
+  glass map, infill, manufacturing+reinforcement policies), set `rebate_depth_mm`, then
+  `POST /projects/<proj>/positions/` → position saves → editor renders the `Herrajes` select.
+- `parametric_tree` node numeric fields are decimal **strings**; top-level `nominal_*_mm` are
+  Decimals (serializer). Passing strings top-level → `'<' str vs Decimal` TypeError.

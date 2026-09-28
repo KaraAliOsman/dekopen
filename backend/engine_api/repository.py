@@ -23,7 +23,7 @@ from dekopen_engine import (
     RailType,
     SystemParams,
 )
-from dekopen_engine.manufacturing import HandleRequirementPolicyV1
+from dekopen_engine.manufacturing import HandleRequirementPolicyV1, handle_policy_from_json
 
 
 class SystemNotFound(LookupError):
@@ -323,7 +323,7 @@ class SystemParamsRepository:
         if not isinstance(row[0], str):
             raise UnsupportedCatalogContract("Handle policy must be raw JSON text")
         try:
-            return HandleRequirementPolicyV1.model_validate(
+            return handle_policy_from_json(
                 json.loads(row[0], parse_float=Decimal, parse_int=Decimal)
             )
         except (ValueError, TypeError) as error:
