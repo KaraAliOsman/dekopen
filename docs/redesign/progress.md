@@ -195,7 +195,6 @@ externa, ver `blocked-inputs.md`).
 
 ## Pendiente
 
-- Capturas de matriz + close-ups + video (testing agent en curso —
-  `docs/redesign/captures/phase03/`).
-- pgTAP/`make test-db` para la migración (pendiente del stack; el seed ya
-  aplicó limpio en reset local).
+- ~~Capturas de matriz + close-ups + video~~ **hecho/probado** —
+  `docs/redesign/captures/phase03/` (59 archivos + REPORT.md) + video de
+  estados; close-ups de herraje verificados.

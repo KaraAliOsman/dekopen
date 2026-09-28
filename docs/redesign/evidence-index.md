@@ -145,3 +145,21 @@ SHA del paquete: `6c61859` (+ capturas en este commit). Fixtures: `scripts/dev_f
 | Componentes migrados                                 | `ui/` + migraciones en páginas reales        | ver `decisions.md` D7–D14                   |
 | Pruebas de comportamiento                            | vitest                                       | 436/436 + 11 nuevas del kit                 |
 | Studio/impresión/bot no subordinados al tema         | `--mat-*` en `:root` sin tematizar           | documentado D7; capturas Studio ambos temas |
+
+## Fase 03 (`docs/redesign/captures/phase03/`, SHA c6a0456)
+
+| Archivo | Qué evidencia |
+|---|---|
+| `benchmark-page-{pvc,pvcfoil,alu}.png` | página completa del muro por acabado |
+| `benchmark-<fixture>-<finish>-3d.png` | 11 fixtures × 3 acabados, 3D activado |
+| `hw-lever-tiltturn.png` | palanca batiente — roseta+collar+palanca cónica, metal satinado |
+| `hw-hinge-tiltturn.png` | bisagra de galce — barril+aleta con highlight metálico |
+| `hw-escutcheon-door-{interior,exterior}.png` | escudo 240mm doble cara + cilindro |
+| `hw-pull-sliding-cup.png` / `hw-pull-sliding-tirador.png` | uñero embutido / tirador D superficial |
+| `hw-centrelever-awning.png`, `hw-tophinge-awning.png` | manilla central + bisagras testero |
+| `theme-{light,dark}-{pvc,alu}.png`, `theme-invariance-*.png` | RGB físico idéntico entre temas |
+| `diag-chips-3d.png`, `diag-handle-outofrange-2d.png`, `studio-handle-outofrange.png` | datum fuera de rango + herraje esquemático — sin clamp silencioso |
+| `2d-alzado-{tiltturn,door}.png` | mano correcta en 2D (palanca opuesta a bisagras) |
+| `before-after-sheet.png` | lámina comparativa fase-00 vs fase-03 |
+| `REPORT.md` | manifiesto del set con veredictos |
+| video (screencasts) `rec-37b9cdc4-…-edited.mp4` | giro/abatir/corredera/despiece sin acumulación |
