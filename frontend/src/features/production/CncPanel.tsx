@@ -301,16 +301,18 @@ export function CncPanel({ orderId, canWrite }: { orderId: string; canWrite: boo
                           <span className="cnc-stale">{t("production.cncSuperseded")}</span>
                         ) : (
                           <span className="cnc-program-actions">
-                            {["operations.json", "operations.csv"].map((filename) => (
-                              <button
-                                key={filename}
-                                type="button"
-                                className="cnc-program-file"
-                                onClick={() => void downloadProgram(program, filename)}
-                              >
-                                {filename}
-                              </button>
-                            ))}
+                            {["operations.json", "operations.csv", "manifest.json"].map(
+                              (filename) => (
+                                <button
+                                  key={filename}
+                                  type="button"
+                                  className="cnc-program-file"
+                                  onClick={() => void downloadProgram(program, filename)}
+                                >
+                                  {filename}
+                                </button>
+                              ),
+                            )}
                           </span>
                         )}
                       </li>

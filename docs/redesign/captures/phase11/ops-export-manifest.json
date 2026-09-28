@@ -1,0 +1,39 @@
+{
+  "counts_by_kind": {
+    "HANDLE_PREP": 1,
+    "SAW_CUT": 38
+  },
+  "files": {
+    "operations.csv": {
+      "bytes": 7849,
+      "sha256": "0f951f5ef11db62d6a3e1a1830b0e38c6713d0d369eff6173a406b8923d76cf7"
+    },
+    "operations.json": {
+      "bytes": 52854,
+      "sha256": "474c5882a075fb84488ad5310d959efec4388f81a56ba72a2051fdc37c2e822f"
+    }
+  },
+  "generated_at": "2026-09-28T21:57:51.296681+00:00",
+  "generated_by": "16054be7-737f-4440-a9c5-fa902bf3f3e2",
+  "kind": "ops_export",
+  "machine_id": "machine-neutral-v1",
+  "operation_count": 39,
+  "order_code": "OT-P-000006-REV-A-03",
+  "schema": "dekopen_export_manifest_v1",
+  "source_fingerprint": "22e093b6cfbc89fe32d4b20658b5821d30e6f83a5d1572c8327e7c7682f1d338",
+  "unemitted_kinds": [
+    "CORNER_CONNECTOR",
+    "CUSTOM",
+    "DRAINAGE",
+    "DRILL",
+    "END_MACHINING",
+    "GASKET_MARK",
+    "HINGE_PREP",
+    "LOCK_PREP",
+    "MILLING",
+    "ROUTING",
+    "SLOT",
+    "T_CONNECTOR",
+    "VENTILATION"
+  ]
+}

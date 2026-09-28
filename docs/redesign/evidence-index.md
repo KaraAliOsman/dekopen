@@ -244,3 +244,16 @@ SHA del paquete: `6c61859` (+ capturas en este commit). Fixtures: `scripts/dev_f
 | `frontend/src/features/production/` | cola por estación del operario, `?piece=` deep link + auto-navegación a orden única, barra de acción pegajosa, viajes + saldo pendiente + selector de unidades, guía por viaje, `canField` para terreno, toast de error de acción |
 | `supabase/migrations/20261228000009_dispatch_client_read.sql` | `documentary_backend` SELECT en `clients` — el despacho del piso resuelve destinatario sin ampliar `clients_member_read` |
 | `docs/redesign/captures/phase10/` | aceptación 4 roles en vivo — 53 archivos: 44 PNGs del journey completo (orden→material→corte→mecanizado→QC→rechazo→remake→embalaje→despacho parcial→entrega), `gd-0001..3.pdf` + `ce-0001..2.pdf` + `cut-pack-ot03.pdf` + `production-pack-ot03.pdf` reales, `labels-rm01.json`, `REPORT.md` |
+
+## Fase 11 (workspace HEAD)
+
+| Archivo / evidencia | Qué prueba |
+|---|---|
+| `engine/src/dekopen_engine/operations.py` | `depth_undeclared`/`tool_undeclared` BLOCK exactos; `sequence_no` en CSV; point_prep no exige profundidad (D43) |
+| `backend/production/cnc.py` | `input_fingerprint` = plan_fp + machine_fp — edición de máquina/herramienta invalida programa; manifiesto por programa |
+| `backend/production/service.py` + `pack.py` | `manifest.json` (`dekopen_export_manifest_v1`) en ops-export; "Ref. montaje" en pack y estación; datum Ext.A/B dibujado; leyenda de coordenada local corregida |
+| `supabase/migrations/20261228000010_step_event_cnc_program.sql` | restaura `WO_CNC_PROGRAM` en `production_step_events_event_check` (la recreación de QC_CHECK lo había perdido → 409 en generar) |
+| `supabase/tests/database/164_cnc.test.sql` | pgTAP: `pg_get_constraintdef` LIKE '%WO_CNC_PROGRAM%' vigila la lista de eventos (8/8) |
+| `frontend/src/features/production/` (labels.ts, CncPanel, OperatorCard) + `i18n/es-CL.ts` | "Ref. montaje" end-to-end; `manifest.json` descargable; overflow móvil cerrado (732→485 @iw500) |
+| `engine/tests/test_operations.py` + `backend/tests/test_production.py` | 4 tests de bloqueo exacto/op manual; manifiesto con sha256 verificado byte a byte — 36/36 + 115 verdes |
+| `docs/redesign/captures/phase11/` | aceptación en vivo: 17 PNGs (panel CNC, ops por miembro, manos L/R, estación, operador, móvil), `pack-tt03.pdf`/`13-pack-ttl.pdf` reales con datum+"Ref. montaje", programas y manifests descargados con hash verificado, REPORT.md con la matriz mandato→resultado |
