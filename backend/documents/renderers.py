@@ -102,8 +102,8 @@ tbody tr:last-child td { border-bottom: 0.9pt solid #465158; }
 .muted { color: #727D82; } .signature { height: 15mm; border-bottom: 0.5pt solid #465158; margin-top: 6mm; }
 .signoff { break-inside: avoid; }
 .keep { break-inside: avoid; }
-.sign-row { display: flex; gap: 8mm; margin-top: 4mm; margin-bottom: 4mm; }
-.sign-cell { flex: 1; height: 10mm; border-bottom: 0.5pt solid #465158; position: relative; }
+.sign-row { display: flex; gap: 8mm; margin-top: 3mm; margin-bottom: 6mm; }
+.sign-cell { flex: 1; height: 9mm; border-bottom: 0.5pt solid #465158; position: relative; }
 .sign-cell.sign-date { flex: 0 0 22mm; }
 .sign-label { position: absolute; bottom: -4.5mm; left: 0; font: 600 6pt 'IBM Plex Mono', monospace; text-transform: uppercase; letter-spacing: 0.08em; color: #727D82; }
 table tr { break-inside: avoid; }
@@ -165,6 +165,16 @@ svg:not(.miter) { max-width: 100%; height: auto; display: block; } svg text { fo
 .inv-cell strong { font-size: 10.5pt; font-weight: 600; color: #161C1F; }
 .inv-cell.inv-total strong { font-size: 15pt; color: #075F5A; }
 .cover-foot { margin-top: 5mm; font-size: 7.5pt; color: #727D82; line-height: 1.6; }
+.dochead { border-bottom: 1.5pt solid #075F5A; padding-bottom: 4mm; margin-bottom: 6mm; }
+.dochead .cover-top { border-bottom: none; padding-bottom: 0; }
+.dochead-client { font-size: 10.5pt; color: #161C1F; margin: 4.5mm 0 0; }
+.dochead-client .kicker { margin: 0 1mm 0 0; }
+.dochead .cover-invest { margin-top: 3.5mm; }
+.dochead .cover-foot { margin-top: 2.5mm; }
+/* Long client/project/typology names wrap inside their column — a width
+   guard, never a truncation. */
+.cover-client, .cover-project, .dochead-client, .pcard-body h3,
+.pcard-specs li, .pcard-dims { overflow-wrap: anywhere; }
 .stat-strip { display: flex; border: 0.5pt solid #CDD5D6; border-left: 2pt solid #075F5A; margin: 0 0 5mm; }
 .stat-cell { flex: 1; padding: 2.6mm 4mm; border-left: 0.5pt solid #CDD5D6; }
 .stat-cell:first-child { border-left: none; }
@@ -204,8 +214,17 @@ svg:not(.miter) { max-width: 100%; height: auto; display: block; } svg text { fo
 .terms { border-left: 2pt solid #CDD5D6; padding-left: 5mm; }
 .terms p { margin: 1.2mm 0; }
 .terms .tlabel { color: #727D82; font-size: 6.5pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5pt; }
-.accept { break-inside: avoid; margin-top: 6mm; }
-.accept-recap { font-size: 8.5pt; color: #465158; margin-bottom: 4mm; }
+.doc-col { break-inside: avoid; }
+.doc-duo { display: flex; gap: 9mm; align-items: flex-start; break-inside: avoid; }
+.doc-duo .doc-col { flex: 1; min-width: 0; }
+.doc-duo h2 { margin-top: 4mm; }
+.doc-duo .invest { flex-direction: column; gap: 4mm; margin: 2mm 0 0; }
+.doc-duo .invest-panel { flex: 0 0 auto; }
+.accept { break-inside: avoid; margin-top: 4mm; }
+.accept h2 { margin-top: 0; }
+.sign-col .sign-cell { margin-bottom: 9mm; }
+.sign-col .sign-cell:last-child { margin-bottom: 0; }
+.accept-recap { font-size: 8.5pt; color: #465158; margin-bottom: 3mm; }
 """
 
 
@@ -1224,8 +1243,11 @@ def _doc01(snapshot: dict[str, object]) -> str:
         )
         if part and part != "—"
     )
-    body += (
-        '<div class="cover">'
+    # Editorial policy (mandate §07): only a large proposal earns a cover
+    # page — it orients the reader across many configurations. Small and
+    # medium quotes open with a compact dochead so the first page already
+    # carries product and price; nobody should print a page for two lines.
+    cover_top = (
         '<div class="cover-top">'
         f'{_brand_block(organization)}'
         '<div class="cover-doc">'
@@ -1234,28 +1256,51 @@ def _doc01(snapshot: dict[str, object]) -> str:
         f"Revisión {escape(_rev_display(snapshot.get('revision')))} · "
         f"{escape(_cldate(snapshot.get('sealed_at')))}"
         "</div></div>"
-        '<div class="cover-main"><div class="cover-left">'
-        '<p class="kicker">Preparado para</p>'
-        f'<h1 class="cover-client">{escape(_value(project.get("client_name")))}</h1>'
-        f'<p class="cover-project">{escape(_value(project.get("name")))} · '
-        f'{escape(_value(project.get("code")))}</p>'
-        f'<p class="cover-meta">{"".join(client_meta)}</p>'
-        "</div>"
-        f"{hero_figure}"
-        "</div>"
-        + (
-            f'<div class="cover-invest">{"".join(cover_invest_cells)}</div>'
-            if cover_invest_cells
-            else ""
-        )
-        + (
-            f'<div class="cover-foot">{escape(issuer_line)}</div>' if issuer_line else ""
-        )
-        + "</div>"
     )
+    cover_invest = (
+        f'<div class="cover-invest">{"".join(cover_invest_cells)}</div>'
+        if cover_invest_cells
+        else ""
+    )
+    issuer_foot = (
+        f'<div class="cover-foot">{escape(issuer_line)}</div>' if issuer_line else ""
+    )
+    if len(groups) > 8:
+        body += (
+            '<div class="cover">'
+            + cover_top
+            + '<div class="cover-main"><div class="cover-left">'
+            + '<p class="kicker">Preparado para</p>'
+            + f'<h1 class="cover-client">{escape(_value(project.get("client_name")))}</h1>'
+            + f'<p class="cover-project">{escape(_value(project.get("name")))} · '
+            + f'{escape(_value(project.get("code")))}</p>'
+            + f'<p class="cover-meta">{"".join(client_meta)}</p>'
+            + "</div>"
+            + f"{hero_figure}"
+            + "</div>"
+            + cover_invest
+            + issuer_foot
+            + "</div>"
+        )
+    else:
+        body += (
+            '<div class="dochead">'
+            + cover_top
+            + '<p class="dochead-client"><span class="kicker">Preparado para</span> '
+            + f'<strong>{escape(_value(project.get("client_name")))}</strong> · '
+            + escape(_value(project.get("name")))
+            + " · "
+            + escape(_value(project.get("code")))
+            + "</p>"
+            + cover_invest
+            + issuer_foot
+            + "</div>"
+        )
 
-    # ── Project summary ────────────────────────────────────────────────
-    if positions:
+    # ── Project summary — a single-configuration quote goes straight to
+    # its product card; the strip only earns space when there is a real
+    # spread to summarize.
+    if positions and len(groups) > 1:
         total_units = sum(bucket["quantity"] for bucket in groups.values())
         doors = sum(
             bucket["quantity"]
@@ -1348,6 +1393,14 @@ def _doc01(snapshot: dict[str, object]) -> str:
             spec_items.append(
                 f'<li><span class="plabel">Sistema</span> {escape(system_name)}</li>'
             )
+        openings = _opening_labels(ref.get("parametric_tree") or {})
+        if openings:
+            spec_items.append(
+                f'<li><span class="plabel">Apertura</span> {escape(", ".join(openings))}</li>'
+            )
+        spec_items.append(
+            '<li><span class="plabel">Vista</span> Exterior</li>'
+        )
         spec_items.append(
             f'<li><span class="plabel">Vidrio / relleno</span> {escape(specs)}</li>'
         )
@@ -1355,6 +1408,22 @@ def _doc01(snapshot: dict[str, object]) -> str:
         if finish and finish != "—":
             spec_items.append(
                 f'<li><span class="plabel">Acabado</span> {escape(finish)}</li>'
+            )
+        schedule = ref.get("accessory_schedule")
+        schedule_items = (
+            [item for item in schedule.get("items") or [] if isinstance(item, dict)]
+            if isinstance(schedule, dict)
+            else []
+        )
+        if schedule_items:
+            names = [
+                _value(item.get("description") or item.get("technical_sku"))
+                for item in schedule_items[:4]
+            ]
+            if len(schedule_items) > 4:
+                names.append(f"+{len(schedule_items) - 4}")
+            spec_items.append(
+                f'<li><span class="plabel">Incluye</span> {escape(", ".join(names))}</li>'
             )
         price_block = ""
         if bucket["priced"]:
@@ -1414,19 +1483,26 @@ def _doc01(snapshot: dict[str, object]) -> str:
         )
     if discount_note:
         invest_note.append(f"<p>{escape(discount_note)}</p>")
-    if totals_priced:
-        extras_html = "".join(
-            '<div class="inv-row"><span>'
-            + escape(_value(item.get("label")))
-            + "</span><strong>"
-            + escape(_money(item.get("amount"), currency))
-            + "</strong></div>"
-            for item in _pricing_extras(snapshot)
+    extras = _pricing_extras(snapshot)
+    if extras:
+        # Extras live inside the sealed net — state them as an included
+        # component line, never as an additive row above the totals.
+        invest_note.append(
+            "<p><span class=\"tlabel\">Incluye</span> "
+            + escape(
+                " · ".join(
+                    f"{_value(item.get('label'))} "
+                    f"({_money(item.get('amount'), currency)})"
+                    for item in extras
+                )
+            )
+            + " — dentro del neto.</p>"
         )
-        body += (
-            "<h2>Inversión</h2>"
+    invest_html = ""
+    if totals_priced:
+        invest_html += (
+            '<div class="doc-col"><h2>Inversión</h2>'
             '<div class="invest"><div class="invest-panel">'
-            + extras_html
             + '<div class="inv-row"><span>Neto</span>'
             f'<strong>{escape(_money(project.get("total_price_net"), currency))}</strong></div>'
             '<div class="inv-row"><span>Impuesto</span>'
@@ -1435,7 +1511,7 @@ def _doc01(snapshot: dict[str, object]) -> str:
             f'<strong>{escape(_money(project.get("total_price_gross"), currency))}</strong></div>'
             "</div>"
             f'<div class="invest-note">{"".join(invest_note)}</div>'
-            "</div>"
+            "</div></div>"
         )
 
     # ── Terms ──────────────────────────────────────────────────────────
@@ -1461,16 +1537,16 @@ def _doc01(snapshot: dict[str, object]) -> str:
             '<p><span class="tlabel">Condiciones</span><br>'
             f"{escape(notes)}</p>"
         )
+    terms_html = ""
     if terms:
-        body += "<h2>Condiciones comerciales</h2>" + (
-            f'<div class="terms">{"".join(terms)}</div>'
+        terms_html = (
+            '<div class="doc-col"><h2>Condiciones comerciales</h2>'
+            f'<div class="terms">{"".join(terms)}</div></div>'
         )
-
     # ── Acceptance ─────────────────────────────────────────────────────
-    body += (
-        '<div class="accept"><h2>Aceptación</h2>'
-        '<p class="accept-recap">'
-        f"{escape(quote_folio)} · Revisión {escape(_rev_display(snapshot.get('revision')))}"
+    accept_recap = (
+        f"{escape(quote_folio)} · Revisión "
+        f"{escape(_rev_display(snapshot.get('revision')))}"
         + (
             f" · Total {escape(_money(project.get('total_price_gross'), currency))}"
             if totals_priced
@@ -1481,16 +1557,39 @@ def _doc01(snapshot: dict[str, object]) -> str:
             if valid_until and valid_until != "—"
             else ""
         )
-        + "</p>"
-        '<div class="sign-row">'
-        '<div class="sign-cell"><span class="sign-label">Nombre</span></div>'
-        '<div class="sign-cell"><span class="sign-label">RUT</span></div>'
-        '<div class="sign-cell"><span class="sign-label">Firma</span></div>'
-        '<div class="sign-cell sign-date"><span class="sign-label">Fecha</span></div>'
-        "</div>"
-        '<p class="muted">La firma confirma la aceptación de esta propuesta '
-        "en la revisión indicada.</p></div></main>"
     )
+    # Small and mid-size proposals close in a shared band: inversión,
+    # condiciones and a compact signature side by side, so acceptance is
+    # never orphaned on a blank continuation sheet. Large proposals keep
+    # the full-width sections — their conditions carry more text.
+    compact = len(groups) <= 8
+    if compact:
+        closing_cols = invest_html + terms_html + (
+            '<div class="doc-col"><h2>Aceptación</h2>'
+            f'<p class="accept-recap">{accept_recap}</p>'
+            '<div class="sign-col">'
+            '<div class="sign-cell"><span class="sign-label">Nombre y RUT</span></div>'
+            '<div class="sign-cell"><span class="sign-label">Firma</span></div>'
+            '<div class="sign-cell"><span class="sign-label">Fecha</span></div>'
+            "</div></div>"
+        )
+        if closing_cols.strip():
+            body += f'<div class="doc-duo">{closing_cols}</div>'
+        body += "</main>"
+    else:
+        body += invest_html + terms_html
+        body += (
+            '<div class="accept"><h2>Aceptación</h2>'
+            f'<p class="accept-recap">{accept_recap}</p>'
+            '<div class="sign-row">'
+            '<div class="sign-cell"><span class="sign-label">Nombre</span></div>'
+            '<div class="sign-cell"><span class="sign-label">RUT</span></div>'
+            '<div class="sign-cell"><span class="sign-label">Firma</span></div>'
+            '<div class="sign-cell sign-date"><span class="sign-label">Fecha</span></div>'
+            "</div>"
+            '<p class="muted">La firma confirma la aceptación de esta propuesta '
+            "en la revisión indicada.</p></div></main>"
+        )
     return body
 
 
@@ -2681,6 +2780,42 @@ _CATEGORY_ES = {
     "HARDWARE_KIT": "Kit herraje", "PANEL": "Panel",
     "ACCESSORY": "Accesorio", "FITTING": "Fijación",
 }
+
+def _opening_labels(tree: dict[str, object]) -> list[str]:
+    """Distinct human opening names declared in the sealed tree (e.g.
+    "Oscilobatiente · izquierda") — the card reads what the product
+    actually does, not only its typology bucket."""
+    labels: list[str] = []
+
+    def walk(node: object) -> None:
+        if not isinstance(node, dict):
+            return
+        opening = str(node.get("opening_type") or "")
+        if opening and opening != "FIXED":
+            label = _TYPOLOGY_ES.get(opening, opening)
+            hand = str(node.get("door_handedness") or "")
+            if hand == "LEFT":
+                label += " · izquierda"
+            elif hand == "RIGHT":
+                label += " · derecha"
+            if label not in labels:
+                labels.append(label)
+        children = node.get("children")
+        if isinstance(children, list):
+            for child in children:
+                walk(child)
+
+    assembly = tree.get("assembly")
+    if isinstance(assembly, dict):
+        modules = assembly.get("modules")
+        if isinstance(modules, list):
+            for module in modules:
+                if isinstance(module, dict):
+                    walk(module.get("tree"))
+    else:
+        walk(tree)
+    return labels
+
 
 _ROLE_ES = {
     "FRAME": "Marco", "SASH": "Hoja", "MULLION_V": "Montante",
