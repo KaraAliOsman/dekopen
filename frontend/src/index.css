@@ -1000,7 +1000,10 @@ p[role="alert"]:only-child::before {
 
 @media (max-width: 1100px) {
   .dashboard {
-    grid-template-columns: 1fr;
+    /* minmax(0,1fr): the single column may shrink below the widest
+       child's min-content — otherwise long rows pin the page wider
+       than the viewport. */
+    grid-template-columns: minmax(0, 1fr);
   }
   .dashboard-ops,
   .dashboard-attention,
@@ -1140,6 +1143,7 @@ p[role="alert"]:only-child::before {
 
 .dashboard-activity-event {
   color: var(--theme-text-primary);
+  min-width: 0;
 }
 
 .dashboard-activity-code {
@@ -1770,6 +1774,41 @@ button.production-chip:hover {
      amounts never break mid-figure. */
   .metric-card strong {
     font-size: var(--text-title);
+  }
+
+  /* Phone: project rows reflow to two compact lines — name+status, then
+     client+code — instead of four columns squeezed into 390px. */
+  .dashboard-row {
+    gap: 0.125rem 0.5rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding-block: 0.625rem;
+  }
+
+  .dashboard-row-name {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .dashboard-row .status-chip {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  .dashboard-row-client {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .dashboard-row-code {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
+  }
+
+  .dashboard-activity li {
+    flex-wrap: wrap;
+    row-gap: 0.125rem;
   }
 
   .onboarding {
