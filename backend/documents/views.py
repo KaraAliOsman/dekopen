@@ -113,6 +113,29 @@ DOCUMENTARY_ERROR_DETAILS = {
     "unblock_requires_supervisor": (
         "Quitar un bloqueo lo decide un encargado (propietario o jefe de taller)."
     ),
+    "order_state_invalid": (
+        "El pedido no admite esa acción en su estado actual; revisa recepciones y estado."
+    ),
+    "order_type_allocation_incomplete": (
+        "Hay necesidades pendientes sin asignación a un pedido; revisa la selección por tipo."
+    ),
+    "order_type_has_no_requirements": "Ese tipo de compra no tiene necesidades pendientes.",
+    "supplier_eligibility_expired": (
+        "La elegibilidad del proveedor venció; requiere una revisión nueva."
+    ),
+    "supplier_eligibility_fragmented": (
+        "Las necesidades del grupo requieren versiones de elegibilidad distintas; sepáralas."
+    ),
+    "supplier_eligibility_requirement_mismatch": (
+        "La elegibilidad no cubre alguna necesidad del grupo; revisa familias y especificaciones."
+    ),
+    "supplier_order_type_required": "El proveedor no está habilitado para este tipo de compra.",
+    "legacy_version_not_eligible": (
+        "Esta versión fue sellada antes de existir la trazabilidad de compras; no admite pedidos."
+    ),
+    "invalid_purchase_requirement": "La necesidad de compra no es válida para esta versión.",
+    "invalid_supplier": "El proveedor no es válido para este pedido.",
+    "invalid_supplier_eligibility": "La elegibilidad indicada no corresponde al proveedor.",
 }
 
 
