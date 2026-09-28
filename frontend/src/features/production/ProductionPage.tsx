@@ -1118,7 +1118,11 @@ export function ProductionPage(): JSX.Element {
     role === "OPERATOR" ||
     role === "ESTIMATOR";
   const canWrite = role === "OWNER" || role === "WORKSHOP_MANAGER";
+  // Station work: _WORKSHOP_STEP_ACTORS (office + saw floor).
   const canStep = canWrite || role === "OPERATOR";
+  // Field work: _STEP_ACTORS (office + installer) — route/failed/delivery
+  // confirmations and the install act. Never drives station steps.
+  const canField = canWrite || role === "INSTALLER";
   if (!canAct) {
     return (
       <section className="production-page">
@@ -1502,7 +1506,7 @@ export function ProductionPage(): JSX.Element {
                     {t("production.dispatchButton")}
                   </button>
                 ) : null}
-                {canStep &&
+                {canField &&
                 detail.status === "DISPATCHED" &&
                 (!delivery || delivery.status === "DELIVERED") ? (
                   <button
@@ -2601,7 +2605,7 @@ export function ProductionPage(): JSX.Element {
                           {t("production.deliveryReschedule")}
                         </button>
                       ) : null}
-                      {canStep &&
+                      {canField &&
                       delivery?.status === "SCHEDULED" &&
                       detail.status === "DISPATCHED" ? (
                         <button
@@ -2612,7 +2616,7 @@ export function ProductionPage(): JSX.Element {
                           {t("production.deliveryOnRoute")}
                         </button>
                       ) : null}
-                      {canStep && delivery?.status === "ON_ROUTE" && !delivery.confirmation ? (
+                      {canField && delivery?.status === "ON_ROUTE" && !delivery.confirmation ? (
                         <button
                           type="button"
                           className="production-chip-danger"
@@ -2622,7 +2626,7 @@ export function ProductionPage(): JSX.Element {
                           {t("production.deliveryFailed")}
                         </button>
                       ) : null}
-                      {canStep &&
+                      {canField &&
                       delivery &&
                       (delivery.status === "ON_ROUTE" || delivery.status === "DELIVERED") &&
                       !delivery.confirmation &&
@@ -2754,7 +2758,7 @@ export function ProductionPage(): JSX.Element {
                         </p>
                       </fieldset>
                     ) : null}
-                    {confirmOpen && canStep && delivery ? (
+                    {confirmOpen && canField && delivery ? (
                       <form
                         className="production-delivery-form production-confirm-form"
                         onSubmit={(event) => {
