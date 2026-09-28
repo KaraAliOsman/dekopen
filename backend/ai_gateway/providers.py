@@ -806,14 +806,15 @@ def _agent_output(input_payload: dict) -> dict:
         # Ref-requiring surfaces can't be queried without entity ids (the
         # payload doesn't carry them), so they settle in one round.
         document["steps"] = [{"kind": "query", "surface": surface_name, "refs": {}}]
-    if not observations and surface_name == "position" and context.get("product"):
+    # The service passes the position's product at input_payload top level
+    # (not inside context) — the mock must read the same place the prompt does.
+    product = context.get("product") or input_payload.get("product")
+    if not observations and surface_name == "position" and product:
         # A mutation-looking goal on the position surface produces a real
         # design-ops proposal — the ops card → apply → Guardar path stays
         # exercisable under mock. The service validates each op through the
         # same contract a live provider hits.
-        design = _design_assist_output(
-            {"prompt": goal, "product": context.get("product") or {}}
-        )
+        design = _design_assist_output({"prompt": goal, "product": product})
         if design["ops"]:
             document["steps"].append(
                 {"kind": "ops", "ops": design["ops"], "label": design["notes"]}
