@@ -188,6 +188,10 @@ def confirm_delivery(
             # The trip being signed is the open one (ON_ROUTE preferred;
             # DELIVERED only reachable on replay). Partial deliveries sign
             # one comprobante per trip — replays key on delivery_id.
+            # A completed earlier trip also matches the filter — LIMIT after
+            # the ON_ROUTE-first ordering picks the trip being signed (an
+            # extra DELIVERED row must not explode one() into
+            # ambiguous_authority).
             delivery = one(
                 """
                 SELECT * FROM public.deliveries
@@ -195,6 +199,7 @@ def confirm_delivery(
                   AND status IN ('ON_ROUTE', 'DELIVERED')
                 ORDER BY CASE WHEN status='ON_ROUTE' THEN 0 ELSE 1 END,
                          created_at DESC
+                LIMIT 1
                 FOR UPDATE
                 """,
                 [order_id_s, org_id_s],
@@ -227,9 +232,15 @@ def confirm_delivery(
             confirmation_code = f"CE-{sequence + 1:04d}"
             issued_at = timezone.now()
 
-            # Lock the project's concurrency point before the ledger insert:
-            # the deal check and the row must agree on one deal generation.
-            project = project_row(org_id, order["project_id"], lock=True)
+            # Lock the project's concurrency point only when the cobro writes
+            # the ledger: the deal check and the row must agree on one deal
+            # generation. A signature-only POD just projects the header —
+            # under FOR UPDATE an INSTALLER would hit
+            # project_documentary_backend_lock (ledger roles only) and the
+            # field signature could never seal (phase-10 defect).
+            project = project_row(
+                org_id, order["project_id"], lock=payment_kwargs is not None
+            )
             payment_id = None
             payment_payload = None
             deal = None
