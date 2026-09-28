@@ -15,6 +15,7 @@ export interface OptimizeStrategyStats {
   waste_mm: string;
   process_waste_mm: string;
   reusable_remnant_mm: string;
+  productive_length_mm: string;
   sheets_total: number;
   pieces_sheets: number;
   unnested_count: number;

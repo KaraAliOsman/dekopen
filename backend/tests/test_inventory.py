@@ -754,7 +754,7 @@ def test_trace_labels_map_member_ids_to_workshop_codes() -> None:
         labels = purchasing_service._trace_labels(version_id, org_id)
     assert labels[member_id] == "M-01"
     assert labels[bay_id] == "V-01"
-    assert labels["pos-1"] == "P1"
+    assert labels["pos-1"] == "P01"
 
 
 def test_line_snapshot_aligns_trace_labels_with_entries() -> None:

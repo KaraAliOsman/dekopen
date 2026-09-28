@@ -65,7 +65,7 @@ _CSS = _FONTS + """
 .titleblock .tb-cell { display: table-cell; border-left: 0.5pt solid #CDD5D6; border-bottom: 0.5pt solid #CDD5D6; padding: 1.2mm 2mm; vertical-align: top; }
 .titleblock .tb-cell:first-child { border-left: none; padding-left: 0; }
 .titleblock .tb-wide { width: 34%; }
-.tb-label { display: block; font: 6.5pt 'IBM Plex Sans', sans-serif; text-transform: uppercase; letter-spacing: 0.5pt; color: #727D82; margin-bottom: 0.6mm; }
+.tb-label { display: block; font: 7pt 'IBM Plex Sans', sans-serif; text-transform: uppercase; letter-spacing: 0.5pt; color: #727D82; margin-bottom: 0.6mm; }
 .tb-value { display: block; font: 8pt 'IBM Plex Mono', monospace; color: #252D31; overflow-wrap: break-word; }
 .pg::after { content: counter(page) " / " counter(pages); }
 h1 { font-size: 16pt; font-weight: 600; margin: 0 0 4mm; letter-spacing: -0.2pt; color: #161C1F; }
@@ -84,7 +84,7 @@ h3 { font-size: 9.5pt; font-weight: 600; margin: 4mm 0 1.5mm; color: #252D31; } 
 .hero p { color: #465158; } .total { font-size: 14pt; font-weight: 600; color: #075F5A; }
 table { width: 100%; border-collapse: collapse; margin: 2mm 0 3mm; table-layout: fixed; }
 thead { border-top: 0.9pt solid #465158; }
-th { color: #465158; font: 6.5pt 'IBM Plex Sans', sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5pt; text-align: left; border-bottom: 0.9pt solid #465158; padding: 1.4mm 1.8mm; }
+th { color: #465158; font: 7pt 'IBM Plex Sans', sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5pt; text-align: left; border-bottom: 0.9pt solid #465158; padding: 1.4mm 1.8mm; }
 td { border-bottom: 0.5pt solid #CDD5D6; padding: 1.6mm 1.8mm; vertical-align: top; overflow-wrap: break-word; hyphens: manual; orphans: 2; widows: 2; }
 tbody tr:last-child td { border-bottom: 0.9pt solid #465158; }
 .workshop h1 { font-size: 14pt; } .workshop th { background: #252D31; color: #FCFDFC; }
@@ -105,7 +105,7 @@ tbody tr:last-child td { border-bottom: 0.9pt solid #465158; }
 .sign-row { display: flex; gap: 8mm; margin-top: 3mm; margin-bottom: 6mm; }
 .sign-cell { flex: 1; height: 9mm; border-bottom: 0.5pt solid #465158; position: relative; }
 .sign-cell.sign-date { flex: 0 0 22mm; }
-.sign-label { position: absolute; bottom: -4.5mm; left: 0; font: 600 6pt 'IBM Plex Mono', monospace; text-transform: uppercase; letter-spacing: 0.08em; color: #727D82; }
+.sign-label { position: absolute; bottom: -4.5mm; left: 0; font: 600 7pt 'IBM Plex Mono', monospace; text-transform: uppercase; letter-spacing: 0.08em; color: #727D82; }
 table tr { break-inside: avoid; }
 .sol-table td.dimension, table td.dimension { text-align: right; overflow-wrap: break-word; }
 .nowrap { white-space: nowrap; }
@@ -302,9 +302,14 @@ def _row(values: list[object], classes: list[str] | None = None) -> str:
     return "<tr>" + "".join(_cell(value, styles[index]) for index, value in enumerate(values)) + "</tr>"
 
 
-def _table(headers: list[str], rows: list[list[object]], classes: list[str] | None = None) -> str:
+def _table(
+    headers: list[str],
+    rows: list[list[object]],
+    classes: list[str] | None = None,
+    thead_extra: str = "",
+) -> str:
     head = "<tr>" + "".join(f"<th>{escape(header)}</th>" for header in headers) + "</tr>"
-    return "<table><thead>" + head + "</thead><tbody>" + "".join(
+    return "<table><thead>" + thead_extra + head + "</thead><tbody>" + "".join(
         _row(row, classes) for row in rows
     ) + "</tbody></table>"
 
@@ -1731,12 +1736,31 @@ def _doc03(snapshot: dict[str, object]) -> str:
     return body + "</main>"
 
 
+def _fact_prefix(fact: dict[object, object]) -> str | None:
+    """Physical-piece code prefix for one manufacturing fact: the frozen
+    (position_index, repetition_index) pair identifies which commercial unit
+    the pieces belong to — e.g. P01-U02 — so a printed code survives
+    re-optimization and reads legibly at the saw."""
+    position_index = fact.get("position_index")
+    repetition_index = fact.get("repetition_index")
+    if position_index is None or repetition_index is None:
+        return None
+    try:
+        return f"P{int(str(position_index)):02d}-U{int(str(repetition_index)):02d}"
+    except (TypeError, ValueError):
+        return None
+
+
 def _piece_labels(
     snapshot: dict[str, object],
 ) -> dict[str, dict[object, str]]:
-    """Sequential workshop-facing piece codes (M-01, R-01, I-01, MAN-01) plus
-    location codes (P-01, V-01, H-01) so emitted documents never print raw
-    engineering ids. The frozen snapshot keeps the full identities."""
+    """Workshop-facing piece codes keyed off the frozen identity: members
+    print ``P{pos}-U{unit}-M{seq}`` (seq assigned inside the unit by
+    semantic_member_id, not by table order), reinforcements inherit their
+    parent member's code with a ``·R`` suffix, infills ``-I{seq}`` and
+    handles ``-MAN{seq}``. Facts frozen before the identity fields existed
+    keep the legacy M-01/R-01/I-01 numbering. Location codes (P-01, V-01,
+    H-01) are unchanged."""
     member: dict[object, str] = {}
     reinforcement: dict[object, str] = {}
     infill: dict[object, str] = {}
@@ -1745,20 +1769,60 @@ def _piece_labels(
     leaf: dict[object, str] = {}
     leaf_fact: dict[object, str] = {}
     for fact in _array(snapshot.get("manufacturing"), "invalid_frozen_revision_snapshot"):
-        for item in _array(fact.get("members"), "invalid_manufacturing_fact"):
-            member.setdefault(item.get("member_id"), f"M-{len(member) + 1:02d}")
+        members = _array(fact.get("members"), "invalid_manufacturing_fact")
+        reinforcements = _array(
+            fact.get("reinforcements"), "invalid_manufacturing_fact"
+        )
+        infills = _array(fact.get("infills"), "invalid_manufacturing_fact")
+        handles = _array(fact.get("handles"), "invalid_manufacturing_fact")
+        prefix = _fact_prefix(fact) if isinstance(fact, dict) else None
+        if prefix is not None:
+            ordered = sorted(
+                members,
+                key=lambda item: (
+                    str(item.get("semantic_member_id") or ""),
+                    str(item.get("member_id") or ""),
+                ),
+            )
+            for index, item in enumerate(ordered, 1):
+                member[item.get("member_id")] = f"{prefix}-M{index:02d}"
+            for index, item in enumerate(reinforcements, 1):
+                parent_code = member.get(item.get("parent_member_id"))
+                reinforcement[item.get("reinforcement_id")] = (
+                    f"{parent_code}·R"
+                    if parent_code is not None
+                    else f"{prefix}-R{index:02d}"
+                )
+            for index, item in enumerate(
+                sorted(
+                    infills,
+                    key=lambda item: (
+                        str(item.get("bay_id") or ""),
+                        str(item.get("leaf_id") or ""),
+                        str(item.get("infill_id") or ""),
+                    ),
+                ),
+                1,
+            ):
+                infill[item.get("infill_id")] = f"{prefix}-I{index:02d}"
+            for index, item in enumerate(
+                sorted(handles, key=lambda item: str(item.get("handle_id") or "")),
+                1,
+            ):
+                handle[item.get("handle_id")] = f"{prefix}-MAN{index:02d}"
+        else:
+            for item in members:
+                member.setdefault(item.get("member_id"), f"M-{len(member) + 1:02d}")
+            for item in reinforcements:
+                reinforcement.setdefault(item.get("reinforcement_id"), f"R-{len(reinforcement) + 1:02d}")
+            for item in infills:
+                infill.setdefault(item.get("infill_id"), f"I-{len(infill) + 1:02d}")
+            for item in handles:
+                handle.setdefault(item.get("handle_id"), f"MAN-{len(handle) + 1:02d}")
+        for item in members:
             if item.get("bay_id") is not None:
                 bay.setdefault(item.get("bay_id"), f"V-{len(bay) + 1:02d}")
-        for item in _array(fact.get("reinforcements"), "invalid_manufacturing_fact"):
-            reinforcement.setdefault(item.get("reinforcement_id"), f"R-{len(reinforcement) + 1:02d}")
-        for item in _array(fact.get("infills"), "invalid_manufacturing_fact"):
-            infill.setdefault(item.get("infill_id"), f"I-{len(infill) + 1:02d}")
-        for item in _array(fact.get("handles"), "invalid_manufacturing_fact"):
-            handle.setdefault(item.get("handle_id"), f"MAN-{len(handle) + 1:02d}")
-        for item in [
-            *_array(fact.get("infills"), "invalid_manufacturing_fact"),
-            *_array(fact.get("handles"), "invalid_manufacturing_fact"),
-        ]:
+        for item in [*infills, *handles]:
             if item.get("bay_id") is not None:
                 bay.setdefault(item.get("bay_id"), f"V-{len(bay) + 1:02d}")
             if item.get("leaf_id") is not None:
@@ -1774,7 +1838,10 @@ def _piece_labels(
                 leaf_fact[item.get("leaf_fact_id")] = bay[bay_id]
     position: dict[object, str] = {}
     for item in _array(snapshot.get("positions"), "invalid_frozen_revision_snapshot"):
-        position[item.get("id")] = f"P{item.get('position_index')}"
+        try:
+            position[item.get("id")] = f"P{int(str(item.get('position_index'))):02d}"
+        except (TypeError, ValueError):
+            position[item.get("id")] = f"P{item.get('position_index')}"
     return {
         "member": member,
         "reinforcement": reinforcement,
@@ -1898,6 +1965,48 @@ def _cut_spec_index(
             )
             spec.setdefault(key, []).append(item.get("reinforcement_id"))
     return spec
+
+
+def _member_home(
+    snapshot: dict[str, object],
+) -> dict[object, object]:
+    """member/reinforcement id → owning fact's ``repetition_index`` (the
+    physical unit inside its position). A cut's ``unit_index`` joins on this
+    to resolve which frozen piece the cut actually makes."""
+    home: dict[object, object] = {}
+    manufacturing = snapshot.get("manufacturing")
+    if not isinstance(manufacturing, list):
+        return home
+    for fact in manufacturing:
+        if not isinstance(fact, dict):
+            continue
+        unit = fact.get("repetition_index")
+        members = {
+            str(item.get("member_id")): item
+            for item in _array(fact.get("members"), "invalid_manufacturing_fact")
+        }
+        for item in members.values():
+            home[item.get("member_id")] = unit
+        for item in _array(fact.get("reinforcements"), "invalid_manufacturing_fact"):
+            if members.get(str(item.get("parent_member_id"))) is not None:
+                home[item.get("reinforcement_id")] = unit
+    return home
+
+
+def _cut_piece_ids(
+    snapshot: dict[str, object],
+) -> dict[tuple[str, ...], dict[object, list[object]]]:
+    """spec key → unit_index → ordered member/reinforcement ids, so each
+    printed cut resolves to the physical piece it produces."""
+    index = _cut_spec_index(snapshot)
+    home = _member_home(snapshot)
+    out: dict[tuple[str, ...], dict[object, list[object]]] = {}
+    for key, ids in index.items():
+        units: dict[object, list[object]] = {}
+        for entity_id in ids:
+            units.setdefault(str(home.get(entity_id)), []).append(entity_id)
+        out[key] = units
+    return out
 
 
 def _member_op_marks(

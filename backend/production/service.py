@@ -3516,11 +3516,11 @@ def _compute_optimization(
                     "width_mm": str(entry.width_mm),
                     "height_mm": str(entry.height_mm), "quantity": quantity,
                     "bay_id": entry.bay_id, "leaf_id": entry.leaf_id,
+                    "reason": "shaped_glass_outline",
                     "shape": [
                         {"x_mm": str(p.x_mm), "y_mm": str(p.y_mm)}
                         for p in entry.shape
                     ],
-                    "reason": "shaped_glass_outline",
                 })
                 continue
             candidates: list[SheetRule]
@@ -3708,6 +3708,13 @@ def _optimization_stats(plan: dict[str, object]) -> dict[str, object]:
         ) or str(waste_mm),
         "reusable_remnant_mm": (
             (plan["bars"].get("metrics") or {}).get("reusable_remnant_mm")
+            if isinstance(plan.get("bars"), dict)
+            else None
+        ) or "0",
+        # Material that ends up inside a sold piece — the numerator a
+        # utilization percentage must declare.
+        "productive_length_mm": (
+            (plan["bars"].get("metrics") or {}).get("productive_length_mm")
             if isinstance(plan.get("bars"), dict)
             else None
         ) or "0",

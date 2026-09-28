@@ -1680,6 +1680,11 @@ export function ProductionPage(): JSX.Element {
                       ) : null}
                     </header>
                     {canOptimize && !TERMINAL_ORDER_STATUSES.has(detail.status) ? (
+                      <p className="production-optimize-inputs">
+                        {t("production.optimizeInputsHint")}
+                      </p>
+                    ) : null}
+                    {canOptimize && !TERMINAL_ORDER_STATUSES.has(detail.status) ? (
                       <div className="production-optimize-controls">
                         {(() => {
                           const sealedColor =
@@ -1702,10 +1707,19 @@ export function ProductionPage(): JSX.Element {
                           value={optStrategy}
                           onChange={(event) => setOptStrategy(event.target.value)}
                           aria-label={t("production.optimizeStrategy")}
+                          title={
+                            tOptional(`production.optimizeStrategyHint.${optStrategy}`) ?? undefined
+                          }
                         >
-                          <option value="auto">{t("production.optimizeStrategyAuto")}</option>
-                          <option value="fast">{t("production.optimizeStrategyFast")}</option>
-                          <option value="deep">{t("production.optimizeStrategyDeep")}</option>
+                          <option value="auto" title={t("production.optimizeStrategyHint.auto")}>
+                            {t("production.optimizeStrategyAuto")}
+                          </option>
+                          <option value="fast" title={t("production.optimizeStrategyHint.fast")}>
+                            {t("production.optimizeStrategyFast")}
+                          </option>
+                          <option value="deep" title={t("production.optimizeStrategyHint.deep")}>
+                            {t("production.optimizeStrategyDeep")}
+                          </option>
                         </select>
                         <button
                           type="button"
@@ -1741,6 +1755,9 @@ export function ProductionPage(): JSX.Element {
                           {" · "}
                           {t("production.optimizeStatsCuts")}: <strong>{stats.cuts_total}</strong>
                           {" · "}
+                          {t("production.optimizeStatsUseful")}:{" "}
+                          <strong>{fmtMm(stats.productive_length_mm)} mm</strong>
+                          {" · "}
                           {t("production.optimizeStatsWaste")}:{" "}
                           <strong>{fmtMm(stats.process_waste_mm ?? stats.waste_mm)} mm</strong>
                           {stats.reusable_remnant_mm && stats.reusable_remnant_mm !== "0"
@@ -1769,52 +1786,57 @@ export function ProductionPage(): JSX.Element {
                             ),
                           );
                           return (
-                            <table className="production-plan production-compare-table">
-                              <thead>
-                                <tr>
-                                  <th>{t("production.optimizeStrategy")}</th>
-                                  <th>{t("production.optimizeStatsBars")}</th>
-                                  <th>{t("production.optimizeStatsCuts")}</th>
-                                  <th>{t("production.optimizeStatsWaste")}</th>
-                                  <th>{t("production.optimizeStatsPurchases")}</th>
-                                  <th>{t("production.optimizeStatsRemnants")}</th>
-                                  <th>{t("production.optimizeStatsRuntime")}</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {strategyCompare.strategies.map((row) => (
-                                  <tr
-                                    key={row.strategy}
-                                    className={
-                                      Number(row.process_waste_mm ?? row.waste_mm) === bestWaste
-                                        ? "production-compare-best"
-                                        : ""
-                                    }
-                                  >
-                                    <td>
-                                      {row.strategy === "fast"
-                                        ? t("production.optimizeStrategyFast")
-                                        : row.strategy === "deep"
-                                          ? t("production.optimizeStrategyDeep")
-                                          : row.strategy}
-                                    </td>
-                                    <td>
-                                      {row.bars_total}
-                                      {row.bars_remnant
-                                        ? ` (+${row.bars_remnant} ${t("production.optimizeStatsRemnant")})`
-                                        : ""}
-                                    </td>
-                                    <td>{row.cuts_total}</td>
-                                    <td>{fmtMm(row.process_waste_mm ?? row.waste_mm)} mm</td>
-                                    <td>{row.purchase_bars + row.purchase_sheets}</td>
-                                    <td>
-                                      {row.remnants_consumed}↓ {row.remnants_produced}↑
-                                    </td>
-                                    <td>{row.runtime_ms} ms</td>
+                            <>
+                              <table className="production-plan production-compare-table">
+                                <thead>
+                                  <tr>
+                                    <th>{t("production.optimizeStrategy")}</th>
+                                    <th>{t("production.optimizeStatsBars")}</th>
+                                    <th>{t("production.optimizeStatsCuts")}</th>
+                                    <th>{t("production.optimizeStatsWaste")}</th>
+                                    <th>{t("production.optimizeStatsPurchases")}</th>
+                                    <th>{t("production.optimizeStatsRemnants")}</th>
+                                    <th>{t("production.optimizeStatsRuntime")}</th>
                                   </tr>
-                                ))}
-                              </tbody>
-                            </table>
+                                </thead>
+                                <tbody>
+                                  {strategyCompare.strategies.map((row) => (
+                                    <tr
+                                      key={row.strategy}
+                                      className={
+                                        Number(row.process_waste_mm ?? row.waste_mm) === bestWaste
+                                          ? "production-compare-best"
+                                          : ""
+                                      }
+                                    >
+                                      <td>
+                                        {row.strategy === "fast"
+                                          ? t("production.optimizeStrategyFast")
+                                          : row.strategy === "deep"
+                                            ? t("production.optimizeStrategyDeep")
+                                            : row.strategy}
+                                      </td>
+                                      <td>
+                                        {row.bars_total}
+                                        {row.bars_remnant
+                                          ? ` (+${row.bars_remnant} ${t("production.optimizeStatsRemnant")})`
+                                          : ""}
+                                      </td>
+                                      <td>{row.cuts_total}</td>
+                                      <td>{fmtMm(row.process_waste_mm ?? row.waste_mm)} mm</td>
+                                      <td>{row.purchase_bars + row.purchase_sheets}</td>
+                                      <td>
+                                        {row.remnants_consumed}↓ {row.remnants_produced}↑
+                                      </td>
+                                      <td>{row.runtime_ms} ms</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                              <p className="production-compare-note">
+                                {t("production.optimizeCompareNote")}
+                              </p>
+                            </>
                           );
                         })()
                       : null}
@@ -2252,7 +2274,10 @@ export function ProductionPage(): JSX.Element {
                             {unnested
                               .map(
                                 (piece) =>
-                                  `${tOptional(`production.pieceKind.${piece.kind}`) ?? piece.kind} ${fmtMm(piece.width_mm)}×${fmtMm(piece.height_mm)} mm ×${piece.quantity} (${piece.group})`,
+                                  `${tOptional(`production.pieceKind.${piece.kind}`) ?? piece.kind} ${fmtMm(piece.width_mm)}×${fmtMm(piece.height_mm)} mm ×${piece.quantity} (${piece.group})` +
+                                  (piece.reason
+                                    ? ` — ${tOptional(`production.unnestedReason.${piece.reason}`) ?? piece.reason}`
+                                    : ""),
                               )
                               .join(" · ")}
                           </p>

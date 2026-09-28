@@ -3976,3 +3976,175 @@ def test_material_recheck_endpoint_forwards(monkeypatch) -> None:
     assert response.status_code == 200
     assert seen["org_id"] == org_id
     assert seen["actor_id"] == token.user_id
+
+
+def _cutpack_snapshot() -> dict:
+    """Two identical units of one position — 4 same-spec profile pieces and
+    a reinforcement per unit, exercising the physical P-U-M identity."""
+    def fact(rep: int, ids: tuple[str, str], reinf: str) -> dict:
+        return {
+            "position_id": "pos-1",
+            "position_index": 2,
+            "repetition_index": rep,
+            "nominal_width_mm": "1000.00",
+            "nominal_height_mm": "1000.00",
+            "members": [
+                {
+                    "member_id": ids[0], "bay_id": "B1",
+                    "workshop_sku": "MARCO-60",
+                    "cut_length_mm": "1000.00",
+                    "angle_left": "45.00", "angle_right": "45.00",
+                    "identity": {"role": "FRAME", "position_id": "pos-1"},
+                },
+                {
+                    "member_id": ids[1], "bay_id": "B1",
+                    "workshop_sku": "MARCO-60",
+                    "cut_length_mm": "1000.00",
+                    "angle_left": "45.00", "angle_right": "45.00",
+                    "identity": {"role": "FRAME", "position_id": "pos-1"},
+                },
+            ],
+            "reinforcements": [{
+                "reinforcement_id": reinf,
+                "parent_member_id": ids[1],
+                "workshop_sku": "ACERO",
+                "cut_length_mm": "940.00",
+                "angle_left": "90.00", "angle_right": "90.00",
+            }],
+            "infills": [], "leaves": [], "handles": [], "relationships": [],
+        }
+
+    return {
+        "positions": [{"id": "pos-1", "position_index": 2}],
+        "manufacturing": [
+            fact(1, ("a" * 64, "b" * 64), "e" * 64),
+            fact(2, ("c" * 64, "d" * 64), "f" * 64),
+        ],
+    }
+
+
+def _cutpack_optimization(*, with_units: bool = True) -> dict:
+    def cut(seq: int, kind: str, sku: str, unit: int | None) -> dict:
+        out = {
+            "sequence": seq, "piece_id": f"spec-{seq}",
+            "source_kind": kind, "workshop_sku": sku,
+            "length_mm": "1000.00" if kind == "PROFILE" else "940.00",
+            "angle_left": "45.00" if kind == "PROFILE" else "90.00",
+            "angle_right": "45.00" if kind == "PROFILE" else "90.00",
+            "role": "FRAME", "bay_id": "B1", "leaf_id": "",
+            "source_position_id": "pos-1",
+        }
+        if with_units:
+            out["unit_index"] = unit
+        return out
+
+    return {
+        "color": "WHITE", "units": 2, "strategy": "FAST",
+        "stats": {"bars_new": 2, "bars_remnant": 0, "cuts_total": 6,
+                  "unnested_count": 0},
+        "bars": {
+            "metrics": {"bars": 2, "cuts": 6, "process_waste_mm": "40",
+                        "reusable_remnant_mm": "1950",
+                        "productive_length_mm": "5880"},
+            "workshop_cut_plan": [
+                {
+                    "bar_index": 1, "commercial_sku": "COMPRA-MARCO",
+                    "material": "PVC", "color": "WHITE", "source": "NEW",
+                    "stock_length_mm": "6000.00", "head_trim_mm": "15.00",
+                    "tail_trim_mm": "15.00", "kerf_mm": "5.00",
+                    "kerf_total_mm": "15.00", "remainder_mm": "1955.00",
+                    "remainder_reusable": True, "yield_pct": "65.7",
+                    "cuts": [
+                        cut(1, "PROFILE", "MARCO-60", 1),
+                        cut(2, "PROFILE", "MARCO-60", 2),
+                        cut(3, "PROFILE", "MARCO-60", 1),
+                        cut(4, "PROFILE", "MARCO-60", 2),
+                    ],
+                },
+                {
+                    "bar_index": 2, "commercial_sku": "COMPRA-ACERO",
+                    "material": "STEEL", "color": "WHITE", "source": "NEW",
+                    "stock_length_mm": "2000.00", "head_trim_mm": "15.00",
+                    "tail_trim_mm": "15.00", "kerf_mm": "5.00",
+                    "kerf_total_mm": "5.00", "remainder_mm": "85.00",
+                    "remainder_reusable": False, "yield_pct": "94.0",
+                    "cuts": [
+                        cut(5, "REINFORCEMENT", "ACERO", 1),
+                        cut(6, "REINFORCEMENT", "ACERO", 2),
+                    ],
+                },
+            ],
+        },
+    }
+
+
+def test_cut_pack_resolves_physical_piece_identity_per_unit() -> None:
+    from documents.renderers import _cut_member_map, _piece_labels
+    from production.cut_pack import _pack_html
+
+    snapshot = _cutpack_snapshot()
+    labels = _piece_labels(snapshot)
+    html = _pack_html(
+        order={"order_code": "OT-TEST-01"},
+        optimization=_cutpack_optimization(),
+        snapshot=snapshot,
+        labels=labels,
+        cut_map=_cut_member_map(snapshot, labels),
+        infills={},
+        bar_meta={},
+        remnant_racks={},
+        fingerprint="f" * 64,
+    )
+    for code in (
+        "P02-U01-M01", "P02-U01-M02", "P02-U02-M01", "P02-U02-M02",
+        "P02-U01-M02·R", "P02-U02-M02·R",
+    ):
+        # once in the diagram label plus once in the table row — no third
+        # occurrence would mean a physical piece printed twice.
+        assert html.count(f">{code}<") >= 2, code
+    # conservation line closes under the declared convention on both bars
+    assert html.count("cierra exacto") == 2
+    assert "diferencia sin asignar" not in html
+
+
+def test_cut_pack_falls_back_to_spec_codes_without_unit_index() -> None:
+    from documents.renderers import _cut_member_map, _piece_labels
+    from production.cut_pack import _pack_html
+
+    snapshot = _cutpack_snapshot()
+    labels = _piece_labels(snapshot)
+    html = _pack_html(
+        order={"order_code": "OT-TEST-01"},
+        optimization=_cutpack_optimization(with_units=False),
+        snapshot=snapshot,
+        labels=labels,
+        cut_map=_cut_member_map(snapshot, labels),
+        infills={},
+        bar_meta={},
+        remnant_racks={},
+        fingerprint="f" * 64,
+    )
+    # grouped spec labels list the physical identities instead of "+3"
+    assert "P02-U01-M01" in html and "P02-U02-M02" in html
+
+
+def test_cut_pack_flags_non_conserving_bar() -> None:
+    from documents.renderers import _cut_member_map, _piece_labels
+    from production.cut_pack import _pack_html
+
+    snapshot = _cutpack_snapshot()
+    labels = _piece_labels(snapshot)
+    optimization = _cutpack_optimization()
+    optimization["bars"]["workshop_cut_plan"][0]["stock_length_mm"] = "5900.00"
+    html = _pack_html(
+        order={"order_code": "OT-TEST-01"},
+        optimization=optimization,
+        snapshot=snapshot,
+        labels=labels,
+        cut_map=_cut_member_map(snapshot, labels),
+        infills={},
+        bar_meta={},
+        remnant_racks={},
+        fingerprint="f" * 64,
+    )
+    assert "diferencia sin asignar" in html

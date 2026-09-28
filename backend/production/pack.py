@@ -18,15 +18,18 @@ from dekopen_engine.cutting import CutBar
 from dekopen_engine.manufacturing import ManufacturingFactsV1
 from dekopen_engine.operations import OperationKind, operations_from_plan
 from documents.renderers import (
+    _CATEGORY_ES,
     _CSS,
+    _ROLE_ES,
     _cldate,
-    _cut_key,
     _cut_member_map,
+    _cut_piece_ids,
     _infill_code_map,
     _infill_key,
     _location,
     _pct,
     _piece_labels,
+    _role_name,
     _SLOT_ES,
     _table,
     _url_fetcher,
@@ -37,7 +40,10 @@ from django.db import transaction
 from documents.repository import DocumentaryError, decoded, documentary_backend, one
 
 from production.cut_pack import (
+    _claim_piece,
     _CSS_PACK,
+    _fmt_mm,
+    _piece_pools,
     _UNNEST_REASONS,
     _bar_svg,
     _mm,
@@ -63,15 +69,21 @@ _CSS_BUNDLE = """
             border: 0.5pt solid #161C1F; border-radius: 0.5mm; }
 .op-table table { table-layout: fixed; width: 100% }
 .op-table td, .op-table th { font-size: 7pt; overflow-wrap: break-word }
-.op-table td:first-child { font-weight: 600; font-size: 6.4pt }
-.op-table td:last-child { font-family: monospace; font-size: 6.3pt;
+.op-table td:first-child { font-weight: 600; font-size: 7pt }
+.op-table td:last-child { font-family: monospace; font-size: 7pt;
                          word-break: break-all }
 .op-table td.mark { text-align: center; font-weight: 700 }
 .label-grid { display: flex; flex-wrap: wrap; gap: 4mm; }
-.unit-label { width: 72mm; border: 0.6pt solid #161C1F; border-radius: 2mm;
-              padding: 3mm; break-inside: avoid; }
-.unit-label .qr { width: 20mm; height: 20mm; }
-.unit-label h4 { margin: 0 0 1mm; font-size: 10pt; }
+.unit-label { width: 100mm; height: 50mm; box-sizing: border-box;
+              border: 0.6pt solid #161C1F; border-radius: 2mm;
+              padding: 2.5mm 3mm; break-inside: avoid;
+              display: flex; align-items: flex-start; gap: 3mm; }
+.unit-label .qr { width: 26mm; height: 26mm; flex: none; }
+.unit-label .qr svg { display: block; }
+.unit-label .label-body { flex: 1; min-width: 0; }
+.unit-label h4 { margin: 0 0 1mm; font-size: 13pt; letter-spacing: 0.02em;
+                 word-break: break-all; }
+.unit-label p { margin: 0; font-size: 7.5pt; line-height: 1.35; }
 .cover-stats { display: flex; flex-wrap: wrap; gap: 4mm; margin: 3mm 0; }
 .cover-stat { border-left: 0.8mm solid #0B7770; padding-left: 2.5mm; }
 .cover-stat strong { display: block; font-size: 13pt; color: #161C1F; }
@@ -533,59 +545,126 @@ def _pack_html(
     if bars:
         body += '<section class="pack-section">'
         first = True
+        pools = _piece_pools(_cut_piece_ids(snapshot), labels)
+        has_sagitta = any(
+            cut.get("sagitta_mm") not in (None, "", "0", "0.00")
+            for bar in bars
+            for cut in (bar.get("cuts") or [])
+            if isinstance(cut, dict)
+        )
+        headers = ["Sec.", "Pieza", "Posición", "Vano / hoja", "Función", "Corte mm", "Ángulos"]
+        classes = ["", "", "", "", "", "dimension", ""]
+        if has_sagitta:
+            headers.append("Sagitta")
+            classes.append("dimension")
         for bar in bars:
             source = str(bar.get("source") or "NEW")
             badge = (
-                '<span class="badge badge-remnant">remanente '
-                + escape(_value(bar.get("remnant_id")))
+                '<span class="badge badge-remnant">retazo '
+                + escape(_value(bar.get("remnant_id"))[:8].upper())
                 + "</span>"
                 if source == "REMNANT"
                 else '<span class="badge badge-new">barra nueva</span>'
             )
+            bar_no = _value(bar.get("bar_index"))
+            bar_sku = _value(bar.get("commercial_sku"))
+            stock = _mm(bar.get("stock_length_mm"))
+            kerf_total = _mm(bar.get("kerf_total_mm") or "0")
+            head_trim = _mm(bar.get("head_trim_mm") or "0")
+            tail_trim = _mm(bar.get("tail_trim_mm") or "0")
+            remainder = _mm(bar.get("remainder_mm") or "0")
+            cuts = [c for c in (bar.get("cuts") or []) if isinstance(c, dict)]
+            pieces_mm = sum(
+                (_mm(c.get("length_mm") or "0") for c in cuts), Decimal("0")
+            )
+            diff = stock - (
+                pieces_mm + kerf_total + head_trim + tail_trim + remainder
+            )
+            remnant_line = ""
+            if remainder > 0:
+                if bar.get("remainder_reusable"):
+                    remnant_line = (
+                        f"Retazo {_fmt_mm(remainder)} mm recuperable — "
+                        "etiquetar y devolver a stock."
+                    )
+                else:
+                    remnant_line = (
+                        f"Cola {_fmt_mm(remainder)} mm — desecho, no "
+                        "retorna a stock."
+                    )
+            codes: list[str] = []
+            table_rows: list[list[object]] = []
+            for index, cut in enumerate(cuts):
+                code, _entity = _claim_piece(cut, pools, labels, cut_map)
+                codes.append(code)
+                row: list[object] = [
+                    cut.get("sequence") or index + 1,
+                    code,
+                    labels["position"].get(
+                        cut.get("source_position_id"),
+                        cut.get("source_position_id"),
+                    ),
+                    _location(labels, cut.get("bay_id"), cut.get("leaf_id")),
+                    " · ".join(
+                        part
+                        for part in (
+                            _CATEGORY_ES.get(
+                                str(cut.get("source_kind")),
+                                _value(cut.get("source_kind")),
+                            ),
+                            _ROLE_ES.get(
+                                _role_name(cut.get("role")),
+                                _value(cut.get("role")),
+                            ),
+                        )
+                        if part
+                    ) or "—",
+                    _fmt_mm(cut.get("length_mm")),
+                    f"{_fmt_mm(cut.get('angle_left'))}° / "
+                    f"{_fmt_mm(cut.get('angle_right'))}°",
+                ]
+                if has_sagitta:
+                    row.append(_value(cut.get("sagitta_mm")))
+                table_rows.append(row)
             body += (
-                '<div class="bar-band">'
+                '<div class="bar-block">'
                 + ("<h2>Plan de barras</h2>" if first else "")
-                + f"<h3>Barra {_value(bar.get('bar_index'))} · "
-                f"{escape(_value(bar.get('commercial_sku')))} · "
+                + '<div class="bar-band">'
+                + f"<h3>Barra {bar_no} · {escape(bar_sku)} · "
                 f"{escape(_value(bar.get('material')))} · "
                 f"{_value(bar.get('stock_length_mm'))} mm {badge} · "
                 f"rendimiento {_pct(bar.get('yield_pct'))}%</h3>"
-                + _bar_svg(bar, labels, cut_map)
+                + _bar_svg(bar, labels, cut_map, codes=codes)
                 + "</div>"
                 + _table(
-                    [
-                        "Sec.",
-                        "Pieza",
-                        "Posición",
-                        "Vano / hoja",
-                        "Corte mm",
-                        "Ángulos",
-                        "Sagitta",
-                    ],
-                    [
-                        [
-                            cut.get("sequence"),
-                            cut_map.get(
-                                _cut_key(cut),
-                                str(cut.get("piece_id") or "")[:10],
-                            ),
-                            labels["position"].get(
-                                cut.get("source_position_id"),
-                                cut.get("source_position_id"),
-                            ),
-                            _location(
-                                labels, cut.get("bay_id"), cut.get("leaf_id")
-                            ),
-                            cut.get("length_mm"),
-                            f"{_value(cut.get('angle_left'))}° / "
-                            f"{_value(cut.get('angle_right'))}°",
-                            _value(cut.get("sagitta_mm")),
-                        ]
-                        for cut in (bar.get("cuts") or [])
-                        if isinstance(cut, dict)
-                    ],
-                    ["", "", "", "", "dimension", "", "dimension"],
+                    headers,
+                    table_rows,
+                    classes,
+                    thead_extra=(
+                        f'<tr class="bar-cont"><th colspan="{len(headers)}">'
+                        f"Tabla de cortes — Barra {escape(bar_no)} · "
+                        f"{escape(bar_sku)}</th></tr>"
+                    ),
                 )
+                + (
+                    f'<div class="bar-balance {"ok" if diff == 0 else "diff"}">'
+                    f"{_fmt_mm(stock)} mm = {_fmt_mm(pieces_mm)} mm piezas "
+                    f"({len(cuts)}) + {_fmt_mm(kerf_total)} mm disco "
+                    f"+ {_fmt_mm(head_trim + tail_trim)} mm despuntes "
+                    f"+ {_fmt_mm(remainder)} mm remanente"
+                    + (
+                        " — cierra exacto"
+                        if diff == 0
+                        else f" — diferencia sin asignar {_fmt_mm(diff)} mm"
+                    )
+                    + "</div>"
+                )
+                + (
+                    f'<div class="bar-remnant">{escape(remnant_line)}</div>'
+                    if remnant_line
+                    else ""
+                )
+                + "</div>"
             )
             first = False
         body += "</section>"
@@ -727,7 +806,8 @@ def _pack_html(
                             labels["member"].get(m.member_id, m.semantic_member_id),
                             "Miembro",
                             f"{escape(m.workshop_sku)} · "
-                            f"{escape(_ROLE_LABELS.get(m.identity.role.value, m.identity.role.value))}",
+                            f"{escape(_ROLE_LABELS.get(m.identity.role.value, m.identity.role.value))}"
+                            f" · largo {_value(m.cut_length_mm)} mm",
                         ]
                         for m in unit.members
                     ]
@@ -857,6 +937,10 @@ def _pack_html(
             "de la orden para producir etiquetas con QR por unidad.</p>"
         )
     else:
+        body += (
+            '<p class="muted">Etiqueta de bulto a tamaño real: 100×50 mm — '
+            "imprimir al 100%, sin 'ajustar a página'.</p>"
+        )
         body += '<div class="label-grid">'
         for unit in units:
             if not isinstance(unit, dict):
@@ -875,17 +959,17 @@ def _pack_html(
             )
             qr = segno.make(
                 f"DEKOPEN|{order_code}|{label_code}|{pieces}", error="m"
-            ).svg_inline(border=2, scale=5)
+            ).svg_inline(border=3, scale=5, dark="#161C1F", light="#FFFFFF")
             body += (
                 f'<div class="unit-label"><div class="qr">{qr}</div>'
-                f"<h4>{escape(label_code)}</h4>"
-                f'<p class="muted">{escape(order_code)} · {pieces} piezas · '
+                f'<div class="label-body"><h4>{escape(label_code)}</h4>'
+                f'<p class="muted">{escape(order_code)} · {pieces} piezas<br>'
                 f"perfiles {unit.get('profiles') or 0} · refuerzos "
                 f"{unit.get('reinforcements') or 0} · vidrios "
                 f"{unit.get('glasses') or 0} · paneles "
                 f"{unit.get('panels') or 0} · herrajes "
                 f"{unit.get('hardware') or 0} · accesorios cristal "
-                f"{unit.get('fittings') or 0}</p></div>"
+                f"{unit.get('fittings') or 0}</p></div></div>"
             )
         body += "</div>"
     body += (

@@ -21459,6 +21459,8 @@ components:
           type: string
         reusable_remnant_mm:
           type: string
+        productive_length_mm:
+          type: string
         sheets_total:
           type: integer
         pieces_sheets:
@@ -21482,6 +21484,7 @@ components:
       - cuts_total
       - pieces_sheets
       - process_waste_mm
+      - productive_length_mm
       - purchase_bars
       - purchase_sheets
       - remnants_consumed

@@ -398,8 +398,10 @@ def test_workshop_order_prints_annotations_drawing_and_assembly_matrix() -> None
     assert "150.00" in html
     assert "Matriz de ensamble" in html
     assert "BELONGS_TO_LEAF" in html and "REINFORCES" in html
-    # heterogeneous endpoints resolve to the printed piece codes, not raw ids
-    assert "M-01" in html and "R-01" in html and "I-01" in html and "H-01" in html
+    # heterogeneous endpoints resolve to the printed physical piece codes —
+    # P{position}-U{unit}-{kind}{seq} — not raw ids nor bare spec letters
+    assert "P01-U01-M01" in html and "P01-U01-M02·R" in html
+    assert "P01-U01-I01" in html and "P01-U01-MAN01" in html
     matrix = html.split("Matriz de ensamble", 1)[1]
     assert "a" * 64 not in matrix and "b" * 64 not in matrix
     assert "c" * 64 not in matrix and "e" * 64 not in matrix

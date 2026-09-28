@@ -330,6 +330,7 @@ class OptimizeStrategyStatsSerializer(serializers.Serializer):
     waste_mm = serializers.CharField()
     process_waste_mm = serializers.CharField()
     reusable_remnant_mm = serializers.CharField()
+    productive_length_mm = serializers.CharField()
     sheets_total = serializers.IntegerField()
     pieces_sheets = serializers.IntegerField()
     unnested_count = serializers.IntegerField()

@@ -1100,11 +1100,23 @@
   color: var(--theme-text);
   font-size: 0.85rem;
 }
+.production-optimize-inputs {
+  margin: 0.4rem 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--theme-text-secondary);
+  max-width: 70ch;
+}
 .production-compare-table {
   margin-top: 0.4rem;
 }
 .production-compare-table .production-compare-best {
   background: color-mix(in srgb, var(--theme-success, #1a7f4b) 10%, transparent);
+}
+.production-compare-note {
+  margin: 0.3rem 0 0.5rem;
+  font-size: 0.75rem;
+  color: var(--theme-text-secondary);
 }
 
 .production-making {

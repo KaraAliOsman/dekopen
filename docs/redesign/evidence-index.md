@@ -220,3 +220,15 @@ SHA del paquete: `6c61859` (+ capturas en este commit). Fixtures: `scripts/dev_f
 | `supabase/migrations/20261228000004_partial_release.sql` + `…05` | Liberación por cantidad `released_qty`; rama `PARTIALLY_RECEIVED→CANCELLED` en `guard_order_evidence` (D36) |
 | `supabase/migrations/20261228000006_stock_spec_text.sql` | `inventory_stock` proyecta `attributes` → `spec_text` buscable por especificación |
 | `backend/purchasing/service.py` | `open_qty` por necesidad; re-confirm ordena sólo el remanente; allocation por línea sin reclamar |
+
+## Fase 09 (workspace HEAD)
+
+| Archivo / evidencia | Qué prueba |
+|---|---|
+| `docs/redesign/captures/phase09/` | cutpack ANTES/DESPUES + pack DESPUES reales (OT-P-000008-REV-A-01), `aceptacion-casos.pdf` 5 p y `aceptacion-100pos.pdf` 60 p, PNGs de páginas clave, versión grises, REPORT.md con medición 0-solapes/0-fuera-de-papel y guía del operario |
+| `backend/production/cut_pack.py` + `pack.py` | bloque de barra indivisible, convención, conservación, disposición de retazo, identidad física |
+| `backend/documents/renderers.py` | `_piece_labels` físicos por unidad; `_table` con renglón de encuadre repetido; piso tipográfico 7 pt |
+| `backend/tests/test_production.py` | identidad por unidad, fallback a spec, conservación — 114 verdes |
+| `backend/production/service.py` + `serializers.py` | `productive_length_mm` en stats; `reason` en unnested shaped-glass |
+| `frontend/src/features/production/` | insumos declarados, hints de estrategia, cantidades separadas, compare honesto, causas legibles |
+| decisión D37–D40 | identidad, bloque indivisible, honestidad del optimizador, etiquetas reales |

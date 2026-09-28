@@ -1830,9 +1830,19 @@ export const messages = {
   "production.optimizeRotated": "rotada",
   "production.optimizeRunAt": "Optimizado",
   "production.optimizeStrategy": "Estrategia",
-  "production.optimizeStrategyAuto": "Automática (compara ambas y elige)",
-  "production.optimizeStrategyFast": "Rápida (heurística)",
-  "production.optimizeStrategyDeep": "Profunda (óptimo acotado)",
+  "production.optimizeStrategyAuto": "Automática (corre ambas y queda la mejor medida)",
+  "production.optimizeStrategyFast": "Rápida (mejor ajuste determinista)",
+  "production.optimizeStrategyDeep": "Profunda (búsqueda por patrones, acotada)",
+  "production.optimizeInputsHint":
+    "El cálculo usa las piezas de la orden, el color indicado, el stock y retazos disponibles en bodega, los largos de suministro declarados en compras y el disco/despuntes de la política de corte.",
+  "production.optimizeStatsUseful": "Material útil",
+  "production.optimizeCompareNote":
+    "La marca indica menor desperdicio entre las variantes corridas — no demuestra un óptimo global.",
+  "production.optimizeStrategyHint.auto":
+    "Corre rápida y profunda y queda la mejor medida — tarda más que rápida sola",
+  "production.optimizeStrategyHint.fast": "Una pasada de mejor ajuste, determinista; la más rápida",
+  "production.optimizeStrategyHint.deep":
+    "Explora patrones de corte por largo de stock, acotada; más lenta, puede mejorar el aprovechamiento",
   "production.optimizeRemnantBar": "remanente",
   "production.optimizeRemnantReusable": "vuelve a stock",
   "production.optimizeRemnantsUsed": "Remanentes usados",
@@ -1911,8 +1921,8 @@ export const messages = {
   "production.unnestedReason.piece_larger_than_usable_sheet": "Supera la hoja declarada",
   "production.optimizeMetrics": "Métricas",
   "production.optimizeComparison": "Comparación de estrategias",
-  "production.optimizeVariant.fast": "Rápido",
-  "production.optimizeVariant.deep": "Exhaustivo",
+  "production.optimizeVariant.fast": "Rápida",
+  "production.optimizeVariant.deep": "Por patrones",
   "production.optimizeChosen": "elegido",
   "production.optimizeUnplaced": "Piezas sin ubicar",
   "production.cutplanYield": "aprovechamiento",
