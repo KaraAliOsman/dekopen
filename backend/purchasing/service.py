@@ -583,7 +583,7 @@ def confirm_order_type_batch(
             values = grouped[eligibility_id]
             eligibility = values[0][1]
             line_snapshots = [
-                _line_snapshot(item, labels, quantity=item.get("open_qty"))
+                _line_snapshot(item, labels, quantity_override=item.get("open_qty"))
                 for item, _ in values
             ]
             order_id = uuid5(
