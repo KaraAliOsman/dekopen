@@ -256,7 +256,7 @@ def purchasing_state(org_id: UUID, version_id: UUID | None = None) -> dict[str, 
             "FROM public.order_receipts rc "
             "JOIN public.order_receipt_lines rl ON rl.receipt_id=rc.id "
             "WHERE rc.org_id=%s GROUP BY rc.order_id"
-            ") r ON r.order_id=o.id ", 
+            ") r ON r.order_id=o.id "
             "WHERE o.project_version_id=%s AND o.org_id=%s "
             "ORDER BY o.order_type,o.supplier_name,o.id",
             [org_id, org_id, version_id, org_id],
