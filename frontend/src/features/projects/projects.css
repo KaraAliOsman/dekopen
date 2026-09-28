@@ -1043,6 +1043,26 @@ p.handle-pending {
   white-space: nowrap;
 }
 
+/* Mobile: the five-column row can't fit 390 px — stack it into a two-row
+ * grid (thumb + identity, then specs/qty/status) instead of h-scrolling. */
+@media (max-width: 640px) {
+  .position-row {
+    grid-template-columns: 4rem 1fr;
+    row-gap: 0.375rem;
+  }
+
+  .position-row__thumb {
+    grid-row: span 3;
+    height: 5rem;
+    width: 4rem;
+  }
+
+  .position-row__spec,
+  .position-row__dims {
+    white-space: normal;
+  }
+}
+
 .position-row__qty-input {
   max-width: 4.25rem;
 }

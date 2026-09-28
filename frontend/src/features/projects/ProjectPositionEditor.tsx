@@ -26,6 +26,7 @@ import { type CanvasDesignInputs, useCanvasStore } from "../canvas/canvasStore";
 import { useProject } from "./useProject";
 import { AssemblyEditor, issueText } from "../canvas/AssemblyEditor";
 import { useAssistantSurface } from "../assistant/assistantContext";
+import { intentBays } from "../canvas/intentEditing";
 import type { IntentNode, Opening } from "../canvas/intentEditing";
 import {
   starterContextSize,
@@ -572,19 +573,26 @@ function PositionWorkspace({
   const colorUndeclared =
     options.data !== undefined && inputs.color !== null && !declaredColors.includes(inputs.color);
   const quantityInvalid = !/^[1-9]\d*$/.test(quantity) || Number(quantity) > 2147483647;
+  // Local, cheap check: a bay with neither glass nor panel fill can never
+  // evaluate — name it so the disabled Guardar isn't a silent dead end.
+  const fillUnassigned = (inputs.product?.assembly.modules ?? []).some((module) =>
+    intentBays(module.tree).some((bay) => !bay.glass_spec && !bay.panel_article_sku),
+  );
   // A disabled Guardar must name the first real blocker ("la hoja queda bajo
   // el ancho mínimo del herraje"), not a generic "revisa los parámetros".
   const saveBlockReason = quantityInvalid
     ? t("projects.qtyInvalid")
     : colorUndeclared
       ? t("projects.colorNotDeclared")
-      : assemblyUnsaveable && assemblyEval !== null && assemblyEval.issues.length > 0
-        ? issueText(
-            assemblyEval.issues[0]!,
-            inputs.product?.assembly.modules ?? [],
-            inputs.product?.assembly.couplings ?? [],
-          )
-        : null;
+      : fillUnassigned
+        ? t("projects.glazingMissing")
+        : assemblyUnsaveable && assemblyEval !== null && assemblyEval.issues.length > 0
+          ? issueText(
+              assemblyEval.issues[0]!,
+              inputs.product?.assembly.modules ?? [],
+              inputs.product?.assembly.couplings ?? [],
+            )
+          : null;
 
   async function save(): Promise<void> {
     if (
@@ -771,7 +779,10 @@ function PositionWorkspace({
        * at Guardar landed on Deshacer (silent undo). */}
       {loaded && (busy || assemblyUnsaveable || result === null || saveBlockReason !== null) && (
         <p className="handle-pending" role="status">
-          {busy ? t("projects.savingBusy") : (saveBlockReason ?? t("projects.saveBlocked"))}
+          {busy
+            ? t("projects.savingBusy")
+            : (saveBlockReason ??
+              (fillUnassigned ? t("projects.glazingMissing") : t("projects.saveBlocked")))}
         </p>
       )}
       {message && <p role="status">{message}</p>}

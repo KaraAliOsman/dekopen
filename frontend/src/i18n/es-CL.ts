@@ -331,6 +331,8 @@ export const messages = {
   "projects.savedState": "Guardado",
   "projects.saveBlocked":
     "No se puede guardar todavía — el motor no completó la evaluación (datos de fabricación incompletos). Revisa las observaciones marcadas en el inspector.",
+  "projects.glazingMissing":
+    "Falta asignar vidrio o panel a una hoja — complétalo en el inspector para poder guardar.",
   "projects.savingBusy": "Guardando / calculando… espera un momento",
   "projects.unsaved": "Cambios sin guardar",
   "projects.saveError":
@@ -3187,7 +3189,7 @@ export const messages = {
   "projects.selectedPosition": "Vano seleccionado",
   "projects.quoteSection": "Cotización",
   "projects.goToQuote": "Ir a Cotización",
-  "projects.importsSection": "Importar",
+  "projects.importsSection": "Documentos de origen",
   "projects.dims": "Medidas",
   "projects.typology": "Tipología",
   "projects.lifecycle": "Proceso comercial",
