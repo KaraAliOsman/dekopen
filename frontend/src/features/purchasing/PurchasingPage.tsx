@@ -337,6 +337,7 @@ function PurchasingWorkspace({
   const [versionId, setVersionId] = useState(initialVersionId);
   const [state, setState] = useState<PurchasingState | null>(null);
   const [stock, setStock] = useState<StockItem[]>([]);
+  const [stockQuery, setStockQuery] = useState("");
   const [busy, setBusy] = useState(true);
   const [message, setMessage] = useState("");
   const [revision, setRevision] = useState(0);
@@ -773,6 +774,15 @@ function PurchasingWorkspace({
           {failedSections.has("stock") ? (
             <p role="alert">{t("purchasing.sectionLoadError")}</p>
           ) : null}
+          <label className="purchasing-stock-search">
+            {t("purchasing.stockSearch")}
+            <input
+              type="search"
+              value={stockQuery}
+              onChange={(e) => setStockQuery(e.target.value)}
+              placeholder={t("purchasing.stockSearchHint")}
+            />
+          </label>
           <table>
             <thead>
               <tr>
@@ -786,25 +796,36 @@ function PurchasingWorkspace({
               </tr>
             </thead>
             <tbody>
-              {stock.map((item) => (
-                <tr key={item.item_id}>
-                  <td>{item.sku}</td>
-                  <td>
-                    {item.name} · {purchaseUnitLabel(item.unit, 2)}
-                  </td>
-                  <td>{item.on_hand_qty}</td>
-                  <td>{item.reserved_qty}</td>
-                  <td>{item.available_qty}</td>
-                  <td>
-                    {item.incoming_qty && item.incoming_qty !== "0" ? (
-                      <strong className="purchasing-coverage-received">{item.incoming_qty}</strong>
-                    ) : (
-                      "0"
-                    )}
-                  </td>
-                  <td>{item.racks || "—"}</td>
-                </tr>
-              ))}
+              {stock
+                .filter((item) => {
+                  const q = stockQuery.trim().toLowerCase();
+                  if (!q) return true;
+                  return [item.sku, item.name, item.racks ?? ""]
+                    .join(" ")
+                    .toLowerCase()
+                    .includes(q);
+                })
+                .map((item) => (
+                  <tr key={item.item_id}>
+                    <td>{item.sku}</td>
+                    <td>
+                      {item.name} · {purchaseUnitLabel(item.unit, 2)}
+                    </td>
+                    <td>{item.on_hand_qty}</td>
+                    <td>{item.reserved_qty}</td>
+                    <td>{item.available_qty}</td>
+                    <td>
+                      {item.incoming_qty && item.incoming_qty !== "0" ? (
+                        <strong className="purchasing-coverage-received">
+                          {item.incoming_qty}
+                        </strong>
+                      ) : (
+                        "0"
+                      )}
+                    </td>
+                    <td>{item.racks || "—"}</td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </section>
@@ -1001,7 +1022,7 @@ function RequirementRow({
       <td>
         {requirement.open_qty !== undefined &&
         requirement.open_qty > 0 &&
-        requirement.open_qty < qtyNumber(requirement.quantity) ? (
+        requirement.open_qty < (qtyNumber(requirement.quantity) ?? requirement.open_qty) ? (
           <>
             {requirement.open_qty} {purchaseUnitLabel(requirement.unit, requirement.open_qty)}
             <br />

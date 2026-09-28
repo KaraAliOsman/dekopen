@@ -1457,6 +1457,8 @@ export const messages = {
   "purchasing.receiveSubmit": "Registrar recepción",
   "purchasing.receiveHistory": "Recepciones registradas",
   "purchasing.stockTitle": "Stock de materiales",
+  "purchasing.stockSearch": "Buscar",
+  "purchasing.stockSearchHint": "SKU o especificación…",
   "purchasing.stockName": "Material",
   "purchasing.stockOnHand": "En bodega",
   "purchasing.stockReserved": "Reservado",
@@ -1467,6 +1469,8 @@ export const messages = {
   "inventory.remnantsHint":
     "Sobras reutilizables de barras y planchas; el optimizador los consume antes que material nuevo.",
   "inventory.filter": "Filtrar por estado",
+  "inventory.remnantSearch": "Buscar retazo",
+  "inventory.remnantSearchHint": "Código, SKU, material, color, rack…",
   "inventory.label": "Etiqueta",
   "inventory.labelPrint": "Imprimir etiqueta",
   "inventory.remnantCreate": "Registrar retazo",

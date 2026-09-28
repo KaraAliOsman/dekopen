@@ -130,6 +130,7 @@ export function InventorySection({
   const [remnants, setRemnants] = useState<Remnant[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
   const [statusFilter, setStatusFilter] = useState("AVAILABLE");
+  const [remnantQuery, setRemnantQuery] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
@@ -202,7 +203,24 @@ export function InventorySection({
       `${a.commercial_sku}${a.stock_color ? ` · ${a.stock_color}` : ""}`,
     ]),
   );
-  const visible = remnants.filter((r) => r.status === statusFilter);
+  const visible = remnants.filter((r) => {
+    if (r.status !== statusFilter) return false;
+    const q = remnantQuery.trim().toLowerCase();
+    if (!q) return true;
+    return [
+      `RET-${r.id.slice(0, 8).toUpperCase()}`,
+      r.sheet_workshop_sku ?? "",
+      r.article_sku ?? "",
+      authorityNames.get(r.stock_authority_id ?? "") ?? "",
+      r.material ?? "",
+      r.color ?? "",
+      r.rack_location ?? "",
+      r.notes ?? "",
+    ]
+      .join(" ")
+      .toLowerCase()
+      .includes(q);
+  });
   const counts = new Map<string, number>();
   for (const r of remnants) counts.set(r.status, (counts.get(r.status) ?? 0) + 1);
 
@@ -364,6 +382,15 @@ export function InventorySection({
             {t("inventory.remnantCreate")}
           </button>
         ) : null}
+        <label className="purchasing-stock-search">
+          {t("inventory.remnantSearch")}
+          <input
+            type="search"
+            value={remnantQuery}
+            onChange={(e) => setRemnantQuery(e.target.value)}
+            placeholder={t("inventory.remnantSearchHint")}
+          />
+        </label>
       </div>
       {showCreate ? (
         <form className="inventory-remnant-form" onSubmit={createRemnant}>

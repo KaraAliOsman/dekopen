@@ -182,6 +182,20 @@
   margin: 0.5rem 0 0.75rem;
   align-items: center;
 }
+.purchasing-stock-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.85rem;
+  color: var(--theme-text-secondary, #667085);
+}
+.purchasing-stock-search input {
+  min-width: 14rem;
+}
+.inventory-remnant-filter .purchasing-stock-search {
+  margin: 0 0 0 auto;
+}
 .inventory-remnant-filter .portal-view-toggle {
   border: 1px solid var(--theme-border-subtle);
   border-radius: 999px;
