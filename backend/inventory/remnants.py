@@ -109,7 +109,7 @@ def list_remnants(
             for row in rows(
                 "SELECT id, order_code FROM public.orders"
                 " WHERE org_id = %s AND id = ANY(%s::uuid[])",
-                [str(org_id), order_ids],
+                [str(org_id), sorted(order_ids)],
             )
         }
         if order_ids
