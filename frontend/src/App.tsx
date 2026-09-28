@@ -88,6 +88,10 @@ const BenchmarkPage = lazy(async () => {
   return { default: module.BenchmarkPage };
 });
 
+function isFloorRole(role: string | undefined): boolean {
+  return ["INSTALLER", "OPERATOR"].includes(role ?? "");
+}
+
 function HomeRedirect(): JSX.Element {
   const auth = useAuthSession();
   if (auth.status === "loading" || auth.status === "resolving") {
@@ -100,11 +104,25 @@ function HomeRedirect(): JSX.Element {
   if (auth.status === "ready") {
     // Floor roles live on the production floor — the commercial dashboard
     // would deny its queries and greet them with errors.
-    const floorRole = ["INSTALLER", "OPERATOR"].includes(auth.me?.active_organization?.role ?? "");
-    const home = floorRole ? "/production" : "/dashboard";
+    const home = isFloorRole(auth.me?.active_organization?.role) ? "/production" : "/dashboard";
     return <Navigate to={home} replace />;
   }
   return <Navigate to="/login" replace />;
+}
+
+/** /dashboard is a commercial surface: its queries are role-gated, so a floor
+ * role deep-linking here met a wall of 403s. Redirect them to the floor home
+ * instead (review: OPERATOR on /dashboard). */
+function DashboardRoute(): JSX.Element {
+  const auth = useAuthSession();
+  if (isFloorRole(auth.me?.active_organization?.role)) {
+    return <Navigate to="/production" replace />;
+  }
+  return (
+    <AppShell>
+      <DashboardPage />
+    </AppShell>
+  );
 }
 
 export function AppRoutes(): JSX.Element {
@@ -234,9 +252,7 @@ export function AppRoutes(): JSX.Element {
           path="/dashboard"
           element={
             <ReadyGuard>
-              <AppShell>
-                <DashboardPage />
-              </AppShell>
+              <DashboardRoute />
             </ReadyGuard>
           }
         />

@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import {
+  productionOrderCancel,
   productionOrderCncExport,
+  productionOrderMaterialRecheck,
   productionOrderOpsExport,
   productionOrderDelivery,
   productionOrderDeliveryConfirm,
@@ -131,7 +133,17 @@ const orderStatusKey: Record<string, Parameters<typeof t>[0]> = {
   COMPLETED: "production.orderCompleted",
   DISPATCHED: "production.orderDispatched",
   INSTALLED: "production.orderInstalled",
+  CANCELLED: "production.orderCancelled",
 };
+
+/** Orders that no longer accept floor actions — every action gate below
+ * excludes them, and shortage/version noise stops applying to them. */
+const TERMINAL_ORDER_STATUSES: ReadonlySet<string> = new Set([
+  "COMPLETED",
+  "DISPATCHED",
+  "INSTALLED",
+  "CANCELLED",
+]);
 const eventKey: Record<string, Parameters<typeof t>[0]> = {
   WO_RELEASED: "production.eventReleased",
   STEP_STARTED: "production.eventStepStarted",
@@ -160,6 +172,8 @@ const eventKey: Record<string, Parameters<typeof t>[0]> = {
   WO_OPS_EXPORTED: "production.eventOpsExported",
   WO_CNC_PROGRAM: "production.eventCncProgram",
   WO_STOCK_CONSUMED: "production.eventStockConsumed",
+  WO_CANCELLED: "production.eventCancelled",
+  WO_MATERIAL_RECHECK: "production.eventMaterialRecheck",
 };
 
 const deliveryStatusKey: Record<string, Parameters<typeof t>[0]> = {
@@ -332,7 +346,10 @@ export function ProductionPage(): JSX.Element {
     (order) =>
       (statusFilter === "" || order.status === statusFilter) &&
       (!blockedOnly || order.status === "HOLD") &&
-      (!shortageOnly || order.shortage > 0 || order.version_shortage > 0) &&
+      // Order-level truth only: version_shortage counts the whole sealed
+      // version's aggregate, so a fully-stocked order matched the filter
+      // whenever a sibling order was short (review P1-1).
+      (!shortageOnly || order.shortage > 0) &&
       (!dispatchReadyOnly || order.dispatch_ready),
   );
   const listFiltered = statusFilter !== "" || shortageOnly || dispatchReadyOnly || blockedOnly;
@@ -616,6 +633,28 @@ export function ProductionPage(): JSX.Element {
       .finally(() => {
         if (mounted.current) setBusy(false);
       });
+  }
+
+  /** Order cancel is destructive-but-reversible work — a danger dialog with an
+   * optional note, then the backend releases every outstanding reservation
+   * atomically and freezes the routing steps as-is. */
+  async function cancelOrder(orderId: string): Promise<void> {
+    const entered = await prompt({
+      title: t("production.cancelTitle"),
+      body: t("production.cancelBody"),
+      input: { label: t("production.cancelNoteLabel") },
+      confirmLabel: t("production.cancelConfirm"),
+      danger: true,
+    });
+    if (entered === null) return;
+    void action(
+      productionOrderCancel(orderId, { confirmed: true, note: entered || undefined }),
+      orderId,
+    );
+  }
+
+  function recheckMaterials(orderId: string): void {
+    void action(productionOrderMaterialRecheck(orderId), orderId);
   }
 
   function optimize(orderId: string): void {
@@ -1040,6 +1079,39 @@ export function ProductionPage(): JSX.Element {
       <div className="production-layout">
         <aside className="production-orders" aria-label={t("production.orders")}>
           <h2>{t("production.orders")}</h2>
+          {/* Piece in hand → find its order without opening one first
+              (PM-M6). Top of the sidebar: scanning a stick is the most
+              frequent floor gesture, above filters and boards. */}
+          <form
+            className="production-trace-lookup"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void lookupPiece();
+            }}
+          >
+            <label>
+              {t("production.tracePieceLabel")}
+              <input
+                type="text"
+                value={pieceQuery}
+                onChange={(event) => setPieceQuery(event.target.value)}
+                placeholder={t("production.tracePiecePlaceholder")}
+                autoFocus
+              />
+            </label>
+            <button type="submit" disabled={pieceBusy || !pieceQuery.trim()}>
+              {t("production.tracePieceLookup")}
+            </button>
+          </form>
+          {pieceReport ? (
+            <TracePieceMatches
+              report={pieceReport}
+              onSelectOrder={(id, stepCode) => {
+                setPendingStepCode(stepCode ?? null);
+                setParams({ order: id });
+              }}
+            />
+          ) : null}
           {prepVersions.length > 0 ? (
             <section className="production-prep" aria-label={t("production.prepTitle")}>
               <h3>{t("production.prepTitle")}</h3>
@@ -1071,26 +1143,33 @@ export function ProductionPage(): JSX.Element {
             role="group"
             aria-label={t("production.statusFilter")}
           >
-            {["", "RELEASED", "IN_PROGRESS", "HOLD", "COMPLETED", "DISPATCHED", "INSTALLED"].map(
-              (status) => (
-                <button
-                  key={status || "all"}
-                  type="button"
-                  className={`production-filter${statusFilter === status ? " is-active" : ""}`}
-                  aria-pressed={statusFilter === status}
-                  onClick={() => {
-                    const next = new URLSearchParams(params);
-                    if (status) next.set("status", status);
-                    else next.delete("status");
-                    setParams(next);
-                  }}
-                >
-                  {status === ""
-                    ? t("production.statusAll")
-                    : t(orderStatusKey[status] ?? "production.orderReleased")}
-                </button>
-              ),
-            )}
+            {[
+              "",
+              "RELEASED",
+              "IN_PROGRESS",
+              "HOLD",
+              "COMPLETED",
+              "DISPATCHED",
+              "INSTALLED",
+              "CANCELLED",
+            ].map((status) => (
+              <button
+                key={status || "all"}
+                type="button"
+                className={`production-filter${statusFilter === status ? " is-active" : ""}`}
+                aria-pressed={statusFilter === status}
+                onClick={() => {
+                  const next = new URLSearchParams(params);
+                  if (status) next.set("status", status);
+                  else next.delete("status");
+                  setParams(next);
+                }}
+              >
+                {status === ""
+                  ? t("production.statusAll")
+                  : t(orderStatusKey[status] ?? "production.orderReleased")}
+              </button>
+            ))}
             <button
               type="button"
               className={`production-filter${shortageOnly ? " is-active" : ""}`}
@@ -1176,38 +1255,6 @@ export function ProductionPage(): JSX.Element {
               </ul>
             </section>
           ) : null}
-          {/* Piece in hand → find its order without opening one first
-              (PM-M6). The lookup is org-wide; matches deep-link the order. */}
-          <form
-            className="production-trace-lookup"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void lookupPiece();
-            }}
-          >
-            <label>
-              {t("production.tracePieceLabel")}
-              <input
-                type="text"
-                value={pieceQuery}
-                onChange={(event) => setPieceQuery(event.target.value)}
-                placeholder={t("production.tracePiecePlaceholder")}
-                autoFocus
-              />
-            </label>
-            <button type="submit" disabled={pieceBusy || !pieceQuery.trim()}>
-              {t("production.tracePieceLookup")}
-            </button>
-          </form>
-          {pieceReport ? (
-            <TracePieceMatches
-              report={pieceReport}
-              onSelectOrder={(id, stepCode) => {
-                setPendingStepCode(stepCode ?? null);
-                setParams({ order: id });
-              }}
-            />
-          ) : null}
           {orders.length === 0 ? <p>{t("production.empty")}</p> : null}
           {listFiltered && orders.length > 0 && filteredOrders.length === 0 ? (
             <p>{t("production.emptyFilter")}</p>
@@ -1239,7 +1286,8 @@ export function ProductionPage(): JSX.Element {
                       {t("production.shortageChip").replace("{count}", String(order.shortage))}
                     </span>
                   ) : null}
-                  {order.version_shortage > order.shortage ? (
+                  {order.version_shortage > order.shortage &&
+                  !TERMINAL_ORDER_STATUSES.has(order.status) ? (
                     <span
                       className="production-chip is-warn"
                       title={t("production.versionShortageTitle")}
@@ -1255,6 +1303,19 @@ export function ProductionPage(): JSX.Element {
                       {t("production.dispatchReadyChip")}
                     </span>
                   ) : null}
+                  {(() => {
+                    const reason = order.remake_reason;
+                    if (!reason) return null;
+                    const why = [reason.qc_item, reason.note]
+                      .filter((part): part is string => Boolean(part))
+                      .join(" · ");
+                    return (
+                      <span className="production-chip is-warn" title={why || undefined}>
+                        {t("production.remakeOf")}
+                        {why ? `: ${why}` : ""}
+                      </span>
+                    );
+                  })()}
                 </button>
               </li>
             ))}
@@ -1280,7 +1341,8 @@ export function ProductionPage(): JSX.Element {
                     {t("production.shortageChip").replace("{count}", String(detail.shortage))}
                   </span>
                 ) : null}
-                {detail.version_shortage > detail.shortage ? (
+                {detail.version_shortage > detail.shortage &&
+                !TERMINAL_ORDER_STATUSES.has(detail.status) ? (
                   <button
                     type="button"
                     className="production-chip is-warn"
@@ -1421,6 +1483,30 @@ export function ProductionPage(): JSX.Element {
                     onClick={() => remake(detail.id)}
                   >
                     {t("production.remakeButton")}
+                  </button>
+                ) : null}
+                {/* Stock arrived after release → top up open reservations
+                    instead of forcing a re-optimize (review P0-3). */}
+                {canWrite && detail.shortage > 0 && !TERMINAL_ORDER_STATUSES.has(detail.status) ? (
+                  <button
+                    type="button"
+                    className="production-remake"
+                    disabled={busy}
+                    onClick={() => recheckMaterials(detail.id)}
+                  >
+                    {t("production.materialRecheck")}
+                  </button>
+                ) : null}
+                {/* A cancelled order releases its reservations and freezes
+                    where it stands — terminal for every floor gate. */}
+                {canWrite && !TERMINAL_ORDER_STATUSES.has(detail.status) ? (
+                  <button
+                    type="button"
+                    className="production-remake production-cancel"
+                    disabled={busy}
+                    onClick={() => void cancelOrder(detail.id)}
+                  >
+                    {t("production.cancelButton")}
                   </button>
                 ) : null}
               </header>
@@ -1596,10 +1682,7 @@ export function ProductionPage(): JSX.Element {
                         </time>
                       ) : null}
                     </header>
-                    {canOptimize &&
-                    detail.status !== "COMPLETED" &&
-                    detail.status !== "DISPATCHED" &&
-                    detail.status !== "INSTALLED" ? (
+                    {canOptimize && !TERMINAL_ORDER_STATUSES.has(detail.status) ? (
                       <div className="production-optimize-controls">
                         {(() => {
                           const sealedColor =
@@ -1677,8 +1760,7 @@ export function ProductionPage(): JSX.Element {
                                 stats.purchase_bars + stats.purchase_sheets
                               }`
                             : ""}
-                          {" · "}
-                          {stats.runtime_ms} ms
+                          {canOptimize ? ` · ${stats.runtime_ms} ms` : ""}
                         </p>
                       );
                     })()}
@@ -1775,10 +1857,7 @@ export function ProductionPage(): JSX.Element {
                           >
                             {t("production.productionPackButton")}
                           </button>
-                          {canOptimize &&
-                          detail.status !== "COMPLETED" &&
-                          detail.status !== "DISPATCHED" &&
-                          detail.status !== "INSTALLED" ? (
+                          {canOptimize && !TERMINAL_ORDER_STATUSES.has(detail.status) ? (
                             <>
                               <button
                                 type="button"
@@ -2200,7 +2279,8 @@ export function ProductionPage(): JSX.Element {
                       ) : null}
                       {canWrite &&
                       detail.status !== "DISPATCHED" &&
-                      detail.status !== "INSTALLED" ? (
+                      detail.status !== "INSTALLED" &&
+                      detail.status !== "CANCELLED" ? (
                         <button type="button" disabled={busy} onClick={() => pack(detail.id)}>
                           {packing
                             ? t("production.packingRegenerate")
@@ -2689,13 +2769,7 @@ export function ProductionPage(): JSX.Element {
                 const nextStep = detail.steps.find(
                   (step) => step.status !== "DONE" && stepActions(step).length > 0,
                 );
-                if (
-                  !nextStep ||
-                  detail.status === "COMPLETED" ||
-                  detail.status === "DISPATCHED" ||
-                  detail.status === "INSTALLED"
-                )
-                  return null;
+                if (!nextStep || TERMINAL_ORDER_STATUSES.has(detail.status)) return null;
                 return (
                   <div
                     className="production-next"
@@ -2725,26 +2799,30 @@ export function ProductionPage(): JSX.Element {
                             ))}
                           </select>
                         ) : null}
-                        {stepActions(nextStep).map((stepAction) =>
-                          stepAction === "START" && stepNeedsPlan(nextStep, detail) ? (
-                            <span className="production-step-hint" key={stepAction}>
-                              {t(
-                                canWrite
-                                  ? "production.stepNeedsPlan"
-                                  : "production.stepNeedsPlanWait",
-                              )}
-                            </span>
-                          ) : (
-                            <button
-                              key={stepAction}
-                              type="button"
-                              disabled={busy}
-                              onClick={() => void transition(nextStep.id, stepAction, detail.id)}
-                            >
-                              {t(actionLabel[stepAction])}
-                            </button>
-                          ),
-                        )}
+                        {stepActions(nextStep)
+                          // Same supervisor gate as the step list — a blocked
+                          // next step must not offer Desbloquear to operators.
+                          .filter((stepAction) => stepAction !== "UNBLOCK" || canWrite)
+                          .map((stepAction) =>
+                            stepAction === "START" && stepNeedsPlan(nextStep, detail) ? (
+                              <span className="production-step-hint" key={stepAction}>
+                                {t(
+                                  canWrite
+                                    ? "production.stepNeedsPlan"
+                                    : "production.stepNeedsPlanWait",
+                                )}
+                              </span>
+                            ) : (
+                              <button
+                                key={stepAction}
+                                type="button"
+                                disabled={busy}
+                                onClick={() => void transition(nextStep.id, stepAction, detail.id)}
+                              >
+                                {t(actionLabel[stepAction])}
+                              </button>
+                            ),
+                          )}
                       </span>
                     ) : null}
                   </div>
@@ -2800,10 +2878,7 @@ export function ProductionPage(): JSX.Element {
                             </span>
                           </div>
                           {step.note ? <p className="production-step-note">{step.note}</p> : null}
-                          {canStep &&
-                          detail.status !== "COMPLETED" &&
-                          detail.status !== "DISPATCHED" &&
-                          detail.status !== "INSTALLED" ? (
+                          {canStep && !TERMINAL_ORDER_STATUSES.has(detail.status) ? (
                             <div className="production-step-actions">
                               {step.code === "QC" && stepActions(step).includes("QC_FAIL") ? (
                                 <select
@@ -2828,6 +2903,11 @@ export function ProductionPage(): JSX.Element {
                                   (stepAction) =>
                                     stepAction !== "START" || step.id === nextStep?.id,
                                 )
+                                // UNBLOCK is a supervisor action — the backend
+                                // refuses it for operators
+                                // (unblock_requires_supervisor), so the button
+                                // would be a guaranteed error toast.
+                                .filter((stepAction) => stepAction !== "UNBLOCK" || canWrite)
                                 .map((stepAction) =>
                                   stepAction === "START" && stepNeedsPlan(step, detail) ? (
                                     <span className="production-step-hint" key={stepAction}>
@@ -2921,7 +3001,9 @@ export function ProductionPage(): JSX.Element {
                     const eventNote = (event.payload as { note?: unknown } | undefined)?.note;
                     const eventItem = (event.payload as { qc_item?: unknown } | undefined)?.qc_item;
                     const eventStep = detail.steps.find((step) => step.id === event.step_id);
-                    const stepName = event.step_code ?? eventStep?.label ?? eventStep?.code;
+                    const stepName =
+                      eventStep?.label ??
+                      (event.step_code ? stationCodeLabel(event.step_code) : undefined);
                     return (
                       <li key={event.id}>
                         <time dateTime={event.created_at}>{formatDateTime(event.created_at)}</time>

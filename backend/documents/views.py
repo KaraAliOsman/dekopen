@@ -109,6 +109,10 @@ DOCUMENTARY_ERROR_DETAILS = {
     "delivery_transition_invalid": "La entrega no puede ejecutar esa acción en su estado actual.",
     "delivery_requires_dispatched": "La orden debe estar despachada para esta acción.",
     "order_already_installed": "La orden ya fue confirmada como instalada.",
+    "work_order_cancelled": "La orden fue anulada; sus pasos quedaron congelados.",
+    "unblock_requires_supervisor": (
+        "Quitar un bloqueo lo decide un encargado (propietario o jefe de taller)."
+    ),
 }
 
 

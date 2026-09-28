@@ -322,7 +322,7 @@
   /* Studio backdrop — white PVC on near-white canvas washed the render out. */
   background:
     radial-gradient(120% 90% at 50% 25%, rgba(255, 255, 255, 0.75), transparent 62%),
-    linear-gradient(180deg, #e2e7e3 0%, #ccd4cf 100%);
+    linear-gradient(180deg, var(--theme-surface-hover) 0%, var(--theme-border-subtle) 100%);
 }
 
 .portal-position__views {

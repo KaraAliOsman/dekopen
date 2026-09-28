@@ -715,14 +715,17 @@ def trace_piece(*, org_id: UUID, piece_id: str) -> dict[str, Any]:
         )
         project = None
         if order["project_id"]:
-            project = one(
-                """
-                SELECT id::text, code, name FROM public.projects
-                WHERE id = %s AND org_id = %s
-                """,
-                [order["project_id"], str(org_id)],
-                "work_order_not_found",
-            )
+            # project_manual_read excludes floor roles — the scan must not die
+            # on a lookup the operator is allowed to know (order code + name).
+            with documentary_backend():
+                project = one(
+                    """
+                    SELECT id::text, code, name FROM public.projects
+                    WHERE id = %s AND org_id = %s
+                    """,
+                    [order["project_id"], str(org_id)],
+                    "work_order_not_found",
+                )
         for hit in hits:
             matches.append({
                 "work_order": {

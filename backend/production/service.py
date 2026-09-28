@@ -685,6 +685,10 @@ def _public_order(order: dict[str, object], *, include_payload: bool = False) ->
         ),
         "shortage": _order_shortage(payload),
         "version_shortage": _version_shortage(payload),
+        # Remake provenance travels on the order row so the floor sees WHY
+        # this unit is being rebuilt without opening the source order
+        # ({qc_item, note} — the QC failure that triggered it).
+        "remake_reason": (payload or {}).get("remake_reason"),
         "created_at": order["created_at"],
     }
     if include_payload:
@@ -1086,6 +1090,220 @@ def confirm_installation(
     return get_work_order(org_id=org_id, order_id=order_id)
 
 
+def cancel_work_order(
+    *, org_id: UUID, order_id: UUID, actor_id: UUID, note: str | None
+) -> dict[str, object]:
+    """Cancel a workshop order: release its still-open stock reservations and
+    remnant holds, freeze the routing where it stands and stamp the
+    cancellation on the order row + event trail. Consumed material stays
+    consumed — the ledger keeps proving what was actually cut.
+
+    Only orders whose goods never physically moved may cancel: DISPATCHED or
+    INSTALLED orders are customer-facing facts (the counter-documents live on
+    the dispatch/invoice side), and a live delivery route must be closed
+    first."""
+    note = (note or "").strip()[:500] or None
+    with transaction.atomic(), documentary_backend():
+        order = one(
+            """
+            SELECT id, order_code, status::text, payload_json
+            FROM public.orders
+            WHERE id = %s AND org_id = %s AND order_type = 'WORKSHOP_OT'
+            FOR UPDATE
+            """,
+            [str(order_id), str(org_id)],
+            "work_order_not_found",
+        )
+        status_now = str(order["status"])
+        if status_now == "CANCELLED":
+            return get_work_order(org_id=org_id, order_id=order_id)
+        if status_now in ("DISPATCHED", "INSTALLED"):
+            raise DocumentaryError(
+                "work_order_cancel_unavailable",
+                detail=(
+                    "La orden ya salió del taller: se cierra con la guía de "
+                    "despacho o el comprobante, no se puede anular."
+                ),
+            )
+        live_delivery = rows(
+            """
+            SELECT id FROM public.deliveries
+            WHERE order_id = %s AND org_id = %s
+              AND status IN ('SCHEDULED', 'ON_ROUTE', 'DELIVERED')
+            """,
+            [str(order_id), str(org_id)],
+        )
+        if live_delivery:
+            raise DocumentaryError(
+                "work_order_delivery_open",
+                detail=(
+                    "La orden tiene un reparto agendado o en curso: ciérralo "
+                    "como fallido antes de anular la orden."
+                ),
+            )
+        released = production_stock.release_for_order(
+            org_id=org_id, order_id=order_id, actor_id=actor_id
+        )
+        remnants_service.release_reservations(org_id=org_id, order_id=order_id)
+        pending_steps = one(
+            """
+            SELECT COUNT(*) AS open
+            FROM public.production_steps
+            WHERE order_id = %s AND org_id = %s AND status <> 'DONE'
+            """,
+            [str(order_id), str(org_id)],
+        )
+        now = datetime.now(timezone.utc)
+        rows(
+            """
+            UPDATE public.orders
+            SET status = 'CANCELLED'::order_status, cancelled_by = %s,
+                cancelled_at = %s, updated_at = %s
+            WHERE id = %s AND org_id = %s
+            RETURNING id
+            """,
+            [str(actor_id), now, now, str(order_id), str(org_id)],
+        )
+        rows(
+            """
+            INSERT INTO public.production_step_events(
+                org_id, order_id, event, actor_id, payload)
+            VALUES (%s, %s, 'WO_CANCELLED', %s, %s::jsonb)
+            RETURNING id
+            """,
+            [
+                str(org_id),
+                str(order_id),
+                str(actor_id),
+                json.dumps(
+                    {
+                        "order_code": order["order_code"],
+                        "note": note,
+                        "reservations_released": released,
+                        "steps_open": int(pending_steps["open"]),
+                    }
+                ),
+            ],
+        )
+    return get_work_order(org_id=org_id, order_id=order_id)
+
+
+def recheck_work_order_material(
+    *, org_id: UUID, order_id: UUID, actor_id: UUID
+) -> dict[str, object]:
+    """Re-check live stock against the order's open (unconsumed) shortage
+    rows — the path that unblocks an order once its missing goods actually
+    arrive. Without it a material-consuming step stays gated on the snapshot
+    taken at optimize time even though the kit is now on the shelf.
+
+    Consumed rows are sealed and never re-checked; unplaced plan pieces still
+    need a real re-optimize. Returns the refreshed reservation list so the UI
+    can show what is still missing."""
+    with transaction.atomic(), documentary_backend():
+        order = one(
+            """
+            SELECT id, order_code, status::text, payload_json
+            FROM public.orders
+            WHERE id = %s AND org_id = %s AND order_type = 'WORKSHOP_OT'
+            FOR UPDATE
+            """,
+            [str(order_id), str(org_id)],
+            "work_order_not_found",
+        )
+        if str(order["status"]) == "CANCELLED":
+            raise DocumentaryError("work_order_cancelled")
+        payload_full = _decoded(order["payload_json"])
+        opt = payload_full.get("optimization") or {}
+        if not opt or opt.get("stock_reservations") is None:
+            raise DocumentaryError(
+                "work_order_plan_missing",
+                detail="La orden no tiene un plan de corte: optimízala antes de revisar material.",
+            )
+        if opt.get("invalidated"):
+            raise DocumentaryError(
+                "work_order_plan_stale",
+                detail=(
+                    "El plan de corte perdió material reservado: "
+                    "vuelve a optimizar la orden antes de revisar material."
+                ),
+            )
+        reservations = opt["stock_reservations"]
+        short_before = {
+            str(entry.get("sku"))
+            for entry in reservations
+            if not entry.get("consumed_at")
+            and str(entry.get("short") or "0") not in ("", "0", "0.00")
+            and entry.get("sku")
+        }
+        before = len(short_before)
+        settled = production_stock.recheck_reservations(
+            org_id=org_id,
+            order_id=order_id,
+            actor_id=actor_id,
+            reservations=reservations,
+        )
+        after = sum(
+            1
+            for entry in settled
+            if not entry.get("consumed_at")
+            and str(entry.get("short") or "0") not in ("", "0", "0.00")
+        )
+        payload_full["optimization"] = opt
+        opt["stock_reservations"] = settled
+        rows(
+            """
+            UPDATE public.orders SET payload_json = %s::jsonb, updated_at = %s
+            WHERE id = %s AND org_id = %s
+            RETURNING id
+            """,
+            [json.dumps(payload_full), datetime.now(timezone.utc),
+             str(order_id), str(org_id)],
+        )
+        rows(
+            """
+            INSERT INTO public.production_step_events(
+                org_id, order_id, event, actor_id, payload)
+            VALUES (%s, %s, 'WO_MATERIAL_RECHECK', %s, %s::jsonb)
+            RETURNING id
+            """,
+            [
+                str(org_id),
+                str(order_id),
+                str(actor_id),
+                json.dumps(
+                    {
+                        "order_code": order["order_code"],
+                        "shortages_before": before,
+                        "shortages_after": after,
+                        # "Filled" names only SKUs that were short before the
+                        # recheck — the delta the operator came for, not the
+                        # whole covered list.
+                        "filled": sorted(
+                            str(e["sku"])
+                            for e in settled
+                            if str(e.get("sku")) in short_before
+                            and not e.get("consumed_at")
+                            and str(e.get("short") or "0") in ("", "0", "0.00")
+                            and str(e.get("reserved") or "0") not in ("", "0", "0.00")
+                        ),
+                        "still_short": [
+                            str(e["sku"])
+                            for e in settled
+                            if not e.get("consumed_at")
+                            and str(e.get("short") or "0") not in ("", "0", "0.00")
+                        ],
+                    }
+                ),
+            ],
+        )
+    return {
+        "order_id": str(order_id),
+        "order_code": order["order_code"],
+        "stock_reservations": settled,
+        "shortage": _order_shortage(payload_full),
+    }
+
+
 def get_work_order(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
     order = one(
         """
@@ -1387,6 +1605,31 @@ def transition_step(
             raise DocumentaryError("work_order_dispatched")
         if str(order["status"]) == "COMPLETED":
             raise DocumentaryError("work_order_completed")
+        if str(order["status"]) == "CANCELLED":
+            raise DocumentaryError("work_order_cancelled")
+        # Releasing a manager's hold is a supervisory decision — the same
+        # trust level as the QC signature: an operator must not undo the hold
+        # placed on their own queue.
+        if action == "UNBLOCK":
+            unblock_role = actor_role
+            if unblock_role is None:
+                membership = one(
+                    """
+                    SELECT role::text AS role FROM public.tenancy_memberships
+                    WHERE org_id = %s AND user_id = %s
+                    """,
+                    [str(org_id), str(actor_id)],
+                    "actor_membership_missing",
+                )
+                unblock_role = str(membership["role"])
+            if unblock_role not in _QC_STEP_ACTORS:
+                raise DocumentaryError(
+                    "unblock_requires_supervisor",
+                    detail=(
+                        "Quitar un bloqueo lo decide un encargado "
+                        "(propietario o jefe de taller), no el operador."
+                    ),
+                )
         if qc_result is not None and not (
             action == "COMPLETE" and str(step["code"]) == "QC"
         ):
@@ -3621,12 +3864,12 @@ def station_queue(*, org_id: UUID) -> dict[str, object]:
         order_id = str(row["order_id"])
         if row["status"] != "DONE" and order_id not in first_open:
             first_open[order_id] = str(row["id"])
+        if row["status"] == "DONE":
+            continue
         station = stations.setdefault(
             str(row["code"]),
             {"code": str(row["code"]), "label": row["label"], "entries": []},
         )
-        if row["status"] == "DONE":
-            continue
         station["entries"].append({
             "step_id": row["id"],
             "order_id": order_id,

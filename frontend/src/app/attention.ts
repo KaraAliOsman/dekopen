@@ -1,4 +1,4 @@
-import type { OperationalSummary } from "../api/generated/models";
+import type { OperationalSummary, ProductionOrder } from "../api/generated/models";
 import { t, tOptional, type TranslationKey } from "../i18n/es-CL";
 
 export type AttentionEntry = {
@@ -114,6 +114,44 @@ export function attentionEntries(ops: OperationalSummary | undefined): Attention
       action: "attention.action.quoteNow",
       count: Number(projects.drafts ?? 0),
       to: "/projects?status=DRAFT",
+      warn: false,
+    },
+  ];
+  return candidates.filter((entry) => entry.count > 0);
+}
+
+/** Floor-role feed (OPERATOR/INSTALLER): the operational summary is gated to
+ * pricing roles, so the bell used to be dead for the people on the floor.
+ * Their attention is physical — orders short on material, orders on hold,
+ * and steps waiting at stations. */
+export function floorAttentionEntries(
+  orders: ProductionOrder[] | undefined,
+  stations: { entries?: unknown[] }[] | undefined,
+): AttentionEntry[] {
+  const list = orders ?? [];
+  const shortage = list.filter((order) => (order.shortage ?? 0) > 0).length;
+  const hold = list.filter((order) => order.status === "HOLD").length;
+  const queued = (stations ?? []).reduce((total, group) => total + (group.entries?.length ?? 0), 0);
+  const candidates: AttentionEntry[] = [
+    {
+      key: "dashboard.prepShortage",
+      action: "attention.action.review",
+      count: shortage,
+      to: "/production?shortage=1",
+      warn: true,
+    },
+    {
+      key: "dashboard.ordersHold",
+      action: "attention.action.review",
+      count: hold,
+      to: "/production?status=HOLD",
+      warn: true,
+    },
+    {
+      key: "attention.stationQueue",
+      action: "attention.action.review",
+      count: queued,
+      to: "/production",
       warn: false,
     },
   ];

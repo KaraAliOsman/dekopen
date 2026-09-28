@@ -47,6 +47,7 @@ class ProductionOrderSerializer(serializers.Serializer):
     dispatch_ready = serializers.BooleanField()
     shortage = serializers.IntegerField()
     version_shortage = serializers.IntegerField()
+    remake_reason = serializers.DictField(allow_null=True, required=False)
     created_at = serializers.DateTimeField()
     project_version_id = serializers.UUIDField(allow_null=True, required=False)
     payload = serializers.DictField(required=False)
@@ -232,6 +233,20 @@ class DispatchNoteVoidSerializer(StrictSerializer):
 
 class RemakeRequestSerializer(StrictSerializer):
     note = serializers.CharField(required=False, allow_null=True, max_length=500)
+
+
+class WorkOrderCancelRequestSerializer(StrictSerializer):
+    # Cancelling a released order is consequential — the UI must send an
+    # explicit attestation, same contract as supplier-order cancellation.
+    confirmed = serializers.BooleanField()
+    note = serializers.CharField(required=False, allow_null=True, allow_blank=True, max_length=500)
+
+
+class MaterialRecheckSerializer(serializers.Serializer):
+    order_id = serializers.UUIDField()
+    order_code = serializers.CharField()
+    shortage = serializers.IntegerField()
+    stock_reservations = serializers.ListField(child=serializers.DictField())
 
 
 class StepTransitionSerializer(serializers.Serializer):

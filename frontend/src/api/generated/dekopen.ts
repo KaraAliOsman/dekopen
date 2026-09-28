@@ -139,6 +139,7 @@ import type {
   KitList,
   KitResponse,
   KitWriteRequest,
+  MaterialRecheck,
   OperationalSummary,
   OpsExport,
   OrderIndexResponse,
@@ -231,6 +232,7 @@ import type {
   WorkCenter,
   WorkCenterList,
   WorkCenterRequestRequest,
+  WorkOrderCancelRequestRequest,
   WorkOrderOptimize,
   WorkOrderOptimizeCompare,
   WorkOrderOptimizeCompareRequestRequest,
@@ -9334,6 +9336,89 @@ export const productionOrderDetail = async (
   });
 };
 
+export type productionOrderCancelResponse200 = {
+  data: ProductionOrderDetail;
+  status: 200;
+};
+
+export type productionOrderCancelResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type productionOrderCancelResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type productionOrderCancelResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type productionOrderCancelResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type productionOrderCancelResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type productionOrderCancelResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type productionOrderCancelResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type productionOrderCancelResponseSuccess = productionOrderCancelResponse200 & {
+  headers: Headers;
+};
+export type productionOrderCancelResponseError = (
+  | productionOrderCancelResponse400
+  | productionOrderCancelResponse401
+  | productionOrderCancelResponse403
+  | productionOrderCancelResponse404
+  | productionOrderCancelResponse409
+  | productionOrderCancelResponse422
+  | productionOrderCancelResponse503
+) & {
+  headers: Headers;
+};
+
+export type productionOrderCancelResponse =
+  productionOrderCancelResponseSuccess | productionOrderCancelResponseError;
+
+export const getProductionOrderCancelUrl = (orderId: string) => {
+  return `/api/v1/production/orders/${orderId}/cancel/`;
+};
+
+export const productionOrderCancel = async (
+  orderId: string,
+  workOrderCancelRequestRequest: WorkOrderCancelRequestRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<productionOrderCancelResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<productionOrderCancelResponse>(getProductionOrderCancelUrl(orderId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+    body: JSON.stringify(workOrderCancelRequestRequest),
+  });
+};
+
 export type productionOrderCncExportResponse201 = {
   data: CncExport;
   status: 201;
@@ -11079,6 +11164,82 @@ export const productionOrderLabels = async (
     ...options,
     method: "GET",
   });
+};
+
+export type productionOrderMaterialRecheckResponse200 = {
+  data: MaterialRecheck;
+  status: 200;
+};
+
+export type productionOrderMaterialRecheckResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type productionOrderMaterialRecheckResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type productionOrderMaterialRecheckResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type productionOrderMaterialRecheckResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type productionOrderMaterialRecheckResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type productionOrderMaterialRecheckResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type productionOrderMaterialRecheckResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type productionOrderMaterialRecheckResponseSuccess =
+  productionOrderMaterialRecheckResponse200 & {
+    headers: Headers;
+  };
+export type productionOrderMaterialRecheckResponseError = (
+  | productionOrderMaterialRecheckResponse400
+  | productionOrderMaterialRecheckResponse401
+  | productionOrderMaterialRecheckResponse403
+  | productionOrderMaterialRecheckResponse404
+  | productionOrderMaterialRecheckResponse409
+  | productionOrderMaterialRecheckResponse422
+  | productionOrderMaterialRecheckResponse503
+) & {
+  headers: Headers;
+};
+
+export type productionOrderMaterialRecheckResponse =
+  productionOrderMaterialRecheckResponseSuccess | productionOrderMaterialRecheckResponseError;
+
+export const getProductionOrderMaterialRecheckUrl = (orderId: string) => {
+  return `/api/v1/production/orders/${orderId}/material-recheck/`;
+};
+
+export const productionOrderMaterialRecheck = async (
+  orderId: string,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<productionOrderMaterialRecheckResponse> => {
+  return apiMutator<productionOrderMaterialRecheckResponse>(
+    getProductionOrderMaterialRecheckUrl(orderId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
 };
 
 export type productionOrderOpsExportResponse201 = {

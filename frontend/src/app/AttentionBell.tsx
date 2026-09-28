@@ -3,10 +3,14 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { ApiError } from "../api/apiMutator";
-import { analyticsOperationalSummary } from "../api/generated/dekopen";
+import {
+  analyticsOperationalSummary,
+  productionOrders,
+  productionStationQueue,
+} from "../api/generated/dekopen";
 import { useAuthSession } from "../auth/AuthSessionProvider";
 import { t } from "../i18n/es-CL";
-import { attentionEntries, attentionLabel } from "./attention";
+import { attentionEntries, attentionLabel, floorAttentionEntries } from "./attention";
 import { useDismiss } from "./shellUtils";
 
 /** Topbar bell: the same action-required feed the dashboard renders, one
@@ -20,17 +24,29 @@ export function AttentionBell(): JSX.Element | null {
   const seenKey = org ? `attention-seen:${org.id}` : null;
   const [seen, setSeen] = useState<Record<string, number>>({});
 
+  const floorRole = ["OPERATOR", "INSTALLER"].includes(org?.role ?? "");
   const query = useQuery({
-    queryKey: ["shell", "attention", org?.id],
-    enabled:
-      org !== undefined && ["OWNER", "ESTIMATOR", "WORKSHOP_MANAGER"].includes(org?.role ?? ""),
+    queryKey: ["shell", "attention", org?.id, org?.role],
+    enabled: org !== undefined,
     staleTime: 60_000,
     refetchOnWindowFocus: "always",
     queryFn: async ({ signal }) => {
-      const ops = await analyticsOperationalSummary({
-        signal,
-        headers: { "X-Organization-ID": org!.id },
-      });
+      const headers = { "X-Organization-ID": org!.id };
+      // Floor roles can't read the operational summary (pricing-role gate),
+      // so their bell draws from the floor feeds they do have.
+      if (floorRole) {
+        const [ordersRes, queueRes] = await Promise.all([
+          productionOrders({ signal, headers }),
+          productionStationQueue({ signal, headers }),
+        ]);
+        if (ordersRes.status !== 200) throw new ApiError(ordersRes.status, ordersRes.data);
+        if (queueRes.status !== 200) throw new ApiError(queueRes.status, queueRes.data);
+        return floorAttentionEntries(
+          ordersRes.data.orders,
+          (queueRes.data.stations ?? []) as { entries?: unknown[] }[],
+        );
+      }
+      const ops = await analyticsOperationalSummary({ signal, headers });
       if (ops.status !== 200) throw new ApiError(ops.status, ops.data);
       return attentionEntries(ops.data);
     },
@@ -120,7 +136,11 @@ export function AttentionBell(): JSX.Element | null {
               ))}
             </ul>
           )}
-          <Link className="shell-menu__all" to="/dashboard" onClick={() => setOpen(false)}>
+          <Link
+            className="shell-menu__all"
+            to={floorRole ? "/production" : "/dashboard"}
+            onClick={() => setOpen(false)}
+          >
             {t("shell.notificationsAll")}
           </Link>
         </div>

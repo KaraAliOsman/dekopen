@@ -269,6 +269,62 @@ def consume_for_order(
     return reservations
 
 
+def recheck_reservations(
+    *,
+    org_id: UUID,
+    order_id: UUID,
+    actor_id: UUID,
+    reservations: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Top up open shortage rows from live stock — the path that unblocks an
+    order once its missing goods actually arrive.
+
+    Each open row (``short`` > 0, never consumed) is re-checked against the
+    current balance; available stock is reserved up to the shortfall and the
+    row's ``reserved``/``short``/``on_hand`` are updated in place. Consumed
+    rows are sealed history and untouched; unplaced plan pieces are a layout
+    problem this does not pretend to solve. Must run inside the caller's
+    transaction."""
+    for entry in reservations:
+        if entry.get("consumed_at"):
+            continue
+        short = _dec(entry.get("short") or "0")
+        if short <= 0:
+            continue
+        item = _upsert_item(
+            org_id=org_id,
+            sku=str(entry["sku"]),
+            name=str(entry.get("name") or entry["sku"]),
+            category=str(entry.get("kind") or "STOCK"),
+            unit=str(entry.get("unit") or "EA"),
+            variant_key=str(entry.get("variant_key") or ""),
+        )
+        on_hand, reserved = _balances(str(item["id"]))
+        grant = min(short, max(on_hand - reserved, Decimal("0")))
+        if grant > 0:
+            rows(
+                """
+                INSERT INTO public.inventory_movements(
+                    org_id, item_id, movement_type, quantity, order_id,
+                    note, actor_id)
+                VALUES (%s, %s, 'RESERVATION', %s, %s, %s, %s)
+                RETURNING id
+                """,
+                [
+                    str(org_id),
+                    str(item["id"]),
+                    grant,
+                    str(order_id),
+                    f"wo-recheck:{entry['kind']}",
+                    str(actor_id) if actor_id else None,
+                ],
+            )
+            entry["reserved"] = str(_dec(entry["reserved"]) + grant)
+            entry["short"] = str(short - grant)
+        entry["on_hand"] = str(on_hand)
+    return reservations
+
+
 def bar_stock_needs(
     *,
     org_id: UUID,

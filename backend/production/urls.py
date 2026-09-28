@@ -19,6 +19,8 @@ from production.views import (
     ProductionOrderLabelsView,
     ProductionOrderCncFileView,
     ProductionOrderCutPackView,
+    ProductionOrderCancelView,
+    ProductionOrderMaterialRecheckView,
     ProductionOrderPackView,
     ProductionOrderDetailView,
     ProductionOrderListView,
@@ -182,6 +184,16 @@ urlpatterns = [
         "orders/<uuid:order_id>/remake/",
         ProductionOrderRemakeView.as_view(),
         name="production-order-remake",
+    ),
+    path(
+        "orders/<uuid:order_id>/cancel/",
+        ProductionOrderCancelView.as_view(),
+        name="production-order-cancel",
+    ),
+    path(
+        "orders/<uuid:order_id>/material-recheck/",
+        ProductionOrderMaterialRecheckView.as_view(),
+        name="production-order-material-recheck",
     ),
     path(
         "steps/<uuid:step_id>/transition/",

@@ -3518,3 +3518,461 @@ def test_get_work_order_decodes_event_payload_strings(monkeypatch) -> None:
     with patch("production.service.documentary_backend", side_effect=_atomic):
         output = service.get_work_order(org_id=org_id, order_id=order_id)
     assert output["events"][0]["payload"] == {"qc_item": "M-03", "qc_result": "FAIL"}
+
+
+# ── Work-order cancel + material recheck (factory-floor review) ─────────────
+
+
+def test_cancel_work_order_releases_stock_and_stamps(monkeypatch) -> None:
+    org_id, order_id, actor_id = uuid4(), uuid4(), uuid4()
+    writes: list[tuple[str, list]] = []
+
+    def fake_one(sql_text: str, params: list, code: str = "not_found") -> dict:
+        lowered = " ".join(sql_text.lower().split())
+        if "for update" in lowered:
+            return {
+                "id": str(order_id),
+                "order_code": "OT-P-AAA-01",
+                "status": "RELEASED",
+                "payload_json": {},
+            }
+        if "count(*) as open" in lowered:
+            return {"open": 2}
+        raise AssertionError(f"unexpected one(): {lowered}")
+
+    def fake_rows(sql_text: str, params: object = ()) -> list[dict]:
+        lowered = " ".join(sql_text.lower().split())
+        writes.append((lowered, list(params)))
+        if "from public.deliveries" in lowered:
+            return []
+        return [{"id": str(uuid4())}]
+
+    remnant_calls: list[dict] = []
+    monkeypatch.setattr("production.service.one", fake_one)
+    monkeypatch.setattr("production.service.rows", fake_rows)
+    monkeypatch.setattr(
+        "production.service.production_stock.release_for_order", lambda **kw: 3
+    )
+    monkeypatch.setattr(
+        "production.service.remnants_service.release_reservations",
+        lambda **kw: remnant_calls.append(kw),
+    )
+    monkeypatch.setattr(
+        "production.service.get_work_order",
+        lambda **kw: {"id": str(kw["order_id"])},
+    )
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ):
+        result = service.cancel_work_order(
+            org_id=org_id,
+            order_id=order_id,
+            actor_id=actor_id,
+            note="cambio de cliente",
+        )
+    cancel_sql = next(
+        s2 for s2, _ in writes if "set status = 'cancelled'" in s2
+    )
+    assert "cancelled_by" in cancel_sql and "cancelled_at" in cancel_sql
+    event_params = next(p2 for s2, p2 in writes if "'wo_cancelled'" in s2)
+    payload = json.loads(event_params[3])
+    assert payload["order_code"] == "OT-P-AAA-01"
+    assert payload["note"] == "cambio de cliente"
+    assert payload["reservations_released"] == 3
+    assert payload["steps_open"] == 2
+    assert remnant_calls and remnant_calls[0]["order_id"] == order_id
+    assert result["id"] == str(order_id)
+
+
+def test_cancel_work_order_is_idempotent(monkeypatch) -> None:
+    org_id, order_id = uuid4(), uuid4()
+    monkeypatch.setattr(
+        "production.service.one",
+        lambda *_a, **_k: {
+            "id": str(order_id),
+            "order_code": "OT-P-AAA-01",
+            "status": "CANCELLED",
+            "payload_json": {},
+        },
+    )
+    def fail_rows(*_a, **_k):
+        raise AssertionError("cancel must not write when already cancelled")
+
+    monkeypatch.setattr("production.service.rows", fail_rows)
+    monkeypatch.setattr(
+        "production.service.get_work_order",
+        lambda **kw: {"status": "CANCELLED"},
+    )
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ):
+        result = service.cancel_work_order(
+            org_id=org_id, order_id=order_id, actor_id=uuid4(), note=None
+        )
+    assert result["status"] == "CANCELLED"
+
+
+@pytest.mark.parametrize("status", ["DISPATCHED", "INSTALLED"])
+def test_cancel_work_order_refuses_shipped_orders(monkeypatch, status) -> None:
+    org_id, order_id = uuid4(), uuid4()
+    monkeypatch.setattr(
+        "production.service.one",
+        lambda *_a, **_k: {
+            "id": str(order_id),
+            "order_code": "OT-P-AAA-01",
+            "status": status,
+            "payload_json": {},
+        },
+    )
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ), pytest.raises(DocumentaryError, match="work_order_cancel_unavailable"):
+        service.cancel_work_order(
+            org_id=org_id, order_id=order_id, actor_id=uuid4(), note=None
+        )
+
+
+def test_cancel_work_order_refuses_open_delivery(monkeypatch) -> None:
+    org_id, order_id = uuid4(), uuid4()
+    monkeypatch.setattr(
+        "production.service.one",
+        lambda *_a, **_k: {
+            "id": str(order_id),
+            "order_code": "OT-P-AAA-01",
+            "status": "RELEASED",
+            "payload_json": {},
+        },
+    )
+    monkeypatch.setattr(
+        "production.service.rows",
+        lambda *_a, **_k: [{"id": str(uuid4())}],
+    )
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ), pytest.raises(DocumentaryError, match="work_order_delivery_open"):
+        service.cancel_work_order(
+            org_id=org_id, order_id=order_id, actor_id=uuid4(), note=None
+        )
+
+
+def test_recheck_material_settles_arrived_stock(monkeypatch) -> None:
+    org_id, order_id, actor_id = uuid4(), uuid4(), uuid4()
+    reservations = [
+        {"sku": "MARCO-60", "kind": "BAR", "reserved": "6.00", "short": "4.00"},
+        {"sku": "GLASS-4", "kind": "SHEET", "reserved": "1", "short": "0"},
+        {
+            "sku": "VIEJO",
+            "kind": "BAR",
+            "reserved": "2.00",
+            "short": "0",
+            "consumed_at": "2026-09-20T10:00:00Z",
+        },
+    ]
+    settled = [
+        {"sku": "MARCO-60", "kind": "BAR", "reserved": "10.00", "short": "0.00"},
+        reservations[1],
+        reservations[2],
+    ]
+    payload = {"optimization": {"stock_reservations": reservations}}
+    writes: list[tuple[str, list]] = []
+    recheck_calls: list[dict] = []
+
+    def fake_one(sql_text: str, params: list, code: str = "not_found") -> dict:
+        return {
+            "id": str(order_id),
+            "order_code": "OT-P-AAA-01",
+            "status": "RELEASED",
+            "payload_json": payload,
+        }
+
+    def fake_rows(sql_text: str, params: object = ()) -> list[dict]:
+        writes.append((" ".join(sql_text.lower().split()), list(params)))
+        return [{"id": str(uuid4())}]
+
+    def fake_recheck(**kw):
+        recheck_calls.append(kw)
+        return settled
+
+    monkeypatch.setattr("production.service.one", fake_one)
+    monkeypatch.setattr("production.service.rows", fake_rows)
+    monkeypatch.setattr(
+        "production.service.production_stock.recheck_reservations", fake_recheck
+    )
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ):
+        output = service.recheck_work_order_material(
+            org_id=org_id, order_id=order_id, actor_id=actor_id
+        )
+    assert recheck_calls[0]["reservations"] is reservations
+    assert output["shortage"] == 0
+    update_params = next(
+        p2 for s2, p2 in writes if "update public.orders" in s2 and "payload_json" in s2
+    )
+    saved = json.loads(update_params[0])
+    assert saved["optimization"]["stock_reservations"] == settled
+    event_params = next(
+        p2 for s2, p2 in writes if "'wo_material_recheck'" in s2
+    )
+    event_payload = json.loads(event_params[3])
+    assert event_payload["shortages_before"] == 1
+    assert event_payload["shortages_after"] == 0
+    assert event_payload["filled"] == ["MARCO-60"]
+
+
+def test_recheck_material_refuses_without_plan(monkeypatch) -> None:
+    org_id, order_id = uuid4(), uuid4()
+    monkeypatch.setattr(
+        "production.service.one",
+        lambda *_a, **_k: {
+            "id": str(order_id),
+            "order_code": "OT-P-AAA-01",
+            "status": "RELEASED",
+            "payload_json": {},
+        },
+    )
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ), pytest.raises(DocumentaryError, match="work_order_plan_missing"):
+        service.recheck_work_order_material(
+            org_id=org_id, order_id=order_id, actor_id=uuid4()
+        )
+
+
+def test_recheck_material_refuses_cancelled_order(monkeypatch) -> None:
+    org_id, order_id = uuid4(), uuid4()
+    monkeypatch.setattr(
+        "production.service.one",
+        lambda *_a, **_k: {
+            "id": str(order_id),
+            "order_code": "OT-P-AAA-01",
+            "status": "CANCELLED",
+            "payload_json": {},
+        },
+    )
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ), pytest.raises(DocumentaryError, match="work_order_cancelled"):
+        service.recheck_work_order_material(
+            org_id=org_id, order_id=order_id, actor_id=uuid4()
+        )
+
+
+def _step_transition_fakes(
+    monkeypatch, *, step_status: str, order_status: str, membership_role: str
+) -> tuple[list, dict, dict]:
+    """Wire `one`/`rows` for transition_step: step_ref → order → step →
+    membership → refresh (status/totals/update) → fresh step."""
+    org_order = {"id": str(uuid4()), "status": order_status, "payload_json": {},
+                 "project_version_id": str(uuid4())}
+    step = {
+        "id": str(uuid4()), "order_id": org_order["id"], "status": step_status,
+        "sequence": 2, "code": "WELD", "label": "Soldadura",
+        "work_center_id": str(uuid4()), "started_at": None, "finished_at": None,
+        "actor_id": None, "note": "faltan perfiles", "work_center_code": "SOL-01",
+        "work_center_name": "Soldadora",
+    }
+    fresh = {**step, "status": "READY", "note": None}
+    writes: list[tuple[str, list]] = []
+
+    def fake_one(sql_text: str, params: list, code: str = "not_found") -> dict:
+        lowered = " ".join(sql_text.lower().split())
+        if "tenancy_memberships" in lowered:
+            return {"role": membership_role}
+        if "for update of s" in lowered:
+            return step
+        if "for update" in lowered and "public.orders" in lowered:
+            return org_order
+        if "select order_id from public.production_steps" in lowered:
+            return {"order_id": org_order["id"]}
+        if "select status::text as status from public.orders" in lowered:
+            return {"status": order_status}
+        if "count(*) as total" in lowered:
+            return {"total": 2, "done": 0, "blocked": 0, "in_progress": 1}
+        if "update public.orders" in lowered and "returning status::text" in lowered:
+            return {"status": "IN_PROGRESS"}
+        if "from public.production_steps s" in lowered:
+            return fresh
+        raise AssertionError(f"unexpected one(): {lowered}")
+
+    def fake_rows(sql_text: str, params: object = ()) -> list[dict]:
+        writes.append((" ".join(sql_text.lower().split()), list(params)))
+        return [{"id": str(uuid4())}]
+
+    monkeypatch.setattr("production.service.one", fake_one)
+    monkeypatch.setattr("production.service.rows", fake_rows)
+    monkeypatch.setattr(
+        "production.service.write",
+        lambda *a, **k: writes.append((" ".join(a[0].lower().split()), [])) or 1,
+    )
+    return writes, step, org_order
+
+
+def test_unblock_step_refuses_operator_role(monkeypatch) -> None:
+    _step_transition_fakes(
+        monkeypatch,
+        step_status="BLOCKED",
+        order_status="HOLD",
+        membership_role="OPERATOR",
+    )
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ), pytest.raises(DocumentaryError, match="unblock_requires_supervisor"):
+        service.transition_step(
+            org_id=uuid4(),
+            step_id=uuid4(),
+            action="UNBLOCK",
+            actor_id=uuid4(),
+            note=None,
+            actor_role="OPERATOR",
+        )
+
+
+def test_unblock_step_looks_up_membership_when_role_absent(monkeypatch) -> None:
+    _step_transition_fakes(
+        monkeypatch,
+        step_status="BLOCKED",
+        order_status="HOLD",
+        membership_role="OPERATOR",
+    )
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ), pytest.raises(DocumentaryError, match="unblock_requires_supervisor"):
+        service.transition_step(
+            org_id=uuid4(),
+            step_id=uuid4(),
+            action="UNBLOCK",
+            actor_id=uuid4(),
+            note=None,
+        )
+
+
+def test_unblock_step_allows_workshop_manager(monkeypatch) -> None:
+    writes, step, org_order = _step_transition_fakes(
+        monkeypatch,
+        step_status="BLOCKED",
+        order_status="HOLD",
+        membership_role="WORKSHOP_MANAGER",
+    )
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ):
+        result = service.transition_step(
+            org_id=uuid4(),
+            step_id=uuid4(),
+            action="UNBLOCK",
+            actor_id=uuid4(),
+            note="llegó el perfil",
+            actor_role="WORKSHOP_MANAGER",
+        )
+    step_update = next(
+        s2 for s2, _ in writes if "update public.production_steps" in s2 and "status" in s2
+    )
+    assert "coalesce(%(actor_id)s" in step_update
+    event = next(
+        p2
+        for s2, p2 in writes
+        if "insert into public.production_step_events" in s2 and "step_id" in s2
+    )
+    assert event[3] == "STEP_UNBLOCKED"
+    assert result["step"]["status"] == "READY"
+    assert result["order_status"] == "IN_PROGRESS"
+
+
+def test_step_transition_refuses_cancelled_order(monkeypatch) -> None:
+    _step_transition_fakes(
+        monkeypatch,
+        step_status="READY",
+        order_status="CANCELLED",
+        membership_role="WORKSHOP_MANAGER",
+    )
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ), pytest.raises(DocumentaryError, match="work_order_cancelled"):
+        service.transition_step(
+            org_id=uuid4(),
+            step_id=uuid4(),
+            action="START",
+            actor_id=uuid4(),
+            note=None,
+            actor_role="WORKSHOP_MANAGER",
+        )
+
+
+def test_cancel_endpoint_requires_confirmation(monkeypatch) -> None:
+    client, _token, _org_id = _client_with_scope(monkeypatch, "WORKSHOP_MANAGER")
+    response = client.post(
+        f"/api/v1/production/orders/{uuid4()}/cancel/",
+        {"confirmed": False},
+        format="json",
+    )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "order_cancel_confirmation_required"
+
+
+def test_cancel_endpoint_forwards_confirmed(monkeypatch) -> None:
+    client, token, org_id = _client_with_scope(monkeypatch, "WORKSHOP_MANAGER")
+    seen: dict = {}
+
+    def fake_cancel(**kwargs):
+        seen.update(kwargs)
+        return {"id": str(kwargs["order_id"]), "status": "CANCELLED"}
+
+    monkeypatch.setattr(service, "cancel_work_order", fake_cancel)
+    order_id = uuid4()
+    response = client.post(
+        f"/api/v1/production/orders/{order_id}/cancel/",
+        {"confirmed": True, "note": "duplicada"},
+        format="json",
+    )
+    assert response.status_code == 200
+    assert seen["org_id"] == org_id
+    assert seen["actor_id"] == token.user_id
+    assert seen["note"] == "duplicada"
+
+
+def test_cancel_endpoint_denies_operator(monkeypatch) -> None:
+    org_id = uuid4()
+    token = SimpleNamespace(user_id=uuid4(), claims={}, aal="aal1")
+
+    @contextmanager
+    def fake_scope(request, allowed):
+        from authentication.errors import contract_error
+
+        if "OPERATOR" in allowed:
+            yield token, _tenant("OPERATOR", org_id), org_id
+        else:
+            raise contract_error(403, "documentary_permission_denied", "denied")
+
+    monkeypatch.setattr(production_views, "documentary_scope", fake_scope)
+    client = APIClient()
+    client.force_authenticate(user=SimpleNamespace(is_authenticated=True), token=object())
+    response = client.post(
+        f"/api/v1/production/orders/{uuid4()}/cancel/",
+        {"confirmed": True},
+        format="json",
+    )
+    assert response.status_code == 403
+
+
+def test_material_recheck_endpoint_forwards(monkeypatch) -> None:
+    client, token, org_id = _client_with_scope(monkeypatch, "WORKSHOP_MANAGER")
+    seen: dict = {}
+
+    def fake_recheck(**kwargs):
+        seen.update(kwargs)
+        return {
+            "order_id": str(kwargs["order_id"]),
+            "order_code": "OT-1",
+            "shortage": 0,
+            "stock_reservations": [],
+        }
+
+    monkeypatch.setattr(service, "recheck_work_order_material", fake_recheck)
+    order_id = uuid4()
+    response = client.post(
+        f"/api/v1/production/orders/{order_id}/material-recheck/"
+    )
+    assert response.status_code == 200
+    assert seen["org_id"] == org_id
+    assert seen["actor_id"] == token.user_id

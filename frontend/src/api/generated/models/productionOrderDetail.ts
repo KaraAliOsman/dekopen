@@ -8,6 +8,7 @@
 import type { ProductionNextStep } from "./productionNextStep";
 import type { ProductionOrderDetailDispatchNoteDte } from "./productionOrderDetailDispatchNoteDte";
 import type { ProductionOrderDetailPayload } from "./productionOrderDetailPayload";
+import type { ProductionOrderDetailRemakeReason } from "./productionOrderDetailRemakeReason";
 import type { ProductionOrderMaking } from "./productionOrderMaking";
 import type { ProductionStep } from "./productionStep";
 import type { ProductionStepEvent } from "./productionStepEvent";
@@ -27,6 +28,8 @@ export interface ProductionOrderDetail {
   dispatch_ready: boolean;
   shortage: number;
   version_shortage: number;
+  /** @nullable */
+  remake_reason?: ProductionOrderDetailRemakeReason;
   created_at: string;
   /** @nullable */
   project_version_id?: string | null;

@@ -73,9 +73,11 @@ from production.serializers import (
     RemakeRequestSerializer,
     ProductionOrderListSerializer,
     ProductionReleaseSerializer,
+    MaterialRecheckSerializer,
     StepTransitionRequestSerializer,
     StepTransitionSerializer,
     WorkCenterListSerializer,
+    WorkOrderCancelRequestSerializer,
     WorkCenterRequestSerializer,
     WorkCenterSerializer,
     WorkOrderOptimizeCompareRequestSerializer,
@@ -242,6 +244,54 @@ class ProductionOrderRemakeView(APIView):
                     note=data.get("note"),
                 )
         return Response(output, status=201)
+
+
+class ProductionOrderCancelView(APIView):
+    @extend_schema(
+        operation_id="production_order_cancel",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=WorkOrderCancelRequestSerializer,
+        responses={200: ProductionOrderDetailSerializer, **ERRORS},
+        tags=["production"],
+    )
+    def post(self, request, order_id: UUID):
+        with public_production_errors():
+            data = validate(WorkOrderCancelRequestSerializer, request.data)
+            if not data.get("confirmed"):
+                raise DocumentaryError(
+                    "order_cancel_confirmation_required",
+                    detail=(
+                        "Anular la orden libera sus reservas de material: "
+                        "confirma la acción para continuar."
+                    ),
+                )
+            with documentary_scope(request, _WRITERS) as (token, _, org_id):
+                output = service.cancel_work_order(
+                    org_id=org_id,
+                    order_id=order_id,
+                    actor_id=token.user_id,
+                    note=data.get("note"),
+                )
+        return Response(output)
+
+
+class ProductionOrderMaterialRecheckView(APIView):
+    @extend_schema(
+        operation_id="production_order_material_recheck",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={200: MaterialRecheckSerializer, **ERRORS},
+        tags=["production"],
+    )
+    def post(self, request, order_id: UUID):
+        with public_production_errors():
+            with documentary_scope(request, _WRITERS) as (token, _, org_id):
+                output = service.recheck_work_order_material(
+                    org_id=org_id,
+                    order_id=order_id,
+                    actor_id=token.user_id,
+                )
+        return Response(output)
 
 
 class ProductionOrderCncExportView(APIView):

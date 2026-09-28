@@ -7,6 +7,7 @@
  */
 import type { ProductionNextStep } from "./productionNextStep";
 import type { ProductionOrderPayload } from "./productionOrderPayload";
+import type { ProductionOrderRemakeReason } from "./productionOrderRemakeReason";
 
 export interface ProductionOrder {
   id: string;
@@ -23,6 +24,8 @@ export interface ProductionOrder {
   dispatch_ready: boolean;
   shortage: number;
   version_shortage: number;
+  /** @nullable */
+  remake_reason?: ProductionOrderRemakeReason;
   created_at: string;
   /** @nullable */
   project_version_id?: string | null;

@@ -224,12 +224,20 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
                 })
               ) : (
                 <div className="rail-context">
-                  <Link
-                    to={context === "project" ? "/projects" : "/dashboard"}
-                    className="rail-context__back"
-                  >
-                    ‹ {t(context === "project" ? "nav.projects" : "nav.dashboard")}
-                  </Link>
+                  {context === "project" ? (
+                    <Link to="/projects" className="rail-context__back">
+                      ‹ {t("nav.projects")}
+                    </Link>
+                  ) : role === "OPERATOR" || role === "INSTALLER" ? (
+                    // Floor roles' home IS production — a «back to panel»
+                    // link would land them on a dashboard their role can't
+                    // read (review: OPERATOR 403 wall).
+                    <p className="rail-context__title">{t("nav.production")}</p>
+                  ) : (
+                    <Link to="/dashboard" className="rail-context__back">
+                      ‹ {t("nav.dashboard")}
+                    </Link>
+                  )}
                   {context === "project" && (
                     <p className="rail-context__title">
                       {projectId === "demo"

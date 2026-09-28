@@ -78,6 +78,23 @@
   --model3d-coupler: #5d6469;
   --model3d-gasket: #2e3134;
   --model3d-edge: #6b7075;
+  /* CNC op-kind marks — a categorical diagram palette (drill/water/cut-mill/
+   * edge/hardware), distinct from semantic accents; the darker edge tone is
+   * each family's stroke so marks stay legible on light member strips. */
+  --op-mark: #7a5af8;
+  --op-mark-edge: #4c2fd1;
+  --op-drill: #2563eb;
+  --op-drill-edge: #1e40af;
+  --op-water: #0891b2;
+  --op-water-edge: #0e7490;
+  --op-cut: #7c3aed;
+  --op-cut-edge: #5b21b6;
+  --op-mill: #9333ea;
+  --op-mill-edge: #6b21a8;
+  --op-edge-work: #64748b;
+  --op-edge-work-edge: #334155;
+  --op-hardware: #b45309;
+  --op-selected-row: #fef3c7;
   --shadow-raise: 0 2px 10px rgb(22 28 31 / 0.1);
   --shadow-pop: 0 12px 32px rgb(22 28 31 / 0.18);
   --shadow-modal: 0 12px 40px rgba(15, 25, 24, 0.22);

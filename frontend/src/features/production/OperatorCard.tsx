@@ -11,6 +11,7 @@ import { fmtMm, formatDateTime } from "../../format";
 import { t, tOptional } from "../../i18n/es-CL";
 import {
   STEP_STOCK_KINDS,
+  cutRoleLabel,
   opBasisLabel,
   opBoundaryLabel,
   opFaceLabel,
@@ -540,7 +541,8 @@ export function OperatorStepCard({
                           }, {}),
                         ).map(([host, hostOps]) => {
                           const meta = memberMeta[host] ?? {};
-                          const code = labels[host] ?? String(meta.role ?? host);
+                          const code =
+                            labels[host] ?? (meta.role ? cutRoleLabel(meta.role) : String(host));
                           const locationCode = _loc(labels, meta);
                           const length =
                             Number(meta.cut_length_mm ?? 0) ||
@@ -644,7 +646,7 @@ export function OperatorStepCard({
                           {piece.sequence ?? "—"}
                         </td>
                         <td>{piece.workshop_sku ?? "—"}</td>
-                        <td>{piece.role ?? "—"}</td>
+                        <td>{cutRoleLabel(piece.role)}</td>
                         <td>
                           {piece.length_mm ?? "—"}
                           {piece.sagitta_mm ? ` · f ${fmtMm(piece.sagitta_mm)}` : ""}
@@ -686,7 +688,7 @@ export function OperatorStepCard({
                         {piece.code ?? "—"}
                         {piece.workshop_sku ? ` · ${piece.workshop_sku}` : ""}
                       </td>
-                      <td>{piece.role ?? "—"}</td>
+                      <td>{cutRoleLabel(piece.role)}</td>
                       <td>
                         {piece.width_mm ?? "—"} × {piece.height_mm ?? "—"}
                       </td>
