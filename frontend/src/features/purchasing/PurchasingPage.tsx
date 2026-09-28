@@ -115,6 +115,9 @@ type Order = {
   supplier_details?: Record<string, unknown> | null;
   line_count?: string | null;
   total_qty?: string | null;
+  released_qty?: string | null;
+  damaged_qty?: string | null;
+  receipt_count?: string | null;
   lines_preview?: OrderLinePreview[];
 };
 const ORDER_STATUSES: OrderStatus[] = [
@@ -877,6 +880,10 @@ function RequirementSection({
         {confirmed && <span className="purchasing-badge">{t("purchasing.confirmedBadge")}</span>}
       </h2>
       {requirements.length === 0 && <p>{t("purchasing.noRequirements")}</p>}
+      {requirements.length > 0 &&
+        new Set(requirements.map((item) => item.purchasing_sku)).size < requirements.length && (
+          <p className="purchasing-order-expected">{t("purchasing.consolidateHint")}</p>
+        )}
       {requirements.length > 0 && (
         <table>
           <thead>
@@ -1265,6 +1272,33 @@ function OrderCard({
       {order.status === "CANCELLED" && order.cancelled_at && (
         <p className="purchasing-order-expected">
           {t("purchasing.cancelledAt")}: {formatDateTime(order.cancelled_at)}
+          {order.released_qty && order.released_qty !== "0" && (
+            <>
+              {" · "}
+              {t("purchasing.cancelledReleased")}: {order.released_qty}
+            </>
+          )}
+        </p>
+      )}
+      {order.status === "CANCELLED" && (
+        <p className="purchasing-order-expected">
+          <button
+            type="button"
+            className="purchasing-blocker-link"
+            onClick={() =>
+              document
+                .getElementById(`purchasing-type-${order.order_type}`)
+                ?.scrollIntoView({ behavior: "smooth", block: "start" })
+            }
+          >
+            {t("purchasing.reorderCta")}
+          </button>{" "}
+          {t("purchasing.reorderHint")}
+        </p>
+      )}
+      {Number(order.damaged_qty ?? "0") > 0 && (
+        <p className="purchasing-order-damaged" role="alert">
+          {t("purchasing.damagedIncidence")}: {order.damaged_qty}
         </p>
       )}
       {order.status === "DRAFT" && canWrite && (
@@ -1473,6 +1507,7 @@ function OrdersIndex({
             <th>{t("purchasing.indexSupplier")}</th>
             <th>{t("purchasing.indexStatus")}</th>
             <th>{t("purchasing.expectedAt")}</th>
+            <th>{t("purchasing.indexReceipts")}</th>
             <th>{t("purchasing.indexOutstanding")}</th>
           </tr>
         </thead>
@@ -1495,6 +1530,15 @@ function OrdersIndex({
                   : order.status}
               </td>
               <td>{order.expected_at ?? "—"}</td>
+              <td>
+                {Number(order.receipt_count ?? 0) > 0 ? order.receipt_count : "—"}
+                {Number(order.damaged_qty ?? 0) > 0 && (
+                  <span className="purchasing-coverage-short">
+                    {" "}
+                    {t("purchasing.indexDamaged")}: {order.damaged_qty}
+                  </span>
+                )}
+              </td>
               <td>{order.status === "CANCELLED" ? "—" : order.outstanding_qty}</td>
             </tr>
           ))}

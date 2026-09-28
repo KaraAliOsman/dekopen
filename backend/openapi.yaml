@@ -21539,12 +21539,20 @@ components:
         total_qty:
           type: string
           nullable: true
+        released_qty:
+          type: string
+          nullable: true
         good_qty:
+          type: string
+        damaged_qty:
+          type: string
+        receipt_count:
           type: string
         outstanding_qty:
           type: string
       required:
       - created_at
+      - damaged_qty
       - expected_at
       - good_qty
       - id
@@ -21555,6 +21563,8 @@ components:
       - project_code
       - project_id
       - project_version_id
+      - receipt_count
+      - released_qty
       - revision_code
       - sent_at
       - sent_to
@@ -21717,6 +21727,15 @@ components:
           type: string
           nullable: true
         total_qty:
+          type: string
+          nullable: true
+        released_qty:
+          type: string
+          nullable: true
+        damaged_qty:
+          type: string
+          nullable: true
+        receipt_count:
           type: string
           nullable: true
         lines_preview:

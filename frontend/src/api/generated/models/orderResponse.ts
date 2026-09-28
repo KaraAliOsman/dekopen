@@ -33,5 +33,11 @@ export interface OrderResponse {
   line_count?: string | null;
   /** @nullable */
   total_qty?: string | null;
+  /** @nullable */
+  released_qty?: string | null;
+  /** @nullable */
+  damaged_qty?: string | null;
+  /** @nullable */
+  receipt_count?: string | null;
   lines_preview?: OrderResponseLinesPreviewItem[];
 }

@@ -432,3 +432,7 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+.purchasing-order-damaged {
+  color: var(--theme-danger, #b3261e);
+  font-weight: 600;
+}

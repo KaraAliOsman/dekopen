@@ -645,6 +645,9 @@ def test_orders_index_projects_orders_with_received_totals() -> None:
         "line_count": 2,
         "total_qty": Decimal("10"),
         "good_qty": Decimal("4"),
+        "damaged_qty": Decimal("1"),
+        "receipt_count": 2,
+        "released_qty": Decimal("0"),
     }
     with patch("purchasing.service.rows", return_value=[row]) as query, patch(
         "purchasing.service.documentary_backend", return_value=_atomic()
@@ -652,6 +655,8 @@ def test_orders_index_projects_orders_with_received_totals() -> None:
         output = purchasing_service.orders_index(org_id)
     assert output["orders"][0]["outstanding_qty"] == "6"
     assert output["orders"][0]["project_code"] == "P-01"
+    assert output["orders"][0]["damaged_qty"] == "1"
+    assert output["orders"][0]["receipt_count"] == 2
     assert query.call_args[0][0].count("%s") == 3
 
 

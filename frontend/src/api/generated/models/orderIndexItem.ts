@@ -35,6 +35,10 @@ export interface OrderIndexItem {
   line_count: string;
   /** @nullable */
   total_qty: string | null;
+  /** @nullable */
+  released_qty: string | null;
   good_qty: string;
+  damaged_qty: string;
+  receipt_count: string;
   outstanding_qty: string;
 }

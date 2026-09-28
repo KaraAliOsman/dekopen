@@ -1387,6 +1387,15 @@ export const messages = {
   "purchasing.indexSupplier": "Proveedor",
   "purchasing.indexStatus": "Estado",
   "purchasing.indexOutstanding": "Pendiente",
+  "purchasing.indexReceipts": "Recepciones",
+  "purchasing.indexDamaged": "dañado",
+  "purchasing.reorderCta": "Volver a pedir",
+  "purchasing.reorderHint":
+    "las líneas liberadas vuelven a figurar como necesidad pendiente arriba",
+  "purchasing.cancelledReleased": "liberado al cancelar",
+  "purchasing.damagedIncidence": "Unidades recibidas con incidencia",
+  "purchasing.consolidateHint":
+    "Requisitos con el mismo SKU de compra se consolidan en la misma orden al asignar un solo proveedor; la traza de cada línea indica qué posiciones la originan.",
   "purchasing.blockerEligibilityRequired":
     "Se requiere un proveedor elegible para este tipo de pedido",
   "purchasing.blockerAllocationRequired": "Requisitos sin proveedor asignado",

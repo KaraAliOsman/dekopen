@@ -107,6 +107,9 @@ class OrderResponseSerializer(serializers.Serializer):
     cancelled_at = serializers.CharField(required=False, allow_null=True)
     line_count = serializers.CharField(required=False, allow_null=True)
     total_qty = serializers.CharField(required=False, allow_null=True)
+    released_qty = serializers.CharField(required=False, allow_null=True)
+    damaged_qty = serializers.CharField(required=False, allow_null=True)
+    receipt_count = serializers.CharField(required=False, allow_null=True)
     lines_preview = serializers.ListField(
         child=serializers.DictField(), required=False
     )
@@ -129,7 +132,10 @@ class OrderIndexItemSerializer(serializers.Serializer):
     revision_code = serializers.CharField(allow_null=True)
     line_count = serializers.CharField()
     total_qty = serializers.CharField(allow_null=True)
+    released_qty = serializers.CharField(allow_null=True)
     good_qty = serializers.CharField()
+    damaged_qty = serializers.CharField()
+    receipt_count = serializers.CharField()
     outstanding_qty = serializers.CharField()
 
 
