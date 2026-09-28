@@ -20693,6 +20693,8 @@ components:
         racks:
           type: string
           nullable: true
+        spec_text:
+          type: string
       required:
       - available_qty
       - category

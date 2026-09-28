@@ -28,6 +28,7 @@ class InventoryStockItemSerializer(serializers.Serializer):
         max_digits=14, decimal_places=2, required=False, default="0"
     )
     racks = serializers.CharField(allow_null=True, required=False)
+    spec_text = serializers.CharField(required=False, allow_blank=True)
 
 
 class InventoryStockSerializer(serializers.Serializer):

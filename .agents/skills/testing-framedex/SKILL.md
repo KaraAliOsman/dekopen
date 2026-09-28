@@ -365,3 +365,31 @@ description: Local dev-stack recipe for DEKOPEN E2E testing — Supabase CLI sta
   the CTA a real Flow link must exist AND the role must see it — currently can't.
 - **Magic-link mint:** the mail's `verify?token=<long-hex>&type=magiclink` — GET it with
   `allow_redirects=False`, read `#access_token` from the Location fragment; then GET `/user`.
+
+## Phase-08 purchasing/receiving-testing notes
+- **Purchasing writers** = OWNER + WORKSHOP_MANAGER (`_ALLOWED`); ESTIMATOR is read-only and
+  the UI renders ZERO mutating controls for it (canWrite gate) — use it to verify the gate.
+- **Flow:** `GET purchasing/versions/<id>/` (purchasing_state: requirements w/ `open_qty`,
+  eligibilities, allocations, orders) → `POST eligibilities/` → `PUT requirements/<id>/allocation/`
+  → `POST versions/<id>/confirm/` (advisory-locked batch; **idempotent** — re-confirm on a fully
+  claimed type returns live orders, same id+snapshot_hash) → `POST orders/<id>/send/` or
+  `/cancel/` (requires `{confirmed:true}`) → `GET/POST inventory/orders/<id>/receiving|receipts/`
+  `{receipt_key, lines:[{order_line_id,received_qty,damaged_qty,lot_code,rack_location}]}`.
+- **Partial-release:** `order_requirement_lines.released_qty`; coverage = SUM(quantity−released_qty).
+  `cancel_order` accepts PARTIALLY_RECEIVED (needs migration 20261228000005's
+  `guard_order_evidence` transition; without it → 409 `documentary_transaction_rejected` and the
+  UI confirm click is SILENT). good = received−damaged keeps covering; released = quantity−good.
+  FULFILLED never cancels (422 `order_state_invalid` — Spanish detail strings since 69a8ff8).
+- **Over-receipt is allowed** (no cap vs ordered); surfaces as negative `Pendiente` on the
+  orders index — cosmetic, flag it.
+- **Remnants:** `reserve_remnants` = atomic `UPDATE…WHERE status='AVAILABLE'` in the caller txn;
+  a partial claim raises `remnant_unavailable`. `record_produced_remnants` links child remnants
+  via `origin=PRODUCTION`+`origin_order_id`. GET `inventory/remnants/` 500s if any backend code
+  passes a `set` to `ANY(::uuid[])` — use `sorted()`.
+- **Verify the backend actually restarted** after each fix commit — `--noreload` serves stale
+  code silently; a stale process made new purchasing columns look absent until a relaunch.
+- **When the session X server dies** (Xtigervnc hung, screenshots/computer-use all timeout):
+  run your own `Xvfb :99` + chrome via a persistent `shell_id` exec with `&` — one-shot/setsid
+  launches die before DevTools binds. `Emulation.setDeviceMetricsOverride` is INERT on headful
+  Chrome 137 and the WM clamps window width to ≥500 px — true 390 px may be unreachable;
+  measure `documentElement.scrollWidth` at iw=500 (mobile CSS still applies) as the evidence.

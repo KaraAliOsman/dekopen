@@ -1449,6 +1449,7 @@ export const messages = {
   "purchasing.receiveOrdered": "Pedido",
   "purchasing.receiveReceived": "Recibido",
   "purchasing.receiveOutstanding": "Pendiente",
+  "purchasing.receiveSurplus": "excedente recibido",
   "purchasing.receiveNow": "Recibir ahora",
   "purchasing.receiveDamaged": "Con daño",
   "purchasing.receiveDamageExceeds":

@@ -170,6 +170,7 @@ type StockItem = {
   available_qty: string;
   incoming_qty?: string;
   racks?: string | null;
+  spec_text?: string;
 };
 type VersionItem = {
   id: string;
@@ -800,7 +801,7 @@ function PurchasingWorkspace({
                 .filter((item) => {
                   const q = stockQuery.trim().toLowerCase();
                   if (!q) return true;
-                  return [item.sku, item.name, item.racks ?? ""]
+                  return [item.sku, item.name, item.spec_text ?? "", item.racks ?? ""]
                     .join(" ")
                     .toLowerCase()
                     .includes(q);
@@ -1726,122 +1727,133 @@ function ReceivingPanel({
       {formError ? <p role="alert">{formError}</p> : null}
       {open && state && (
         <form onSubmit={submit}>
-          <table>
-            <thead>
-              <tr>
-                <th>{t("purchasing.purchaseSku")}</th>
-                <th>{t("purchasing.receiveOrdered")}</th>
-                <th>{t("purchasing.receiveReceived")}</th>
-                <th>{t("purchasing.receiveOutstanding")}</th>
-                <th>{t("purchasing.receiveNow")}</th>
-                <th>{t("purchasing.receiveDamaged")}</th>
-                <th>{t("purchasing.receiveLot")}</th>
-                <th>{t("purchasing.receiveRack")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {state.lines.map((line) => (
-                <tr key={line.id}>
-                  <td>{line.purchasing_sku ?? line.category}</td>
-                  <td>
-                    {line.ordered_qty} {purchaseUnitLabel(line.unit, qtyNumber(line.ordered_qty))}
-                  </td>
-                  <td>{line.received_qty}</td>
-                  <td>{line.outstanding_qty}</td>
-                  <td>
-                    <input
-                      type="number"
-                      min="0"
-                      step="any"
-                      aria-label={`${t("purchasing.receiveNow")} · ${line.purchasing_sku ?? line.category}`}
-                      disabled={busy || Number(line.outstanding_qty) <= 0}
-                      value={quantities[line.id]?.received ?? "0"}
-                      onChange={(event) =>
-                        setQuantities((previous) => ({
-                          ...previous,
-                          [line.id]: {
-                            ...(previous[line.id] ?? {
-                              lot_code: "",
-                              rack_location: "",
-                            }),
-                            received: event.target.value,
-                            damaged: previous[line.id]?.damaged ?? "0",
-                          },
-                        }))
-                      }
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="number"
-                      min="0"
-                      step="any"
-                      aria-label={`${t("purchasing.receiveDamaged")} · ${line.purchasing_sku ?? line.category}`}
-                      disabled={busy || Number(line.outstanding_qty) <= 0}
-                      value={quantities[line.id]?.damaged ?? "0"}
-                      onChange={(event) =>
-                        setQuantities((previous) => ({
-                          ...previous,
-                          [line.id]: {
-                            ...(previous[line.id] ?? {
-                              lot_code: "",
-                              rack_location: "",
-                            }),
-                            received: previous[line.id]?.received ?? "0",
-                            damaged: event.target.value,
-                          },
-                        }))
-                      }
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      aria-label={`${t("purchasing.receiveLot")} · ${line.purchasing_sku ?? line.category}`}
-                      disabled={busy || Number(line.outstanding_qty) <= 0}
-                      placeholder={t("purchasing.receiveLot")}
-                      value={quantities[line.id]?.lot_code ?? ""}
-                      onChange={(event) =>
-                        setQuantities((previous) => ({
-                          ...previous,
-                          [line.id]: {
-                            ...(previous[line.id] ?? {
-                              received: "0",
-                              damaged: "0",
-                              rack_location: "",
-                            }),
-                            lot_code: event.target.value,
-                          },
-                        }))
-                      }
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      aria-label={`${t("purchasing.receiveRack")} · ${line.purchasing_sku ?? line.category}`}
-                      disabled={busy || Number(line.outstanding_qty) <= 0}
-                      placeholder={t("purchasing.receiveRack")}
-                      value={quantities[line.id]?.rack_location ?? ""}
-                      onChange={(event) =>
-                        setQuantities((previous) => ({
-                          ...previous,
-                          [line.id]: {
-                            ...(previous[line.id] ?? {
-                              received: "0",
-                              damaged: "0",
-                              lot_code: "",
-                            }),
-                            rack_location: event.target.value,
-                          },
-                        }))
-                      }
-                    />
-                  </td>
+          <div className="purchasing-receiving-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>{t("purchasing.purchaseSku")}</th>
+                  <th>{t("purchasing.receiveOrdered")}</th>
+                  <th>{t("purchasing.receiveReceived")}</th>
+                  <th>{t("purchasing.receiveOutstanding")}</th>
+                  <th>{t("purchasing.receiveNow")}</th>
+                  <th>{t("purchasing.receiveDamaged")}</th>
+                  <th>{t("purchasing.receiveLot")}</th>
+                  <th>{t("purchasing.receiveRack")}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {state.lines.map((line) => (
+                  <tr key={line.id}>
+                    <td>{line.purchasing_sku ?? line.category}</td>
+                    <td>
+                      {line.ordered_qty} {purchaseUnitLabel(line.unit, qtyNumber(line.ordered_qty))}
+                    </td>
+                    <td>{line.received_qty}</td>
+                    <td>
+                      {Number(line.outstanding_qty) < 0 ? "0" : line.outstanding_qty}
+                      {Number(line.outstanding_qty) < 0 ? (
+                        <small className="purchasing-hint">
+                          {" "}
+                          (+{Math.abs(Number(line.outstanding_qty))}{" "}
+                          {t("purchasing.receiveSurplus")})
+                        </small>
+                      ) : null}
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        aria-label={`${t("purchasing.receiveNow")} · ${line.purchasing_sku ?? line.category}`}
+                        disabled={busy || Number(line.outstanding_qty) <= 0}
+                        value={quantities[line.id]?.received ?? "0"}
+                        onChange={(event) =>
+                          setQuantities((previous) => ({
+                            ...previous,
+                            [line.id]: {
+                              ...(previous[line.id] ?? {
+                                lot_code: "",
+                                rack_location: "",
+                              }),
+                              received: event.target.value,
+                              damaged: previous[line.id]?.damaged ?? "0",
+                            },
+                          }))
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        aria-label={`${t("purchasing.receiveDamaged")} · ${line.purchasing_sku ?? line.category}`}
+                        disabled={busy || Number(line.outstanding_qty) <= 0}
+                        value={quantities[line.id]?.damaged ?? "0"}
+                        onChange={(event) =>
+                          setQuantities((previous) => ({
+                            ...previous,
+                            [line.id]: {
+                              ...(previous[line.id] ?? {
+                                lot_code: "",
+                                rack_location: "",
+                              }),
+                              received: previous[line.id]?.received ?? "0",
+                              damaged: event.target.value,
+                            },
+                          }))
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="text"
+                        aria-label={`${t("purchasing.receiveLot")} · ${line.purchasing_sku ?? line.category}`}
+                        disabled={busy || Number(line.outstanding_qty) <= 0}
+                        placeholder={t("purchasing.receiveLot")}
+                        value={quantities[line.id]?.lot_code ?? ""}
+                        onChange={(event) =>
+                          setQuantities((previous) => ({
+                            ...previous,
+                            [line.id]: {
+                              ...(previous[line.id] ?? {
+                                received: "0",
+                                damaged: "0",
+                                rack_location: "",
+                              }),
+                              lot_code: event.target.value,
+                            },
+                          }))
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="text"
+                        aria-label={`${t("purchasing.receiveRack")} · ${line.purchasing_sku ?? line.category}`}
+                        disabled={busy || Number(line.outstanding_qty) <= 0}
+                        placeholder={t("purchasing.receiveRack")}
+                        value={quantities[line.id]?.rack_location ?? ""}
+                        onChange={(event) =>
+                          setQuantities((previous) => ({
+                            ...previous,
+                            [line.id]: {
+                              ...(previous[line.id] ?? {
+                                received: "0",
+                                damaged: "0",
+                                lot_code: "",
+                              }),
+                              rack_location: event.target.value,
+                            },
+                          }))
+                        }
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           <label>
             {t("purchasing.receiveNote")}
             <input
@@ -1859,7 +1871,7 @@ function ReceivingPanel({
                 const next: Quantities = {};
                 for (const line of state.lines) {
                   next[line.id] = {
-                    received: line.outstanding_qty,
+                    received: String(Math.max(0, Number(line.outstanding_qty))),
                     damaged: "0",
                     lot_code: "",
                     rack_location: "",

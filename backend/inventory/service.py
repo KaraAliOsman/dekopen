@@ -80,6 +80,7 @@ def list_stock(*, org_id: UUID) -> dict[str, object]:
     items = rows(
         """
         SELECT inventory_stock.item_id, sku, name, category, unit, variant_key,
+               attributes,
                on_hand_qty, reserved_qty, (on_hand_qty - reserved_qty) AS available_qty,
                loc.racks
         FROM public.inventory_stock
@@ -142,7 +143,38 @@ def list_stock(*, org_id: UUID) -> dict[str, object]:
         item = keys.get((sku, variant_key))
         if item is not None:
             item["incoming_qty"] = qty
+    for item in items:
+        item["spec_text"] = _spec_text(item.get("attributes"))
+        item.pop("attributes", None)
     return {"items": items}
+
+
+def _spec_text(attributes: object) -> str:
+    """Flat searchable text from the stored specification — glass composition,
+    treatments, dims. Searching '4-16-4' or 'Float' must find the item."""
+    if isinstance(attributes, str):
+        try:
+            attributes = json.loads(attributes)
+        except (ValueError, TypeError):
+            return ""
+    if not isinstance(attributes, dict):
+        return ""
+    seen: list[str] = []
+
+    def walk(value: object) -> None:
+        if isinstance(value, dict):
+            for child in value.values():
+                walk(child)
+        elif isinstance(value, (list, tuple)):
+            for child in value:
+                walk(child)
+        elif value is not None:
+            text = str(value).strip()
+            if text and text not in seen:
+                seen.append(text)
+
+    walk(attributes)
+    return " ".join(seen)
 
 
 def list_movements(*, org_id: UUID, item_id: UUID | None, limit: int) -> dict[str, object]:

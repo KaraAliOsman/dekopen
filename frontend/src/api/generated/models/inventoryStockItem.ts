@@ -23,4 +23,5 @@ export interface InventoryStockItem {
   incoming_qty?: string;
   /** @nullable */
   racks?: string | null;
+  spec_text?: string;
 }

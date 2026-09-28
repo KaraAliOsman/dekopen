@@ -66,7 +66,7 @@ _CSS = _FONTS + """
 .titleblock .tb-cell:first-child { border-left: none; padding-left: 0; }
 .titleblock .tb-wide { width: 34%; }
 .tb-label { display: block; font: 6.5pt 'IBM Plex Sans', sans-serif; text-transform: uppercase; letter-spacing: 0.5pt; color: #727D82; margin-bottom: 0.6mm; }
-.tb-value { display: block; font: 8pt 'IBM Plex Mono', monospace; color: #252D31; overflow-wrap: anywhere; }
+.tb-value { display: block; font: 8pt 'IBM Plex Mono', monospace; color: #252D31; overflow-wrap: break-word; }
 .pg::after { content: counter(page) " / " counter(pages); }
 h1 { font-size: 16pt; font-weight: 600; margin: 0 0 4mm; letter-spacing: -0.2pt; color: #161C1F; }
 h2 { font-size: 11pt; font-weight: 600; margin: 5mm 0 2mm; border-bottom: 0.75pt solid #465158; padding-bottom: 1.2mm; color: #161C1F; }
@@ -107,7 +107,7 @@ tbody tr:last-child td { border-bottom: 0.9pt solid #465158; }
 .sign-cell.sign-date { flex: 0 0 22mm; }
 .sign-label { position: absolute; bottom: -4.5mm; left: 0; font: 600 6pt 'IBM Plex Mono', monospace; text-transform: uppercase; letter-spacing: 0.08em; color: #727D82; }
 table tr { break-inside: avoid; }
-.sol-table td.dimension, table td.dimension { text-align: right; overflow-wrap: anywhere; }
+.sol-table td.dimension, table td.dimension { text-align: right; overflow-wrap: break-word; }
 .nowrap { white-space: nowrap; }
 svg:not(.miter) { max-width: 100%; height: auto; display: block; } svg text { font-family: 'IBM Plex Mono', monospace; }
 .figures { display: flex; flex-wrap: wrap; gap: 4mm; margin: 2mm 0 4mm; }
@@ -174,7 +174,7 @@ svg:not(.miter) { max-width: 100%; height: auto; display: block; } svg text { fo
 /* Long client/project/typology names wrap inside their column — a width
    guard, never a truncation. */
 .cover-client, .cover-project, .dochead-client, .pcard-body h3,
-.pcard-specs li, .pcard-dims { overflow-wrap: anywhere; }
+.pcard-specs li, .pcard-dims { overflow-wrap: break-word; }
 .stat-strip { display: flex; border: 0.5pt solid #CDD5D6; border-left: 2pt solid #075F5A; margin: 0 0 5mm; }
 .stat-cell { flex: 1; padding: 2.6mm 4mm; border-left: 0.5pt solid #CDD5D6; }
 .stat-cell:first-child { border-left: none; }

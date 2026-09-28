@@ -182,6 +182,13 @@
   margin: 0.5rem 0 0.75rem;
   align-items: center;
 }
+.purchasing-receiving-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.purchasing-receiving-scroll table {
+  min-width: 42rem;
+}
 .purchasing-stock-search {
   display: inline-flex;
   align-items: center;
