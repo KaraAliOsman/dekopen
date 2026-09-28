@@ -211,3 +211,12 @@ SHA del paquete: `6c61859` (+ capturas en este commit). Fixtures: `scripts/dev_f
 | `backend/tests/test_inventory.py` | `test_orders_index_projects_orders_with_received_totals` verifica damaged=1, receipts=2 |
 | `docs/redesign/decisions.md` D33–D35 | Incidencia en índice; fecha necesaria documentada sin autoridad; agregabilidad declarada |
 | verificación en vivo (agente de testing) | Recorrido necesidad→pedido→recepción parcial→incidencia→restante→reserva→consumo + cancelar/recomprar + concurrencia + retazos |
+
+## Fase 08 aceptación en vivo (commit `eb02e73`)
+
+| Archivo / evidencia | Qué prueba |
+|---|---|
+| `docs/redesign/captures/phase08/` | 42 archivos: REPORT.md, `doc02-pedido-vidrio.{pdf,xlsx}` reales, capturas J1–J8 (recepción parcial con daño, cancel con liberado, "Volver a pedir", índice con `dañado:N`, retazos reservados/consumidos, búsqueda de stock, móvil) |
+| `supabase/migrations/20261228000004_partial_release.sql` + `…05` | Liberación por cantidad `released_qty`; rama `PARTIALLY_RECEIVED→CANCELLED` en `guard_order_evidence` (D36) |
+| `supabase/migrations/20261228000006_stock_spec_text.sql` | `inventory_stock` proyecta `attributes` → `spec_text` buscable por especificación |
+| `backend/purchasing/service.py` | `open_qty` por necesidad; re-confirm ordena sólo el remanente; allocation por línea sin reclamar |
