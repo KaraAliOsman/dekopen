@@ -1492,7 +1492,11 @@ def _doc01(snapshot: dict[str, object]) -> str:
             + escape(
                 " · ".join(
                     f"{_value(item.get('label'))} "
-                    f"({_money(item.get('amount'), currency)})"
+                    + (
+                        f"({_money(item.get('amount'), currency)})"
+                        if _num(item.get("amount")) != 0
+                        else "(sin costo)"
+                    )
                     for item in extras
                 )
             )
@@ -1558,38 +1562,22 @@ def _doc01(snapshot: dict[str, object]) -> str:
             else ""
         )
     )
-    # Small and mid-size proposals close in a shared band: inversión,
-    # condiciones and a compact signature side by side, so acceptance is
-    # never orphaned on a blank continuation sheet. Large proposals keep
-    # the full-width sections — their conditions carry more text.
-    compact = len(groups) <= 8
-    if compact:
-        closing_cols = invest_html + terms_html + (
-            '<div class="doc-col"><h2>Aceptación</h2>'
-            f'<p class="accept-recap">{accept_recap}</p>'
-            '<div class="sign-col">'
-            '<div class="sign-cell"><span class="sign-label">Nombre y RUT</span></div>'
-            '<div class="sign-cell"><span class="sign-label">Firma</span></div>'
-            '<div class="sign-cell"><span class="sign-label">Fecha</span></div>'
-            "</div></div>"
-        )
-        if closing_cols.strip():
-            body += f'<div class="doc-duo">{closing_cols}</div>'
-        body += "</main>"
-    else:
-        body += invest_html + terms_html
-        body += (
-            '<div class="accept"><h2>Aceptación</h2>'
-            f'<p class="accept-recap">{accept_recap}</p>'
-            '<div class="sign-row">'
-            '<div class="sign-cell"><span class="sign-label">Nombre</span></div>'
-            '<div class="sign-cell"><span class="sign-label">RUT</span></div>'
-            '<div class="sign-cell"><span class="sign-label">Firma</span></div>'
-            '<div class="sign-cell sign-date"><span class="sign-label">Fecha</span></div>'
-            "</div>"
-            '<p class="muted">La firma confirma la aceptación de esta propuesta '
-            "en la revisión indicada.</p></div></main>"
-        )
+    # Closing band: inversión, condiciones and a compact signature share one
+    # row, so acceptance is never orphaned on a near-blank continuation
+    # sheet. A genuinely long conditions column just grows the band — it
+    # still travels with its siblings.
+    closing_cols = invest_html + terms_html + (
+        '<div class="doc-col"><h2>Aceptación</h2>'
+        f'<p class="accept-recap">{accept_recap}</p>'
+        '<div class="sign-col">'
+        '<div class="sign-cell"><span class="sign-label">Nombre y RUT</span></div>'
+        '<div class="sign-cell"><span class="sign-label">Firma</span></div>'
+        '<div class="sign-cell"><span class="sign-label">Fecha</span></div>'
+        "</div></div>"
+    )
+    if closing_cols.strip():
+        body += f'<div class="doc-duo">{closing_cols}</div>'
+    body += "</main>"
     return body
 
 
