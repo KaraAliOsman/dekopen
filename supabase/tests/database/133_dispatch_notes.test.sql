@@ -1,7 +1,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
 SET LOCAL search_path = public, private, auth, extensions, pg_temp;
-SELECT plan(14);
+SELECT plan(15);
 
 -- Tenants read but never write.
 SELECT ok(
@@ -63,6 +63,10 @@ SELECT policies_are(
 SELECT ok(
     has_table_privilege('documentary_backend', 'public.dispatch_notes', 'INSERT'),
     'documentary backend may insert sealed notes'
+);
+SELECT ok(
+    has_table_privilege('documentary_backend', 'public.clients', 'SELECT'),
+    'the sealed guía may read the org-scoped client fallback (RUT/address)'
 );
 SELECT ok(
     (SELECT relrowsecurity FROM pg_class
