@@ -45,3 +45,26 @@ Las capturas de cotización emitida y pack de cortes requieren el camino
 posición → pricing → emisión → release → OT → optimizar. El fixture lo deja
 todo listo hasta `DRAFT`; emitir exige que el engine valide `VALID` y que
 `pricing` aplique — ambos verificables en local con los datos del fixture.
+
+## Inventario de autoridad faltante — fase 04 (catalogo)
+
+Medido sobre el seed actual (`DEMO_60`, `ALU_65`, `GLASS_45`). Todo dato
+presente es `SEED_SYNTHETIC` — valido para demostrar, no para fabricar.
+Ningun hueco fue rellenado con numeros de demostracion.
+
+| Dato real faltante | Tabla/campo | Estado actual | Fuente esperada |
+|---|---|---|---|
+| Secciones de perfil (poligono DXF del fabricante) | `profile_articles.section` | 29/33 articulos sin seccion (todos los MULLION/COUPLER/THRESHOLD/GLAZING_BEAD; 2/3 FRAME y SASH) | DXF de planos del fabricante (ej. Aluprof MB-86), revision humana |
+| Procedencia documental por parametro | `catalog_parameter_evidence` | Tabla creada, 0 filas — toda autoridad declarada sin fuente registrada | Fichas tecnicas del fabricante con pagina; sellado por import o declaracion manual |
+| Prestaciones certificadas (U, acustica, seguridad) | `profile_systems` — sin columnas | No modeladas: los documentos comerciales omiten prestaciones por diseño | Certificados de ensayo (IFT/CSI), pagina del ensayo |
+| Foto/imagen por articulo | — sin modelo | No existe ninguna foto ni de demostracion | Fotografia del sistema o render aprobado por el fabricante |
+| Datos de proveedor real | `purchase_mappings.manufacturer_name` etc. | Valores sinteticos (proveedor demo) | Tarifario/contrato con proveedor, condiciones comerciales firmadas |
+| Lead-times de compra | — sin modelo | Sin autoridad; compras no prometen fechas | Historial de compras real o SLA del proveedor |
+| Peso nominal de kit por variante | `hardware_kits.weight_kg` | Poblado con valor demo (2.5 kg) en todos los kits | Catalogo de herrajes (ej. Siegenia Titan AF) con masa declarada |
+| Refuerzo por caso (viento/limites) | `reinforcement_cut_policies` | 3 filas demo; sin criterio estructural real | Memoria de calculo del fabricante / estudio de viento |
+| Geometria de sellado/juntas | — | Junta visual aproximada | Catalogo de gomas del sistema |
+| Herrajes por apertura exotica (plegable, oscilo-paralela) | `hardware_kits` | Sin kits; apertura no seleccionable | Ficha del proveedor de herrajes |
+
+Fuera de catalogo pero del mismo mandato: certificado SII, CAF por tipo de
+DTE, credenciales Flow, clave de proveedor IA — detallados arriba; sin ellos
+los flujos responden errores nombrados, no silencio.

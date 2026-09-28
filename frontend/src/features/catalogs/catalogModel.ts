@@ -17,6 +17,7 @@ import type {
   ArticleResponse,
   BeadResponse,
   KitResponse,
+  EvidenceRow,
 } from "../../api/generated/models";
 
 export type SystemWrite = SystemWriteRequest;
@@ -532,6 +533,19 @@ export function catalogApi(orgId: string) {
       const response = await client.catalogProcessProfileList({ ...options, signal });
       if (response.status !== 200) throw new Error("catalog_read_failed");
       return response.data.items;
+    },
+    async evidence(systemId: string, signal?: AbortSignal): Promise<EvidenceRow[]> {
+      const response = await client.catalogEvidenceList(
+        { system_id: systemId },
+        { ...options, signal },
+      );
+      if (response.status !== 200) throw new Error("catalog_evidence_read_failed");
+      return response.data.items;
+    },
+    async reviewEvidence(id: string, state: "REVIEWED" | "REJECTED"): Promise<EvidenceRow> {
+      const response = await client.catalogEvidenceReview(id, { review_state: state }, options);
+      if (response.status !== 200) throw new Error("catalog_evidence_review_failed");
+      return response.data;
     },
     async workCenters(signal?: AbortSignal): Promise<WorkCenter[]> {
       const response = await client.productionWorkCenters({ ...options, signal });

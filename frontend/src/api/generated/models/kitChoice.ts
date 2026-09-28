@@ -11,5 +11,12 @@ export interface KitChoice {
   sku: string;
   name: string;
   opening_type: string;
+  min_leaf_width_mm: string;
+  max_leaf_width_mm: string;
+  min_leaf_height_mm: string;
+  max_leaf_height_mm: string;
+  max_leaf_weight_kg: string;
+  /** @nullable */
+  weight_kg: string | null;
   contents: KitComponent[];
 }

@@ -2510,6 +2510,215 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/catalogs/evidence/:
+    get:
+      operationId: catalog_evidence_list
+      description: |-
+        GET evidence/?system_id= — the source trail behind a system's
+        parameters. POST — a member declares evidence (declared PENDING; the
+        review stamp is a separate server-set transition).
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: query
+        name: system_id
+        schema:
+          type: string
+          format: uuid
+        description: System whose authority rows the evidence attests.
+        required: true
+      tags:
+      - catalogs
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvidenceList'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+    post:
+      operationId: catalog_evidence_declare
+      description: |-
+        GET evidence/?system_id= — the source trail behind a system's
+        parameters. POST — a member declares evidence (declared PENDING; the
+        review stamp is a separate server-set transition).
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - catalogs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvidenceInputRequest'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvidenceRow'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/catalogs/evidence/{row_id}/review/:
+    post:
+      operationId: catalog_evidence_review
+      description: |-
+        POST evidence/{id}/review/ — stamp a review verdict. The reviewer
+        identity and timestamp come from the request, never from the client.
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: row_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - catalogs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvidenceReviewInputRequest'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvidenceRow'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/catalogs/glazing/:
     get:
       operationId: catalog_bead_list
@@ -16518,6 +16727,32 @@ components:
       - active_organization
       - memberships
       - user
+    AuthorityTableEnum:
+      enum:
+      - catalog_imports
+      - fitting_purchase_mappings
+      - glass_purchase_mappings
+      - glazing_bead_matrix
+      - handle_requirement_policies
+      - hardware_kits
+      - infill_articles
+      - manufacturing_placement_policies
+      - profile_articles
+      - profile_systems
+      - reinforcement_cut_policies
+      type: string
+      description: |-
+        * `catalog_imports` - catalog_imports
+        * `fitting_purchase_mappings` - fitting_purchase_mappings
+        * `glass_purchase_mappings` - glass_purchase_mappings
+        * `glazing_bead_matrix` - glazing_bead_matrix
+        * `handle_requirement_policies` - handle_requirement_policies
+        * `hardware_kits` - hardware_kits
+        * `infill_articles` - infill_articles
+        * `manufacturing_placement_policies` - manufacturing_placement_policies
+        * `profile_articles` - profile_articles
+        * `profile_systems` - profile_systems
+        * `reinforcement_cut_policies` - reinforcement_cut_policies
     AxisOffsets:
       type: object
       properties:
@@ -19305,6 +19540,166 @@ components:
             $ref: '#/components/schemas/Membership'
       required:
       - error
+    EvidenceInputRequest:
+      type: object
+      description: |-
+        Member-side declaration of a parameter's source. Review stamps are
+        not client-writable — the server sets them on the review endpoint.
+      properties:
+        authority_table:
+          $ref: '#/components/schemas/AuthorityTableEnum'
+        row_id:
+          type: string
+          format: uuid
+        field_name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        value_text:
+          type: string
+          nullable: true
+          maxLength: 120
+        unit:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/EvidenceInputUnitEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        scope:
+          allOf:
+          - $ref: '#/components/schemas/ScopeEnum'
+          default: SYSTEM
+        applicability:
+          type: string
+          nullable: true
+          maxLength: 300
+        source_document:
+          type: string
+          minLength: 1
+          maxLength: 300
+        source_page:
+          type: integer
+          minimum: 1
+          nullable: true
+        source_url:
+          type: string
+          format: uri
+          nullable: true
+          minLength: 1
+      required:
+      - authority_table
+      - field_name
+      - row_id
+      - source_document
+    EvidenceInputUnitEnum:
+      enum:
+      - mm
+      - mm2
+      - m
+      - kg
+      - kg/m
+      - kg/m2
+      - unit
+      - set
+      - percent
+      - currency
+      - text
+      type: string
+      description: |-
+        * `mm` - mm
+        * `mm2` - mm2
+        * `m` - m
+        * `kg` - kg
+        * `kg/m` - kg/m
+        * `kg/m2` - kg/m2
+        * `unit` - unit
+        * `set` - set
+        * `percent` - percent
+        * `currency` - currency
+        * `text` - text
+    EvidenceList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/EvidenceRow'
+      required:
+      - items
+    EvidenceReviewInputRequest:
+      type: object
+      properties:
+        review_state:
+          $ref: '#/components/schemas/ReviewStateEnum'
+      required:
+      - review_state
+    EvidenceRow:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+          nullable: true
+        authority_table:
+          type: string
+        row_id:
+          type: string
+          format: uuid
+        field_name:
+          type: string
+        value_text:
+          type: string
+          nullable: true
+        unit:
+          type: string
+          nullable: true
+        scope:
+          type: string
+        applicability:
+          type: string
+          nullable: true
+        source_document:
+          type: string
+        source_page:
+          type: integer
+          nullable: true
+        source_url:
+          type: string
+          nullable: true
+        declared_by:
+          type: string
+          format: uuid
+        declared_at:
+          type: string
+        review_state:
+          type: string
+        reviewed_by:
+          type: string
+          format: uuid
+          nullable: true
+        reviewed_at:
+          type: string
+          nullable: true
+      required:
+      - applicability
+      - authority_table
+      - declared_at
+      - declared_by
+      - field_name
+      - id
+      - org_id
+      - review_state
+      - reviewed_at
+      - reviewed_by
+      - row_id
+      - scope
+      - source_document
+      - source_page
+      - source_url
+      - unit
+      - value_text
     ExtraChargeKindEnum:
       enum:
       - INSTALLATION
@@ -20401,15 +20796,34 @@ components:
           type: string
         opening_type:
           type: string
+        min_leaf_width_mm:
+          type: string
+        max_leaf_width_mm:
+          type: string
+        min_leaf_height_mm:
+          type: string
+        max_leaf_height_mm:
+          type: string
+        max_leaf_weight_kg:
+          type: string
+        weight_kg:
+          type: string
+          nullable: true
         contents:
           type: array
           items:
             $ref: '#/components/schemas/KitComponent'
       required:
       - contents
+      - max_leaf_height_mm
+      - max_leaf_weight_kg
+      - max_leaf_width_mm
+      - min_leaf_height_mm
+      - min_leaf_width_mm
       - name
       - opening_type
       - sku
+      - weight_kg
     KitComponent:
       type: object
       properties:
@@ -24822,6 +25236,14 @@ components:
       - confirmed
       - expected_operation_id
       - reason
+    ReviewStateEnum:
+      enum:
+      - REVIEWED
+      - REJECTED
+      type: string
+      description: |-
+        * `REVIEWED` - REVIEWED
+        * `REJECTED` - REJECTED
     RevisionCompareEntry:
       type: object
       properties:
@@ -25008,6 +25430,18 @@ components:
         * `FAIL` - FAIL
         * `NOT_APPLICABLE` - NOT_APPLICABLE
         * `MISSING_INPUT` - MISSING_INPUT
+    ScopeEnum:
+      enum:
+      - SYSTEM
+      - SERIES
+      - GLOBAL
+      - ORG
+      type: string
+      description: |-
+        * `SYSTEM` - SYSTEM
+        * `SERIES` - SERIES
+        * `GLOBAL` - GLOBAL
+        * `ORG` - ORG
     SearchResponse:
       type: object
       properties:

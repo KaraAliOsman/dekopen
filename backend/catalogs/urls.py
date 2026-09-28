@@ -62,4 +62,10 @@ urlpatterns = [
         views.KitReviewView.as_view(),
         name="catalog-kit-review",
     ),
+    path("evidence/", views.EvidenceCollectionView.as_view(), name="catalog-evidence-list"),
+    path(
+        "evidence/<uuid:row_id>/review/",
+        views.EvidenceReviewView.as_view(),
+        name="catalog-evidence-review",
+    ),
 ]

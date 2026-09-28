@@ -321,7 +321,20 @@ beforeEach(() => {
         { sku: "GLASS-B", spec: null },
       ],
       handle_policy: null,
-      hardware_kits: [{ sku: "KIT-B", name: "Kit B", opening_type: "TURN", contents: [] }],
+      hardware_kits: [
+        {
+          sku: "KIT-B",
+          name: "Kit B",
+          opening_type: "TURN",
+          min_leaf_width_mm: "400",
+          max_leaf_width_mm: "1600",
+          min_leaf_height_mm: "400",
+          max_leaf_height_mm: "2400",
+          max_leaf_weight_kg: "120",
+          weight_kg: null,
+          contents: [],
+        },
+      ],
       coupler_skus: ["ACOPLE-60"],
       coupler_profiles: [
         { sku: "ACOPLE-60", name: "Coplana 60", material: "PVC", face_width_mm: "90.00" },

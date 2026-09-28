@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { WorkCenterRequestKindEnum } from "../../api/generated/models";
 import type {
   ArticleResponse,
+  EvidenceRow,
   BeadResponse,
   KitResponse,
   PurchaseMappingRow,
@@ -289,6 +290,7 @@ export function SystemWorkspaceView({
 }: WorkspaceProps): JSX.Element {
   const [workspace, setWorkspace] = useState<SystemWorkspace | null>(null);
   const [centers, setCenters] = useState<WorkCenter[] | null>(null);
+  const [evidenceRows, setEvidenceRows] = useState<EvidenceRow[] | null>(null);
   const [error, setError] = useState(false);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
 
@@ -315,6 +317,14 @@ export function SystemWorkspaceView({
       })
       .catch(() => {
         if (alive) setCenters([]);
+      });
+    void api
+      .evidence(systemId, controller.signal)
+      .then((result) => {
+        if (alive) setEvidenceRows(result);
+      })
+      .catch(() => {
+        if (alive) setEvidenceRows([]);
       });
     return () => {
       alive = false;
@@ -461,6 +471,27 @@ export function SystemWorkspaceView({
   ];
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const activeNode = selectedNode ? nodeById.get(selectedNode) : undefined;
+
+  // Fuentes: human-readable name for the row each evidence attests.
+  const targetName = (row: EvidenceRow): string => {
+    if (row.authority_table === "profile_systems" && row.row_id === system.id) return system.name;
+    const article = articles.find((a) => a.id === row.row_id);
+    if (article) return `${article.sku} · ${article.name}`;
+    const bead = beads.find((b) => b.id === row.row_id);
+    if (bead) return `${wst("bead")} ${bead.glass_thickness_mm} mm`;
+    const kit = kits.find((k) => k.id === row.row_id);
+    if (kit) return kit.name;
+    const reinforcement = reinforcements.find((r) => r.id === row.row_id);
+    if (reinforcement) return reinforcement.id.slice(0, 8);
+    return `${row.authority_table} · ${row.row_id.slice(0, 8)}`;
+  };
+  const reviewEvidence = (row: EvidenceRow, state: "REVIEWED" | "REJECTED") => {
+    void api.reviewEvidence(row.id, state).then((updated) => {
+      setEvidenceRows((rows) =>
+        rows ? rows.map((r) => (r.id === updated.id ? updated : r)) : rows,
+      );
+    });
+  };
 
   return (
     <div className="ws">
@@ -1023,6 +1054,92 @@ export function SystemWorkspaceView({
               ))}
           </div>
         ) : null}
+      </section>
+
+      <section className="ws-section" id="ws.sources">
+        <header className="ws-section-head">
+          <h3>{wst("sources")}</h3>
+        </header>
+        <p className="ws-hint">{wst("sourcesHint")}</p>
+        {evidenceRows === null ? (
+          <p className="ws-empty">{ct("loading")}</p>
+        ) : !evidenceRows.length ? (
+          <p className="ws-empty">{wst("noSources")}</p>
+        ) : (
+          <table className="ui-table ws-evidence">
+            <thead>
+              <tr>
+                <th>{wst("evidenceTarget")}</th>
+                <th>{wst("evidenceField")}</th>
+                <th>{wst("evidenceValue")}</th>
+                <th>{wst("evidenceSource")}</th>
+                <th>{wst("evidenceScope")}</th>
+                <th>{wst("evidenceStateCol")}</th>
+                {canEdit && <th />}
+              </tr>
+            </thead>
+            <tbody>
+              {evidenceRows.map((row) => (
+                <tr key={row.id}>
+                  <td>{targetName(row)}</td>
+                  <td>
+                    <code>{row.field_name}</code>
+                  </td>
+                  <td>
+                    {row.value_text ?? "—"}
+                    {row.unit ? ` ${row.unit}` : ""}
+                  </td>
+                  <td>
+                    {row.source_url ? (
+                      <a href={row.source_url} target="_blank" rel="noreferrer">
+                        {row.source_document}
+                      </a>
+                    ) : (
+                      row.source_document
+                    )}
+                    {row.source_page ? ` · ${wst("evidencePage")} ${row.source_page}` : ""}
+                    {row.applicability ? (
+                      <small className="ws-evidence-applies">
+                        {" "}
+                        {wst("evidenceOn")} {row.applicability}
+                      </small>
+                    ) : null}
+                  </td>
+                  <td>{row.scope}</td>
+                  <td>
+                    <span
+                      className={`ws-badge ${row.review_state === "REVIEWED" ? "ws-badge--ok" : row.review_state === "REJECTED" ? "ws-badge--warn" : ""}`}
+                    >
+                      {wst(`evidenceState.${row.review_state}`)}
+                    </span>
+                  </td>
+                  {canEdit && (
+                    <td>
+                      {row.review_state === "PENDING" && (
+                        <span className="ws-evidence-actions">
+                          <button
+                            type="button"
+                            className="ui-button ui-button--small"
+                            onClick={() => reviewEvidence(row, "REVIEWED")}
+                          >
+                            {wst("evidenceReview")}
+                          </button>
+                          <button
+                            type="button"
+                            className="ui-button ui-button--ghost ui-button--small"
+                            onClick={() => reviewEvidence(row, "REJECTED")}
+                          >
+                            {wst("evidenceReject")}
+                          </button>
+                        </span>
+                      )}
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </section>
 
       {canEdit && (

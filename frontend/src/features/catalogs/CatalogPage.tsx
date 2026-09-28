@@ -306,15 +306,19 @@ function CatalogWorkspace({ orgId, role }: { orgId: string; role: string }): JSX
                     setNotice("");
                   }}
                 >
-                  <strong>{system.name}</strong>
+                  <strong>
+                    {system.manufacturer ? `${system.manufacturer} ` : ""}
+                    {system.name}
+                  </strong>
                   <span title={system.code}>
-                    {shortCode(system.code)} · {ct(`option.${system.material}`)}
+                    {system.family ? `${system.family} · ` : ""}
+                    {shortCode(system.code)} · {ct(`option.${system.material}`)} · v{system.version}
                   </span>
                   <small>
                     {system.is_global ? ct("global") : ct("own")}
                     {system.is_demo ? ` · ${ct("demo")}` : ""}
+                    {system.review_pending ? ` · ${ct("reviewPending")}` : ""}
                     {" · "}
-
                     <span>{systemReadinessLabel(system)}</span>
                   </small>
                 </button>

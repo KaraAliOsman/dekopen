@@ -51,6 +51,15 @@ class KitChoiceSerializer(serializers.Serializer):
     sku = serializers.CharField()
     name = serializers.CharField()
     opening_type = serializers.CharField()
+    # The leaf envelope the kit is rated for — Studio ranks/selects against
+    # these bounds instead of treating every kit as interchangeable.
+    min_leaf_width_mm = serializers.CharField()
+    max_leaf_width_mm = serializers.CharField()
+    min_leaf_height_mm = serializers.CharField()
+    max_leaf_height_mm = serializers.CharField()
+    max_leaf_weight_kg = serializers.CharField()
+    # The kit's own mass — engine adds it to the leaf for the weight axis.
+    weight_kg = serializers.CharField(allow_null=True)
     # The declared kit bill — HANDLE/HINGE/LOCK/ROLLER/… lines with real
     # quantities. The design surface uses it to bind visual hardware to the
     # selected kit instead of inventing positions and counts (phase-03).
@@ -151,6 +160,12 @@ class DesignOptionsView(APIView):
                             "sku": item.sku,
                             "name": item.name,
                             "opening_type": item.opening_type,
+                            "min_leaf_width_mm": str(item.min_leaf_width_mm),
+                            "max_leaf_width_mm": str(item.max_leaf_width_mm),
+                            "min_leaf_height_mm": str(item.min_leaf_height_mm),
+                            "max_leaf_height_mm": str(item.max_leaf_height_mm),
+                            "max_leaf_weight_kg": str(item.max_leaf_weight_kg),
+                            "weight_kg": None if item.weight_kg is None else str(item.weight_kg),
                             "contents": [
                                 {
                                     "sku": component.sku,

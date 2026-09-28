@@ -2,6 +2,7 @@
 
 from contextlib import contextmanager
 from decimal import Decimal
+from uuid import UUID
 import json
 
 from django.db import DatabaseError
@@ -28,8 +29,12 @@ from authentication.tenancy import (
     resolve_tenant_context,
 )
 from authentication.views import verified_request_token
-from catalogs import service
+from catalogs import evidence, service
 from catalogs.serializers import (
+    EvidenceInputSerializer,
+    EvidenceListSerializer,
+    EvidenceReviewInputSerializer,
+    EvidenceRowSerializer,
     ArticleListSerializer,
     ArticleResponseSerializer,
     BeadListSerializer,
@@ -398,3 +403,80 @@ class ProcessProfileCollectionView(APIView):
                 {"items": service.process_profile_options(org_id)}
             ).data
         return Response(output)
+
+
+class EvidenceCollectionView(APIView):
+    """GET evidence/?system_id= — the source trail behind a system's
+    parameters. POST — a member declares evidence (declared PENDING; the
+    review stamp is a separate server-set transition)."""
+
+    parser_classes = [CatalogJSONParser]
+
+    @extend_schema(
+        operation_id="catalog_evidence_list",
+        parameters=[
+            *HEADERS,
+            OpenApiParameter(
+                "system_id", OpenApiTypes.UUID, OpenApiParameter.QUERY,
+                required=True,
+                description="System whose authority rows the evidence attests.",
+            ),
+        ],
+        responses={200: EvidenceListSerializer, **ERRORS},
+        tags=["catalogs"],
+    )
+    def get(self, request):
+        with catalog_scope(request, roles=READ_ROLES) as org_id:
+            system_id = request.query_params.get("system_id")
+            try:
+                system_uuid = UUID(str(system_id))
+            except (TypeError, ValueError) as error:
+                raise contract_error(
+                    400, "catalog_evidence_query", "catalogs.errors.evidence_query"
+                ) from error
+            output = EvidenceListSerializer(
+                {"items": evidence.list_evidence(org_id=org_id, system_id=system_uuid)}
+            ).data
+        return Response(output)
+
+    @extend_schema(
+        operation_id="catalog_evidence_declare",
+        parameters=HEADERS,
+        request=EvidenceInputSerializer,
+        responses={201: EvidenceRowSerializer, **ERRORS},
+        tags=["catalogs"],
+    )
+    def post(self, request):
+        with catalog_scope(request, roles=WRITE_ROLES) as org_id:
+            data = _validated(EvidenceInputSerializer, request.data)
+            row = evidence.declare_evidence(
+                org_id=org_id,
+                actor_id=verified_request_token(request).user_id,
+                values=data,
+            )
+        return Response(EvidenceRowSerializer(row).data, status=201)
+
+
+class EvidenceReviewView(APIView):
+    """POST evidence/{id}/review/ — stamp a review verdict. The reviewer
+    identity and timestamp come from the request, never from the client."""
+
+    parser_classes = [CatalogJSONParser]
+
+    @extend_schema(
+        operation_id="catalog_evidence_review",
+        parameters=HEADERS,
+        request=EvidenceReviewInputSerializer,
+        responses={200: EvidenceRowSerializer, **ERRORS},
+        tags=["catalogs"],
+    )
+    def post(self, request, row_id):
+        with catalog_scope(request, roles=WRITE_ROLES) as org_id:
+            data = _validated(EvidenceReviewInputSerializer, request.data)
+            row = evidence.review_evidence(
+                org_id=org_id,
+                evidence_id=row_id,
+                actor_id=verified_request_token(request).user_id,
+                state=data["review_state"],
+            )
+        return Response(EvidenceRowSerializer(row).data)

@@ -198,3 +198,37 @@ externa, ver `blocked-inputs.md`).
 - ~~Capturas de matriz + close-ups + video~~ **hecho/probado** —
   `docs/redesign/captures/phase03/` (59 archivos + REPORT.md) + video de
   estados; close-ups de herraje verificados.
+
+# Fase 04 — Catalogos que gobiernan sin abrumar
+
+- **hecho/probado** Registro de evidencia de parametros:
+  `catalog_parameter_evidence` (migracion 20261227000002) + servicio
+  `catalogs/evidence.py` + API GET/POST `/catalogs/evidence/` +
+  POST `/evidence/{id}/review/` — sellos solo servidor; pgTAP 172
+  (12 checks: member no escribe, org B no ve, sello requiere revisor,
+  url http(s), unidad valida) + 10 tests unitarios del servicio.
+- **hecho/probado** Import sella evidencia: `confirm_catalog_import` fija
+  `stamp_import_evidence` por articulo creado (por campo, ON CONFLICT);
+  `actor_id` entra por firma — 2 tests nuevos, 31 tests de ingest verdes.
+- **hecho/probado** Auditoria PostgREST real: `authenticated` tenia
+  TRUNCATE/TRIGGER/REFERENCES en 5 tablas de autoridad (TRUNCATE ignora
+  RLS) — revocado en `20261228000001`, pgTAP 173 (15 checks). DELETE se
+  conserva: el delete de app corre bajo `authenticated` + RLS.
+- **hecho/probado** Entrada de catalogo enriquecida: fabricante, familia,
+  version, material, global/propio/demo, `review_pending`, ladder de
+  capacidades con primer bloqueo — sin tabla cruda de 20 columnas.
+- **hecho/probado** Workspace: nueva seccion "Fuentes" — evidencia por
+  sistema con objeto/parametro/valor/fuente/ambito/estado + acciones de
+  revision solo para roles de escritura.
+- **hecho/probado** Studio muestra compatibilidad: inspector de vano con
+  picker de kits rankeado (compatible → indecidible → incompatible con
+  razon), ejes identicos al engine (apertura, envelope via
+  `bayEnvelopeMm`, masa via `leaf_weights` del calculo); 10 tests de
+  `kitCompatibility`.
+- **probado** Aislamiento de revision sellada: ya cubierto por
+  `guard_referenced_catalog` + `test_historical_render_uses_frozen_
+  snapshot_after_catalog_change` — el catalogo nuevo no muta REV-A.
+- **hecho** Inventario de autoridad faltante real en `blocked-inputs.md`
+  (sin numeros de demostracion).
+- **pendiente-capturas** `docs/redesign/captures/phase04/` — dos
+  experiencias (Fuentes + picker Studio), en curso via testing agent.

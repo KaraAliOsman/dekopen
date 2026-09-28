@@ -13,6 +13,7 @@ from dekopen_engine.models import (
     HARDWARE_COMPONENT_CATEGORIES,
     polygon_self_intersects,
 )
+from catalogs.evidence import EVIDENCE_TABLES, EVIDENCE_SCOPES, EVIDENCE_UNITS
 
 KIT_OPENING_TYPES = sorted(
     {
@@ -503,3 +504,52 @@ class ProcessProfileOptionSerializer(serializers.Serializer):
 
 class ProcessProfileOptionListSerializer(serializers.Serializer):
     items = ProcessProfileOptionSerializer(many=True)
+
+
+class EvidenceInputSerializer(serializers.Serializer):
+    """Member-side declaration of a parameter's source. Review stamps are
+    not client-writable — the server sets them on the review endpoint."""
+
+    authority_table = serializers.ChoiceField(choices=sorted(EVIDENCE_TABLES))
+    row_id = serializers.UUIDField()
+    field_name = serializers.CharField(max_length=80)
+    value_text = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True, max_length=120)
+    unit = serializers.ChoiceField(
+        choices=list(EVIDENCE_UNITS), required=False, allow_null=True)
+    scope = serializers.ChoiceField(
+        choices=list(EVIDENCE_SCOPES), required=False, default="SYSTEM")
+    applicability = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True, max_length=300)
+    source_document = serializers.CharField(max_length=300)
+    source_page = serializers.IntegerField(
+        required=False, allow_null=True, min_value=1)
+    source_url = serializers.URLField(required=False, allow_null=True)
+
+
+class EvidenceReviewInputSerializer(serializers.Serializer):
+    review_state = serializers.ChoiceField(choices=["REVIEWED", "REJECTED"])
+
+
+class EvidenceRowSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    org_id = serializers.UUIDField(allow_null=True)
+    authority_table = serializers.CharField()
+    row_id = serializers.UUIDField()
+    field_name = serializers.CharField()
+    value_text = serializers.CharField(allow_null=True)
+    unit = serializers.CharField(allow_null=True)
+    scope = serializers.CharField()
+    applicability = serializers.CharField(allow_null=True)
+    source_document = serializers.CharField()
+    source_page = serializers.IntegerField(allow_null=True)
+    source_url = serializers.CharField(allow_null=True)
+    declared_by = serializers.UUIDField()
+    declared_at = serializers.CharField()
+    review_state = serializers.CharField()
+    reviewed_by = serializers.UUIDField(allow_null=True)
+    reviewed_at = serializers.CharField(allow_null=True)
+
+
+class EvidenceListSerializer(serializers.Serializer):
+    items = EvidenceRowSerializer(many=True)

@@ -42,6 +42,7 @@ import type {
   Billing,
   CatalogArticleListParams,
   CatalogBeadListParams,
+  CatalogEvidenceListParams,
   CatalogImportConfirmRequest,
   CatalogImportConfirmResponse,
   CatalogImportCreateResponse,
@@ -112,6 +113,10 @@ import type {
   EngineOptimizeResponse,
   EngineSystemsResponse,
   ErrorResponse,
+  EvidenceInputRequest,
+  EvidenceList,
+  EvidenceReviewInputRequest,
+  EvidenceRow,
   FlowAcknowledgement,
   FlowConfirmationRequest,
   FreezeRequestRequest,
@@ -3055,6 +3060,251 @@ export const catalogArticleReview = async (
   return apiMutator<catalogArticleReviewResponse>(getCatalogArticleReviewUrl(rowId), {
     ...options,
     method: "POST",
+  });
+};
+
+export type catalogEvidenceListResponse200 = {
+  data: EvidenceList;
+  status: 200;
+};
+
+export type catalogEvidenceListResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type catalogEvidenceListResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type catalogEvidenceListResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type catalogEvidenceListResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type catalogEvidenceListResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type catalogEvidenceListResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type catalogEvidenceListResponseSuccess = catalogEvidenceListResponse200 & {
+  headers: Headers;
+};
+export type catalogEvidenceListResponseError = (
+  | catalogEvidenceListResponse400
+  | catalogEvidenceListResponse401
+  | catalogEvidenceListResponse403
+  | catalogEvidenceListResponse404
+  | catalogEvidenceListResponse409
+  | catalogEvidenceListResponse503
+) & {
+  headers: Headers;
+};
+
+export type catalogEvidenceListResponse =
+  catalogEvidenceListResponseSuccess | catalogEvidenceListResponseError;
+
+export const getCatalogEvidenceListUrl = (params: CatalogEvidenceListParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v1/catalogs/evidence/?${stringifiedParams}`
+    : `/api/v1/catalogs/evidence/`;
+};
+
+/**
+ * GET evidence/?system_id= — the source trail behind a system's
+ * parameters. POST — a member declares evidence (declared PENDING; the
+ * review stamp is a separate server-set transition).
+ */
+export const catalogEvidenceList = async (
+  params: CatalogEvidenceListParams,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<catalogEvidenceListResponse> => {
+  return apiMutator<catalogEvidenceListResponse>(getCatalogEvidenceListUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export type catalogEvidenceDeclareResponse201 = {
+  data: EvidenceRow;
+  status: 201;
+};
+
+export type catalogEvidenceDeclareResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type catalogEvidenceDeclareResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type catalogEvidenceDeclareResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type catalogEvidenceDeclareResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type catalogEvidenceDeclareResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type catalogEvidenceDeclareResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type catalogEvidenceDeclareResponseSuccess = catalogEvidenceDeclareResponse201 & {
+  headers: Headers;
+};
+export type catalogEvidenceDeclareResponseError = (
+  | catalogEvidenceDeclareResponse400
+  | catalogEvidenceDeclareResponse401
+  | catalogEvidenceDeclareResponse403
+  | catalogEvidenceDeclareResponse404
+  | catalogEvidenceDeclareResponse409
+  | catalogEvidenceDeclareResponse503
+) & {
+  headers: Headers;
+};
+
+export type catalogEvidenceDeclareResponse =
+  catalogEvidenceDeclareResponseSuccess | catalogEvidenceDeclareResponseError;
+
+export const getCatalogEvidenceDeclareUrl = () => {
+  return `/api/v1/catalogs/evidence/`;
+};
+
+/**
+ * GET evidence/?system_id= — the source trail behind a system's
+ * parameters. POST — a member declares evidence (declared PENDING; the
+ * review stamp is a separate server-set transition).
+ */
+export const catalogEvidenceDeclare = async (
+  evidenceInputRequest: EvidenceInputRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<catalogEvidenceDeclareResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<catalogEvidenceDeclareResponse>(getCatalogEvidenceDeclareUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+    body: JSON.stringify(evidenceInputRequest),
+  });
+};
+
+export type catalogEvidenceReviewResponse200 = {
+  data: EvidenceRow;
+  status: 200;
+};
+
+export type catalogEvidenceReviewResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type catalogEvidenceReviewResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type catalogEvidenceReviewResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type catalogEvidenceReviewResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type catalogEvidenceReviewResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type catalogEvidenceReviewResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type catalogEvidenceReviewResponseSuccess = catalogEvidenceReviewResponse200 & {
+  headers: Headers;
+};
+export type catalogEvidenceReviewResponseError = (
+  | catalogEvidenceReviewResponse400
+  | catalogEvidenceReviewResponse401
+  | catalogEvidenceReviewResponse403
+  | catalogEvidenceReviewResponse404
+  | catalogEvidenceReviewResponse409
+  | catalogEvidenceReviewResponse503
+) & {
+  headers: Headers;
+};
+
+export type catalogEvidenceReviewResponse =
+  catalogEvidenceReviewResponseSuccess | catalogEvidenceReviewResponseError;
+
+export const getCatalogEvidenceReviewUrl = (rowId: string) => {
+  return `/api/v1/catalogs/evidence/${rowId}/review/`;
+};
+
+/**
+ * POST evidence/{id}/review/ — stamp a review verdict. The reviewer
+ * identity and timestamp come from the request, never from the client.
+ */
+export const catalogEvidenceReview = async (
+  rowId: string,
+  evidenceReviewInputRequest: EvidenceReviewInputRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<catalogEvidenceReviewResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<catalogEvidenceReviewResponse>(getCatalogEvidenceReviewUrl(rowId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+    body: JSON.stringify(evidenceReviewInputRequest),
   });
 };
 

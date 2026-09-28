@@ -18,6 +18,7 @@ from authentication.errors import contract_error
 from authentication.rls import catalog_backend
 from documents.repository import documentary_backend
 from documents.storage import SupabaseDocumentStorage
+from catalogs import evidence as catalog_evidence
 from ingest.catalog_parser import ROLES, parse_catalog_lines
 from ingest.extract import extract_tagged, kind_for, safe_file_name, sniffed_kind
 from jobs import service as jobs_service
@@ -350,7 +351,8 @@ def mark_catalog_import_failed(*, org_id: UUID, import_id: UUID, code: str) -> N
 
 
 def confirm_catalog_import(
-    *, org_id: UUID, import_id: UUID, system_id: UUID, items: list[dict]
+    *, org_id: UUID, actor_id: UUID, import_id: UUID, system_id: UUID,
+    items: list[dict],
 ) -> dict:
     """Human confirm — the only path from candidate to catalog authority.
 
@@ -403,7 +405,11 @@ def confirm_catalog_import(
                 "El sistema destino debe pertenecer a tu organización.",
             )
         material = system[0]["material"]
-        candidate_keys = {candidate.get("key") for candidate in _as_list(row["candidates"])}
+        candidates_by_key = {
+            str(candidate.get("key")): candidate
+            for candidate in _as_list(row["candidates"])
+        }
+        candidate_keys = set(candidates_by_key)
         created = _as_list(row["result"])
         done = {str(entry.get("key")) for entry in created}
         errors: list[dict] = []
@@ -465,7 +471,20 @@ def confirm_catalog_import(
             if not inserted:
                 errors.append({"key": key, "code": "catalog_sku_conflict"})
                 continue
-            created.append({"key": key, "article_id": str(inserted[0]["id"])})
+            article_id = inserted[0]["id"]
+            # Pin the parser's per-field evidence to the created article —
+            # the confirming member is the declarer, the document the import.
+            catalog_evidence.stamp_import_evidence(
+                org_id=org_id,
+                actor_id=actor_id,
+                import_id=import_id,
+                article_id=article_id,
+                candidate={
+                    **(candidates_by_key.get(key) or {}),
+                    "source_document": f"{row['file_name']} (import {import_id})",
+                },
+            )
+            created.append({"key": key, "article_id": str(article_id)})
             done.add(key)
         if errors:
             # Retryable: persist what was created so the next confirm only

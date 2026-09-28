@@ -163,3 +163,17 @@ SHA del paquete: `6c61859` (+ capturas en este commit). Fixtures: `scripts/dev_f
 | `before-after-sheet.png` | lámina comparativa fase-00 vs fase-03 |
 | `REPORT.md` | manifiesto del set con veredictos |
 | video (screencasts) `rec-37b9cdc4-…-edited.mp4` | giro/abatir/corredera/despiece sin acumulación |
+
+## Fase 04 (SHA pendiente de commit)
+
+| Archivo / evidencia | Qué prueba |
+|---|---|
+| `supabase/migrations/20261227000002_catalog_parameter_evidence.sql` | tabla de evidencia con sellos servidor, CHECKs de unidad/url/pagina/revision, indice dedup, RLS |
+| `supabase/tests/database/172_catalog_parameter_evidence.test.sql` | 12 checks: member no inserta/actualiza/borra, org B no lee, sello sin revisor rechazado, url no-http rechazada |
+| `supabase/migrations/20261228000001_catalog_table_privilege_hygiene.sql` | REVOKE REFERENCES/TRIGGER/TRUNCATE de `authenticated` en 12 tablas de autoridad |
+| `supabase/tests/database/173_catalog_privilege_hygiene.test.sql` | 15 checks: sin TRUNCATE (bypass RLS), sin TRIGGER, sin REFERENCES |
+| `backend/tests/test_catalog_evidence.py` | 10 tests: declare/review/stamp_import — org-scoping, actores server-side, idempotencia |
+| `backend/tests/test_catalog_ingest.py` (+2) | confirm fija evidencia del parser; sin evidencia no escribe nada |
+| `frontend/src/features/canvas/kitCompatibility.ts` + test | ejes del engine replicados; compatible/indecidible/incompatible + `bayEnvelopeMm` |
+| `frontend/src/features/catalogs/SystemWorkspace.tsx` — sección Fuentes | evidencia visible por sistema + acciones de revision por rol |
+| `docs/redesign/captures/phase04/` | capturas de ambas experiencias (pendiente de la ejecución del agente) |

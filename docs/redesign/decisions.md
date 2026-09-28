@@ -183,3 +183,38 @@ mueven juntos y cada frame escribe transformaciones absolutas — cambiar
 de modo no acumula desplazamiento. Cuando un producto no declara
 recorrido autorizado, el viewport muestra el caption "Posición
 ilustrativa" en vez de insinuar un límite de apertura real.
+
+## D18 — La evidencia de parametros es una tabla, no un campo
+
+`catalog_parameter_evidence` registra cada parametro critico con valor
+tipado (texto, sin perdida de precision), unidad tipada, documento/pagina
+fuente, URL solo http(s), ambito (SYSTEM/SERIES/GLOBAL/ORG), condicion de
+aplicacion, declarador y estado de revision — sellos `declared_by`/
+`reviewed_by`/`reviewed_at` escritos siempre en servidor bajo
+`catalog_backend`; `authenticated` solo tiene SELECT. Una evidencia org
+sobre una autoridad global queda org-scoped (un org atestigua lo que
+reviso; no puede manchar el catalogo global). La importacion fija evidencia
+automatica por campo del parser (`normalized`/`original`/`unit`/`source`)
+con la fuente = archivo+import; idempotente por indice unico en
+(tabla,fila,campo,documento,pagina).
+
+## D19 — Higiene de privilegios: `authenticated` nunca TRUNCATE
+
+Las tablas de autoridad de catalogo heredaban REFERENCES/TRIGGER/TRUNCATE
+para `authenticated` por los default privileges de Supabase. TRUNCATE no
+consulta RLS: una sesion SQL autenticada podria vaciar el catalogo de
+todas las orgs + globales en una sentencia. Migracion
+`20261228000001` revoca los tres privilegios en las 12 tablas de
+autoridad; DELETE/UPDATE/INSERT se conservan porque el flujo de app los
+ejecuta bajo `authenticated` + `can_manage_catalog`. pgTAP 173 lo fija.
+
+## D20 — Compatibilidad fisica visible, no solo validada
+
+`kitCompatibility.ts` replica los ejes del engine (apertura normalizada,
+ancho/alto de hoja, masa maxima) sobre `KitChoice` enriquecido con el
+envelope. El inspector de vano lista kits compatibles primero,
+indecidibles marcados (`peso sin verificar` cuando `leaf_weight_kg` es
+desconocido) e incompatibles consultables con su razon — nunca elegibles
+como equivalentes. El engine revalida igual en el guardado; la UI informa,
+no optimiza. `bayEnvelopeMm` reproduce la particion de `frontLayout`
+(offset o mitad, menos media cara del premarco) para el tamano de hoja.

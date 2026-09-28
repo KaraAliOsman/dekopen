@@ -7,6 +7,7 @@ import type {
   DesignOptions,
   EngineAssemblyCalculateResponse,
   GlassSpecChoice,
+  KitChoice,
   PanelChoice,
   ProductIssue,
 } from "../../api/generated/models";
@@ -30,6 +31,7 @@ import { CanvasViewport } from "./CanvasViewport";
 import { ObjectTree } from "./ObjectTree";
 import { buildObjectTree } from "./objectTree";
 import { resolveMembers, type MemberGeometry } from "./members";
+import { bayEnvelopeMm, rankKits } from "./kitCompatibility";
 import { SectionView } from "./SectionView";
 import { SectionPreviewSvg } from "./SectionPreviewSvg";
 import {
@@ -862,6 +864,9 @@ function BayInspector({
   glazingThicknesses,
   panelSkus,
   panelChoices,
+  kits,
+  members,
+  leafWeightKg,
   busy,
   commit,
   onAskAssistant,
@@ -874,6 +879,10 @@ function BayInspector({
   glazingThicknesses: string[];
   panelSkus: string[];
   panelChoices: PanelChoice[];
+  kits: KitChoice[];
+  members: MemberGeometry;
+  /** Engine-resolved leaf mass; null = undecidable (never assumed). */
+  leafWeightKg: number | null;
   busy: boolean;
   commit(next: ProductJson): void;
   onAskAssistant?(): void;
@@ -915,6 +924,29 @@ function BayInspector({
       door_handedness: next === "DOOR_ENTRY" ? (bay.door_handedness ?? "LEFT") : null,
     });
   }
+
+  // Hardware picker context: bay envelope from the intent tree + the
+  // engine's leaf mass. The select ranks valid kits first; incompatible
+  // kits stay consultable with their reason but are not selectable as if
+  // they were equivalent (mandate 04). The engine re-checks at save.
+  const operable = opening !== "FIXED" && !(isDoor && bay.panel_article_sku);
+  const leafEnvelope = operable
+    ? bayEnvelopeMm(module.tree, bay.id, Number(module.width_mm), Number(module.height_mm), {
+        vertical: members.mullionV?.faceWidthMm ?? 0,
+        horizontal: members.mullionH?.faceWidthMm ?? 0,
+      })
+    : null;
+  const kitEvaluations = operable
+    ? rankKits(kits, {
+        opening,
+        leafWidthMm: leafEnvelope ? Math.round(leafEnvelope.w * 10) / 10 : null,
+        leafHeightMm: leafEnvelope ? Math.round(leafEnvelope.h * 10) / 10 : null,
+        leafWeightKg,
+      })
+    : [];
+  const selectableKits = kitEvaluations.filter((item) => item.fit !== "incompatible");
+  const incompatibleKits = kitEvaluations.filter((item) => item.fit === "incompatible");
+  const selectedKitEval = kitEvaluations.find((item) => item.kit.sku === bay.hardware_set_sku);
 
   return (
     <section className="assembly-inspector" aria-label={t("assembly.bay")}>
@@ -997,6 +1029,60 @@ function BayInspector({
           busy={busy}
           onChange={(next) => commit(setModuleSlidingLayout(product, module.id, next, bay.id))}
         />
+      )}
+      {operable && kits.length > 0 && (
+        <details className="inspector-section" open={bay.hardware_set_sku != null}>
+          <summary>{t("assembly.hardware")}</summary>
+          <label className="assembly-field">
+            <span>{t("assembly.hardwareKit")}</span>
+            <select
+              aria-label={t("assembly.hardwareKit")}
+              disabled={busy}
+              value={bay.hardware_set_sku ?? ""}
+              onChange={(event) => patchBay({ hardware_set_sku: event.target.value || null })}
+            >
+              <option value="">{t("assembly.hardwareAuto")}</option>
+              {bay.hardware_set_sku != null &&
+                !selectableKits.some((item) => item.kit.sku === bay.hardware_set_sku) && (
+                  <option value={bay.hardware_set_sku}>{bay.hardware_set_sku}</option>
+                )}
+              {selectableKits.map((item) => (
+                <option key={item.kit.sku} value={item.kit.sku}>
+                  {item.kit.name}
+                  {item.fit === "undecidable" ? ` · ${t("assembly.kitUndecidable")}` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          {selectedKitEval && selectedKitEval.fit !== "compatible" && (
+            <p className="assembly-hint" role="status">
+              {selectedKitEval.fit === "undecidable"
+                ? t("assembly.kitUndecidableHint")
+                : t("assembly.kitIncompatibleHint")}
+              {" — "}
+              {selectedKitEval.reasons
+                .map((reason) => t(`assembly.kitReason.${reason}` as TranslationKey))
+                .join(" · ")}
+            </p>
+          )}
+          {incompatibleKits.length > 0 && (
+            <ul
+              className="assembly-kit-incompatible"
+              aria-label={t("assembly.kitIncompatibleList")}
+            >
+              {incompatibleKits.map((item) => (
+                <li key={item.kit.sku}>
+                  <span>{item.kit.name}</span>
+                  <small>
+                    {item.reasons
+                      .map((reason) => t(`assembly.kitReason.${reason}` as TranslationKey))
+                      .join(" · ")}
+                  </small>
+                </li>
+              ))}
+            </ul>
+          )}
+        </details>
       )}
       <details className="inspector-section" open>
         <summary>{t("inspector.glazing")}</summary>
@@ -2635,6 +2721,21 @@ export function AssemblyEditor({
             module={selectedBayModule}
             bay={selectedBayNode}
             product={product}
+            kits={options?.hardware_kits ?? []}
+            members={members}
+            leafWeightKg={
+              evaluation?.modules
+                ?.find((item) => item.module_id === selectedBayModule.id)
+                ?.result?.leaf_weights?.find((w) => w.bay_id === selectedBayNode.id)
+                ?.total_weight_kg != null
+                ? Number(
+                    evaluation.modules
+                      .find((item) => item.module_id === selectedBayModule.id)!
+                      .result!.leaf_weights!.find((w) => w.bay_id === selectedBayNode.id)!
+                      .total_weight_kg,
+                  )
+                : null
+            }
             glassSkus={glassSkus}
             glassSpecs={options?.glass_specs ?? []}
             glazingThicknesses={options?.glazing_thicknesses ?? []}
