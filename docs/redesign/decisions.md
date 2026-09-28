@@ -314,3 +314,28 @@ La pantalla declara los insumos antes de correr (stock, retazos, largos, máquin
 Operación sin autoridad = bloqueo exacto, nunca supuesto: `depth_undeclared` (BLOCK) para las clases que cortan material sin `depth_mm`, `tool_undeclared` (BLOCK) para mecanizado de miembro sin herramienta declarada. `HANDLE_PREP` declarado como `feature=point_prep` no es mecanizado ejecutable: sigue WARN `feature_point_only` y se lee "Ref. montaje" (montaje) en pack, tarjeta de estación y panel CNC — nunca "Prep. herraje" con diámetro/profundidad inventados. El pack de taller ahora dice la verdad sobre el datum: "Dist." se mide desde Ext. A (u=0) sobre la pieza, con marcas de datum en la tira — el texto anterior decía "plano del conjunto" para una columna que ya era local del miembro.
 
 Todo export (ops neutras y programa por pieza) lleva `manifest.json`: esquema, identidad, fingerprint, archivos con sha256+bytes verificables, conteos, hora y responsable. El CSV de operaciones gana `sequence_no` explícito.
+
+## D44 — El ribbon del bot es identidad, el anillo es estado
+
+La referencia separa dos lecturas: la órbita cian ES la marca del personaje
+(no se apaga ni desaparece), mientras el estado del trabajo (queued/running/
+approval/…) viaja en un arco circular externo con los colores de las pills de
+estado. En estados consecuentes el ribbon sólo se tiñe (ámbar=aprobación,
+rojo=error, verde=éxito) — nunca se reemplaza. En working un segmento
+brillante corre el ribbon: el carácter trabaja, no un spinner genérico.
+
+## D45 — Toda prompt lleva la regla de datos no-confiables
+
+`guarded()` en `ai_gateway/context.py` inyecta la misma línea antes del
+cierre "Sin texto fuera del JSON" en AGENT_SYSTEM, los 7 WORKFLOW_SYSTEM y
+ASK_SYSTEM — imposible añadir un prompt nuevo sin la regla (el test la exige
+en cada entrada). Contexto, candidatos de importación y texto de documentos
+son DATOS: una instrucción embebida se reporta como warning, jamás se obedece.
+org_id nunca llega del modelo: lo fija `documentary_scope` por token.
+
+## D46 — La referencia del bot se conserva como guía, no como asset
+
+`referencias/dekopen-bot-original.png` es la imagen aportada por el usuario;
+el producto no la copia como raster — Orb/BotFigure son SVG originales que
+preservan geometría/paleta/proporción. `referencias/README.md` documenta
+procedencia, alcance (guía de identidad) y la regla STARWIN≠DEKOPEN.

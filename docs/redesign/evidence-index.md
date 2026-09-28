@@ -257,3 +257,16 @@ SHA del paquete: `6c61859` (+ capturas en este commit). Fixtures: `scripts/dev_f
 | `frontend/src/features/production/` (labels.ts, CncPanel, OperatorCard) + `i18n/es-CL.ts` | "Ref. montaje" end-to-end; `manifest.json` descargable; overflow móvil cerrado (732→485 @iw500) |
 | `engine/tests/test_operations.py` + `backend/tests/test_production.py` | 4 tests de bloqueo exacto/op manual; manifiesto con sha256 verificado byte a byte — 36/36 + 115 verdes |
 | `docs/redesign/captures/phase11/` | aceptación en vivo: 17 PNGs (panel CNC, ops por miembro, manos L/R, estación, operador, móvil), `pack-tt03.pdf`/`13-pack-ttl.pdf` reales con datum+"Ref. montaje", programas y manifests descargados con hash verificado, REPORT.md con la matriz mandato→resultado |
+
+## Fase 12 (workspace HEAD)
+
+| Archivo / evidencia | Qué prueba |
+|---|---|
+| `frontend/src/features/assistant/Orb.tsx` + `orb.css` | esfera grafito + ojos cápsula cian + ribbon orbital en dos medias curvas; 10 estados con texto explícito; tinte de ribbon por estado; simplificación `orb--s` a 16px |
+| `frontend/src/features/assistant/BotFigure.tsx` | figura 96–200px (panes de vidrio + sombra) en bienvenida dock ask/agent y hero del workspace |
+| `frontend/src/styles/tokens.css` | `--orb-eye/--orb-eye-hi/--orb-ribbon*` cian en ambos temas — los ojos dejan de ser blanquecinos |
+| `backend/ai_gateway/context.py` (`UNTRUSTED_DATA_RULE`, `guarded`) | regla datos≠instrucciones inyectada en TODOS los prompts; defensa contra instrucciones embebidas en documentos/catálogos |
+| `backend/tests/test_ai_agent.py` | 2 tests: la regla está en cada system prompt; texto envenenado no entra al system prompt |
+| `AskDekopen.tsx` | dock recuerda expandir/plegar (sessionStorage por pestaña); activador 48px |
+| `referencias/README.md` + `dekopen-bot-original.png` | procedencia y alcance de la referencia; STARWIN≠DEKOPEN documentado |
+| `docs/redesign/captures/phase12/` | lámina comparativa referencia→tamaños→estados, capturas Studio/móvil/oscuro, gauntlet de confianza en vivo (REPORT.md del agente de testing) |
