@@ -213,10 +213,7 @@ export function DashboardPage(): JSX.Element {
           opsQuery.data.commercial.length > 0 ? (
             <div className="dashboard-money">
               {opsQuery.data.commercial.map((row) => {
-                const outstanding = Math.max(
-                  0,
-                  Number(row.booked) - Number(row.collected),
-                );
+                const outstanding = Math.max(0, Number(row.booked) - Number(row.collected));
                 return (
                   <div key={row.currency} className="dashboard-money-currency">
                     <h3 className="eyebrow">{row.currency}</h3>

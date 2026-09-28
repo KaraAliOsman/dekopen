@@ -89,7 +89,8 @@ function bayChildren(
       node.glass_thickness_mm ? `${node.glass_thickness_mm} mm` : null,
       // Prefer the catalog spec text over the raw SKU — "VIDRIO-BASE" is a
       // code, not a label a designer should read.
-      node.glass_article_sku ? (glassNames.get(node.glass_article_sku) ?? node.glass_spec ?? null)
+      node.glass_article_sku
+        ? (glassNames.get(node.glass_article_sku) ?? node.glass_spec ?? null)
         : (node.glass_spec ?? null),
     ]
       .filter(Boolean)

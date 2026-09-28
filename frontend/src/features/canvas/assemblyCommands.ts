@@ -302,7 +302,8 @@ export const ASSEMBLY_COMMANDS: CommandSpec[] = [
     id: "module.remove",
     title: "cmd.removeUnit",
     keywords: ["eliminar", "quitar", "unidad", "vano", "hoja", "modulo"],
-    applicable: (ctx) => selectedModuleScope(ctx) !== null && ctx.product.assembly.modules.length > 1,
+    applicable: (ctx) =>
+      selectedModuleScope(ctx) !== null && ctx.product.assembly.modules.length > 1,
     apply: (ctx, args) => {
       const id = args.module ?? selectedModule(ctx)?.id;
       return id && ctx.product.assembly.modules.length > 1
