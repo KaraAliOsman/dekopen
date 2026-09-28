@@ -331,3 +331,19 @@ description: Local dev-stack recipe for DEKOPEN E2E testing — Supabase CLI sta
   `POST /projects/<proj>/positions/` → position saves → editor renders the `Herrajes` select.
 - `parametric_tree` node numeric fields are decimal **strings**; top-level `nominal_*_mm` are
   Decimals (serializer). Passing strings top-level → `'<' str vs Decimal` TypeError.
+
+## Phase-06 pricing-testing notes
+- **Backend code needs a restart** — `manage.py runserver --noreload` does NOT hot-reload. If a
+  new commit's backend fields are missing (e.g. pricing `lines` returning bare
+  `{position_index, line_net}` with no `unit_price`), kill + relaunch Django, then re-check —
+  do NOT report it as a code bug until the running process is confirmed on the new HEAD.
+- **OWNER needs aal2 for pricing writes** — magic-link gives aal1 → `/auth/mfa` wall. Mint aal2:
+  POST `/auth/v1/factors/{factor_id}/challenge` then `/verify` {challenge_id, pyotp_code}. Owner
+  TOTP secret lives in `auth.mfa_factors.secret` (fixture owner = `NPPECYRXWHNRYC6MCFI4YDWOQ4L25YOY`).
+- **Emit gate:** `Emitir cotización` stays disabled until each operable leaf's suggested handle
+  height is confirmed via its "Usar sugeridas" button (`legacy_handle_migration_confirmed`).
+- **Blocker→Resolver:** `missing_glass_authority` needs a mode-2 `pricing_configuration` with a
+  gap (fixture has none). To demo the positioned-blocker + `/pricing/cost-lists` link (OWNER) vs
+  `pricing-fix` span (ESTIMATOR), run a USD calc — no fx snapshot → `missing_fx_authority`.
+- **Amount parity:** emitted PDF = `POST /documents/artifacts/{id}/access/` → signed_url (storage);
+  PyMuPDF (`fitz`) renders/extracts it. Portal = `/cotizacion/<token>` from "Compartir cotización".

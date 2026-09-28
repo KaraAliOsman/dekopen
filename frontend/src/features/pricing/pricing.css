@@ -220,10 +220,15 @@
   }
 }
 
+.operation-lines__wrap {
+  margin-bottom: var(--space-2);
+  overflow-x: auto;
+}
+
 .operation-lines {
   border-collapse: collapse;
   font-size: 0.8125rem;
-  margin-bottom: var(--space-2);
+  min-width: 48rem;
   width: 100%;
 }
 

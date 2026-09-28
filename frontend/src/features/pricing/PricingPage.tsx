@@ -1338,114 +1338,116 @@ function OperationDecision({
         )}
       </div>
 
-      <table className="operation-lines">
-        <caption>{t("pricing.perPosition")}</caption>
-        <thead>
-          <tr>
-            <th scope="col">#</th>
-            <th scope="col">{t("projects.location")}</th>
-            <th scope="col">{t("pricing.quantity")}</th>
-            <th scope="col">{t("pricing.unitPrice")}</th>
-            <th scope="col">{t("pricing.lineDiscount")}</th>
-            <th scope="col">{t("pricing.lineCost")}</th>
-            <th scope="col">{t("pricing.net")}</th>
-            <th scope="col">{t("pricing.marginNet")}</th>
-            {canLineDelta && <th scope="col">{t("pricing.lineDelta")}</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {(operation.lines ?? []).map((line) => {
-            const position = positions.get(line.position_index);
-            const breakdown = breakdowns.get(line.position_index);
-            const lineDiscount = line.discount_pct ? Number(line.discount_pct) : null;
-            return (
-              <Fragment key={line.position_index}>
-                <tr>
-                  <td>
-                    <span className="operation-lines__vano">
-                      {position?.design && <PositionThumb design={position.design} />}
-                      {line.position_index}
-                    </span>
-                  </td>
-                  <td>{position?.location_tag || "—"}</td>
-                  <td>{line.quantity ?? position?.quantity ?? "—"}</td>
-                  <td className="operation-lines__money">
-                    {line.unit_price != null
-                      ? formatMoney(line.unit_price, operation.currency)
-                      : "—"}
-                  </td>
-                  <td>
-                    {lineDiscount !== null && lineDiscount > 0
-                      ? `−${pctDisplay(lineDiscount)} %`
-                      : "—"}
-                  </td>
-                  <td className="operation-lines__money">
-                    {formatMoney(costs.get(line.position_index) ?? "0", operation.currency)}
-                  </td>
-                  <td className="operation-lines__money">
-                    {discount > 0 && position?.quantity ? (
-                      <>
-                        {formatMoney(line.line_net, operation.currency)}
-                        <span className="operation-lines__list">
-                          {" "}
-                          (
-                          {formatMoney(
-                            String(Number(line.line_net) / (1 - discount)),
-                            operation.currency,
-                          )}{" "}
-                          −{pctDisplay(discount)}%)
-                        </span>
-                      </>
-                    ) : (
-                      formatMoney(line.line_net, operation.currency)
-                    )}
-                  </td>
-                  <td className="operation-lines__money">
-                    {marginText(
-                      line.line_net,
-                      costs.get(line.position_index) ?? "0",
-                      operation.currency,
-                    )}
-                  </td>
-                  {canLineDelta && (
-                    <td className="operation-lines__delta operation-lines__money">
-                      {position?.price_net != null
-                        ? (() => {
-                            const lineDelta = Number(line.line_net) - Number(position.price_net);
-                            return lineDelta !== 0 ? (
-                              <span data-negative={lineDelta < 0 || undefined}>
-                                {lineDelta > 0 ? "+" : ""}
-                                {formatMoney(String(lineDelta), operation.currency)}
-                              </span>
-                            ) : (
-                              "—"
-                            );
-                          })()
+      <div className="operation-lines__wrap">
+        <table className="operation-lines">
+          <caption>{t("pricing.perPosition")}</caption>
+          <thead>
+            <tr>
+              <th scope="col">#</th>
+              <th scope="col">{t("projects.location")}</th>
+              <th scope="col">{t("pricing.quantity")}</th>
+              <th scope="col">{t("pricing.unitPrice")}</th>
+              <th scope="col">{t("pricing.lineDiscount")}</th>
+              <th scope="col">{t("pricing.lineCost")}</th>
+              <th scope="col">{t("pricing.net")}</th>
+              <th scope="col">{t("pricing.marginNet")}</th>
+              {canLineDelta && <th scope="col">{t("pricing.lineDelta")}</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {(operation.lines ?? []).map((line) => {
+              const position = positions.get(line.position_index);
+              const breakdown = breakdowns.get(line.position_index);
+              const lineDiscount = line.discount_pct ? Number(line.discount_pct) : null;
+              return (
+                <Fragment key={line.position_index}>
+                  <tr>
+                    <td>
+                      <span className="operation-lines__vano">
+                        {position?.design && <PositionThumb design={position.design} />}
+                        {line.position_index}
+                      </span>
+                    </td>
+                    <td>{position?.location_tag || "—"}</td>
+                    <td>{line.quantity ?? position?.quantity ?? "—"}</td>
+                    <td className="operation-lines__money">
+                      {line.unit_price != null
+                        ? formatMoney(line.unit_price, operation.currency)
                         : "—"}
                     </td>
-                  )}
-                </tr>
-                {breakdown && (
-                  <tr className="operation-lines__detail">
-                    <td colSpan={canLineDelta ? 9 : 8}>
-                      <details>
-                        <summary>{t("pricing.costComposition")}</summary>
-                        <CostComposition
-                          currency={operation.currency}
-                          discount={discount}
-                          entry={breakdown}
-                          lineNet={line.line_net}
-                          lineCost={costs.get(line.position_index) ?? "0"}
-                        />
-                      </details>
+                    <td>
+                      {lineDiscount !== null && lineDiscount > 0
+                        ? `−${pctDisplay(lineDiscount)} %`
+                        : "—"}
                     </td>
+                    <td className="operation-lines__money">
+                      {formatMoney(costs.get(line.position_index) ?? "0", operation.currency)}
+                    </td>
+                    <td className="operation-lines__money">
+                      {discount > 0 && position?.quantity ? (
+                        <>
+                          {formatMoney(line.line_net, operation.currency)}
+                          <span className="operation-lines__list">
+                            {" "}
+                            (
+                            {formatMoney(
+                              String(Number(line.line_net) / (1 - discount)),
+                              operation.currency,
+                            )}{" "}
+                            −{pctDisplay(discount)}%)
+                          </span>
+                        </>
+                      ) : (
+                        formatMoney(line.line_net, operation.currency)
+                      )}
+                    </td>
+                    <td className="operation-lines__money">
+                      {marginText(
+                        line.line_net,
+                        costs.get(line.position_index) ?? "0",
+                        operation.currency,
+                      )}
+                    </td>
+                    {canLineDelta && (
+                      <td className="operation-lines__delta operation-lines__money">
+                        {position?.price_net != null
+                          ? (() => {
+                              const lineDelta = Number(line.line_net) - Number(position.price_net);
+                              return lineDelta !== 0 ? (
+                                <span data-negative={lineDelta < 0 || undefined}>
+                                  {lineDelta > 0 ? "+" : ""}
+                                  {formatMoney(String(lineDelta), operation.currency)}
+                                </span>
+                              ) : (
+                                "—"
+                              );
+                            })()
+                          : "—"}
+                      </td>
+                    )}
                   </tr>
-                )}
-              </Fragment>
-            );
-          })}
-        </tbody>
-      </table>
+                  {breakdown && (
+                    <tr className="operation-lines__detail">
+                      <td colSpan={canLineDelta ? 9 : 8}>
+                        <details>
+                          <summary>{t("pricing.costComposition")}</summary>
+                          <CostComposition
+                            currency={operation.currency}
+                            discount={discount}
+                            entry={breakdown}
+                            lineNet={line.line_net}
+                            lineCost={costs.get(line.position_index) ?? "0"}
+                          />
+                        </details>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
       {kindRows.length > 0 && (
         <details className="operation-authorities">
