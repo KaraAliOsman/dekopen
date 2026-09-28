@@ -521,7 +521,9 @@ def confirm_order_type_batch(
         allocation_by_requirement = {
             str(item["requirement_line_id"]): item for item in allocations
         }
-        if len(allocation_by_requirement) != len(requirement_rows) or any(
+        # Allocations persist for requirements a partially-received cancel
+        # left covered — this batch only needs one per UNCLAIMED line.
+        if any(
             str(item["id"]) not in allocation_by_requirement for item in requirement_rows
         ):
             raise DocumentaryError("order_type_allocation_incomplete")
