@@ -268,3 +268,11 @@ El picker de kits era inalcanzable: `GET /api/v1/projects/design-options/<system
 - **corregido** Defecto real: `project_payment_links` invisible para `portal_backend` → "Pagar ahora" inalcanzable. Migración `20261228000003_portal_payment_link_read` (D32) verificada end-to-end con `portal_quote` — `payment_url` devuelto.
 - **documentado** Alternativas fuera del DOC-01 (D31); `missing` opcional → "—" sin "None"; Carta/A4 declarados con fuentes embebidas; legible en grises.
 - **pendiente honesto** `payment` state en portal devuelve `None` hasta que existe una fila `project_payments` — correcto (sin abono registrado no hay abono); banner de sustituida enlaza a la vigente.
+
+## Fase 08 — Visibilidad de compras/recepción/stock/retazos
+
+Recon: la maquinaria del backend ya era profunda (ledger idempotente con `receipt_key`, lock `version_id:order_type`, `cancel_order` con `released_at`, retazos con reserva atómica y lineage). Los huecos reales eran de superficie.
+
+- `orders_index` + `purchasing_state` proyectan `released_qty`, `damaged_qty`, `receipt_count` (D33). Pedido cancelado → muestra liberado + CTA "Volver a pedir"; incidencia → alerta + columna Recepciones en el índice.
+- Necesidades con SKU duplicado declaran su agregabilidad (D35). "Fecha necesaria" documentada como ausente sin autoridad (D34) — no fabricada.
+- Tests: `test_orders_index_projects_orders_with_received_totals` extendido (39 verdes); vitest purchasing 15 verdes.

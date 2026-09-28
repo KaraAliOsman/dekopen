@@ -201,3 +201,13 @@ SHA del paquete: `6c61859` (+ capturas en este commit). Fixtures: `scripts/dev_f
 | `frontend/src/i18n/es-CL.ts` | Share honesto: abrir canal ≠ enviado; "Enlace copiado al portapapeles" |
 | `supabase/migrations/20261228000003_portal_payment_link_read.sql` | SELECT + policy org-scoped para `portal_backend` en `project_payment_links`; `portal_quote` devuelve `payment_url` real (verificado vía servicio) |
 | `docs/redesign/captures/phase07/live/` | 17 PNG + REPORT.md + video `rec-86d733b8-…-edited.mp4`: portal desktop/móvil, estados emitida/aprobada/rechazada/vencida/sustituida, aprobación idempotente, enlace antiguo→vigente, paridad UI/PDF/portal en misma revisión |
+
+## Fase 08 (commit `7b7035f`)
+
+| Archivo / evidencia | Qué prueba |
+|---|---|
+| `backend/purchasing/service.py` + `serializers.py` | `orders_index`/`purchasing_state` proyectan `released_qty`, `damaged_qty`, `receipt_count` — incidencia y liberación visibles sin abrir el pedido |
+| `frontend/src/features/purchasing/PurchasingPage.tsx` | Columna Recepciones con flag `dañado:N`; pedido cancelado muestra liberado + CTA "Volver a pedir"; `consolidateHint` cuando SKU de compra duplicado |
+| `backend/tests/test_inventory.py` | `test_orders_index_projects_orders_with_received_totals` verifica damaged=1, receipts=2 |
+| `docs/redesign/decisions.md` D33–D35 | Incidencia en índice; fecha necesaria documentada sin autoridad; agregabilidad declarada |
+| verificación en vivo (agente de testing) | Recorrido necesidad→pedido→recepción parcial→incidencia→restante→reserva→consumo + cancelar/recomprar + concurrencia + retazos |

@@ -266,3 +266,15 @@ Las alternativas viven sólo en el flujo AI de design-alternatives, fuera del `f
 ## D32 — Portal lee `project_payment_links` bajo `app.portal_org_id`
 
 La policy `project_payment_links_isolation` usa `current_user_org_ids()` que devuelve vacío para `portal_backend` (auth.uid() nulo por diseño — el token es la única capacidad). Resultado: el portal nunca veía el link de pago y "Pagar ahora" era inalcanzable aunque hubiera link PENDING. La migración `20261228000003` otorga SELECT + policy org-scoped idéntica a la de `project_payments` (`20261207000000`) — el token acota la org por `app.portal_org_id`, ninguna otra org es visible. Verificado end-to-end: `portal_quote` devuelve `payment_url` real.
+
+## D33 — Incidencia de recepción visible en el índice, no sólo al abrir el pedido
+
+`orders_index` sólo agregaba `total_qty`/`good_qty`/`outstanding`; un pedido PARTIALLY_RECEIVED con unidades dañadas era indistinguible de uno sano, y un pedido CANCELLED no declaraba cuánto liberó. Ahora el índice proyecta `receipt_count`, `damaged_qty` (JOIN a `order_receipts`/`order_receipt_lines`) y `released_qty` (`released_at` estampado por `cancel_order`). La columna "Recepciones" marca `dañado: N` en rojo cuando hay incidencia; el pedido cancelado muestra la cantidad liberada y un CTA "Volver a pedir" que enlaza a la necesidad abierta (el lote liberado ya vuelve a `unclaimed_requirements` por el mismo `released_at`). `purchasing_state` (vista por versión) recibe los mismos tres campos.
+
+## D34 — "Fecha necesaria" documentada como no disponible, no inventada
+
+El mandato pide "fecha necesaria" por necesidad. El modelo real no la tiene: `purchase_requirement_lines` no lleva fecha y `deliveries.scheduled_date` está scoped a la OT, no a la necesidad de compra. En lugar de fabricar un campo, la necesidad muestra lo que sí tiene autoridad (requerido, reservado/disponible, pendiente, obra/revisión) y el gap queda registrado aquí. Si se decide un "needed-by", la fuente correcta es la fecha de entrega planificada de la OT que origina la necesidad — vía `purchase_allocations`, no una columna nueva sobre la línea.
+
+## D35 — Agregabilidad declarada en la lista de necesidades
+
+Cuando varios requisitos comparten `purchasing_sku`, la sección muestra `consolidateHint` explicando que se consolidan en la misma orden al asignar un proveedor y que cada línea conserva su traza (positions de origen ya viajan en `requirement_lines[].positions`). No se presentan como duplicados sin explicación ni se fusionan en una sola fila perdiendo la relación línea→posición.
