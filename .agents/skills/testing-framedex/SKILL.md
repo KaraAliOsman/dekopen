@@ -282,3 +282,31 @@ description: Local dev-stack recipe for DEKOPEN E2E testing — Supabase CLI sta
   Ask = synchronous POST `/ai/ask/` (`surface`, `refs:{project_id}`, `question`,
   `operation_key`), not a queued job. The dock renders its own failure state on
   `ai_provider_error` — that IS the intentional path.
+
+## Phase-03 3D-render capture notes (fenestration evidence)
+- Benchmark route `/benchmark` is public — fixture cards `.benchmark-fixture`
+  (idx: 0=fixed,1=tiltTurn,2=twoSash,3=sliding,4=sliding3,5=awning,6=door,7=corner,
+  8=bow,9=frameless,10=trapezoid,11=arch). 3D activates via `.benchmark-three-activate`
+  ("Orbitar"); enlarge the card with `.model3d-view{position:fixed;inset:2%;z-index:9999}`
+  (r3f auto-resizes) — then wheel-zoom (OrbitControls dollies to controls.target=center,
+  NOT the cursor — zoom toward center then drag the part to middle).
+- Close-ups: full-viewport `Page.captureScreenshot` then PIL-crop by
+  `getBoundingClientRect` × (pngW/innerWidth). `clip=` param is unreliable under
+  emulation (DSF mismatch). Left-drag=orbit, middle-drag=pan, wheel=dolly.
+- **WebGL in a fresh CDP chrome**: launch needs `--use-gl=angle --use-angle=swiftshader
+  --enable-unsafe-swiftshader` else the 3D card shows "Tu navegador no puede mostrar WebGL".
+- **Theme is React state, not data-theme**: `useTheme()` reads a provider that only
+  initializes from `localStorage['dekopen.theme']` ON MOUNT — to flip the 3D stage you
+  must set localStorage THEN `Page.navigate`/reload. Setting `documentElement.dataset.theme`
+  alone changes the page bg but NOT the r3f stage (`--theme-viewport-stage`/`--model3d-*`).
+- **DraftField commits on real `focusout` only** — synthetic `FocusEvent("blur")` does
+  NOT trigger React onBlur. Use real CDP input: click the field, Ctrl+A, type, then
+  Enter (calls `.blur()` → commit) or Tab. Setting `.value` + `input` event leaves it
+  as a draft that reverts.
+- **UnsavedChangesGuard blocks `Page.navigate`** with a "Leave site?" dialog after any
+  dirty editor edit — dismiss it (real click "Leave") or the nav recv() hangs.
+- Handle-height out-of-range → 2D `.handle-lever.is-datum-invalid` + `.handle-datum-flag`
+  red dashed ring + `<title>` text; 3D `.model3d-diagnostics` chips ("Herraje esquemático",
+  "Altura de manilla fuera de rango"). Manilla inspector field = "Altura de manilla (mm)".
+- `--model3d-handle`(#4a5055)/`--model3d-steel`(#a9b2b8) use metalness≤0.9 with NO envMap
+  → hardware renders near-black/flat. Metalness needs an `<Environment>`/HDRI to read metallic.

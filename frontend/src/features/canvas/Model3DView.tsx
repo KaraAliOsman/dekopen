@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Edges, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import type { PlanGeometry } from "../../api/generated/models";
 import { t } from "../../i18n/es-CL";
 import type { ProductJson } from "./productEditing";
@@ -276,6 +277,28 @@ function SolidMesh({
   );
 }
 
+/** Procedural studio environment — a bare PBR metal needs reflections to
+ * read as metal; without an env map metalness collapses to black. RoomEnvironment
+ * is generated code (no HDRI download): softbox walls give handles/hinges the
+ * highlights that sell them as satin metal. */
+function StudioEnvironment({ commercial }: { commercial: boolean }): null {
+  const gl = useThree((state) => state.gl);
+  const scene = useThree((state) => state.scene);
+  useEffect(() => {
+    const pmrem = new THREE.PMREMGenerator(gl);
+    const envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environment = envMap;
+    scene.environmentIntensity = commercial ? 0.6 : 0.45;
+    return () => {
+      scene.environment = null;
+      scene.environmentIntensity = 1;
+      envMap.dispose();
+      pmrem.dispose();
+    };
+  }, [gl, scene, commercial]);
+  return null;
+}
+
 /** Keeps the live camera fitted when the scene bounds change — the Canvas
  * `camera` prop only applies at mount, so a growing assembly would leave
  * the original frustum. Refits along the current view direction so the
@@ -379,6 +402,7 @@ function SceneContent({
   return (
     <>
       <ClipSetup />
+      <StudioEnvironment commercial={mode === "commercial"} />
       <Stage scene={scene} theme={theme} />
       <ambientLight intensity={mode === "commercial" ? 0.55 : 0.85} />
       {/* Commercial mode gets studio key/fill; technical stays flat-lit. */}

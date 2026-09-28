@@ -253,6 +253,24 @@ const BENCH_KITS: KitChoice[] = [
     ],
   } as KitChoice,
   {
+    // The 3-leaf fixture binds this kit so the surface-pull path renders
+    // next to the flush cup — real catalogs sell both families.
+    sku: "KIT-SLIDING-TIRADOR",
+    name: "Kit Corredera con tirador",
+    opening_type: "SLIDING",
+    contents: [
+      {
+        sku: "DEMO-CARR-60",
+        name: "Carro doble rueda",
+        qty: "2",
+        unit: "unit",
+        category: "ROLLER",
+      },
+      { sku: "DEMO-TIR-60", name: "Tirador D", qty: "1", unit: "unit", category: "HANDLE" },
+      { sku: "DEMO-CIERRE-60", name: "Cierre gancho", qty: "1", unit: "unit", category: "LOCK" },
+    ],
+  } as KitChoice,
+  {
     sku: "KIT-AWNING-16",
     name: 'Kit Proyectante Compás 16" 45kg',
     opening_type: "AWNING",
@@ -404,7 +422,9 @@ const KIT_BY_OPENING: Record<string, string> = {
 function bindKits(product: ProductJson): ProductJson {
   const stamp = (node: IntentNode): void => {
     const opening = node.opening_type ?? "";
-    if (opening.startsWith("SLIDING")) node.hardware_set_sku = "KIT-SLIDING";
+    if (opening === "SLIDING_3L" || opening === "SLIDING_4L")
+      node.hardware_set_sku = "KIT-SLIDING-TIRADOR";
+    else if (opening.startsWith("SLIDING")) node.hardware_set_sku = "KIT-SLIDING";
     else if (KIT_BY_OPENING[opening]) node.hardware_set_sku = KIT_BY_OPENING[opening];
     for (const child of node.children ?? []) stamp(child);
   };
