@@ -1,9 +1,10 @@
-/* DEKOPEN Bot identity — reference: referencias/dekopen-bot-original.png.
- * A graphite sphere with twin cyan capsule eyes and a thin cyan orbital
- * ribbon that wraps front/behind the body. Eyes carry life (pose, blink,
- * gaze), the outer ring carries job status, the ribbon is identity with
- * subtle state tints. Animations are CSS-only: no timers, free pause in
- * background tabs, one reduced-motion query. */
+/* DEKOPEN Bot identity — flat 2D, modern-assistant style.
+ * A solid graphite sphere with a darker bottom crescent, twin cyan capsule
+ * eyes and one thin cyan orbit line that wraps front/behind the body. No
+ * gradients, speculars or glow halos. Eyes carry life (pose, blink, gaze),
+ * the outer arc carries job status, the orbit line is identity with subtle
+ * state tints. Animations are CSS-only: no timers, free pause in background
+ * tabs, one reduced-motion query. */
 
 .orb {
   /* Sphere palette tokens live in styles/tokens.css — the identity IS the
@@ -44,11 +45,10 @@
   stroke: var(--orb-edge);
   stroke-width: 0.8;
 }
-.orb__spec {
-  opacity: var(--orb-spec-op);
-}
-.orb__bounce {
-  opacity: 0.6;
+/* Flat crescent under the belly — the only depth cue; solid fill, drawn
+ * inside the silhouette so it never reaches the eyes. */
+.orb__shade {
+  fill: var(--orb-deep);
 }
 .orb__eyes--joy path {
   fill: none;
@@ -87,11 +87,10 @@
   visibility: hidden;
 }
 
-/* Small silhouettes: drop the micro-details that muddy sub-28px renders,
+/* Small silhouettes: drop the crescent — at <28px it flattens the face;
  * and push the open eyes larger — at 22px the capsules fall under 3px wide
- * and the face stops reading. The orbit ring stays: it IS the identity. */
-.orb--s .orb__bounce,
-.orb--s .orb__spec {
+ * and the face stops reading. The orbit line stays: it IS the identity. */
+.orb--s .orb__shade {
   display: none;
 }
 .orb--s .orb__eyes--open {
@@ -378,11 +377,8 @@
   stroke: var(--orb-edge);
   stroke-width: 1;
 }
-.bot-figure__spec {
-  opacity: var(--orb-spec-op);
-}
-.bot-figure__bounce {
-  opacity: 0.6;
+.bot-figure__shade {
+  fill: var(--orb-deep);
 }
 .bot-figure__ribbon {
   fill: none;
