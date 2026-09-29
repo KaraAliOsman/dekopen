@@ -14,6 +14,7 @@ import { useAuthSession } from "./auth/AuthSessionProvider";
 import { LoginPage } from "./auth/LoginPage";
 import { MfaPage } from "./auth/MfaPage";
 import { SelectOrganizationPage } from "./auth/SelectOrganizationPage";
+import { consumeReturnTo } from "./auth/returnTo";
 import { LandingPage } from "./features/landing/LandingPage";
 const WalletPage = lazy(async () => ({
   default: (await import("./features/billing/WalletPage")).WalletPage,
@@ -106,7 +107,10 @@ function HomeRedirect(): JSX.Element {
     // Floor roles live on the production floor — the commercial dashboard
     // would deny its queries and greet them with errors.
     const home = isFloorRole(auth.me?.active_organization?.role) ? "/production" : "/dashboard";
-    return <Navigate to={home} replace />;
+    // A magic link can land on `/` instead of /auth/callback when the site
+    // URL differs from the requested origin — still honor the stashed
+    // destination rather than dropping it on the dashboard.
+    return <Navigate to={consumeReturnTo(home)} replace />;
   }
   // Anonymous visitors get the public product presentation, not a bare login.
   return <LandingPage />;
