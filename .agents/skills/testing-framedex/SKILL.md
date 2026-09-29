@@ -439,3 +439,6 @@ description: Local dev-stack recipe for DEKOPEN E2E testing — Supabase CLI sta
 - **Strict serializers** reject extra keys (400): no `confirmed` on withdraw/cancel, no `reason` on cancel.
 - **Payment**: `payments/` manual receipts OK; `payment-links/` → `flow_not_configured` unless Flow configured in Settings.
 - **Mobile floor**: window manager min ≈500px — use iw=500 as the mobile proxy; check `document.documentElement.scrollWidth` for overflow and walk all elements >iw to find culprits.
+- **Recorder captures the real display `:0`** — Chrome may be running on virtual display `:99` (invisible to the recorder). Relaunch it with `DISPLAY=:0` before recording; beware `pkill -f chrome` matching your own shell command string.
+- **Recorder "edited" output keeps only annotation windows** — for a full-length demo, concatenate the `raw-*.mkv` segments instead (see `docs/redesign/captures/phase14-demo/`).
+- **CNC plan references tools by `code`** — seeding a tool requires `tool_id` whose `code` (e.g. `'drill'`) matches what the plan references, not just the kind.
