@@ -915,7 +915,8 @@ it("shows unit price, per-line discount and the position thumbnail on the decisi
 });
 
 it("keeps the positioned backend reason and links to the resolver surface", async () => {
-  const failure = new ApiError();
+  const failure = new ApiError(422, null);
+  // The mocked ApiError has no fields — attach the payload explicitly.
   Object.assign(failure, {
     payload: {
       error: {
