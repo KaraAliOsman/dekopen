@@ -14,6 +14,7 @@ import { useAuthSession } from "./auth/AuthSessionProvider";
 import { LoginPage } from "./auth/LoginPage";
 import { MfaPage } from "./auth/MfaPage";
 import { SelectOrganizationPage } from "./auth/SelectOrganizationPage";
+import { LandingPage } from "./features/landing/LandingPage";
 const WalletPage = lazy(async () => ({
   default: (await import("./features/billing/WalletPage")).WalletPage,
 }));
@@ -107,7 +108,8 @@ function HomeRedirect(): JSX.Element {
     const home = isFloorRole(auth.me?.active_organization?.role) ? "/production" : "/dashboard";
     return <Navigate to={home} replace />;
   }
-  return <Navigate to="/login" replace />;
+  // Anonymous visitors get the public product presentation, not a bare login.
+  return <LandingPage />;
 }
 
 /** /dashboard is a commercial surface: its queries are role-gated, so a floor

@@ -4,6 +4,7 @@ import { Navigate } from "react-router-dom";
 import { t } from "../i18n/es-CL";
 import { telemetry } from "../telemetry/telemetry";
 import { useAuthSession } from "./AuthSessionProvider";
+import { consumeReturnTo } from "./returnTo";
 import { supabase } from "./supabaseClient";
 
 type FactorState = {
@@ -45,7 +46,7 @@ export function MfaPage(): JSX.Element {
     };
   }, []);
 
-  if (auth.status === "ready") return <Navigate to="/dashboard" replace />;
+  if (auth.status === "ready") return <Navigate to={consumeReturnTo()} replace />;
 
   async function enroll(): Promise<void> {
     if (supabase === null) return;

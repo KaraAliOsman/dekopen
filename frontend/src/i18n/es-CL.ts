@@ -839,6 +839,7 @@ export const messages = {
   "auth.contextError": "No fue posible resolver el contexto autenticado.",
   "auth.callback": "Validando el enlace y resolviendo tu taller…",
   "auth.callbackError": "No fue posible validar el enlace de acceso.",
+  "auth.linkExpired": "El enlace venció. Solicita uno nuevo para entrar.",
   "auth.noMembership": "No tienes una membresía activa. Contacta al propietario del taller.",
   "auth.returnToLogin": "Volver al acceso",
   "auth.signOut": "Cerrar sesión",
@@ -944,6 +945,41 @@ export const messages = {
   "onboarding.later": "Revisar después",
   "onboarding.finish": "Ir al panel",
   "onboarding.loading": "Preparando el recorrido…",
+
+  // Presentación pública — cada afirmación corresponde a una función existente.
+  "landing.enter": "Entrar",
+  "landing.heroTitle": "De la ventana que diseñas al trabajo que entregas",
+  "landing.heroLead":
+    "DEKOPEN conecta el diseño paramétrico, la cotización y el taller: lo que dibujas es lo que se precisa, se corta y se entrega.",
+  "landing.seeProduct": "Ver el producto",
+  "landing.heroBot":
+    "El asistente DEKOPEN acompaña el trabajo con evidencia real, no con promesas.",
+  "landing.botName": "Asistente DEKOPEN",
+  "landing.studioAlt": "Studio de DEKOPEN editando una ventana con cotas",
+  "landing.studioCaption": "Studio — editor paramétrico con cotas en vivo.",
+  "landing.productLabel": "El producto",
+  "landing.designTitle": "Diseñar con claridad",
+  "landing.designBody":
+    "Canvas paramétrico con manipulación directa: divides vanos, cambias tipologías (abatible, oscilobatiente, corredera, bow, no rectangular) y el modelo se valida al instante con cotas reales.",
+  "landing.designAlt": "Editor de posición con cotas y árbol de objeto",
+  "landing.quoteTitle": "Cotizar con producto y precio conectados",
+  "landing.quoteBody":
+    "La cotización nace del modelo: BOM del motor, revisiones selladas, comparación entre versiones y propuesta online que el cliente puede aprobar. Nada se reescribe a mano.",
+  "landing.quoteAlt": "Propuesta de cotización generada desde el producto",
+  "landing.produceTitle": "Producir con piezas comprensibles",
+  "landing.produceBody":
+    "Planes de corte con identidad física por pieza, conservación verificada en cada barra, paquetes de taller por estación y programas de mecanizado con manifiesto.",
+  "landing.produceAlt": "Página real del plan de corte con barras y piezas",
+  "landing.deliverTitle": "Controlar cambios y entregas",
+  "landing.deliverBody":
+    "Trazabilidad de la pieza a la entrega: órdenes por estación, control de calidad, embalaje, despachos parciales y cobranza — todo sobre la revisión sellada.",
+  "landing.deliverAlt": "Tablero de producción con órdenes por estación",
+  "landing.assistantTitle": "Un asistente que dice lo que puede respaldar",
+  "landing.assistantBody":
+    "El DEKOPEN Bot propone cambios con alcance visible, aplica solo con confirmación y enlaza cada afirmación a la entidad real. Si algo no está implementado, lo dice.",
+  "landing.assistantAlt": "Asistente DEKOPEN en el panel lateral de Studio",
+  "landing.footer":
+    "DEKOPEN — software de ingeniería y cotización para talleres de ventanas y puertas.",
   "dashboard.onboardingCta": "Recorrido guiado",
   "shell.navigation": "Navegación principal",
   "shell.skipToContent": "Saltar al contenido",

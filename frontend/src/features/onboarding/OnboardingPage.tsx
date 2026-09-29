@@ -654,7 +654,7 @@ export function OnboardingPage(): JSX.Element {
             <button
               type="button"
               className="ui-button ui-button--primary"
-              onClick={() => finish("/dashboard")}
+              onClick={() => finish(projectId ? `/projects/${projectId}` : "/dashboard")}
             >
               {t("onboarding.finish")}
             </button>

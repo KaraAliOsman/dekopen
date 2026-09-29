@@ -1,18 +1,29 @@
-import { type FormEvent, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { type FormEvent, useEffect, useState } from "react";
+import { Navigate, useLocation } from "react-router-dom";
 
 import { t } from "../i18n/es-CL";
 
 import { useAuthSession } from "./AuthSessionProvider";
+import { consumeReturnTo, stashReturnTo } from "./returnTo";
 
 export function LoginPage(): JSX.Element {
   const auth = useAuthSession();
+  const location = useLocation();
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (auth.status === "ready") return <Navigate to="/dashboard" replace />;
+  // A guarded route hands its path in router state; stash it so the intended
+  // destination survives the magic-link round trip through the mail client.
+  useEffect(() => {
+    const from = (location.state as { from?: unknown } | null)?.from;
+    if (typeof from === "string") stashReturnTo(from);
+  }, [location.state]);
+
+  if (auth.status === "ready") {
+    return <Navigate to={consumeReturnTo()} replace />;
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
