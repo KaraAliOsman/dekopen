@@ -442,3 +442,10 @@ description: Local dev-stack recipe for DEKOPEN E2E testing — Supabase CLI sta
 - **Recorder captures the real display `:0`** — Chrome may be running on virtual display `:99` (invisible to the recorder). Relaunch it with `DISPLAY=:0` before recording; beware `pkill -f chrome` matching your own shell command string.
 - **Recorder "edited" output keeps only annotation windows** — for a full-length demo, concatenate the `raw-*.mkv` segments instead (see `docs/redesign/captures/phase14-demo/`).
 - **CNC plan references tools by `code`** — seeding a tool requires `tool_id` whose `code` (e.g. `'drill'`) matches what the plan references, not just the kind.
+
+## Phase-15 sweep notes
+- Purchasing UI is fully index-driven: order send needs inline form (date+contact+confirm checkbox); receiving form lives inside the order's `details.purchasing-receiving` on `/purchasing` — it's React-controlled, click the `summary` (setting `.open=true` doesn't render children); revision picker is a native `<select>` (prototype setter + change event).
+- Stock adjust: `details.inventory-adjust` → per-item "Ajustar" opens `.inventory-remnant-form` (qty+note required); verify in `/api/v1/inventory/movements/`.
+- Remnant "Etiqueta" renders `.inventory-label` inline (no close button); "Imprimir" → `window.print()` w/ `@media print` isolating the label (24-page count in dialog is harmless — hidden content). Print dialog BLOCKS CDP websocket — cancel it via GUI before continuing.
+- Doc generators ("Generar / abrir", DOC-0x PDF/XLSX) call `window.open(signed_storage_url)` — stub `window.open` to capture the URL, then `urlretrieve` and verify `%PDF`+`%%EOF`/PK.
+- Mobile pass: `Emulation.setDeviceMetricsOverride width=390 dsf=0 mobile=false` — must re-check `innerWidth` after nav (mobile=true can yield iw≠width).

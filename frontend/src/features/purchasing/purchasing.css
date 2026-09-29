@@ -374,6 +374,11 @@
 .inventory-label .inventory-label-rack {
   font-size: 0.85rem;
 }
+.inventory-label-actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
 @media print {
   body * {
     visibility: hidden;
@@ -381,6 +386,11 @@
   .inventory-label,
   .inventory-label * {
     visibility: visible;
+  }
+  /* The print/dismiss controls are screen-only chrome — never on the label. */
+  .inventory-label .inventory-label-actions,
+  .inventory-label .inventory-label-actions * {
+    visibility: hidden;
   }
   .inventory-label {
     position: absolute;

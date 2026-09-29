@@ -601,9 +601,14 @@ export function InventorySection({
             <p className="inventory-label-rack">
               {t("inventory.rack")}: {label.rack}
             </p>
-            <button type="button" className="secondary" onClick={() => window.print()}>
-              {t("inventory.labelPrint")}
-            </button>
+            <div className="inventory-label-actions">
+              <button type="button" className="secondary" onClick={() => window.print()}>
+                {t("inventory.labelPrint")}
+              </button>
+              <button type="button" className="secondary" onClick={() => setLabel(null)}>
+                {t("catalog.close")}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

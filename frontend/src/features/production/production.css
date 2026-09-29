@@ -328,6 +328,11 @@
   display: flex;
   gap: 0.75rem;
   font-size: 0.85rem;
+  flex-wrap: wrap;
+}
+.production-events li > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .production-events time {
   color: var(--theme-text-secondary);
@@ -488,6 +493,8 @@
 
 .production-packing {
   margin-block: var(--space-4, 16px);
+  /* Packing tables can exceed a phone's width — scroll inside the section. */
+  overflow-x: auto;
 }
 
 .production-label-code {
@@ -956,9 +963,20 @@ div:has(> table.production-plan) {
   gap: 0.25rem;
   font-size: 0.8125rem;
   flex: 1;
+  min-width: 0;
 }
 .production-trace-lookup input {
   font-family: var(--font-mono, ui-monospace, monospace);
+  min-width: 0;
+  width: 100%;
+}
+@media (max-width: 480px) {
+  .production-trace-lookup {
+    flex-wrap: wrap;
+  }
+  .production-trace-lookup label {
+    flex-basis: 100%;
+  }
 }
 .production-trace-empty {
   font-size: 0.8125rem;

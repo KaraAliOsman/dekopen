@@ -2012,6 +2012,12 @@ function CommercialOperations({
             placeholder={t("pricing.reasonPlaceholder")}
             value={reason}
             onChange={(event) => setReason(event.target.value)}
+            onFocus={(event) => {
+              // The seeded first-quote reason is a convenience, not content to
+              // append to — select it on focus so typing replaces it instead
+              // of concatenating ("Cotización inicial…" + typed text).
+              if (reason === t("pricing.firstQuoteReason")) event.target.select();
+            }}
           />
         </label>
         <label>

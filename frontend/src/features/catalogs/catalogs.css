@@ -92,6 +92,20 @@
   gap: 1rem;
 }
 
+/* Long system names/records must wrap, not stretch the page — the detail
+ * column hosts wide tables inside scroll containers, which can only shrink
+ * if every level allows min-width:0. */
+.catalog-detail > *,
+.ws > * {
+  min-width: 0;
+}
+.catalog-detail h2,
+.ws-identity-head h2,
+.ws-chip,
+.ws-badge {
+  overflow-wrap: anywhere;
+}
+
 .catalog-tabs {
   display: flex;
   flex-wrap: wrap;
@@ -557,7 +571,7 @@
   border-radius: var(--theme-radius);
   padding: 0.6rem;
   display: grid;
-  grid-template-columns: 92px 1fr;
+  grid-template-columns: 92px minmax(0, 1fr);
   gap: 0.7rem;
 }
 .ws-article-section {
