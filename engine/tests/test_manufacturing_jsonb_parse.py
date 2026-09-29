@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import pytest
 from decimal import Decimal
+from typing import Any
 
 from dekopen_engine.manufacturing import (
     ManufacturingAuthorityError,
@@ -21,7 +22,7 @@ from dekopen_engine.manufacturing import (
 from dekopen_engine.manufacturing_trace import MemberSide
 from dekopen_engine.models import BayOpeningType
 
-_HANDLE = {
+_HANDLE: dict[str, Any] = {
     "schema_version": 1,
     "policy_id": "P1",
     "version": 2,
@@ -41,7 +42,7 @@ _HANDLE = {
     ],
 }
 
-_PLACEMENT = {
+_PLACEMENT: dict[str, Any] = {
     "schema_version": 1,
     "policy_id": "PP1",
     "version": 2,
@@ -55,7 +56,7 @@ _PLACEMENT = {
     },
 }
 
-_REINFORCEMENT = {
+_REINFORCEMENT: dict[str, Any] = {
     "schema_version": 1,
     "policy_id": "R1",
     "version": 1,

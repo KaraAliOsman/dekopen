@@ -391,7 +391,7 @@
   stroke-width: 1.4;
 }
 .bot-figure__spec {
-  fill: #e8f0f2;
+  fill: var(--orb-spec);
   opacity: var(--orb-spec-op);
 }
 .bot-figure__bounce {

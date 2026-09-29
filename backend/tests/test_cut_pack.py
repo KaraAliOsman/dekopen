@@ -153,6 +153,9 @@ def _install_db(monkeypatch, order_payload):
         raise AssertionError(lowered)
 
     monkeypatch.setattr("production.cut_pack.one", fake_one)
+    # _bar_context looks up article/remnant facts — the fixture catalog has
+    # no mapping rows, so the lookup returns empty.
+    monkeypatch.setattr("production.cut_pack.rows", lambda *a, **k: [])
     monkeypatch.setattr(
         "production.cut_pack.documentary_backend", contextlib.nullcontext
     )

@@ -84,6 +84,8 @@
   --orb-ribbon: #0fd8ea;
   --orb-ribbon-soft: rgba(15, 216, 234, 0.45);
   --orb-glint: rgba(255, 255, 255, 0.75);
+  /* Specular highlight on the graphite sphere — physical finish, theme-invariant */
+  --orb-spec: #e8f0f2;
 }
 
 :root[data-theme="dark"] {

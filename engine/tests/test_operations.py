@@ -722,8 +722,8 @@ def test_mirrored_door_mirrors_machining_host() -> None:
     assert prep_on_left.operation_id != prep_on_right.operation_id
 
 
-def _op(**overrides: object) -> ManufacturingOperation:
-    base: dict[str, object] = {
+def _op(**overrides: Any) -> ManufacturingOperation:
+    base: dict[str, Any] = {
         "operation_id": "op-test",
         "kind": OperationKind.DRILL,
         "host_kind": "MEMBER",
