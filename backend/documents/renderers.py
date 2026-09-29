@@ -271,7 +271,10 @@ def _pct(value: object) -> str:
     """Yield percentages print at one decimal — 93.5%, not 93.4667%."""
     if value is None:
         return "—"
-    return format(Decimal(str(value)).quantize(Decimal("0.1")), "f")
+    try:
+        return format(Decimal(str(value)).quantize(Decimal("0.1")), "f")
+    except (InvalidOperation, ValueError):
+        return _value(value)
 
 
 def _dim(value: object) -> str:
@@ -455,13 +458,19 @@ def _num(value: object) -> Decimal:
     if isinstance(value, bool):
         raise DocumentaryError("svg_dimension_invalid")
     if isinstance(value, (Decimal, int)):
-        return Decimal(value)
-    if isinstance(value, str):
+        number = Decimal(value)
+    elif isinstance(value, str):
         try:
-            return Decimal(value)
+            number = Decimal(value)
         except ArithmeticError:
             raise DocumentaryError("svg_dimension_invalid") from None
-    raise DocumentaryError("svg_dimension_invalid")
+    else:
+        raise DocumentaryError("svg_dimension_invalid")
+    # NaN/±Infinity reach Decimal through payload strings — geometry math on
+    # them raises InvalidOperation mid-render instead of rejecting here.
+    if not number.is_finite():
+        raise DocumentaryError("svg_dimension_invalid")
+    return number
 
 
 def _pt(value: Decimal) -> str:

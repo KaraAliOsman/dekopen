@@ -3410,7 +3410,7 @@ def void_dispatch_note(
             """
             SELECT id, note_code FROM public.dispatch_notes
             WHERE org_id=%s AND work_order_id=%s AND voided_at IS NULL
-            ORDER BY created_at DESC
+            ORDER BY created_at DESC, id DESC LIMIT 1
             """,
             [org_id_s, order_id_s],
             "dispatch_note_not_found",
