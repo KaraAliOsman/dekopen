@@ -83,6 +83,18 @@
   padding: 1rem;
   margin: 1rem 0;
   background: var(--theme-surface-panel);
+  overflow-x: auto;
+  max-width: 100%;
+}
+.purchasing-type > table {
+  min-width: 36rem;
+}
+.purchasing-stock {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.purchasing-stock > table {
+  min-width: 36rem;
 }
 .purchasing-badge {
   margin-left: 0.75rem;
@@ -112,6 +124,11 @@
 .purchasing-order {
   border-top: 1px solid var(--theme-border-subtle);
   padding: 0.75rem 0;
+  overflow-x: auto;
+  max-width: 100%;
+}
+.purchasing-receipts {
+  min-width: 34rem;
 }
 .purchasing-eligibility form {
   display: grid;
@@ -152,9 +169,12 @@
 
 .purchasing-coverage {
   margin: 1rem 0;
+  overflow-x: auto;
+  max-width: 100%;
 }
 .purchasing-coverage table {
   width: 100%;
+  min-width: 38rem;
   border-collapse: collapse;
   font-size: 0.9rem;
 }
@@ -224,6 +244,8 @@
 }
 .inventory-movements {
   margin-top: 0.75rem;
+  overflow-x: auto;
+  max-width: 100%;
 }
 .inventory-movements summary {
   cursor: pointer;
@@ -232,6 +254,7 @@
 }
 .inventory-movements table {
   margin-top: 0.5rem;
+  min-width: 34rem;
 }
 .inventory-adjust {
   margin-bottom: 0.9rem;

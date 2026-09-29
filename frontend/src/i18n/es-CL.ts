@@ -1190,6 +1190,7 @@ export const messages = {
   "jobs.fail.invalid":
     "Los datos del trabajo no son válidos — revisa la configuración antes de reintentar.",
   "jobs.fail.generic": "Error técnico. Reintenta; si persiste, reporta el código al soporte.",
+  "jobs.fail.canceled": "Trabajo cancelado.",
   "jobs.type.ingest.document.extract": "Extracción de documento",
   "jobs.type.ingest.catalog.extract": "Compilación de catálogo",
   "jobs.type.document.artifact.generate": "Generación de documento",

@@ -865,7 +865,9 @@ export function AssistantWorkspacePage(): JSX.Element {
                 </span>
                 {" · "}
                 {SURFACE_LABELS[job.surface] ?? job.surface}
-                {job.error_code ? ` · ${t(jobErrorKey(job.error_code))}` : ""}
+                {(job.state === "FAILED" || job.state === "FAILED_RETRYABLE") && job.error_code
+                  ? ` · ${t(jobErrorKey(job.error_code))}`
+                  : ""}
               </p>
             </div>
             <div className="aiws-head__actions">

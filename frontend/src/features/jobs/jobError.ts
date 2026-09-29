@@ -3,6 +3,7 @@ import type { TranslationKey } from "../../i18n/es-CL";
 /** Backend failure codes grouped into operator-facing recovery language; the
  * raw code stays visible as a diagnostic tail, not as the message. */
 export function jobErrorKey(code: string): TranslationKey {
+  if (code === "ai_job_canceled" || code === "ai_job_unclaimable") return "jobs.fail.canceled";
   if (code.includes("cost_list") || code.includes("pricing_configuration"))
     return "jobs.fail.missingAuthority";
   if (code.endsWith("_not_found")) return "jobs.fail.notFound";
