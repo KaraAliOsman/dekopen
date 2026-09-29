@@ -258,8 +258,7 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
       setNotice(t("clients.deactivated"));
       void query.refetch();
     } catch (caught) {
-      if (!controller.signal.aborted)
-        setError(t("projects.uncertain"));
+      if (!controller.signal.aborted) setError(t("projects.uncertain"));
     } finally {
       if (!controller.signal.aborted) setBusy(false);
     }
