@@ -5,6 +5,7 @@ import {
   productionOrderCncReadiness,
 } from "../../api/generated/dekopen";
 import { apiFetchBlob } from "../../api/apiMutator";
+import { actionErrorDetail } from "../errors";
 import { fmtMm } from "../../format";
 import { t, tOptional } from "../../i18n/es-CL";
 import { opLabel } from "./labels";
@@ -178,8 +179,9 @@ export function CncPanel({ orderId, canWrite }: { orderId: string; canWrite: boo
       });
       await load();
     } catch (err) {
-      const apiErr = err as { detail?: string; error?: string };
-      setError(apiErr.detail || apiErr.error || t("production.cncProgramError"));
+      // ApiError carries the contract payload on .payload — reading
+      // .detail/.error off the error object itself always misses it.
+      setError(actionErrorDetail(err, t("production.cncProgramError")));
     } finally {
       setBusy(false);
     }

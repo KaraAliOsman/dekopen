@@ -140,10 +140,18 @@ export function CanvasViewport({
       fit();
   }, [fit, size, contentBox, contentEpoch]);
 
-  // Space held → pan mode. Listen on window so it works wherever focus sits.
+  // Space held → pan mode. Listen on window so it works wherever focus sits —
+  // except inside form fields, where Space must type a space.
   useEffect(() => {
     const down = (event: KeyboardEvent) => {
-      if (event.code === "Space") spaceRef.current = true;
+      const target = event.target as HTMLElement | null;
+      const editing =
+        target !== null &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable);
+      if (event.code === "Space" && !editing) spaceRef.current = true;
     };
     const up = (event: KeyboardEvent) => {
       if (event.code === "Space") spaceRef.current = false;

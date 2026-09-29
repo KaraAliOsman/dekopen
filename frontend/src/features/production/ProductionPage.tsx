@@ -448,7 +448,9 @@ export function ProductionPage(): JSX.Element {
         // order it isn't about.
         if (generation !== traceGeneration.current) return;
         if (selectedIdRef.current !== id) return;
-        if (response.status === 200) setTrace(response.data);
+        // A non-200 response must behave like a failure — leaving the stale
+        // trace up lets the operator act on pre-mutation stock/piece data.
+        setTrace(response.status === 200 ? response.data : null);
       } catch {
         // On failure drop the stale data instead of leaving it displayed —
         // the reload control reappears and the card can't mislead the

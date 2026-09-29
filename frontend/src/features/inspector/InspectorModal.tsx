@@ -10,6 +10,11 @@ import { calculationKey, requestFromInputs } from "../canvas/useEngineCalculatio
 import { previewDrainDraft, workshopReadiness } from "./inspectorDraft";
 import "./inspector.css";
 
+function fmtValues(value: string[] | undefined): string {
+  const items = Array.isArray(value) ? value : [];
+  return items.length ? `${items.join(", ")} mm` : "—";
+}
+
 function humanError(error: unknown): string {
   if (error instanceof ApiError && typeof error.payload === "object" && error.payload !== null) {
     const detail = (error.payload as { error?: { detail?: unknown } }).error?.detail;
@@ -286,10 +291,10 @@ export function InspectorModal({
           {preview && (
             <aside className="inspector-diff" aria-label={t("inspector.preview")}>
               <p>
-                {t("inspector.before")}: {preview.operations[0]?.old_value.join(", ")} mm
+                {t("inspector.before")}: {fmtValues(preview.operations[0]?.old_value)}
               </p>
               <p>
-                {t("inspector.after")}: {preview.operations[0]?.new_value.join(", ")} mm
+                {t("inspector.after")}: {fmtValues(preview.operations[0]?.new_value)}
               </p>
               <button
                 type="button"

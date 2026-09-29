@@ -259,7 +259,7 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
       void query.refetch();
     } catch (caught) {
       if (!controller.signal.aborted)
-        setError(t(caught instanceof ApiError ? "projects.uncertain" : "projects.uncertain"));
+        setError(t("projects.uncertain"));
     } finally {
       if (!controller.signal.aborted) setBusy(false);
     }

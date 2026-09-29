@@ -608,6 +608,9 @@ function CatalogEditor({
   function change(name: string, value: string) {
     setDirty(true);
     setError("");
+    // Editing after an uncertain create is explicit intent to produce a
+    // (different) row — release the retry lock the failure left behind.
+    setUncertainCreate(false);
     setDraft((current) => ({
       ...current,
       [name]: value,
@@ -618,6 +621,7 @@ function CatalogEditor({
   function changeSection(next: (current: SectionDraft) => SectionDraft) {
     setDirty(true);
     setError("");
+    setUncertainCreate(false);
     setSectionDraft(next);
   }
 
