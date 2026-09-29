@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Session } from "@supabase/supabase-js";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
@@ -89,7 +90,11 @@ function DraftSurface(): JSX.Element {
 }
 
 function mount(child: JSX.Element = <Probe />): void {
-  render(<AuthSessionProvider>{child}</AuthSessionProvider>);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <AuthSessionProvider>{child}</AuthSessionProvider>
+    </QueryClientProvider>,
+  );
 }
 
 function seedCanvas(): void {

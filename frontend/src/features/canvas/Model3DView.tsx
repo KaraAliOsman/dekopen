@@ -79,20 +79,24 @@ function LeafGroup({
   useFrame((_, delta) => {
     const step = Math.min(1, delta * 5.5);
     const wantPivot = tiltPose ? "tilt" : "swing";
+    let switched = false;
     let switching = motion.kind === "tilt_turn" && wantPivot !== activePivot.current;
     if (switching && progress.current > 0) {
       // Close on the current pivot before switching to the other.
       const next = progress.current - progress.current * step;
       progress.current = Math.abs(next) < 0.004 ? 0 : Math.max(0, next);
     } else if (switching) {
+      // Pivot flip owes one pose write so the groups re-anchor.
       activePivot.current = wantPivot;
       switching = false;
+      switched = true;
     }
     const moving = progress.current !== target;
     const exploding = explodeProgress.current !== explodeTarget;
-    if (!moving && !exploding && !switching) {
-      // A flipped pivot still owes one write so the groups re-pose.
-      if (activePivot.current === wantPivot && progress.current === 0) return;
+    if (!moving && !exploding && !switching && !switched) {
+      // Settled pose — rewriting identical transforms and scheduling another
+      // frame only burns GPU under frameloop="demand".
+      return;
     }
     if (moving) {
       const next = progress.current + (target - progress.current) * step;

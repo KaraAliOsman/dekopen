@@ -642,6 +642,7 @@ function ProjectHeader({
   canRelease,
   onOpenSection,
   onShareQuote,
+  shareBusy,
 }: {
   project: ProjectResponse;
   orgId: string;
@@ -649,6 +650,7 @@ function ProjectHeader({
   canRelease: boolean;
   onOpenSection: (section: FactsSection) => void;
   onShareQuote: () => void;
+  shareBusy?: boolean;
 }): JSX.Element {
   const payments = useQuery({
     queryKey: ["projects", "payments-summary", orgId, project.id],
@@ -730,6 +732,7 @@ function ProjectHeader({
             ) : (
               <button
                 className="primary-action"
+                disabled={action.share === true && shareBusy === true}
                 onClick={() =>
                   action.share ? onShareQuote() : action.section && onOpenSection(action.section)
                 }
@@ -1217,12 +1220,14 @@ function ProjectWorkspace({
   const [importsDirty, setImportsDirty] = useState(false);
   const [params, setParams] = useSearchParams();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const positionRowRefs = useRef(new Map<string, HTMLDivElement>());
   const [factsCollapsed, setFactsCollapsed] = useState(false);
   const [openSection, setOpenSection] = useState<FactsSection | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [sharedUrl, setSharedUrl] = useState("");
+  const [shareBusy, setShareBusy] = useState(false);
   const [mustReload, setMustReload] = useState(false);
   const lifetime = useRef<AbortController | null>(null);
   const locked = useRef(false);
@@ -1488,7 +1493,10 @@ function ProjectWorkspace({
   // The header's "Enviar al cliente" CTA performs the share itself — mint
   // the portal link, copy it, refresh the approvals track (review WB1).
   async function shareQuote(): Promise<void> {
-    if (!project) return;
+    // Each click mints a new portal link — without the busy guard a
+    // double-click issues two links and the second silently wins.
+    if (!project || shareBusy) return;
+    setShareBusy(true);
     setNotice("");
     setError("");
     try {
@@ -1517,6 +1525,8 @@ function ProjectWorkspace({
       }
     } catch {
       setError(t("quotation.error"));
+    } finally {
+      setShareBusy(false);
     }
   }
   // Deep-linkable triage filter — the dashboard attention queue lands on
@@ -1566,6 +1576,7 @@ function ProjectWorkspace({
             setOpenSection(section);
           }}
           onShareQuote={() => void shareQuote()}
+          shareBusy={shareBusy}
           project={project}
         />
       ) : null}
@@ -1792,8 +1803,21 @@ function ProjectWorkspace({
             </div>
             {project.position_count === 0 && <p>{t("projects.noPositions")}</p>}
             <div className="position-grid" role="listbox" aria-label={t("projects.positions")}>
-              {project.positions?.map((position) => {
+              {project.positions?.map((position, positionIndex) => {
                 const status = positionStatusKey(project, position);
+                const positions = project.positions ?? [];
+                // Roving tabindex — a 100-position project must not cost
+                // 100 Tab stops. Arrows move focus+selection together.
+                const activeIndex = Math.max(
+                  0,
+                  positions.findIndex((entry) => entry.id === selectedId),
+                );
+                const moveTo = (index: number): void => {
+                  const target = positions[index];
+                  if (!target) return;
+                  setSelectedId(target.id);
+                  positionRowRefs.current.get(target.id)?.focus();
+                };
                 return (
                   <div
                     aria-selected={selectedId === position.id}
@@ -1805,10 +1829,26 @@ function ProjectWorkspace({
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
                         setSelectedId(position.id);
+                      } else if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+                        event.preventDefault();
+                        moveTo(Math.min(positions.length - 1, positionIndex + 1));
+                      } else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+                        event.preventDefault();
+                        moveTo(Math.max(0, positionIndex - 1));
+                      } else if (event.key === "Home") {
+                        event.preventDefault();
+                        moveTo(0);
+                      } else if (event.key === "End") {
+                        event.preventDefault();
+                        moveTo(positions.length - 1);
                       }
                     }}
+                    ref={(element) => {
+                      if (element) positionRowRefs.current.set(position.id, element);
+                      else positionRowRefs.current.delete(position.id);
+                    }}
                     role="option"
-                    tabIndex={0}
+                    tabIndex={positionIndex === activeIndex ? 0 : -1}
                   >
                     <span className="position-row__thumb">
                       <PositionThumb design={position.design} variant="studio" />

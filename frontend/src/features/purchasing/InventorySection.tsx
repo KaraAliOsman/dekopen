@@ -177,12 +177,13 @@ export function InventorySection({
 
   useEffect(load, [load]);
 
-  async function run(task: Promise<unknown>, fallback: string): Promise<void> {
+  async function run(task: Promise<unknown>, fallback: string): Promise<boolean> {
     setBusy(true);
     setMessage("");
     try {
       await task;
       load();
+      return true;
     } catch (error) {
       const detail =
         error instanceof ApiError && typeof error.payload === "object" && error.payload !== null
@@ -191,6 +192,7 @@ export function InventorySection({
       setMessage(
         typeof detail === "string" && detail ? detail : t(fallback as Parameters<typeof t>[0]),
       );
+      return false;
     } finally {
       setBusy(false);
     }
@@ -243,7 +245,10 @@ export function InventorySection({
         notes: form.notes.trim() || null,
       }),
       "inventory.remnantCreateError",
-    ).then(() => setShowCreate(false));
+    ).then((ok) => {
+      // Closing a failed submit would silently discard the operator's input.
+      if (ok) setShowCreate(false);
+    });
   }
 
   function recordMovement(event: FormEvent): void {
@@ -259,7 +264,9 @@ export function InventorySection({
         note: adjustForm.note.trim(),
       }),
       "inventory.movementError",
-    ).then(() => setAdjustItem(null));
+    ).then((ok) => {
+      if (ok) setAdjustItem(null);
+    });
   }
 
   const adjustTarget = stockItems.find((s) => s.item_id === adjustItem);

@@ -92,7 +92,7 @@ def save_integration(*, org_id: UUID, data: dict) -> dict:
     api_url = str(data.get("api_url") or "https://sandbox.flow.cl/api")
     with transaction.atomic(), documentary_backend():
         existing = rows(
-            "SELECT secret_key FROM public.org_payment_integrations "
+            "SELECT api_key, secret_key FROM public.org_payment_integrations "
             "WHERE org_id=%s AND provider='FLOW'",
             [str(org_id)],
         )
@@ -100,6 +100,11 @@ def save_integration(*, org_id: UUID, data: dict) -> dict:
         if not secret:
             raise contract_error(
                 422, "flow_secret_required", "La clave secreta de Flow es obligatoria."
+            )
+        api_key = data.get("api_key") or (existing[0]["api_key"] if existing else None)
+        if not api_key:
+            raise contract_error(
+                422, "flow_api_key_required", "La api key de Flow es obligatoria."
             )
         rows(
             """
@@ -118,7 +123,7 @@ def save_integration(*, org_id: UUID, data: dict) -> dict:
             [
                 str(org_id),
                 api_url,
-                data["api_key"].strip(),
+                api_key.strip(),
                 secret.strip(),
                 (data.get("payer_return_url") or "").strip() or None,
                 bool(data.get("enabled", True)),

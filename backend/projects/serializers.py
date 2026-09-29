@@ -409,7 +409,9 @@ class PaymentIntegrationSerializer(StrictSerializer):
     api_url = serializers.ChoiceField(
         choices=("https://sandbox.flow.cl/api", "https://www.flow.cl/api")
     )
-    api_key = serializers.CharField(min_length=10, max_length=100)
+    api_key = serializers.CharField(
+        min_length=10, max_length=100, required=False, allow_blank=True
+    )
     secret_key = serializers.CharField(
         min_length=10, max_length=100, required=False, write_only=True, allow_blank=True
     )

@@ -205,7 +205,9 @@ export const messages = {
   "projects.paymentKindParcial": "Abono",
   "projects.paymentKindSaldo": "Saldo",
   "projects.paymentAmount": "Monto",
-  "projects.paymentAmountHint": "Puedes escribir 1500000 o 1.500.000 — el punto agrupa miles.",
+  "projects.paymentAmountHint":
+    "Puedes escribir 1500000, 1.500.000 o 1.500.000,50 — el punto agrupa miles, la coma marca decimales.",
+  "projects.paymentAmountInvalid": "Ingresa un monto numérico válido.",
   "projects.paymentMethod": "Medio",
   "projects.paymentMethodTransfer": "Transferencia",
   "projects.paymentMethodCash": "Efectivo",

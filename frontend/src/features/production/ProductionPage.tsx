@@ -320,6 +320,7 @@ export function ProductionPage(): JSX.Element {
   const [pieceQuery, setPieceQuery] = useState("");
   const [pieceReport, setPieceReport] = useState<ProductionPieceTrace | null>(null);
   const [pieceBusy, setPieceBusy] = useState(false);
+  const [pieceMiss, setPieceMiss] = useState(false);
   const [qcFailItem, setQcFailItem] = useState("");
   const sigRef = useRef<SignaturePadHandle | null>(null);
   const labelsGeneration = useRef(0);
@@ -487,6 +488,18 @@ export function ProductionPage(): JSX.Element {
     if (!resolvedOrder && orders.length === 0 && !/^[0-9a-f-]{32,}$/i.test(selectedParam)) return;
     setTrace(null);
     setOperatorStepId(null);
+    // Drop the previous order's detail immediately — leaving it rendered
+    // during loadDetail's gap lets actions fire against the stale id.
+    setDetail(null);
+    setLabels([]);
+    setDelivery(null);
+    setDeliveries([]);
+    setPendingUnits([]);
+    setDispatchUnitsSel([]);
+    setDeliveryForm(null);
+    setConfirmOpen(false);
+    setConfirmName("");
+    setOptColor("");
     // A live ?piece= deep link owns the trace panel — re-runs caused by the
     // orders list resolving must not wipe its in-flight result.
     const deepPiece = params.get("piece");
@@ -541,12 +554,35 @@ export function ProductionPage(): JSX.Element {
       setPieceBusy(true);
       try {
         const response = await productionPieceTrace(query);
-        if (response.status === 200) setPieceReport(response.data);
+        if (response.status === 200) {
+          setPieceReport(response.data);
+          setPieceMiss(false);
+        }
+      } catch (error) {
+        // A scan miss (404) is a result, not a crash — show the empty state;
+        // anything else surfaces as an error the operator can act on.
+        if (error instanceof ApiError && error.status === 404) {
+          setPieceReport(null);
+          setPieceMiss(true);
+        } else if (mounted.current) {
+          setMessage(t("production.loadError"));
+        }
       } finally {
         setPieceBusy(false);
       }
     },
     [pieceQuery],
+  );
+
+  /** Order selection keeps the active filters — a ?blocked=1 / ?status=
+   *  deep link must not dissolve the moment the operator clicks a row. */
+  const openOrder = useCallback(
+    (id: string) => {
+      const next = new URLSearchParams(params);
+      next.set("order", id);
+      setParams(next);
+    },
+    [params, setParams],
   );
 
   // ?piece= deep link: a QR scan that arrives before login (or from outside
@@ -593,11 +629,17 @@ export function ProductionPage(): JSX.Element {
       // A mutating action (optimize, ops export, step transition) changes
       // the trace — refetch it so an open operator card never shows stale
       // reservations/ops until a manual reload.
-      const reloads = [loadDetail(orderId), loadOrders()];
+      const reloads = [
+        loadDetail(orderId).catch(() => undefined),
+        loadOrders().catch(() => undefined),
+      ];
       // A trace-read failure must not masquerade as a failed mutation —
       // the step transition or optimization already committed.
       if (trace) reloads.push(loadTrace(orderId).catch(() => undefined));
-      await Promise.all(reloads);
+      const results = await Promise.allSettled(reloads);
+      if (results.some((entry) => entry.status === "rejected") && mounted.current) {
+        setMessage(t("production.loadError"));
+      }
     } catch (error) {
       if (mounted.current) setMessage(actionErrorDetail(error));
     } finally {
@@ -666,7 +708,7 @@ export function ProductionPage(): JSX.Element {
         if ((response.status === 200 || response.status === 201) && mounted.current) {
           await loadOrders();
           const first = response.data.orders[0];
-          if (first) setParams({ order: first.id });
+          if (first) openOrder(first.id);
         }
       })
       .catch((error) => {
@@ -684,7 +726,7 @@ export function ProductionPage(): JSX.Element {
       .then(async (response) => {
         if (response.status === 201 && mounted.current) {
           setNote("");
-          setParams({ order: response.data.id });
+          openOrder(response.data.id);
           await loadOrders();
         }
       })
@@ -767,9 +809,15 @@ export function ProductionPage(): JSX.Element {
       for (const [filename, content] of Object.entries(files)) {
         downloadCnc(orderCode, filename, content);
       }
-      const reloads = [loadDetail(orderId), loadOrders()];
+      const reloads = [
+        loadDetail(orderId).catch(() => undefined),
+        loadOrders().catch(() => undefined),
+      ];
       if (trace) reloads.push(loadTrace(orderId).catch(() => undefined));
-      await Promise.all(reloads);
+      const results = await Promise.allSettled(reloads);
+      if (results.some((entry) => entry.status === "rejected") && mounted.current) {
+        setMessage(t("production.loadError"));
+      }
     } catch (error) {
       if (mounted.current) setMessage(actionErrorDetail(error));
     } finally {
@@ -1200,9 +1248,11 @@ export function ProductionPage(): JSX.Element {
               report={pieceReport}
               onSelectOrder={(id, stepCode) => {
                 setPendingStepCode(stepCode ?? null);
-                setParams({ order: id });
+                openOrder(id);
               }}
             />
+          ) : pieceMiss ? (
+            <p className="production-trace-empty">{t("production.tracePieceNone")}</p>
           ) : null}
           {/* Station board first for the floor: the operator's authorized
               queue — "qué está esperando en mi puesto" — leads the sidebar
@@ -1229,9 +1279,7 @@ export function ProductionPage(): JSX.Element {
                               <button
                                 type="button"
                                 className="production-order"
-                                onClick={() =>
-                                  entry.order_id && setParams({ order: entry.order_id })
-                                }
+                                onClick={() => entry.order_id && openOrder(entry.order_id)}
                               >
                                 <span className="production-order-code">
                                   {entry.order_code ?? "—"}
@@ -1391,7 +1439,7 @@ export function ProductionPage(): JSX.Element {
                           <button
                             type="button"
                             className="production-order"
-                            onClick={() => entry.order_id && setParams({ order: entry.order_id })}
+                            onClick={() => entry.order_id && openOrder(entry.order_id)}
                           >
                             <span className="production-order-code">{entry.order_code ?? "—"}</span>
                             <span className="production-order-line">
@@ -1430,7 +1478,7 @@ export function ProductionPage(): JSX.Element {
                   className={
                     order.id === selectedId ? "production-order active" : "production-order"
                   }
-                  onClick={() => setParams({ order: order.id })}
+                  onClick={() => openOrder(order.id)}
                 >
                   <span className="production-order-code">{order.order_code}</span>
                   <span className={`production-chip status-${order.status.toLowerCase()}`}>

@@ -2027,45 +2027,9 @@ export function AssemblyEditor({
       : null,
   );
 
-  if (!product) {
-    return (
-      <section className="assembly-editor assembly-editor--empty">
-        <div className="assembly-canvas canvas-empty">
-          <p className="assembly-hint">{t("assembly.pickStarter")}</p>
-        </div>
-        <aside className="assembly-side">
-          {positionPanel ?? <p className="assembly-hint">{t("assembly.elementHint")}</p>}
-        </aside>
-      </section>
-    );
-  }
-  const productJson = product;
-  const modules = product.assembly.modules;
-  const couplings = product.assembly.couplings;
-  const selectedModule = modules.find((module) => module.id === selection);
-  const selectedCoupling = couplings.find((coupling) => coupling.id === selection);
-  // Leaf granularity: canvas bay clicks and tree leaf rows select the
-  // composite "moduleId/bayId" — resolved back into (module, bay node) here.
-  const treeSelection = selection?.includes("/") ? selection.split("/") : null;
-  const selectedTreeModule = treeSelection
-    ? modules.find((module) => module.id === treeSelection[0])
-    : undefined;
-  const selectedNode = (() => {
-    if (!treeSelection || !selectedTreeModule || treeSelection[1] === undefined) return null;
-    return findNode(selectedTreeModule.tree, treeSelection[1]);
-  })();
-  const selectedBayModule = selectedNode?.type === "BAY" ? selectedTreeModule : undefined;
-  const selectedBayNode = selectedNode?.type === "BAY" ? selectedNode : null;
-  const selectedDivisionModule =
-    selectedNode && (selectedNode.type === "SPLIT_V" || selectedNode.type === "SPLIT_H")
-      ? selectedTreeModule
-      : undefined;
-  const selectedDivisionNode = selectedDivisionModule ? selectedNode : null;
-  // isPending also holds while the query is disabled (no system/product yet).
-  // Evaluation is non-blocking: an in-flight recalc keeps the canvas live —
-  // react-query keys on the product so stale results never land on newer
-  // state, and save still requires the fresh engine verdict upstream.
-  const evaluating = isPending && inputs.systemId !== null;
+  // Hooks before the empty branch — a starter pick flips product
+  // null→object on the SAME mounted instance, so any early return placed
+  // ahead of a hook crashes with "Rendered more hooks".
   const busy = disabled;
   const mullionSkus: Partial<Record<SplitType, string>> = useMemo(
     () => ({
@@ -2077,18 +2041,18 @@ export function AssemblyEditor({
 
   // One layout pass per product commit — bounds/selection boxes derive from
   // the memo instead of recomputing the elevation four times per render.
-  const front = useMemo(() => frontLayout(product), [product]);
-  const frontBox = useMemo(() => frontBounds(front), [front]);
-  const planBox = couplings.length > 0 && evaluation?.plan ? planBounds(evaluation.plan) : null;
+  const front = useMemo(() => (product ? frontLayout(product) : null), [product]);
+  const frontBox = useMemo(() => (front ? frontBounds(front) : null), [front]);
   const selectionBox = useMemo(
-    () => frontModuleBox(front, selectedModule?.id ?? null),
-    [front, selectedModule?.id],
+    () => (front ? frontModuleBox(front, selection) : null),
+    [front, selection],
   );
 
   // The shared command registry: palette, keyboard and AI all dispatch the
   // same typed commands; `commit` inside is the single undoable transaction.
-  const commandCtx = useMemo<CommandContext>(
-    () => ({
+  const commandCtx = useMemo<CommandContext | null>(() => {
+    if (!product) return null;
+    return {
       product,
       selection,
       catalog: {
@@ -2119,35 +2083,36 @@ export function AssemblyEditor({
       writeSpecClipboard: useCanvasStore.getState().setSpecClipboard,
       lastMutation,
       recordMutation: useCanvasStore.getState().recordMutation,
-    }),
+    };
     // `commit` is re-declared per render and always sees current inputs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [
-      product,
-      selection,
-      options,
-      glassSkus,
-      couplerSkus,
-      panelSkus,
-      mullionSkus,
-      busy,
-      select,
-      undoHistory,
-      redoHistory,
-      canUndo,
-      canRedo,
-      specClipboard,
-      lastMutation,
-    ],
-  );
+  }, [
+    product,
+    selection,
+    options,
+    glassSkus,
+    couplerSkus,
+    panelSkus,
+    mullionSkus,
+    busy,
+    select,
+    undoHistory,
+    redoHistory,
+    canUndo,
+    canRedo,
+    specClipboard,
+    lastMutation,
+  ]);
   const surface = useMemo(
-    () => ({ commands: resolveCommands(commandCtx, assemblyCommands(commandCtx)) }),
+    () =>
+      commandCtx ? { commands: resolveCommands(commandCtx, assemblyCommands(commandCtx)) } : null,
     [commandCtx],
   );
   // Every chord the surface advertises (menus, palette) is reserved while the
   // editor is mounted — a filtered-out command's shortcut must not leak to
   // the browser (Ctrl+D opened the bookmark dialog).
   const reservedShortcuts = useMemo(() => {
+    if (!commandCtx) return [];
     const specs = assemblyCommands(commandCtx);
     return specs.flatMap((spec) => {
       const s = spec.shortcut;
@@ -2156,6 +2121,52 @@ export function AssemblyEditor({
   }, [commandCtx]);
   useRegisterCommands(surface);
   useCommandShortcuts(surface, reservedShortcuts);
+  const objectTree = useMemo(
+    () => (product ? buildObjectTree(product, members, issues, t, options) : null),
+    [product, members, issues, options],
+  );
+
+  if (!product || !front || !frontBox || !commandCtx || !surface || !objectTree) {
+    return (
+      <section className="assembly-editor assembly-editor--empty">
+        <div className="assembly-canvas canvas-empty">
+          <p className="assembly-hint">{t("assembly.pickStarter")}</p>
+        </div>
+        <aside className="assembly-side">
+          {positionPanel ?? <p className="assembly-hint">{t("assembly.elementHint")}</p>}
+        </aside>
+      </section>
+    );
+  }
+
+  const productJson = product;
+  const modules = product.assembly.modules;
+  const couplings = product.assembly.couplings;
+  const selectedModule = modules.find((module) => module.id === selection);
+  const selectedCoupling = couplings.find((coupling) => coupling.id === selection);
+  // Leaf granularity: canvas bay clicks and tree leaf rows select the
+  // composite "moduleId/bayId" — resolved back into (module, bay node) here.
+  const treeSelection = selection?.includes("/") ? selection.split("/") : null;
+  const selectedTreeModule = treeSelection
+    ? modules.find((module) => module.id === treeSelection[0])
+    : undefined;
+  const selectedNode = (() => {
+    if (!treeSelection || !selectedTreeModule || treeSelection[1] === undefined) return null;
+    return findNode(selectedTreeModule.tree, treeSelection[1]);
+  })();
+  const selectedBayModule = selectedNode?.type === "BAY" ? selectedTreeModule : undefined;
+  const selectedBayNode = selectedNode?.type === "BAY" ? selectedNode : null;
+  const selectedDivisionModule =
+    selectedNode && (selectedNode.type === "SPLIT_V" || selectedNode.type === "SPLIT_H")
+      ? selectedTreeModule
+      : undefined;
+  const selectedDivisionNode = selectedDivisionModule ? selectedNode : null;
+  // isPending also holds while the query is disabled (no system/product yet).
+  // Evaluation is non-blocking: an in-flight recalc keeps the canvas live —
+  // react-query keys on the product so stale results never land on newer
+  // state, and save still requires the fresh engine verdict upstream.
+  const evaluating = isPending && inputs.systemId !== null;
+  const planBox = couplings.length > 0 && evaluation?.plan ? planBounds(evaluation.plan) : null;
   const statusText = `${front.totalW.toFixed(0)} × ${front.height.toFixed(0)} mm`;
   // Labels derive from actual product membership — selection ids are
   // arbitrary strings, so a coupling legitimately named "coupling-x" must
@@ -2219,10 +2230,6 @@ export function AssemblyEditor({
     setTool("select");
     select(id);
   }
-  const objectTree = useMemo(
-    () => buildObjectTree(product, members, issues, t, options),
-    [product, members, issues, options],
-  );
 
   function coupleUnit(side: "left" | "right"): void {
     const next = addAdjacentUnit(productJson, side);

@@ -1550,7 +1550,21 @@ function OrdersIndex({
         </thead>
         <tbody>
           {visible.map((order) => (
-            <tr key={order.id} className="purchasing-index-row" onClick={() => onOpen(order)}>
+            <tr
+              key={order.id}
+              className="purchasing-index-row"
+              onClick={() => onOpen(order)}
+              // Row-level click needs a keyboard twin: focus the row and
+              // activate with Enter/Space, same as the button it replaces.
+              tabIndex={0}
+              onKeyDown={(event) => {
+                if (event.target !== event.currentTarget) return;
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onOpen(order);
+                }
+              }}
+            >
               <td>{order.order_code}</td>
               <td>
                 {order.project_code ?? "—"} · {formatRevision(order.revision_code ?? "")}

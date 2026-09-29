@@ -334,6 +334,10 @@
 .purchasing-index-row:hover {
   background: var(--theme-hover, #f4f7fb);
 }
+.purchasing-index-row:focus-visible {
+  outline: 2px solid var(--theme-focus-ring);
+  outline-offset: -2px;
+}
 
 .purchasing-badge--expired {
   background: var(--theme-danger-soft);

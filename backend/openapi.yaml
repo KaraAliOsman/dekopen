@@ -22508,9 +22508,12 @@ components:
         api_url:
           $ref: '#/components/schemas/ApiUrlEnum'
         api_key:
-          type: string
-          minLength: 10
-          maxLength: 100
+          oneOf:
+          - type: string
+            maxLength: 100
+            minLength: 10
+          - type: string
+            maxLength: 0
         secret_key:
           writeOnly: true
           oneOf:
@@ -22526,7 +22529,6 @@ components:
           type: boolean
           default: true
       required:
-      - api_key
       - api_url
     PaymentIntegrationStatus:
       type: object

@@ -29,7 +29,7 @@ import type {
 } from "../../api/generated/models";
 import { t, type TranslationKey } from "../../i18n/es-CL";
 import { actionErrorDetail } from "../errors";
-import { formatDate, formatMoney } from "../money";
+import { formatDate, formatMoney, parseMoneyInput } from "../money";
 import { formatRevision } from "../../format";
 import { ProjectPaymentLinksPanel } from "./ProjectPaymentLinksPanel";
 import { useConfirm, usePrompt } from "../../ui";
@@ -144,6 +144,11 @@ export function ProjectPaymentsPanel({
 
   async function record(event: FormEvent): Promise<void> {
     event.preventDefault();
+    const amountParsed = parseMoneyInput(amount);
+    if (amountParsed === null) {
+      setMessage(t("projects.paymentAmountInvalid"));
+      return;
+    }
     const current = generation.current;
     setBusy(true);
     setMessage("");
@@ -153,9 +158,7 @@ export function ProjectPaymentsPanel({
         {
           operation_key: operationKey,
           kind,
-          // es-CL groups thousands with "." — "1.500.000" is 1500000, and
-          // CLP is integer-only so a dot can only ever be grouping.
-          amount: amount.replace(/\./g, ""),
+          amount: amountParsed,
           method,
           ...(reference.trim() ? { reference: reference.trim() } : {}),
           ...(note.trim() ? { note: note.trim() } : {}),
@@ -427,8 +430,11 @@ export function ProjectPaymentsPanel({
       },
     });
     if (amountText === null) return;
-    const amountDigits = amountText.replace(/[^\d]/g, "");
-    if (amountText.trim() && !amountDigits) {
+    // Parse es-CL input ("1.500.000" / "1.500.000,50") into the canonical
+    // decimal the API expects — stripping non-digits turned "100,50" into
+    // "10050" and the sealed note locks whatever number lands.
+    const amountParsed = amountText.trim() ? parseMoneyInput(amountText) : "";
+    if (amountText.trim() && amountParsed === null) {
       setMessage(t("projects.creditNoteAmountInvalid"));
       return;
     }
@@ -441,7 +447,7 @@ export function ProjectPaymentsPanel({
         invoice.id,
         {
           ...(reason.trim() ? { reason: reason.trim() } : {}),
-          ...(amountDigits ? { amount: amountDigits } : {}),
+          ...(amountParsed ? { amount: amountParsed } : {}),
         },
         requestOptions,
       );

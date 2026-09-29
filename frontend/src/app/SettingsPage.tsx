@@ -114,7 +114,9 @@ function FlowIntegrationCard({ orgId }: { orgId: string }): JSX.Element {
       const response = await projectPaymentIntegrationSave(
         {
           api_url: apiUrl,
-          api_key: apiKey.trim() || (status?.api_key_preview ?? "").replace("…", ""),
+          // Blank = keep the stored key — never echo the masked preview back
+          // as if it were the credential.
+          ...(apiKey.trim() ? { api_key: apiKey.trim() } : {}),
           ...(secretKey.trim() ? { secret_key: secretKey.trim() } : {}),
           payer_return_url: returnUrl.trim(),
           enabled,

@@ -23,6 +23,29 @@ function quantize(value: string, digits: number): string {
   }`;
 }
 
+/** Parse a typed amount into the canonical decimal string the API expects.
+ * es-CL rules: "," is the only decimal mark, "." only groups thousands —
+ * "1.500.000" is 1500000, "100,50" is 100.50. Garbage rejects rather than
+ * guessing: a mangled immutable document is worse than a rejected
+ * keystroke. */
+export function parseMoneyInput(text: string): string | null {
+  const cleaned = text.trim().replace(/\s/g, "");
+  if (!cleaned || !/^[\d.,]+$/.test(cleaned) || !/\d/.test(cleaned)) return null;
+  const lastComma = cleaned.lastIndexOf(",");
+  const hasDecimal =
+    lastComma !== -1 &&
+    cleaned.indexOf(",") === lastComma &&
+    /^\d{1,2}$/.test(cleaned.slice(lastComma + 1));
+  const intRaw = hasDecimal ? cleaned.slice(0, lastComma) : cleaned;
+  const dec = hasDecimal ? cleaned.slice(lastComma + 1) : "";
+  // Every "." in the integer part must lead a 3-digit thousands group —
+  // "1.0.0" or "12,34" reject instead of silently rescaling.
+  if (!/^\d+$/.test(intRaw) && !/^\d{1,3}(\.\d{3})+$/.test(intRaw)) return null;
+  const intPart = intRaw.replace(/\./g, "");
+  if (!intPart) return null;
+  return dec ? `${intPart}.${dec}` : intPart;
+}
+
 export function formatMoney(value: string | null | undefined, currency: string): string {
   if (value === null || value === undefined || value === "") return "—";
   const digits = currency === "CLP" ? 0 : 2;

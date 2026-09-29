@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import type { Session } from "@supabase/supabase-js";
 import {
   createContext,
@@ -80,6 +81,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren): JSX.Elemen
   const organizationRef = useRef<string | null>(null);
   const requestGeneration = useRef(0);
   const mounted = useRef(true);
+  const queryClient = useQueryClient();
   const canvasIdentity = useRef<{ userId: string; organizationId: string | null } | null>(null);
   // Latest resolved context — a same-user re-resolution (token refresh,
   // tab-focus revalidation) must retain it: dropping `me` mid-session
@@ -318,6 +320,10 @@ export function AuthSessionProvider({ children }: PropsWithChildren): JSX.Elemen
       async selectOrganization(organizationId: string) {
         const current = sessionRef.current;
         if (current === null) return;
+        // Queries pinned to the outgoing org's header would reject with
+        // stale_organization the moment the context flips — cancel them so
+        // their rejections never reach a rendered error state.
+        void queryClient.cancelQueries();
         transitionCanvasIdentity(current.user.id, organizationId);
         organizationRef.current = organizationId;
         window.localStorage.setItem(organizationStorageKey(current.user.id), organizationId);
