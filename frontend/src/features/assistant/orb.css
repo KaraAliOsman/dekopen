@@ -19,52 +19,41 @@
   stroke-width: 1.6;
   opacity: 0;
 }
-/* The orbital ribbon — thin, continuous, cyan. Back sweep is dimmed (it is
- * the far side of the orbit); the front sweep is the identity stroke. */
+/* The orbital ring — thin, continuous, cyan. Back sweep is dimmed (it is
+ * the far side of the orbit); the front sweep is the identity stroke and
+ * passes low under the belly, never across the face. */
 .orb__ribbon {
   fill: none;
   stroke: var(--orb-ribbon);
-  stroke-width: 1.5;
+  stroke-width: 2;
   stroke-linecap: round;
 }
 .orb__ribbon--back {
   stroke: var(--orb-ribbon-soft);
-  stroke-width: 1.2;
+  stroke-width: 1.6;
 }
 .orb__ribbon-run {
   fill: none;
   stroke: var(--orb-eye-hi);
-  stroke-width: 2.1;
+  stroke-width: 2.4;
   stroke-linecap: round;
-  stroke-dasharray: 7 210;
+  stroke-dasharray: 9 46;
   opacity: 0;
 }
 .orb__body {
   stroke: var(--orb-edge);
-  stroke-width: 1;
+  stroke-width: 0.8;
 }
 .orb__spec {
-  fill: var(--orb-eye);
   opacity: var(--orb-spec-op);
 }
 .orb__bounce {
-  fill: var(--theme-accent);
-  opacity: 0.1;
-}
-.orb__eye {
-  fill: var(--orb-eye);
-}
-.orb__eye-glow {
-  fill: var(--orb-eye-glow);
-}
-.orb__glint {
-  fill: var(--orb-glint);
-  opacity: 0.85;
+  opacity: 0.6;
 }
 .orb__eyes--joy path {
   fill: none;
   stroke: var(--orb-eye);
-  stroke-width: 1.8;
+  stroke-width: 1.9;
   stroke-linecap: round;
 }
 .orb__eyes--worry rect,
@@ -100,20 +89,19 @@
 
 /* Small silhouettes: drop the micro-details that muddy sub-28px renders,
  * and push the open eyes larger — at 22px the capsules fall under 3px wide
- * and the face stops reading. The ribbon stays: it IS the identity. */
-.orb--s .orb__glint,
+ * and the face stops reading. The orbit ring stays: it IS the identity. */
 .orb--s .orb__bounce,
-.orb--s .orb__eye-glow {
+.orb--s .orb__spec {
   display: none;
 }
 .orb--s .orb__eyes--open {
-  transform: scale(1.22);
+  transform: scale(1.16);
 }
 .orb--s .orb__ribbon {
-  stroke-width: 1.9;
+  stroke-width: 2.4;
 }
 .orb--s .orb__ribbon--back {
-  stroke-width: 1.5;
+  stroke-width: 1.9;
 }
 
 .orb__tilt,
@@ -327,7 +315,7 @@
 }
 @keyframes orb-ribbonrun {
   to {
-    stroke-dashoffset: -217;
+    stroke-dashoffset: -55;
   }
 }
 @keyframes orb-ringpulse {
@@ -388,27 +376,22 @@
 }
 .bot-figure__body {
   stroke: var(--orb-edge);
-  stroke-width: 1.4;
+  stroke-width: 1;
 }
 .bot-figure__spec {
-  fill: var(--orb-spec);
   opacity: var(--orb-spec-op);
 }
 .bot-figure__bounce {
-  fill: var(--orb-ribbon);
-  opacity: 0.12;
-}
-.bot-figure__eye-glow {
-  fill: var(--orb-eye-glow);
+  opacity: 0.6;
 }
 .bot-figure__ribbon {
   fill: none;
-  stroke-width: 3;
+  stroke-width: 5;
   stroke-linecap: round;
 }
 .bot-figure__ribbon--back {
   stroke: var(--orb-ribbon-soft);
-  stroke-width: 2.4;
+  stroke-width: 4;
 }
 .bot-figure__ribbon--front {
   stroke: var(--orb-ribbon);
@@ -416,9 +399,9 @@
 .bot-figure__ribbon-run {
   fill: none;
   stroke: var(--orb-eye-hi);
-  stroke-width: 4.5;
+  stroke-width: 6;
   stroke-linecap: round;
-  stroke-dasharray: 26 850;
+  stroke-dasharray: 34 182;
   opacity: 0;
 }
 /* States on the figure ride the same grammar as the orb — subtle pose and
@@ -454,7 +437,7 @@
 }
 @keyframes orb-figurerun {
   to {
-    stroke-dashoffset: -876;
+    stroke-dashoffset: -216;
   }
 }
 @media (prefers-reduced-motion: reduce) {

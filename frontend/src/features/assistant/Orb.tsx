@@ -5,13 +5,14 @@ import "./orb.css";
 /** DEKOPEN Bot — the identity from `referencias/dekopen-bot-original.png` (user-
  * provided reference; this SVG is original geometry matching it, not a copied
  * mark): a graphite-near-black sphere with soft volume, two tall cyan capsule
- * eyes, and a thin cyan orbital ribbon that passes in front of the sphere's
- * belly and behind its upper right — drawn as two half-arcs so the wrap is
- * physically coherent. No body, no mouth, no helmet.
+ * eyes, and a thin cyan orbital ring tilted around it — drawn as a wide flat
+ * ellipse whose back half disappears behind the sphere and whose front half
+ * sweeps beneath it, so the wrap is physically coherent and never reads as a
+ * mouth. No body, no mouth, no helmet.
  *
  * Two orthogonal channels carry meaning: the eyes carry life (breathe, blink,
  * gaze, poses) and a thin circular arc carries job status in the state-pill
- * hues; the ribbon is identity, tinted subtly on consequential states. */
+ * hues; the orbit ring is identity, tinted subtly on consequential states. */
 export type OrbState =
   | "idle"
   | "input"
@@ -90,99 +91,100 @@ export function Orb({
       aria-label={label}
     >
       <defs>
-        <radialGradient id={`${uid}-body`} cx="36%" cy="26%" r="82%">
+        <radialGradient id={`${uid}-body`} cx="38%" cy="30%" r="78%" fx="34%" fy="24%">
           <stop offset="0%" stopColor="var(--orb-hi)" />
-          <stop offset="52%" stopColor="var(--orb-mid)" />
+          <stop offset="34%" stopColor="var(--orb-mid)" />
+          <stop offset="72%" stopColor="var(--orb-deep)" />
           <stop offset="100%" stopColor="var(--orb-lo)" />
         </radialGradient>
         <linearGradient id={`${uid}-eye`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="var(--orb-eye-hi)" />
           <stop offset="100%" stopColor="var(--orb-eye)" />
         </linearGradient>
+        <radialGradient id={`${uid}-glow`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="var(--orb-eye)" stopOpacity="0.55" />
+          <stop offset="100%" stopColor="var(--orb-eye)" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id={`${uid}-spec`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="var(--orb-spec)" stopOpacity="0.9" />
+          <stop offset="60%" stopColor="var(--orb-spec)" stopOpacity="0.28" />
+          <stop offset="100%" stopColor="var(--orb-spec)" stopOpacity="0" />
+        </radialGradient>
       </defs>
 
       {/* Semantics channel — the status arc, hidden unless the state needs it. */}
-      <circle className="orb__ring" cx="24" cy="24" r="21.5" />
+      <circle className="orb__ring" cx="24" cy="24" r="22.5" />
 
       {/* Life channel — everything that tilts, breathes and blinks. */}
       <g className="orb__tilt">
-        {/* Ribbon back sweep — drawn before the sphere so its upper-right
-            run disappears behind the body like the reference's orbit. */}
-        <path
-          className="orb__ribbon orb__ribbon--back"
-          d="M2.07 30.47 A22.6 6.9 -14 0 0 45.93 19.53"
-        />
+        {/* Orbit ring, back sweep — a wide flat ellipse centred below the
+            eyes; its far arc hides behind the sphere like the reference. */}
+        <g transform="rotate(-8 24 29)">
+          <path className="orb__ribbon orb__ribbon--back" d="M1.5 29 A22.5 5.8 0 0 1 46.5 29" />
+        </g>
 
-        <circle className="orb__body" cx="24" cy="23.5" r="15.5" fill={`url(#${uid}-body)`} />
-        <ellipse
-          className="orb__bounce"
-          cx="28.5"
-          cy="33.6"
-          rx="6.4"
-          ry="2.4"
-          transform="rotate(-16 28.5 33.6)"
-        />
+        <circle className="orb__body" cx="24" cy="22.5" r="15.8" fill={`url(#${uid}-body)`} />
+        {/* Soft top-left specular — graphite sheen, not a stuck-on pill. */}
         <ellipse
           className="orb__spec"
-          cx="18.4"
-          cy="15"
-          rx="5.2"
-          ry="2.9"
-          transform="rotate(-24 18.4 15)"
+          cx="17.5"
+          cy="13.5"
+          rx="7"
+          ry="4"
+          transform="rotate(-28 17.5 13.5)"
+          fill={`url(#${uid}-spec)`}
+        />
+        {/* Cyan bounce where the orbit comes closest under the belly. */}
+        <ellipse
+          className="orb__bounce"
+          cx="30"
+          cy="33"
+          rx="6"
+          ry="2.2"
+          transform="rotate(-14 30 33)"
+          fill={`url(#${uid}-glow)`}
         />
 
         <g className="orb__eyes orb__eyes--open">
-          <rect className="orb__eye-glow" x="14.9" y="16.4" width="8.2" height="14.4" rx="4.1" />
-          <rect className="orb__eye-glow" x="25.1" y="16.4" width="8.2" height="14.4" rx="4.1" />
-          <rect
-            className="orb__eye"
-            x="16.4"
-            y="17.9"
-            width="5.2"
-            height="11.4"
-            rx="2.6"
-            fill={`url(#${uid}-eye)`}
-          />
-          <rect
-            className="orb__eye"
-            x="26.6"
-            y="17.9"
-            width="5.2"
-            height="11.4"
-            rx="2.6"
-            fill={`url(#${uid}-eye)`}
-          />
-          <circle className="orb__glint" cx="18.2" cy="20" r="0.9" />
-          <circle className="orb__glint" cx="28.4" cy="20" r="0.9" />
+          <ellipse cx="18.9" cy="21.5" rx="4.4" ry="7" fill={`url(#${uid}-glow)`} />
+          <ellipse cx="29.1" cy="21.5" rx="4.4" ry="7" fill={`url(#${uid}-glow)`} />
+          <rect x="16.6" y="16" width="4.6" height="11" rx="2.3" fill={`url(#${uid}-eye)`} />
+          <rect x="26.8" y="16" width="4.6" height="11" rx="2.3" fill={`url(#${uid}-eye)`} />
         </g>
         <g className="orb__eyes orb__eyes--joy">
-          <path d="M15.9 25.6 Q19 21.4 22.1 25.6" />
-          <path d="M26.1 25.6 Q29.2 21.4 32.3 25.6" />
+          <path d="M16.2 24.4 Q18.9 20.4 21.6 24.4" />
+          <path d="M26.4 24.4 Q29.1 20.4 31.8 24.4" />
         </g>
         <g className="orb__eyes orb__eyes--worry">
           <rect
-            x="15.9"
-            y="22.2"
-            width="6.2"
-            height="4.6"
-            rx="2.3"
-            transform="rotate(-9 19 24.5)"
+            x="16.2"
+            y="20.6"
+            width="5"
+            height="4.2"
+            rx="2.1"
+            transform="rotate(-10 18.7 22.7)"
           />
-          <rect x="26" y="22.2" width="6.2" height="4.6" rx="2.3" transform="rotate(9 29.1 24.5)" />
+          <rect
+            x="26.8"
+            y="20.6"
+            width="5"
+            height="4.2"
+            rx="2.1"
+            transform="rotate(10 29.3 22.7)"
+          />
         </g>
         <g className="orb__eyes orb__eyes--flat">
-          <rect x="15.9" y="22.6" width="6.2" height="3.6" rx="1.8" />
-          <rect x="26" y="22.6" width="6.2" height="3.6" rx="1.8" />
+          <rect x="16.4" y="21.2" width="5" height="3.4" rx="1.7" />
+          <rect x="26.6" y="21.2" width="5" height="3.4" rx="1.7" />
         </g>
 
-        {/* Ribbon front sweep — over the belly, tips extend past the
-            silhouette at lower-left. */}
-        <path
-          className="orb__ribbon orb__ribbon--front"
-          d="M45.93 19.53 A22.6 6.9 -14 0 1 2.07 30.47"
-        />
-        {/* Working state: a bright segment runs the front ribbon. */}
-        <path className="orb__ribbon-run" d="M45.93 19.53 A22.6 6.9 -14 0 1 2.07 30.47" />
+        {/* Orbit ring, front sweep — passes under the belly, tips extending
+            past the silhouette on both sides. Never a mouth. */}
+        <g transform="rotate(-8 24 29)">
+          <path className="orb__ribbon orb__ribbon--front" d="M46.5 29 A22.5 5.8 0 0 1 1.5 29" />
+          {/* Working state: a bright segment runs the front ring. */}
+          <path className="orb__ribbon-run" d="M46.5 29 A22.5 5.8 0 0 1 1.5 29" />
+        </g>
       </g>
     </svg>
   );

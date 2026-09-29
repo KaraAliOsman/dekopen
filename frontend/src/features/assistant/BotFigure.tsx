@@ -4,10 +4,11 @@ import { Orb, type OrbState } from "./Orb";
 import "./orb.css";
 
 /** DEKOPEN Bot at figure scale (96–200px) — welcome and empty states. The
- * same sphere/capsule-eyes/ribbon identity, plus the reference's translucent
- * window panes behind the sphere and a soft ground shadow. Pure SVG: zero
- * runtime weight, no WebGL, prints safely. States come from the same Orb
- * vocabulary — the figure poses the character, it doesn't invent new anatomy. */
+ * same sphere/capsule-eyes/orbit-ring identity as the Orb, plus the
+ * reference's translucent window panes behind the sphere and a soft ground
+ * shadow. Pure SVG: zero runtime weight, no WebGL, prints safely. States
+ * come from the same Orb vocabulary — the figure poses the character, it
+ * doesn't invent new anatomy. */
 export function BotFigure({
   state = "idle",
   size = 120,
@@ -30,23 +31,28 @@ export function BotFigure({
       aria-label={label}
     >
       <defs>
-        <radialGradient id={`${uid}-body`} cx="36%" cy="25%" r="85%">
+        <radialGradient id={`${uid}-body`} cx="38%" cy="30%" r="78%" fx="34%" fy="24%">
           <stop offset="0%" stopColor="var(--orb-hi)" />
-          <stop offset="50%" stopColor="var(--orb-mid)" />
+          <stop offset="34%" stopColor="var(--orb-mid)" />
+          <stop offset="72%" stopColor="var(--orb-deep)" />
           <stop offset="100%" stopColor="var(--orb-lo)" />
         </radialGradient>
         <linearGradient id={`${uid}-eye`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="var(--orb-eye-hi)" />
           <stop offset="100%" stopColor="var(--orb-eye)" />
         </linearGradient>
+        <radialGradient id={`${uid}-glow`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="var(--orb-eye)" stopOpacity="0.55" />
+          <stop offset="100%" stopColor="var(--orb-eye)" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id={`${uid}-spec`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="var(--orb-spec)" stopOpacity="0.9" />
+          <stop offset="60%" stopColor="var(--orb-spec)" stopOpacity="0.28" />
+          <stop offset="100%" stopColor="var(--orb-spec)" stopOpacity="0" />
+        </radialGradient>
         <linearGradient id={`${uid}-pane`} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%" stopColor="var(--orb-ribbon)" stopOpacity="0.34" />
           <stop offset="100%" stopColor="var(--orb-ribbon)" stopOpacity="0.08" />
-        </linearGradient>
-        <linearGradient id={`${uid}-ribbon`} x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="var(--orb-ribbon-soft)" />
-          <stop offset="55%" stopColor="var(--orb-ribbon)" />
-          <stop offset="100%" stopColor="var(--orb-ribbon-hi, #8ff6ff)" />
         </linearGradient>
       </defs>
 
@@ -80,49 +86,54 @@ export function BotFigure({
       <ellipse className="bot-figure__shadow" cx="96" cy="176" rx="52" ry="7.5" />
 
       <g className="bot-figure__tilt">
-        {/* Ribbon back sweep (ellipse rx≈94, ry≈29, rotated −12° about
-            (96,100)): from the left tip through the top to the right tip,
-            hidden by the sphere where they overlap. */}
-        <path
-          className="bot-figure__ribbon bot-figure__ribbon--back"
-          d="M4.06 119.55 A94 29 -12 0 0 187.94 80.45"
-        />
+        {/* Orbit ring, back sweep — wide flat ellipse centred (96,121),
+            rx≈94, ry≈24, rotated −7°; the far arc hides behind the sphere. */}
+        <g transform="rotate(-7 96 121)">
+          <path
+            className="bot-figure__ribbon bot-figure__ribbon--back"
+            d="M2 121 A94 24 0 0 1 190 121"
+          />
+        </g>
 
-        <circle cx="96" cy="98" r="62" fill={`url(#${uid}-body)`} className="bot-figure__body" />
-        {/* Soft top-left specular + faint cyan bounce where the ribbon is
+        <circle cx="96" cy="94" r="66" fill={`url(#${uid}-body)`} className="bot-figure__body" />
+        {/* Soft top-left specular + faint cyan bounce where the ring is
             closest — volume, not plastic shine. */}
         <ellipse
-          cx="74"
-          cy="62"
-          rx="21"
-          ry="12"
-          transform="rotate(-24 74 62)"
+          cx="69"
+          cy="56"
+          rx="29"
+          ry="17"
+          transform="rotate(-28 69 56)"
           className="bot-figure__spec"
+          fill={`url(#${uid}-spec)`}
         />
         <ellipse
-          cx="112"
-          cy="136"
-          rx="26"
+          cx="121"
+          cy="137"
+          rx="25"
           ry="9"
-          transform="rotate(-16 112 136)"
+          transform="rotate(-14 121 137)"
           className="bot-figure__bounce"
+          fill={`url(#${uid}-glow)`}
         />
 
         {/* Capsule eyes — the reference's tall cyan slots. */}
         <g className="bot-figure__eyes">
-          <rect className="bot-figure__eye-glow" x="60" y="68" width="30" height="52" rx="15" />
-          <rect className="bot-figure__eye-glow" x="102" y="68" width="30" height="52" rx="15" />
-          <rect x="66" y="74" width="19" height="41" rx="9.5" fill={`url(#${uid}-eye)`} />
-          <rect x="108" y="74" width="19" height="41" rx="9.5" fill={`url(#${uid}-eye)`} />
+          <ellipse cx="78.7" cy="89.6" rx="18.3" ry="29.2" fill={`url(#${uid}-glow)`} />
+          <ellipse cx="121.3" cy="89.6" rx="18.3" ry="29.2" fill={`url(#${uid}-glow)`} />
+          <rect x="69" y="67" width="19.2" height="45.8" rx="9.6" fill={`url(#${uid}-eye)`} />
+          <rect x="111.7" y="67" width="19.2" height="45.8" rx="9.6" fill={`url(#${uid}-eye)`} />
         </g>
 
-        {/* Ribbon front sweep — crosses the belly in front, tips exit the
-            silhouette at lower-left. */}
-        <path
-          className="bot-figure__ribbon bot-figure__ribbon--front"
-          d="M187.94 80.45 A94 29 -12 0 1 4.06 119.55"
-        />
-        <path className="bot-figure__ribbon-run" d="M187.94 80.45 A94 29 -12 0 1 4.06 119.55" />
+        {/* Orbit ring, front sweep — passes under the belly; tips extend
+            past the silhouette both sides. */}
+        <g transform="rotate(-7 96 121)">
+          <path
+            className="bot-figure__ribbon bot-figure__ribbon--front"
+            d="M190 121 A94 24 0 0 1 2 121"
+          />
+          <path className="bot-figure__ribbon-run" d="M190 121 A94 24 0 0 1 2 121" />
+        </g>
       </g>
     </svg>
   );

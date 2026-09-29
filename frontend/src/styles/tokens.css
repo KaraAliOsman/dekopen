@@ -71,21 +71,21 @@
   /* DEKOPEN orb identity — the sphere is intentionally identical across
    * themes (the identity IS the black orb); only the edge stroke and
    * specular strength adapt to the dark theme. */
-  --orb-hi: #4e5960;
-  --orb-mid: #262e34;
-  --orb-lo: #12171b;
-  --orb-edge: rgba(18, 24, 28, 0.55);
-  --orb-spec-op: 0.5;
+  --orb-hi: #545e65;
+  --orb-mid: #2a3238;
+  --orb-deep: #171e23;
+  --orb-lo: #080c0f;
+  --orb-edge: rgba(10, 15, 18, 0.55);
+  --orb-spec-op: 0.85;
   /* Cyan capsule eyes + orbital ribbon — the reference identity. The eyes
      are cyan (not white dots); the ribbon is the same hue at lower strength. */
   --orb-eye: #0fd8ea;
   --orb-eye-hi: #7cf3ff;
-  --orb-eye-glow: rgba(15, 216, 234, 0.3);
+  --orb-eye-glow: rgba(15, 216, 234, 0.55);
   --orb-ribbon: #0fd8ea;
-  --orb-ribbon-soft: rgba(15, 216, 234, 0.45);
-  --orb-glint: rgba(255, 255, 255, 0.75);
+  --orb-ribbon-soft: rgba(15, 216, 234, 0.42);
   /* Specular highlight on the graphite sphere — physical finish, theme-invariant */
-  --orb-spec: #e8f0f2;
+  --orb-spec: #ffffff;
 }
 
 :root[data-theme="dark"] {
@@ -135,17 +135,17 @@
   --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.55);
   --shadow-modal: 0 12px 44px rgba(0, 0, 0, 0.6);
 
-  --orb-hi: #5a666e;
-  --orb-mid: #272f35;
-  --orb-lo: #10151a;
+  --orb-hi: #5f6b72;
+  --orb-mid: #313a41;
+  --orb-deep: #1a2228;
+  --orb-lo: #0a0e11;
   --orb-edge: rgba(233, 242, 241, 0.16);
-  --orb-spec-op: 0.32;
+  --orb-spec-op: 0.55;
   --orb-eye: #12ddf0;
-  --orb-eye-hi: #86f5ff;
-  --orb-eye-glow: rgba(18, 221, 240, 0.35);
+  --orb-eye-hi: #96f6ff;
+  --orb-eye-glow: rgba(18, 221, 240, 0.6);
   --orb-ribbon: #12ddf0;
-  --orb-ribbon-soft: rgba(18, 221, 240, 0.5);
-  --orb-glint: rgba(255, 255, 255, 0.8);
+  --orb-ribbon-soft: rgba(18, 221, 240, 0.48);
 }
 
 :root {
