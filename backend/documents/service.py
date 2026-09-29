@@ -196,10 +196,20 @@ def _handle_rules_for_leaf(
         and (rule.leaf_slot is None or rule.leaf_slot == leaf.leaf_slot)
         and (rule.leaf_handedness is None or rule.leaf_handedness == leaf.door_handedness)
     ]
-    if leaf.door_handedness is not None and any(
-        rule.leaf_handedness == leaf.door_handedness for rule in matching
-    ):
-        matching = [rule for rule in matching if rule.leaf_handedness is not None]
+    if leaf.door_handedness is not None:
+        # Pinned rules win per domain slot only — a wildcard rule for a
+        # slot with no pinned entry must still match.
+        pinned_slots = {
+            rule.handle_domain_slot
+            for rule in matching
+            if rule.leaf_handedness == leaf.door_handedness
+        }
+        matching = [
+            rule
+            for rule in matching
+            if rule.leaf_handedness is not None
+            or rule.handle_domain_slot not in pinned_slots
+        ]
     return matching
 
 

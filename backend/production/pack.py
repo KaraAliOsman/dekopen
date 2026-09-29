@@ -1018,6 +1018,8 @@ def render_production_pack(*, org_id: UUID, order_id: UUID) -> tuple[bytes, str]
             [str(order_id), str(org_id)],
             "work_order_not_found",
         )
+        if str(order["status"]) == "CANCELLED":
+            raise DocumentaryError("work_order_cancelled")
         payload = _decoded(order["payload_json"])
         optimization = payload.get("optimization")
         if not isinstance(optimization, dict) or not optimization.get("bars"):

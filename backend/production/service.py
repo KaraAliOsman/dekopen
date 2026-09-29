@@ -108,10 +108,21 @@ _STEP_LABELS = {
 # glazing. Reservations stay open until their step completes.
 _STEP_CONSUMED_KINDS = {
     "CUT": {"BAR", "SHEET"},
+    # Dedicated saws consume the same BAR reservations as the generic CUT
+    # step — whichever bar-cutting station completes first settles them,
+    # and the consumed_at stamp keeps the other stations idempotent.
+    "PROFILE_CUT": {"BAR"},
+    "REINFORCEMENT_CUT": {"BAR"},
     "ASSEMBLE": {"HARDWARE_KIT", "FITTING"},
     "HARDWARE": {"HARDWARE_KIT", "FITTING"},
     "GLAZE": {"PANEL"},
 }
+
+# Stations that physically drop bars: the order's remnant settle runs when
+# the first of them completes (consumed/produced writes are once-per-order).
+_BAR_DROP_STATIONS = frozenset(
+    code for code, kinds in _STEP_CONSUMED_KINDS.items() if "BAR" in kinds
+)
 
 # Stations that physically work the sealed plan without consuming stock:
 # they must never START or COMPLETE against a missing/invalidated plan —
@@ -880,7 +891,7 @@ def release_production(*, org_id: UUID, version_id: UUID, actor_id: UUID) -> dic
                             seq,
                             str(center["id"]) if center else None,
                             code,
-                            _STEP_LABELS[code],
+                            _STEP_LABELS.get(code, code),
                         ],
                     )
                 rows(
@@ -1011,12 +1022,14 @@ def production_prep(*, org_id: UUID) -> dict[str, object]:
                     AND o.order_type = 'WORKSHOP_OT'
               )
               AND NOT EXISTS (
-                  -- Only the newest production-allowed revision per project is
-                  -- release-able; older ones are superseded, not waiting work.
+                  -- Mirrors release_production's supersede gate: only the
+                  -- newest revision per project (base-26 code order, across
+                  -- every version — an unreleasable newer revision still
+                  -- supersedes) can actually be released.
                   SELECT 1 FROM public.project_versions v2
                   WHERE v2.org_id = v.org_id AND v2.project_id = v.project_id
-                    AND v2.production_allowed
-                    AND v2.emitted_at > v.emitted_at
+                    AND (length(v2.revision_code), v2.revision_code)
+                      > (length(v.revision_code), v.revision_code)
               )
             ORDER BY v.emitted_at DESC NULLS LAST, v.id
             """,
@@ -1885,10 +1898,10 @@ def transition_step(
                 }),
             ],
         )
-        # §6: completing CUT is where the physical drop goes on the saw —
-        # reserved remnants consume and the plan's usable remainders return
-        # to stock under this order's provenance, once.
-        if new_status == "DONE" and str(step["code"]) == "CUT":
+        # §6: completing a bar-cutting station is where the physical drop
+        # goes on the saw — reserved remnants consume and the plan's usable
+        # remainders return to stock under this order's provenance, once.
+        if new_status == "DONE" and str(step["code"]) in _BAR_DROP_STATIONS:
             payload_row = one(
                 """
                 SELECT payload_json FROM public.orders
@@ -2476,6 +2489,8 @@ def export_cnc_files(
             raise DocumentaryError("work_order_dispatched")
         if str(order["status"]) == "COMPLETED":
             raise DocumentaryError("work_order_completed")
+        if str(order["status"]) == "CANCELLED":
+            raise DocumentaryError("work_order_cancelled")
         payload = _decoded(order["payload_json"])
         optimization = payload.get("optimization")
         if not isinstance(optimization, dict) or not optimization.get("bars"):
@@ -2689,6 +2704,8 @@ def export_operations(
             raise DocumentaryError("work_order_dispatched")
         if str(order["status"]) == "COMPLETED":
             raise DocumentaryError("work_order_completed")
+        if str(order["status"]) == "CANCELLED":
+            raise DocumentaryError("work_order_cancelled")
         payload = _decoded(order["payload_json"])
         optimization = payload.get("optimization")
         if not isinstance(optimization, dict) or not optimization.get("bars"):
@@ -2954,6 +2971,8 @@ def export_dxf_files(
             raise DocumentaryError("work_order_dispatched")
         if str(order["status"]) == "COMPLETED":
             raise DocumentaryError("work_order_completed")
+        if str(order["status"]) == "CANCELLED":
+            raise DocumentaryError("work_order_cancelled")
         payload = _decoded(order["payload_json"])
         optimization = payload.get("optimization")
         if not isinstance(optimization, dict) or not (
@@ -3115,6 +3134,8 @@ def generate_packing_manifest(
             raise DocumentaryError("work_order_installed")
         if str(order["status"]) == "DISPATCHED":
             raise DocumentaryError("work_order_dispatched")
+        if str(order["status"]) == "CANCELLED":
+            raise DocumentaryError("work_order_cancelled")
         payload = _decoded(order["payload_json"])
         materials = payload.get("materials") or {}
         quantity = int(payload.get("quantity") or 1)
@@ -3873,6 +3894,8 @@ def _order_optimize_context(
         raise DocumentaryError("work_order_dispatched")
     if str(order["status"]) == "COMPLETED":
         raise DocumentaryError("work_order_completed")
+    if str(order["status"]) == "CANCELLED":
+        raise DocumentaryError("work_order_cancelled")
     payload = _decoded(order["payload_json"])
     position_id = payload.get("position_id")
     system_id = payload.get("system_id")
@@ -4056,6 +4079,8 @@ def optimize_work_order(
             raise DocumentaryError("work_order_dispatched")
         if str(order["status"]) == "COMPLETED":
             raise DocumentaryError("work_order_completed")
+        if str(order["status"]) == "CANCELLED":
+            raise DocumentaryError("work_order_cancelled")
         # A plan writes fresh reservations for every stock kind, but only a
         # consuming step that completes can settle them — replanning after a
         # step already consumed its material would strand the new holds

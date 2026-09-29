@@ -721,15 +721,20 @@ def project_manufacturing_facts_v1(
             )
         ]
         # A declared-handedness leaf prefers rules pinned to that
-        # handedness over wildcard rules for the same domain slot.
-        if leaf.door_handedness is not None and any(
-            slot_rule.leaf_handedness == leaf.door_handedness
-            for slot_rule in handle_rules
-        ):
+        # handedness over wildcard rules for the same domain slot —
+        # per slot, so a wildcard rule for a slot with no pinned entry
+        # still applies.
+        if leaf.door_handedness is not None:
+            pinned_slots = {
+                slot_rule.handle_domain_slot
+                for slot_rule in handle_rules
+                if slot_rule.leaf_handedness == leaf.door_handedness
+            }
             handle_rules = [
                 slot_rule
                 for slot_rule in handle_rules
                 if slot_rule.leaf_handedness is not None
+                or slot_rule.handle_domain_slot not in pinned_slots
             ]
         if not handle_rules:
             if leaf.opening_type is BayOpeningType.DOOR_ENTRY and any(
