@@ -317,6 +317,10 @@ def station_map_for(payload: dict[str, Any], kinds: list[str]) -> dict[str, str]
     if authority_map:
         station_map = dict(authority_map)
         station_map.setdefault("SAW_CUT", "CUT")
+        # A kind the frozen authority doesn't map falls back to the legacy
+        # cell — an op with station=None is invisible to every station queue.
+        for kind in kinds:
+            station_map.setdefault(kind, "MACHINING")
         return station_map
     return {
         kind: ("CUT" if kind == "SAW_CUT" else "MACHINING") for kind in kinds

@@ -1646,6 +1646,75 @@ def test_optimize_rejects_completed_order() -> None:
     assert error.value.code == "work_order_completed"
 
 
+def test_optimize_rejects_cancelled_order() -> None:
+    order_id = uuid4()
+
+    def fake_one(query, params=(), code=None):
+        if "FOR UPDATE" in query:
+            return {
+                "id": order_id, "order_code": "OT", "status": "CANCELLED",
+                "payload_json": {},
+            }
+        raise AssertionError(query)
+
+    with patch("production.service.one", side_effect=fake_one), patch(
+        "production.service.transaction.atomic", return_value=_atomic()
+    ), patch("production.service.documentary_backend", return_value=_atomic()):
+        with pytest.raises(DocumentaryError) as error:
+            service.optimize_work_order(
+                org_id=uuid4(), order_id=order_id, actor_id=uuid4(), color="BLANCO",
+            )
+    assert error.value.code == "work_order_cancelled"
+
+
+def test_cnc_generate_rejects_cancelled_order() -> None:
+    from production import cnc
+
+    order_id = uuid4()
+    bundle = {
+        "order": {"id": order_id, "order_code": "OT", "status": "CANCELLED"}
+    }
+    with patch("production.cnc._order_ops", return_value=bundle):
+        with pytest.raises(DocumentaryError) as error:
+            cnc.generate_program(
+                org_id=uuid4(), order_id=order_id, machine_id=uuid4(),
+                member_id="M-1", actor_id=uuid4(),
+            )
+    assert error.value.code == "work_order_cancelled"
+
+
+def test_cnc_generate_rejects_malformed_machine_id(monkeypatch) -> None:
+    client, _, _ = _client_with_scope(monkeypatch, "WORKSHOP_MANAGER")
+    monkeypatch.setattr(
+        production_views.cnc,
+        "generate_program",
+        lambda **kwargs: {"program": {}},
+    )
+    response = client.post(
+        f"/api/v1/production/orders/{uuid4()}/cnc/programs/",
+        {"machine_id": "not-a-uuid", "member_id": "M-1"},
+        format="json",
+    )
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "machine_id_invalid"
+
+
+def test_cancelled_order_error_maps_to_409(monkeypatch) -> None:
+    client, _, _ = _client_with_scope(monkeypatch, "WORKSHOP_MANAGER")
+
+    def fake_optimize(**kwargs):
+        raise DocumentaryError("work_order_cancelled")
+
+    monkeypatch.setattr(service, "optimize_work_order", fake_optimize)
+    response = client.post(
+        f"/api/v1/production/orders/{uuid4()}/optimize/",
+        {"color": "BLANCO"},
+        format="json",
+    )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "work_order_cancelled"
+
+
 def test_optimize_rejects_replan_after_consumed_step() -> None:
     # A DONE material-consuming step already settled its reservations —
     # replanning would strand the fresh holds forever (no second DONE

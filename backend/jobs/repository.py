@@ -9,6 +9,7 @@ import json
 from uuid import UUID
 
 from django.db import connection, DatabaseError
+from psycopg import sql
 
 from pricing.repository import json_text, rows
 
@@ -259,15 +260,45 @@ def release_stale(*, now: datetime | None = None) -> int:
         cursor.execute(
             """
             UPDATE public.job_runs
-            SET state = 'QUEUED',
+            SET state = CASE WHEN attempt >= max_attempts THEN 'FAILED' ELSE 'QUEUED' END,
                 locked_by = NULL,
                 locked_at = NULL,
+                completed_at = CASE WHEN attempt >= max_attempts THEN NOW() ELSE completed_at END,
+                error = CASE WHEN attempt >= max_attempts
+                        THEN '{"code":"job_lease_expired"}'::jsonb ELSE error END,
                 updated_at = NOW()
             WHERE state = 'RUNNING' AND locked_at < %s
+            RETURNING CASE WHEN state = 'FAILED' AND type = 'ai.agent.run'
+                          THEN payload->>'ai_job_id' ELSE NULL END AS ai_job_id
             """,
             [cutoff],
         )
-        return cursor.rowcount
+        released = cursor.rowcount
+        # A terminal ai.agent.run never reaches its handler, so nothing else
+        # settles the ai_jobs row — without this the assistant card hangs in
+        # PLANNING/RUNNING forever. FAILED_RETRYABLE keeps the workspace's
+        # resume path open. ai_jobs grants sit on ai_backend/postgres, not
+        # service_role — RESET ROLE reaches the session owner (the table
+        # owner bypasses RLS and owns the ai_backend membership).
+        stranded = [row[0] for row in cursor.fetchall() if row[0]]
+        if stranded:
+            cursor.execute("SELECT current_setting('role')")
+            previous = str(cursor.fetchone()[0])
+            cursor.execute("RESET ROLE")
+            cursor.execute(
+                """
+                UPDATE public.ai_jobs SET state = 'FAILED_RETRYABLE',
+                    error_code = 'job_lease_expired', updated_at = NOW()
+                WHERE id = ANY(%s::uuid[])
+                  AND state IN ('QUEUED','PLANNING','RUNNING')
+                """,
+                [stranded],
+            )
+            if previous != "none":
+                cursor.execute(
+                    sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(previous))
+                )
+        return released
 
 
 def report_progress(*, job_id: UUID, worker_id: str, progress: float) -> None:

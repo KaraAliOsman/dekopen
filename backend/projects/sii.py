@@ -780,7 +780,7 @@ def emit_dte(*, org_id: UUID, project: dict, invoice_id: UUID, actor_id: UUID) -
             existing = rows(
                 "SELECT * FROM public.project_dtes "
                 "WHERE org_id=%s AND invoice_id=%s AND credit_note_id IS NULL "
-                "AND dte_type=%s",
+                "AND dte_type=%s ORDER BY created_at, id",
                 [org_id_s, invoice_id_s, DTE_FACTURA],
             )
             if existing:
@@ -1027,7 +1027,7 @@ def emit_credit_note_dte(
             parents = rows(
                 "SELECT * FROM public.project_dtes "
                 "WHERE org_id=%s AND invoice_id=%s AND credit_note_id IS NULL "
-                "AND dte_type=%s",
+                "AND dte_type=%s ORDER BY created_at, id",
                 [org_id_s, invoice_id_s, DTE_FACTURA],
             )
             if not parents:
@@ -1039,11 +1039,26 @@ def emit_credit_note_dte(
             parent_dte = parents[0]
             notes = rows(
                 "SELECT * FROM public.project_credit_notes "
-                "WHERE invoice_id=%s AND org_id=%s",
+                "WHERE invoice_id=%s AND org_id=%s ORDER BY created_at, id",
                 [invoice_id_s, org_id_s],
             )
             if notes:
                 credit_note = notes[0]
+                note_payload = (
+                    credit_note["payload_json"]
+                    if isinstance(credit_note["payload_json"], dict)
+                    else json.loads(credit_note["payload_json"])
+                )
+                if note_payload.get("credit_partial") is True:
+                    # A DTE-61's <Referencia CodRef=1> annuls the parent
+                    # factura in full — stamping it for a partial internal
+                    # note would overstate the credit.
+                    raise contract_error(
+                        422,
+                        "credit_note_dte_partial_unsupported",
+                        "La nota de crédito electrónica anula la factura completa — "
+                        "para un abono parcial emite la nota de crédito interna.",
+                    )
                 existing = rows(
                     "SELECT * FROM public.project_dtes "
                     "WHERE org_id=%s AND credit_note_id=%s",
@@ -1335,14 +1350,16 @@ def emit_dispatch_note_dte(
     try:
         with transaction.atomic(), documentary_backend():
             order = one(
-                "SELECT id, project_id, order_code FROM public.orders "
+                "SELECT id, project_id, order_code, project_version_id "
+                "FROM public.orders "
                 "WHERE id=%s AND org_id=%s",
                 [order_id_s, org_id_s],
                 "work_order_not_found",
             )
             note = rows(
                 "SELECT * FROM public.dispatch_notes "
-                "WHERE work_order_id=%s AND org_id=%s AND voided_at IS NULL",
+                "WHERE work_order_id=%s AND org_id=%s AND voided_at IS NULL "
+                "ORDER BY created_at DESC, id DESC LIMIT 1",
                 [order_id_s, org_id_s],
             )
             if not note:
@@ -1352,6 +1369,15 @@ def emit_dispatch_note_dte(
                     "La orden debe despacharse antes de timbrar la guía electrónica.",
                 )
             note = note[0]
+            if ind_traslado == IND_TRASLADO_INTERNO and note.get("delivery_id"):
+                # Traslado interno moves the org's own goods — a guía bound
+                # to a client delivery is a sale and must stamp IndTraslado=1.
+                raise contract_error(
+                    422,
+                    "ind_traslado_interno_requires_internal",
+                    "El despacho está asociado a una entrega al cliente — "
+                    "timbra la guía de venta, no traslado interno.",
+                )
             one(
                 "SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",
                 [f"sii_folios:{org_id_s}:{DTE_GUIA}"],
@@ -1390,7 +1416,11 @@ def emit_dispatch_note_dte(
                 # venta. Traslado interno (5) legitimately carries no deal.
                 from projects import invoices  # lazy: invoices → sii_envio → sii
 
-                sealed = invoices._sealed_deal(org_id, order["project_id"])
+                sealed = invoices._sealed_deal(
+                    org_id,
+                    order["project_id"],
+                    version_id=order.get("project_version_id"),
+                )
                 if sealed is None:
                     raise contract_error(
                         422,

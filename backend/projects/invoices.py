@@ -88,15 +88,28 @@ def _collected(org_id: UUID, project_id: UUID) -> Decimal:
     return Decimal(str(total))
 
 
-def _sealed_deal(org_id: UUID, project_id: UUID) -> dict | None:
-    """The invoiceable deal: the latest sealed revision only. A live priced
-    total that never froze is not a document the company may charge on."""
-    version = rows(
-        "SELECT id,revision_code,snapshot_json::text AS snapshot_json "
-        "FROM public.project_versions "
-        "WHERE org_id=%s AND project_id=%s ORDER BY emitted_at DESC,id DESC LIMIT 1",
-        [str(org_id), str(project_id)],
-    )
+def _sealed_deal(
+    org_id: UUID, project_id: UUID, *, version_id: UUID | None = None
+) -> dict | None:
+    """The invoiceable deal: the latest sealed revision — or the specific
+    revision a document is bound to when ``version_id`` is given (a work
+    order's guía must stamp the revision the order was released from, never
+    a successor). A live priced total that never froze is not a document
+    the company may charge on."""
+    if version_id is not None:
+        version = rows(
+            "SELECT id,revision_code,snapshot_json::text AS snapshot_json "
+            "FROM public.project_versions "
+            "WHERE id=%s AND org_id=%s AND project_id=%s",
+            [str(version_id), str(org_id), str(project_id)],
+        )
+    else:
+        version = rows(
+            "SELECT id,revision_code,snapshot_json::text AS snapshot_json "
+            "FROM public.project_versions "
+            "WHERE org_id=%s AND project_id=%s ORDER BY emitted_at DESC,id DESC LIMIT 1",
+            [str(org_id), str(project_id)],
+        )
     if not version:
         return None
     version = version[0]
@@ -140,6 +153,17 @@ def issue_invoice(*, org_id: UUID, project: dict, actor_id: UUID) -> dict:
                 "SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",
                 [f"project_invoices:{org_id_s}"],
             )
+            # Idempotent emission: one factura per sealed revision — a
+            # double-click replays the sealed row instead of minting a
+            # second counter-document for the same frozen deal.
+            existing = rows(
+                "SELECT * FROM public.project_invoices "
+                "WHERE org_id=%s AND project_id=%s AND project_version_id=%s "
+                "ORDER BY created_at, id",
+                [org_id_s, project_id_s, str(deal["version_id"])],
+            )
+            if existing:
+                return _invoice_public(existing[0])
             sequence = int(
                 one(
                     "SELECT COUNT(*) AS n FROM public.project_invoices WHERE org_id=%s",

@@ -153,18 +153,62 @@ def enqueue_job(*, org_id: UUID, user_id: UUID, surface: str,
     return existing
 
 
+def _run_lease_live(*, job_id: UUID) -> bool:
+    """Whether a worker still holds a fresh lease on this ai_job's run —
+    job_runs is service-owned, so the read borrows the same role switch the
+    rail's live-progress read uses. A dead heartbeat (locked_at past the
+    stale cutoff) means the RUNNING ai_jobs row is stranded, not owned."""
+    if connection.vendor != "postgresql":
+        return False
+    from jobs import service as job_service  # lazy — avoids the import cycle
+    from jobs.repository import STALE_LOCK_SECONDS
+
+    with job_service.job_backend():
+        return bool(
+            rows(
+                "SELECT 1 FROM public.job_runs"
+                " WHERE type = 'ai.agent.run' AND state = 'RUNNING'"
+                " AND payload->>'ai_job_id' = %s"
+                " AND locked_at > NOW() - (%s || ' seconds')::interval"
+                " LIMIT 1",
+                [str(job_id), str(STALE_LOCK_SECONDS)],
+            )
+        )
+
+
 def claim_queued_job(*, job_id: UUID, org_id: UUID, user_id: UUID) -> dict | None:
     """The worker's atomic claim, committed on its own so the row shows
     PLANNING while the run's transaction works — mid-run readers then see a
     real lifecycle instead of the previous round's terminal state. QUEUED is
-    the normal entry; PLANNING/RUNNING re-claim a run stranded by a worker
-    crash (the row lock serializes a live act transaction, so a re-claim
-    waits for it and then fails the state check — it can never run twice)."""
+    the normal entry; PLANNING/RUNNING may only be re-claimed when the
+    previous run's lease is actually dead — a live worker's heartbeat keeps
+    locked_at fresh, and reclaiming under it would run two provider loops
+    over one transcript."""
     with _ai_backend():
         record = rows(
             "UPDATE public.ai_jobs SET state = 'PLANNING', updated_at = NOW()"
             " WHERE id = %s AND org_id = %s AND user_id = %s"
-            " AND state IN ('QUEUED','PLANNING','RUNNING')"
+            " AND state = 'QUEUED'"
+            f" RETURNING {_JOB_COLUMNS}",
+            [str(job_id), str(org_id), str(user_id)],
+        )
+        if record:
+            return _decode(record[0])
+        if not rows(
+            "SELECT 1 FROM public.ai_jobs"
+            " WHERE id = %s AND org_id = %s AND user_id = %s"
+            " AND state IN ('PLANNING','RUNNING')",
+            [str(job_id), str(org_id), str(user_id)],
+        ):
+            return None
+    if _run_lease_live(job_id=job_id):
+        # A worker still owns this run — the re-claim would double-run it.
+        return None
+    with _ai_backend():
+        record = rows(
+            "UPDATE public.ai_jobs SET state = 'PLANNING', updated_at = NOW()"
+            " WHERE id = %s AND org_id = %s AND user_id = %s"
+            " AND state IN ('PLANNING','RUNNING')"
             f" RETURNING {_JOB_COLUMNS}",
             [str(job_id), str(org_id), str(user_id)],
         )
@@ -478,15 +522,15 @@ def resume_job(*, job_id: UUID, transcript: list, org_id: UUID, user_id: UUID) -
             " completed_at = NULL, updated_at = NOW()"
             " WHERE id = %s AND org_id = %s AND user_id = %s"
             " AND state = 'QUEUED'"
-            " RETURNING id",
+            f" RETURNING {_JOB_COLUMNS}",
             [_dump(transcript), str(job_id), str(org_id), str(user_id)],
         )
     if record:
-        # act() rebuilds the transcript off the claimed row — carrying the
-        # transcript we just wrote keeps earlier rounds; returning only the
-        # id would make the round start from an empty thread and clobber
-        # the conversation at finish.
-        return {"id": str(record[0]["id"]), "transcript": transcript}
+        # The claimed row must carry its whole state into act(): returning
+        # only the id would drop the accumulated artifact shelf (finish_job
+        # writes the merged list the caller passes) and the recorded
+        # outcomes that pending-approval resolution reads.
+        return _decode(record[0])
     state = rows(
         "SELECT state FROM public.ai_jobs WHERE id = %s", [str(job_id)]
     )
@@ -592,74 +636,88 @@ def record_outcome(
             "action": recorded["action"],
         }
     ]
-    with _ai_backend():
-        # The reported step must actually exist in the transcript — a client
-        # may only record outcomes against steps the run proposed, or any
-        # index the UI never showed becomes fabricable telemetry.
-        job = get_job(org_id=org_id, user_id=user_id, job_id=job_id)
-        if job is None:
-            return None
-        transcript = job.get("transcript") or []
-        turn = (
-            transcript[recorded["turn_index"]]
-            if 0 <= recorded["turn_index"] < len(transcript)
-            else None
-        )
-        steps = (turn or {}).get("steps") or []
-        step = (
-            steps[recorded["step_index"]]
-            if 0 <= recorded["step_index"] < len(steps)
-            else None
-        )
-        if step is None or step.get("kind") not in ("ops", "batch_ops", "prepare"):
-            return None
-        found = rows(
-            "UPDATE public.ai_jobs SET outcomes = outcomes || %s::jsonb,"
-            " updated_at = NOW()"
-            " WHERE id = %s AND org_id = %s AND user_id = %s"
-            " AND NOT outcomes @> %s::jsonb"
-            # A terminal decision (applied/declined) can't be contradicted by a
-            # second one on the same step — a race or a stale card must never
-            # record 'applied' and 'declined' together. apply_failed is not
-            # terminal: retrying a failed apply is the whole point.
-            " AND (%s NOT IN ('applied','declined') OR NOT EXISTS ("
-            "   SELECT 1 FROM jsonb_array_elements(outcomes) o"
-            "   WHERE (o->>'turn_index')::int = %s AND (o->>'step_index')::int = %s"
-            "     AND o->>'action' IN ('applied','declined')))"
-            " RETURNING id",
-            [
-                _dump([recorded]),
-                str(job_id),
-                str(org_id),
-                str(user_id),
-                _dump(dedupe),
-                recorded["action"],
-                recorded["turn_index"],
-                recorded["step_index"],
-            ],
-        )
-        if found and job.get("state") == "WAITING_FOR_APPROVAL":
-            # The wait is resolvable: once every gated step the transcript
-            # proposed has at least one recorded outcome, the job succeeded —
-            # decisions on later rounds can't reopen a resolved approval.
-            pending = [
-                (turn_index, step_index)
-                for turn_index, turn_row in enumerate(transcript)
-                for step_index, step_row in enumerate(turn_row.get("steps") or [])
-                if step_row.get("kind") in ("ops", "batch_ops", "prepare")
-            ]
-            resolved = {
-                (outcome["turn_index"], outcome["step_index"])
-                for outcome in (job.get("outcomes") or [])
-            }
-            resolved.add((recorded["turn_index"], recorded["step_index"]))
-            if pending and all(pair in resolved for pair in pending):
-                write(
-                    "UPDATE public.ai_jobs SET state = 'SUCCEEDED',"
-                    " updated_at = NOW()"
-                    " WHERE id = %s AND state = 'WAITING_FOR_APPROVAL'",
-                    [str(job_id)],
+    # One transaction, one row lock: the transcript/outcome snapshot the
+    # validation and resolution read is the same row the UPDATE writes —
+    # concurrent outcome reports serialize on the lock instead of resolving
+    # a WAITING_FOR_APPROVAL job off a pre-update read.
+    with transaction.atomic():
+        with _ai_backend():
+            if connection.vendor == "postgresql":
+                rows(
+                    "SELECT id FROM public.ai_jobs"
+                    " WHERE id = %s AND org_id = %s AND user_id = %s"
+                    " FOR UPDATE",
+                    [str(job_id), str(org_id), str(user_id)],
                 )
+            # The reported step must actually exist in the transcript — a
+            # client may only record outcomes against steps the run
+            # proposed, or any index the UI never showed becomes fabricable
+            # telemetry.
+            job = get_job(org_id=org_id, user_id=user_id, job_id=job_id)
+            if job is None:
+                return None
+            transcript = job.get("transcript") or []
+            turn = (
+                transcript[recorded["turn_index"]]
+                if 0 <= recorded["turn_index"] < len(transcript)
+                else None
+            )
+            steps = (turn or {}).get("steps") or []
+            step = (
+                steps[recorded["step_index"]]
+                if 0 <= recorded["step_index"] < len(steps)
+                else None
+            )
+            if step is None or step.get("kind") not in ("ops", "batch_ops", "prepare"):
+                return None
+            found = rows(
+                "UPDATE public.ai_jobs SET outcomes = outcomes || %s::jsonb,"
+                " updated_at = NOW()"
+                " WHERE id = %s AND org_id = %s AND user_id = %s"
+                " AND NOT outcomes @> %s::jsonb"
+                # A terminal decision (applied/declined) can't be contradicted
+                # by a second one on the same step — a race or a stale card
+                # must never record 'applied' and 'declined' together.
+                # apply_failed is not terminal: retrying a failed apply is
+                # the whole point.
+                " AND (%s NOT IN ('applied','declined') OR NOT EXISTS ("
+                "   SELECT 1 FROM jsonb_array_elements(outcomes) o"
+                "   WHERE (o->>'turn_index')::int = %s AND (o->>'step_index')::int = %s"
+                "     AND o->>'action' IN ('applied','declined')))"
+                " RETURNING id",
+                [
+                    _dump([recorded]),
+                    str(job_id),
+                    str(org_id),
+                    str(user_id),
+                    _dump(dedupe),
+                    recorded["action"],
+                    recorded["turn_index"],
+                    recorded["step_index"],
+                ],
+            )
+            if found and job.get("state") == "WAITING_FOR_APPROVAL":
+                # The wait is resolvable: once every gated step the transcript
+                # proposed has at least one recorded outcome, the job succeeded —
+                # decisions on later rounds can't reopen a resolved approval.
+                pending = [
+                    (turn_index, step_index)
+                    for turn_index, turn_row in enumerate(transcript)
+                    for step_index, step_row in enumerate(turn_row.get("steps") or [])
+                    if step_row.get("kind") in ("ops", "batch_ops", "prepare")
+                ]
+                resolved = {
+                    (outcome["turn_index"], outcome["step_index"])
+                    for outcome in (job.get("outcomes") or [])
+                }
+                resolved.add((recorded["turn_index"], recorded["step_index"]))
+                if pending and all(pair in resolved for pair in pending):
+                    write(
+                        "UPDATE public.ai_jobs SET state = 'SUCCEEDED',"
+                        " updated_at = NOW()"
+                        " WHERE id = %s AND state = 'WAITING_FOR_APPROVAL'",
+                        [str(job_id)],
+                    )
     return {"id": str(found[0]["id"]), "recorded": True} if found else {"id": str(job_id), "recorded": False}
 
 

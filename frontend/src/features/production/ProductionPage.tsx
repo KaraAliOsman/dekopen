@@ -389,6 +389,7 @@ export function ProductionPage(): JSX.Element {
       setMessage(t("production.loadError"));
     }
     if (response.status === 200) setOrders(response.data.orders);
+    else setMessage(t("production.loadError"));
     // §8: versions approved for production but not yet released surface here
     // — the workshop sees the approved work without waiting for a reminder.
     if (prepResponse?.status === 200) setPrepVersions(prepResponse.data.versions);

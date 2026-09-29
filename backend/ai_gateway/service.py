@@ -1,9 +1,12 @@
 """AI gateway invoke: one transaction binding entitlement, provider call,
 immutable audit and wallet debit (PRD-13 pre/post-invocation hooks).
 
-The org row lock (reconcile → FOR UPDATE) serializes AI spend per tenant; the
-balance check runs BEFORE any provider HTTP so a broke wallet cancels the call
-before the request exists. Tenants only ever see public_name — provider and
+The org row lock (reconcile → FOR UPDATE) serializes AI spend per tenant —
+but only around its own mutations: the balance check runs BEFORE any
+provider HTTP so a broke wallet cancels the call before the request exists,
+the provider call itself runs outside the lock, and audit + debit re-enter
+it (debit re-checks the balance under the lock, so two concurrent invokes
+still can't overspend). Tenants only ever see public_name — provider and
 model stay sealed in the audit row."""
 
 from __future__ import annotations
@@ -274,19 +277,35 @@ def invoke(
         # active org; the provider signs exactly that path at wire time —
         # never a path the request supplied.
         document_path = _source_document_path(org_id, input_payload.get("source"))
-        result = provider_for(route).invoke(
-            route=route,
+    # The provider call runs OUTSIDE the wallet lock — holding the org row
+    # FOR UPDATE across a network call would serialize every tenant request
+    # behind provider latency (and a hung provider behind its full timeout).
+    result = provider_for(route).invoke(
+        route=route,
+        capability=capability,
+        input_payload=input_payload,
+        provider_options=provider_options,
+        document_path=document_path,
+        # The wire key is org-namespaced: a real provider dedupes on the
+        # header globally, so the raw org-scoped key alone would collide
+        # across tenants sharing a capability-level key prefix.
+        operation_key=f"{org_id}:{operation_key}",
+    )
+    if len(str(result["output"])) > MAX_OUTPUT_CHARS:
+        raise ProviderError("ai_provider_output_too_large")
+    with wallet.financial_transaction(org_id):
+        wallet.reconcile(org_id)
+        # A concurrent invoke may have committed while the provider ran —
+        # replay must be re-checked under the lock before spending again.
+        replay = _replay(
+            org_id=org_id,
+            operation_key=operation_key,
             capability=capability,
-            input_payload=input_payload,
-            provider_options=provider_options,
-            document_path=document_path,
-            # The wire key is org-namespaced: a real provider dedupes on the
-            # header globally, so the raw org-scoped key alone would collide
-            # across tenants sharing a capability-level key prefix.
-            operation_key=f"{org_id}:{operation_key}",
+            tool_name=tool_name,
+            input_hash=input_hash,
         )
-        if len(str(result["output"])) > MAX_OUTPUT_CHARS:
-            raise ProviderError("ai_provider_output_too_large")
+        if replay is not None:
+            return replay
         audit = _audit(
             org_id=org_id,
             user_id=user_id,
@@ -306,8 +325,8 @@ def invoke(
             },
         )
         if audit is None:
-            # Defense in depth: the org lock already serializes invokes, so this
-            # only fires if the row appeared without holding the lock.
+            # The loser of a concurrent same-key invoke replays the winner's
+            # stored response instead of double-debiting.
             return _replay(
                 org_id=org_id,
                 operation_key=operation_key,

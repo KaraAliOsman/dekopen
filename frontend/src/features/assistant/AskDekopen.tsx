@@ -19,6 +19,20 @@ type Thread = { question: string; answer: AiAskResponse }[];
  * itself answering. */
 const dockThreads = new Map<string, Thread>();
 
+/** Module-scope store bound — an SPA session that visits many surfaces must
+ * not accumulate every thread forever; oldest keys age out first. */
+const MAX_DOCK_THREADS = 12;
+
+function syncDockThreads(next: Map<string, Thread>): void {
+  while (next.size > MAX_DOCK_THREADS) {
+    const oldest = next.keys().next().value;
+    if (oldest === undefined) break;
+    next.delete(oldest);
+  }
+  dockThreads.clear();
+  for (const [key, value] of next) dockThreads.set(key, value);
+}
+
 /** Contextual "Preguntar a DEKOPEN": a docked panel that answers questions
  * inside a typed server-side projection of the current surface. The provider
  * can suggest navigation; it can never execute a mutation. */
@@ -118,8 +132,7 @@ export function AskDekopen({
           if (existing.length >= restored.length) return prev;
           const next = new Map(prev);
           next.set(key, restored);
-          dockThreads.clear();
-          for (const [k, v] of next) dockThreads.set(k, v);
+          syncDockThreads(next);
           return next;
         });
       } catch {
@@ -155,7 +168,12 @@ export function AskDekopen({
           question: trimmed,
           operation_key: operationKey.current.key,
         },
-        { headers: { "X-Organization-ID": orgId } },
+        {
+          headers: { "X-Organization-ID": orgId },
+          // The provider is bounded server-side — the client must not spin
+          // forever on a wedged request.
+          signal: AbortSignal.timeout(120_000),
+        },
       );
       if (response.status !== 200) throw new ApiError(response.status, response.data);
       if (seq !== requestSeq.current) return;
@@ -165,8 +183,7 @@ export function AskDekopen({
           ...(next.get(threadKey) ?? []),
           { question: trimmed, answer: response.data },
         ]);
-        dockThreads.clear();
-        for (const [key, value] of next) dockThreads.set(key, value);
+        syncDockThreads(next);
         return next;
       });
       setQuestion("");

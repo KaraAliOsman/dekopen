@@ -309,7 +309,9 @@ def _patch_env(
     # stub it so they stay unit-fast.
     monkeypatch.setattr(sii, "_seal_repr", lambda **kw: None)
     monkeypatch.setattr(
-        invoices_module, "_sealed_deal", lambda org_id, project_id: sealed_deal
+        invoices_module,
+        "_sealed_deal",
+        lambda org_id, project_id, *, version_id=None: sealed_deal,
     )
 
 

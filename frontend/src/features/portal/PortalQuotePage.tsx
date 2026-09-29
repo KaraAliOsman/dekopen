@@ -8,6 +8,16 @@ import type { PositionDesign } from "../../api/generated/models";
 import { t, TranslationKey } from "../../i18n/es-CL";
 import { formatRevision } from "../../format";
 import { PositionThumb, THUMB_MEMBERS } from "../projects/PositionThumb";
+import {
+  addDecimal,
+  divideByInt,
+  divideDecimal,
+  formatDecimal,
+  multiplyDecimal,
+  parseDecimal,
+  roundDecimalToInt,
+  type DecimalValue,
+} from "../projects/decimal";
 import { reSkinMembers, type MemberGeometry } from "../canvas/members";
 import "./portal.css";
 import { formatDate, formatMoney } from "../money";
@@ -99,7 +109,7 @@ function groupPositions(positions: PortalPosition[]): {
   locations: string[];
   indexes: string[];
   quantity: number;
-  totalNet: number;
+  totalNet: DecimalValue | null;
 }[] {
   const groups = new Map<
     string,
@@ -109,7 +119,7 @@ function groupPositions(positions: PortalPosition[]): {
       locations: string[];
       indexes: string[];
       quantity: number;
-      totalNet: number;
+      totalNet: DecimalValue | null;
     }
   >();
   for (const position of positions) {
@@ -126,11 +136,17 @@ function groupPositions(positions: PortalPosition[]): {
     const group = groups.get(key);
     const location = position.location_tag?.trim();
     const index = position.position_index != null ? String(position.position_index) : null;
+    // Sealed money stays exact decimal end to end — group totals never
+    // round-trip through binary float before reaching the es-CL formatter.
+    const lineNet = position.price_net != null ? parseDecimal(position.price_net) : null;
     if (group) {
       if (location && !group.locations.includes(location)) group.locations.push(location);
       if (index) group.indexes.push(index);
       group.quantity += position.quantity ?? 1;
-      group.totalNet += Number(position.price_net) || 0;
+      group.totalNet =
+        group.totalNet !== null && lineNet !== null
+          ? addDecimal(group.totalNet, lineNet)
+          : (group.totalNet ?? lineNet);
     } else {
       groups.set(key, {
         key,
@@ -138,7 +154,7 @@ function groupPositions(positions: PortalPosition[]): {
         locations: location ? [location] : [],
         indexes: index ? [index] : [],
         quantity: position.quantity ?? 1,
-        totalNet: Number(position.price_net) || 0,
+        totalNet: lineNet,
       });
     }
   }
@@ -154,14 +170,19 @@ function PositionGroupCard({
   currency: string;
   // IVA-included line totals reconcile with the headline Total — a customer
   // thinks in gross, so the card leads with it when the rate is derivable.
-  taxRate: number | null;
+  taxRate: DecimalValue | null;
 }): JSX.Element {
   const { position } = group;
   const [variant, setVariant] = useState<"studio" | "elevation">("studio");
   const specs = position.glass_specs ?? [];
   const finished = position.finish ?? null;
   const members = positionMembers(position);
-  const hasPrice = position.price_net != null;
+  const hasPrice = position.price_net != null && group.totalNet !== null;
+  const totalNet = group.totalNet;
+  const grossLine =
+    totalNet !== null && taxRate !== null
+      ? multiplyDecimal(totalNet, addDecimal({ numerator: 1n, denominator: 1n }, taxRate))
+      : null;
   const locations =
     group.locations.length > 0
       ? compactList(group.locations)
@@ -228,19 +249,23 @@ function PositionGroupCard({
           ) : null}
         </dl>
         <p className="portal-position__price">
-          {hasPrice && group.quantity > 1 && (
+          {hasPrice && group.quantity > 1 && totalNet !== null && (
             <span className="portal-position__unit">
-              {t("portal.unitNet")} {money(String(group.totalNet / group.quantity), currency)}
+              {t("portal.unitNet")}{" "}
+              {money(formatDecimal(divideByInt(totalNet, group.quantity)), currency)}
             </span>
           )}
           <span>
-            {t("portal.lineNet")} {hasPrice ? money(String(group.totalNet), currency) : "—"}
+            {t("portal.lineNet")}{" "}
+            {hasPrice && totalNet !== null ? money(formatDecimal(totalNet), currency) : "—"}
           </span>
           <strong>
             {hasPrice
-              ? taxRate !== null
-                ? money(String(Math.round(group.totalNet * (1 + taxRate))), currency)
-                : money(String(group.totalNet), currency)
+              ? grossLine !== null
+                ? money(roundDecimalToInt(grossLine), currency)
+                : totalNet !== null
+                  ? money(formatDecimal(totalNet), currency)
+                  : "—"
               : "—"}
             {taxRate !== null && hasPrice ? (
               <span className="portal-position__taxincl"> {t("portal.taxIncluded")}</span>
@@ -361,9 +386,11 @@ export function PortalQuotePage(): JSX.Element {
   const decided = quote.approval_status !== "PENDING";
   // Line-level IVA: net + tax are the sealed truth — the implied rate lets
   // product cards show the gross the customer will actually pay.
+  const netTotal = quote.total_price_net ? parseDecimal(quote.total_price_net) : null;
+  const taxTotal = quote.total_price_tax ? parseDecimal(quote.total_price_tax) : null;
   const taxRate =
-    quote.total_price_net && quote.total_price_tax
-      ? Number(quote.total_price_tax) / Number(quote.total_price_net)
+    netTotal !== null && taxTotal !== null && netTotal.numerator !== 0n
+      ? divideDecimal(taxTotal, netTotal)
       : null;
   const org = quote.organization;
   const issuer = org?.commercial_name || org?.name || "DEKOPEN";

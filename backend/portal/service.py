@@ -7,6 +7,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 import hashlib
 import json
+import logging
 import secrets
 from typing import Iterator
 from uuid import UUID
@@ -25,6 +26,8 @@ from documents.repository import (
     rows,
     write,
 )
+
+logger = logging.getLogger(__name__)
 
 _TOKEN_BYTES = 32
 _APPROVAL_TTL_DAYS = 30
@@ -191,6 +194,17 @@ def list_approvals(*, org_id: UUID, project_id: UUID) -> list[dict[str, object]]
                 [str(org_id), str(project_id)],
             )
         ]
+
+
+def _validity_expired(value: object) -> bool:
+    """Sealed ``quotation_valid_until`` — a malformed date is a data defect,
+    not a crash: the public read must surface a contract error, not a 500."""
+    if not value:
+        return False
+    try:
+        return date.fromisoformat(str(value)) < datetime.now(timezone.utc).date()
+    except ValueError:
+        raise DocumentaryError("quotation_valid_until_invalid") from None
 
 
 def _approval_for_token(token: str) -> dict[str, object]:
@@ -395,11 +409,7 @@ def portal_quote(token: str, *, track: bool = True) -> dict[str, object]:
         )
         gross = Decimal(str(sealed.get("total_price_gross") or "0"))
         superseded = str(project["current_revision"]) != str(version["revision_code"])
-        validity_expired = bool(
-            sealed.get("quotation_valid_until")
-            and date.fromisoformat(str(sealed["quotation_valid_until"]))
-            < datetime.now(timezone.utc).date()
-        )
+        validity_expired = _validity_expired(sealed.get("quotation_valid_until"))
         # A live Flow link the estimator already minted is the proposal's next
         # step — only for CLP deals (the provider charges CLP), and never on a
         # dead revision, lapsed validity or a rejected proposal: charging a
@@ -487,7 +497,19 @@ def _transition_project_approved(
         [now, approval["project_id"], approval["org_id"]],
     )
     if len(updated) != 1:
-        raise DocumentaryError("quote_link_stale")
+        # Under the FOR UPDATE lock the only way the guard misses is the
+        # projects policy rejecting the claims principal — the link's
+        # creator left the org. The customer's decision still seals; the
+        # project stays QUOTED for staff to approve off-channel instead of
+        # failing a customer click with a 500.
+        logger.warning(
+            "portal_approval_transition_denied",
+            extra={
+                "approval_id": str(approval["id"]),
+                "created_by": str(approval["created_by"]),
+            },
+        )
+        return
     # §08: an approved quote queues the material forecast for the version it
     # decided — the job carries the approval's minted actor as its principal.
     from automations.service import emit
@@ -588,9 +610,7 @@ def decide_quote(
         if approval["status"] == "PENDING":
             version = _bound_version(approval)
             valid_until = _sealed_project(version).get("quotation_valid_until")
-            if valid_until and date.fromisoformat(str(valid_until)) < datetime.now(
-                timezone.utc
-            ).date():
+            if _validity_expired(valid_until):
                 raise DocumentaryError("quote_validity_expired")
             project = _live_project(approval, for_update=True)
             live_status = str(project["status"])

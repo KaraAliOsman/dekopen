@@ -195,7 +195,7 @@ def receipt_access(
             annulled_key = object_key.replace(".pdf", "_anulado.pdf")
             storage.upload_immutable(annulled_key, content, media_type)
             try:
-                one(
+                sealed = rows(
                     "UPDATE public.payment_receipts SET annulled_object_key=%s,"
                     " annulled_file_sha256=%s, annulled_byte_size=%s"
                     " WHERE id=%s AND org_id=%s AND annulled_object_key IS NULL"
@@ -203,7 +203,19 @@ def receipt_access(
                     [annulled_key, _file_sha256(content), len(content),
                      str(receipt["id"]), str(org_id)],
                 )
-                object_key = annulled_key
+                if sealed:
+                    object_key = annulled_key
+                else:
+                    # A concurrent reader sealed the annulled render first:
+                    # the deterministic key is now referenced by its commit,
+                    # so this duplicate upload stays — deleting it would
+                    # break the signed URL that reader just served.
+                    winner_key = one(
+                        "SELECT annulled_object_key FROM public.payment_receipts"
+                        " WHERE id=%s AND org_id=%s",
+                        [str(receipt["id"]), str(org_id)],
+                    )["annulled_object_key"]
+                    object_key = str(winner_key) if winner_key else annulled_key
             except Exception:
                 try:
                     storage.delete_object(annulled_key)

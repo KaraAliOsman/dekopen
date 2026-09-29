@@ -102,7 +102,12 @@ def public_production_errors():
     try:
         yield
     except DocumentaryError as error:
-        status_code = 404 if error.code in ("version_not_found", "work_order_not_found", "production_step_not_found", "delivery_not_found", "delivery_confirmation_not_found") else 422
+        if error.code in ("version_not_found", "work_order_not_found", "production_step_not_found", "delivery_not_found", "delivery_confirmation_not_found"):
+            status_code = 404
+        elif error.code == "work_order_cancelled":
+            status_code = 409
+        else:
+            status_code = 422
         raise contract_error(
             status_code,
             error.code,
@@ -1131,12 +1136,18 @@ class CncProgramListView(APIView):
     )
     def post(self, request, order_id: UUID):
         data = validate(CncGenerateRequestSerializer, request.data)
+        try:
+            machine_id = UUID(str(data["machine_id"]))
+        except (ValueError, AttributeError, TypeError):
+            raise contract_error(
+                400, "machine_id_invalid", "machine_id debe ser un UUID válido."
+            )
         with public_production_errors():
             with documentary_scope(request, _WRITERS) as (token, _, org_id):
                 output = cnc.generate_program(
                     org_id=org_id,
                     order_id=order_id,
-                    machine_id=UUID(data["machine_id"]),
+                    machine_id=machine_id,
                     member_id=data["member_id"],
                     actor_id=token.user_id,
                 )

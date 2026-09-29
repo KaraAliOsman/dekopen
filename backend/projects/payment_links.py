@@ -236,6 +236,43 @@ def create_link(*, org_id: UUID, project_id: UUID, actor_id: UUID, data: dict) -
                     409, "payment_operation_conflict", "La operación ya existe en otro proyecto."
                 )
             return {"link": _public_link(link)}
+        # One live claim per deal: the project slot serializes mints, so the
+        # live-link check below can never race a concurrent create. Two
+        # outstanding Flow charges on one deal is an over-collection path.
+        rows(
+            "SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",
+            [f"project_payment_links:{org_id}:{project_id}"],
+        )
+        live = rows(
+            "SELECT * FROM public.project_payment_links "
+            "WHERE org_id=%s AND project_id=%s "
+            "AND status IN ('DISPATCHING','PENDING','UNCERTAIN') "
+            "ORDER BY created_at, id",
+            [str(org_id), str(project_id)],
+        )
+        if live:
+            live_link = live[0]
+            # Reuse only a genuinely identical charge: same payer, subject,
+            # amount and kind, already minted (PENDING carries the payer URL;
+            # DISPATCHING/UNCERTAIN have no usable URL to hand back). Any
+            # mismatch means a different request — refusing is safer than
+            # handing out a charge meant for someone else.
+            reusable = (
+                str(live_link["status"]) == "PENDING"
+                and live_link["url"]
+                and Decimal(str(live_link["amount"])) == amount
+                and str(live_link["kind"]) == kind
+                and str(live_link["payer_email"]) == data["payer_email"].strip()
+                and str(live_link["subject"]) == subject[:200]
+            )
+            if reusable:
+                return {"link": _public_link(live_link)}
+            raise contract_error(
+                409,
+                "payment_link_pending_exists",
+                "Ya existe un cobro en línea vigente para este proyecto — "
+                "usa el link existente o espera su resultado.",
+            )
         link = rows(
             """
             INSERT INTO public.project_payment_links(
@@ -340,9 +377,10 @@ def _settle(*, org_id: UUID, link_id: UUID, verified: dict, client: FlowClient) 
             return {"link": _public_link(link)}
         if verified["status"] == 1:
             rows(
-                "UPDATE public.project_payment_links SET status='PENDING', updated_at=now() "
+                "UPDATE public.project_payment_links SET status='PENDING', "
+                "flow_order=%s, updated_at=now() "
                 "WHERE org_id=%s AND id=%s AND status='DISPATCHING' RETURNING id",
-                [str(org_id), str(link_id)],
+                [verified["flowOrder"], str(org_id), str(link_id)],
             )
             return {"link": _public_link(link)}
         if verified["status"] in (3, 4):

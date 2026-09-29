@@ -757,6 +757,8 @@ def generate_program(
     actor_id: UUID,
 ) -> dict[str, object]:
     bundle = _order_ops(org_id=org_id, order_id=order_id)
+    if str(bundle["order"]["status"]) == "CANCELLED":
+        raise DocumentaryError("work_order_cancelled")
     tools_by_id = _tools_by_id(org_id=org_id)
     machine_row = one(
         """
