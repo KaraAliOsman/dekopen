@@ -191,6 +191,7 @@ class HttpProvider:
             # so a retry ambiguous to us can still dedupe provider-side.
             headers["Idempotency-Key"] = operation_key
         path, body = self._wire_request(route, capability, input_payload, provider_options)
+        started = time.monotonic()
         with client.stream(
             "POST",
             f"https://{url_host}{port_suffix}{path}",
@@ -201,6 +202,11 @@ class HttpProvider:
             response.raise_for_status()
             content = bytearray()
             for chunk in response.iter_bytes(65536):
+                # httpx's read timeout bounds each socket op — a provider
+                # drip-feeding bytes would still pin a RUNNING job forever.
+                # The whole exchange must fit the configured wall-clock.
+                if time.monotonic() - started > self.timeout:
+                    raise ProviderError("ai_provider_error")
                 content += chunk
                 if len(content) > MAX_BODY_BYTES:
                     raise ProviderError("ai_provider_output_too_large")

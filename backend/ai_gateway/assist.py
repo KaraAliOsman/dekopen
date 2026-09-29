@@ -28,10 +28,14 @@ from authentication.errors import contract_error
 from projects.design_assist import _BARE_NUMBER_RE, _MEASURE_RE, _parse_number
 
 # Tokens that carry digits without quantitative meaning — scrubbed before the
-# grounding scan so they cannot back an invented number.
+# grounding scan so they cannot back an invented number. The third branch
+# covers alphanumeric codes (SKUs, order codes like "OT-42", "PER-4590"): a
+# word run where a letter precedes a digit is an identifier, not a numeric
+# claim — while digit-leading tokens like "1500mm" still count as measures.
 _OPAQUE_TOKEN_RE = re.compile(
     r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
     r"|\d{4}-\d{2}-\d{2}(?:[T ][0-9:.]+(?:Z|[+-]\d{2}:?\d{2})?)?"
+    r"|[\w-]*[A-Za-z_][\w-]*\d[\w-]*"
 )
 
 CAPABILITY = "context_assist"

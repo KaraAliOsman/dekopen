@@ -259,9 +259,12 @@ def release_stale(*, now: datetime | None = None) -> int:
         cursor.execute(
             """
             UPDATE public.job_runs
-            SET state = 'QUEUED',
+            SET state = CASE WHEN attempt >= max_attempts THEN 'FAILED' ELSE 'QUEUED' END,
                 locked_by = NULL,
                 locked_at = NULL,
+                completed_at = CASE WHEN attempt >= max_attempts THEN NOW() ELSE completed_at END,
+                error = CASE WHEN attempt >= max_attempts
+                        THEN '{"code":"job_lease_expired"}'::jsonb ELSE error END,
                 updated_at = NOW()
             WHERE state = 'RUNNING' AND locked_at < %s
             """,

@@ -511,6 +511,10 @@ export function AgentBody({
     setMessage("");
     setBusy(false);
     operationKey.current = null;
+    // Instructions queued against the old job belong to its conversation —
+    // leaving them queued would post them onto the NEXT job the dock binds.
+    pendingRef.current = [];
+    setPending([]);
     inputRef.current?.focus();
   }
 

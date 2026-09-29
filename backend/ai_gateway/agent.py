@@ -730,7 +730,7 @@ def _batch_ops_step(
     project_id: str,
     project_editable: bool,
     observed_refs: frozenset[str],
-    grounding: set,
+    declared: set,
     rejected: list[dict],
 ) -> dict | None:
     """§08-WC — validate a proposed batch edit: the same op set against every
@@ -781,7 +781,7 @@ def _batch_ops_step(
         if werror is not None:
             rejected.append({"op": "batch_ops", "reason": f"{at}:{werror}"})
             continue
-        accepted, dropped = design_assist._validate_ops(expanded, summary, catalog, grounding)
+        accepted, dropped = design_assist._validate_ops(expanded, summary, catalog, declared)
         for entry in dropped:
             rejected.append({**entry, "reason": f"{at}:{entry['reason']}"})
         if accepted:
@@ -1032,7 +1032,11 @@ def _act(
     # Ops steps ride the design-assist contract: they only exist when the
     # caller is on a position surface with a live product, and they validate
     # against the position's own catalog authority — never a client field.
-    summary = catalog = declared = None
+    # Numeric ops may only cite what the user declared — never a number the
+    # context merely contains. The goal-scoped set feeds both the position
+    # ops validator and the batch_ops validator below.
+    summary = catalog = None
+    declared = design_assist._declared_values(goal)
     if surface == "position" and product is not None and "position_id" in refs:
         summary = design_assist._summary(product)
         if summary is not None:
@@ -1045,7 +1049,6 @@ def _act(
                 # A position without a bound system can't validate ops — skip
                 # cleanly instead of crashing the whole round on ValueError.
                 catalog = None
-            declared = design_assist._declared_values(goal)
 
     steps: list[dict] = []
     rejected: list[dict] = []
@@ -1058,7 +1061,7 @@ def _act(
         if kind == "query":
             continue  # executed above — `queries` reports them as provenance
         if kind == "ops":
-            if summary is None or catalog is None or declared is None:
+            if summary is None or catalog is None:
                 # The surface can't validate ops (no live product, no bound
                 # system) — an ops step that vanishes without a note reads
                 # as a clean answer with work silently missing. Surface the
@@ -1095,7 +1098,7 @@ def _act(
                 project_id=str(refs.get("project_id") or ""),
                 project_editable=bool((context or {}).get("editable")),
                 observed_refs=context_refs,
-                grounding=grounding,
+                declared=declared,
                 rejected=rejected,
             )
             if out is not None:
