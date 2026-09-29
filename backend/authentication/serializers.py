@@ -22,7 +22,7 @@ class MembershipSerializer(serializers.Serializer):
     organization_id = serializers.UUIDField()
     organization_name = serializers.CharField()
     role = serializers.ChoiceField(
-        choices=("OWNER", "ESTIMATOR", "WORKSHOP_MANAGER", "INSTALLER")
+        choices=("OWNER", "ESTIMATOR", "WORKSHOP_MANAGER", "INSTALLER", "OPERATOR")
     )
 
 
@@ -30,7 +30,7 @@ class ActiveOrganizationSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     name = serializers.CharField()
     role = serializers.ChoiceField(
-        choices=("OWNER", "ESTIMATOR", "WORKSHOP_MANAGER", "INSTALLER")
+        choices=("OWNER", "ESTIMATOR", "WORKSHOP_MANAGER", "INSTALLER", "OPERATOR")
     )
 
 

@@ -95,7 +95,7 @@ def _patch_env(monkeypatch, storage, *, existing=None, count=0):
     one_calls = []
 
     def fake_rows(sql, params=None):
-        if "FROM public.dispatch_notes WHERE work_order_id" in sql:
+        if "from public.dispatch_notes" in str(sql).lower():
             return [existing] if existing else []
         return []
 
@@ -167,7 +167,7 @@ def test_issue_dispatch_note_payload_seals_manifest_and_destination(monkeypatch)
     )
     payload = json.loads(insert[4])
     assert payload["note_code"] == "GD-0001"
-    assert payload["project"]["delivery_address"] == "Av. Providencia 1234"
+    assert payload["delivery"]["address"] == "Av. Providencia 1234"
     assert payload["order"]["code"] == "OT-P-1-REV-A-01"
     assert len(payload["units"]) == 2
     assert payload["units"][0]["label_code"] == "OT-P-1-REV-A-01-U01"

@@ -75,6 +75,15 @@ def _runner(captured, existing=None, payments_list=None, sealed_gross=None,
             return [{"currency": "CLP"}] if applied else []
         if "FROM public.tenancy_organizations" in sql:
             return [{"currency": "CLP"}]
+        if "COALESCE(SUM(amount)" in sql:
+            return [
+                {
+                    "collected": sum(
+                        (p["amount"] for p in (payments_list or []) if p["voided_at"] is None),
+                        Decimal("0"),
+                    )
+                }
+            ]
         if "FROM public.project_payments" in sql and "ORDER BY recorded_at,id" in sql:
             return list(payments_list or [])
         if "FROM public.project_invoices" in sql:
@@ -406,3 +415,36 @@ def test_payments_record_forbidden_for_installer(monkeypatch):
     )
     assert calls == []
     assert response.status_code >= 400
+
+
+def test_record_payment_requires_sealed_deal(monkeypatch, env):
+    """Applied pricing without a sealed revision is not collectible (F18)."""
+    _patch_rows(monkeypatch, env, applied=True, sealed_gross=None)
+    with pytest.raises(APIException) as failure:
+        payments.record_payment(
+            org_id=uuid4(),
+            project_id=uuid4(),
+            actor_id=uuid4(),
+            data={"operation_key": "op-12345678", "kind": "ANTICIPO",
+                  "amount": Decimal("100"), "method": "TRANSFER"},
+        )
+    assert failure.value.contract_code == "payment_requires_sealed_deal"
+
+
+def test_record_payment_rejects_over_collection(monkeypatch, env):
+    """A payment must fit inside the outstanding balance (F19)."""
+    _patch_rows(
+        monkeypatch,
+        env,
+        sealed_gross="400000",
+        payments_list=[_payment_row(amount=Decimal("350000"))],
+    )
+    with pytest.raises(APIException) as failure:
+        payments.record_payment(
+            org_id=uuid4(),
+            project_id=uuid4(),
+            actor_id=uuid4(),
+            data={"operation_key": "op-99999999", "kind": "SALDO",
+                  "amount": Decimal("60000"), "method": "TRANSFER"},
+        )
+    assert failure.value.contract_code == "payment_exceeds_balance"

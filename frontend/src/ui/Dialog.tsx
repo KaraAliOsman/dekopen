@@ -42,6 +42,35 @@ export function Dialog({
         onClose();
         return;
       }
+      if (event.key === "Tab" && panelRef.current) {
+        // Modal containment — Tab cycles inside the dialog, never reaching
+        // the page behind the overlay.
+        const focusables = panelRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        );
+        if (focusables.length === 0) {
+          event.preventDefault();
+          panelRef.current.focus();
+          return;
+        }
+        const first = focusables.item(0);
+        const last = focusables.item(focusables.length - 1);
+        const active = document.activeElement as HTMLElement | null;
+        if (event.shiftKey) {
+          if (
+            active === first ||
+            active === panelRef.current ||
+            !panelRef.current.contains(active)
+          ) {
+            event.preventDefault();
+            last.focus();
+          }
+        } else if (active === last || !panelRef.current.contains(active)) {
+          event.preventDefault();
+          first.focus();
+        }
+        return;
+      }
       if (event.key === "Enter" && panelRef.current?.contains(event.target as Node)) {
         const target = event.target as HTMLElement;
         if (target.tagName === "TEXTAREA" || target.tagName === "SELECT") return;

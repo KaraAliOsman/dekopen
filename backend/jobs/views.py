@@ -50,6 +50,16 @@ def public_job_errors():
             raise contract_error(
                 403, error.code, "Tu rol no permite encolar este trabajo."
             ) from error
+        if error.code == "job_not_found":
+            raise contract_error(
+                404, error.code, "Trabajo no encontrado."
+            ) from error
+        if error.code == "job_not_terminal":
+            raise contract_error(
+                409,
+                error.code,
+                "Solo se reintenta un trabajo fallido o cancelado.",
+            ) from error
         raise contract_error(
             422, error.code, "Revisa los parámetros del trabajo."
         ) from error
@@ -67,7 +77,7 @@ def public_job_errors():
 
 
 @contextmanager
-def job_scope(request):
+def job_scope(request, allowed: tuple[str, ...] | None = None):
     """Verify the token + tenant inside RLS, then yield OUTSIDE it: job_runs
     is a service-owned table reached as the connection owner with an explicit
     org filter (same pattern as payment_events)."""
@@ -78,7 +88,19 @@ def job_scope(request):
             request.headers.get("X-Organization-ID"),
         )
         enforce_owner_mfa(tenant, token.aal)
+        if allowed is not None and tenant.active_organization.role not in allowed:
+            raise contract_error(
+                403,
+                "job_permission_denied",
+                "Tu rol no permite realizar esta operación.",
+            )
     yield token, tenant, tenant.active_organization.organization_id
+
+
+# Read-side gate: job payloads and results are service-owned JSON that may
+# embed commercial detail, so reads are limited to the roles every job spec
+# is authorized for (no spec is ever enqueued as INSTALLER).
+_JOB_READERS = ("OWNER", "ESTIMATOR", "WORKSHOP_MANAGER")
 
 
 class JobListCreateView(APIView):
@@ -92,12 +114,13 @@ class JobListCreateView(APIView):
     def get(self, request):
         query = validate(JobListQuerySerializer, request.query_params)
         with public_job_errors():
-            with job_scope(request) as (_, _, org_id):
+            with job_scope(request, _JOB_READERS) as (_, _, org_id):
                 items = service.list_recent(
                     org_id=org_id,
                     job_type=query.get("type"),
                     state=query.get("state"),
                     limit=query.get("limit", 50),
+                    offset=query.get("offset", 0),
                 )
         return Response(JobRunSerializer(items, many=True).data)
 
@@ -145,8 +168,28 @@ class JobDetailView(APIView):
     )
     def get(self, request, job_id: UUID):
         with public_job_errors():
-            with job_scope(request) as (_, _, org_id):
+            with job_scope(request, _JOB_READERS) as (_, _, org_id):
                 job = service.get(org_id=org_id, job_id=job_id)
         if job is None:
             raise contract_error(404, "job_not_found", "Trabajo no encontrado.")
+        return Response(JobRunSerializer(job).data)
+
+
+class JobRetryView(APIView):
+    @extend_schema(
+        operation_id="jobs_retry",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={200: JobRunSerializer},
+        tags=["jobs"],
+    )
+    def post(self, request, job_id: UUID):
+        with public_job_errors():
+            with job_scope(request) as (token, tenant, org_id):
+                job = service.retry(
+                    org_id=org_id,
+                    job_id=job_id,
+                    actor_id=token.user_id,
+                    role=tenant.active_organization.role,
+                )
         return Response(JobRunSerializer(job).data)

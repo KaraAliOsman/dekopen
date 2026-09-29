@@ -48,7 +48,7 @@ def position_data(system_id, width="1000.00"):
                     "opening_type": "FIXED",
                     "glass_spec": "4-12-4 Float Incoloro",
                     "glass_thickness_mm": "24.00",
-                    "glass_article_sku": "GLASS-BASE",
+                    "glass_article_sku": "VIDRIO-BASE",
                 },
             },
         }
@@ -300,17 +300,18 @@ def test_catalog_write_denied_in_postgresql(documentary_tenant, role):
     catalog_id = uuid4()
 
     # Copy a complete technical seed only to construct this test's catalog row.
-    with as_user(users["OWNER"]):
-        rows(
-            "INSERT INTO public.profile_systems "
-            "SELECT (jsonb_populate_record(NULL::public.profile_systems, "
-            "to_jsonb(s) || jsonb_build_object("
-            "'id',%s::text,'org_id',%s::text,'code',%s::text,"
-            "'is_global',false,'is_demo',false,'technical_locked',false))).* "
-            "FROM public.profile_systems s WHERE code='DEMO_60' AND is_global "
-            "RETURNING id",
-            [str(catalog_id), str(org), f"TEST-{catalog_id.hex}"],
-        )
+    # CAT-01: member roles no longer hold any INSERT privilege on catalog
+    # tables, so the fixture row is created as the connection owner.
+    rows(
+        "INSERT INTO public.profile_systems "
+        "SELECT (jsonb_populate_record(NULL::public.profile_systems, "
+        "to_jsonb(s) || jsonb_build_object("
+        "'id',%s::text,'org_id',%s::text,'code',%s::text,"
+        "'is_global',false,'is_demo',false,'technical_locked',false))).* "
+        "FROM public.profile_systems s WHERE code='DEMO_60' AND is_global "
+        "RETURNING id",
+        [str(catalog_id), str(org), f"TEST-{catalog_id.hex}"],
+    )
 
     with as_user(users[role]):
         assert rows(

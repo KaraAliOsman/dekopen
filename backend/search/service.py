@@ -23,7 +23,13 @@ def _where(columns: tuple[str, ...]) -> str:
     )
 
 
-def search(org_id: UUID, query: str) -> dict:
+# Groups an installer must never see: the client registry carries fiscal PII
+# (RUT) and the documents group mixes invoices into the result set. Projects
+# still surface (dispatch/installation context) minus the commercial subtitle.
+_INSTALLER_EXCLUDED_GROUPS = {"clients", "documents"}
+
+
+def search(org_id: UUID, query: str, role: str = "OWNER") -> dict:
     needle = query.strip().lower()
     if len(needle) < 2 or len(needle) > MAX_QUERY_LEN:
         return {"results": []}
@@ -187,7 +193,7 @@ def search(org_id: UUID, query: str) -> dict:
     for row in org(
         "SELECT d.id, d.note_code, o.order_code"
         " FROM public.dispatch_notes d JOIN public.orders o ON o.id = d.work_order_id"
-        " WHERE d.org_id=%s AND o.org_id=%s AND (__WHERE__)"
+        " WHERE d.org_id=%s AND d.voided_at IS NULL AND o.org_id=%s AND (__WHERE__)"
         f" ORDER BY d.created_at DESC LIMIT {GROUP_LIMIT}",
         "d.note_code",
         org_params=2,
@@ -218,5 +224,12 @@ def search(org_id: UUID, query: str) -> dict:
                 "path": "/purchasing",
             }
         )
+
+    if role == "INSTALLER":
+        results = [
+            ({**r, "subtitle": None} if r["group"] == "projects" else r)
+            for r in results
+            if r["group"] not in _INSTALLER_EXCLUDED_GROUPS
+        ]
 
     return {"results": results}

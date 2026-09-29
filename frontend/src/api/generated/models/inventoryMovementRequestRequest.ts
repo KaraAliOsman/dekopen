@@ -20,6 +20,12 @@ export interface InventoryMovementRequestRequest {
   lot_code?: string | null;
   /**
    * @minLength 1
+   * @maxLength 50
+   * @nullable
+   */
+  rack_location?: string | null;
+  /**
+   * @minLength 1
    * @maxLength 500
    */
   note: string;

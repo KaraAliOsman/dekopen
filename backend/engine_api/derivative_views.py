@@ -67,11 +67,17 @@ def _execute(request: Request, *, inspection: bool) -> Response:
                 return Response({**output.model_dump(mode="json"), "source_calculation_hash": source})
             config = InspectorRepository().load(system_id, org_id)
             root = normalized_root_from_api(**arguments)
-            computation = compute_geometry(root, params, diagnostic=True)
+            computation = compute_geometry(
+                root, params, diagnostic=True, is_foiled=data["color"] != "WHITE"
+            )
             annotations = [WorkshopAnnotations.model_validate(item) for item in data["annotations"]]
             targets = {(o.bay_id, None) for o in computation.openings} | {
                 (leaf.bay_id, leaf.leaf_id) for leaf in computation.leaves}
-            if any((a.bay_id, a.leaf_id) not in targets or a.finish_class == "FOILED" for a in annotations):
+            # A FOILED machining annotation only exists on a foiled design —
+            # the finish the design declared is the annotation's ceiling.
+            if any((a.bay_id, a.leaf_id) not in targets
+                   or (a.finish_class == "FOILED" and data["color"] == "WHITE")
+                   for a in annotations):
                 raise ValueError("Observation target or finish is outside the active contract")
             structural = [StructuralInput.model_validate(item) for item in data["structural_inputs"]]
             if any(item.target_id not in {span.target_id for span in computation.spans} for item in structural):

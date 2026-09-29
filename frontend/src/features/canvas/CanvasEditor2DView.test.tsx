@@ -160,15 +160,16 @@ describe("SHOT-05 transactional G1 editor", () => {
     expect(editor).toHaveAttribute("data-system-id", "runtime-discovered-system");
     expect(calculateMock).toHaveBeenCalledWith(
       expect.objectContaining({ system_id: "runtime-discovered-system" }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(screen.getByLabelText("Ancho nominal (mm)")).toHaveValue("1000.00");
     expect(screen.getByLabelText("Alto nominal (mm)")).toHaveValue("1000.00");
     expect(screen.getByText("FIXED")).toBeInTheDocument();
-    expect(screen.getByTestId("canvas-glass-dimension")).toHaveTextContent("910.00 × 910.00 mm");
-    expect(screen.getByTestId("technical-frame")).toHaveTextContent("1006.00 mm");
-    expect(screen.getByTestId("technical-reinforcement")).toHaveTextContent("970.00 mm");
-    expect(screen.getByTestId("technical-glass")).toHaveTextContent("910.00 × 910.00 mm");
-    expect(screen.getByTestId("technical-bead")).toHaveTextContent("919.00 mm");
+    expect(screen.getByTestId("canvas-glass-dimension")).toHaveTextContent("910 × 910 mm");
+    expect(screen.getByTestId("technical-frame")).toHaveTextContent("1006 mm");
+    expect(screen.getByTestId("technical-reinforcement")).toHaveTextContent("970 mm");
+    expect(screen.getByTestId("technical-glass")).toHaveTextContent("910 × 910 mm");
+    expect(screen.getByTestId("technical-bead")).toHaveTextContent("919 mm");
   });
 
   it("supports width and height keyboard edits without implicit blur commits", async () => {
@@ -203,6 +204,7 @@ describe("SHOT-05 transactional G1 editor", () => {
         nominal_width_mm: "1100.50",
         nominal_height_mm: "1150.00",
       }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 
@@ -217,7 +219,7 @@ describe("SHOT-05 transactional G1 editor", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("validation_error");
     expect(width).toHaveValue("1000.00");
-    expect(screen.getByTestId("canvas-glass-dimension")).toHaveTextContent("910.00 × 910.00 mm");
+    expect(screen.getByTestId("canvas-glass-dimension")).toHaveTextContent("910 × 910 mm");
   });
 
   it.each([

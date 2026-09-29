@@ -238,5 +238,7 @@ def test_layout_api_binds_to_same_calculation_and_tenant(monkeypatch):
     assert response.status_code == 200
     assert response.json()["calculation_hash"] == calculated.json()["calculation_hash"]
     assert response.json()["nodes"][0]["horizontal"]["half"] == "500.00"
-    request["color"] = "FOILED"
-    assert client.post("/api/v1/engine/layout/", request, format="json").status_code == 422
+    request["color"] = "NOT_A_DECLARED_FINISH"
+    response = client.post("/api/v1/engine/layout/", request, format="json")
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "validation_error"

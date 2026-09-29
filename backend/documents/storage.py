@@ -113,6 +113,26 @@ class SupabaseDocumentStorage:
             raise DocumentaryError("document_storage_download_failed")
         return response.content
 
+    def download_bounded(self, object_key: str, max_bytes: int) -> bytes | None:
+        """Download only when the object fits — the stream is aborted the
+        moment it exceeds `max_bytes`, so a huge document never buffers whole
+        in memory. None means over the cap; callers fall back to a URL-based
+        hand-off."""
+        chunks: list[bytes] = []
+        received = 0
+        with httpx.Client(timeout=30) as client:
+            with client.stream(
+                "GET", self._read_url(object_key), headers=self._headers()
+            ) as response:
+                if response.status_code != 200:
+                    raise DocumentaryError("document_storage_download_failed")
+                for chunk in response.iter_bytes():
+                    received += len(chunk)
+                    if received > max_bytes:
+                        return None
+                    chunks.append(chunk)
+        return b"".join(chunks)
+
     def delete_object(self, object_key: str) -> None:
         with httpx.Client(timeout=10) as client:
             response = client.delete(

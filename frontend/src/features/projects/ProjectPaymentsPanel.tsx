@@ -1,9 +1,12 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { ApiError } from "../../api/apiMutator";
 import {
   projectCreditNoteAccess,
   projectCreditNoteDteAccess,
   projectCreditNoteDteEmit,
+  projectCreditNoteDteEnvioAccess,
+  projectCreditNoteDteEnvioSend,
   projectCreditNoteEmit,
   projectInvoiceAccess,
   projectInvoiceDteAccess,
@@ -25,7 +28,8 @@ import type {
   ProjectPayment,
 } from "../../api/generated/models";
 import { t, type TranslationKey } from "../../i18n/es-CL";
-import { formatDate, formatMoney } from "../money";
+import { actionErrorDetail } from "../errors";
+import { formatDate, formatMoney, parseMoneyInput } from "../money";
 import { formatRevision } from "../../format";
 import { ProjectPaymentLinksPanel } from "./ProjectPaymentLinksPanel";
 import { useConfirm, usePrompt } from "../../ui";
@@ -49,17 +53,6 @@ const STATUS_LABEL: Record<string, TranslationKey> = {
   PAID: "projects.paymentStatusPaid",
 };
 
-/** Contract errors carry actionable detail (e.g. `sii_caf_exhausted` tells
- * the operator to load a CAF) — surface it instead of the generic toast. */
-function actionErrorDetail(error: unknown, fallback: string): string {
-  if (error instanceof ApiError) {
-    const payload = error.payload as { error?: { detail?: unknown } } | null;
-    const detail = payload?.error?.detail;
-    if (typeof detail === "string" && detail.trim()) return detail;
-  }
-  return fallback;
-}
-
 export function ProjectPaymentsPanel({
   projectId,
   orgId,
@@ -77,7 +70,23 @@ export function ProjectPaymentsPanel({
 }): JSX.Element {
   const confirm = useConfirm();
   const prompt = usePrompt();
-  const [summary, setSummary] = useState<PaymentsSummary | null>(null);
+  const queryClient = useQueryClient();
+  // Shares the project header's `payments-summary` query — one fetch serves
+  // both consumers instead of the panel re-fetching the same endpoint.
+  const paymentsKey = ["projects", "payments-summary", orgId, projectId] as const;
+  const paymentsQuery = useQuery({
+    queryKey: paymentsKey,
+    queryFn: async ({ signal }) => {
+      const response = await projectPaymentsList(projectId, {
+        signal,
+        headers: { "X-Organization-ID": orgId },
+      });
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      return response.data;
+    },
+  });
+  const summary = paymentsQuery.data ?? null;
+  const setSummary = (data: PaymentsSummary) => queryClient.setQueryData(paymentsKey, data);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -99,23 +108,14 @@ export function ProjectPaymentsPanel({
   );
 
   const load = useCallback(async () => {
-    const current = ++generation.current;
-    setBusy(true);
     setMessage("");
-    try {
-      const response = await projectPaymentsList(projectId, requestOptions);
-      if (response.status !== 200) throw new ApiError(response.status, response.data);
-      if (generation.current === current) setSummary(response.data);
-    } catch {
-      if (generation.current === current) setMessage(t("projects.paymentsLoadError"));
-    } finally {
-      if (generation.current === current) setBusy(false);
-    }
-  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+    const result = await paymentsQuery.refetch();
+    if (result.isError) setMessage(t("projects.paymentsLoadError"));
+  }, [paymentsQuery]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (paymentsQuery.isError) setMessage(t("projects.paymentsLoadError"));
+  }, [paymentsQuery.isError]);
 
   const formDirty =
     showForm &&
@@ -130,12 +130,25 @@ export function ProjectPaymentsPanel({
 
   function openForm(): void {
     setOperationKey(crypto.randomUUID());
-    setBaseline({ kind, method });
+    // Follow the deal's position — registering against an outstanding
+    // balance should open as SALDO prefilled with what is owed, not the
+    // anticipo the first payment was (review WM7).
+    const collected = summary ? Number(summary.collected) : 0;
+    const balance = summary ? Number(summary.balance) : 0;
+    const nextKind: PaymentKindEnum = collected > 0 && balance > 0 ? "SALDO" : "ANTICIPO";
+    setKind(nextKind);
+    if (nextKind === "SALDO") setAmount(String(balance));
+    setBaseline({ kind: nextKind, method });
     setShowForm(true);
   }
 
   async function record(event: FormEvent): Promise<void> {
     event.preventDefault();
+    const amountParsed = parseMoneyInput(amount);
+    if (amountParsed === null) {
+      setMessage(t("projects.paymentAmountInvalid"));
+      return;
+    }
     const current = generation.current;
     setBusy(true);
     setMessage("");
@@ -145,7 +158,7 @@ export function ProjectPaymentsPanel({
         {
           operation_key: operationKey,
           kind,
-          amount: amount.replace(",", "."),
+          amount: amountParsed,
           method,
           ...(reference.trim() ? { reference: reference.trim() } : {}),
           ...(note.trim() ? { note: note.trim() } : {}),
@@ -155,6 +168,9 @@ export function ProjectPaymentsPanel({
       if (response.status !== 201) throw new ApiError(response.status, response.data);
       if (generation.current !== current) return;
       setSummary(response.data);
+      void queryClient.invalidateQueries({
+        queryKey: ["projects", "payments-summary", orgId, projectId],
+      });
       setShowForm(false);
       setAmount("");
       setReference("");
@@ -177,6 +193,9 @@ export function ProjectPaymentsPanel({
       if (response.status !== 200) throw new ApiError(response.status, response.data);
       if (generation.current !== current) return;
       setSummary(response.data);
+      void queryClient.invalidateQueries({
+        queryKey: ["projects", "payments-summary", orgId, projectId],
+      });
     } catch (error) {
       if (generation.current === current) {
         setMessage(actionErrorDetail(error, t("projects.paymentsVoidError")));
@@ -350,10 +369,75 @@ export function ProjectPaymentsPanel({
     }
   }
 
+  async function sendCreditEnvio(note: ProjectCreditNote, resubmit = false): Promise<void> {
+    const current = generation.current;
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await projectCreditNoteDteEnvioSend(
+        projectId,
+        note.id,
+        { resubmit },
+        requestOptions,
+      );
+      if (response.status !== 201) throw new ApiError(response.status, response.data);
+      if (generation.current !== current) return;
+      await load();
+    } catch (error) {
+      if (generation.current === current) {
+        setMessage(actionErrorDetail(error, t("projects.envioSendError")));
+      }
+    } finally {
+      if (generation.current === current) setBusy(false);
+    }
+  }
+
+  async function openCreditEnvio(note: ProjectCreditNote): Promise<void> {
+    const tab = window.open("", "_blank");
+    if (!tab) {
+      setMessage(t("projects.envioOpenError"));
+      return;
+    }
+    const current = generation.current;
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await projectCreditNoteDteEnvioAccess(projectId, note.id, requestOptions);
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      if (generation.current !== current) {
+        tab.close();
+        return;
+      }
+      tab.opener = null;
+      tab.location.href = response.data.signed_url;
+    } catch {
+      tab.close();
+      if (generation.current === current) setMessage(t("projects.envioOpenError"));
+    } finally {
+      if (generation.current === current) setBusy(false);
+    }
+  }
+
   async function annulInvoice(invoice: ProjectInvoice): Promise<void> {
     if (!(await confirm({ title: t("projects.creditNoteAnnulConfirm"), danger: true }))) return;
     const reason = await prompt({ title: t("projects.creditNoteReason") });
     if (reason === null) return;
+    const amountText = await prompt({
+      title: t("projects.creditNoteAmount"),
+      input: {
+        label: t("projects.creditNoteAmount"),
+        placeholder: t("projects.creditNoteAmountHint"),
+      },
+    });
+    if (amountText === null) return;
+    // Parse es-CL input ("1.500.000" / "1.500.000,50") into the canonical
+    // decimal the API expects — stripping non-digits turned "100,50" into
+    // "10050" and the sealed note locks whatever number lands.
+    const amountParsed = amountText.trim() ? parseMoneyInput(amountText) : "";
+    if (amountText.trim() && amountParsed === null) {
+      setMessage(t("projects.creditNoteAmountInvalid"));
+      return;
+    }
     const current = generation.current;
     setBusy(true);
     setMessage("");
@@ -361,7 +445,10 @@ export function ProjectPaymentsPanel({
       const response = await projectCreditNoteEmit(
         projectId,
         invoice.id,
-        reason.trim() ? { reason: reason.trim() } : {},
+        {
+          ...(reason.trim() ? { reason: reason.trim() } : {}),
+          ...(amountParsed ? { amount: amountParsed } : {}),
+        },
         requestOptions,
       );
       if (response.status !== 201) throw new ApiError(response.status, response.data);
@@ -520,7 +607,8 @@ export function ProjectPaymentsPanel({
             <input
               required
               inputMode="decimal"
-              pattern="[0-9]+([.,][0-9]{1,2})?"
+              pattern="[0-9]{1,3}(\.[0-9]{3})+|[0-9]+"
+              title={t("projects.paymentAmountHint")}
               value={amount}
               onChange={(event) => setAmount(event.target.value)}
               placeholder="500000"
@@ -646,7 +734,7 @@ export function ProjectPaymentsPanel({
                           }}
                           disabled={busy}
                         >
-                          {`${t("projects.invoiceStatusAnnulled")} · ${invoice.credit_note.credit_code}`}
+                          {`${t(invoice.credit_note.partial ? "projects.invoiceStatusCredited" : "projects.invoiceStatusAnnulled")} · ${invoice.credit_note.credit_code}`}
                         </button>
                       ) : (
                         <span className="production-chip">{t("projects.invoiceStatusIssued")}</span>
@@ -682,6 +770,19 @@ export function ProjectPaymentsPanel({
                           disabled={busy}
                         >
                           {`${t("projects.envioStatus")} · ${invoice.dte.envio.status}`}
+                        </button>
+                      )}
+                      {invoice.credit_note?.dte?.envio && (
+                        <button
+                          type="button"
+                          className="production-chip"
+                          title={`${t("projects.envioStatus")} · ${invoice.credit_note.dte.envio.track_id ?? ""}`}
+                          onClick={() => {
+                            if (invoice.credit_note) void openCreditEnvio(invoice.credit_note);
+                          }}
+                          disabled={busy}
+                        >
+                          {`${t("projects.envioStatus")} · ${invoice.credit_note.dte.envio.status}`}
                         </button>
                       )}
                     </td>
@@ -737,6 +838,39 @@ export function ProjectPaymentsPanel({
                           disabled={busy}
                         >
                           {invoice.dte.envio.attempted === true && !invoice.dte.envio.track_id
+                            ? t("projects.envioResend")
+                            : t("projects.envioRefresh")}
+                        </button>
+                      )}
+                      {canSendEnvio &&
+                        invoice.credit_note?.dte &&
+                        !invoice.credit_note.dte.envio && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (invoice.credit_note) void sendCreditEnvio(invoice.credit_note);
+                            }}
+                            disabled={busy}
+                          >
+                            {t("projects.envioSend")}
+                          </button>
+                        )}
+                      {canSendEnvio && invoice.credit_note?.dte?.envio?.status === "PENDING" && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (invoice.credit_note) {
+                              void sendCreditEnvio(
+                                invoice.credit_note,
+                                invoice.credit_note.dte?.envio?.attempted === true &&
+                                  !invoice.credit_note.dte.envio.track_id,
+                              );
+                            }
+                          }}
+                          disabled={busy}
+                        >
+                          {invoice.credit_note.dte.envio.attempted === true &&
+                          !invoice.credit_note.dte.envio.track_id
                             ? t("projects.envioResend")
                             : t("projects.envioRefresh")}
                         </button>

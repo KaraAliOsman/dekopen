@@ -23,6 +23,7 @@ def test_openapi_contains_only_authorized_shot_11_paths_and_bearer_security() ->
         "/api/v1/clients/{client_id}/",
         "/api/v1/projects/",
         "/api/v1/projects/{project_id}/",
+        "/api/v1/projects/{project_id}/approve/",
         "/api/v1/projects/{project_id}/clone/",
         "/api/v1/projects/{project_id}/successor/",
         "/api/v1/projects/{project_id}/reset-pricing/",
@@ -34,14 +35,20 @@ def test_openapi_contains_only_authorized_shot_11_paths_and_bearer_security() ->
         "/api/v1/catalogs/systems/",
         "/api/v1/catalogs/systems/{row_id}/",
         "/api/v1/catalogs/systems/{row_id}/review/",
+        "/api/v1/catalogs/systems/{row_id}/workspace/",
+        "/api/v1/catalogs/process-profiles/",
+        "/api/v1/catalogs/section-imports/",
         "/api/v1/catalogs/articles/",
         "/api/v1/catalogs/articles/{row_id}/",
         "/api/v1/catalogs/articles/{row_id}/review/",
         "/api/v1/catalogs/glazing/",
         "/api/v1/catalogs/glazing/{row_id}/",
+        "/api/v1/catalogs/glazing/{row_id}/review/",
         "/api/v1/catalogs/hardware-kits/",
         "/api/v1/catalogs/hardware-kits/{row_id}/",
         "/api/v1/catalogs/hardware-kits/{row_id}/review/",
+        "/api/v1/catalogs/evidence/",
+        "/api/v1/catalogs/evidence/{row_id}/review/",
         "/api/v1/auth/me/",
         "/api/v1/engine/calculate/",
         "/api/v1/engine/assembly/calculate/",
@@ -51,21 +58,28 @@ def test_openapi_contains_only_authorized_shot_11_paths_and_bearer_security() ->
         "/api/v1/engine/optimize-cut/",
         "/api/v1/pricing/admin/{resource}/",
         "/api/v1/pricing/preview/",
+        "/api/v1/pricing/design-batch-preview/",
         "/api/v1/pricing/operations/",
         "/api/v1/pricing/operations/{operation_id}/apply/",
+        "/api/v1/pricing/operations/{operation_id}/withdraw/",
         "/api/v1/pricing/drafts/",
         "/api/v1/pricing/import/",
         "/api/v1/documents/projects/{project_id}/freeze/",
         "/api/v1/documents/projects/{project_id}/inputs/",
         "/api/v1/documents/artifacts/",
         "/api/v1/documents/artifacts/{artifact_id}/access/",
+        "/api/v1/documents/projects/{project_id}/artifacts/",
+        "/api/v1/documents/projects/{project_id}/versions/compare/",
         "/api/v1/jobs/",
         "/api/v1/jobs/{job_id}/",
+        "/api/v1/jobs/{job_id}/retry/",
         "/api/v1/inventory/stock/",
         "/api/v1/inventory/movements/",
         "/api/v1/inventory/orders/{order_id}/receiving/",
         "/api/v1/inventory/orders/{order_id}/receipts/",
         "/api/v1/inventory/remnants/",
+        "/api/v1/inventory/bar-authorities/",
+        "/api/v1/inventory/remnants/{remnant_id}/label/",
         "/api/v1/inventory/remnants/{remnant_id}/release/",
         "/api/v1/inventory/remnants/{remnant_id}/scrap/",
         "/api/v1/analytics/summary/",
@@ -74,6 +88,9 @@ def test_openapi_contains_only_authorized_shot_11_paths_and_bearer_security() ->
         "/api/v1/projects/{project_id}/quote-link/",
         "/api/v1/projects/flow/confirm/{link_id}/",
         "/api/v1/projects/payment-integration/",
+        "/api/v1/organization/branding/",
+        "/api/v1/organization/branding/logo/",
+        "/api/v1/projects/{project_id}/quote-links/{approval_id}/revoke/",
         "/api/v1/projects/{project_id}/payments/",
         "/api/v1/projects/{project_id}/payments/{payment_id}/",
         "/api/v1/projects/{project_id}/payments/{payment_id}/receipt/",
@@ -85,6 +102,7 @@ def test_openapi_contains_only_authorized_shot_11_paths_and_bearer_security() ->
         "/api/v1/sii/cafs/",
         "/api/v1/sii/certificate/",
         "/api/v1/projects/{project_id}/invoices/{invoice_id}/dte-envio/",
+        "/api/v1/projects/{project_id}/credit-notes/{credit_note_id}/dte-envio/",
         "/api/v1/projects/{project_id}/credit-notes/{credit_note_id}/",
         "/api/v1/projects/{project_id}/invoices/{invoice_id}/credit-note-dte/",
         "/api/v1/projects/{project_id}/payment-links/",
@@ -92,6 +110,12 @@ def test_openapi_contains_only_authorized_shot_11_paths_and_bearer_security() ->
         "/api/v1/ai/invoke/",
         "/api/v1/ai/ask/",
         "/api/v1/ai/agent/",
+        "/api/v1/ai/jobs/",
+        "/api/v1/ai/jobs/{job_id}/",
+        "/api/v1/ai/jobs/{job_id}/messages/",
+        "/api/v1/ai/jobs/{job_id}/outcome/",
+        "/api/v1/ai/jobs/{job_id}/retry/",
+        "/api/v1/ai/metrics/",
         "/api/v1/projects/{project_id}/imports/",
         "/api/v1/projects/{project_id}/imports/{import_id}/",
         "/api/v1/projects/{project_id}/imports/{import_id}/confirm/",
@@ -102,35 +126,55 @@ def test_openapi_contains_only_authorized_shot_11_paths_and_bearer_security() ->
         "/api/v1/production/prep/",
         "/api/v1/production/orders/{order_id}/",
         "/api/v1/production/orders/{order_id}/optimize/",
+        "/api/v1/production/orders/{order_id}/optimize/compare/",
         "/api/v1/production/orders/{order_id}/trace/",
         "/api/v1/production/pieces/{piece_id}/trace/",
         "/api/v1/production/orders/{order_id}/cnc-export/",
         "/api/v1/production/orders/{order_id}/cnc-export/{filename}",
+        "/api/v1/production/cnc/machines/",
+        "/api/v1/production/cnc/machines/{machine_id}/",
+        "/api/v1/production/cnc/programs/{program_id}/file/{filename}",
+        "/api/v1/production/cnc/tools/",
+        "/api/v1/production/cnc/tools/{tool_id}/",
+        "/api/v1/production/cnc/workspace/",
+        "/api/v1/production/orders/{order_id}/cnc/programs/",
+        "/api/v1/production/orders/{order_id}/cnc/readiness/",
+        "/api/v1/production/station-queue/",
         "/api/v1/production/orders/{order_id}/dxf-export/",
         "/api/v1/production/orders/{order_id}/dxf-export/{filename}",
         "/api/v1/production/orders/{order_id}/operations-export/",
         "/api/v1/production/orders/{order_id}/operations-export/{filename}",
         "/api/v1/production/orders/{order_id}/packing/",
+        "/api/v1/production/orders/{order_id}/cut-pack/",
+        "/api/v1/production/orders/{order_id}/production-pack/",
         "/api/v1/production/orders/{order_id}/delivery/",
         "/api/v1/production/orders/{order_id}/delivery/transition/",
         "/api/v1/production/orders/{order_id}/delivery/confirm/",
         "/api/v1/production/orders/{order_id}/delivery/confirmation/",
         "/api/v1/production/orders/{order_id}/dispatch/",
         "/api/v1/production/orders/{order_id}/dispatch-note/",
+        "/api/v1/production/orders/{order_id}/dispatch-note-void/",
         "/api/v1/production/orders/{order_id}/dispatch-note-dte/",
+        "/api/v1/production/orders/{order_id}/dispatch-note-envio/",
         "/api/v1/production/orders/{order_id}/install/",
         "/api/v1/production/orders/{order_id}/labels/",
         "/api/v1/production/orders/{order_id}/remake/",
+        "/api/v1/production/orders/{order_id}/cancel/",
+        "/api/v1/production/orders/{order_id}/material-recheck/",
         "/api/v1/production/steps/{step_id}/transition/",
         "/api/v1/production/versions/{version_id}/release/",
         "/api/v1/production/versions/{version_id}/trace/",
         "/api/v1/production/work-centers/",
+        "/api/v1/production/work-centers/seed-defaults/",
         "/api/v1/purchasing/versions/",
         "/api/v1/purchasing/versions/{version_id}/",
         "/api/v1/purchasing/versions/{version_id}/eligibilities/",
         "/api/v1/purchasing/versions/{version_id}/confirm/",
         "/api/v1/purchasing/requirements/{requirement_id}/allocation/",
         "/api/v1/purchasing/orders/{order_id}/send/",
+        "/api/v1/purchasing/orders/{order_id}/cancel/",
+        "/api/v1/purchasing/orders/",
+        "/api/v1/purchasing/suppliers/",
     }
     bearer = schema["components"]["securitySchemes"]["SupabaseBearer"]
     assert bearer == {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}
@@ -144,25 +188,32 @@ def test_engine_response_includes_shot06_and_excludes_inspector() -> None:
     }
 
 
-def test_persisted_quotation_color_is_white_without_narrowing_generic_engine_schema() -> None:
+def test_position_color_is_a_declared_finish_string_and_finish_domain_is_bounded() -> None:
     schema = yaml.safe_load(OPENAPI.read_text(encoding="utf-8"))["components"]["schemas"]
-    assert schema["WhiteColorEnum"]["enum"] == ["WHITE"]
     assert schema["ColorEnum"]["enum"] == ["WHITE", "FOILED"]
-    assert schema["PositionDesignRequest"]["properties"]["color"] == {
-        "$ref": "#/components/schemas/WhiteColorEnum"
-    }
+    # Position colors are declared-finish strings — the system's `finishes`
+    # list (not a hardcoded enum) is the membership authority.
+    for name in ("PositionDesignRequest", "DraftPositionRequest"):
+        assert schema[name]["properties"]["color"] == {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50,
+        }, name
     assert schema["PositionDesign"]["properties"]["color"] == {
-        "$ref": "#/components/schemas/WhiteColorEnum"
+        "type": "string",
+        "maxLength": 50,
     }
     assert schema["PositionResponse"]["properties"]["design"] == {
         "$ref": "#/components/schemas/PositionDesign"
     }
-    assert schema["DraftPositionRequest"]["properties"]["color"] == {
-        "$ref": "#/components/schemas/WhiteColorEnum"
-    }
+    # The workshop machining finish domain stays WHITE|FOILED.
     finish = schema["WorkshopAnnotationRequest"]["properties"]["finish_class"]
     assert {item.get("$ref") for item in finish["oneOf"]} >= {
-        "#/components/schemas/WhiteColorEnum"
+        "#/components/schemas/ColorEnum"
+    }
+    assert schema["SystemWriteRequest"]["properties"]["finishes"] == {
+        "type": "array",
+        "items": {"type": "string", "minLength": 1, "maxLength": 50},
     }
     assert schema["EngineCalculateRequestRequest"]["properties"]["color"]["type"] == "string"
 
@@ -178,6 +229,7 @@ def test_openapi_documents_active_org_and_mfa_selection_errors() -> None:
         ("/api/v1/engine/optimize-cut/", "post"),
         ("/api/v1/pricing/admin/{resource}/", "post"),
         ("/api/v1/pricing/preview/", "post"),
+        ("/api/v1/pricing/design-batch-preview/", "post"),
         ("/api/v1/pricing/operations/", "get"),
         ("/api/v1/pricing/operations/{operation_id}/apply/", "post"),
         ("/api/v1/pricing/drafts/", "post"),
@@ -186,6 +238,7 @@ def test_openapi_documents_active_org_and_mfa_selection_errors() -> None:
         ("/api/v1/documents/projects/{project_id}/inputs/", "put"),
         ("/api/v1/documents/artifacts/", "post"),
         ("/api/v1/documents/artifacts/{artifact_id}/access/", "post"),
+        ("/api/v1/documents/projects/{project_id}/artifacts/", "get"),
         ("/api/v1/purchasing/versions/", "get"),
         ("/api/v1/purchasing/versions/{version_id}/", "get"),
         ("/api/v1/purchasing/versions/{version_id}/eligibilities/", "post"),
@@ -194,6 +247,10 @@ def test_openapi_documents_active_org_and_mfa_selection_errors() -> None:
         ("/api/v1/projects/{project_id}/reset-pricing/", "post"),
         ("/api/v1/purchasing/requirements/{requirement_id}/allocation/", "put"),
         ("/api/v1/purchasing/orders/{order_id}/send/", "post"),
+        ("/api/v1/purchasing/orders/{order_id}/cancel/", "post"),
+        ("/api/v1/purchasing/orders/", "get"),
+        ("/api/v1/purchasing/suppliers/", "get"),
+        ("/api/v1/purchasing/suppliers/", "post"),
     ):
         header = next(p for p in schema["paths"][path][method]["parameters"] if p["name"] == "X-Organization-ID")
         assert header["in"] == "header"

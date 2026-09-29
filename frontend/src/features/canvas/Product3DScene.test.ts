@@ -387,6 +387,41 @@ describe("buildScene3D", () => {
     expect(verticals[3]).toBeCloseTo(1104, 5);
   });
 
+  it("opens a two-leaf slider by sliding one leaf over the other", () => {
+    const base = makeBowProduct({ moduleCount: 1, widthMm: 1200, heightMm: 1400, angleDeg: 0 });
+    const bay: IntentNode = {
+      id: "b1",
+      type: "BAY",
+      opening_type: "SLIDING",
+      glass_thickness_mm: "4.00",
+      sliding_layout: {
+        tracks: 2,
+        panels: [
+          { slot: "S1", kind: "MOVING", track: 0 },
+          { slot: "S2", kind: "MOVING", track: 1 },
+        ],
+      },
+    };
+    const module = {
+      ...base.assembly.modules[0]!,
+      tree: { id: "r", type: "ROOT" as const, children: [bay] },
+    };
+    const product = {
+      ...base,
+      assembly: { modules: [module], couplings: [] },
+    } as ProductJson;
+    const scene = buildScene3D(product, members);
+    // Both leaves translating swaps their slots and reveals no aperture;
+    // only the inner-rail leaf carries a slide motion (one pitch over).
+    const slides = scene.modules[0]!.leaves.filter((leaf) => leaf.kind === "slide");
+    expect(slides).toHaveLength(1);
+    expect(slides[0]!.leafId).toBe("b1:0");
+    // leaf0 (60..672, leafW 612) slides right until its edge meets the bay
+    // edge at 1140 — travel 468 stacks it on leaf1's slot, opening the
+    // left half of the aperture.
+    expect(slides[0]!.travel).toBeCloseTo(468, 5);
+  });
+
   it("wraps an operable panel door's infill in a sash", () => {
     const base = makeBowProduct({ moduleCount: 1, widthMm: 900, heightMm: 2100, angleDeg: 0 });
     const bay: IntentNode = {
@@ -408,9 +443,9 @@ describe("buildScene3D", () => {
     expect(solids.filter((solid) => solid.surface === "sash")).toHaveLength(4);
     const panels = solids.filter((solid) => solid.surface === "panel") as BoxSolid[];
     expect(panels).toHaveLength(1);
-    // the slab is inset by the sash face, not the bead — sash 72 into a
-    // 60..840 aperture puts the panel's left edge at 132
-    expect(panels[0]!.center[0] - panels[0]!.size[0] / 2).toBeCloseTo(132, 5);
+    // the slab is inset by the sash face — the sash overlaps the aperture
+    // by 10, so its left edge is 50 and the panel's left edge lands at 122
+    expect(panels[0]!.center[0] - panels[0]!.size[0] / 2).toBeCloseTo(122, 5);
   });
 
   it("extrudes the frameless pane at the declared glass thickness", () => {
@@ -584,5 +619,111 @@ describe("buildScene3D", () => {
     const scene = buildScene3D(productWithCoupling, members, plan);
     const coupler = scene.couplers.find((solid) => solid.owner === "c1");
     expect(coupler?.kind).toBe("prism");
+  });
+
+  describe("§05 physical details", () => {
+    function frameSectionOptions(): DesignOptions {
+      return {
+        profiles: [
+          {
+            role: "FRAME",
+            sku: "FR-SEC",
+            material: "PVC",
+            face_width_mm: "60.00",
+            section: {
+              source: "POLYGON",
+              depth_mm: "70.00",
+              polygon: [
+                { x_mm: "0", y_mm: "0" },
+                { x_mm: "60", y_mm: "0" },
+                { x_mm: "60", y_mm: "70" },
+                { x_mm: "0", y_mm: "70" },
+              ],
+            },
+          },
+        ],
+      } as DesignOptions;
+    }
+
+    it("extrudes a declared frame section as profile solids, not boxes", () => {
+      const product = makeBowProduct({ moduleCount: 1, widthMm: 900, heightMm: 1400, angleDeg: 0 });
+      const scene = buildScene3D(product, resolveMembers(frameSectionOptions()));
+      const profiles = scene.modules[0]!.solids.filter(
+        (solid) => solid.kind === "profile" && solid.surface === "frame",
+      );
+      // the ring emits one run per side — posts on y, rails on x
+      expect(profiles).toHaveLength(4);
+      expect(profiles.every((solid) => solid.kind === "profile" && !solid.approximate)).toBe(true);
+      const post = profiles[0]!;
+      expect(post.kind).toBe("profile");
+      if (post.kind === "profile") {
+        expect(post.axis).toBe("y");
+        expect(post.a1 - post.a0).toBeCloseTo(1400, 5);
+        expect(post.outline.length).toBe(4);
+      }
+    });
+
+    it("keeps undeclared members approximate boxes", () => {
+      const product = makeBowProduct({ moduleCount: 1, widthMm: 900, heightMm: 1400, angleDeg: 0 });
+      const scene = buildScene3D(product, members);
+      const frames = scene.modules[0]!.solids.filter(
+        (solid) => solid.surface === "frame",
+      ) as BoxSolid[];
+      expect(frames).toHaveLength(4);
+      expect(frames.every((solid) => solid.approximate === true)).toBe(true);
+    });
+
+    it("emits bead and gasket solids around a fixed pane", () => {
+      const product = makeBowProduct({ moduleCount: 1, widthMm: 900, heightMm: 1400, angleDeg: 0 });
+      const scene = buildScene3D(product, members);
+      const solids = scene.modules[0]!.solids;
+      expect(solids.filter((solid) => solid.surface === "bead").length).toBe(4);
+      expect(solids.filter((solid) => solid.surface === "gasket").length).toBe(4);
+    });
+
+    it("binds hardware to the declared hand: hinges on the named side, lever opposite at the datum", () => {
+      const base = makeBowProduct({ moduleCount: 1, widthMm: 900, heightMm: 1400, angleDeg: 0 });
+      const module = {
+        ...base.assembly.modules[0]!,
+        tree: { id: "b1", type: "BAY", opening_type: "TURN_LEFT", glass_thickness_mm: "4.00" },
+      } as (typeof base.assembly.modules)[number];
+      const product = { ...base, assembly: { modules: [module], couplings: [] } } as ProductJson;
+      const scene = buildScene3D(product, members);
+      const solids = scene.modules[0]!.solids;
+      const hinges = solids.filter((solid) => solid.surface === "hinge");
+      const handle = solids.filter((solid) => solid.surface === "handle");
+      const xs = (solid: (typeof solids)[number]) =>
+        solid.kind === "box" ? solid.center[0] : Number.POSITIVE_INFINITY;
+      // TURN_LEFT declares hinges on the left — every hinge solid sits
+      // left of every handle solid (DIN: lever opposite the hinges).
+      expect(hinges.length).toBeGreaterThan(0);
+      expect(handle.length).toBeGreaterThan(0);
+      expect(Math.max(...hinges.map(xs))).toBeLessThan(Math.min(...handle.map(xs)));
+      // The lever cluster centres on the 1050mm convention datum, and the
+      // heuristic hinge count is reported as a visual convention — never
+      // presented as a kit-derived count.
+      const centre = handle.some(
+        (solid) => solid.kind === "box" && Math.abs(solid.center[1] - 1050) < 30,
+      );
+      expect(centre).toBe(true);
+      expect(scene.diagnostics.some((d) => d.code === "hardware_convention")).toBe(true);
+    });
+
+    it("emits one rail per declared sliding track", () => {
+      const base = makeBowProduct({ moduleCount: 1, widthMm: 1800, heightMm: 1400, angleDeg: 0 });
+      const module = {
+        ...base.assembly.modules[0]!,
+        tree: {
+          id: "b1",
+          type: "BAY",
+          opening_type: "SLIDING_2L",
+          glass_thickness_mm: "4.00",
+        },
+      } as (typeof base.assembly.modules)[number];
+      const product = { ...base, assembly: { modules: [module], couplings: [] } } as ProductJson;
+      const scene = buildScene3D(product, members);
+      const tracks = scene.modules[0]!.solids.filter((solid) => solid.surface === "track");
+      expect(tracks).toHaveLength(2);
+    });
   });
 });

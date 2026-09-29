@@ -1,3 +1,4 @@
+import { fmtMm } from "../../format";
 import { Fragment, useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { ApiError } from "../../api/apiMutator";
 import {
@@ -329,7 +330,11 @@ export function CatalogImportsPanel({
       </div>
       <p className="imports-hint">{ct("importsHelp")}</p>
       {message && <p className="form-error">{message}</p>}
-      {imports.length === 0 && <p className="imports-empty">{ct("importsEmpty")}</p>}
+      {imports.length === 0 && (
+        <p className="imports-empty">
+          {canWrite ? ct("importsEmpty") : `${ct("importsEmpty")} ${ct("importsReadOnly")}`}
+        </p>
+      )}
       {imports.length > 0 && (
         <div className="catalog-table-scroll">
           <table className="payments-table">
@@ -565,7 +570,7 @@ export function CatalogImportsPanel({
                               <span key={match.system_code} className="imports-existing">
                                 {ct("importsExisting").replace("{system}", match.system_code)}:{" "}
                                 {match.name} · {ct(`option.${match.role}`)}
-                                {match.face_width_mm ? ` · ${match.face_width_mm} mm` : ""}
+                                {match.face_width_mm ? ` · ${fmtMm(match.face_width_mm)} mm` : ""}
                               </span>
                             ))}
                           </td>

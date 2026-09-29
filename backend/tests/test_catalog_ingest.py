@@ -131,6 +131,7 @@ class _NullAtomic:
 @pytest.fixture(autouse=True)
 def _no_db(monkeypatch):
     monkeypatch.setattr(catalog_service, "transaction", _NullAtomic())
+    monkeypatch.setattr(catalog_service, "catalog_backend", _backend)
 
 
 def _import_row(**overrides):
@@ -216,6 +217,7 @@ def test_confirm_inserts_articles_and_seals(monkeypatch):
     updates, inserts, article_id = _confirm_patches(monkeypatch, row)
     out = catalog_service.confirm_catalog_import(
         org_id=row["org_id"],
+        actor_id=uuid4(),
         import_id=row["id"],
         system_id=system_id,
         items=[_item()],
@@ -238,6 +240,7 @@ def test_confirm_rejects_shared_system(monkeypatch):
     with pytest.raises(APIException) as failure:
         catalog_service.confirm_catalog_import(
             org_id=row["org_id"],
+            actor_id=uuid4(),
             import_id=row["id"],
             system_id=uuid4(),
             items=[_item()],
@@ -250,6 +253,7 @@ def test_confirm_sku_conflict_surfaces_per_key(monkeypatch):
     _confirm_patches(monkeypatch, row, insert_return=False)
     out = catalog_service.confirm_catalog_import(
         org_id=row["org_id"],
+        actor_id=uuid4(),
         import_id=row["id"],
         system_id=uuid4(),
         items=[_item()],
@@ -263,6 +267,7 @@ def test_confirm_rejects_unknown_key(monkeypatch):
     _confirm_patches(monkeypatch, row)
     out = catalog_service.confirm_catalog_import(
         org_id=row["org_id"],
+        actor_id=uuid4(),
         import_id=row["id"],
         system_id=uuid4(),
         items=[_item(key="nope")],
@@ -277,6 +282,7 @@ def test_confirm_replays_confirmed_import(monkeypatch):
     monkeypatch.setattr(catalog_service, "documentary_backend", _backend)
     out = catalog_service.confirm_catalog_import(
         org_id=row["org_id"],
+        actor_id=uuid4(),
         import_id=row["id"],
         system_id=uuid4(),
         items=[_item()],
@@ -299,6 +305,7 @@ def test_confirm_missing_fabrication_fields_stay_unknown(monkeypatch):
     )
     catalog_service.confirm_catalog_import(
         org_id=row["org_id"],
+        actor_id=uuid4(),
         import_id=row["id"],
         system_id=uuid4(),
         items=[item],
@@ -353,6 +360,7 @@ def test_confirm_singleton_role_conflict_is_per_key(monkeypatch):
     )
     out = catalog_service.confirm_catalog_import(
         org_id=row["org_id"],
+        actor_id=uuid4(),
         import_id=row["id"],
         system_id=uuid4(),
         items=[_item()],
@@ -368,6 +376,7 @@ def test_confirm_insert_failure_is_per_key(monkeypatch):
     _failing_insert(monkeypatch, row, DatabaseError("constraint exploded"))
     out = catalog_service.confirm_catalog_import(
         org_id=row["org_id"],
+        actor_id=uuid4(),
         import_id=row["id"],
         system_id=uuid4(),
         items=[_item()],
@@ -380,6 +389,7 @@ def test_confirm_failed_import_is_reconfirmable(monkeypatch):
     updates, inserts, article_id = _confirm_patches(monkeypatch, row)
     out = catalog_service.confirm_catalog_import(
         org_id=row["org_id"],
+        actor_id=uuid4(),
         import_id=row["id"],
         system_id=uuid4(),
         items=[_item()],
@@ -396,6 +406,12 @@ def test_mark_failed_only_updates_inflight(monkeypatch):
         return []
 
     monkeypatch.setattr(catalog_service, "rows", _rows)
+
+    def _write(sql, params=None):
+        statements.append((sql, params))
+        return 1
+
+    monkeypatch.setattr(catalog_service, "write", _write)
     monkeypatch.setattr(catalog_service, "documentary_backend", _backend)
     catalog_service.mark_catalog_import_failed(org_id=uuid4(), import_id=uuid4(), code="x" * 200)
     sql, params = statements[0]
@@ -425,6 +441,7 @@ def test_confirm_retry_rejects_other_system(monkeypatch):
     with pytest.raises(APIException) as failure:
         catalog_service.confirm_catalog_import(
             org_id=row["org_id"],
+            actor_id=uuid4(),
             import_id=row["id"],
             system_id=uuid4(),
             items=[_item(key="c1")],
@@ -532,3 +549,52 @@ def test_create_catalog_import_rejects_path_like_filenames():
             getattr(caught.value, "contract_code", None)
             == "catalog_import_file_invalid"
         )
+
+
+def test_confirm_pins_parser_evidence_on_created_article(monkeypatch):
+    """Confirmed candidates carry their per-field evidence into the registry
+    — the import file + line ref become the declared source."""
+    candidate = _import_row()["candidates"][0]
+    candidate["source_ref"] = "página 4, línea 12"
+    candidate["evidence"] = {
+        "fields": {
+            "face_width_mm": {"normalized": "78", "unit": "mm"},
+        }
+    }
+    row = _import_row(candidates=[candidate])
+    _, _, article_id = _confirm_patches(monkeypatch, row)
+    stamped = []
+    monkeypatch.setattr(
+        catalog_service.catalog_evidence,
+        "stamp_import_evidence",
+        lambda **kwargs: stamped.append(kwargs),
+    )
+    catalog_service.confirm_catalog_import(
+        org_id=row["org_id"],
+        actor_id=uuid4(),
+        import_id=row["id"],
+        system_id=uuid4(),
+        items=[_item()],
+    )
+    assert stamped[0]["article_id"] == article_id
+    assert "aluprof.pdf" in stamped[0]["candidate"]["source_document"]
+
+
+def test_confirm_without_evidence_stamps_nothing(monkeypatch):
+    row = _import_row()
+    _confirm_patches(monkeypatch, row)
+    stamped = []
+    monkeypatch.setattr(
+        catalog_service.catalog_evidence,
+        "stamp_import_evidence",
+        lambda **kwargs: stamped.append(kwargs),
+    )
+    catalog_service.confirm_catalog_import(
+        org_id=row["org_id"],
+        actor_id=uuid4(),
+        import_id=row["id"],
+        system_id=uuid4(),
+        items=[_item()],
+    )
+    # Still called (the hook decides) but the candidate carries no evidence.
+    assert stamped and stamped[0]["candidate"].get("evidence") is None

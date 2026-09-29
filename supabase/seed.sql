@@ -16,7 +16,8 @@ INSERT INTO public.profile_systems (
     sliding_glazing_deduction_height_mm,
     door_leaf_side_clearance_mm,
     is_global,
-    is_demo
+    is_demo,
+    finishes
 )
 VALUES (
     uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/DEMO_60'),
@@ -34,7 +35,8 @@ VALUES (
     20.00,
     7.00,
     TRUE,
-    TRUE
+    TRUE,
+    '["WHITE", "FOILED"]'::jsonb
 )
 ON CONFLICT (id) DO UPDATE SET
     org_id = EXCLUDED.org_id,
@@ -51,7 +53,8 @@ ON CONFLICT (id) DO UPDATE SET
     sliding_glazing_deduction_height_mm = EXCLUDED.sliding_glazing_deduction_height_mm,
     door_leaf_side_clearance_mm = EXCLUDED.door_leaf_side_clearance_mm,
     is_global = EXCLUDED.is_global,
-    is_demo = EXCLUDED.is_demo;
+    is_demo = EXCLUDED.is_demo,
+    finishes = EXCLUDED.finishes;
 
 INSERT INTO public.profile_articles (
     id,
@@ -378,18 +381,47 @@ FROM public.profile_systems AS system
 WHERE kit.system_id = system.id AND system.code = 'DEMO_60' AND system.is_global = TRUE
   AND kit.sku IN ('KIT-TURN', 'KIT-TILT-TURN', 'KIT-SLIDING');
 
+-- Categorized kit contents: the visual renderer and readiness reads bind
+-- handle/hinge/lock counts to these declared lines instead of heuristics.
+-- Quantities are synthetic fixture data, not a manufacturer bill of parts.
+UPDATE public.hardware_kits AS kit
+SET contents = CASE kit.sku
+    WHEN 'KIT-TURN' THEN '[
+        {"sku":"DEMO-BIS-60","name":"Bisagra practicable Demo 60","qty":3,"unit":"unit","category":"HINGE"},
+        {"sku":"DEMO-MAN-PRACT","name":"Manilla roseta practicable Demo","qty":1,"unit":"unit","category":"HANDLE"},
+        {"sku":"DEMO-CREM-60","name":"Cremona + ganchos Demo 60","qty":1,"unit":"set","category":"LOCK"}
+      ]'::JSONB
+    WHEN 'KIT-TILT-TURN' THEN '[
+        {"sku":"DEMO-BIS-OB","name":"Bisagra oscilobatiente Demo (tijera+esquina)","qty":4,"unit":"unit","category":"HINGE"},
+        {"sku":"DEMO-MAN-OB","name":"Manilla oscilobatiente Demo","qty":1,"unit":"unit","category":"HANDLE"},
+        {"sku":"DEMO-CREM-OB","name":"Cremona multipunto Demo","qty":1,"unit":"set","category":"LOCK"}
+      ]'::JSONB
+    WHEN 'KIT-SLIDING' THEN '[
+        {"sku":"DEMO-CARR-60","name":"Carro doble rueda corredera Demo","qty":2,"unit":"unit","category":"ROLLER"},
+        {"sku":"DEMO-UNERO-60","name":"Uñero embutido corredera Demo","qty":1,"unit":"unit","category":"HANDLE"},
+        {"sku":"DEMO-CIERRE-60","name":"Cierre embutido corredera Demo","qty":1,"unit":"unit","category":"LOCK"}
+      ]'::JSONB
+    ELSE kit.contents
+  END
+FROM public.profile_systems AS system
+WHERE kit.system_id = system.id AND system.code = 'DEMO_60' AND system.is_global = TRUE
+  AND kit.sku IN ('KIT-TURN', 'KIT-TILT-TURN', 'KIT-SLIDING');
+
 INSERT INTO public.profile_articles (
     id, system_id, org_id, sku, name, role, material,
-    face_width_mm, welding_loss_mm, reinforcement_gap_mm, reinforcement_sku
+    face_width_mm, commercial_length_mm, welding_loss_mm, reinforcement_gap_mm,
+    reinforcement_sku
 )
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/DEMO_60/UMBRAL-ALU'),
     system.id, NULL, 'UMBRAL-ALU', 'Umbral Aluminio Demo 60', 'THRESHOLD', 'ALUMINIUM',
-    30.00, 0.00, 0.00, NULL
+    30.00, 6000.00, 0.00, 0.00, NULL
 FROM public.profile_systems AS system
 WHERE system.code = 'DEMO_60' AND system.is_global = TRUE
 ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name, role = EXCLUDED.role, material = EXCLUDED.material,
-    face_width_mm = EXCLUDED.face_width_mm, welding_loss_mm = EXCLUDED.welding_loss_mm,
+    face_width_mm = EXCLUDED.face_width_mm,
+    commercial_length_mm = EXCLUDED.commercial_length_mm,
+    welding_loss_mm = EXCLUDED.welding_loss_mm,
     reinforcement_gap_mm = EXCLUDED.reinforcement_gap_mm,
     reinforcement_sku = EXCLUDED.reinforcement_sku;
 
@@ -404,7 +436,8 @@ SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/DEMO_60/' 
 FROM public.profile_systems AS system
 CROSS JOIN (VALUES
     ('COPLE-60', 'Acoplador Angular Demo 60/30', 30.00::numeric, 0.9000::numeric),
-    ('COPLE-90', 'Acoplador Angular Demo 60/34', 34.00::numeric, 1.1000::numeric)
+    ('COPLE-90', 'Acoplador Angular Demo 60/34', 34.00::numeric, 1.1000::numeric),
+    ('CANAL-U', 'Canal U vidrio sin marco 60/24', 24.00::numeric, 0.7000::numeric)
 ) AS coupler(sku, name, face_mm, weight)
 WHERE system.code = 'DEMO_60' AND system.is_global = TRUE
 ON CONFLICT (system_id, sku) DO UPDATE SET
@@ -441,10 +474,13 @@ FROM public.profile_systems AS system
 CROSS JOIN (VALUES
     ('KIT-AWNING-16', 'Kit Proyectante Compás 16" 45kg', 'AWNING',
      400.00, 1200.00, 400.00, 1000.00, 45.00, 2,
-     '[{"sku":"DEMO-STAY-16","name":"Compás a fricción 16\"","qty":2,"unit":"unit"}]'::JSONB),
+     '[{"sku":"DEMO-STAY-16","name":"Compás a fricción 16\"","qty":2,"unit":"unit","category":"FITTING"},
+       {"sku":"DEMO-MAN-PROY","name":"Manilla central proyectante Demo","qty":1,"unit":"unit","category":"HANDLE"}]'::JSONB),
     ('KIT-DOOR-MULTIPOINT', 'Kit Puerta Entrada Multipunto Demo 60', 'DOOR',
      700.00, 1200.00, 1800.00, 2400.00, 120.00, 0,
-     '[{"sku":"DEMO-LOCK-MULTIPOINT","name":"Cerradura multipunto Demo","qty":1,"unit":"unit"}]'::JSONB)
+     '[{"sku":"DEMO-LOCK-MULTIPOINT","name":"Cerradura multipunto Demo","qty":1,"unit":"unit","category":"LOCK"},
+       {"sku":"DEMO-BIS-PUERTA","name":"Bisagra puerta reforzada Demo","qty":3,"unit":"unit","category":"HINGE"},
+       {"sku":"DEMO-MAN-PUERTA","name":"Par manilla puerta + cilindro Demo","qty":1,"unit":"set","category":"HANDLE"}]'::JSONB)
 ) AS fixture(sku, name, opening_type, min_w, max_w, min_h, max_h, max_weight, stays, contents)
 WHERE system.code = 'DEMO_60' AND system.is_global = TRUE
 ON CONFLICT (id) DO UPDATE SET
@@ -464,12 +500,12 @@ UPDATE public.profile_systems SET chamber_clearance_mm=12.00
 INSERT INTO public.cutting_profiles
  (id, org_id, code, name, kerf_mm, head_trim_mm, tail_trim_mm, is_default, is_active)
 VALUES (uuid_generate_v5(uuid_ns_url(),'https://dekopen.local/shot07/cutting/DEMO'),
- NULL,'DEMO','DEMO_60 SYNTHETIC FIXTURE',4.00,15.00,15.00,TRUE,TRUE)
+ NULL,'DEMO','Catálogo de demostración',4.00,15.00,15.00,TRUE,TRUE)
 ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.profile_purchase_mappings
  (id,profile_article_id,org_id,commercial_sku,manufacturer_name,supplier_name,purchase_unit)
 SELECT uuid_generate_v5(uuid_ns_url(),'https://dekopen.local/shot07/purchase/'||article.id),
- article.id,NULL,'DEMO-BAR-'||article.sku,'DEMO_60 SYNTHETIC FIXTURE','DEMO-SUPPLIER','BAR'
+ article.id,NULL,'COMPRA-'||article.sku,'Catálogo de demostración','Proveedor de referencia','BAR'
 FROM public.profile_articles article JOIN public.profile_systems system ON system.id=article.system_id
 WHERE system.code='DEMO_60' AND system.is_global=TRUE AND article.org_id IS NULL
 ON CONFLICT (id) DO NOTHING;
@@ -477,8 +513,8 @@ INSERT INTO public.reinforcement_articles
  (id,system_id,org_id,parent_profile_article_id,sku,commercial_sku,name,
  manufacturer_name,supplier_name,stock_length_mm,purchase_unit,is_default)
 SELECT uuid_generate_v5(uuid_ns_url(),'https://dekopen.local/shot07/steel/'||article.id),
- system.id,NULL,article.id,'DEMO-STEEL-'||article.sku,'DEMO-STEEL-BAR-'||article.sku,
- 'DEMO_60 SYNTHETIC FIXTURE','DEMO_60 SYNTHETIC FIXTURE','DEMO-SUPPLIER',6000.00,'BAR',TRUE
+ system.id,NULL,article.id,'ACERO-'||article.sku,'COMPRA-ACERO-'||article.sku,
+ 'Catálogo de demostración','Catálogo de demostración','Proveedor de referencia',6000.00,'BAR',TRUE
 FROM public.profile_articles article JOIN public.profile_systems system ON system.id=article.system_id
 WHERE system.code='DEMO_60' AND system.is_global=TRUE AND article.org_id IS NULL
  AND article.role NOT IN ('GLAZING_BEAD','THRESHOLD')
@@ -528,22 +564,22 @@ WHERE reinforcement.system_id=system.id AND system.code='DEMO_60' AND system.is_
  AND reinforcement.org_id IS NULL;
 
 INSERT INTO public.manufacturing_placement_policies (id,system_id,org_id,version,authority)
-SELECT uuid_generate_v5(uuid_ns_url(),'https://dekopen.local/shot09/placement/DEMO_60/V1'),
- system.id,NULL,1,'{"schema_version":1,"policy_id":"DEMO_60_PLACEMENT_V1","version":1,"sliding_leaf_offsets":{"L1":{"x_mm":"0.00","y_mm":"0.00"},"L2":{"x_mm":"940.00","y_mm":"0.00"}},"sliding_infill_offsets":{"L1":{"x_mm":"70.00","y_mm":"70.00"},"L2":{"x_mm":"70.00","y_mm":"70.00"}},"bead_offsets":{"TOP":{"x_mm":"0.00","y_mm":"0.00"},"RIGHT":{"x_mm":"0.00","y_mm":"0.00"},"BOTTOM":{"x_mm":"0.00","y_mm":"0.00"},"LEFT":{"x_mm":"0.00","y_mm":"0.00"}}}'::jsonb
+SELECT uuid_generate_v5(uuid_ns_url(),'https://dekopen.local/shot09/placement/DEMO_60/V2'),
+ system.id,NULL,2,'{"schema_version":1,"policy_id":"DEMO_60_PLACEMENT_V2","version":2,"sliding_leaf_offsets":{"L1":{"x_mm":0.00,"y_mm":0.00,"x_pitches":0.00},"L2":{"x_mm":0.00,"y_mm":0.00,"x_pitches":1.00},"L3":{"x_mm":0.00,"y_mm":0.00,"x_pitches":2.00},"L4":{"x_mm":0.00,"y_mm":0.00,"x_pitches":3.00}},"sliding_infill_offsets":{"L1":{"x_mm":70.00,"y_mm":70.00,"x_pitches":0.00},"L2":{"x_mm":70.00,"y_mm":70.00,"x_pitches":0.00},"L3":{"x_mm":70.00,"y_mm":70.00,"x_pitches":0.00},"L4":{"x_mm":70.00,"y_mm":70.00,"x_pitches":0.00}},"bead_offsets":{"TOP":{"x_mm":0.00,"y_mm":0.00},"RIGHT":{"x_mm":0.00,"y_mm":0.00},"BOTTOM":{"x_mm":0.00,"y_mm":0.00},"LEFT":{"x_mm":0.00,"y_mm":0.00}}}'::jsonb
 FROM public.profile_systems system
 WHERE system.code='DEMO_60' AND system.is_global=TRUE
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.handle_requirement_policies (id,system_id,org_id,version,authority)
-SELECT uuid_generate_v5(uuid_ns_url(),'https://dekopen.local/shot09/handles/DEMO_60/V1'),
- system.id,NULL,1,'{"schema_version":1,"policy_id":"DEMO_60_HANDLES_V1","version":1,"slots":[{"opening_type":"TURN_LEFT","leaf_slot":null,"handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":"-10.00","permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":"0.00","mounting_max_from_leaf_top_mm":"3000.00"},{"opening_type":"TURN_RIGHT","leaf_slot":null,"handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":"-10.00","permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":"0.00","mounting_max_from_leaf_top_mm":"3000.00"},{"opening_type":"TILT_TURN_LEFT","leaf_slot":null,"handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":"-10.00","permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":"0.00","mounting_max_from_leaf_top_mm":"3000.00"},{"opening_type":"TILT_TURN_RIGHT","leaf_slot":null,"handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":"-10.00","permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":"0.00","mounting_max_from_leaf_top_mm":"3000.00"},{"opening_type":"SLIDING_2L","leaf_slot":"L1","handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":"-10.00","permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":"0.00","mounting_max_from_leaf_top_mm":"3000.00"},{"opening_type":"SLIDING_2L","leaf_slot":"L2","handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":"-10.00","permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":"0.00","mounting_max_from_leaf_top_mm":"3000.00"},{"opening_type":"AWNING","leaf_slot":null,"handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":"-10.00","permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":"0.00","mounting_max_from_leaf_top_mm":"3000.00"},{"opening_type":"DOOR_ENTRY","leaf_slot":null,"handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":"-10.00","permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":"0.00","mounting_max_from_leaf_top_mm":"3000.00"}]}'::jsonb
+SELECT uuid_generate_v5(uuid_ns_url(),'https://dekopen.local/shot09/handles/DEMO_60/V2'),
+ system.id,NULL,2,'{"schema_version":1,"policy_id":"DEMO_60_HANDLES_V2","version":2,"slots":[{"opening_type":"TURN_LEFT","leaf_slot":null,"leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":-10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"TURN_RIGHT","leaf_slot":null,"leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"TILT_TURN_LEFT","leaf_slot":null,"leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":-10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"TILT_TURN_RIGHT","leaf_slot":null,"leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING_2L","leaf_slot":"L1","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":-10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING_2L","leaf_slot":"L2","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING_3L","leaf_slot":"L1","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":-10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING_3L","leaf_slot":"L2","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING_3L","leaf_slot":"L3","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING_4L","leaf_slot":"L1","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":-10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING_4L","leaf_slot":"L2","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING_4L","leaf_slot":"L3","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING_4L","leaf_slot":"L4","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING","leaf_slot":"L1","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":-10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING","leaf_slot":"L2","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING","leaf_slot":"L3","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING","leaf_slot":"L4","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"AWNING","leaf_slot":null,"leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"BOTTOM","horizontal_reference":"HOST_MEMBER_CENTER","horizontal_offset_mm":0.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"DOOR_ENTRY","leaf_slot":null,"leaf_handedness":"LEFT","handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":-10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"DOOR_ENTRY","leaf_slot":null,"leaf_handedness":"RIGHT","handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00}]}'::jsonb
 FROM public.profile_systems system
 WHERE system.code='DEMO_60' AND system.is_global=TRUE
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.reinforcement_cut_policies (id,system_id,org_id,version,authority)
 SELECT uuid_generate_v5(uuid_ns_url(),'https://dekopen.local/shot09/reinforcement-cuts/DEMO_60/V1'),
- system.id,NULL,1,'{"schema_version":1,"policy_id":"DEMO_60_REINFORCEMENT_CUT_V1","version":1,"rules":[{"role":"FRAME","profile_angle_left":"45.0","profile_angle_right":"45.0","reinforcement_angle_left":"90.0","reinforcement_angle_right":"90.0","length_authority":"EXISTING_ENGINE","compatible_with_existing_length":true},{"role":"FRAME","profile_angle_left":"45.0","profile_angle_right":"90.0","reinforcement_angle_left":"90.0","reinforcement_angle_right":"90.0","length_authority":"EXISTING_ENGINE","compatible_with_existing_length":true},{"role":"SASH","profile_angle_left":"45.0","profile_angle_right":"45.0","reinforcement_angle_left":"90.0","reinforcement_angle_right":"90.0","length_authority":"EXISTING_ENGINE","compatible_with_existing_length":true},{"role":"MULLION_V","profile_angle_left":"90.0","profile_angle_right":"90.0","reinforcement_angle_left":"90.0","reinforcement_angle_right":"90.0","length_authority":"EXISTING_ENGINE","compatible_with_existing_length":true},{"role":"MULLION_H","profile_angle_left":"90.0","profile_angle_right":"90.0","reinforcement_angle_left":"90.0","reinforcement_angle_right":"90.0","length_authority":"EXISTING_ENGINE","compatible_with_existing_length":true}]}'::jsonb
+ system.id,NULL,1,'{"schema_version":1,"policy_id":"DEMO_60_REINFORCEMENT_CUT_V1","version":1,"rules":[{"role":"FRAME","profile_angle_left":45.0,"profile_angle_right":45.0,"reinforcement_angle_left":90.0,"reinforcement_angle_right":90.0,"length_authority":"EXISTING_ENGINE","compatible_with_existing_length":true},{"role":"FRAME","profile_angle_left":45.0,"profile_angle_right":90.0,"reinforcement_angle_left":90.0,"reinforcement_angle_right":90.0,"length_authority":"EXISTING_ENGINE","compatible_with_existing_length":true},{"role":"SASH","profile_angle_left":45.0,"profile_angle_right":45.0,"reinforcement_angle_left":90.0,"reinforcement_angle_right":90.0,"length_authority":"EXISTING_ENGINE","compatible_with_existing_length":true},{"role":"MULLION_V","profile_angle_left":90.0,"profile_angle_right":90.0,"reinforcement_angle_left":90.0,"reinforcement_angle_right":90.0,"length_authority":"EXISTING_ENGINE","compatible_with_existing_length":true},{"role":"MULLION_H","profile_angle_left":90.0,"profile_angle_right":90.0,"reinforcement_angle_left":90.0,"reinforcement_angle_right":90.0,"length_authority":"EXISTING_ENGINE","compatible_with_existing_length":true}]}'::jsonb
 FROM public.profile_systems system
 WHERE system.code='DEMO_60' AND system.is_global=TRUE
 ON CONFLICT (id) DO NOTHING;
@@ -551,8 +587,8 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.glass_purchase_mappings
  (id,system_id,org_id,technical_sku,purchasing_sku,manufacturer_name,purchase_unit,version,provenance,glass_spec)
 SELECT uuid_generate_v5(uuid_ns_url(),'https://dekopen.local/shot09/glass/DEMO_60/GLASS-BASE/V1'),
- system.id,NULL,'GLASS-BASE','DEMO-GLASS-FINISHED-UNIT','DEMO_60 SYNTHETIC FIXTURE','EA',1,
- '{"source":"DEMO_60 SYNTHETIC FIXTURE","certified":"false"}'::jsonb,'4 Float Incoloro'
+ system.id,NULL,'VIDRIO-BASE','VIDRIO-TERMINADO','Catálogo de demostración','EA',1,
+ '{"source":"Referencia DEKOPEN","certified":"false"}'::jsonb,'4 Float Incoloro'
 FROM public.profile_systems system
 WHERE system.code='DEMO_60' AND system.is_global=TRUE
 ON CONFLICT (id) DO NOTHING;
@@ -560,8 +596,8 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.hardware_purchase_mappings
  (id,hardware_kit_id,org_id,purchasing_sku,manufacturer_name,purchase_unit,version,provenance)
 SELECT uuid_generate_v5(uuid_ns_url(),'https://dekopen.local/shot09/hardware/'||kit.id||'/V1'),
- kit.id,NULL,'DEMO-BUY-'||kit.sku,'DEMO_60 SYNTHETIC FIXTURE','KIT',1,
- '{"source":"DEMO_60 SYNTHETIC FIXTURE","mode":"KIT_ONLY"}'::jsonb
+ kit.id,NULL,'COMPRA-'||kit.sku,'Catálogo de demostración','KIT',1,
+ '{"source":"Referencia DEKOPEN","mode":"KIT_ONLY"}'::jsonb
 FROM public.hardware_kits kit JOIN public.profile_systems system ON system.id=kit.system_id
 WHERE system.code='DEMO_60' AND system.is_global=TRUE AND kit.org_id IS NULL
 ON CONFLICT (id) DO NOTHING;
@@ -569,8 +605,8 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.panel_purchase_authorities
  (id,infill_article_id,org_id,purchasing_sku,manufacturer_name,supply_form,purchase_unit,version,provenance)
 SELECT uuid_generate_v5(uuid_ns_url(),'https://dekopen.local/shot09/panel/'||panel.id||'/V1'),
- panel.id,NULL,'DEMO-BUY-'||panel.sku,'DEMO_60 SYNTHETIC FIXTURE','CUT_TO_SIZE','EA',1,
- '{"source":"DEMO_60 SYNTHETIC FIXTURE","certified":"false"}'::jsonb
+ panel.id,NULL,'COMPRA-'||panel.sku,'Catálogo de demostración','CUT_TO_SIZE','EA',1,
+ '{"source":"Referencia DEKOPEN","certified":"false"}'::jsonb
 FROM public.infill_articles panel JOIN public.profile_systems system ON system.id=panel.system_id
 WHERE system.code='DEMO_60' AND system.is_global=TRUE AND panel.org_id IS NULL
 ON CONFLICT (id) DO NOTHING;
@@ -655,7 +691,8 @@ FROM public.profile_systems s CROSS JOIN (VALUES
     ('JQ-A-8','Junquillo Aluminio 8','GLAZING_BEAD',8.00,0.2000),
     ('UMBRAL-A','Umbral Aluminio 65','THRESHOLD',28.00,0.9000),
     ('COPLE-A-30','Acoplador Aluminio 30','COUPLER',30.00,0.8500),
-    ('COPLE-A-90','Acoplador Aluminio 90','COUPLER',34.00,1.0000)
+    ('COPLE-A-90','Acoplador Aluminio 90','COUPLER',34.00,1.0000),
+    ('CANAL-A-U','Canal U vidrio sin marco Aluminio 26','COUPLER',26.00,0.7200)
 ) AS a(sku, name, role, face_mm, weight)
 WHERE s.code = 'ALU_65' AND s.is_global = TRUE
 ON CONFLICT (system_id, sku) DO UPDATE SET
@@ -680,7 +717,8 @@ FROM public.profile_systems s CROSS JOIN (VALUES
     ('UMBRAL-G','Umbral Vidrio 45','THRESHOLD',18.00,0.6000),
     ('COPLE-G-30','Acoplador Vidrio 30','COUPLER',26.00,0.7000),
     ('COPLE-G-90','Acoplador Vidrio 90','COUPLER',28.00,0.7800),
-    ('REMATE-G','Remate estructural Vidrio 45','COUPLER',20.00,0.5500)
+    ('REMATE-G','Remate estructural Vidrio 45','COUPLER',20.00,0.5500),
+    ('CANAL-G-U','Canal U estructural Vidrio 45/24','COUPLER',24.00,0.6400)
 ) AS a(sku, name, role, face_mm, weight)
 WHERE s.code = 'GLASS_45' AND s.is_global = TRUE
 ON CONFLICT (system_id, sku) DO UPDATE SET
@@ -736,15 +774,29 @@ INSERT INTO public.hardware_kits (
 )
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/ALU_65/' || kit.sku), s.id, NULL,
  kit.sku, kit.name, kit.opening_type, kit.min_w, kit.max_w, kit.min_h, kit.max_h,
- kit.max_weight, kit.rail, kit.carriages, kit.stays, 2.50, '[]'::JSONB
+ kit.max_weight, kit.rail, kit.carriages, kit.stays, 2.50, kit.contents
 FROM public.profile_systems s
 CROSS JOIN (VALUES
-    ('KIT-A-TURN','Kit practicable Aluminio 65','TURN',400,1100,500,2200,60,'dual',0,0),
-    ('KIT-A-TILT-TURN','Kit oscilobatiente Aluminio 65','TILT_TURN',450,1300,600,2200,90,'dual',0,1),
-    ('KIT-A-SLIDING','Kit corredera Aluminio 65','SLIDING',500,1800,600,2400,100,'dual',2,0),
-    ('KIT-A-AWNING','Kit proyectante Aluminio 65','AWNING',450,1400,400,1200,50,'dual',0,2),
-    ('KIT-A-DOOR','Kit puerta multipunto Aluminio 65','DOOR',750,1200,1900,2400,90,'dual',0,0)
-) AS kit(sku, name, opening_type, min_w, max_w, min_h, max_h, max_weight, rail, carriages, stays)
+    ('KIT-A-TURN','Kit practicable Aluminio 65','TURN',400,1100,500,2200,60,'dual',0,0,
+     '[{"sku":"ALU-BIS-65","name":"Bisagra practicable Aluminio 65","qty":3,"unit":"unit","category":"HINGE"},
+       {"sku":"ALU-MAN-PRACT","name":"Manilla roseta Aluminio","qty":1,"unit":"unit","category":"HANDLE"},
+       {"sku":"ALU-CREM-65","name":"Cremona multipunto Aluminio 65","qty":1,"unit":"set","category":"LOCK"}]'::JSONB),
+    ('KIT-A-TILT-TURN','Kit oscilobatiente Aluminio 65','TILT_TURN',450,1300,600,2200,90,'dual',0,1,
+     '[{"sku":"ALU-BIS-OB","name":"Bisagra oscilobatiente Aluminio 65","qty":4,"unit":"unit","category":"HINGE"},
+       {"sku":"ALU-MAN-OB","name":"Manilla oscilobatiente Aluminio","qty":1,"unit":"unit","category":"HANDLE"},
+       {"sku":"ALU-CREM-OB","name":"Cremona multipunto Aluminio 65","qty":1,"unit":"set","category":"LOCK"}]'::JSONB),
+    ('KIT-A-SLIDING','Kit corredera Aluminio 65','SLIDING',500,1800,600,2400,100,'dual',2,0,
+     '[{"sku":"ALU-CARR-65","name":"Carro doble rueda corredera Aluminio","qty":2,"unit":"unit","category":"ROLLER"},
+       {"sku":"ALU-TIRADOR-65","name":"Tirador superficial corredera Aluminio","qty":1,"unit":"unit","category":"HANDLE"},
+       {"sku":"ALU-CIERRE-65","name":"Cierre corredera Aluminio","qty":1,"unit":"unit","category":"LOCK"}]'::JSONB),
+    ('KIT-A-AWNING','Kit proyectante Aluminio 65','AWNING',450,1400,400,1200,50,'dual',0,2,
+     '[{"sku":"ALU-STAY-65","name":"Compás a fricción Aluminio 65","qty":2,"unit":"unit","category":"FITTING"},
+       {"sku":"ALU-MAN-PROY","name":"Manilla central proyectante Aluminio","qty":1,"unit":"unit","category":"HANDLE"}]'::JSONB),
+    ('KIT-A-DOOR','Kit puerta multipunto Aluminio 65','DOOR',750,1200,1900,2400,90,'dual',0,0,
+     '[{"sku":"ALU-BIS-PUERTA","name":"Bisagra puerta Aluminio 65","qty":3,"unit":"unit","category":"HINGE"},
+       {"sku":"ALU-LOCK-PUERTA","name":"Cerradura multipunto Aluminio","qty":1,"unit":"unit","category":"LOCK"},
+       {"sku":"ALU-MAN-PUERTA","name":"Par manilla puerta + cilindro Aluminio","qty":1,"unit":"set","category":"HANDLE"}]'::JSONB)
+) AS kit(sku, name, opening_type, min_w, max_w, min_h, max_h, max_weight, rail, carriages, stays, contents)
 WHERE s.code = 'ALU_65' AND s.is_global = TRUE
 ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name, opening_type = EXCLUDED.opening_type,
@@ -761,15 +813,29 @@ INSERT INTO public.hardware_kits (
 )
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/GLASS_45/' || kit.sku), s.id, NULL,
  kit.sku, kit.name, kit.opening_type, kit.min_w, kit.max_w, kit.min_h, kit.max_h,
- kit.max_weight, kit.rail, kit.carriages, kit.stays, 2.50, '[]'::JSONB
+ kit.max_weight, kit.rail, kit.carriages, kit.stays, 2.50, kit.contents
 FROM public.profile_systems s
 CROSS JOIN (VALUES
-    ('KIT-G-TURN','Kit practicable Vidrio 45','TURN',400,1000,500,2100,50,'dual',0,0),
-    ('KIT-G-TILT-TURN','Kit oscilobatiente Vidrio 45','TILT_TURN',450,1200,600,2100,70,'dual',0,1),
-    ('KIT-G-SLIDING','Kit corredera Vidrio 45','SLIDING',600,1600,700,2300,80,'dual',2,0),
-    ('KIT-G-AWNING','Kit proyectante Vidrio 45','AWNING',500,1600,400,1100,45,'dual',0,2),
-    ('KIT-G-DOOR','Kit puerta Vidrio 45','DOOR',800,1100,1950,2300,70,'dual',0,0)
-) AS kit(sku, name, opening_type, min_w, max_w, min_h, max_h, max_weight, rail, carriages, stays)
+    ('KIT-G-TURN','Kit practicable Vidrio 45','TURN',400,1000,500,2100,50,'dual',0,0,
+     '[{"sku":"GLASS-BIS-45","name":"Bisagra vidrio-perfil 45","qty":3,"unit":"unit","category":"HINGE"},
+       {"sku":"GLASS-MAN-45","name":"Manilla acero pulido vidrio 45","qty":1,"unit":"unit","category":"HANDLE"},
+       {"sku":"GLASS-CIERRE-45","name":"Cierre magnético vidrio 45","qty":1,"unit":"unit","category":"LOCK"}]'::JSONB),
+    ('KIT-G-TILT-TURN','Kit oscilobatiente Vidrio 45','TILT_TURN',450,1200,600,2100,70,'dual',0,1,
+     '[{"sku":"GLASS-BIS-OB","name":"Bisagra oscilobatiente vidrio 45","qty":4,"unit":"unit","category":"HINGE"},
+       {"sku":"GLASS-MAN-OB","name":"Manilla oscilobatiente vidrio 45","qty":1,"unit":"unit","category":"HANDLE"},
+       {"sku":"GLASS-CIERRE-OB","name":"Cierre magnético vidrio 45","qty":1,"unit":"unit","category":"LOCK"}]'::JSONB),
+    ('KIT-G-SLIDING','Kit corredera Vidrio 45','SLIDING',600,1600,700,2300,80,'dual',2,0,
+     '[{"sku":"GLASS-CARR-45","name":"Carro corredera vidrio 45","qty":2,"unit":"unit","category":"ROLLER"},
+       {"sku":"GLASS-TIRADOR-45","name":"Tirador barra vidrio 45","qty":1,"unit":"unit","category":"HANDLE"},
+       {"sku":"GLASS-LOCK-45","name":"Cerradura corredera vidrio 45","qty":1,"unit":"unit","category":"LOCK"}]'::JSONB),
+    ('KIT-G-AWNING','Kit proyectante Vidrio 45','AWNING',500,1600,400,1100,45,'dual',0,2,
+     '[{"sku":"GLASS-STAY-45","name":"Compás proyectante vidrio 45","qty":2,"unit":"unit","category":"FITTING"},
+       {"sku":"GLASS-MAN-PROY","name":"Manilla central vidrio 45","qty":1,"unit":"unit","category":"HANDLE"}]'::JSONB),
+    ('KIT-G-DOOR','Kit puerta Vidrio 45','DOOR',800,1100,1950,2300,70,'dual',0,0,
+     '[{"sku":"GLASS-BIS-PUERTA","name":"Bisagra puerta vidrio 45","qty":3,"unit":"unit","category":"HINGE"},
+       {"sku":"GLASS-LOCK-PUERTA","name":"Cerradura puerta vidrio 45","qty":1,"unit":"unit","category":"LOCK"},
+       {"sku":"GLASS-MAN-PUERTA","name":"Par manilla puerta vidrio + cilindro","qty":1,"unit":"set","category":"HANDLE"}]'::JSONB)
+) AS kit(sku, name, opening_type, min_w, max_w, min_h, max_h, max_weight, rail, carriages, stays, contents)
 WHERE s.code = 'GLASS_45' AND s.is_global = TRUE
 ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name, opening_type = EXCLUDED.opening_type,
@@ -852,7 +918,7 @@ INSERT INTO public.profile_purchase_mappings
  (id, profile_article_id, org_id, commercial_sku, manufacturer_name, supplier_name,
   purchase_unit, physical_stock_identity, stock_color, cutting_profile_id, binding_version)
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot07/purchase/' || article.id::text),
- article.id, NULL, 'TEST-BUY-' || article.sku, 'SYNTHETIC TEST DATA', 'TEST-SUPPLIER', 'BAR',
+ article.id, NULL, 'COMPRA-' || article.sku, 'Referencia DEKOPEN', 'Proveedor de referencia', 'BAR',
  uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/physical/profile/' || article.id::text),
  'WHITE',
  uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot07/cutting/DEMO'),
@@ -866,7 +932,7 @@ INSERT INTO public.profile_purchase_mappings
  (id, profile_article_id, org_id, commercial_sku, manufacturer_name, supplier_name,
   purchase_unit, physical_stock_identity, stock_color, cutting_profile_id, binding_version)
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot07/purchase/' || article.id::text),
- article.id, NULL, 'TEST-BUY-' || article.sku, 'SYNTHETIC TEST DATA', 'TEST-SUPPLIER', 'BAR',
+ article.id, NULL, 'COMPRA-' || article.sku, 'Referencia DEKOPEN', 'Proveedor de referencia', 'BAR',
  uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/physical/profile/' || article.id::text),
  'WHITE',
  uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot07/cutting/DEMO'),
@@ -879,8 +945,8 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.hardware_purchase_mappings
  (id, hardware_kit_id, org_id, purchasing_sku, manufacturer_name, purchase_unit, version, provenance)
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/hardware/' || kit.id::text || '/V1'),
- kit.id, NULL, 'TEST-BUY-' || kit.sku, 'SYNTHETIC TEST DATA', 'KIT', 1,
- '{"source":"SYNTHETIC TEST DATA","mode":"KIT_ONLY"}'::jsonb
+ kit.id, NULL, 'COMPRA-' || kit.sku, 'Referencia DEKOPEN', 'KIT', 1,
+ '{"source":"Referencia DEKOPEN","mode":"KIT_ONLY"}'::jsonb
 FROM public.hardware_kits kit
 JOIN public.profile_systems s ON s.id = kit.system_id
 WHERE s.code = 'ALU_65' AND s.is_global = TRUE AND kit.org_id IS NULL
@@ -889,24 +955,24 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.glass_purchase_mappings
  (id, system_id, org_id, technical_sku, purchasing_sku, manufacturer_name, purchase_unit, version, provenance, glass_spec)
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/glass/ALU_65/DVH-24/V1'), s.id, NULL,
- 'DVH-24', 'TEST-BUY-DVH-24', 'SYNTHETIC TEST DATA', 'EA', 1,
- '{"source":"SYNTHETIC TEST DATA","certified":"false"}'::jsonb, '4-16-4'
+ 'DVH-24', 'TEST-BUY-DVH-24', 'Referencia DEKOPEN', 'EA', 1,
+ '{"source":"Referencia DEKOPEN","certified":"false"}'::jsonb, '4-16-4'
 FROM public.profile_systems s WHERE s.code='ALU_65' AND s.is_global=TRUE
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.glass_purchase_mappings
  (id, system_id, org_id, technical_sku, purchasing_sku, manufacturer_name, purchase_unit, version, provenance, glass_spec)
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/glass/ALU_65/MONO-5/V1'), s.id, NULL,
- 'MONO-5', 'TEST-BUY-MONO-5', 'SYNTHETIC TEST DATA', 'EA', 1,
- '{"source":"SYNTHETIC TEST DATA","certified":"false"}'::jsonb, '5'
+ 'MONO-5', 'TEST-BUY-MONO-5', 'Referencia DEKOPEN', 'EA', 1,
+ '{"source":"Referencia DEKOPEN","certified":"false"}'::jsonb, '5'
 FROM public.profile_systems s WHERE s.code='ALU_65' AND s.is_global=TRUE
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.panel_purchase_authorities
  (id, infill_article_id, org_id, purchasing_sku, manufacturer_name, supply_form, purchase_unit, version, provenance)
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/panel/' || panel.id::text || '/V1'),
- panel.id, NULL, 'TEST-BUY-' || panel.sku, 'SYNTHETIC TEST DATA', 'CUT_TO_SIZE', 'EA', 1,
- '{"source":"SYNTHETIC TEST DATA","certified":"false"}'::jsonb
+ panel.id, NULL, 'COMPRA-' || panel.sku, 'Referencia DEKOPEN', 'CUT_TO_SIZE', 'EA', 1,
+ '{"source":"Referencia DEKOPEN","certified":"false"}'::jsonb
 FROM public.infill_articles panel
 JOIN public.profile_systems s ON s.id = panel.system_id
 WHERE s.code = 'ALU_65' AND s.is_global = TRUE AND panel.org_id IS NULL
@@ -915,8 +981,8 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.hardware_purchase_mappings
  (id, hardware_kit_id, org_id, purchasing_sku, manufacturer_name, purchase_unit, version, provenance)
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/hardware/' || kit.id::text || '/V1'),
- kit.id, NULL, 'TEST-BUY-' || kit.sku, 'SYNTHETIC TEST DATA', 'KIT', 1,
- '{"source":"SYNTHETIC TEST DATA","mode":"KIT_ONLY"}'::jsonb
+ kit.id, NULL, 'COMPRA-' || kit.sku, 'Referencia DEKOPEN', 'KIT', 1,
+ '{"source":"Referencia DEKOPEN","mode":"KIT_ONLY"}'::jsonb
 FROM public.hardware_kits kit
 JOIN public.profile_systems s ON s.id = kit.system_id
 WHERE s.code = 'GLASS_45' AND s.is_global = TRUE AND kit.org_id IS NULL
@@ -925,70 +991,70 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.glass_purchase_mappings
  (id, system_id, org_id, technical_sku, purchasing_sku, manufacturer_name, purchase_unit, version, provenance, glass_spec)
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/glass/GLASS_45/DVH-28/V1'), s.id, NULL,
- 'DVH-28', 'TEST-BUY-DVH-28', 'SYNTHETIC TEST DATA', 'EA', 1,
- '{"source":"SYNTHETIC TEST DATA","certified":"false"}'::jsonb, '4-20-4'
+ 'DVH-28', 'TEST-BUY-DVH-28', 'Referencia DEKOPEN', 'EA', 1,
+ '{"source":"Referencia DEKOPEN","certified":"false"}'::jsonb, '4-20-4'
 FROM public.profile_systems s WHERE s.code='GLASS_45' AND s.is_global=TRUE
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.glass_purchase_mappings
  (id, system_id, org_id, technical_sku, purchasing_sku, manufacturer_name, purchase_unit, version, provenance, glass_spec)
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/glass/GLASS_45/DVH-32/V1'), s.id, NULL,
- 'DVH-32', 'TEST-BUY-DVH-32', 'SYNTHETIC TEST DATA', 'EA', 1,
- '{"source":"SYNTHETIC TEST DATA","certified":"false"}'::jsonb, '4-24-4'
+ 'DVH-32', 'TEST-BUY-DVH-32', 'Referencia DEKOPEN', 'EA', 1,
+ '{"source":"Referencia DEKOPEN","certified":"false"}'::jsonb, '4-24-4'
 FROM public.profile_systems s WHERE s.code='GLASS_45' AND s.is_global=TRUE
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.glass_purchase_mappings
  (id, system_id, org_id, technical_sku, purchasing_sku, manufacturer_name, purchase_unit, version, provenance, glass_spec)
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/glass/GLASS_45/MONO-8/V1'), s.id, NULL,
- 'MONO-8', 'TEST-BUY-MONO-8', 'SYNTHETIC TEST DATA', 'EA', 1,
- '{"source":"SYNTHETIC TEST DATA","certified":"false"}'::jsonb, '8'
+ 'MONO-8', 'TEST-BUY-MONO-8', 'Referencia DEKOPEN', 'EA', 1,
+ '{"source":"Referencia DEKOPEN","certified":"false"}'::jsonb, '8'
 FROM public.profile_systems s WHERE s.code='GLASS_45' AND s.is_global=TRUE
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.panel_purchase_authorities
  (id, infill_article_id, org_id, purchasing_sku, manufacturer_name, supply_form, purchase_unit, version, provenance)
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/panel/' || panel.id::text || '/V1'),
- panel.id, NULL, 'TEST-BUY-' || panel.sku, 'SYNTHETIC TEST DATA', 'CUT_TO_SIZE', 'EA', 1,
- '{"source":"SYNTHETIC TEST DATA","certified":"false"}'::jsonb
+ panel.id, NULL, 'COMPRA-' || panel.sku, 'Referencia DEKOPEN', 'CUT_TO_SIZE', 'EA', 1,
+ '{"source":"Referencia DEKOPEN","certified":"false"}'::jsonb
 FROM public.infill_articles panel
 JOIN public.profile_systems s ON s.id = panel.system_id
 WHERE s.code = 'GLASS_45' AND s.is_global = TRUE AND panel.org_id IS NULL
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.manufacturing_placement_policies (id, system_id, org_id, version, authority)
-SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/placement/ALU_65/V1'), s.id, NULL, 1,
- '{"schema_version": 1, "policy_id": "ALU_65_PLACEMENT_V1", "version": 1, "sliding_leaf_offsets": {"L1": {"x_mm": "0.00", "y_mm": "0.00"}, "L2": {"x_mm": "940.00", "y_mm": "0.00"}}, "sliding_infill_offsets": {"L1": {"x_mm": "70.00", "y_mm": "70.00"}, "L2": {"x_mm": "70.00", "y_mm": "70.00"}}, "bead_offsets": {"TOP": {"x_mm": "0.00", "y_mm": "0.00"}, "RIGHT": {"x_mm": "0.00", "y_mm": "0.00"}, "BOTTOM": {"x_mm": "0.00", "y_mm": "0.00"}, "LEFT": {"x_mm": "0.00", "y_mm": "0.00"}}}'::jsonb
+SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/placement/ALU_65/V2'), s.id, NULL,2,
+ '{"schema_version":1,"policy_id":"ALU_65_PLACEMENT_V2","version":2,"sliding_leaf_offsets":{"L1":{"x_mm":0.00,"y_mm":0.00,"x_pitches":0.00},"L2":{"x_mm":0.00,"y_mm":0.00,"x_pitches":1.00},"L3":{"x_mm":0.00,"y_mm":0.00,"x_pitches":2.00},"L4":{"x_mm":0.00,"y_mm":0.00,"x_pitches":3.00}},"sliding_infill_offsets":{"L1":{"x_mm":70.00,"y_mm":70.00,"x_pitches":0.00},"L2":{"x_mm":70.00,"y_mm":70.00,"x_pitches":0.00},"L3":{"x_mm":70.00,"y_mm":70.00,"x_pitches":0.00},"L4":{"x_mm":70.00,"y_mm":70.00,"x_pitches":0.00}},"bead_offsets":{"TOP":{"x_mm":0.00,"y_mm":0.00},"RIGHT":{"x_mm":0.00,"y_mm":0.00},"BOTTOM":{"x_mm":0.00,"y_mm":0.00},"LEFT":{"x_mm":0.00,"y_mm":0.00}}}'::jsonb
 FROM public.profile_systems s WHERE s.code='ALU_65' AND s.is_global=TRUE
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.handle_requirement_policies (id, system_id, org_id, version, authority)
-SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/handles/ALU_65/V1'), s.id, NULL, 1,
- '{"schema_version": 1, "policy_id": "ALU_65_HANDLES_V1", "version": 1, "slots": [{"opening_type": "TURN_LEFT", "leaf_slot": null, "handle_domain_slot": "PRIMARY", "host_member_side": "RIGHT", "horizontal_reference": "HOST_MEMBER_AXIS", "horizontal_offset_mm": "-10.00", "permitted_vertical_references": ["OUTER_TOP", "OUTER_BOTTOM", "LEAF_TOP", "LEAF_BOTTOM"], "mounting_min_from_leaf_top_mm": "0.00", "mounting_max_from_leaf_top_mm": "3000.00"}, {"opening_type": "TURN_RIGHT", "leaf_slot": null, "handle_domain_slot": "PRIMARY", "host_member_side": "RIGHT", "horizontal_reference": "HOST_MEMBER_AXIS", "horizontal_offset_mm": "-10.00", "permitted_vertical_references": ["OUTER_TOP", "OUTER_BOTTOM", "LEAF_TOP", "LEAF_BOTTOM"], "mounting_min_from_leaf_top_mm": "0.00", "mounting_max_from_leaf_top_mm": "3000.00"}, {"opening_type": "TILT_TURN_LEFT", "leaf_slot": null, "handle_domain_slot": "PRIMARY", "host_member_side": "RIGHT", "horizontal_reference": "HOST_MEMBER_AXIS", "horizontal_offset_mm": "-10.00", "permitted_vertical_references": ["OUTER_TOP", "OUTER_BOTTOM", "LEAF_TOP", "LEAF_BOTTOM"], "mounting_min_from_leaf_top_mm": "0.00", "mounting_max_from_leaf_top_mm": "3000.00"}, {"opening_type": "TILT_TURN_RIGHT", "leaf_slot": null, "handle_domain_slot": "PRIMARY", "host_member_side": "RIGHT", "horizontal_reference": "HOST_MEMBER_AXIS", "horizontal_offset_mm": "-10.00", "permitted_vertical_references": ["OUTER_TOP", "OUTER_BOTTOM", "LEAF_TOP", "LEAF_BOTTOM"], "mounting_min_from_leaf_top_mm": "0.00", "mounting_max_from_leaf_top_mm": "3000.00"}, {"opening_type": "SLIDING_2L", "leaf_slot": "L1", "handle_domain_slot": "PRIMARY", "host_member_side": "RIGHT", "horizontal_reference": "HOST_MEMBER_AXIS", "horizontal_offset_mm": "-10.00", "permitted_vertical_references": ["OUTER_TOP", "OUTER_BOTTOM", "LEAF_TOP", "LEAF_BOTTOM"], "mounting_min_from_leaf_top_mm": "0.00", "mounting_max_from_leaf_top_mm": "3000.00"}, {"opening_type": "SLIDING_2L", "leaf_slot": "L2", "handle_domain_slot": "PRIMARY", "host_member_side": "RIGHT", "horizontal_reference": "HOST_MEMBER_AXIS", "horizontal_offset_mm": "-10.00", "permitted_vertical_references": ["OUTER_TOP", "OUTER_BOTTOM", "LEAF_TOP", "LEAF_BOTTOM"], "mounting_min_from_leaf_top_mm": "0.00", "mounting_max_from_leaf_top_mm": "3000.00"}, {"opening_type": "AWNING", "leaf_slot": null, "handle_domain_slot": "PRIMARY", "host_member_side": "RIGHT", "horizontal_reference": "HOST_MEMBER_AXIS", "horizontal_offset_mm": "-10.00", "permitted_vertical_references": ["OUTER_TOP", "OUTER_BOTTOM", "LEAF_TOP", "LEAF_BOTTOM"], "mounting_min_from_leaf_top_mm": "0.00", "mounting_max_from_leaf_top_mm": "3000.00"}, {"opening_type": "DOOR_ENTRY", "leaf_slot": null, "handle_domain_slot": "PRIMARY", "host_member_side": "RIGHT", "horizontal_reference": "HOST_MEMBER_AXIS", "horizontal_offset_mm": "-10.00", "permitted_vertical_references": ["OUTER_TOP", "OUTER_BOTTOM", "LEAF_TOP", "LEAF_BOTTOM"], "mounting_min_from_leaf_top_mm": "0.00", "mounting_max_from_leaf_top_mm": "3000.00"}]}'::jsonb
+SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/handles/ALU_65/V2'), s.id, NULL, 2,
+ '{"schema_version":1,"policy_id":"ALU_65_HANDLES_V2","version":2,"slots":[{"opening_type":"TURN_LEFT","leaf_slot":null,"leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":-10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"TURN_RIGHT","leaf_slot":null,"leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"TILT_TURN_LEFT","leaf_slot":null,"leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":-10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"TILT_TURN_RIGHT","leaf_slot":null,"leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING_2L","leaf_slot":"L1","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":-10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING_2L","leaf_slot":"L2","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING_3L","leaf_slot":"L1","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":-10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING_3L","leaf_slot":"L2","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING_3L","leaf_slot":"L3","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING_4L","leaf_slot":"L1","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":-10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING_4L","leaf_slot":"L2","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING_4L","leaf_slot":"L3","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING_4L","leaf_slot":"L4","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING","leaf_slot":"L1","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":-10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING","leaf_slot":"L2","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING","leaf_slot":"L3","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING","leaf_slot":"L4","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"AWNING","leaf_slot":null,"leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"BOTTOM","horizontal_reference":"HOST_MEMBER_CENTER","horizontal_offset_mm":0.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"DOOR_ENTRY","leaf_slot":null,"leaf_handedness":"LEFT","handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":-10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"DOOR_ENTRY","leaf_slot":null,"leaf_handedness":"RIGHT","handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00}]}'::jsonb
 FROM public.profile_systems s WHERE s.code='ALU_65' AND s.is_global=TRUE
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.reinforcement_cut_policies (id, system_id, org_id, version, authority)
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/reinforcement-cuts/ALU_65/V1'), s.id, NULL, 1,
- '{"schema_version": 1, "policy_id": "ALU_65_REINFORCEMENT_CUT_V1", "version": 1, "rules": [{"role": "FRAME", "profile_angle_left": "45.0", "profile_angle_right": "45.0", "reinforcement_angle_left": "90.0", "reinforcement_angle_right": "90.0", "length_authority": "EXISTING_ENGINE", "compatible_with_existing_length": true}, {"role": "FRAME", "profile_angle_left": "45.0", "profile_angle_right": "90.0", "reinforcement_angle_left": "90.0", "reinforcement_angle_right": "90.0", "length_authority": "EXISTING_ENGINE", "compatible_with_existing_length": true}, {"role": "SASH", "profile_angle_left": "45.0", "profile_angle_right": "45.0", "reinforcement_angle_left": "90.0", "reinforcement_angle_right": "90.0", "length_authority": "EXISTING_ENGINE", "compatible_with_existing_length": true}, {"role": "MULLION_V", "profile_angle_left": "90.0", "profile_angle_right": "90.0", "reinforcement_angle_left": "90.0", "reinforcement_angle_right": "90.0", "length_authority": "EXISTING_ENGINE", "compatible_with_existing_length": true}, {"role": "MULLION_H", "profile_angle_left": "90.0", "profile_angle_right": "90.0", "reinforcement_angle_left": "90.0", "reinforcement_angle_right": "90.0", "length_authority": "EXISTING_ENGINE", "compatible_with_existing_length": true}]}'::jsonb
+ '{"schema_version": 1, "policy_id": "ALU_65_REINFORCEMENT_CUT_V1", "version": 1, "rules": [{"role": "FRAME", "profile_angle_left":45.0, "profile_angle_right":45.0, "reinforcement_angle_left":90.0, "reinforcement_angle_right":90.0, "length_authority": "EXISTING_ENGINE", "compatible_with_existing_length": true}, {"role": "FRAME", "profile_angle_left":45.0, "profile_angle_right":90.0, "reinforcement_angle_left":90.0, "reinforcement_angle_right":90.0, "length_authority": "EXISTING_ENGINE", "compatible_with_existing_length": true}, {"role": "SASH", "profile_angle_left":45.0, "profile_angle_right":45.0, "reinforcement_angle_left":90.0, "reinforcement_angle_right":90.0, "length_authority": "EXISTING_ENGINE", "compatible_with_existing_length": true}, {"role": "MULLION_V", "profile_angle_left":90.0, "profile_angle_right":90.0, "reinforcement_angle_left":90.0, "reinforcement_angle_right":90.0, "length_authority": "EXISTING_ENGINE", "compatible_with_existing_length": true}, {"role": "MULLION_H", "profile_angle_left":90.0, "profile_angle_right":90.0, "reinforcement_angle_left":90.0, "reinforcement_angle_right":90.0, "length_authority": "EXISTING_ENGINE", "compatible_with_existing_length": true}]}'::jsonb
 FROM public.profile_systems s WHERE s.code='ALU_65' AND s.is_global=TRUE
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.manufacturing_placement_policies (id, system_id, org_id, version, authority)
-SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/placement/GLASS_45/V1'), s.id, NULL, 1,
- '{"schema_version": 1, "policy_id": "GLASS_45_PLACEMENT_V1", "version": 1, "sliding_leaf_offsets": {"L1": {"x_mm": "0.00", "y_mm": "0.00"}, "L2": {"x_mm": "940.00", "y_mm": "0.00"}}, "sliding_infill_offsets": {"L1": {"x_mm": "70.00", "y_mm": "70.00"}, "L2": {"x_mm": "70.00", "y_mm": "70.00"}}, "bead_offsets": {"TOP": {"x_mm": "0.00", "y_mm": "0.00"}, "RIGHT": {"x_mm": "0.00", "y_mm": "0.00"}, "BOTTOM": {"x_mm": "0.00", "y_mm": "0.00"}, "LEFT": {"x_mm": "0.00", "y_mm": "0.00"}}}'::jsonb
+SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/placement/GLASS_45/V2'), s.id, NULL,2,
+ '{"schema_version":1,"policy_id":"GLASS_45_PLACEMENT_V2","version":2,"sliding_leaf_offsets":{"L1":{"x_mm":0.00,"y_mm":0.00,"x_pitches":0.00},"L2":{"x_mm":0.00,"y_mm":0.00,"x_pitches":1.00},"L3":{"x_mm":0.00,"y_mm":0.00,"x_pitches":2.00},"L4":{"x_mm":0.00,"y_mm":0.00,"x_pitches":3.00}},"sliding_infill_offsets":{"L1":{"x_mm":70.00,"y_mm":70.00,"x_pitches":0.00},"L2":{"x_mm":70.00,"y_mm":70.00,"x_pitches":0.00},"L3":{"x_mm":70.00,"y_mm":70.00,"x_pitches":0.00},"L4":{"x_mm":70.00,"y_mm":70.00,"x_pitches":0.00}},"bead_offsets":{"TOP":{"x_mm":0.00,"y_mm":0.00},"RIGHT":{"x_mm":0.00,"y_mm":0.00},"BOTTOM":{"x_mm":0.00,"y_mm":0.00},"LEFT":{"x_mm":0.00,"y_mm":0.00}}}'::jsonb
 FROM public.profile_systems s WHERE s.code='GLASS_45' AND s.is_global=TRUE
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.handle_requirement_policies (id, system_id, org_id, version, authority)
-SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/handles/GLASS_45/V1'), s.id, NULL, 1,
- '{"schema_version": 1, "policy_id": "GLASS_45_HANDLES_V1", "version": 1, "slots": [{"opening_type": "TURN_LEFT", "leaf_slot": null, "handle_domain_slot": "PRIMARY", "host_member_side": "RIGHT", "horizontal_reference": "HOST_MEMBER_AXIS", "horizontal_offset_mm": "-10.00", "permitted_vertical_references": ["OUTER_TOP", "OUTER_BOTTOM", "LEAF_TOP", "LEAF_BOTTOM"], "mounting_min_from_leaf_top_mm": "0.00", "mounting_max_from_leaf_top_mm": "3000.00"}, {"opening_type": "TURN_RIGHT", "leaf_slot": null, "handle_domain_slot": "PRIMARY", "host_member_side": "RIGHT", "horizontal_reference": "HOST_MEMBER_AXIS", "horizontal_offset_mm": "-10.00", "permitted_vertical_references": ["OUTER_TOP", "OUTER_BOTTOM", "LEAF_TOP", "LEAF_BOTTOM"], "mounting_min_from_leaf_top_mm": "0.00", "mounting_max_from_leaf_top_mm": "3000.00"}, {"opening_type": "TILT_TURN_LEFT", "leaf_slot": null, "handle_domain_slot": "PRIMARY", "host_member_side": "RIGHT", "horizontal_reference": "HOST_MEMBER_AXIS", "horizontal_offset_mm": "-10.00", "permitted_vertical_references": ["OUTER_TOP", "OUTER_BOTTOM", "LEAF_TOP", "LEAF_BOTTOM"], "mounting_min_from_leaf_top_mm": "0.00", "mounting_max_from_leaf_top_mm": "3000.00"}, {"opening_type": "TILT_TURN_RIGHT", "leaf_slot": null, "handle_domain_slot": "PRIMARY", "host_member_side": "RIGHT", "horizontal_reference": "HOST_MEMBER_AXIS", "horizontal_offset_mm": "-10.00", "permitted_vertical_references": ["OUTER_TOP", "OUTER_BOTTOM", "LEAF_TOP", "LEAF_BOTTOM"], "mounting_min_from_leaf_top_mm": "0.00", "mounting_max_from_leaf_top_mm": "3000.00"}, {"opening_type": "SLIDING_2L", "leaf_slot": "L1", "handle_domain_slot": "PRIMARY", "host_member_side": "RIGHT", "horizontal_reference": "HOST_MEMBER_AXIS", "horizontal_offset_mm": "-10.00", "permitted_vertical_references": ["OUTER_TOP", "OUTER_BOTTOM", "LEAF_TOP", "LEAF_BOTTOM"], "mounting_min_from_leaf_top_mm": "0.00", "mounting_max_from_leaf_top_mm": "3000.00"}, {"opening_type": "SLIDING_2L", "leaf_slot": "L2", "handle_domain_slot": "PRIMARY", "host_member_side": "RIGHT", "horizontal_reference": "HOST_MEMBER_AXIS", "horizontal_offset_mm": "-10.00", "permitted_vertical_references": ["OUTER_TOP", "OUTER_BOTTOM", "LEAF_TOP", "LEAF_BOTTOM"], "mounting_min_from_leaf_top_mm": "0.00", "mounting_max_from_leaf_top_mm": "3000.00"}, {"opening_type": "AWNING", "leaf_slot": null, "handle_domain_slot": "PRIMARY", "host_member_side": "RIGHT", "horizontal_reference": "HOST_MEMBER_AXIS", "horizontal_offset_mm": "-10.00", "permitted_vertical_references": ["OUTER_TOP", "OUTER_BOTTOM", "LEAF_TOP", "LEAF_BOTTOM"], "mounting_min_from_leaf_top_mm": "0.00", "mounting_max_from_leaf_top_mm": "3000.00"}, {"opening_type": "DOOR_ENTRY", "leaf_slot": null, "handle_domain_slot": "PRIMARY", "host_member_side": "RIGHT", "horizontal_reference": "HOST_MEMBER_AXIS", "horizontal_offset_mm": "-10.00", "permitted_vertical_references": ["OUTER_TOP", "OUTER_BOTTOM", "LEAF_TOP", "LEAF_BOTTOM"], "mounting_min_from_leaf_top_mm": "0.00", "mounting_max_from_leaf_top_mm": "3000.00"}]}'::jsonb
+SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/handles/GLASS_45/V2'), s.id, NULL, 2,
+ '{"schema_version":1,"policy_id":"GLASS_45_HANDLES_V2","version":2,"slots":[{"opening_type":"TURN_LEFT","leaf_slot":null,"leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":-10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"TURN_RIGHT","leaf_slot":null,"leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"TILT_TURN_LEFT","leaf_slot":null,"leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":-10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"TILT_TURN_RIGHT","leaf_slot":null,"leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING_2L","leaf_slot":"L1","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":-10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING_2L","leaf_slot":"L2","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING_3L","leaf_slot":"L1","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":-10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING_3L","leaf_slot":"L2","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING_3L","leaf_slot":"L3","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING_4L","leaf_slot":"L1","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":-10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING_4L","leaf_slot":"L2","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING_4L","leaf_slot":"L3","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING_4L","leaf_slot":"L4","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING","leaf_slot":"L1","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":-10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING","leaf_slot":"L2","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING","leaf_slot":"L3","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"SLIDING","leaf_slot":"L4","leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"AWNING","leaf_slot":null,"leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"BOTTOM","horizontal_reference":"HOST_MEMBER_CENTER","horizontal_offset_mm":0.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"DOOR_ENTRY","leaf_slot":null,"leaf_handedness":"LEFT","handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":-10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00},{"opening_type":"DOOR_ENTRY","leaf_slot":null,"leaf_handedness":"RIGHT","handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00}]}'::jsonb
 FROM public.profile_systems s WHERE s.code='GLASS_45' AND s.is_global=TRUE
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.reinforcement_cut_policies (id, system_id, org_id, version, authority)
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/reinforcement-cuts/GLASS_45/V1'), s.id, NULL, 1,
- '{"schema_version": 1, "policy_id": "GLASS_45_REINFORCEMENT_CUT_V1", "version": 1, "rules": [{"role": "FRAME", "profile_angle_left": "45.0", "profile_angle_right": "45.0", "reinforcement_angle_left": "90.0", "reinforcement_angle_right": "90.0", "length_authority": "EXISTING_ENGINE", "compatible_with_existing_length": true}, {"role": "FRAME", "profile_angle_left": "45.0", "profile_angle_right": "90.0", "reinforcement_angle_left": "90.0", "reinforcement_angle_right": "90.0", "length_authority": "EXISTING_ENGINE", "compatible_with_existing_length": true}, {"role": "SASH", "profile_angle_left": "45.0", "profile_angle_right": "45.0", "reinforcement_angle_left": "90.0", "reinforcement_angle_right": "90.0", "length_authority": "EXISTING_ENGINE", "compatible_with_existing_length": true}, {"role": "MULLION_V", "profile_angle_left": "90.0", "profile_angle_right": "90.0", "reinforcement_angle_left": "90.0", "reinforcement_angle_right": "90.0", "length_authority": "EXISTING_ENGINE", "compatible_with_existing_length": true}, {"role": "MULLION_H", "profile_angle_left": "90.0", "profile_angle_right": "90.0", "reinforcement_angle_left": "90.0", "reinforcement_angle_right": "90.0", "length_authority": "EXISTING_ENGINE", "compatible_with_existing_length": true}]}'::jsonb
+ '{"schema_version": 1, "policy_id": "GLASS_45_REINFORCEMENT_CUT_V1", "version": 1, "rules": [{"role": "FRAME", "profile_angle_left":45.0, "profile_angle_right":45.0, "reinforcement_angle_left":90.0, "reinforcement_angle_right":90.0, "length_authority": "EXISTING_ENGINE", "compatible_with_existing_length": true}, {"role": "FRAME", "profile_angle_left":45.0, "profile_angle_right":90.0, "reinforcement_angle_left":90.0, "reinforcement_angle_right":90.0, "length_authority": "EXISTING_ENGINE", "compatible_with_existing_length": true}, {"role": "SASH", "profile_angle_left":45.0, "profile_angle_right":45.0, "reinforcement_angle_left":90.0, "reinforcement_angle_right":90.0, "length_authority": "EXISTING_ENGINE", "compatible_with_existing_length": true}, {"role": "MULLION_V", "profile_angle_left":90.0, "profile_angle_right":90.0, "reinforcement_angle_left":90.0, "reinforcement_angle_right":90.0, "length_authority": "EXISTING_ENGINE", "compatible_with_existing_length": true}, {"role": "MULLION_H", "profile_angle_left":90.0, "profile_angle_right":90.0, "reinforcement_angle_left":90.0, "reinforcement_angle_right":90.0, "length_authority": "EXISTING_ENGINE", "compatible_with_existing_length": true}]}'::jsonb
 FROM public.profile_systems s WHERE s.code='GLASS_45' AND s.is_global=TRUE
 ON CONFLICT (id) DO NOTHING;
 

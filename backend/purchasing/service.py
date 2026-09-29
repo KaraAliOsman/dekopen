@@ -16,8 +16,11 @@ from dekopen_engine.documentary_canonical import (
     documentary_sha256_v1,
 )
 
-from documents.repository import DocumentaryError, decoded, documentary_backend, json_text, one, rows
+from documents.renderers import _piece_labels
+from documents.repository import DocumentaryError, decoded, documentary_backend, json_text, one, rows, write
 from inventory.production_stock import coverage_for_version
+from inventory.service import stock_variant_key
+from projects import org_branding
 
 
 ORDER_TYPES = (
@@ -63,7 +66,28 @@ def _version(version_id: UUID, org_id: UUID) -> dict[str, object]:
     return version
 
 
-def _line_snapshot(row: dict[str, object]) -> dict[str, object]:
+def _trace_labels(version_id: UUID, org_id: UUID) -> dict[str, str]:
+    """Human-facing codes for trace ids (M-01 members, V-01 bays, I-01 glass) so
+    a purchaser reads where each requirement comes from instead of raw hashes.
+    Same sequential codes the workshop documents print — one identity space."""
+    row = one(
+        "SELECT snapshot_json::text AS snapshot_json FROM public.project_versions "
+        "WHERE id=%s AND org_id=%s",
+        [version_id, org_id],
+        "project_version_not_found",
+    )
+    snapshot = _object(row["snapshot_json"], "invalid_frozen_revision_snapshot")
+    merged: dict[str, str] = {}
+    for kind_map in _piece_labels(snapshot).values():
+        for key, label in kind_map.items():
+            if key is not None:
+                merged.setdefault(str(key), label)
+    return merged
+
+
+def _line_snapshot(row: dict[str, object],
+                   labels: dict[str, str] | None = None,
+                   quantity_override=None) -> dict[str, object]:
     technical = _object(row["technical_identity"], "invalid_purchase_requirement")
     specification = _object(row["specification"], "invalid_purchase_requirement")
     source_trace = _array(row["source_trace"], "invalid_purchase_requirement")
@@ -75,8 +99,11 @@ def _line_snapshot(row: dict[str, object]) -> dict[str, object]:
         raise DocumentaryError("invalid_purchase_requirement")
     if not all(isinstance(item, str) for item in source_trace):
         raise DocumentaryError("invalid_purchase_requirement")
-    quantity = Decimal(str(row["quantity"]))
-    if quantity != quantity.to_integral_value():
+    if quantity_override is not None:
+        quantity = Decimal(str(quantity_override))
+    else:
+        quantity = Decimal(str(row["quantity"]))
+    if quantity != quantity.to_integral_value() or quantity <= 0:
         raise DocumentaryError("invalid_purchase_requirement")
     return {
         "id": str(row["id"]),
@@ -102,6 +129,10 @@ def _line_snapshot(row: dict[str, object]) -> dict[str, object]:
         "quantity": int(quantity),
         "specification": specification,
         "source_trace": source_trace,
+        "source_trace_labels": [
+            labels.get(entry) if labels is not None else None
+            for entry in source_trace
+        ],
     }
 
 
@@ -111,22 +142,70 @@ def _requirements(version_id: UUID, org_id: UUID,
     parameters: list[object] = [version_id, org_id]
     if order_type is not None:
         parameters.append(order_type)
-    return rows(
+    result = rows(
         "SELECT line.id,line.requirement_key,line.project_id,line.project_version_id,"
         "line.org_id,line.order_type::text AS order_type,"
         "line.category,line.technical_identity::text,line.purchasing_sku,"
         "line.physical_stock_identity,line.unit,"
-        "line.quantity,line.specification::text,line.source_trace::text,"
-        "stock.sku AS physical_stock_sku,stock.name AS physical_stock_name "
+        "line.quantity,line.specification::text,line.source_trace::text "
         "FROM public.purchase_requirement_lines line "
-        "LEFT JOIN public.inventory_stock stock "
-        "ON stock.org_id = line.org_id "
-        "AND stock.variant_key = line.physical_stock_identity::text "
         "WHERE line.project_version_id=%s AND line.org_id=%s"
         + condition
         + " ORDER BY line.order_type,line.category,line.purchasing_sku,line.requirement_key",
         parameters,
     )
+    # Stock display identity resolves the same bucket the receiver writes
+    # (psi, else the spec hash for made-to-measure glass) — a SQL join on psi
+    # alone can never reach a spec-keyed row.
+    stock_names = {
+        (str(item["sku"]), str(item["variant_key"])): item
+        for item in rows(
+            "SELECT sku, name, variant_key FROM public.inventory_stock "
+            "WHERE org_id = %s",
+            [org_id],
+        )
+    }
+    for line in result:
+        specification = line.get("specification")
+        variant = stock_variant_key(
+            line.get("physical_stock_identity"),
+            json.loads(str(specification)) if specification else None,
+            line.get("category"),
+        )
+        item = stock_names.get((str(line["purchasing_sku"]), variant))
+        line["physical_stock_sku"] = item["sku"] if item else None
+        line["physical_stock_name"] = item["name"] if item else None
+    return result
+
+
+def _unclaimed_requirements(version_id: UUID, org_id: UUID,
+                            order_type: str) -> list[dict[str, object]]:
+    """Requirement lines not fully covered by order lines. Coverage is
+    quantity-aware: each order line covers `quantity - released_qty`, so a
+    cancellation releases the unreceived remainder (a partially-received
+    line keeps covering only what physically arrived) and the requirement
+    comes back here carrying its open quantity — never the full amount
+    again, which would re-order already-received goods."""
+    covered = {
+        str(row["requirement_line_id"]): Decimal(str(row["covered_qty"]))
+        for row in rows(
+            "SELECT requirement_line_id, SUM(quantity - released_qty) AS covered_qty "
+            "FROM public.order_requirement_lines "
+            "WHERE project_version_id=%s AND org_id=%s "
+            "GROUP BY requirement_line_id",
+            [version_id, org_id],
+        )
+    }
+    result = []
+    for item in _requirements(version_id, org_id, order_type):
+        open_qty = (
+            Decimal(str(item["quantity"]))
+            - covered.get(str(item["id"]), Decimal(0))
+        )
+        if open_qty > 0:
+            item["open_qty"] = open_qty
+            result.append(item)
+    return result
 
 
 def purchasing_state(org_id: UUID, version_id: UUID | None = None) -> dict[str, object]:
@@ -146,7 +225,10 @@ def purchasing_state(org_id: UUID, version_id: UUID | None = None) -> dict[str, 
             )
             return {"versions": _public(versions)}
         version = _version(version_id, org_id)
-        requirements = [_line_snapshot(item) for item in _requirements(version_id, org_id)]
+        labels = _trace_labels(version_id, org_id)
+        requirements = [
+            _line_snapshot(item, labels) for item in _requirements(version_id, org_id)
+        ]
         eligibilities = rows(
             "SELECT id,order_type::text,supplier_identity,supplier_name,supplier_details::text,"
             "eligible_requirement_keys::text,evidence::text,version,content_hash,created_at "
@@ -154,6 +236,12 @@ def purchasing_state(org_id: UUID, version_id: UUID | None = None) -> dict[str, 
             "ORDER BY order_type,supplier_name,supplier_identity,version",
             [version_id, org_id],
         )
+        today = datetime.now(timezone.utc).date().isoformat()
+        for eligibility in eligibilities:
+            expiry = _object(
+                eligibility["evidence"], "invalid_supplier_eligibility"
+            ).get("valid_until")
+            eligibility["expired"] = bool(expiry) and str(expiry) < today
         allocations = rows(
             "SELECT allocation.id,allocation.requirement_line_id,allocation.supplier_eligibility_id,"
             "allocation.order_type::text,allocation.allocated_at "
@@ -162,10 +250,28 @@ def purchasing_state(org_id: UUID, version_id: UUID | None = None) -> dict[str, 
             [version_id, org_id],
         )
         orders = rows(
-            "SELECT id,order_code,order_type::text,status::text,supplier_identity,supplier_name,"
-            "order_snapshot_hash,confirmed_at,sent_at FROM public.orders "
-            "WHERE project_version_id=%s AND org_id=%s ORDER BY order_type,supplier_name,id",
-            [version_id, org_id],
+            "SELECT o.id,o.order_code,o.order_type::text,o.status::text,o.supplier_identity,"
+            "o.supplier_name,o.order_snapshot_hash,o.confirmed_at,o.sent_at,o.expected_at,"
+            "o.sent_to,o.cancelled_at,o.supplier_details::text AS supplier_details,"
+            "l.line_count,l.total_qty,l.released_qty,l.lines_preview::text AS lines_preview,"
+            "r.damaged_qty,r.receipt_count "
+            "FROM public.orders o LEFT JOIN ("
+            "SELECT order_id, COUNT(*) AS line_count, SUM(quantity) AS total_qty,"
+            " SUM(COALESCE(released_qty, 0)) AS released_qty,"
+            " jsonb_agg(jsonb_build_object('sku',line_snapshot->>'purchasing_sku',"
+            " 'qty',quantity,'unit',line_snapshot->>'unit') ORDER BY id) AS lines_preview"
+            " FROM public.order_requirement_lines WHERE org_id=%s GROUP BY order_id"
+            ") l ON l.order_id=o.id "
+            "LEFT JOIN ("
+            "SELECT rc.order_id, SUM(rl.damaged_qty) AS damaged_qty,"
+            " COUNT(DISTINCT rc.id) AS receipt_count "
+            "FROM public.order_receipts rc "
+            "JOIN public.order_receipt_lines rl ON rl.receipt_id=rc.id "
+            "WHERE rc.org_id=%s GROUP BY rc.order_id"
+            ") r ON r.order_id=o.id "
+            "WHERE o.project_version_id=%s AND o.org_id=%s "
+            "ORDER BY o.order_type,o.supplier_name,o.id",
+            [org_id, org_id, version_id, org_id],
         )
         artifacts = rows(
             "SELECT id,artifact_scope,artifact_scope_id,document_type,format,bom_hash,file_sha256,"
@@ -174,9 +280,25 @@ def purchasing_state(org_id: UUID, version_id: UUID | None = None) -> dict[str, 
             [version_id, org_id],
         )
         allocated = {str(item["requirement_line_id"]) for item in allocations}
+        coverage = {
+            str(row["requirement_line_id"]): Decimal(str(row["covered_qty"]))
+            for row in rows(
+                "SELECT requirement_line_id, SUM(quantity - released_qty) AS covered_qty "
+                "FROM public.order_requirement_lines "
+                "WHERE project_version_id=%s AND org_id=%s "
+                "GROUP BY requirement_line_id",
+                [version_id, org_id],
+            )
+        }
+        for item in requirements:
+            covered_qty = coverage.get(str(item["id"]), Decimal(0))
+            open_qty = Decimal(str(item["quantity"])) - covered_qty
+            item["claimed"] = open_qty <= 0
+            item["open_qty"] = int(open_qty) if open_qty > 0 else 0
         covered_keys = {
             (str(item["order_type"]), str(key))
             for item in eligibilities
+            if not item["expired"]
             for key in _array(
                 item["eligible_requirement_keys"], "invalid_supplier_eligibility"
             )
@@ -212,7 +334,18 @@ def purchasing_state(org_id: UUID, version_id: UUID | None = None) -> dict[str, 
                 for item in eligibilities
             ],
             "allocations": _public(allocations),
-            "orders": _public(orders),
+            "orders": [
+                {
+                    **_public(item),
+                    "lines_preview": decoded(item["lines_preview"])
+                    if item.get("lines_preview")
+                    else [],
+                    "supplier_details": _object(
+                        item["supplier_details"] or {}, "invalid_order_snapshot"
+                    ),
+                }
+                for item in orders
+            ],
             "artifacts": _public(artifacts),
             "blockers": blockers,
             # §10 coverage: required vs on-hand/reserved/open-ordered vs the
@@ -226,6 +359,9 @@ def create_eligibility(
 ) -> dict[str, object]:
     if data.get("confirmed") is not True:
         raise DocumentaryError("supplier_eligibility_confirmation_required")
+    valid_until = (data.get("evidence") or {}).get("valid_until")
+    if valid_until is not None and valid_until < datetime.now(timezone.utc).date():
+        raise DocumentaryError("supplier_eligibility_expired")
     order_type = str(data["order_type"])
     keys = data["eligible_requirement_keys"]
     if (
@@ -269,6 +405,12 @@ def create_eligibility(
              data["supplier_name"], json_text(data["supplier_details"]), json_text(keys),
              json_text(data["evidence"]), data["version"], content_hash, actor_id],
         )
+        _upsert_supplier(
+            org_id=org_id, actor_id=actor_id,
+            tax_id=str(data["supplier_identity"]),
+            name=str(data["supplier_name"]),
+            details=data.get("supplier_details") or {},
+        )
         return {"id": str(eligibility["id"]), "content_hash": eligibility["content_hash"]}
 
 
@@ -284,11 +426,16 @@ def allocate_requirement(
         )
         eligibility = one(
             "SELECT id,project_id,project_version_id,org_id,order_type::text,"
-            "eligible_requirement_keys::text FROM public.supplier_eligibility_versions "
+            "eligible_requirement_keys::text,evidence::text FROM public.supplier_eligibility_versions "
             "WHERE id=%s AND org_id=%s",
             [eligibility_id, org_id],
             "supplier_eligibility_not_found",
         )
+        expiry = _object(eligibility["evidence"], "invalid_supplier_eligibility").get(
+            "valid_until"
+        )
+        if expiry and str(expiry) < datetime.now(timezone.utc).date().isoformat():
+            raise DocumentaryError("supplier_eligibility_expired")
         binding = ("project_id", "project_version_id", "org_id", "order_type")
         if any(str(requirement[key]) != str(eligibility[key]) for key in binding):
             raise DocumentaryError("supplier_eligibility_requirement_mismatch")
@@ -319,29 +466,43 @@ def confirm_order_type_batch(
         raise DocumentaryError("order_batch_confirmation_required")
     with documentary_backend():
         version = _version(version_id, org_id)
+        labels = _trace_labels(version_id, org_id)
         with connection.cursor() as cursor:
             cursor.execute(
                 "SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",
                 [f"{version_id}:{order_type}"],
             )
         existing_batch = rows(
-            "SELECT id FROM public.order_allocation_batches "
-            "WHERE project_version_id=%s AND org_id=%s AND order_type=%s",
+            "SELECT id,attempt FROM public.order_allocation_batches "
+            "WHERE project_version_id=%s AND org_id=%s AND order_type=%s "
+            "ORDER BY attempt DESC",
             [version_id, org_id, order_type],
         )
+        # Requirements already claimed by a live order line stay claimed — a
+        # re-confirm only covers lines released by a cancellation.
+        requirement_rows = _unclaimed_requirements(version_id, org_id, order_type)
+        attempt = 1
         if existing_batch:
-            existing_orders = rows(
-                "SELECT id,order_code,order_type::text,status::text,supplier_name,order_snapshot_hash "
-                "FROM public.orders WHERE allocation_batch_id=%s ORDER BY supplier_name,id",
-                [existing_batch[0]["id"]],
-            )
-            return (
-                [{key: str(value) for key, value in item.items()}
-                 for item in existing_orders],
-                False,
-            )
-        requirement_rows = _requirements(version_id, org_id, order_type)
-        if not requirement_rows:
+            # Idempotent while the batch covers the type and nothing was
+            # released. When cancelled orders released requirement lines, the
+            # buyer confirms a new attempt — a fresh batch, never a mutation
+            # of the cancelled one. The response lists every live order of the
+            # type, across attempts.
+            if not requirement_rows:
+                return (
+                    [
+                        _public(item) for item in rows(
+                            "SELECT id,order_code,order_type::text,status::text,supplier_name,order_snapshot_hash "
+                            "FROM public.orders "
+                            "WHERE project_version_id=%s AND org_id=%s AND order_type=%s "
+                            "AND status <> 'CANCELLED' ORDER BY supplier_name,id",
+                            [version_id, org_id, order_type],
+                        )
+                    ],
+                    False,
+                )
+            attempt = int(existing_batch[0]["attempt"]) + 1
+        elif not requirement_rows:
             raise DocumentaryError("order_type_has_no_requirements")
         allocations = rows(
             "SELECT allocation.id,allocation.requirement_line_id,allocation.supplier_eligibility_id,"
@@ -360,7 +521,9 @@ def confirm_order_type_batch(
         allocation_by_requirement = {
             str(item["requirement_line_id"]): item for item in allocations
         }
-        if len(allocation_by_requirement) != len(requirement_rows) or any(
+        # Allocations persist for requirements a partially-received cancel
+        # left covered — this batch only needs one per UNCLAIMED line.
+        if any(
             str(item["id"]) not in allocation_by_requirement for item in requirement_rows
         ):
             raise DocumentaryError("order_type_allocation_incomplete")
@@ -374,6 +537,10 @@ def confirm_order_type_batch(
             )
             if str(requirement["requirement_key"]) not in keys:
                 raise DocumentaryError("supplier_eligibility_requirement_mismatch")
+            evidence = _object(allocation["evidence"], "invalid_supplier_eligibility")
+            expiry = evidence.get("valid_until")
+            if expiry and str(expiry) < datetime.now(timezone.utc).date().isoformat():
+                raise DocumentaryError("supplier_eligibility_expired")
             supplier_identity = str(allocation["supplier_identity"])
             eligibility_id = str(allocation["supplier_eligibility_id"])
             prior = supplier_eligibility.get(supplier_identity)
@@ -390,16 +557,19 @@ def confirm_order_type_batch(
             "schema_version": 1,
             "project_version_id": version_id,
             "order_type": order_type,
+            "attempt": attempt,
             "allocations": allocation_preimage,
         })
         confirmed_at = datetime.now(timezone.utc)
         batch = one(
             "INSERT INTO public.order_allocation_batches("
             "project_id,project_version_id,org_id,bom_hash,snapshot_sha256,order_type,"
-            "allocation_hash,confirmed_by,confirmed_at) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+            "allocation_hash,attempt,confirmed_by,confirmed_at) "
+            "VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
             "RETURNING id",
             [version["project_id"], version_id, org_id, version["bom_hash"],
-             version["snapshot_sha256"], order_type, allocation_hash, actor_id, confirmed_at],
+             version["snapshot_sha256"], order_type, allocation_hash, attempt,
+             actor_id, confirmed_at],
         )
         batch_id = UUID(str(batch["id"]))
         projection = one(
@@ -412,7 +582,10 @@ def confirm_order_type_batch(
         for eligibility_id in sorted(grouped):
             values = grouped[eligibility_id]
             eligibility = values[0][1]
-            line_snapshots = [_line_snapshot(item) for item, _ in values]
+            line_snapshots = [
+                _line_snapshot(item, labels, quantity_override=item.get("open_qty"))
+                for item, _ in values
+            ]
             order_id = uuid5(
                 NAMESPACE_URL,
                 f"https://dekopen.local/order/{batch_id}/{eligibility_id}",
@@ -466,6 +639,9 @@ def confirm_order_type_batch(
                 "allocation_identity": allocation_identity,
                 "supplier_eligibility": eligibility_snapshot,
                 "lines": line_snapshots,
+                # Issuer identity for the letterhead — sealed with the order so
+                # re-renders keep the same branding.
+                "organization": org_branding.branding_for_snapshot(org_id=org_id),
             }
             order_snapshot_hash = documentary_sha256_v1(snapshot)
             one(
@@ -506,7 +682,8 @@ def confirm_order_type_batch(
 
 
 def send_order(
-    *, org_id: UUID, actor_id: UUID, order_id: UUID, confirmed: bool
+    *, org_id: UUID, actor_id: UUID, order_id: UUID, confirmed: bool,
+    expected_at=None, sent_to=None,
 ) -> dict[str, object]:
     if not confirmed:
         raise DocumentaryError("order_send_confirmation_required")
@@ -524,10 +701,171 @@ def send_order(
         if order["status"] != "DRAFT":
             raise DocumentaryError("order_state_invalid")
         sent_at = datetime.now(timezone.utc)
+        if sent_to is not None:
+            sent_to = str(sent_to).strip() or None
         updated = one(
-            "UPDATE public.orders SET status='SENT',sent_by=%s,sent_at=%s,updated_at=%s "
+            "UPDATE public.orders SET status='SENT',sent_by=%s,sent_at=%s,"
+            "expected_at=%s,sent_to=%s,updated_at=%s "
             "WHERE id=%s AND org_id=%s RETURNING id,order_code,order_type::text,status::text,"
-            "supplier_name,order_snapshot_hash",
-            [actor_id, sent_at, sent_at, order_id, org_id],
+            "supplier_name,order_snapshot_hash,expected_at,sent_to",
+            [actor_id, sent_at, expected_at, sent_to, sent_at, order_id, org_id],
         )
-        return {key: str(value) for key, value in updated.items()}
+        return _public(updated)
+
+
+def cancel_order(
+    *, org_id: UUID, actor_id: UUID, order_id: UUID, confirmed: bool
+) -> dict[str, object]:
+    """Cancel an order. Cancellation is a human, consequential decision —
+    it always requires the explicit attestation. For DRAFT/SENT the whole
+    order releases; for PARTIALLY_RECEIVED the received (usable) quantities
+    remain covered by the received goods and only the unreceived remainder
+    returns to open demand. FULFILLED orders can never be cancelled — every
+    line is already evidence of physical events."""
+    if not confirmed:
+        raise DocumentaryError("order_cancel_confirmation_required")
+    with documentary_backend():
+        order = one(
+            "SELECT id,order_code,order_type::text,status::text,supplier_name,"
+            "order_snapshot_hash,cancelled_by,cancelled_at,expected_at "
+            "FROM public.orders WHERE id=%s AND org_id=%s FOR UPDATE",
+            [order_id, org_id],
+            "order_not_found",
+        )
+        if order["order_type"] not in ORDER_TYPES:
+            raise DocumentaryError("supplier_order_type_required")
+        if order["status"] == "CANCELLED":
+            return _public(order)
+        if order["status"] not in ("DRAFT", "SENT", "PARTIALLY_RECEIVED"):
+            raise DocumentaryError("order_state_invalid")
+        cancelled_at = datetime.now(timezone.utc)
+        updated = one(
+            "UPDATE public.orders SET status='CANCELLED',cancelled_by=%s,"
+            "cancelled_at=%s,updated_at=%s "
+            "WHERE id=%s AND org_id=%s RETURNING id,order_code,order_type::text,"
+            "status::text,supplier_name,order_snapshot_hash,cancelled_by,"
+            "cancelled_at,expected_at",
+            [actor_id, cancelled_at, cancelled_at, order_id, org_id],
+        )
+        # Release the line claims so the same requirements can be ordered
+        # again. The release is quantity-aware: each line releases only what
+        # was never received as usable goods (received - damaged keeps
+        # covering the requirement — that material physically arrived and is
+        # evidence, never re-ordered). The cancelled order's rows remain as
+        # evidence, stamped released_at.
+        write(
+            "UPDATE public.order_requirement_lines l SET released_at=%s,"
+            " released_qty = GREATEST(0, l.quantity - COALESCE(("
+            " SELECT SUM(g.received_qty - g.damaged_qty)"
+            " FROM public.order_receipt_lines g WHERE g.order_line_id = l.id"
+            " ),0)) "
+            "WHERE l.order_id=%s AND l.org_id=%s AND l.released_at IS NULL",
+            [cancelled_at, order_id, org_id],
+        )
+        return _public(updated)
+
+
+def orders_index(org_id: UUID, status: str | None = None) -> dict[str, object]:
+    """Org-wide purchase-order index — the purchaser's day view: every order
+    with its project, revision, expected date, and how much is still to arrive."""
+    params: list[object] = [org_id]
+    status_filter = ""
+    if status:
+        status_filter = " AND o.status=%s"
+        params.append(status)
+    with documentary_backend():
+        orders = rows(
+            "SELECT o.id,o.order_code,o.order_type::text,o.status::text,o.supplier_identity,"
+            "o.supplier_name,o.expected_at,o.sent_at,o.sent_to,o.created_at,"
+            "v.revision_code,v.id AS project_version_id,"
+            "p.id AS project_id,p.code AS project_code,"
+            "COALESCE(l.line_count,0) AS line_count,l.total_qty,l.released_qty,"
+            "COALESCE(r.good_qty,0) AS good_qty,COALESCE(r.damaged_qty,0) AS damaged_qty,"
+            "COALESCE(r.receipt_count,0) AS receipt_count "
+            "FROM public.orders o "
+            "LEFT JOIN public.project_versions v "
+            "ON v.id=o.project_version_id AND v.org_id=o.org_id "
+            "LEFT JOIN public.projects p ON p.id=o.project_id AND p.org_id=o.org_id "
+            "LEFT JOIN ("
+            "SELECT order_id, COUNT(*) AS line_count, SUM(quantity) AS total_qty,"
+            " SUM(COALESCE(released_qty, 0)) AS released_qty "
+            "FROM public.order_requirement_lines WHERE org_id=%s GROUP BY order_id"
+            ") l ON l.order_id=o.id "
+            "LEFT JOIN ("
+            "SELECT rc.order_id,"
+            " SUM(rl.received_qty - rl.damaged_qty) AS good_qty,"
+            " SUM(rl.damaged_qty) AS damaged_qty,"
+            " COUNT(DISTINCT rc.id) AS receipt_count "
+            "FROM public.order_receipts rc "
+            "JOIN public.order_receipt_lines rl ON rl.receipt_id=rc.id "
+            "WHERE rc.org_id=%s GROUP BY rc.order_id"
+            ") r ON r.order_id=o.id "
+            # Purchasing index lists supplier purchase orders only — WORKSHOP_OT
+            # rows are production work orders sharing the orders table.
+            "WHERE o.org_id=%s AND o.order_type<>'WORKSHOP_OT'" + status_filter + " "
+            "ORDER BY CASE WHEN o.expected_at IS NULL THEN 1 ELSE 0 END,"
+            "o.expected_at,o.created_at DESC,o.id",
+            [org_id, org_id] + params,
+        )
+        result = []
+        for item in orders:
+            item = dict(item)
+            total = Decimal(str(item.get("total_qty") or 0))
+            good = Decimal(str(item.get("good_qty") or 0))
+            item["outstanding_qty"] = total - good
+            result.append(_public(item))
+        return {"orders": result}
+
+
+
+def _upsert_supplier(
+    *, org_id: UUID, actor_id: UUID, tax_id: str, name: str, details: object
+) -> dict[str, object]:
+    tax_id = tax_id.strip()
+    name = name.strip()
+    if not tax_id or not name:
+        raise DocumentaryError("invalid_supplier")
+    if not isinstance(details, dict):
+        raise DocumentaryError("invalid_supplier")
+    row = one(
+        "INSERT INTO public.suppliers(org_id,tax_id,name,details,created_by) "
+        "VALUES(%s,%s,%s,%s::jsonb,%s) "
+        "ON CONFLICT(org_id,tax_id) DO UPDATE SET "
+        "name=EXCLUDED.name,details=EXCLUDED.details,updated_at=now() "
+        "RETURNING id,tax_id,name,details::text AS details,updated_at",
+        [org_id, tax_id, name, json_text(details), actor_id],
+    )
+    return {
+        "id": str(row["id"]),
+        "tax_id": str(row["tax_id"]),
+        "name": str(row["name"]),
+        "details": _object(row["details"], "invalid_supplier"),
+        "updated_at": str(row["updated_at"]),
+    }
+
+
+def create_supplier(*, org_id: UUID, actor_id: UUID, data: dict[str, object]) -> dict[str, object]:
+    if data.get("confirmed") is not True:
+        raise DocumentaryError("supplier_confirmation_required")
+    with documentary_backend():
+        return _upsert_supplier(
+            org_id=org_id, actor_id=actor_id,
+            tax_id=str(data.get("tax_id") or ""),
+            name=str(data.get("name") or ""),
+            details=data.get("details") or {},
+        )
+
+
+def suppliers_index(org_id: UUID) -> dict[str, object]:
+    with documentary_backend():
+        entries = rows(
+            "SELECT id,tax_id,name,details::text AS details,updated_at "
+            "FROM public.suppliers WHERE org_id=%s ORDER BY name,tax_id",
+            [org_id],
+        )
+        return {
+            "suppliers": [
+                {**_public(item), "details": _object(item["details"], "invalid_supplier")}
+                for item in entries
+            ]
+        }

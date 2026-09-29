@@ -108,8 +108,8 @@ function latestMagicLink(
 async function requestMagicLink(page: Page, email: string): Promise<void> {
   await page.goto("/login");
   await page.getByLabel("Correo").fill(email);
-  await page.getByRole("button", { name: "Enviar Magic Link" }).click();
-  await expect(page.getByRole("status")).toContainText("Revisa el buzón local");
+  await page.getByRole("button", { name: "Enviar enlace de acceso" }).click();
+  await expect(page.getByRole("status")).toContainText("Revisa tu correo para continuar");
 }
 
 async function accessToken(page: Page): Promise<string> {
@@ -217,8 +217,13 @@ test("real Magic Link reaches Mailpit and authenticates Django /auth/me", async 
   await assertRealIdentity(page, request, fixture, "aal1");
 
   const navigation = page.getByRole("navigation", { name: "Navegación principal" });
+  // The rail mirrors the backend role sets: an ESTIMATOR sees the commercial
+  // surfaces but never Catálogo (OWNER/WORKSHOP_MANAGER) nor Administración.
   await expect(navigation.getByRole("link", { name: "Catálogo", exact: true })).toHaveCount(0);
-  for (const route of ["Proyectos", "Administración", "Panel"]) {
+  await expect(navigation.getByRole("link", { name: "Administración", exact: true })).toHaveCount(
+    0,
+  );
+  for (const route of ["Proyectos", "Clientes", "Panel"]) {
     await navigation.getByRole("link", { name: route, exact: true }).click();
     await expect(page.getByTestId("app-shell")).toBeVisible();
   }
@@ -284,12 +289,12 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   const lists = await request.get(`${djangoUrl}/api/v1/pricing/admin/cost-lists/`, { headers });
   const listId = (await lists.json()).items[0].id as string;
   for (const [sku, unit] of [
-    ["DEMO-BAR-MARCO", "BAR"],
-    ["DEMO-BAR-JQ-24", "BAR"],
-    ["DEMO-BAR-POSTE-V", "BAR"],
-    ["DEMO-STEEL-BAR-MARCO", "BAR"],
-    ["DEMO-STEEL-BAR-POSTE-V", "BAR"],
-    ["GLASS-BASE", "M2"],
+    ["COMPRA-MARCO", "BAR"],
+    ["COMPRA-JQ-24", "BAR"],
+    ["COMPRA-POSTE-V", "BAR"],
+    ["COMPRA-ACERO-MARCO", "BAR"],
+    ["COMPRA-ACERO-POSTE-V", "BAR"],
+    ["VIDRIO-BASE", "M2"],
   ]) {
     await api("admin/cost-items/", {
       values: { cost_list_id: listId, sku, unit, item_type: "PROFILE", unit_cost: "100" },
@@ -329,12 +334,16 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   // Canvas-first editor: the single module is already selected on the drawing;
   // glazing choices live in its contextual inspector, not a separate form.
   await page.getByRole("combobox", { name: "Espesor de vidrio", exact: true }).selectOption("4.00");
-  await page.getByRole("combobox", { name: "Vidrio", exact: true }).selectOption("GLASS-BASE");
+  await page.getByRole("combobox", { name: "Vidrio", exact: true }).selectOption("VIDRIO-BASE");
   await expect(page.getByRole("button", { name: "Guardar", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "Guardar", exact: true }).click();
   await expect(page.getByText("Guardado", { exact: true })).toBeVisible();
-  await page.getByRole("link", { name: "Volver al proyecto", exact: true }).click();
-  await page.getByRole("link", { name: "Calcular precio", exact: true }).click();
+  await page.getByRole("link", { name: /Volver al proyecto/ }).click();
+  // React Query may serve the pre-save project from its fresh cache — the page
+  // would still show "Añadir vano" instead of the quote next-action. Reload to
+  // force the backend read that reflects the position just saved.
+  await page.reload();
+  await page.getByRole("link", { name: "Cotizar proyecto", exact: true }).click();
   await expect(page.getByLabel("Proyecto", { exact: true })).toHaveCount(0);
   await page.getByLabel("Fecha efectiva", { exact: true }).fill("2026-09-10");
   await page.getByLabel("Motivo del cambio", { exact: true }).fill("Apply browser quote");
@@ -418,7 +427,7 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
       response.request().method() === "POST" &&
       new URL(response.url()).pathname === `/api/v1/projects/${draft.id}/successor/`,
   );
-  await page.getByRole("button", { name: "Editar cotización", exact: true }).click();
+  await page.getByRole("button", { name: "Crear nueva revisión", exact: true }).click();
   // §F: in-app ConfirmDialog replaced window.confirm — the successor POST
   // only fires after the product-surface confirmation.
   const successorDialog = page.getByRole("dialog");
@@ -430,15 +439,19 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   // The desk grid is select-then-act: pick the vano row so the side pane
   // offers Abrir diseño.
   await page
-    .locator(".position-grid [role='listitem']")
+    .locator(".position-grid [role='option']")
     .filter({ hasText: "Fijo comercial" })
     .click();
   await page.getByRole("link", { name: "Abrir diseño", exact: true }).click();
   await page.getByLabel("Cantidad", { exact: true }).fill("3");
   await page.getByRole("button", { name: "Guardar", exact: true }).click();
   await expect(page.getByText("Guardado", { exact: true })).toBeVisible();
-  await page.getByRole("link", { name: "Volver al proyecto", exact: true }).click();
-  await page.getByRole("link", { name: "Calcular precio", exact: true }).click();
+  await page.getByRole("link", { name: /Volver al proyecto/ }).click();
+  // React Query may serve the pre-save project from its fresh cache — the page
+  // would still show "Añadir vano" instead of the quote next-action. Reload to
+  // force the backend read that reflects the position just saved.
+  await page.reload();
+  await page.getByRole("link", { name: "Cotizar proyecto", exact: true }).click();
   await page.getByLabel("Fecha efectiva", { exact: true }).fill("2026-09-19");
   await page.getByLabel("Motivo del cambio", { exact: true }).fill("Apply browser REV-B quote");
   await page.getByRole("button", { name: "Calcular y revisar", exact: true }).click();
@@ -519,7 +532,7 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
     label: "Sistema Demo 60mm PVC — referencia sintética · Catálogo de demostración",
   });
   await page.getByRole("combobox", { name: "Espesor de vidrio", exact: true }).selectOption("4.00");
-  await page.getByRole("combobox", { name: "Vidrio", exact: true }).selectOption("GLASS-BASE");
+  await page.getByRole("combobox", { name: "Vidrio", exact: true }).selectOption("VIDRIO-BASE");
   const dividedCalculation = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
@@ -535,12 +548,12 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   await page.getByRole("button", { name: "Guardar", exact: true }).click();
   const compositePosition = await (await compositeSave).json();
   expect(compositePosition.typology).toBe("COMPOSITE");
-  await page.getByRole("link", { name: "Volver al proyecto", exact: true }).click();
-  await page.getByRole("link", { name: "Volver al proyecto", exact: true }).click();
+  await page.getByRole("link", { name: /Volver al proyecto/ }).click();
+  await page.getByRole("link", { name: /Volver al proyecto/ }).click();
   await page.reload();
-  await page.getByRole("link", { name: /P-[A-Z0-9]+ · Composite browser gate/ }).click();
+  await page.getByRole("link", { name: "Composite browser gate", exact: true }).click();
   await page
-    .locator(".position-grid [role='listitem']")
+    .locator(".position-grid [role='option']")
     .filter({ hasText: "Fachada compuesta" })
     .click();
   await page.getByRole("link", { name: "Abrir diseño", exact: true }).click();
@@ -549,8 +562,12 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   // draws a real mullion member between the two glass bays.
   await expect(page.locator(".canvas-sheet .member-mullion")).toHaveCount(1);
   await expect(page.locator(".canvas-sheet .module-glass")).toHaveCount(2);
-  await page.getByRole("link", { name: "Volver al proyecto", exact: true }).click();
-  await page.getByRole("link", { name: "Calcular precio", exact: true }).click();
+  await page.getByRole("link", { name: /Volver al proyecto/ }).click();
+  // React Query may serve the pre-save project from its fresh cache — the page
+  // would still show "Añadir vano" instead of the quote next-action. Reload to
+  // force the backend read that reflects the position just saved.
+  await page.reload();
+  await page.getByRole("link", { name: "Cotizar proyecto", exact: true }).click();
   await page.getByLabel("Fecha efectiva", { exact: true }).fill("2026-09-19");
   await page.getByLabel("Motivo del cambio", { exact: true }).fill("Composite browser price");
   const compositePreview = page.waitForResponse(
@@ -693,7 +710,7 @@ for (const tier of ["TRIAL", "STARTER"] as const) {
     expect(project.status(), await project.text()).toBe(201);
     await page.goto(`/projects/${(await project.json()).id}`);
     await expect(
-      page.getByRole("heading", { name: / · SHOT-11 manual product$/, level: 1 }),
+      page.getByRole("heading", { name: "SHOT-11 manual product", exact: true, level: 1 }),
     ).toBeVisible();
   });
 }

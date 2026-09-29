@@ -1,0 +1,43 @@
+{
+  "counts_by_kind": {
+    "HANDLE_PREP": 1
+  },
+  "files": {
+    "operations.csv": {
+      "bytes": 512,
+      "sha256": "72dfc36d87dceecff681b629b9df089e9c9dbf94170128966f478752e1809f25"
+    },
+    "operations.json": {
+      "bytes": 11062,
+      "sha256": "f1e61785cf15291d5323e835590f11d91c35deb8d95f30761239bcd51f8695ff"
+    }
+  },
+  "fingerprint": "914a8a49f0ac46ec9a815b2088ca26c3ba2cf3d04bff38937daa903f05e9e32b",
+  "generated_at": "2026-09-28T22:00:39.434025+00:00",
+  "generated_by": "16054be7-737f-4440-a9c5-fa902bf3f3e2",
+  "identity": {
+    "machine_id": "CNC-01",
+    "machine_name": "Centro mecanizado demo",
+    "member_id": "ebaecccbed03cc559d751c8a3cf8bc916692815f2eca374c6b6e2a40013947d2",
+    "member_label": "P03-U01-M06",
+    "order_code": "OT-P-000006-REV-A-03",
+    "plan_seed": "8a2ef53ab198920fa2997ad3e9dc51f6f99d1af6cdc8085e58ac6a900d5e6478",
+    "position_id": "81a8ff7a-7a96-4afa-b81a-b8092b6075b7",
+    "postprocessor_id": "neutral-ops-v1",
+    "postprocessor_version": "1.0.0",
+    "project_code": "P-000006",
+    "revision_code": "REV-A"
+  },
+  "input_fingerprint": "22e093b6cfbc89fe32d4b20658b5821d30e6f83a5d1572c8327e7c7682f1d338+c0240c461aa1e3f958c13d8b904cd5bb88a50122b3ee4255bfcd62f34ddb0515",
+  "kind": "cnc_program",
+  "machine": {
+    "code": "CNC-01",
+    "id": "7dc69b60-2b80-4f71-8fb4-a98ae39af529",
+    "postprocessor_id": "neutral-ops-v1",
+    "postprocessor_version": "1.0.0"
+  },
+  "operation_count": 1,
+  "program_no": "OT-P-000006-REV-A-03-P03U01M06-CNC-01-01",
+  "schema": "dekopen_export_manifest_v1",
+  "verdict": "WARN"
+}

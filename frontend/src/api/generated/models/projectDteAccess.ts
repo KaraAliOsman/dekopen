@@ -15,5 +15,7 @@ export interface ProjectDteAccess {
   issued_at: string;
   envio?: ProjectDteEnvio | null;
   signed_url: string;
+  /** @nullable */
+  tributario_signed_url: string | null;
   expires_in: number;
 }

@@ -39,7 +39,10 @@ def verify(container: str) -> None:
             if path.name >= migration_path.name:
                 break
             sql(database, path.read_text(encoding="utf-8"))
-        sql(database, (ROOT / "supabase/seed.sql").read_text(encoding="utf-8"))
+        # No seed.sql replay: the demo catalog already arrives via its own
+        # migrations above, and seed.sql tracks the current schema — piping it
+        # onto this historical schema breaks whenever the seed gains a newer
+        # column (exactly the drift this drill exists to catch).
         sql(database, """
           INSERT INTO public.tenancy_organizations(id,name,tax_id)
             VALUES('88880000-0000-4000-8000-000000000001','Populated upgrade','SHOT08-UPGRADE');

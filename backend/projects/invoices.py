@@ -26,7 +26,7 @@ from documents.repository import documentary_backend
 from documents.renderers import render_project_invoice
 from documents.storage import SupabaseDocumentStorage
 from pricing.repository import one, rows
-from projects import sii, sii_envio
+from projects import org_branding, sii, sii_envio
 
 logger = logging.getLogger(__name__)
 
@@ -154,6 +154,7 @@ def issue_invoice(*, org_id: UUID, project: dict, actor_id: UUID) -> dict:
             sealed_project = deal["project"]
             payload = {
                 "invoice_code": invoice_code,
+                "organization": org_branding.branding_for_snapshot(org_id=org_id),
                 "issued_at": timezone.now().isoformat(),
                 "revision_code": deal["revision_code"],
                 "project": {
@@ -180,6 +181,11 @@ def issue_invoice(*, org_id: UUID, project: dict, actor_id: UUID) -> dict:
                         if position.get("height_mm") is not None
                         else None,
                         "location_tag": position.get("location_tag"),
+                        # Frozen line net so the DTE can itemize per position
+                        # (F24) — None for snapshots that predate the column.
+                        "price_net": str(position.get("price_net"))
+                        if position.get("price_net") is not None
+                        else None,
                     }
                     for position in deal["positions"]
                 ],
@@ -282,13 +288,25 @@ def list_invoices(*, org_id: UUID, project_id: UUID) -> list[dict]:
         dtes = sii.dtes_by_invoice(org_id=org_id, project_id=project_id)
         nc_dtes = sii.dtes_by_credit_note(org_id=org_id, project_id=project_id)
         envios = sii_envio.envios_by_invoice(org_id=org_id, project_id=project_id)
+        nc_envios = sii_envio.envios_by_credit_note(
+            org_id=org_id, project_id=project_id
+        )
         return [
             _invoice_public(
                 row,
                 _credit_note_public(
                     credit_notes[str(row["id"])],
                     row,
-                    nc_dtes.get(str(credit_notes[str(row["id"])]["id"])),
+                    (
+                        {
+                            **nc_dtes[str(credit_notes[str(row["id"])]["id"])],
+                            "envio": nc_envios.get(
+                                str(credit_notes[str(row["id"])]["id"])
+                            ),
+                        }
+                        if str(credit_notes[str(row["id"])]["id"]) in nc_dtes
+                        else None
+                    ),
                 )
                 if str(row["id"]) in credit_notes
                 else None,
@@ -321,8 +339,24 @@ def invoice_access(*, org_id: UUID, project_id: UUID, invoice_id: UUID) -> dict:
             [str(org_id), str(invoice_id)],
         )
         nc_dtes = sii.dtes_by_credit_note(org_id=org_id, project_id=project_id)
-        signed_url = SupabaseDocumentStorage().signed_url(
+        storage = SupabaseDocumentStorage()
+        signed_url = storage.signed_url(
             str(invoice["storage_object_key"]), expires_in=SIGNED_URL_TTL_SECONDS
+        )
+        # The customer-facing PDF carries the DTE's fiscal identity when the
+        # factura is stamped; an internal copy stays byte-exact sealed.
+        repr_row = rows(
+            "SELECT repr_storage_object_key FROM public.project_dtes "
+            "WHERE org_id=%s AND invoice_id=%s AND credit_note_id IS NULL",
+            [str(org_id), str(invoice_id)],
+        )
+        tributario_signed_url = (
+            storage.signed_url(
+                str(repr_row[0].get("repr_storage_object_key")),
+                expires_in=SIGNED_URL_TTL_SECONDS,
+            )
+            if repr_row and repr_row[0].get("repr_storage_object_key")
+            else None
         )
     return {
         **_invoice_public(
@@ -336,5 +370,6 @@ def invoice_access(*, org_id: UUID, project_id: UUID, invoice_id: UUID) -> dict:
             else None,
         ),
         "signed_url": signed_url,
+        "tributario_signed_url": tributario_signed_url,
         "expires_in": SIGNED_URL_TTL_SECONDS,
     }

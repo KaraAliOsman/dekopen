@@ -74,7 +74,9 @@ export function calculationKey(
 }
 
 async function calculate(inputs: CanvasDesignInputs): Promise<EngineCalculateResponse> {
-  const response = await engineCalculate(requestFromInputs(inputs));
+  const response = await engineCalculate(requestFromInputs(inputs), {
+    signal: AbortSignal.timeout(30_000),
+  });
   if (response.status !== 200) throw new Error("Generated client returned an unexpected status");
   return response.data;
 }
@@ -94,13 +96,14 @@ export function useEngineCalculation(organizationId: string): EngineCalculationC
   const systemsQuery = useQuery({
     queryKey: ["engine-systems", organizationId],
     queryFn: async () => {
-      const response = await engineSystems();
+      const response = await engineSystems({ signal: AbortSignal.timeout(15_000) });
       if (response.status !== 200) {
         throw new Error("Generated client returned an unexpected status");
       }
       return response.data.systems;
     },
-    retry: false,
+    retry: 2,
+    retryDelay: (attempt) => 500 * (attempt + 1),
     staleTime: Number.POSITIVE_INFINITY,
   });
 
@@ -120,7 +123,8 @@ export function useEngineCalculation(organizationId: string): EngineCalculationC
     queryKey: calculationKey(organizationId, inputs),
     queryFn: () => calculate(inputs),
     enabled: demoSystem !== null && inputs.systemId === demoSystem.id,
-    retry: false,
+    retry: 2,
+    retryDelay: (attempt) => 500 * (attempt + 1),
     staleTime: Number.POSITIVE_INFINITY,
   });
 

@@ -38,6 +38,31 @@ def _text(value: object) -> str:
     raise DocumentaryError("xlsx_value_not_exact_text")
 
 
+def _trace_labels(line: dict[str, object]) -> str:
+    labels = [
+        _text(item)
+        for item in _array(
+            line.get("source_trace_labels") or line.get("source_trace"),
+            "invalid_order_line",
+        )
+        if item
+    ]
+    return ", ".join(sorted(labels))
+
+
+def _spec_text(value: object) -> str:
+    """Spec detail cell — nested structures flatten to 'k=v' pairs so a
+    structured spec never crashes the sheet."""
+    if isinstance(value, dict):
+        return "; ".join(
+            f"{key}={_spec_text(val)}"
+            for key, val in sorted(value.items(), key=lambda pair: str(pair[0]))
+        )
+    if isinstance(value, list):
+        return ", ".join(_spec_text(item) for item in value)
+    return _text(value)
+
+
 def _normalize_archive(content: bytes) -> bytes:
     source = BytesIO(content)
     target = BytesIO()
@@ -86,7 +111,12 @@ def render_order_xlsx(document_type: str, snapshot: dict[str, object]) -> tuple[
         raise DocumentaryError("document_scope_mismatch")
     if document_type == "DOC-04" and order.get("order_type") != "SUPPLIER_PROFILE_PO":
         raise DocumentaryError("document_scope_mismatch")
-    if document_type not in ("DOC-02", "DOC-04"):
+    if document_type == "DOC-08" and order.get("order_type") not in (
+        "SUPPLIER_HARDWARE_PO",
+        "SUPPLIER_PANEL_PO",
+    ):
+        raise DocumentaryError("document_scope_mismatch")
+    if document_type not in ("DOC-02", "DOC-04", "DOC-08"):
         raise DocumentaryError("xlsx_document_type_invalid")
 
     if document_type == "DOC-02":
@@ -98,7 +128,7 @@ def render_order_xlsx(document_type: str, snapshot: dict[str, object]) -> tuple[
         ]
         data = []
         total_area = Decimal("0")
-        for line in lines:
+        for index, line in enumerate(lines, start=1):
             specification = _object(line.get("specification"), "invalid_order_line")
             polishing = _object(specification.get("polishing"), "invalid_order_line")
             quantity = int(line["quantity"])
@@ -109,7 +139,7 @@ def render_order_xlsx(document_type: str, snapshot: dict[str, object]) -> tuple[
             )
             total_area += area
             data.append([
-                _text(line.get("requirement_key")),
+                f"L{index:02d}",
                 ", ".join(_text(item) for item in _array(
                     line.get("technical_skus"), "invalid_order_line"
                 )),
@@ -120,43 +150,67 @@ def render_order_xlsx(document_type: str, snapshot: dict[str, object]) -> tuple[
                 quantity,
                 _text(line.get("unit")),
                 "/".join(
-                    edge.upper() for edge in ("top", "right", "bottom", "left")
+                    edge_es
+                    for edge, edge_es in (
+                        ("top", "SUP"), ("right", "DER"),
+                        ("bottom", "INF"), ("left", "IZQ"),
+                    )
                     if polishing.get(edge) is True
                 ) or "SIN PULIDO",
                 _text(specification.get("location_tag")),
-                ", ".join(_text(item) for item in _array(
-                    line.get("source_trace"), "invalid_order_line"
-                )),
+                _trace_labels(line),
                 format(area.normalize(), "f"),
             ])
         data.append([
             "TOTAL", "—", "—", "—", "—", "—", "—", "—", "—", "—", "—",
             format(total_area.normalize(), "f"),
         ])
-    else:
-        sheet_name = "Pedido de perfiles"
+    elif document_type == "DOC-08":
+        sheet_name = "Orden de compra"
         headers = [
-            "Requisito", "Categoría", "SKU taller", "SKU compra", "Stock físico",
-            "Largo barra mm", "Cantidad", "Unidad", "Perfil de corte", "Trazabilidad",
+            "Requisito", "Categoría", "SKU taller", "SKU compra", "Cantidad",
+            "Unidad", "Detalle", "Trazabilidad",
         ]
         data = []
-        for line in lines:
+        for index, line in enumerate(lines, start=1):
             specification = _object(line.get("specification"), "invalid_order_line")
+            detail = "; ".join(
+                f"{key}={_spec_text(value)}"
+                for key, value in sorted(specification.items())
+            )
             data.append([
-                _text(line.get("requirement_key")),
+                f"L{index:02d}",
                 _text(line.get("category")),
                 ", ".join(_text(item) for item in _array(
                     line.get("technical_skus"), "invalid_order_line"
                 )),
                 _text(line.get("purchasing_sku")),
-                _text(line.get("physical_stock_identity")),
+                int(line["quantity"]),
+                _text(line.get("unit")),
+                detail,
+                _trace_labels(line),
+            ])
+    else:
+        sheet_name = "Pedido de perfiles"
+        headers = [
+            "Requisito", "Categoría", "SKU taller", "SKU compra", "Stock físico",
+            "Largo barra mm", "Cantidad", "Unidad", "Trazabilidad",
+        ]
+        data = []
+        for index, line in enumerate(lines, start=1):
+            specification = _object(line.get("specification"), "invalid_order_line")
+            data.append([
+                f"L{index:02d}",
+                _text(line.get("category")),
+                ", ".join(_text(item) for item in _array(
+                    line.get("technical_skus"), "invalid_order_line"
+                )),
+                _text(line.get("purchasing_sku")),
+                _text(line.get("physical_stock_sku")),
                 _text(specification.get("stock_length_mm")),
                 int(line["quantity"]),
                 _text(line.get("unit")),
-                _text(specification.get("cutting_profile_id")),
-                ", ".join(_text(item) for item in _array(
-                    line.get("source_trace"), "invalid_order_line"
-                )),
+                _trace_labels(line),
             ])
 
     metadata = [
@@ -164,8 +218,6 @@ def render_order_xlsx(document_type: str, snapshot: dict[str, object]) -> tuple[
         ["Orden", _text(order.get("order_code"))],
         ["Proveedor", _text(order.get("supplier_name"))],
         ["Revisión", _text(revision.get("revision_code"))],
-        ["BOM hash", _text(revision.get("bom_hash"))],
-        ["Snapshot hash", _text(revision.get("snapshot_sha256"))],
     ]
     expected: list[list[str | int]] = [*metadata, headers, *data]
     workbook = Workbook()
@@ -181,10 +233,13 @@ def render_order_xlsx(document_type: str, snapshot: dict[str, object]) -> tuple[
                 # begins with =, +, - or @; openpyxl would otherwise store a
                 # leading '=' as an executable formula.
                 cell.data_type = "s"
-    sheet.freeze_panes = "A8"
+    header_row = len(metadata) + 1
+    sheet.freeze_panes = f"A{header_row + 1}"
     last_data_row = len(expected) - (1 if document_type == "DOC-02" else 0)
-    sheet.auto_filter.ref = f"A7:{chr(64 + len(headers))}{last_data_row}"
-    for cell in sheet[7]:
+    sheet.auto_filter.ref = (
+        f"A{header_row}:{chr(64 + len(headers))}{last_data_row}"
+    )
+    for cell in sheet[header_row]:
         font = copy(cell.font)
         font.bold = True
         cell.font = font

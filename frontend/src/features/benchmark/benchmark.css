@@ -1,0 +1,206 @@
+/* §05-H visual benchmark wall — QA surface, not a product page. */
+
+.benchmark-page {
+  min-height: 100vh;
+  padding: var(--space-6, 1.5rem);
+  background: var(--theme-bg-canvas);
+  color: var(--theme-text-primary);
+}
+
+.benchmark-header {
+  align-items: flex-end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
+
+.benchmark-header h1 {
+  font-size: var(--font-size-xl, 1.35rem);
+  margin: 0;
+}
+
+.benchmark-subtitle {
+  color: var(--theme-text-secondary);
+  margin: 0.25rem 0 0;
+  max-width: 60ch;
+}
+
+.benchmark-materials {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.benchmark-chip {
+  background: var(--theme-surface-raised);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-full, 999px);
+  color: var(--theme-text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.35rem 0.9rem;
+}
+
+.benchmark-chip:hover {
+  background: var(--theme-surface-hover);
+}
+
+.benchmark-chip.is-active,
+.benchmark-chip[aria-selected="true"] {
+  background: var(--theme-accent-soft);
+  border-color: var(--theme-accent);
+  color: var(--theme-accent-ink);
+}
+
+.benchmark-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.benchmark-fixture {
+  background: var(--theme-surface-raised);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-md, 0.65rem);
+  padding: 0.9rem 1rem 1rem;
+}
+
+.benchmark-fixture__name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0 0 0.75rem;
+}
+
+.benchmark-captures {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.benchmark-capture {
+  margin: 0;
+  min-width: 0;
+}
+
+.benchmark-capture figcaption {
+  color: var(--theme-text-secondary);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+}
+
+.benchmark-capture__body {
+  align-items: center;
+  background: var(--theme-bg-canvas);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-sm, 0.45rem);
+  display: flex;
+  height: 280px;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.benchmark-capture__body .product-front-svg {
+  height: 100%;
+  width: 100%;
+}
+
+.benchmark-capture__body--studio img {
+  height: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+
+.benchmark-capture__body--three {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  position: relative;
+}
+
+.benchmark-capture__body--three .model3d-view {
+  min-height: 0;
+  width: 100%;
+}
+
+.benchmark-three-activate {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  justify-content: center;
+  padding: 0;
+  position: relative;
+  width: 100%;
+}
+
+.benchmark-three-activate img {
+  height: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+
+.benchmark-three-cta {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: 999px;
+  bottom: 0.6rem;
+  color: var(--theme-text-secondary);
+  font-size: 0.75rem;
+  left: 50%;
+  padding: 0.2rem 0.65rem;
+  position: absolute;
+  transform: translateX(-50%);
+}
+
+.benchmark-three-activate:hover .benchmark-three-cta,
+.benchmark-three-activate:focus-visible .benchmark-three-cta {
+  border-color: var(--theme-accent, #0f817a);
+  color: var(--theme-accent-ink);
+}
+
+.benchmark-three-freeze {
+  align-self: flex-end;
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: 0.25rem;
+  color: var(--theme-text-secondary);
+  cursor: pointer;
+  font-size: 0.72rem;
+  padding: 0.15rem 0.5rem;
+  position: absolute;
+  right: 0.5rem;
+  top: 0.5rem;
+  z-index: 2;
+}
+
+.benchmark-three-freeze:hover {
+  border-color: var(--theme-accent, #0f817a);
+}
+
+@media (max-width: 1100px) {
+  .benchmark-captures {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* The benchmark's 3D capture is a document-flow block — .model3d-inset is
+ * the editor's absolute floating panel and made every figure stack. */
+.benchmark-capture--three .model3d-view {
+  background: var(--theme-bg-canvas);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-sm, 0.45rem);
+  display: flex;
+  flex-direction: column;
+  height: 280px;
+  overflow: hidden;
+}
+.benchmark-capture--three .model3d-view .model3d-canvas {
+  flex: 1;
+  min-height: 0;
+}

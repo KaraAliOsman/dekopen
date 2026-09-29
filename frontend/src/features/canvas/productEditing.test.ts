@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   addAdjacentUnit,
+  addStackedUnit,
+  duplicateModule,
+  insertModuleBetween,
+  moduleNeighbors,
+  swapModules,
   makeTrapezoidModule,
   elevationLayoutMm,
   equalizeCouplingAngles,
@@ -497,6 +502,97 @@ describe("scaleModuleWidths", () => {
     expect(envelope).toBeCloseTo(1200, 2);
     expect(Number(scaled.assembly.modules[0]!.width_mm)).toBeCloseTo(1200, 2);
     expect(Number(scaled.assembly.modules[1]!.width_mm)).toBeCloseTo(1200, 2);
+  });
+});
+
+describe("legacy positional couplings", () => {
+  // Rows without modules/edges resolve coupling i to modules i↔i+1. Any
+  // mutation that reorders modules must pin every joint to the pair it
+  // actually joins — not let the saved assembly reconnect wrong units.
+  function legacy(): ProductJson {
+    const product = bow();
+    return {
+      ...product,
+      assembly: {
+        modules: [...product.assembly.modules],
+        couplings: product.assembly.couplings.map((coupling) => ({
+          id: coupling.id,
+          angle_deg: coupling.angle_deg,
+          coupler_profile_sku: coupling.coupler_profile_sku,
+          kind: "INLINE" as const,
+        })),
+      },
+    } as ProductJson;
+  }
+
+  it("pins joints on duplicate — the copy never hijacks an old seam", () => {
+    const copied = duplicateModule(legacy(), "m1");
+    const byId = new Map(copied.assembly.couplings.map((c) => [c.id, c]));
+    // m1's right edge is claimed (legacy c1), so the copy lands on its left
+    // at index 0 — without materialization c1 would resolve copy↔m1.
+    expect(byId.get("c1")?.modules).toEqual(["m1", "m2"]);
+    expect(byId.get("c1")?.edges).toEqual(["right", "left"]);
+    expect(byId.get("c2")?.modules).toEqual(["m2", "m3"]);
+    // The new coplanar joint names its endpoints too.
+    expect(copied.assembly.couplings.at(-1)?.modules).toEqual([
+      copied.assembly.modules[0]!.id,
+      "m1",
+    ]);
+  });
+
+  it("pins joints on prepend — addAdjacentUnit left keeps the chain", () => {
+    const grown = addAdjacentUnit(legacy(), "left");
+    const byId = new Map(grown.assembly.couplings.map((c) => [c.id, c]));
+    expect(byId.get("c1")?.modules).toEqual(["m1", "m2"]);
+    expect(byId.get("c2")?.modules).toEqual(["m2", "m3"]);
+    expect(grown.assembly.couplings[0]?.modules).toEqual([grown.assembly.modules[0]!.id, "m1"]);
+  });
+
+  it("pins joints on insert between a positional seam", () => {
+    const inserted = insertModuleBetween(legacy(), "c1");
+    const byId = new Map(inserted.assembly.couplings.map((c) => [c.id, c]));
+    const added = inserted.assembly.modules[1]!;
+    // c1 keeps its id on the left↔new joint; the minted joint joins
+    // new↔m2 explicitly; the untouched c2 stays on m2↔m3.
+    expect(byId.get("c1")?.modules).toEqual(["m1", added.id]);
+    expect(byId.get("c2")?.modules).toEqual(["m2", "m3"]);
+    const minted = inserted.assembly.couplings.find(
+      (c) => c.modules?.[0] === added.id && c.modules?.[1] === "m2",
+    );
+    expect(minted).toBeDefined();
+  });
+
+  it("reorders a conjunto — swap moves ids through every joint and column", () => {
+    // Designer report: a conjunto could not reorder units (put the door at
+    // the end). Swapping m1↔m2 rewires endpoints AND column order.
+    const moved = swapModules(legacy(), "m1", "m2");
+    expect(moved.assembly.modules.map((m) => m.id)).toEqual(["m2", "m1", "m3"]);
+    const byId = new Map(moved.assembly.couplings.map((c) => [c.id, c]));
+    // c1 was m1↔m2 — now joins m2↔m1 (same seam, order flipped); c2 keeps
+    // joining m2↔m3 which after the move are m2's new right neighbour pair.
+    expect(byId.get("c1")?.modules).toEqual(["m2", "m1"]);
+    expect(byId.get("c1")?.edges).toEqual(["right", "left"]);
+    expect(byId.get("c2")?.modules).toEqual(["m1", "m3"]);
+    // Moving the edge member to the far end rewires both of its joints.
+    const far = swapModules(legacy(), "m1", "m3");
+    expect(far.assembly.modules.map((m) => m.id)).toEqual(["m3", "m2", "m1"]);
+    const farById = new Map(far.assembly.couplings.map((c) => [c.id, c]));
+    expect(farById.get("c1")?.modules).toEqual(["m3", "m2"]);
+    expect(farById.get("c2")?.modules).toEqual(["m2", "m1"]);
+    // Joints keep their declared angle/coupler through the rewire.
+    expect(farById.get("c1")?.angle_deg).toBe(legacy().assembly.couplings[0]!.angle_deg);
+  });
+
+  it("names horizontal neighbours along the chain, not array neighbours", () => {
+    const product = legacy();
+    expect(moduleNeighbors(product, "m1")).toEqual({ left: null, right: "m2" });
+    expect(moduleNeighbors(product, "m2")).toEqual({ left: "m1", right: "m3" });
+    expect(moduleNeighbors(product, "m3")).toEqual({ left: "m2", right: null });
+    // Stacked members report no horizontal neighbour from their stack joint.
+    const stacked = addStackedUnit(product, "m2");
+    const top = stacked.assembly.modules.at(-1)!.id;
+    expect(moduleNeighbors(stacked, top)).toEqual({ left: null, right: null });
+    expect(moduleNeighbors(stacked, "m2")).toEqual({ left: "m1", right: "m3" });
   });
 });
 

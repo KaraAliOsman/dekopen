@@ -163,6 +163,8 @@ def test_record_payment_issues_receipt_with_the_deal(monkeypatch):
         captured.append((sql, params))
         if "operation_key=%s" in sql:
             return []
+        if "COALESCE(SUM(amount)" in sql:
+            return [{"collected": Decimal("0")}]
         if "FROM public.project_versions" in sql:
             return [{
                 "revision_code": "REV-A",

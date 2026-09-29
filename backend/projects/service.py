@@ -21,7 +21,7 @@ from engine_api.adapter import (
     UnsupportedEngineContract,
 )
 from engine_api.repository import SystemParamsRepository, SystemNotFound, UnsupportedCatalogContract
-from pricing.repository import audit_reason, commercial_backend, json_text, rows
+from pricing.repository import audit_reason, commercial_backend, json_text, one, rows
 from pricing.service import decoded
 from projects.clients import linkable_client
 from projects.serializers import PositionWriteSerializer
@@ -66,6 +66,10 @@ POSITION_COLUMNS = (
     "color_exterior",
     "parametric_tree",
     "bom_snapshot",
+    # cost_net is a commercial authority column — the shot-08 column grant
+    # excludes it from every member read; sale price stays readable.
+    "price_net",
+    "discount_pct",
     "updated_at",
 )
 
@@ -167,6 +171,11 @@ def position_public(row):
                 "updated_at",
             )
         },
+        # The pricing authority writes these on apply — the workspace shows
+        # each vano's live net alongside its total, no re-derivation. The
+        # cost side stays inside pricing operations (member-denied column).
+        "price_net": str(row["price_net"]),
+        "discount_pct": str(row["discount_pct"]),
         "design": design,
         "bom": {**safe, "calculation_hash": expected},
     }
@@ -184,17 +193,32 @@ def positions(org_id, project_id):
 
 
 def project_versions(org_id, project_id):
-    return rows(
-        "SELECT id,revision_code,authority_version,bom_hash,snapshot_sha256,"
-        "production_allowed,documentary_complete,emitted_at "
-        "FROM public.project_versions WHERE project_id=%s AND org_id=%s "
-        "ORDER BY emitted_at,id",
-        [project_id, org_id],
-    )
+    # snapshot_json is role-denied (rbac_repair): the sealed money fields must
+    # be read through the documentary backend, like _latest_version does.
+    with documentary_backend():
+        return rows(
+            "SELECT id,revision_code,authority_version,bom_hash,snapshot_sha256,"
+            "production_allowed,documentary_complete,emitted_at,"
+            # Sealed money lets a successor revision's pricing decision compare
+            # against what the customer was actually quoted (live totals are
+            # zeroed by start_successor, so the snapshot is the only baseline).
+            "snapshot_json->>'total_price_net' AS sealed_price_net,"
+            "snapshot_json->>'total_price_tax' AS sealed_price_tax,"
+            "snapshot_json->>'total_price_gross' AS sealed_price_gross,"
+            "snapshot_json->>'currency' AS sealed_currency "
+            "FROM public.project_versions WHERE project_id=%s AND org_id=%s "
+            "ORDER BY emitted_at,id",
+            [project_id, org_id],
+        )
 
 
-def project_public(org_id, row, *, detail=False):
-    authority = _pricing_authority(org_id, row["id"], row["current_revision"])
+_UNSET = object()
+
+
+def project_public(org_id, row, *, detail=False, authority=_UNSET,
+                   position_count=_UNSET):
+    if authority is _UNSET:
+        authority = _pricing_authority(org_id, row["id"], row["current_revision"])
     value = {
         **row,
         "pricing_current": authority is not None,
@@ -203,35 +227,97 @@ def project_public(org_id, row, *, detail=False):
         # to render honestly; unpriced rows keep the org-default CLP fallback.
         "currency": (authority or {}).get("currency") or "CLP",
     }
+    value.pop("pricing_reset_at", None)  # internal gate timestamp, not API state
     for key in METADATA:
         value[key] = value[key] or ""
     for key in ("total_price_net", "total_price_tax", "total_price_gross"):
         value[key] = str(value[key])
-    value["position_count"] = rows(
-        "SELECT count(id) AS count FROM public.project_positions WHERE project_id=%s AND org_id=%s",
-        [row["id"], org_id],
-    )[0]["count"]
+    if position_count is _UNSET:
+        position_count = rows(
+            "SELECT count(id) AS count FROM public.project_positions WHERE project_id=%s AND org_id=%s",
+            [row["id"], org_id],
+        )[0]["count"]
+    value["position_count"] = position_count
     if detail:
         value["positions"] = positions(org_id, row["id"])
         value["versions"] = project_versions(org_id, row["id"])
     return value
 
 
-def list_projects(org_id):
-    return [
-        project_public(org_id, row)
-        for row in rows(
-            f"SELECT {','.join(PROJECT_COLUMNS)} FROM public.projects "
-            "WHERE org_id=%s ORDER BY updated_at DESC,id",
-            [org_id],
+def _bulk_pricing_authorities(org_id, project_ids):
+    """Latest APPLIED op per (project, revision) in ONE query — the list
+    endpoint resolves authority per row in Python instead of N×3 queries."""
+    if not project_ids:
+        return {}
+    with commercial_backend():
+        result = rows(
+            "SELECT DISTINCT ON (project_id, COALESCE(revision_code,'REV-A')) "
+            "project_id, COALESCE(revision_code,'REV-A') AS revision, id, "
+            "request->>'currency' AS currency, approved_at "
+            "FROM public.pricing_operations "
+            "WHERE org_id=%s AND project_id = ANY(%s) AND state='APPLIED' "
+            "ORDER BY project_id, COALESCE(revision_code,'REV-A'), "
+            "approved_at DESC, id DESC",
+            [org_id, project_ids],
         )
+    return result
+
+
+def list_projects(org_id):
+    project_rows = rows(
+        f"SELECT {','.join(PROJECT_COLUMNS)}, pricing_reset_at "
+        "FROM public.projects WHERE org_id=%s ORDER BY updated_at DESC,id "
+        "LIMIT 500",
+        [org_id],
+    )
+    if not project_rows:
+        return []
+    project_ids = [row["id"] for row in project_rows]
+    counts = {
+        item["project_id"]: item["count"]
+        for item in rows(
+            "SELECT project_id, count(id) AS count "
+            "FROM public.project_positions "
+            "WHERE org_id=%s AND project_id = ANY(%s) GROUP BY project_id",
+            [org_id, project_ids],
+        )
+    }
+    authorities = {}
+    rows_by_id = {row["id"]: row for row in project_rows}
+    for candidate in _bulk_pricing_authorities(org_id, project_ids):
+        row = rows_by_id[candidate["project_id"]]
+        reset_at = row.get("pricing_reset_at")
+        if candidate["revision"] != row["current_revision"]:
+            continue
+        # Mirrors the scalar predicate: a NULL approved_at under a set
+        # pricing_reset_at excludes the op exactly like SQL NULL comparison.
+        if reset_at is not None and not (
+            candidate["approved_at"] is not None
+            and candidate["approved_at"] > reset_at
+        ):
+            continue
+        authorities[candidate["project_id"]] = candidate
+    return [
+        project_public(
+            org_id, row,
+            authority=authorities.get(row["id"]),
+            position_count=counts.get(row["id"], 0),
+        )
+        for row in project_rows
     ]
+
+
+def _next_project_code():
+    """Sequential human code — opaque (a shared sequence leaks no row count)
+    and race-free under the (org_id, code) unique index."""
+    value = rows("SELECT nextval('public.project_code_seq') AS seq")[0]["seq"]
+    return f"P-{int(value):06d}"
 
 
 def create_project(org_id, actor_id, data):
     identity = uuid4()
     # The code is an opaque human-readable reference, never an internal DB ID input.
-    code = f"P-{identity.hex[:12].upper()}"
+    code = _next_project_code()
     values = {key: data.get(key, "") for key in METADATA}
     client_id = data.get("client_id")
     if client_id:
@@ -663,8 +749,26 @@ def start_successor(org_id, project_id, expected_current_revision=None):
             **project_public(org_id, project_row(org_id, project_id), detail=True),
             "successor_created": False,
         }
-    if project["status"] != "QUOTED" or project["current_revision"] != expected:
+    # QUOTED and APPROVED are both revisable — the client portal can flip a
+    # quote to APPROVED and the client may still request changes; the sealed
+    # revision stays immutable and the successor simply needs a fresh
+    # approval (review WM7). But once live workshop orders exist the product
+    # is on the factory floor — revising it would silently change what is
+    # being built, so production in flight blocks the successor.
+    if project["status"] not in ("QUOTED", "APPROVED") or project["current_revision"] != expected:
         raise contract_error(409, "successor_source_stale", "La revisión actual del proyecto no coincide con la esperada.")
+    if project["status"] == "APPROVED":
+        live_orders = one(
+            """
+            SELECT COUNT(*)::int AS live FROM public.orders
+            WHERE project_id = %s AND org_id = %s AND order_type = 'WORKSHOP_OT'
+              AND status NOT IN ('COMPLETED', 'DISPATCHED', 'INSTALLED', 'CANCELLED', 'FULFILLED')
+            """,
+            [project_id, org_id],
+            "order_lookup_failed",
+        )
+        if live_orders["live"] > 0:
+            raise contract_error(409, "successor_in_production", "El proyecto tiene órdenes de producción en curso; no se puede revisar.")
     if latest["revision_code"] != project["current_revision"]:
         raise contract_error(409, "revision_source_drift", "La revisión emitida no coincide con el proyecto.")
     _assert_live_matches_version(org_id, project_id, latest)

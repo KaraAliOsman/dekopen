@@ -54,6 +54,10 @@ class ConfirmBatchRequestSerializer(StrictSerializer):
 
 class SendOrderRequestSerializer(StrictSerializer):
     confirmed = serializers.BooleanField()
+    expected_at = serializers.DateField(required=False, allow_null=True, default=None)
+    sent_to = serializers.CharField(
+        required=False, allow_null=True, allow_blank=True, max_length=200, default=None
+    )
 
 
 class PurchasingStateSerializer(serializers.Serializer):
@@ -79,10 +83,80 @@ class AllocationResponseSerializer(serializers.Serializer):
     supplier_eligibility_id = serializers.UUIDField()
 
 
+ORDER_STATUSES = [
+    "DRAFT",
+    "SENT",
+    "PARTIALLY_RECEIVED",
+    "FULFILLED",
+    "CANCELLED",
+]
+
+
 class OrderResponseSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     order_code = serializers.CharField()
     order_type = serializers.ChoiceField(choices=ORDER_TYPES)
-    status = serializers.ChoiceField(choices=["DRAFT", "SENT"])
+    status = serializers.ChoiceField(choices=ORDER_STATUSES)
     supplier_name = serializers.CharField()
     order_snapshot_hash = serializers.RegexField(r"^[0-9a-f]{64}$")
+    confirmed_at = serializers.CharField(required=False, allow_null=True)
+    sent_at = serializers.CharField(required=False, allow_null=True)
+    expected_at = serializers.DateField(required=False, allow_null=True)
+    sent_to = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    cancelled_by = serializers.UUIDField(required=False, allow_null=True)
+    cancelled_at = serializers.CharField(required=False, allow_null=True)
+    line_count = serializers.CharField(required=False, allow_null=True)
+    total_qty = serializers.CharField(required=False, allow_null=True)
+    released_qty = serializers.CharField(required=False, allow_null=True)
+    damaged_qty = serializers.CharField(required=False, allow_null=True)
+    receipt_count = serializers.CharField(required=False, allow_null=True)
+    lines_preview = serializers.ListField(
+        child=serializers.DictField(), required=False
+    )
+
+
+class OrderIndexItemSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    order_code = serializers.CharField()
+    order_type = serializers.ChoiceField(choices=ORDER_TYPES)
+    status = serializers.ChoiceField(choices=ORDER_STATUSES)
+    supplier_identity = serializers.CharField(allow_null=True)
+    supplier_name = serializers.CharField(allow_null=True)
+    expected_at = serializers.DateField(allow_null=True)
+    sent_to = serializers.CharField(allow_null=True, allow_blank=True)
+    sent_at = serializers.CharField(allow_null=True)
+    created_at = serializers.CharField()
+    project_id = serializers.UUIDField(allow_null=True)
+    project_code = serializers.CharField(allow_null=True)
+    project_version_id = serializers.UUIDField(allow_null=True)
+    revision_code = serializers.CharField(allow_null=True)
+    line_count = serializers.CharField()
+    total_qty = serializers.CharField(allow_null=True)
+    released_qty = serializers.CharField(allow_null=True)
+    good_qty = serializers.CharField()
+    damaged_qty = serializers.CharField()
+    receipt_count = serializers.CharField()
+    outstanding_qty = serializers.CharField()
+
+
+class OrderIndexResponseSerializer(serializers.Serializer):
+    orders = OrderIndexItemSerializer(many=True)
+
+
+class SupplierUpsertSerializer(StrictSerializer):
+    tax_id = serializers.CharField(max_length=100, allow_blank=False, trim_whitespace=True)
+    name = serializers.CharField(max_length=300, allow_blank=False, trim_whitespace=True)
+    details = SupplierDetailsSerializer(required=False, default=dict)
+    confirmed = serializers.BooleanField()
+
+
+class SupplierSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    tax_id = serializers.CharField()
+    name = serializers.CharField()
+    details = serializers.DictField()
+    updated_at = serializers.CharField()
+
+
+class SuppliersIndexResponseSerializer(serializers.Serializer):
+    suppliers = SupplierSerializer(many=True)

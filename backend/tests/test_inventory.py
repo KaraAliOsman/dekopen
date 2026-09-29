@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from decimal import Decimal
+import json
 from types import SimpleNamespace
 from unittest.mock import patch
 from uuid import uuid4
@@ -17,23 +18,67 @@ from inventory import service, views as inventory_views
 
 def test_list_stock_returns_view_rows() -> None:
     org_id = uuid4()
-    with patch("inventory.service.rows") as mock_rows:
-        mock_rows.return_value = [
-            {
-                "item_id": uuid4(),
-                "sku": "UMBRAL-ALU",
-                "name": "Umbral",
-                "category": "PROFILE",
-                "unit": "MM",
-                "variant_key": "",
-                "on_hand_qty": Decimal("1200.00"),
-                "reserved_qty": Decimal("400.00"),
-                "available_qty": Decimal("800.00"),
-            }
-        ]
+    stock_row = {
+        "item_id": uuid4(),
+        "sku": "UMBRAL-ALU",
+        "name": "Umbral",
+        "category": "PROFILE",
+        "unit": "MM",
+        "variant_key": "",
+        "on_hand_qty": Decimal("1200.00"),
+        "reserved_qty": Decimal("400.00"),
+        "available_qty": Decimal("800.00"),
+        "racks": "A-01",
+    }
+
+    def fake_rows(query, params=()):
+        if "order_requirement_lines" in query:
+            return []
+        return [stock_row]
+
+    with patch("inventory.service.rows", side_effect=fake_rows), patch(
+        "inventory.service.documentary_backend", return_value=_atomic()
+    ):
         output = service.list_stock(org_id=org_id)
     assert output["items"][0]["available_qty"] == Decimal("800.00")
-    mock_rows.assert_called_once()
+    assert output["items"][0]["incoming_qty"] == Decimal(0)
+
+
+def test_list_stock_incoming_keys_by_spec_variant() -> None:
+    # A made-to-measure glass line lands incoming on the spec-keyed bucket, not
+    # the raw purchasing SKU row.
+    org_id = uuid4()
+    stock_row = {
+        "item_id": uuid4(),
+        "sku": "GLASS-BUY",
+        "name": "Vidrio",
+        "category": "GLASS",
+        "unit": "EA",
+        "variant_key": "SPEC:deadbeef",
+        "on_hand_qty": Decimal(0),
+        "reserved_qty": Decimal(0),
+        "available_qty": Decimal(0),
+        "racks": None,
+    }
+    line_snapshot = json.dumps(
+        {
+            "purchasing_sku": "GLASS-BUY",
+            "physical_stock_identity": None,
+            "category": "GLASS",
+            "specification": {"width_mm": 1000, "height_mm": 800},
+        }
+    )
+
+    def fake_rows(query, params=()):
+        if "order_requirement_lines" in query:
+            return [{"line_snapshot": line_snapshot, "open_qty": Decimal(2)}]
+        return [stock_row]
+
+    with patch("inventory.service.rows", side_effect=fake_rows), patch(
+        "inventory.service.stock_variant_key", return_value="SPEC:deadbeef"
+    ), patch("inventory.service.documentary_backend", return_value=_atomic()):
+        output = service.list_stock(org_id=org_id)
+    assert output["items"][0]["incoming_qty"] == Decimal(2)
 
 
 def test_order_receiving_computes_outstanding() -> None:
@@ -66,7 +111,9 @@ def test_order_receiving_computes_outstanding() -> None:
         "inventory.service.documentary_backend", return_value=_atomic()
     ):
         output = service.order_receiving(org_id=org_id, order_id=order_id)
-    assert output["lines"][0]["outstanding_qty"] == Decimal("6")
+    # Damaged goods never fulfill: 4 arrived, 1 of them damaged → 3 good,
+    # still owed 7 of the ordered 10.
+    assert output["lines"][0]["outstanding_qty"] == Decimal("7")
     assert output["lines"][0]["purchasing_sku"] == "SKU-1"
 
 
@@ -192,7 +239,9 @@ def test_record_movement_returns_full_projection() -> None:
     }
     with patch("inventory.service.rows", return_value=[]), patch(
         "inventory.service.one", return_value=row
-    ), patch("inventory.service.transaction.atomic", return_value=_atomic()):
+    ), patch(
+        "inventory.service.transaction.atomic", return_value=_atomic()
+    ), patch("inventory.service.documentary_backend", return_value=_atomic()):
         output = service.record_movement(
             org_id=uuid4(),
             actor_id=uuid4(),
@@ -247,7 +296,7 @@ def _tenant(role: str, org_id):
 
 def _client_with_scope(monkeypatch, role: str):
     org_id = uuid4()
-    token = SimpleNamespace(user_id=uuid4(), claims={}, aal="aal1")
+    token = SimpleNamespace(user_id=uuid4(), email="op@taller.cl", claims={}, aal="aal1")
 
     @contextmanager
     def fake_scope(request, allowed):
@@ -293,7 +342,7 @@ def test_receipt_post_forwards_payload(monkeypatch) -> None:
 
 def test_receipt_post_denies_estimator(monkeypatch) -> None:
     org_id = uuid4()
-    token = SimpleNamespace(user_id=uuid4(), claims={}, aal="aal1")
+    token = SimpleNamespace(user_id=uuid4(), email="op@taller.cl", claims={}, aal="aal1")
 
     @contextmanager
     def fake_scope(request, allowed):
@@ -449,3 +498,505 @@ def test_unreserve_remnant_refuses_moved_reservation() -> None:
             org_id=org_id, remnant_id=remnant_id, actor_id=uuid4()
         )
     assert error.value.code == "remnant_reservation_moved"
+
+
+def test_cancel_order_requires_attestation() -> None:
+    from purchasing import service as purchasing_service
+
+    with pytest.raises(DocumentaryError) as error:
+        purchasing_service.cancel_order(
+            org_id=uuid4(), actor_id=uuid4(), order_id=uuid4(), confirmed=False
+        )
+    assert error.value.code == "order_cancel_confirmation_required"
+
+
+def test_cancel_order_rejects_fulfilled_orders() -> None:
+    from purchasing import service as purchasing_service
+
+    org_id, order_id = uuid4(), uuid4()
+    with patch(
+        "purchasing.service.one",
+        return_value={
+            "id": order_id,
+            "order_code": "PO-1",
+            "order_type": "SUPPLIER_GLASS_PO",
+            "status": "FULFILLED",
+            "supplier_name": "Vendor",
+            "order_snapshot_hash": "a" * 64,
+        },
+    ), patch(
+        "purchasing.service.documentary_backend", return_value=_atomic()
+    ):
+        with pytest.raises(DocumentaryError) as error:
+            purchasing_service.cancel_order(
+                org_id=org_id, actor_id=uuid4(), order_id=order_id, confirmed=True
+            )
+    assert error.value.code == "order_state_invalid"
+
+
+def test_cancel_order_partial_receipt_releases_only_unreceived() -> None:
+    # A partially-received order can be cancelled: the release stamps
+    # released_at AND computes released_qty = quantity - good received, so
+    # already-arrived material keeps covering the requirement while the
+    # unreceived remainder returns to open demand.
+    from purchasing import service as purchasing_service
+
+    org_id, order_id = uuid4(), uuid4()
+    partial = {
+        "id": order_id,
+        "order_code": "PO-1",
+        "order_type": "SUPPLIER_GLASS_PO",
+        "status": "PARTIALLY_RECEIVED",
+        "supplier_name": "Vendor",
+        "order_snapshot_hash": "a" * 64,
+        "cancelled_by": None,
+        "cancelled_at": None,
+        "expected_at": None,
+    }
+    cancelled = dict(partial, status="CANCELLED", cancelled_at="2026-09-28")
+    reads = iter([partial, cancelled])
+    with patch(
+        "purchasing.service.one", side_effect=lambda *a, **k: next(reads)
+    ), patch(
+        "purchasing.service.documentary_backend", return_value=_atomic()
+    ), patch("purchasing.service.write", return_value=1) as mock_write:
+        output = purchasing_service.cancel_order(
+            org_id=org_id, actor_id=uuid4(), order_id=order_id, confirmed=True
+        )
+    assert output["status"] == "CANCELLED"
+    statement, params = mock_write.call_args[0]
+    assert "released_qty" in statement
+    assert "received_qty" in statement and "damaged_qty" in statement
+    assert params[1] == order_id
+
+
+def test_cancel_order_idempotent_replay() -> None:
+    from purchasing import service as purchasing_service
+
+    org_id, order_id = uuid4(), uuid4()
+    row = {
+        "id": order_id,
+        "order_code": "PO-1",
+        "order_type": "SUPPLIER_GLASS_PO",
+        "status": "CANCELLED",
+        "supplier_name": "Vendor",
+        "order_snapshot_hash": "a" * 64,
+        "cancelled_by": uuid4(),
+        "cancelled_at": None,
+        "expected_at": None,
+    }
+    with patch("purchasing.service.one", return_value=row), patch(
+        "purchasing.service.documentary_backend", return_value=_atomic()
+    ):
+        output = purchasing_service.cancel_order(
+            org_id=org_id, actor_id=uuid4(), order_id=order_id, confirmed=True
+        )
+    assert output["status"] == "CANCELLED"
+
+
+def test_cancel_order_releases_line_claims() -> None:
+    # The cancelled order keeps its rows as evidence but stamps released_at —
+    # the same requirements claim into the retry batch's orders.
+    from purchasing import service as purchasing_service
+
+    org_id, order_id = uuid4(), uuid4()
+    draft = {
+        "id": order_id,
+        "order_code": "PO-1",
+        "order_type": "SUPPLIER_GLASS_PO",
+        "status": "DRAFT",
+        "supplier_name": "Vendor",
+        "order_snapshot_hash": "a" * 64,
+        "cancelled_by": None,
+        "cancelled_at": None,
+        "expected_at": None,
+    }
+    cancelled = dict(draft, status="CANCELLED", cancelled_at="2026-09-26")
+    reads = iter([draft, cancelled])
+    with patch(
+        "purchasing.service.one", side_effect=lambda *a, **k: next(reads)
+    ), patch(
+        "purchasing.service.documentary_backend", return_value=_atomic()
+    ), patch("purchasing.service.write", return_value=1) as mock_write:
+        output = purchasing_service.cancel_order(
+            org_id=org_id, actor_id=uuid4(), order_id=order_id, confirmed=True
+        )
+    assert output["status"] == "CANCELLED"
+    assert mock_write.call_count == 1
+    statement, params = mock_write.call_args[0]
+    assert "released_at" in statement and "released_at IS NULL" in statement
+    assert params[1] == order_id
+
+
+def test_unclaimed_requirements_excludes_live_claims() -> None:
+    from purchasing import service as purchasing_service
+
+    org_id, version_id = uuid4(), uuid4()
+    held_id, free_id = uuid4(), uuid4()
+
+    def fake_rows(query, params=()):
+        if "order_requirement_lines" in query and "covered_qty" in query:
+            return [{"requirement_line_id": held_id, "covered_qty": 2}]
+        if "inventory_stock" in query:
+            return []
+        if "FROM public.purchase_requirement_lines" in query:
+            return [
+                {"id": held_id, "requirement_key": "a" * 64, "order_type": "SUPPLIER_GLASS_PO",
+                 "category": "GLASS", "purchasing_sku": "GLASS-BUY",
+                 "physical_stock_identity": None, "unit": "EA", "quantity": 2,
+                 "specification": None, "source_trace": "[]"},
+                {"id": free_id, "requirement_key": "b" * 64, "order_type": "SUPPLIER_GLASS_PO",
+                 "category": "GLASS", "purchasing_sku": "GLASS-BUY-2",
+                 "physical_stock_identity": None, "unit": "EA", "quantity": 1,
+                 "specification": None, "source_trace": "[]"},
+            ]
+        raise AssertionError(query)
+
+    with patch("purchasing.service.rows", side_effect=fake_rows):
+        result = purchasing_service._unclaimed_requirements(
+            version_id, org_id, "SUPPLIER_GLASS_PO"
+        )
+    assert [str(item["id"]) for item in result] == [str(free_id)]
+    assert result[0]["open_qty"] == 1
+
+
+def test_unclaimed_requirements_reopen_partial_remainder() -> None:
+    # A requirement covered only partially (e.g. cancel after partial
+    # receipt) comes back with open_qty = required - covered, not the full
+    # quantity — re-ordering the covered part would duplicate demand.
+    from purchasing import service as purchasing_service
+
+    org_id, version_id = uuid4(), uuid4()
+    req_id = uuid4()
+
+    def fake_rows(query, params=()):
+        if "order_requirement_lines" in query and "covered_qty" in query:
+            return [{"requirement_line_id": req_id, "covered_qty": 3}]
+        if "inventory_stock" in query:
+            return []
+        if "FROM public.purchase_requirement_lines" in query:
+            return [
+                {"id": req_id, "requirement_key": "a" * 64, "order_type": "SUPPLIER_GLASS_PO",
+                 "category": "GLASS", "purchasing_sku": "GLASS-BUY",
+                 "physical_stock_identity": None, "unit": "EA", "quantity": 5,
+                 "specification": None, "source_trace": "[]"},
+            ]
+        raise AssertionError(query)
+
+    with patch("purchasing.service.rows", side_effect=fake_rows):
+        result = purchasing_service._unclaimed_requirements(
+            version_id, org_id, "SUPPLIER_GLASS_PO"
+        )
+    assert len(result) == 1
+    assert result[0]["open_qty"] == 2
+
+
+def test_orders_index_projects_orders_with_received_totals() -> None:
+    from purchasing import service as purchasing_service
+
+    org_id = uuid4()
+    order_id = uuid4()
+    row = {
+        "id": order_id,
+        "order_code": "OC-GLASS-1",
+        "order_type": "SUPPLIER_GLASS_PO",
+        "status": "PARTIALLY_RECEIVED",
+        "supplier_identity": "76.111-2",
+        "supplier_name": "Vendor",
+        "expected_at": None,
+        "sent_at": None,
+        "created_at": None,
+        "revision_code": "REV-A",
+        "project_version_id": uuid4(),
+        "project_id": uuid4(),
+        "project_code": "P-01",
+        "line_count": 2,
+        "total_qty": Decimal("10"),
+        "good_qty": Decimal("4"),
+        "damaged_qty": Decimal("1"),
+        "receipt_count": 2,
+        "released_qty": Decimal("0"),
+    }
+    with patch("purchasing.service.rows", return_value=[row]) as query, patch(
+        "purchasing.service.documentary_backend", return_value=_atomic()
+    ):
+        output = purchasing_service.orders_index(org_id)
+    assert output["orders"][0]["outstanding_qty"] == "6"
+    assert output["orders"][0]["project_code"] == "P-01"
+    assert output["orders"][0]["damaged_qty"] == "1"
+    assert output["orders"][0]["receipt_count"] == 2
+    assert query.call_args[0][0].count("%s") == 3
+
+
+def test_trace_labels_map_member_ids_to_workshop_codes() -> None:
+    import json
+
+    from purchasing import service as purchasing_service
+
+    version_id, org_id = uuid4(), uuid4()
+    member_id = "a" * 64
+    bay_id = "b" * 64
+    snapshot = {
+        "manufacturing": [
+            {
+                "members": [{"member_id": member_id, "bay_id": bay_id}],
+                "reinforcements": [],
+                "infills": [],
+                "handles": [],
+            }
+        ],
+        "positions": [{"id": "pos-1", "position_index": 1}],
+    }
+    with patch(
+        "purchasing.service.one",
+        return_value={"snapshot_json": json.dumps(snapshot)},
+    ):
+        labels = purchasing_service._trace_labels(version_id, org_id)
+    assert labels[member_id] == "M-01"
+    assert labels[bay_id] == "V-01"
+    assert labels["pos-1"] == "P01"
+
+
+def test_line_snapshot_aligns_trace_labels_with_entries() -> None:
+    import json
+
+    from purchasing import service as purchasing_service
+
+    row = {
+        "id": uuid4(),
+        "requirement_key": "k" * 64,
+        "order_type": "SUPPLIER_GLASS_PO",
+        "category": "GLASS_UNIT",
+        "technical_identity": json.dumps({"authority_ids": ["a1"], "technical_skus": ["S1"]}),
+        "purchasing_sku": "DVE-4-12-4",
+        "physical_stock_identity": None,
+        "unit": "EA",
+        "quantity": Decimal("4"),
+        "specification": json.dumps({}),
+        "source_trace": json.dumps(["m" * 64, "deadbeef-hash"]),
+    }
+    output = purchasing_service._line_snapshot(row, {"m" * 64: "I-01"})
+    assert output["source_trace_labels"] == ["I-01", None]
+
+
+def test_allocate_requirement_rejects_expired_eligibility() -> None:
+    import json
+
+    from purchasing import service as purchasing_service
+
+    org_id, requirement_id, eligibility_id = uuid4(), uuid4(), uuid4()
+    requirement = {
+        "id": requirement_id,
+        "requirement_key": "a" * 64,
+        "project_id": uuid4(),
+        "project_version_id": uuid4(),
+        "org_id": org_id,
+        "order_type": "SUPPLIER_GLASS_PO",
+    }
+    eligibility = {
+        "id": eligibility_id,
+        "project_id": requirement["project_id"],
+        "project_version_id": requirement["project_version_id"],
+        "org_id": org_id,
+        "order_type": "SUPPLIER_GLASS_PO",
+        "eligible_requirement_keys": json.dumps(["a" * 64]),
+        "evidence": json.dumps({"valid_until": "2000-01-01"}),
+    }
+    with patch(
+        "purchasing.service.one", side_effect=[requirement, eligibility]
+    ), patch(
+        "purchasing.service.documentary_backend", return_value=_atomic()
+    ):
+        with pytest.raises(DocumentaryError) as error:
+            purchasing_service.allocate_requirement(
+                org_id=org_id,
+                actor_id=uuid4(),
+                requirement_id=requirement_id,
+                eligibility_id=eligibility_id,
+            )
+    assert error.value.code == "supplier_eligibility_expired"
+
+
+def test_create_eligibility_writes_directory_entry() -> None:
+
+    from purchasing import service as purchasing_service
+
+    org_id, version_id = uuid4(), uuid4()
+    version = {
+        "id": version_id,
+        "project_id": uuid4(),
+        "org_id": org_id,
+        "revision_code": "REV-A",
+        "authority_version": "SHOT09_V1",
+        "bom_hash": "b" * 64,
+        "snapshot_sha256": "c" * 64,
+        "production_allowed": False,
+        "documentary_complete": True,
+        "emitted_at": None,
+        "project_code": "P-01",
+    }
+    requirement = {"requirement_key": "a" * 64}
+    eligibility_row = {"id": uuid4(), "content_hash": "d" * 64}
+    supplier_row = {
+        "id": uuid4(),
+        "tax_id": "76.111-2",
+        "name": "Vidrios SPA",
+        "details": "{}",
+        "updated_at": "2026-09-25",
+    }
+    data = {
+        "order_type": "SUPPLIER_GLASS_PO",
+        "supplier_identity": "76.111-2",
+        "supplier_name": "Vidrios SPA",
+        "supplier_details": {},
+        "eligible_requirement_keys": ["a" * 64],
+        "evidence": {},
+        "version": 1,
+        "confirmed": True,
+    }
+    with patch("purchasing.service._version", return_value=version), patch(
+        "purchasing.service._requirements", return_value=[requirement]
+    ), patch(
+        "purchasing.service.one", side_effect=[eligibility_row, supplier_row]
+    ) as mock_one, patch(
+        "purchasing.service.documentary_backend", return_value=_atomic()
+    ):
+        output = purchasing_service.create_eligibility(
+            org_id=org_id, actor_id=uuid4(), version_id=version_id, data=data
+        )
+    assert output["content_hash"] == "d" * 64
+    supplier_sql = mock_one.call_args_list[1][0][0]
+    assert "public.suppliers" in supplier_sql
+    assert "ON CONFLICT(org_id,tax_id)" in supplier_sql
+    assert mock_one.call_args_list[1][0][1][1] == "76.111-2"
+
+
+def test_suppliers_index_and_upsert_roundtrip() -> None:
+    import json
+
+    from purchasing import service as purchasing_service
+
+    org_id = uuid4()
+    row = {
+        "id": uuid4(),
+        "tax_id": "76.111-2",
+        "name": "Vidrios SPA",
+        "details": json.dumps({"email": "v@spa.cl"}),
+        "updated_at": "2026-09-25T00:00:00+00:00",
+    }
+    with patch("purchasing.service.rows", return_value=[row]), patch(
+        "purchasing.service.documentary_backend", return_value=_atomic()
+    ):
+        index = purchasing_service.suppliers_index(org_id)
+    assert index["suppliers"][0]["tax_id"] == "76.111-2"
+    assert index["suppliers"][0]["details"]["email"] == "v@spa.cl"
+
+    upsert_row = dict(row)
+    with patch("purchasing.service.one", return_value=upsert_row) as mock_one, patch(
+        "purchasing.service.documentary_backend", return_value=_atomic()
+    ):
+        output = purchasing_service.create_supplier(
+            org_id=org_id,
+            actor_id=uuid4(),
+            data={"tax_id": "76.111-2", "name": "Vidrios SPA",
+                  "details": {"email": "v@spa.cl"}, "confirmed": True},
+        )
+    assert output["tax_id"] == "76.111-2"
+    assert "ON CONFLICT(org_id,tax_id)" in mock_one.call_args[0][0]
+
+
+def test_list_bar_authorities_merges_profiles_and_reinforcement() -> None:
+    from inventory import remnants
+
+    org_id = uuid4()
+    profile_row = {
+        "id": str(uuid4()),
+        "commercial_sku": "KOMM-MARCO",
+        "physical_stock_identity": str(uuid4()),
+        "stock_color": "Blanco",
+    }
+    reinforce_row = {
+        "id": str(uuid4()),
+        "commercial_sku": "ACERO-REF-32",
+        "physical_stock_identity": None,
+        "stock_color": None,
+    }
+
+    def fake_rows(query, params=()):
+        assert params == [str(org_id)]
+        if "profile_purchase_mappings" in query:
+            assert "org_id IS NULL" in query and "is_active" in query
+            return [profile_row]
+        if "reinforcement_articles" in query:
+            return [reinforce_row]
+        raise AssertionError(query)
+
+    with patch("inventory.remnants.rows", side_effect=fake_rows):
+        output = remnants.list_bar_authorities(org_id=org_id)
+
+    assert output["authorities"] == [
+        {
+            "id": profile_row["id"],
+            "commercial_sku": "KOMM-MARCO",
+            "physical_stock_identity": profile_row["physical_stock_identity"],
+            "stock_color": "Blanco",
+            "source": "PROFILE",
+        },
+        {
+            "id": reinforce_row["id"],
+            "commercial_sku": "ACERO-REF-32",
+            "physical_stock_identity": None,
+            "stock_color": None,
+            "source": "REINFORCEMENT",
+        },
+    ]
+
+
+def test_bar_authorities_view_uses_inventory_readers(monkeypatch) -> None:
+    client, _, org_id = _client_with_scope(monkeypatch, "ESTIMATOR")
+    seen = {}
+
+    def fake_list(*, org_id):
+        seen["org_id"] = org_id
+        return {"authorities": [{"commercial_sku": "KOMM-MARCO"}]}
+
+    monkeypatch.setattr(
+        "inventory.views.remnants_service.list_bar_authorities", fake_list
+    )
+    response = client.get("/api/v1/inventory/bar-authorities/")
+    assert response.status_code == 200
+    assert response.data == {"authorities": [{"commercial_sku": "KOMM-MARCO"}]}
+    assert seen["org_id"] == org_id
+
+
+def test_remnant_label_returns_qr_and_identity() -> None:
+    # §5 rack label: the printed tag carries the remnant's stable QR so a
+    # floor scanner resolves the physical drop back to this row.
+    from inventory import remnants
+
+    org_id, remnant_id, order_id = uuid4(), uuid4(), uuid4()
+    with patch(
+        "inventory.remnants.one",
+        side_effect=lambda query, params=(), code=None: _remnant_row(remnant_id, order_id),
+    ), patch(
+        "inventory.remnants.rows",
+        return_value=[{"commercial_sku": "PROF-60-W"}],
+    ):
+        output = remnants.remnant_label(org_id=org_id, remnant_id=remnant_id)
+
+    # Identity is the authority's commercial SKU, not the internal psi UUID.
+    assert output["identity"] == "PROF-60-W"
+    assert f"DEKOPEN|REMNANT|{remnant_id}" == output["qr_payload"]
+    assert "<svg" in output["qr_svg"]
+    assert output["remnant"]["id"] == str(remnant_id)
+
+
+def test_remnant_label_missing_remant_raises() -> None:
+    from inventory import remnants
+
+    def missing(query, params=(), code=None):
+        raise DocumentaryError("remnant_not_found")
+
+    with patch("inventory.remnants.one", side_effect=missing):
+        with pytest.raises(DocumentaryError):
+            remnants.remnant_label(org_id=uuid4(), remnant_id=uuid4())

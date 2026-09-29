@@ -24,6 +24,8 @@ export interface Delivery {
   /** @nullable */
   notes: string | null;
   status: DeliveryStatusEnum;
+  /** @nullable */
+  unit_indexes?: number[] | null;
   confirmation: DeliveryConfirmation | null;
   /** @nullable */
   scheduled_by: string | null;

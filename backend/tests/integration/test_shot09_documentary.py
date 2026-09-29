@@ -114,7 +114,7 @@ def _seed_project(
         "opening_type": "FIXED",
         "glass_spec": "4-12-4 Float Incoloro",
         "glass_thickness_mm": "24.00",
-        "glass_article_sku": "GLASS-BASE",
+        "glass_article_sku": "VIDRIO-BASE",
     }
     with as_user(owner):
         params = SystemParamsRepository().load_visible(system_id, org)
@@ -139,10 +139,10 @@ def _seed_project(
                 "SHOT-09 fixture list",
             )
             for sku, unit in (
-                ("DEMO-BAR-MARCO", "BAR"),
-                ("DEMO-BAR-JQ-10", "BAR"),
-                ("DEMO-STEEL-BAR-MARCO", "BAR"),
-                ("GLASS-BASE", "M2"),
+                ("COMPRA-MARCO", "BAR"),
+                ("COMPRA-JQ-10", "BAR"),
+                ("COMPRA-ACERO-MARCO", "BAR"),
+                ("VIDRIO-BASE", "M2"),
             ):
                 admin_write(
                     "cost-items", org,
@@ -185,7 +185,13 @@ def _seed_project(
             "JOIN public.handle_requirement_policies handles ON handles.system_id=system.id "
             "JOIN public.reinforcement_cut_policies steel ON steel.system_id=system.id "
             "WHERE system.id=%s AND placement.org_id IS NULL AND handles.org_id IS NULL "
-            "AND steel.org_id IS NULL",
+            "AND steel.org_id IS NULL "
+            "AND placement.version=(SELECT max(p2.version) FROM public.manufacturing_placement_policies p2 "
+            "WHERE p2.system_id=placement.system_id AND p2.org_id IS NULL) "
+            "AND steel.version=(SELECT max(s2.version) FROM public.reinforcement_cut_policies s2 "
+            "WHERE s2.system_id=steel.system_id AND s2.org_id IS NULL) "
+            "AND handles.version=(SELECT max(h2.version) FROM public.handle_requirement_policies h2 "
+            "WHERE h2.system_id=handles.system_id AND h2.org_id IS NULL) ",
             [system_id],
         )
         annotations = ([{
@@ -430,8 +436,13 @@ def test_historical_render_uses_frozen_snapshot_after_catalog_change(documentary
         _, snapshot = revision_snapshot(UUID(frozen["id"]), org)
     before = _doc01(snapshot)
     with connection.cursor() as cursor:
+        # Referenced catalog rows are frozen by guard_referenced_catalog —
+        # the only post-freeze mutation the catalog permits is the
+        # provenance/review triple, which is exactly the surface this test
+        # must prove cannot shift a frozen snapshot.
         cursor.execute(
-            "UPDATE public.profile_articles SET name='LATER CATALOG CHANGE' WHERE sku='MARCO'"
+            "UPDATE public.profile_articles SET data_provenance='LEGACY_UNVERIFIED' "
+            "WHERE sku='MARCO'"
         )
     with as_user(users["OWNER"]):
         _, loaded = revision_snapshot(UUID(frozen["id"]), org)

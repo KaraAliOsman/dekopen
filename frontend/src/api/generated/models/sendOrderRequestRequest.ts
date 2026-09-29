@@ -8,4 +8,11 @@
 
 export interface SendOrderRequestRequest {
   confirmed: boolean;
+  /** @nullable */
+  expected_at?: string | null;
+  /**
+   * @maxLength 200
+   * @nullable
+   */
+  sent_to?: string | null;
 }

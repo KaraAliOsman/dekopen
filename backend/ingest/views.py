@@ -251,11 +251,12 @@ class CatalogImportConfirmView(APIView):
     )
     def post(self, request, import_id: UUID):
         try:
-            with documentary_scope(request, _CATALOG_WRITERS) as (_, _, org_id):
+            with documentary_scope(request, _CATALOG_WRITERS) as (token, _, org_id):
                 data = validate(CatalogImportConfirmSerializer, request.data)
                 return _payload(
                     catalog_service.confirm_catalog_import(
                         org_id=org_id,
+                        actor_id=token.user_id,
                         import_id=import_id,
                         system_id=data["system_id"],
                         items=data["items"],

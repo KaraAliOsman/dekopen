@@ -7,15 +7,32 @@ an unknown answer is refused rather than invented. """
 from __future__ import annotations
 
 import json
+import logging
 import re
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+from django.db import connection
+
 from ai_gateway import service as gateway
-from ai_gateway.context import REQUIRED_REFS, _ContextError, build_context
+from ai_gateway.context import (
+    REQUIRED_REFS,
+    _ContextError,
+    build_context,
+    guarded,
+    stable_refs,
+)
+from ai_gateway.jobs import _ai_backend
 from authentication.errors import contract_error
 from projects.design_assist import _BARE_NUMBER_RE, _MEASURE_RE, _parse_number
+
+# Tokens that carry digits without quantitative meaning — scrubbed before the
+# grounding scan so they cannot back an invented number.
+_OPAQUE_TOKEN_RE = re.compile(
+    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+    r"|\d{4}-\d{2}-\d{2}(?:[T ][0-9:.]+(?:Z|[+-]\d{2}:?\d{2})?)?"
+)
 
 CAPABILITY = "context_assist"
 MAX_QUESTION = 2000
@@ -65,6 +82,15 @@ Reglas:
 - "warnings" para problemas reales que el contexto evidencie (ej. escasez de material, una revisión sin congelar). Máximo 8.
 - Sin texto fuera del JSON."""
 
+CATALOG_SYSTEM_SUFFIX = """
+Contexto de CATÁLOGO — puedes:
+- Explicar bloqueos de disponibilidad citando "readiness.levels[].blockers": entidad afectada, autoridad que falta, consecuencia y acción de resolución — con sus palabras exactas.
+- Ubicar evidencia: provenance (MANUAL/LEGACY_UNVERIFIED), review_queue y drawing_ref de secciones muestran de dónde salió cada dato.
+- Sugerir relaciones entre entidades por su id/SKU (artículos, junquillos, kits, refuerzos, mapeos de compra) — señala el par concreto, no generalidades.
+- Detectar duplicados o inconsistencias visibles en los rosters (SKU repetido, nombre idéntico con rol distinto).
+- Comparar revisiones cuando el contexto expone "revision" — describe qué campos cambiarían.
+NUNCA certifiques un dato técnico que el contexto no muestre literalmente: si falta soldadura, masa o una sección, dilo y apunta al formulario real — la revisión humana es la única autoridad, tú no la eres."""
+
 
 def _grounding_values(context: Any, question: str) -> set[Decimal]:
     """Numbers the answer may cite: every numeric token literally present in
@@ -78,12 +104,19 @@ def _grounding_values(context: Any, question: str) -> set[Decimal]:
             for item in node.values():
                 walk(item)
         elif isinstance(node, list):
-            values.add(Decimal(len(node)))
+            # Entity collections may ground "cuántos" answers; scalar arrays
+            # (coordinates, point pairs) can't launder an invented count.
+            if any(isinstance(item, dict) for item in node):
+                values.add(Decimal(len(node)))
             for item in node:
                 walk(item)
 
     walk(context)
-    for match in _BARE_NUMBER_RE.finditer(json.dumps(context)):
+    # Opaque identifiers and dates look numeric to a bare-digit scan but
+    # carry no quantitative meaning — scrub them so '2026-09-30' can't ground
+    # '2026 unidades' nor a UUID's hex digits a fabricated measure.
+    scrubbed = _OPAQUE_TOKEN_RE.sub(" ", json.dumps(context))
+    for match in _BARE_NUMBER_RE.finditer(scrubbed):
         number = _parse_number(match.group(0))
         if number is not None:
             values.add(number)
@@ -110,8 +143,11 @@ def _grounding_values(context: Any, question: str) -> set[Decimal]:
 def _grounded(answer: str, values: set[Decimal]) -> bool:
     """Every number in the answer must be citable — within rounding tolerance
     of a grounding value ('el desperdicio es 20%' may cite a 20.4 in context,
-    but '3 barras' may not invent a consumption)."""
-    for match in _BARE_NUMBER_RE.finditer(answer):
+    but '3 barras' may not invent a consumption). Opaque tokens are scrubbed
+    before scanning: a date or UUID in the text is an identifier, not a
+    numeric claim ('entrega 2026-09-30' need not ground '2026')."""
+    scan = _OPAQUE_TOKEN_RE.sub(" ", answer)
+    for match in _BARE_NUMBER_RE.finditer(scan):
         number = _parse_number(match.group(0))
         if number is None:
             continue
@@ -218,7 +254,11 @@ def ask(
         capability=CAPABILITY,
         operation_key=operation_key,
         tool_name="context_assist",
-        provider_options={"system": ASK_SYSTEM, "json_output": True},
+        provider_options={
+            "system": guarded(ASK_SYSTEM)
+            + (CATALOG_SYSTEM_SUFFIX if surface == "catalog" else ""),
+            "json_output": True,
+        },
         input_payload={
             "question": question[:MAX_QUESTION],
             "surface": surface,
@@ -234,18 +274,115 @@ def ask(
             "El asistente devolvió una respuesta inválida.",
         ) from None
     validated = _answer(document, _context_refs(context))
-    if not _grounded(validated["answer"], _grounding_values(context, question)):
+    values = _grounding_values(context, question)
+    if not _grounded(validated["answer"], values):
         raise contract_error(
             502,
             "ai_assist_ungrounded",
             "El asistente citó valores que no constan en el contexto.",
         )
-    return {
+    # Warnings render as system-derived evidence — invented numerics there
+    # carry the same weight as an ungrounded answer.
+    validated["warnings"] = [
+        item for item in validated["warnings"] if _grounded(item, values)
+    ]
+    result = {
         "audit_id": envelope["audit_id"],
         "model": envelope["model"],
         "credits_debited": envelope["credits_debited"],
         **validated,
     }
+    # The durable thread keys on the stable refs — a volatile pointer ref
+    # (selection) reaches the context but must not split the conversation
+    # into a new thread per canvas click.
+    _record_turn(
+        org_id=org_id,
+        user_id=user_id,
+        surface=surface,
+        refs=stable_refs(refs or {}),
+        question=question[:MAX_QUESTION],
+        answer=result,
+    )
+    return result
 
 
-__all__ = ["ask"]
+def _record_turn(
+    *,
+    org_id: UUID,
+    user_id: UUID,
+    surface: str,
+    refs: dict,
+    question: str,
+    answer: dict,
+) -> None:
+    """Persist the ask turn so the dock restores the conversation across
+    reload and later sessions (§3). Writes run under ``ai_backend`` — a
+    turn is committed evidence of what the assistant answered, so members
+    never mint or edit one through PostgREST. A persistence failure must
+    not break the reply the user is already reading."""
+    if connection.vendor != "postgresql":
+        return
+    try:
+        with _ai_backend():
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO public.ai_ask_turns
+                        (org_id, user_id, surface, refs, question, answer)
+                    VALUES (%s, %s, %s, %s::jsonb, %s, %s::jsonb)
+                    """,
+                    [
+                        str(org_id), str(user_id), surface,
+                        json.dumps(refs), question, json.dumps(answer),
+                    ],
+                )
+    except Exception:  # noqa: BLE001 — evidence must never break the answer
+        # But never silently: a persistent insert failure means restored
+        # threads diverge from what the user saw — operators need the log.
+        logging.getLogger(__name__).warning(
+            "ai_ask_turn persist failed", exc_info=True
+        )
+        return
+
+
+def list_turns(
+    *, org_id: UUID, user_id: UUID, surface: str, refs: dict
+) -> list[dict]:
+    """The durable ask thread for (user, surface, stable refs) — newest-last
+    so the dock replays it as a conversation. Volatile pointer refs are
+    stripped before matching so a canvas click never orphans the thread."""
+    if connection.vendor != "postgresql":
+        return []
+    refs = stable_refs(refs)
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT question, answer, created_at
+            FROM public.ai_ask_turns
+            WHERE org_id = %s AND user_id = %s AND surface = %s
+              AND refs = %s::jsonb
+            ORDER BY created_at DESC, id DESC
+            LIMIT 50
+            """,
+            [str(org_id), str(user_id), surface, json.dumps(refs)],
+        )
+        rows_out = cursor.fetchall()
+    # Newest-first read window, restored oldest-first so the dock replays
+    # the recent tail as a conversation — a >50-turn thread keeps its
+    # freshest context instead of permanently dropping the newest turns.
+    turns = []
+    for q, a, ts in reversed(rows_out):
+        # Drivers that don't register jsonb return it as a raw JSON string —
+        # the client contract is an object, so decode it back before serving.
+        if isinstance(a, str):
+            try:
+                a = json.loads(a)
+            except (json.JSONDecodeError, TypeError):
+                continue  # a corrupt turn can't render; skip, don't crash the thread
+        turns.append(
+            {"question": q, "answer": a, "created_at": ts.isoformat() if ts else None}
+        )
+    return turns
+
+
+__all__ = ["ask", "list_turns"]

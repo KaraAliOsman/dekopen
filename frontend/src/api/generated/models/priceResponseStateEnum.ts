@@ -11,6 +11,7 @@
  * * `PENDING` - PENDING
  * * `APPLIED` - APPLIED
  * * `REJECTED` - REJECTED
+ * * `WITHDRAWN` - WITHDRAWN
  */
 export type PriceResponseStateEnum =
   (typeof PriceResponseStateEnum)[keyof typeof PriceResponseStateEnum];
@@ -20,4 +21,5 @@ export const PriceResponseStateEnum = {
   PENDING: "PENDING",
   APPLIED: "APPLIED",
   REJECTED: "REJECTED",
+  WITHDRAWN: "WITHDRAWN",
 } as const;

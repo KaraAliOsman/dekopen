@@ -25,4 +25,8 @@ class OperationalSummaryView(APIView):
     def get(self, request):
         with documentary_scope(request, _READERS) as (_, _, org_id):
             output = service.operational_summary(org_id=org_id)
+        # job_runs is a service-owned table: the member-facing RLS context has
+        # no grant, so the count runs outside it as the connection owner with
+        # the verified org filter — the same pattern as the jobs API.
+        output["prep"]["jobs_failed"] = service.failed_jobs_count(org_id=org_id)
         return Response(output)

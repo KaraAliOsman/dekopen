@@ -1,0 +1,2 @@
+sequence_no,operation_id,kind,host_kind,host,coordinate_system,reference,face,x_mm,y_mm,u_mm,angle_left_deg,angle_right_deg,depth_mm,tool_id,basis,piece_id,piece_label,unit_index,sequence,bar_sku
+1,da3a6ff1d27616eaed1e8eba73fde1bf,HANDLE_PREP,MEMBER,ebaecccbed03cc559d751c8a3cf8bc916692815f2eca374c6b6e2a40013947d2,MEMBER_PLAN,member_start,INSIDE_FACE,62.00,500.0000,448.0000,,,,drill,handle_requirement_policy:DEMO_60_HANDLES_V2@2,ebaecccbed03cc559d751c8a3cf8bc916692815f2eca374c6b6e2a40013947d2,P03-U01-M06,,,

@@ -83,6 +83,22 @@ export interface SystemResponse {
    */
   version: number;
   is_active: boolean;
+  /**
+   * @maxLength 255
+   * @nullable
+   */
+  manufacturer?: string | null;
+  /**
+   * @maxLength 150
+   * @nullable
+   */
+  family?: string | null;
+  /** @items.maxLength 60 */
+  applications?: string[];
+  /** @items.maxLength 50 */
+  finishes?: string[];
+  /** @nullable */
+  process_profile_id?: string | null;
   readonly readiness: CatalogReadiness;
   readonly revision: string;
   read_only: boolean;

@@ -8,18 +8,51 @@ quantity; order status advances through PARTIALLY_RECEIVED / FULFILLED."""
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from decimal import Decimal
 import json
 from typing import Any
 from uuid import UUID
 
 from django.db import transaction
 
+from dekopen_engine.documentary_canonical import documentary_sha256_v1
 from documents.repository import DocumentaryError, documentary_backend, one, rows
 from pricing.repository import json_text
 
 
 def _decode_snapshot(value: object) -> dict[str, object]:
     return value if isinstance(value, dict) else json.loads(str(value))
+
+
+# Categories whose SKU underdetermines the physical unit — a finished glass is
+# made per opening, so the ordered spec is the fungible identity. Everything
+# else is fungible by SKU alone. PANEL stays SKU-keyed deliberately: work-order
+# panel needs (unit_stock_needs) reserve by SKU, and a spec hash there would
+# strand the reservation.
+_SPEC_KEYED_CATEGORIES = frozenset({"GLASS"})
+
+
+def stock_variant_key(
+    physical_stock_identity: object,
+    specification: object,
+    category: object = None,
+) -> str:
+    """Physical stock bucket for (sku, variant). Bar authority carries an
+    explicit physical stock identity; made-to-measure units carry none — their
+    fungible identity is the ordered spec itself, minus the destination tag
+    (two equal units are interchangeable even when they mount in different
+    openings)."""
+    if physical_stock_identity:
+        return str(physical_stock_identity)
+    if str(category or "") in _SPEC_KEYED_CATEGORIES and isinstance(
+        specification, dict
+    ) and specification:
+        identity = {
+            key: value for key, value in specification.items()
+            if key != "location_tag"
+        }
+        return "SPEC:" + documentary_sha256_v1(identity)
+    return ""
 
 
 def _line_item_identity(line_snapshot: dict[str, object]) -> dict[str, str]:
@@ -35,22 +68,113 @@ def _line_item_identity(line_snapshot: dict[str, object]) -> dict[str, str]:
         "name": name,
         "category": str(line_snapshot.get("category") or "UNSPECIFIED"),
         "unit": str(line_snapshot.get("unit") or "unit"),
-        "variant_key": str(line_snapshot.get("physical_stock_identity") or ""),
+        "variant_key": stock_variant_key(
+            line_snapshot.get("physical_stock_identity"),
+            specification,
+            line_snapshot.get("category"),
+        ),
     }
 
 
 def list_stock(*, org_id: UUID) -> dict[str, object]:
     items = rows(
         """
-        SELECT item_id, sku, name, category, unit, variant_key,
-               on_hand_qty, reserved_qty, (on_hand_qty - reserved_qty) AS available_qty
+        SELECT inventory_stock.item_id, sku, name, category, unit, variant_key,
+               attributes,
+               on_hand_qty, reserved_qty, (on_hand_qty - reserved_qty) AS available_qty,
+               loc.racks
         FROM public.inventory_stock
-        WHERE org_id = %s
+        LEFT JOIN (
+            SELECT item_id,
+                   STRING_AGG(DISTINCT rack_location, ', ' ORDER BY rack_location) AS racks
+            FROM public.inventory_movements
+            WHERE org_id = %s
+              AND rack_location IS NOT NULL
+              AND rack_location <> ''
+            GROUP BY item_id
+        ) loc ON loc.item_id = public.inventory_stock.item_id
+        WHERE inventory_stock.org_id = %s
         ORDER BY sku, variant_key
         """,
-        [str(org_id)],
+        [str(org_id), str(org_id)],
     )
+    for item in items:
+        item["incoming_qty"] = Decimal(0)
+    # Incoming needs Python-side matching: a line's stock bucket derives from
+    # psi-or-spec-hash (stock_variant_key), which SQL cannot express without
+    # duplicating the canonical hash.
+    incoming: dict[tuple[str, str], object] = {}
+    # order_requirement_lines / purchase_allocations are documentary-backend
+    # tables — no SELECT grant to `authenticated`. The incoming read crosses
+    # roles explicitly; RLS still applies via request.jwt.claims.
+    with documentary_backend():
+        open_lines = rows(
+            """
+            SELECT l.line_snapshot,
+                   l.quantity - COALESCE(r.received_qty, 0) AS open_qty
+            FROM public.order_requirement_lines l
+            JOIN public.orders o
+                ON o.id = l.order_id AND o.org_id = l.org_id
+                AND o.status IN ('SENT', 'PARTIALLY_RECEIVED')
+            LEFT JOIN (
+                SELECT order_line_id, SUM(received_qty) AS received_qty
+                FROM public.order_receipt_lines
+                GROUP BY order_line_id
+            ) r ON r.order_line_id = l.id
+            WHERE l.org_id = %s AND l.released_at IS NULL
+            """,
+            [str(org_id)],
+        )
+    for line in open_lines:
+        if Decimal(str(line["open_qty"])) <= 0:
+            continue
+        snapshot = _decode_snapshot(line["line_snapshot"])
+        key = (
+            str(snapshot.get("purchasing_sku") or ""),
+            stock_variant_key(
+                snapshot.get("physical_stock_identity"),
+                snapshot.get("specification"),
+                snapshot.get("category"),
+            ),
+        )
+        incoming[key] = incoming.get(key, Decimal(0)) + Decimal(str(line["open_qty"]))
+    keys = {(str(item["sku"]), str(item["variant_key"])): item for item in items}
+    for (sku, variant_key), qty in incoming.items():
+        item = keys.get((sku, variant_key))
+        if item is not None:
+            item["incoming_qty"] = qty
+    for item in items:
+        item["spec_text"] = _spec_text(item.get("attributes"))
+        item.pop("attributes", None)
     return {"items": items}
+
+
+def _spec_text(attributes: object) -> str:
+    """Flat searchable text from the stored specification — glass composition,
+    treatments, dims. Searching '4-16-4' or 'Float' must find the item."""
+    if isinstance(attributes, str):
+        try:
+            attributes = json.loads(attributes)
+        except (ValueError, TypeError):
+            return ""
+    if not isinstance(attributes, dict):
+        return ""
+    seen: list[str] = []
+
+    def walk(value: object) -> None:
+        if isinstance(value, dict):
+            for child in value.values():
+                walk(child)
+        elif isinstance(value, (list, tuple)):
+            for child in value:
+                walk(child)
+        elif value is not None:
+            text = str(value).strip()
+            if text and text not in seen:
+                seen.append(text)
+
+    walk(attributes)
+    return " ".join(seen)
 
 
 def list_movements(*, org_id: UUID, item_id: UUID | None, limit: int) -> dict[str, object]:
@@ -63,7 +187,8 @@ def list_movements(*, org_id: UUID, item_id: UUID | None, limit: int) -> dict[st
     items = rows(
         f"""
         SELECT m.id, m.item_id, m.movement_type::text, m.quantity, m.order_id,
-               m.order_line_id, m.lot_code, m.note, m.actor_id, m.created_at
+               m.order_line_id, m.lot_code, m.rack_location, m.note,
+               m.actor_id, m.actor_label, m.created_at
         FROM public.inventory_movements m
         WHERE {' AND '.join(clauses)}
         ORDER BY m.created_at DESC
@@ -113,8 +238,10 @@ def order_receiving(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
     public_lines = []
     for line in lines:
         snapshot = _decode_snapshot(line["line_snapshot"])
+        # Damaged units are not fulfilment — the buyer still owes the line
+        # their replacement, so outstanding counts usable receipts only.
         outstanding = max(
-            line["quantity"] - line["received_qty"],
+            line["quantity"] - (line["received_qty"] - line["damaged_qty"]),
             type(line["quantity"])(0),
         )
         public_lines.append(
@@ -148,10 +275,12 @@ def _next_order_status(*, org_id: UUID, order_id: UUID) -> str:
         """
         SELECT COALESCE(bool_and(complete), FALSE) AS fulfilled
         FROM (
-            SELECT COALESCE(r.received_qty, 0) >= l.quantity AS complete
+            SELECT COALESCE(r.received_qty, 0) - COALESCE(r.damaged_qty, 0)
+                   >= l.quantity AS complete
             FROM public.order_requirement_lines l
             LEFT JOIN (
-                SELECT order_line_id, SUM(received_qty) AS received_qty
+                SELECT order_line_id, SUM(received_qty) AS received_qty,
+                       SUM(damaged_qty) AS damaged_qty
                 FROM public.order_receipt_lines
                 GROUP BY order_line_id
             ) r ON r.order_line_id = l.id
@@ -174,6 +303,7 @@ def receive_order(
     receipt_key: str,
     note: str | None,
     lines: list[dict[str, Any]],
+    actor_label: str | None = None,
 ) -> tuple[dict[str, object], bool]:
     """Record a physical receipt against a SENT/partial order. Idempotent per
     (org, receipt_key): a replayed key returns the existing receipt."""
@@ -277,8 +407,9 @@ def receive_order(
                 """
                 INSERT INTO public.inventory_movements(
                     org_id, item_id, movement_type, quantity, order_id,
-                    order_line_id, receipt_line_id, lot_code, note, actor_id)
-                VALUES (%s, %s, 'RECEIPT', %s, %s, %s, %s, %s, %s, %s)
+                    order_line_id, receipt_line_id, lot_code, rack_location,
+                    note, actor_id, actor_label)
+                VALUES (%s, %s, 'RECEIPT', %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
                 [
@@ -289,8 +420,10 @@ def receive_order(
                     order_line_id,
                     str(receipt_line["id"]),
                     entry.get("lot_code"),
+                    entry.get("rack_location"),
                     entry.get("note"),
                     str(actor_id),
+                    actor_label,
                 ],
             )
         new_status = _next_order_status(org_id=org_id, order_id=order_id)
@@ -310,12 +443,14 @@ def record_movement(
     quantity: Any,
     lot_code: str | None,
     note: str,
+    rack_location: str | None = None,
+    actor_label: str | None = None,
 ) -> dict[str, object]:
     """Manual stock corrections. Reservation/consumption stay reserved for
     production flows; here only RECEIPT-free adjustments are allowed."""
     if movement_type not in ("ADJUSTMENT", "RETURN", "SCRAP"):
         raise DocumentaryError("movement_type_not_allowed")
-    with transaction.atomic():
+    with transaction.atomic(), documentary_backend():
         item = one(
             "SELECT id FROM public.inventory_items WHERE id = %s AND org_id = %s",
             [str(item_id), str(org_id)],
@@ -324,10 +459,12 @@ def record_movement(
         movement = one(
             """
             INSERT INTO public.inventory_movements(
-                org_id, item_id, movement_type, quantity, lot_code, note, actor_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                org_id, item_id, movement_type, quantity, lot_code,
+                rack_location, note, actor_id, actor_label)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id, item_id, movement_type::text, quantity, order_id,
-                      order_line_id, lot_code, note, actor_id, created_at
+                      order_line_id, lot_code, rack_location, note,
+                      actor_id, actor_label, created_at
             """,
             [
                 str(org_id),
@@ -335,8 +472,10 @@ def record_movement(
                 movement_type,
                 quantity,
                 lot_code,
+                rack_location,
                 note,
                 str(actor_id),
+                actor_label,
             ],
         )
     return dict(movement)

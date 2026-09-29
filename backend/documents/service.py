@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from math import ceil
 from typing import Mapping, TypeVar
 from uuid import NAMESPACE_URL, UUID, uuid5
@@ -23,6 +23,7 @@ from dekopen_engine.inspection_models import (
     InspectorConfig,
     InspectorInput,
     InspectorResult,
+    InspectorSeverity,
     RuleEvaluationStatus,
 )
 from dekopen_engine.inspector import inspect
@@ -31,6 +32,7 @@ from dekopen_engine.manufacturing import (
     HandleRequirementPolicyV1,
     ManufacturingFactsV1,
     ManufacturingPlacementPolicyV1,
+    VerticalReference,
     project_manufacturing_facts_v1,
 )
 from dekopen_engine.manufacturing_trace import (
@@ -38,7 +40,7 @@ from dekopen_engine.manufacturing_trace import (
     PlacementDomain,
     SemanticLeafTraceV1,
 )
-from dekopen_engine.models import EngineResult
+from dekopen_engine.models import BayOpeningType, EngineResult
 from dekopen_engine.product import (
     contour_module_computation,
     frameless_module_computation,
@@ -56,7 +58,7 @@ from engine_api.adapter import (
     parse_product_model,
 )
 from engine_api.cutting_repository import CuttingRepository
-from engine_api.inspection_repository import InspectorRepository
+from engine_api.inspection_repository import InspectorAuthorities, InspectorRepository
 from engine_api.repository import SystemParamsRepository
 from pricing.repository import commercial_backend
 from production.service import process_facts_snapshot
@@ -177,6 +179,30 @@ def _module_scoped(
     return scoped
 
 
+def _handle_rules_for_leaf(
+    slots: list,
+    leaf,
+) -> list:
+    """Mirror of the engine's handle-rule matching (policy slot → leaf):
+    opening_type + leaf_slot filter, then the door-handedness pin — a rule
+    carrying leaf_handedness applies only to leaves whose declared
+    handedness matches, and pinned rules win over wildcards when both
+    match. Keeping the predicate in one place keeps the preparation UI and
+    the freeze-time projection agreeing on which intents are required."""
+    matching = [
+        rule
+        for rule in slots
+        if rule.opening_type is leaf.opening_type
+        and (rule.leaf_slot is None or rule.leaf_slot == leaf.leaf_slot)
+        and (rule.leaf_handedness is None or rule.leaf_handedness == leaf.door_handedness)
+    ]
+    if leaf.door_handedness is not None and any(
+        rule.leaf_handedness == leaf.door_handedness for rule in matching
+    ):
+        matching = [rule for rule in matching if rule.leaf_handedness is not None]
+    return matching
+
+
 def _missing_handle_intents(
     trace: GeometryManufacturingTraceV1,
     handle_policy: HandleRequirementPolicyV1,
@@ -185,12 +211,20 @@ def _missing_handle_intents(
     available = {
         (item.bay_id, item.leaf_id, item.handle_domain_slot) for item in intents
     }
+    door_rules_exist = any(
+        rule.opening_type is BayOpeningType.DOOR_ENTRY for rule in handle_policy.slots
+    )
     for leaf in trace.leaves:
-        for rule in handle_policy.slots:
-            if rule.opening_type is not leaf.opening_type or (
-                rule.leaf_slot is not None and rule.leaf_slot != leaf.leaf_slot
-            ):
-                continue
+        if (
+            door_rules_exist
+            and leaf.opening_type is BayOpeningType.DOOR_ENTRY
+            and leaf.door_handedness is None
+        ):
+            # A door without declared handedness is incomplete — the
+            # policy cannot legally mount its handle (pinned rules don't
+            # match, and there is no wildcard to guess with).
+            return True
+        for rule in _handle_rules_for_leaf(handle_policy.slots, leaf):
             if (
                 leaf.bay_id,
                 leaf.leaf_id,
@@ -241,13 +275,48 @@ def _handle_policy_requirements(
     the editor needs to know which (bay, leaf) pairs need an intent and the
     policy bounds that govern it before a position can freeze completely."""
     requirements: list[dict[str, object]] = []
+    door_rules = [
+        rule for rule in handle_policy.slots if rule.opening_type is BayOpeningType.DOOR_ENTRY
+    ]
     for item in trace_leaves:
         leaf = item["leaf"]
-        for rule in handle_policy.slots:
-            if rule.opening_type is not leaf.opening_type or (
-                rule.leaf_slot is not None and rule.leaf_slot != leaf.leaf_slot
-            ):
-                continue
+        if (
+            door_rules
+            and leaf.opening_type is BayOpeningType.DOOR_ENTRY
+            and leaf.door_handedness is None
+        ):
+            # The door leaf needs handedness before any height intent can
+            # land — surface that as an explicit row (no host side) instead
+            # of letting the leaf look requirement-free and then failing
+            # at freeze.
+            requirements.append(
+                {
+                    "bay_id": item["bay_id"],
+                    "leaf_id": item["leaf_id"],
+                    "leaf_label": item["leaf_label"],
+                    "opening_type": leaf.opening_type.value,
+                    "handle_domain_slot": door_rules[0].handle_domain_slot,
+                    "host_member_side": None,
+                    "requires_handedness": True,
+                    "outer_height_mm": str(item["nominal_height_mm"]),
+                    "mounting_min_from_leaf_top_mm": str(
+                        min(rule.mounting_min_from_leaf_top_mm for rule in door_rules)
+                    ),
+                    "mounting_max_from_leaf_top_mm": str(
+                        max(rule.mounting_max_from_leaf_top_mm for rule in door_rules)
+                    ),
+                    "permitted_vertical_references": sorted(
+                        {
+                            reference.value
+                            for rule in door_rules
+                            for reference in rule.permitted_vertical_references
+                        }
+                    ),
+                    "leaf_rects": _leaf_rects(leaf, placement_authorities),
+                }
+            )
+            continue
+        for rule in _handle_rules_for_leaf(handle_policy.slots, leaf):
             requirements.append(
                 {
                     "bay_id": item["bay_id"],
@@ -256,6 +325,7 @@ def _handle_policy_requirements(
                     "opening_type": leaf.opening_type.value,
                     "handle_domain_slot": rule.handle_domain_slot,
                     "host_member_side": rule.host_member_side.value,
+                    "requires_handedness": False,
                     "outer_height_mm": str(item["nominal_height_mm"]),
                     "mounting_min_from_leaf_top_mm": str(
                         rule.mounting_min_from_leaf_top_mm
@@ -273,13 +343,49 @@ def _handle_policy_requirements(
     return requirements
 
 
-def _tree_has_legacy_handle(value: object) -> bool:
-    if not isinstance(value, dict):
-        return False
-    if value.get("handle_height_mm") is not None:
-        return True
-    children = value.get("children", [])
-    return isinstance(children, list) and any(_tree_has_legacy_handle(child) for child in children)
+def _synthesized_handle_intents(
+    module_tree: object,
+    trace: GeometryManufacturingTraceV1,
+    intents: list[HandleIntentV1],
+) -> list[HandleIntentV1]:
+    """A bay's `handle_height_mm` is the editor's declared handle datum,
+    measured up from the product's sill line — it IS product intent, not a
+    legacy flag, so the freeze synthesizes the same intent the preparation
+    UI would produce: one PRIMARY intent per leaf of that bay that does not
+    already carry an explicit one. Explicit intents always win."""
+    declared: dict[str, Decimal] = {}
+    stack = [module_tree]
+    while stack:
+        node = stack.pop()
+        if not isinstance(node, dict):
+            continue
+        value = node.get("handle_height_mm")
+        if value is not None and isinstance(node.get("id"), str):
+            try:
+                declared[str(node["id"])] = Decimal(str(value))
+            except InvalidOperation:
+                pass
+        children = node.get("children")
+        if isinstance(children, list):
+            stack.extend(children)
+    if not declared:
+        return intents
+    covered = {
+        (item.bay_id, item.leaf_id, item.handle_domain_slot) for item in intents
+    }
+    merged = list(intents)
+    for leaf in trace.leaves:
+        height = declared.get(leaf.bay_id)
+        if height is None or (leaf.bay_id, leaf.leaf_id, "PRIMARY") in covered:
+            continue
+        merged.append(HandleIntentV1(
+            bay_id=leaf.bay_id,
+            leaf_id=leaf.leaf_id,
+            handle_domain_slot="PRIMARY",
+            requested_height_mm=height,
+            vertical_reference=VerticalReference.OUTER_BOTTOM,
+        ))
+    return merged
 
 
 def _same_documentary_value(left: object, right: object) -> bool:
@@ -831,11 +937,13 @@ def _position_rows(project_id: UUID, org_id: UUID) -> list[dict[str, object]]:
         "input.reinforcement_cut_policy_id,input.workshop_annotations::text,"
         "input.structural_inputs::text,input.glass_polishing::text,"
         "input.handle_intents::text,input.accessory_schedule::text,"
-        "input.legacy_handle_migration_confirmed,input.calculation_hash AS documentary_calculation_hash "
+        "input.legacy_handle_migration_confirmed,input.calculation_hash AS documentary_calculation_hash,"
+        "system.name AS system_name "
         "FROM public.project_positions position "
         "JOIN public.position_documentary_inputs input "
         "ON input.position_id=position.id AND input.project_id=position.project_id "
         "AND input.org_id=position.org_id "
+        "JOIN public.profile_systems system ON system.id=position.system_id "
         "WHERE position.project_id=%s AND position.org_id=%s "
         "ORDER BY position.position_index",
         [project_id, org_id],
@@ -1045,7 +1153,11 @@ def freeze_revision_a(
             }
             if any(item.target_id not in spans for item in structural):
                 raise DocumentaryError("structural_input_target_invalid")
-            if color != "WHITE" or any(item.finish_class not in (None, "WHITE") for item in annotations):
+            # Foiled positions exist now — annotations on one may carry the
+            # FOILED machining class; a WHITE design can never claim it.
+            if color == "WHITE" and any(
+                item.finish_class not in (None, "WHITE") for item in annotations
+            ):
                 raise DocumentaryError("unsupported_documentary_color")
 
             inspector_authorities = InspectorRepository().load(system_id, org_id)
@@ -1078,15 +1190,22 @@ def freeze_revision_a(
                     except MissingStockAuthority:
                         inertia = None
                     inertias[span.target_id] = inertia
-                inspection = inspect(InspectorInput(
-                    computation=computation,
-                    chamber_clearance_mm=inspector_authorities.chamber_clearance_mm,
-                    annotations=_module_scoped(annotations, module_id, "bay_id", "leaf_id"),
-                    structural_inputs=_module_scoped(structural, module_id, "target_id"),
-                    reinforcement_ix_by_target=inertias,
-                    mode=InspectionMode.DESIGN,
-                    source_calculation_hash=str(source_hash),
-                ), inspector_authorities.config)
+                try:
+                    inspection = inspect(InspectorInput(
+                        computation=computation,
+                        chamber_clearance_mm=inspector_authorities.chamber_clearance_mm,
+                        annotations=_module_scoped(annotations, module_id, "bay_id", "leaf_id"),
+                        structural_inputs=_module_scoped(structural, module_id, "target_id"),
+                        reinforcement_ix_by_target=inertias,
+                        mode=InspectionMode.DESIGN,
+                        source_calculation_hash=str(source_hash),
+                    ), inspector_authorities.config)
+                except ValueError as error:
+                    # Inspector violations carry no position identity; without
+                    # it the estimator must binary-search the vano list.
+                    raise ValueError(
+                        f"Vano «{position['name'] or position['position_index']}»: {error}"
+                    ) from error
                 module_allowed = inspection.production_allowed
                 module_complete = not any(
                     evaluation.status is RuleEvaluationStatus.MISSING_INPUT
@@ -1095,8 +1214,18 @@ def freeze_revision_a(
                 inspections.append(
                     (module_id, inspection, module_complete, module_allowed)
                 )
+                # Only RED-severity failures block unconditionally — a
+                # YELLOW finding is a warning the inspector itself classifies
+                # as production-allowed, so blocking on it made a healthy
+                # freeze fail invisibly (review WB3).
+                red_rules = {
+                    finding.rule_id
+                    for finding in inspection.findings
+                    if finding.severity is InspectorSeverity.RED
+                }
                 has_failures = has_failures or any(
                     evaluation.status is RuleEvaluationStatus.FAIL
+                    and evaluation.rule_id in red_rules
                     for evaluation in inspection.evaluations
                 )
                 position_production_allowed = (
@@ -1107,7 +1236,28 @@ def freeze_revision_a(
                 inspection.status == "RED" for _, inspection, _, _ in inspections
             )
             if has_failures or (is_red and not allow_incomplete_workshop):
-                raise DocumentaryError("inspector_red_blocks_documentary_freeze")
+                # Serialize the blocking rules — a bare "inspector_red_blocks"
+                # left the emission form unable to say WHAT failed (review WB2).
+                failures = [
+                    {
+                        "rule": str(finding.rule_id.value),
+                        "severity": str(finding.severity.value),
+                        "title": finding.title,
+                        "diagnosis": finding.diagnosis,
+                        "recommendation": finding.recommendation,
+                        "module_id": module_id,
+                        "bay_id": finding.bay_id,
+                        "leaf_id": finding.leaf_id,
+                    }
+                    for module_id, inspection, _, _ in inspections
+                    for finding in inspection.findings
+                    if finding.severity is InspectorSeverity.RED
+                ]
+                raise DocumentaryError(
+                    "inspector_red_blocks_documentary_freeze",
+                    detail="Una regla del inspector bloquea el congelamiento documental.",
+                    extra={"inspector_failures": failures},
+                )
             production_allowed = production_allowed and position_production_allowed
             documentary_complete = documentary_complete and position_complete
 
@@ -1122,8 +1272,10 @@ def freeze_revision_a(
             quantity = int(position["quantity"])
             unit_models: list[tuple[str | None, ManufacturingFactsV1]] = []
             for module_id, computation, module_tree in calculations:
-                scoped_intents = _module_scoped(
-                    intents, module_id, "bay_id", "leaf_id"
+                scoped_intents = _synthesized_handle_intents(
+                    module_tree,
+                    computation.manufacturing_trace,
+                    _module_scoped(intents, module_id, "bay_id", "leaf_id"),
                 )
                 if is_assembly and _missing_handle_intents(
                     computation.manufacturing_trace,
@@ -1147,10 +1299,7 @@ def freeze_revision_a(
                             reinforcement_policy=policies.reinforcement,
                             handle_intents=scoped_intents,
                             resolved_reinforcement_skus=cutting.reinforcement_skus,
-                            legacy_handle_height_present=_tree_has_legacy_handle(module_tree),
-                            legacy_handle_migration_confirmed=bool(
-                                position["legacy_handle_migration_confirmed"]
-                            ),
+
                             module_id=module_id,
                         ),
                     ))
@@ -1258,6 +1407,7 @@ def freeze_revision_a(
                 "color_interior": str(position["color_interior"]),
                 "color_exterior": str(position["color_exterior"]),
                 "location_tag": location_tag,
+                "system_name": str(position["system_name"]),
                 "price_net": D(str(position["price_net"])),
                 "discount_pct": str(position["discount_pct"]),
                 "parametric_tree": tree,
@@ -1316,7 +1466,9 @@ def freeze_revision_a(
             project_id=project_id, revision=revision, positions=position_inputs, bom=bom
         )
         organization = one(
-            "SELECT name, tax_id FROM public.tenancy_organizations WHERE id = %s",
+            "SELECT name, tax_id, commercial_name, giro, brand_address,"
+            " brand_phone, brand_email, brand_logo_key, brand_logo_sha256"
+            " FROM public.tenancy_organizations WHERE id = %s",
             [str(org_id)],
             "organization_not_found",
         )
@@ -1328,9 +1480,18 @@ def freeze_revision_a(
             "org_id": org_id,
             # Issuer identity for the letterhead — rendered only on revisions
             # frozen after this field existed; older snapshots simply omit it.
+            # The logo key is content-addressed, so the frozen sha pins the
+            # exact bytes a re-rendered document may show.
             "organization": {
                 "name": str(organization["name"]),
                 "tax_id": str(organization["tax_id"]),
+                "commercial_name": organization["commercial_name"],
+                "giro": organization["giro"],
+                "brand_address": organization["brand_address"],
+                "brand_phone": organization["brand_phone"],
+                "brand_email": organization["brand_email"],
+                "brand_logo_key": organization["brand_logo_key"],
+                "brand_logo_sha256": organization["brand_logo_sha256"],
             },
             "revision": revision,
             "sealed_by": actor_id,
@@ -1453,6 +1614,30 @@ def freeze_revision_a(
                 [project_id, org_id, revision],
                 "revision_state_transition_failed",
             )
+        # §08 automations: a production-allowed freeze queues the material
+        # forecast; a freeze that revealed missing catalog authority files a
+        # catalog task per affected system instead. Emit inside this tx so the
+        # job exists iff the version does.
+        from automations.service import emit
+
+        if production_allowed:
+            emit(
+                "automation.prep_forecast",
+                org_id=org_id,
+                actor_id=actor_id,
+                idempotency_key=f"auto:prep:{version_id}",
+                version_id=str(version_id),
+            )
+        else:
+            for system_id in sorted(set(position_system_ids)):
+                emit(
+                    "automation.catalog_task",
+                    org_id=org_id,
+                    actor_id=actor_id,
+                    idempotency_key=f"auto:catalog:{version_id}:{system_id}",
+                    system_id=system_id,
+                    version_id=str(version_id),
+                )
         return {
             "id": str(version_id),
             "pricing_operation_id": str(pricing_operation_id),
@@ -1551,7 +1736,10 @@ def prepare_documentary_inputs(
         return options[0]["id"] if len(options) == 1 else None
 
     prepared = []
-    inspector_configs: dict[str, InspectorConfig] = {}
+    # Full load (config + chamber clearance) is cached per system so the
+    # readiness preview runs the same inspector the freeze will run.
+    inspector_authorities: dict[str, InspectorAuthorities] = {}
+    stock_repository = CuttingRepository()
     for position in positions:
         identity = str(position["id"])
         existing = position_inputs.get(identity)
@@ -1586,8 +1774,10 @@ def prepare_documentary_inputs(
             result,
         )
         identity_hash = identity_hashes[0]
-        if existing and existing["calculation_hash"] not in identity_hashes:
-            existing = None
+        # A changed product no longer discards the estimator's work (review
+        # WM3): saved values carry forward and the per-target filters below
+        # drop only the entries whose bay/leaf/span disappeared — an
+        # untouched leaf keeps its recorded measurements across re-prepare.
         valid_bays, valid_leaves, valid_spans, valid_glass = _valid_targets(calculations)
 
         trace_leaves: list[dict[str, object]] = []
@@ -1664,15 +1854,62 @@ def prepare_documentary_inputs(
             and (item.get("bay_id"), item.get("leaf_id")) in valid_leaves
         ]
 
-        inspector_config = inspector_configs.setdefault(
-            system_id, InspectorRepository().load(system_id_uuid, org_id).config
+        inspector_authority = inspector_authorities.setdefault(
+            system_id, InspectorRepository().load(system_id_uuid, org_id)
         )
+        inspector_config = inspector_authority.config
         # Suggestions stay a separate channel: prepare returns what the
         # estimator actually stored, plus advisory defaults the emit form can
         # prefill. Absence is never synthesized into stored authority — what
         # the user sees and saves is what exists.
         workshop_suggestions = _seed_workshop_defaults(calculations, [], inspector_config)
         polishing_suggestions = _seed_polishing_defaults(valid_glass, [])
+
+        # Readiness preview: the emit button must state what the revision
+        # will allow BEFORE it runs — same inspector, same saved inputs the
+        # freeze consumes, so "Sólo cotización" is never a surprise.
+        preview_annotations = workshop_annotations(workshop)
+        preview_structural = structural_inputs(structural)
+        production_ready = True
+        documentary_ready = True
+        for module_id, computation, _module_tree in calculations:
+            inertias: dict[str, Decimal | None] = {}
+            for span in computation.spans:
+                try:
+                    _, inertia = stock_repository.reinforcement_stock(
+                        system_id_uuid, org_id, span.parent_profile_sku, None, color
+                    )
+                except MissingStockAuthority:
+                    inertia = None
+                inertias[span.target_id] = inertia
+            try:
+                preview = inspect(
+                    InspectorInput(
+                        computation=computation,
+                        chamber_clearance_mm=inspector_authority.chamber_clearance_mm,
+                        annotations=_module_scoped(
+                            preview_annotations, module_id, "bay_id", "leaf_id"
+                        ),
+                        structural_inputs=_module_scoped(
+                            preview_structural, module_id, "target_id"
+                        ),
+                        reinforcement_ix_by_target=inertias,
+                        mode=InspectionMode.DESIGN,
+                        source_calculation_hash=str(identity_hash),
+                    ),
+                    inspector_config,
+                )
+            except ValueError:
+                # A hard inspector failure is previewed as "not ready"; the
+                # freeze surfaces the named rule if the estimator emits anyway.
+                production_ready = False
+                documentary_ready = False
+                continue
+            production_ready = production_ready and preview.production_allowed
+            documentary_ready = documentary_ready and not any(
+                evaluation.status is RuleEvaluationStatus.MISSING_INPUT
+                for evaluation in preview.evaluations
+            )
 
         prepared.append(
             {
@@ -1723,6 +1960,8 @@ def prepare_documentary_inputs(
                 "legacy_handle_migration_confirmed": bool(
                     existing and existing["legacy_handle_migration_confirmed"]
                 ),
+                "production_ready": production_ready,
+                "documentary_ready": documentary_ready,
             }
         )
     values = project_inputs[0] if project_inputs else {}
@@ -1882,3 +2121,271 @@ def revision_snapshot(version_id: UUID, org_id: UUID) -> tuple[dict[str, object]
     if snapshot_sha256_v1(snapshot) != str(version["snapshot_sha256"]):
         raise DocumentaryError("frozen_revision_hash_mismatch")
     return version, snapshot
+
+
+_COMPARE_FIELDS = (
+    "position_index",
+    "location_tag",
+    "quantity",
+    "typology",
+    "system_id",
+    "width_mm",
+    "height_mm",
+    "color_interior",
+    "color_exterior",
+    "price_net",
+    "discount_pct",
+)
+
+
+# Frozen-position fields that carry workshop/documentary authority beyond
+# the engineering hash — annotations, intents, policies, structural inputs.
+# A revision that only changed these must still report a change.
+_DOCUMENTARY_SLICE = (
+    "workshop_annotations",
+    "structural_inputs",
+    "glass_polishing",
+    "handle_intents",
+    "accessory_schedule",
+    "manufacturing_policies",
+    "legacy_handle_migration_confirmed",
+    "process_facts",
+)
+
+
+# Fields whose "changed" signal must be numeric, not lexical — "268000.00"
+# vs "268000" is the same price, not a revision change.
+_COMPARE_NUMERIC = {"quantity", "width_mm", "height_mm", "price_net", "discount_pct"}
+
+
+def _compare_value(field: str, value: object) -> str:
+    raw = str(value or "")
+    if field in _COMPARE_NUMERIC:
+        try:
+            return format(D(raw).normalize(), "f")
+        except (InvalidOperation, TypeError, ValueError):
+            return raw
+    return raw
+
+
+def _compare_position(row: dict[str, object]) -> dict[str, object]:
+    """The commercially legible slice of a frozen position — enough to render
+    a thumbnail and read what changed, nothing the customer shouldn't see."""
+    return {
+        "id": str(row.get("id") or ""),
+        "position_index": int(row["position_index"]),
+        "location_tag": row.get("location_tag") or "",
+        "typology": str(row.get("typology") or ""),
+        "system_id": str(row.get("system_id") or ""),
+        "quantity": int(row.get("quantity") or 0),
+        "width_mm": str(row.get("width_mm") or ""),
+        "height_mm": str(row.get("height_mm") or ""),
+        "color_interior": str(row.get("color_interior") or ""),
+        "color_exterior": str(row.get("color_exterior") or ""),
+        "price_net": str(row.get("price_net") or ""),
+        "discount_pct": str(row.get("discount_pct") or ""),
+        "parametric_tree": row.get("parametric_tree"),
+        "calculation_hash": str(row.get("calculation_hash") or ""),
+        "documentary_signature": documentary_canonical_json_v1(
+            {key: row.get(key) for key in _DOCUMENTARY_SLICE}
+        ).decode("utf-8"),
+    }
+
+
+def _public_position(row: dict[str, object] | None) -> dict[str, object] | None:
+    if row is None:
+        return None
+    return {
+        key: value
+        for key, value in row.items()
+        if key not in ("calculation_hash", "documentary_signature")
+    }
+
+
+def _compare_match_key(position: dict[str, object]) -> tuple[str, object]:
+    """Persistent position id when the snapshot carries it; position_index
+    only for snapshots frozen before ids existed. Index alone would merge a
+    deleted position with a new one that reuses its number."""
+    if position["id"]:
+        return ("id", position["id"])
+    return ("index", position["position_index"])
+
+
+def compare_versions(
+    *, org_id: UUID, project_id: UUID, base_code: str, head_code: str
+) -> dict[str, object]:
+    """Side-by-side diff of two frozen revisions of one project: positions
+    keyed by position_index, commercial fields compared string-for-string.
+    Snapshots that predate the hash columns are compared as stored; sealed
+    integrity fields are still reported so the reader sees what is proven."""
+    with documentary_backend():
+        project = one(
+            "SELECT id,code,name FROM public.projects WHERE id=%s AND org_id=%s",
+            [str(project_id), str(org_id)],
+            "project_not_found",
+        )
+        versions = {
+            str(row["revision_code"]): row
+            for row in rows(
+                "SELECT id,revision_code,snapshot_json::text,snapshot_sha256,"
+                "emitted_at FROM public.project_versions "
+                "WHERE org_id=%s AND project_id=%s AND revision_code IN (%s,%s)",
+                [str(org_id), str(project_id), base_code, head_code],
+            )
+        }
+    if base_code not in versions or head_code not in versions:
+        raise DocumentaryError("version_not_found")
+
+    def snapshot_of(code: str) -> tuple[dict[str, object], str | None]:
+        version = versions[code]
+        snapshot = _json_object(
+            version["snapshot_json"], "invalid_frozen_revision_snapshot"
+        )
+        integrity = None
+        if version["snapshot_sha256"]:
+            integrity = (
+                "VERIFIED"
+                if snapshot_sha256_v1(snapshot) == str(version["snapshot_sha256"])
+                else "MISMATCH"
+            )
+        return snapshot, integrity
+
+    base_snapshot, base_integrity = snapshot_of(base_code)
+    head_snapshot, head_integrity = snapshot_of(head_code)
+    base_positions = {
+        _compare_match_key(row): row
+        for row in (
+            _compare_position(p)
+            for p in base_snapshot.get("positions", [])
+            if isinstance(p, dict) and p.get("position_index") is not None
+        )
+    }
+    head_positions = {
+        _compare_match_key(row): row
+        for row in (
+            _compare_position(p)
+            for p in head_snapshot.get("positions", [])
+            if isinstance(p, dict) and p.get("position_index") is not None
+        )
+    }
+    entries: list[dict[str, object]] = []
+    added = removed = changed = unchanged = 0
+    keys = sorted(
+        set(base_positions) | set(head_positions),
+        key=lambda key: (
+            (base_positions.get(key) or head_positions.get(key))["position_index"],
+            key[0],
+        ),
+    )
+    for key in keys:
+        before = base_positions.get(key)
+        after = head_positions.get(key)
+        position_index = (
+            after["position_index"] if after is not None else before["position_index"]
+        )
+        if before is None:
+            added += 1
+            entries.append(
+                {
+                    "position_index": position_index,
+                    "change": "ADDED",
+                    "location_tag": after["location_tag"],
+                    "before": None,
+                    "after": _public_position(after),
+                    "changes": [],
+                }
+            )
+            continue
+        if after is None:
+            removed += 1
+            entries.append(
+                {
+                    "position_index": position_index,
+                    "change": "REMOVED",
+                    "location_tag": before["location_tag"],
+                    "before": _public_position(before),
+                    "after": None,
+                    "changes": [],
+                }
+            )
+            continue
+        fields = [
+            {"field": field, "before": str(before[field]), "after": str(after[field])}
+            for field in _COMPARE_FIELDS
+            if _compare_value(field, before[field]) != _compare_value(field, after[field])
+        ]
+        spec_drift = before["calculation_hash"] != after["calculation_hash"]
+        if not (before["calculation_hash"] and after["calculation_hash"]):
+            # Pre-hash snapshots cannot prove design equality by hash — fall
+            # back to the canonical tree so a bay that changed FIXED→TURN_LEFT
+            # still surfaces instead of reading as unchanged.
+            spec_drift = documentary_canonical_json_v1(
+                before.get("parametric_tree")
+            ) != documentary_canonical_json_v1(after.get("parametric_tree"))
+        if spec_drift:
+            fields.append({"field": "spec", "before": "", "after": ""})
+        if before["documentary_signature"] != after["documentary_signature"]:
+            fields.append(
+                {"field": "manufacturing", "before": "", "after": ""}
+            )
+        if fields:
+            changed += 1
+            entries.append(
+                {
+                    "position_index": position_index,
+                    "change": "CHANGED",
+                    "location_tag": after["location_tag"],
+                    "before": _public_position(before),
+                    "after": _public_position(after),
+                    "changes": fields,
+                }
+            )
+        else:
+            unchanged += 1
+
+    def totals(snapshot: dict[str, object]) -> dict[str, object]:
+        project_data = snapshot.get("project", {})
+        return {
+            "currency": str(project_data.get("currency") or ""),
+            "total_price_net": str(project_data.get("total_price_net") or ""),
+            "total_price_tax": str(project_data.get("total_price_tax") or ""),
+            "total_price_gross": str(project_data.get("total_price_gross") or ""),
+        }
+
+    base_totals = totals(base_snapshot)
+    head_totals = totals(head_snapshot)
+    # A monetary delta across currencies would be a conversion, not a
+    # comparison — only same-currency totals produce one.
+    price_delta = None
+    if base_totals["currency"] and base_totals["currency"] == head_totals["currency"]:
+        try:
+            price_delta = str(
+                D(str(head_totals["total_price_gross"]))
+                - D(str(base_totals["total_price_gross"]))
+            )
+        except Exception:
+            price_delta = None
+    return {
+        "project_id": str(project["id"]),
+        "project_code": str(project["code"]),
+        "base": {
+            "revision_code": base_code,
+            "emitted_at": versions[base_code]["emitted_at"].isoformat(),
+            "integrity": base_integrity,
+            **base_totals,
+        },
+        "head": {
+            "revision_code": head_code,
+            "emitted_at": versions[head_code]["emitted_at"].isoformat(),
+            "integrity": head_integrity,
+            **head_totals,
+        },
+        "summary": {
+            "added": added,
+            "removed": removed,
+            "changed": changed,
+            "unchanged": unchanged,
+            "price_gross_delta": price_delta,
+        },
+        "positions": entries,
+    }

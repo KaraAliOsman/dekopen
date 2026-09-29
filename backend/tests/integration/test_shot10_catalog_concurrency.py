@@ -9,7 +9,10 @@ from django.db import connection, transaction, close_old_connections, DatabaseEr
 import pytest
 
 from authentication.errors import ContractAPIException
-from backend.tests.integration.catalog_fixture import copy_fixed_catalog
+from backend.tests.integration.catalog_fixture import (
+    copy_fixed_catalog,
+    decode_jsonb_columns,
+)
 from backend.tests.integration.test_shot08_pricing import (
     committed_commercial_rows as committed_commercial_rows,
     as_user,
@@ -70,8 +73,9 @@ def _bare_system(org):
     one(
         "INSERT INTO public.profile_systems SELECT (jsonb_populate_record("
         "NULL::public.profile_systems,%s::jsonb)).* RETURNING id",
-        [json_text({**source, "id": identity, "org_id": org, "code": f"RACE-{identity.hex}",
-                    "is_global": False, "is_demo": False, "technical_locked": False})],
+        [json_text(decode_jsonb_columns("profile_systems", {
+            **source, "id": identity, "org_id": org, "code": f"RACE-{identity.hex}",
+            "is_global": False, "is_demo": False, "technical_locked": False}))],
     )
     return identity
 
@@ -177,8 +181,9 @@ def _unreferenced_global_system(role):
     one(
         "INSERT INTO public.profile_systems SELECT (jsonb_populate_record("
         "NULL::public.profile_systems,%s::jsonb)).* RETURNING id",
-        [json_text({**source, "id": identity, "code": f"GLOB-{identity.hex}",
-                    "is_demo": False, "technical_locked": False})],
+        [json_text(decode_jsonb_columns("profile_systems", {
+            **source, "id": identity, "code": f"GLOB-{identity.hex}",
+            "is_demo": False, "technical_locked": False}))],
     )
     one(
         "INSERT INTO public.profile_articles(system_id,sku,name,role,material,face_width_mm) "

@@ -5,20 +5,45 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { CostLineResponse } from "./costLineResponse";
 import type { CurrencyEnum } from "./currencyEnum";
 import type { LineResponse } from "./lineResponse";
+import type { PositionBreakdown } from "./positionBreakdown";
+import type { PriceResponseExtrasItem } from "./priceResponseExtrasItem";
+import type { PriceResponseRules } from "./priceResponseRules";
 import type { PriceResponseStateEnum } from "./priceResponseStateEnum";
 
 export interface PriceResponse {
   id: string;
   project_id: string;
+  project_code: string;
+  project_name: string;
+  client_name: string;
   /** @pattern ^REV-[A-Z]+$ */
   revision_code: string;
   discount_pct: string;
+  pricing_mode: string;
+  segment: string;
   state: PriceResponseStateEnum;
   currency: CurrencyEnum;
   lines: LineResponse[];
+  cost_lines: CostLineResponse[];
+  extras: PriceResponseExtrasItem[];
+  extras_net: string;
+  positions_breakdown: PositionBreakdown[];
+  authorities: unknown[];
+  rules: PriceResponseRules;
+  total_cost: string;
   project_net: string;
   project_tax: string;
   project_gross: string;
+  reason: string;
+  requested_by: string;
+  /** @nullable */
+  requested_by_email: string | null;
+  /** @nullable */
+  approved_by: string | null;
+  /** @nullable */
+  approved_at: string | null;
+  created_at: string;
 }

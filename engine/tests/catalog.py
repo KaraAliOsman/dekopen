@@ -35,6 +35,10 @@ def _article(
         role=role,
         material=MaterialType.PVC,
         face_width_mm=d(face_width_mm),
+        # The live DEMO_60 seed declares a 6000 mm commercial length on every
+        # profile/bead article; the fixture mirrors it so the RLS parity test
+        # verifies the value reaches the typed model field-for-field.
+        commercial_length_mm=d("6000.00"),
         welding_loss_mm=d(welding_loss_mm),
         reinforcement_gap_mm=d(reinforcement_gap_mm),
         weight_kg_m=d("1.2000"),
@@ -95,6 +99,7 @@ def demo_60_params() -> SystemParams:
 
     return SystemParams(
         system_code="DEMO_60",
+        finishes=("WHITE", "FOILED"),
         depth_mm=d("60.00"),
         material=MaterialType.PVC,
         effective_profile_articles={
@@ -107,6 +112,7 @@ def demo_60_params() -> SystemParams:
                 role=ProfileRole.THRESHOLD,
                 material=MaterialType.ALUMINIUM,
                 face_width_mm=d("30.00"),
+                commercial_length_mm=d("6000.00"),
                 welding_loss_mm=d("0.00"),
                 reinforcement_gap_mm=d("0.00"),
                 weight_kg_m=d("1.2000"),

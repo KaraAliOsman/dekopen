@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { useCanvasStore } from "./canvasStore";
 import {
+  applyBaySpec,
+  baySpec,
   changeOpening,
   exactMm,
   intentBays,
@@ -63,6 +65,34 @@ describe("rectangular intent", () => {
       expect(JSON.stringify(bay)).toBe(source);
     },
   );
+
+  it("mirrors the second leaf's handedness on a vertical split", () => {
+    const source: IntentNode = { ...bay, opening_type: "TILT_TURN_LEFT" };
+    const tree = splitBay(
+      source,
+      source.id,
+      { type: "SPLIT_V", offsetMm: "500", mullionSku: "POST" },
+      { split: "split-a", secondBay: "bay-b" },
+    );
+    expect(intentBays(tree).map((node) => node.opening_type)).toEqual([
+      "TILT_TURN_LEFT",
+      "TILT_TURN_RIGHT",
+    ]);
+  });
+
+  it("keeps identical opening types on a horizontal split", () => {
+    const source: IntentNode = { ...bay, opening_type: "TILT_TURN_LEFT" };
+    const tree = splitBay(
+      source,
+      source.id,
+      { type: "SPLIT_H", offsetMm: "400", mullionSku: "TRAV" },
+      { split: "split-a", secondBay: "bay-b" },
+    );
+    expect(intentBays(tree).map((node) => node.opening_type)).toEqual([
+      "TILT_TURN_LEFT",
+      "TILT_TURN_LEFT",
+    ]);
+  });
 
   it("edits only the selected nested bay and preserves explicit materials", () => {
     const tree = divided();
@@ -164,6 +194,66 @@ describe("rectangular intent", () => {
       color: "WHITE",
       parametric_tree: inputs.parametricTree,
     });
+  });
+
+  it("clears recipient fields the copied bay never declared", () => {
+    const tree = divided();
+    // bay-b carries an opening the source never set; pasting bay-a's spec
+    // must null it out rather than leave the stale value behind.
+    const withExtra = requestTree(
+      JSON.parse(
+        JSON.stringify(tree).replace('"id":"bay-b"', '"id":"bay-b","handle_height_mm":"1234"'),
+      ) as IntentNode,
+    );
+    const applied = applyBaySpec(withExtra, "bay-a", "bay-b");
+    const target = intentBays(applied).find((node) => node.id === "bay-b")!;
+    expect(target.opening_type).toBe("FIXED");
+    expect(target.glass_thickness_mm).toBe("24.00");
+    expect(target.handle_height_mm).toBeNull();
+    // The source bay is untouched and the copy is complete.
+    expect(intentBays(applied).find((node) => node.id === "bay-a")).toEqual(
+      intentBays(withExtra).find((node) => node.id === "bay-a"),
+    );
+    expect(baySpec(bay)).toEqual({
+      opening_type: "FIXED",
+      sliding_layout: null,
+      door_handedness: null,
+      glass_thickness_mm: "24.00",
+      glass_spec: "4-16-4",
+      glass_article_sku: "GLASS-A",
+      panel_article_sku: null,
+      hardware_set_sku: null,
+      handle_height_mm: null,
+    });
+  });
+
+  it("keeps the target's declared opening when pasting a spec onto it", () => {
+    // Mirrored pair: copying the left leaf's spec to the right leaf must
+    // carry glass/hardware but never flip Osc-der back to Osc-izq.
+    const tree = requestTree(
+      JSON.parse(
+        JSON.stringify(divided())
+          .replace('"opening_type":"FIXED"', '"opening_type":"TILT_TURN_LEFT"')
+          .replace('"opening_type":"FIXED"', '"opening_type":"TILT_TURN_RIGHT"'),
+      ) as IntentNode,
+    );
+    const applied = applyBaySpec(tree, "bay-a", "bay-b");
+    const target = intentBays(applied).find((node) => node.id === "bay-b")!;
+    expect(target.opening_type).toBe("TILT_TURN_RIGHT");
+    expect(target.glass_thickness_mm).toBe("24.00");
+    expect(target.glass_article_sku).toBe("GLASS-A");
+    // A bay that never declared an opening still adopts the source's.
+    const ontoFixed = requestTree(
+      JSON.parse(
+        JSON.stringify(divided())
+          .replace(',"opening_type":"FIXED"', "")
+          .replace('"opening_type":"FIXED"', '"opening_type":"TILT_TURN_RIGHT"'),
+      ) as IntentNode,
+    );
+    const filled = applyBaySpec(ontoFixed, "bay-b", "bay-a");
+    expect(intentBays(filled).find((node) => node.id === "bay-a")!.opening_type).toBe(
+      "TILT_TURN_RIGHT",
+    );
   });
 
   it("rejects a stale calculation after reset, even with identical values", () => {

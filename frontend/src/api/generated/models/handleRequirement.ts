@@ -6,7 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { HandleLeafRect } from "./handleLeafRect";
-import type { HostMemberSideEnum } from "./hostMemberSideEnum";
+import type { HandleRequirementHostMemberSide } from "./handleRequirementHostMemberSide";
 import type { VerticalReferenceEnum } from "./verticalReferenceEnum";
 
 export interface HandleRequirement {
@@ -16,7 +16,9 @@ export interface HandleRequirement {
   leaf_label: string;
   opening_type: string;
   handle_domain_slot: string;
-  host_member_side: HostMemberSideEnum;
+  host_member_side:
+    (typeof HandleRequirementHostMemberSide)[keyof typeof HandleRequirementHostMemberSide] | null;
+  requires_handedness?: boolean;
   /** @pattern ^-?\d{0,10}(?:\.\d{0,4})?$ */
   outer_height_mm: string;
   /** @pattern ^-?\d{0,10}(?:\.\d{0,4})?$ */

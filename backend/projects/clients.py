@@ -63,7 +63,7 @@ def list_clients(org_id):
         _public(row)
         for row in rows(
             f"SELECT {','.join(COLUMNS)} FROM public.clients "
-            "WHERE org_id=%s ORDER BY is_active DESC, name, id",
+            "WHERE org_id=%s ORDER BY is_active DESC, name, id LIMIT 500",
             [org_id],
         )
     ]

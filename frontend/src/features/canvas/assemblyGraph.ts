@@ -121,12 +121,14 @@ export function alreadyJoined(product: ProductJson, a: string, b: string): boole
 }
 
 /** Edges a coupling kind may legally join — mirrors the engine's validation:
- * INLINE joints are coplanar front seams (left/right); STACKED, TEE and
- * CORNER are vertical/stacking joints (top/bottom). */
+ * INLINE joints are coplanar front seams (left/right); STACKED and TEE are
+ * vertical/stacking joints (top/bottom); CORNER is the L-junction family and
+ * may turn the front chain (right/left at an angle) or hang a wing off a
+ * member's top, so any two free end faces qualify. */
 export function kindEdges(kind: CouplingKind): ReadonlySet<GraphEdge> {
-  return kind === "INLINE"
-    ? new Set<GraphEdge>(["left", "right"])
-    : new Set<GraphEdge>(["top", "bottom"]);
+  if (kind === "INLINE") return new Set<GraphEdge>(["left", "right"]);
+  if (kind === "CORNER") return new Set<GraphEdge>(["left", "right", "top", "bottom"]);
+  return new Set<GraphEdge>(["top", "bottom"]);
 }
 
 /** True when `moduleId` hangs under a partner — it occupies the `bottom`

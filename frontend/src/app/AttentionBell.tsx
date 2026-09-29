@@ -1,12 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { ApiError } from "../api/apiMutator";
-import { analyticsOperationalSummary, projectsList } from "../api/generated/dekopen";
+import {
+  analyticsOperationalSummary,
+  productionOrders,
+  productionStationQueue,
+} from "../api/generated/dekopen";
 import { useAuthSession } from "../auth/AuthSessionProvider";
 import { t } from "../i18n/es-CL";
-import { attentionEntries } from "./attention";
+import { attentionEntries, attentionLabel, floorAttentionEntries } from "./attention";
 import { useDismiss } from "./shellUtils";
 
 /** Topbar bell: the same action-required feed the dashboard renders, one
@@ -15,25 +19,51 @@ export function AttentionBell(): JSX.Element | null {
   const org = useAuthSession().me?.active_organization;
   const [open, setOpen] = useState(false);
   const rootRef = useDismiss<HTMLDivElement>(open, () => setOpen(false));
+  // "Read" = seen at last open, per org. The badge counts only entries that
+  // are new or grew since then; opening the list acknowledges them.
+  const seenKey = org ? `attention-seen:${org.id}` : null;
+  const [seen, setSeen] = useState<Record<string, number>>({});
 
+  const floorRole = ["OPERATOR", "INSTALLER"].includes(org?.role ?? "");
   const query = useQuery({
-    queryKey: ["shell", "attention", org?.id],
+    queryKey: ["shell", "attention", org?.id, org?.role],
     enabled: org !== undefined,
     staleTime: 60_000,
     refetchOnWindowFocus: "always",
     queryFn: async ({ signal }) => {
-      const [ops, projects] = await Promise.all([
-        analyticsOperationalSummary({ signal, headers: { "X-Organization-ID": org!.id } }),
-        projectsList({ signal, headers: { "X-Organization-ID": org!.id } }),
-      ]);
+      const headers = { "X-Organization-ID": org!.id };
+      // Floor roles can't read the operational summary (pricing-role gate),
+      // so their bell draws from the floor feeds they do have.
+      if (floorRole) {
+        const [ordersRes, queueRes] = await Promise.all([
+          productionOrders({ signal, headers }),
+          productionStationQueue({ signal, headers }),
+        ]);
+        if (ordersRes.status !== 200) throw new ApiError(ordersRes.status, ordersRes.data);
+        if (queueRes.status !== 200) throw new ApiError(queueRes.status, queueRes.data);
+        return floorAttentionEntries(
+          ordersRes.data.orders,
+          (queueRes.data.stations ?? []) as { entries?: unknown[] }[],
+        );
+      }
+      const ops = await analyticsOperationalSummary({ signal, headers });
       if (ops.status !== 200) throw new ApiError(ops.status, ops.data);
-      if (projects.status !== 200) throw new ApiError(projects.status, projects.data);
-      return attentionEntries(ops.data, projects.data.items);
+      return attentionEntries(ops.data);
     },
   });
 
+  // Hydrate the per-org seen snapshot when the org resolves / switches.
+  useEffect(() => {
+    if (!seenKey) return;
+    try {
+      setSeen(JSON.parse(localStorage.getItem(seenKey) ?? "{}"));
+    } catch {
+      setSeen({});
+    }
+  }, [seenKey]);
+
   if (!org) return null;
-  const count = query.data?.length ?? 0;
+  const unread = (query.data ?? []).filter((entry) => entry.count > (seen[entry.key] ?? 0)).length;
   return (
     <div className="attention-bell" ref={rootRef}>
       <button
@@ -44,8 +74,23 @@ export function AttentionBell(): JSX.Element | null {
         aria-label={t("shell.notifications")}
         title={t("shell.notifications")}
         onClick={() => {
-          if (!open) void query.refetch();
-          setOpen((value) => !value);
+          const next = !open;
+          // Refresh on open so the panel shows live counts; the seen snapshot
+          // records what was last displayed, so entries arriving during the
+          // open panel still badge on close.
+          if (next) void query.refetch();
+          setOpen(next);
+          if (next && query.data && seenKey) {
+            const snapshot = Object.fromEntries(
+              query.data.map((entry) => [entry.key, entry.count]),
+            );
+            setSeen(snapshot);
+            try {
+              localStorage.setItem(seenKey, JSON.stringify(snapshot));
+            } catch {
+              // Storage quota/denied — badge still works for this session.
+            }
+          }
         }}
       >
         <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden>
@@ -62,14 +107,10 @@ export function AttentionBell(): JSX.Element | null {
             strokeLinecap="round"
           />
         </svg>
-        {count > 0 && <span className="attention-bell__badge">{count}</span>}
+        {unread > 0 && <span className="attention-bell__badge">{unread}</span>}
       </button>
       {open && (
-        <div
-          className="shell-menu shell-menu--right"
-          role="menu"
-          aria-label={t("shell.notifications")}
-        >
+        <div className="shell-menu shell-menu--right" aria-label={t("shell.notifications")}>
           <p className="shell-menu__title">{t("shell.notifications")}</p>
           {query.isPending ? (
             <p className="shell-menu__meta">{t("dashboard.attentionLoading")}</p>
@@ -84,18 +125,24 @@ export function AttentionBell(): JSX.Element | null {
               {(query.data ?? []).map((entry) => (
                 <li key={entry.key}>
                   <Link
-                    role="menuitem"
                     className={`shell-menu__item${entry.warn ? " shell-menu__item--warn" : ""}`}
                     to={entry.to}
                     onClick={() => setOpen(false)}
                   >
-                    <span>{t(entry.key)}</span>
+                    <span>{attentionLabel(entry)}</span>
                     <strong>{entry.count}</strong>
                   </Link>
                 </li>
               ))}
             </ul>
           )}
+          <Link
+            className="shell-menu__all"
+            to={floorRole ? "/production" : "/dashboard"}
+            onClick={() => setOpen(false)}
+          >
+            {t("shell.notificationsAll")}
+          </Link>
         </div>
       )}
     </div>

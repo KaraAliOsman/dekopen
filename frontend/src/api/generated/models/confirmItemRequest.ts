@@ -6,7 +6,6 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { ImportOpeningTypeEnum } from "./importOpeningTypeEnum";
-import type { WhiteColorEnum } from "./whiteColorEnum";
 
 export interface ConfirmItemRequest {
   /**
@@ -27,7 +26,11 @@ export interface ConfirmItemRequest {
   quantity: number;
   opening_type: ImportOpeningTypeEnum;
   system_id: string;
-  color: WhiteColorEnum;
+  /**
+   * @minLength 1
+   * @maxLength 50
+   */
+  color: string;
   /** @pattern ^-?\d{0,8}(?:\.\d{0,2})?$ */
   glass_thickness_mm: string;
   /** @maxLength 120 */

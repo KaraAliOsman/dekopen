@@ -14,7 +14,7 @@ export interface PaymentLinkCreateRequest {
    */
   operation_key: string;
   kind: PaymentKindEnum;
-  /** @pattern ^-?\d{0,14}(?:\.\d{0,0})?$ */
+  /** @pattern ^-?\d{0,12}(?:\.\d{0,2})?$ */
   amount: string;
   /**
    * @minLength 1

@@ -6,6 +6,7 @@ import { ApiError } from "../../api/apiMutator";
 import { globalSearch } from "../../api/generated/dekopen";
 import type { SearchResult } from "../../api/generated/models";
 import { t, type TranslationKey } from "../../i18n/es-CL";
+import { MOD_K_HINT } from "../../platform";
 import { useCommandSurface } from "./registry";
 import type { CommandParam, ResolvedCommand } from "./types";
 
@@ -71,6 +72,7 @@ export function CommandPalette({
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const searchSeq = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const paletteRef = useRef<HTMLDivElement>(null);
   const surface = useCommandSurface();
 
   const close = useCallback(() => {
@@ -86,6 +88,19 @@ export function CommandPalette({
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         setOpen((previous) => !previous);
+      } else if (event.key === "/" && !open) {
+        // Chrome owns Ctrl+K while the omnibox has focus — "/" stays reachable.
+        const target = event.target as HTMLElement | null;
+        const inField =
+          target instanceof HTMLElement &&
+          (target.tagName === "INPUT" ||
+            target.tagName === "TEXTAREA" ||
+            target.tagName === "SELECT" ||
+            target.isContentEditable);
+        if (!inField) {
+          event.preventDefault();
+          setOpen(true);
+        }
       } else if (event.key === "Escape" && open) {
         event.preventDefault();
         if (pending) {
@@ -94,6 +109,26 @@ export function CommandPalette({
           setCursor(0);
           setInvalidParam(false);
         } else close();
+      } else if (event.key === "Tab" && open) {
+        // aria-modal obliges a focus trap: cycle Tab/Shift+Tab inside the
+        // palette (the input is the only tabbable — options use
+        // aria-activedescendant).
+        const root = paletteRef.current;
+        const focusables = root
+          ? Array.from(root.querySelectorAll<HTMLElement>("input, button:not([disabled])"))
+          : [];
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (!first || !last) {
+          event.preventDefault();
+          return;
+        }
+        const active = document.activeElement;
+        const outside = !root?.contains(active);
+        if (event.shiftKey ? active === first || outside : active === last || outside) {
+          event.preventDefault();
+          (event.shiftKey ? last : first).focus();
+        }
       }
     }
     window.addEventListener("keydown", onKeyDown);
@@ -243,6 +278,7 @@ export function CommandPalette({
       }}
     >
       <div
+        ref={paletteRef}
         className="command-palette"
         role="dialog"
         aria-modal="true"
@@ -255,6 +291,18 @@ export function CommandPalette({
             placeholder={pending && currentParam ? currentParam.label : t("cmd.placeholder")}
             aria-label={pending && currentParam ? currentParam.label : t("cmd.placeholder")}
             aria-invalid={invalidParam || undefined}
+            role="combobox"
+            aria-expanded="true"
+            aria-controls="command-palette-results"
+            aria-activedescendant={
+              pending && currentParam
+                ? filteredOptions.length > 0
+                  ? `command-palette-option-${Math.min(cursor, filteredOptions.length - 1)}`
+                  : undefined
+                : items.length > 0
+                  ? `command-palette-option-${Math.min(cursor, items.length - 1)}`
+                  : undefined
+            }
             onChange={(event) => {
               setQuery(event.target.value);
               setCursor(0);
@@ -262,15 +310,18 @@ export function CommandPalette({
             }}
             onKeyDown={onInputKeyDown}
           />
-          <kbd>Ctrl K</kbd>
+          <kbd>{MOD_K_HINT}</kbd>
+          <kbd>/</kbd>
         </div>
         {pending && currentParam ? (
-          <ul className="command-palette-list" role="listbox">
+          <ul className="command-palette-list" role="listbox" id="command-palette-results">
             {currentParam.kind === "choice" ? (
               filteredOptions.map((option, index) => (
                 <li key={option.value}>
                   <button
                     type="button"
+                    tabIndex={-1}
+                    id={`command-palette-option-${index}`}
                     role="option"
                     aria-selected={index === cursor}
                     className={`command-palette-item${index === cursor ? " active" : ""}`}
@@ -300,11 +351,13 @@ export function CommandPalette({
           </ul>
         ) : (
           <>
-            <ul className="command-palette-list" role="listbox">
+            <ul className="command-palette-list" role="listbox" id="command-palette-results">
               {items.map((item, index) => (
                 <li key={item.key}>
                   <button
                     type="button"
+                    tabIndex={-1}
+                    id={`command-palette-option-${index}`}
                     role="option"
                     aria-selected={index === cursor}
                     className={`command-palette-item${index === cursor ? " active" : ""}`}

@@ -49,6 +49,12 @@ export interface Remnant {
   rack_location: string | null;
   /** @nullable */
   notes: string | null;
+  /** @nullable */
+  reserved_order_code?: string | null;
+  /** @nullable */
+  origin_order_code?: string | null;
+  /** @nullable */
+  article_sku?: string | null;
   created_at: string;
   updated_at: string;
 }

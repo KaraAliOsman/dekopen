@@ -10,7 +10,6 @@ from rest_framework.exceptions import APIException
 
 from backend.tests.factories import ORG_A_ID, demo_60_params
 from backend.tests.test_engine_api import g1_request
-from documents.serializers import WorkshopAnnotationSerializer
 from engine_api.repository import SystemParamsRepository
 from engine_api.serializers import EngineCalculateRequestSerializer
 from pricing.serializers import DraftPositionSerializer
@@ -55,17 +54,26 @@ def test_position_rejects_client_bom():
     assert not serializer.is_valid()
 
 
-def test_persisted_quotation_inputs_are_white_only_without_narrowing_engine_types():
+def test_persisted_quotation_inputs_carry_a_bounded_finish_string():
+    """Finishes moved from a WHITE-only constant to the system's declared
+    `finishes` list: write serializers bound the field by shape, and the
+    engine adapter enforces membership at calculation time."""
     foiled = {**g1_request(), "color": "FOILED"}
     assert EngineCalculateRequestSerializer(data=foiled).is_valid()
-    assert not PositionWriteSerializer(
+    assert PositionWriteSerializer(
         data={"location_tag": "Cocina", "quantity": 1, "design": foiled}
     ).is_valid()
-    assert not DraftPositionSerializer(
+    assert DraftPositionSerializer(
         data={**foiled, "position_index": 1, "quantity": 1, "typology": "FIXED"}
     ).is_valid()
-    assert not WorkshopAnnotationSerializer(
-        data={"bay_id": "B1", "finish_class": "FOILED"}
+    # the shape is still bounded — blank or overlong finish strings are refused
+    blank = {**g1_request(), "color": ""}
+    assert not PositionWriteSerializer(
+        data={"location_tag": "Cocina", "quantity": 1, "design": blank}
+    ).is_valid()
+    overlong = {**g1_request(), "color": "X" * 60}
+    assert not DraftPositionSerializer(
+        data={**overlong, "position_index": 1, "quantity": 1, "typology": "FIXED"}
     ).is_valid()
 
 
@@ -273,6 +281,9 @@ def test_position_public_preserves_pre_upgrade_glass_metadata_hash():
         "color_exterior": "WHITE",
         "parametric_tree": _json.dumps(design["parametric_tree"]),
         "bom_snapshot": _json.dumps({**stored_bom, "calculation_hash": expected}),
+        "cost_net": Decimal("0"),
+        "price_net": Decimal("0"),
+        "discount_pct": Decimal("0"),
         "updated_at": "2026-09-23T00:00:00Z",
     }
     public = service.position_public(row)
@@ -328,6 +339,9 @@ def test_position_public_reads_new_glass_metadata_fields():
         "color_exterior": "WHITE",
         "parametric_tree": _json.dumps(design["parametric_tree"]),
         "bom_snapshot": _json.dumps({**stored_bom, "calculation_hash": expected}),
+        "cost_net": Decimal("0"),
+        "price_net": Decimal("0"),
+        "discount_pct": Decimal("0"),
         "updated_at": "2026-09-23T00:00:00Z",
     }
     public = service.position_public(row)

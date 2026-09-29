@@ -4,15 +4,21 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { t, type TranslationKey } from "../i18n/es-CL";
 
 import { useAuthSession } from "../auth/AuthSessionProvider";
+import { MOD_K_HINT } from "../platform";
+import { useProject } from "../features/projects/useProject";
 import { telemetry } from "../telemetry/telemetry";
 import { useTheme } from "../theme/ThemeProvider";
 import { CommandPalette } from "../features/commands/CommandPalette";
+import type { AiJob } from "../api/generated/models/aiJob";
+import { AiPresence } from "../features/assistant/AiPresence";
 import { AskDekopen } from "../features/assistant/AskDekopen";
+import { STATE_LABELS } from "../features/assistant/states";
 import { AssistantSurfaceProvider } from "../features/assistant/assistantContext";
 import { AttentionBell } from "./AttentionBell";
 import { OrgSwitcher } from "./OrgSwitcher";
 import { ProjectSwitcher } from "./ProjectSwitcher";
-import { ShellCrumbs, useProjectName } from "./ShellCrumbs";
+import { RailIcon } from "./railIcons";
+import { ShellCrumbs, crumbsFor, useProjectName } from "./ShellCrumbs";
 import { ShellLeafContext } from "./shellLeaf";
 import { contextItemActive, roleLabel, type ContextNavItem } from "./shellUtils";
 
@@ -42,6 +48,8 @@ const domainGroups: {
       { to: "/catalogs/systems", label: "nav.catalog" },
       { to: "/purchasing", label: "nav.purchasing" },
       { to: "/production", label: "nav.production" },
+      { to: "/assistant", label: "nav.assistant" },
+      { to: "/jobs", label: "nav.jobs" },
     ],
   },
   {
@@ -67,6 +75,14 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
   const leafContext = useMemo(() => ({ leaf, setLeaf }), [leaf, setLeaf]);
   const [paletteRequest, setPaletteRequest] = useState(0);
   const [assistantRequest, setAssistantRequest] = useState(0);
+  const [presenceJob, setPresenceJob] = useState<AiJob | null>(null);
+  const onActiveJob = useCallback(
+    (job: AiJob | null) =>
+      setPresenceJob((previous) =>
+        previous?.id === job?.id && previous?.state === job?.state ? previous : job,
+      ),
+    [],
+  );
   const [railOpen, setRailOpen] = useState(false);
 
   // Close the drawer nav on route change and on Escape — the drawer only
@@ -90,15 +106,63 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
 
   const parts = location.pathname.split("/").filter(Boolean);
   const projectId = parts[0] === "projects" && parts[1] !== undefined ? parts[1] : null;
-  const context: "project" | "production" | null =
-    projectId !== null ? "project" : parts[0] === "production" ? "production" : null;
+  // Same queryKey as the position editor's lock check — when the user is
+  // already on the project this is a cache hit; a locked project must not
+  // keep advertising «Nuevo vano» in the rail.
+  const projectLock = useProject(
+    canWrite && projectId !== null && projectId !== "demo" ? projectId : null,
+  );
+  const lockedProject = projectLock.data;
+  const projectUnlocked =
+    !lockedProject ||
+    (lockedProject.status === "DRAFT" &&
+      !lockedProject.versions?.some(
+        (version) => version.revision_code === lockedProject.current_revision,
+      ) &&
+      !lockedProject.current_pricing_operation_id);
+  // Studio (position editor): the project-context rail yields to a compact
+  // 64px global icon strip — the canvas owns the room and the topbar keeps
+  // the where-you-are breadcrumbs (mandate 01: Studio rail may be ~64px).
+  const isStudio = parts[0] === "projects" && parts[2] === "positions" && parts.length >= 4;
+  const context: "project" | "production" | null = isStudio
+    ? null
+    : projectId !== null
+      ? "project"
+      : parts[0] === "production"
+        ? "production"
+        : null;
   const projectName = useProjectName(projectId !== null && projectId !== "demo" ? projectId : null);
 
+  // Browser tab title tracks the same crumbs the shell renders — tabs and
+  // history entries stop all saying "DEKOPEN".
+  useEffect(() => {
+    const crumbs = crumbsFor(location.pathname, projectName, leaf);
+    const head = crumbs
+      .slice(-2)
+      .map((crumb) => crumb.label)
+      .join(" · ");
+    document.title = head ? `${head} · DEKOPEN` : "DEKOPEN";
+  }, [location.pathname, projectName, leaf]);
+
   function navigationAllowed(to: string): boolean {
+    // Mirrors the backend role sets — a nav link must never land on a
+    // 403 wall.
+    if (to === "/pricing/commercial") return role === "OWNER" || role === "ESTIMATOR";
+    if (to === "/assistant") return role !== "INSTALLER";
+    if (to === "/jobs") return role !== "INSTALLER";
     if (to === "/catalogs/systems" || to === "/purchasing")
       return role === "OWNER" || role === "WORKSHOP_MANAGER";
     if (to === "/production")
-      return role === "OWNER" || role === "WORKSHOP_MANAGER" || role === "INSTALLER";
+      return (
+        role === "OWNER" ||
+        role === "WORKSHOP_MANAGER" ||
+        role === "INSTALLER" ||
+        role === "OPERATOR" ||
+        role === "ESTIMATOR"
+      );
+    if (to === "/settings/general") return role === "OWNER" || role === "WORKSHOP_MANAGER";
+    if (to === "/dashboard" || to === "/projects" || to === "/clients")
+      return role === "OWNER" || role === "ESTIMATOR" || role === "WORKSHOP_MANAGER";
     return true;
   }
 
@@ -107,8 +171,16 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
       ? []
       : [
           { to: `/projects/${projectId}`, label: "nav.context.summary" },
-          { to: `/projects/${projectId}/pricing`, label: "nav.context.quote" },
+          // Pricing ops accept O/E only — WM gets the summary but no dead link.
           ...(canWrite
+            ? [
+                {
+                  to: `/projects/${projectId}/pricing`,
+                  label: "nav.context.quote" as const,
+                },
+              ]
+            : []),
+          ...(canWrite && projectUnlocked
             ? [
                 {
                   to: `/projects/${projectId}/positions/new`,
@@ -128,7 +200,14 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
   return (
     <ShellLeafContext.Provider value={leafContext}>
       <AssistantSurfaceProvider>
-        <div className={`app-shell${railOpen ? " rail-open" : ""}`} data-testid="app-shell">
+        <div
+          className={`app-shell${railOpen ? " rail-open" : ""}`}
+          data-studio={isStudio || undefined}
+          data-testid="app-shell"
+        >
+          <a href="#workspace-main" className="skip-link">
+            {t("shell.skipToContent")}
+          </a>
           <button
             type="button"
             className="rail-scrim"
@@ -150,8 +229,15 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
                     <div key={group.id} className="rail-group">
                       <p className="rail-group__title">{t(group.title)}</p>
                       {items.map((item) => (
-                        <NavLink key={item.to} to={item.to} className="rail-item">
-                          {t(item.label)}
+                        <NavLink
+                          aria-label={isStudio ? t(item.label) : undefined}
+                          className="rail-item"
+                          key={item.to}
+                          title={isStudio ? t(item.label) : undefined}
+                          to={item.to}
+                        >
+                          <RailIcon to={item.to} />
+                          <span aria-hidden={isStudio || undefined}>{t(item.label)}</span>
                         </NavLink>
                       ))}
                     </div>
@@ -159,12 +245,20 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
                 })
               ) : (
                 <div className="rail-context">
-                  <Link
-                    to={context === "project" ? "/projects" : "/dashboard"}
-                    className="rail-context__back"
-                  >
-                    ‹ {t(context === "project" ? "nav.projects" : "nav.dashboard")}
-                  </Link>
+                  {context === "project" ? (
+                    <Link to="/projects" className="rail-context__back">
+                      ‹ {t("nav.projects")}
+                    </Link>
+                  ) : role === "OPERATOR" || role === "INSTALLER" ? (
+                    // Floor roles' home IS production — a «back to panel»
+                    // link would land them on a dashboard their role can't
+                    // read (review: OPERATOR 403 wall).
+                    <p className="rail-context__title">{t("nav.production")}</p>
+                  ) : (
+                    <Link to="/dashboard" className="rail-context__back">
+                      ‹ {t("nav.dashboard")}
+                    </Link>
+                  )}
                   {context === "project" && (
                     <p className="rail-context__title">
                       {projectId === "demo"
@@ -195,7 +289,9 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
             </nav>
             <div className="app-rail__user">
               <div className="app-rail__identity">
-                <span className="app-rail__email">{auth.me?.user.email ?? "—"}</span>
+                <span className="app-rail__email" title={auth.me?.user.email ?? undefined}>
+                  {auth.me?.user.email ? auth.me.user.email.split("@")[0] : "—"}
+                </span>
                 {role && <span className="app-rail__role">{t(roleLabel[role])}</span>}
               </div>
               <div className="app-rail__user-actions">
@@ -249,19 +345,46 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
                     />
                   </svg>
                   <span>{t("shell.searchHint")}</span>
-                  <kbd>⌘K</kbd>
+                  <kbd>{MOD_K_HINT}</kbd>
+                  <kbd>/</kbd>
                 </button>
                 <AttentionBell />
-                <button
-                  type="button"
-                  className="topbar-button topbar-ai"
-                  onClick={() => setAssistantRequest((value) => value + 1)}
-                >
-                  {t("shell.aiEntry")}
-                </button>
+                {/* INSTALLER has no AI surface — every ai endpoint is gated to
+                    _AGENT_CALLERS, so the orb would offer a 403 wall. */}
+                {role !== "INSTALLER" ? (
+                  <>
+                    {/* The orb always opens the dock — a pressing job gets its
+                        own chip so an unlucky FAILED_RETRYABLE can never make
+                        the dock unreachable (AI review P1-1). */}
+                    <button
+                      type="button"
+                      className="topbar-button topbar-ai"
+                      onClick={() => setAssistantRequest((value) => value + 1)}
+                    >
+                      <AiPresence
+                        organizationId={org?.id ?? null}
+                        size={22}
+                        onActiveJob={onActiveJob}
+                      />
+                      {t("shell.aiEntry")}
+                    </button>
+                    {presenceJob ? (
+                      <button
+                        type="button"
+                        className="topbar-button topbar-ai-job"
+                        title={t("aiws.presenceOpen")}
+                        onClick={() => navigate(`/assistant?job=${presenceJob.id}`)}
+                      >
+                        {t(STATE_LABELS[presenceJob.state] ?? "aiws.jobs")}
+                      </button>
+                    ) : null}
+                  </>
+                ) : null}
               </div>
             </header>
-            <main className="workspace">{children}</main>
+            <main className="workspace" id="workspace-main" tabIndex={-1}>
+              {children}
+            </main>
           </div>
           <CommandPalette
             openRequested={paletteRequest}
@@ -269,11 +392,14 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
             onNavigate={(to) => navigate(to)}
             organizationId={org?.id ?? null}
           />
-          <AskDekopen
-            openRequested={assistantRequest}
-            hideTrigger
-            organizationId={org?.id ?? null}
-          />
+          {role !== "INSTALLER" ? (
+            <AskDekopen
+              openRequested={assistantRequest}
+              hideTrigger
+              organizationId={org?.id ?? null}
+              userId={auth.me?.user.id ?? null}
+            />
+          ) : null}
         </div>
       </AssistantSurfaceProvider>
     </ShellLeafContext.Provider>

@@ -13,6 +13,7 @@ from django.db.backends.utils import CursorWrapper
 import pytest
 from rest_framework.test import APIClient
 
+from authentication.errors import ContractAPIException
 from authentication.rls import authenticated_rls_context
 from authentication.tenancy import MembershipRepository
 from authentication.types import Membership, SupabaseUser, TenantContext, VerifiedSupabaseToken
@@ -215,7 +216,7 @@ def seed_unpriced_project(org, owner, system=None):
     project = one('INSERT INTO public.projects(org_id,code,name,client_name,created_by) '
                   'VALUES(%s,%s,%s,%s,%s) RETURNING id',[org,str(uuid4()),'Commercial gate','Fixture',owner])['id']
     tree = {'id':'root','type':'BAY','opening_type':'FIXED','glass_spec':'4-12-4 Float Incoloro',
-            'glass_thickness_mm':'24.00','glass_article_sku':'GLASS-BASE'}
+            'glass_thickness_mm':'24.00','glass_article_sku':'VIDRIO-BASE'}
     one('INSERT INTO public.project_positions(org_id,project_id,position_index,quantity,typology,system_id,'
         'width_mm,height_mm,parametric_tree,bom_snapshot) VALUES(%s,%s,1,1,%s,%s,1000,1000,%s::jsonb,%s::jsonb) RETURNING id',
         [org,project,'FIXED',system,json_text(tree),'{}'])
@@ -226,8 +227,8 @@ def seed_commercial_project(org, owner, system=None):
     project = seed_unpriced_project(org, owner, system)
     with as_user(owner):
         parent = admin_write('cost-lists',org,{'supplier_name':'Gate','currency':'CLP','valid_from':date(2026,9,1)},'Gate setup')
-        for sku,unit,cost in [('DEMO-BAR-MARCO','BAR','100'),('DEMO-BAR-JQ-10','BAR','100'),
-                              ('DEMO-STEEL-BAR-MARCO','BAR','100'),('GLASS-BASE','M2','100')]:
+        for sku,unit,cost in [('COMPRA-MARCO','BAR','100'),('COMPRA-JQ-10','BAR','100'),
+                              ('COMPRA-ACERO-MARCO','BAR','100'),('VIDRIO-BASE','M2','100')]:
             admin_write('cost-items',org,{'cost_list_id':parent['id'],'sku':sku,'item_type':'FIXTURE',
                         'unit':unit,'unit_cost':Decimal(cost)},'Gate input')
         admin_write('rules',org,{'pricing_mode':'COST_PLUS_MARGIN','default_margin_pct':Decimal('0.35'),
@@ -236,7 +237,7 @@ def seed_commercial_project(org, owner, system=None):
         for mode in ('PRICE_PER_M2_BY_TYPOLOGY','FIXED_PRICE_MATRIX_DIMENSIONAL','COMMERCIAL_LIST_WITH_DISCOUNTS'):
             values = {'context_code':'DEFAULT','typology':'FIXED','pricing_mode':mode,'currency':'CLP'}
             if mode=='PRICE_PER_M2_BY_TYPOLOGY':
-                values.update(rate_per_m2=Decimal('2000'),base_glass_sku='GLASS-BASE')
+                values.update(rate_per_m2=Decimal('2000'),base_glass_sku='VIDRIO-BASE')
             if mode=='COMMERCIAL_LIST_WITH_DISCOUNTS':
                 values['catalog_price']=Decimal('2000')
             config=admin_write('configurations',org,values,'Gate config')
@@ -290,9 +291,9 @@ def test_composite_pricing_requires_exact_typology_configuration(commercial_rows
         'id':'S1','type':'SPLIT_V','split_offset_mm':'500.00','mullion_profile_sku':'POSTE-V',
         'children':[
             {'id':'B1','type':'BAY','opening_type':'FIXED','glass_spec':'4-12-4 Float Incoloro',
-             'glass_thickness_mm':'24.00','glass_article_sku':'GLASS-BASE'},
+             'glass_thickness_mm':'24.00','glass_article_sku':'VIDRIO-BASE'},
             {'id':'B2','type':'BAY','opening_type':'FIXED','glass_spec':'4-12-4 Float Incoloro',
-             'glass_thickness_mm':'24.00','glass_article_sku':'GLASS-BASE'},
+             'glass_thickness_mm':'24.00','glass_article_sku':'VIDRIO-BASE'},
         ],
     }
     serializer=PositionWriteSerializer(data={'location_tag':'Fachada','quantity':1,'design':{
@@ -305,7 +306,7 @@ def test_composite_pricing_requires_exact_typology_configuration(commercial_rows
         saved=project_service.save_position(org,project,values,position_id=position['id'])
         assert saved['typology']=='COMPOSITE'
         cost_list=one('SELECT id FROM public.cost_lists WHERE org_id=%s',[org])
-        for sku in ('DEMO-BAR-POSTE-V','DEMO-STEEL-BAR-POSTE-V'):
+        for sku in ('COMPRA-POSTE-V','COMPRA-ACERO-POSTE-V'):
             admin_write('cost-items',org,{'cost_list_id':cost_list['id'],'sku':sku,
                 'item_type':'FIXTURE','unit':'BAR','unit_cost':Decimal('100')},'Composite input')
         with commercial_backend():
@@ -315,14 +316,16 @@ def test_composite_pricing_requires_exact_typology_configuration(commercial_rows
                 project,users['OWNER'],'TARGET_GROSS_MARGIN_PROJECT'))['state']=='PREVIEW'
             for mode in ('PRICE_PER_M2_BY_TYPOLOGY','FIXED_PRICE_MATRIX_DIMENSIONAL',
                          'COMMERCIAL_LIST_WITH_DISCOUNTS'):
-                with pytest.raises(PricingError,match='pricing_configuration_not_found'):
+                with pytest.raises(ContractAPIException) as caught:
                     preview(org,tenant(org,'OWNER'),price_request(project,users['OWNER'],mode))
+                assert caught.value.contract_code=='pricing_configuration_not_found'
+                assert 'Fachada' in caught.value.public_detail
         for mode in ('PRICE_PER_M2_BY_TYPOLOGY','FIXED_PRICE_MATRIX_DIMENSIONAL',
                      'COMMERCIAL_LIST_WITH_DISCOUNTS'):
             config_values={'context_code':'DEFAULT','typology':'COMPOSITE','pricing_mode':mode,
                            'currency':'CLP'}
             if mode=='PRICE_PER_M2_BY_TYPOLOGY':
-                config_values.update(rate_per_m2=Decimal('3000'),base_glass_sku='GLASS-BASE')
+                config_values.update(rate_per_m2=Decimal('3000'),base_glass_sku='VIDRIO-BASE')
             if mode=='COMMERCIAL_LIST_WITH_DISCOUNTS':
                 config_values['catalog_price']=Decimal('3000')
             config=admin_write('configurations',org,config_values,'Composite authority')
@@ -344,7 +347,7 @@ def test_legacy_draft_rejects_submitted_typology_mismatch(commercial_rows):
             'nominal_width_mm':'1000.00','nominal_height_mm':'1000.00','color':'WHITE',
             'parametric_tree':{'id':'B1','type':'BAY','opening_type':'FIXED',
                 'glass_spec':'4-12-4 Float Incoloro','glass_thickness_mm':'24.00',
-                'glass_article_sku':'GLASS-BASE'}}]},format='json')
+                'glass_article_sku':'VIDRIO-BASE'}}]},format='json')
     assert response.status_code==400
     assert response.json()['error']['code']=='typology_mismatch'
     with as_user(users['OWNER']):
@@ -524,8 +527,8 @@ def pricing_operation_evidence(org, project):
 def required_cost_list(org, valid_from, cost):
     parent = admin_write('cost-lists',org,{'supplier_name':'Snapshot fixture','currency':'CLP',
                          'valid_from':valid_from},'Snapshot list')
-    for sku,unit in [('DEMO-BAR-MARCO','BAR'),('DEMO-BAR-JQ-10','BAR'),
-                     ('DEMO-STEEL-BAR-MARCO','BAR'),('GLASS-BASE','M2')]:
+    for sku,unit in [('COMPRA-MARCO','BAR'),('COMPRA-JQ-10','BAR'),
+                     ('COMPRA-ACERO-MARCO','BAR'),('VIDRIO-BASE','M2')]:
         admin_write('cost-items',org,{'cost_list_id':parent['id'],'sku':sku,
                     'item_type':'FIXTURE','unit':unit,'unit_cost':Decimal(cost)},'Snapshot cost')
     return parent['id']
@@ -604,7 +607,12 @@ def test_pricing_http_valid_preview_remains_successful(committed_commercial_rows
     assert response.status_code==200
     body = response.json()
     assert set(body)=={'id','project_id','revision_code','discount_pct','state','currency','lines',
-                      'project_net','project_tax','project_gross'}
+                      'project_net','project_tax','project_gross','cost_lines','total_cost',
+                      'project_code','project_name','client_name','pricing_mode','segment',
+                      'positions_breakdown','authorities','rules','requested_by_email',
+                      'reason','requested_by','approved_by','approved_at','created_at',
+                      'extras','extras_net'}
+    assert body['approved_by'] is None and body['approved_at'] is None
     assert body['state']=='PREVIEW'
     assert body['project_id']==str(project)
     assert body['revision_code']=='REV-A'
@@ -613,7 +621,8 @@ def test_pricing_http_valid_preview_remains_successful(committed_commercial_rows
     assert body['project_net']=='500'
     assert body['project_tax']=='95'
     assert body['project_gross']=='595'
-    assert body['lines']==[{'position_index':1,'line_net':'500'}]
+    assert body['lines']==[{'position_index':1,'quantity':1,'unit_price':'499.8074',
+                            'discount_pct':'0.0000','line_net':'500'}]
 
 
 def privileged_role():
@@ -958,7 +967,7 @@ def test_preview_retry_refreshes_membership_authorization(
         resume.set()
         response = request.result(timeout=15)
     assert_public_error(response,403,'pricing_permission_denied',
-                        'La operación comercial requiere revisar sus permisos, datos o configuración.')
+                        'Tu rol no permite esta operación comercial.')
     assert sqlstates==['40001']
     assert calls==['OWNER','INSTALLER']
     assert pricing_operation_evidence(org,project)==([],[])
@@ -1096,22 +1105,21 @@ def test_preview_isolation_first_sql_and_normal_endpoint_is_read_committed(
     request_thread = get_ident()
     original_execute = CursorWrapper.execute
 
+    preview_isolation = []
+
     def traced_execute(cursor, sql, params=None):
         if get_ident()==request_thread:
-            statements.append(str(sql).strip())
+            statement=str(sql).strip()
+            statements.append(statement)
+            # Sample the connection's isolation level once the request's
+            # transaction is live — the first real statement after the SET.
+            if not preview_isolation and not statement.upper().startswith('SET '):
+                with connection.cursor() as probe:
+                    original_execute(probe,'SHOW transaction_isolation')
+                    preview_isolation.append(probe.fetchone()[0])
         return original_execute(cursor,sql,params)
 
     monkeypatch.setattr(CursorWrapper,'execute',traced_execute)
-    preview_isolation = []
-    original_preview = pricing_views.preview
-
-    def checked_preview(*args,**kwargs):
-        with connection.cursor() as cursor:
-            cursor.execute('SHOW transaction_isolation')
-            preview_isolation.append(cursor.fetchone()[0])
-        return original_preview(*args,**kwargs)
-
-    monkeypatch.setattr(pricing_views,'preview',checked_preview)
     response = owner_client(users['OWNER']).post('/api/v1/pricing/preview/',
                                                  price_payload(project),format='json')
     assert response.status_code==200

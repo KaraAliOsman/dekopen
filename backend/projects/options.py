@@ -39,10 +39,50 @@ def _section_json(section):
     return None if section is None else section.model_dump()
 
 
+class KitComponentSerializer(serializers.Serializer):
+    sku = serializers.CharField()
+    name = serializers.CharField()
+    qty = serializers.CharField()
+    unit = serializers.CharField()
+    category = serializers.CharField()
+
+
 class KitChoiceSerializer(serializers.Serializer):
     sku = serializers.CharField()
     name = serializers.CharField()
     opening_type = serializers.CharField()
+    # The leaf envelope the kit is rated for — Studio ranks/selects against
+    # these bounds instead of treating every kit as interchangeable.
+    min_leaf_width_mm = serializers.CharField()
+    max_leaf_width_mm = serializers.CharField()
+    min_leaf_height_mm = serializers.CharField()
+    max_leaf_height_mm = serializers.CharField()
+    max_leaf_weight_kg = serializers.CharField()
+    # The kit's own mass — engine adds it to the leaf for the weight axis.
+    weight_kg = serializers.CharField(allow_null=True)
+    # The declared kit bill — HANDLE/HINGE/LOCK/ROLLER/… lines with real
+    # quantities. The design surface uses it to bind visual hardware to the
+    # selected kit instead of inventing positions and counts (phase-03).
+    contents = KitComponentSerializer(many=True)
+
+
+class HandleSlotSerializer(serializers.Serializer):
+    opening_type = serializers.CharField()
+    leaf_slot = serializers.CharField(allow_null=True)
+    leaf_handedness = serializers.CharField(allow_null=True)
+    handle_domain_slot = serializers.CharField()
+    host_member_side = serializers.CharField()
+    horizontal_reference = serializers.CharField()
+    horizontal_offset_mm = serializers.CharField()
+    permitted_vertical_references = serializers.ListField(child=serializers.CharField())
+    mounting_min_from_leaf_top_mm = serializers.CharField()
+    mounting_max_from_leaf_top_mm = serializers.CharField()
+
+
+class HandlePolicySerializer(serializers.Serializer):
+    policy_id = serializers.CharField()
+    version = serializers.IntegerField()
+    slots = HandleSlotSerializer(many=True)
 
 
 class GlassSpecChoiceSerializer(serializers.Serializer):
@@ -50,10 +90,19 @@ class GlassSpecChoiceSerializer(serializers.Serializer):
     spec = serializers.CharField(allow_null=True)
 
 
+class PanelChoiceSerializer(serializers.Serializer):
+    sku = serializers.CharField()
+    name = serializers.CharField()
+    thickness_mm = serializers.CharField()
+
+
 class DesignOptionsSerializer(serializers.Serializer):
     profiles = ProfileChoiceSerializer(many=True)
     glazing_thicknesses = serializers.ListField(child=serializers.CharField())
     hardware_kits = KitChoiceSerializer(many=True)
+    # Declared handle-mounting authority for the system — null when no policy
+    # is on file. The design surface must not silently invent positions.
+    handle_policy = HandlePolicySerializer(allow_null=True)
     glass_skus = serializers.ListField(child=serializers.CharField())
     glass_specs = GlassSpecChoiceSerializer(many=True)
     colors = serializers.ListField(child=serializers.CharField())
@@ -61,6 +110,7 @@ class DesignOptionsSerializer(serializers.Serializer):
     coupler_profiles = CouplerChoiceSerializer(many=True)
     glazing_beads = GlazingBeadChoiceSerializer(many=True)
     panel_skus = serializers.ListField(child=serializers.CharField())
+    panel_choices = PanelChoiceSerializer(many=True)
     rebate_depth_mm = serializers.CharField()
     sash_overlap_mm = serializers.CharField()
     depth_mm = serializers.CharField()
@@ -78,6 +128,7 @@ class DesignOptionsView(APIView):
             params = repository.load_visible(system_id, org)
             names = repository.load_article_names(system_id, org)
             couplers = repository.load_coupler_articles(system_id, org)
+            handle_policy = repository.load_handle_policy(system_id, org)
             # Latest version wins; an org-scoped mapping outranks the global
             # recipe for the same technical SKU — same resolution the confirm
             # endpoint applies when it binds the glass authority.
@@ -105,9 +156,59 @@ class DesignOptionsView(APIView):
                         str(value) for value in sorted(params.glazing_bead_rules)
                     ],
                     "hardware_kits": [
-                        {"sku": item.sku, "name": item.name, "opening_type": item.opening_type}
+                        {
+                            "sku": item.sku,
+                            "name": item.name,
+                            "opening_type": item.opening_type,
+                            "min_leaf_width_mm": str(item.min_leaf_width_mm),
+                            "max_leaf_width_mm": str(item.max_leaf_width_mm),
+                            "min_leaf_height_mm": str(item.min_leaf_height_mm),
+                            "max_leaf_height_mm": str(item.max_leaf_height_mm),
+                            "max_leaf_weight_kg": str(item.max_leaf_weight_kg),
+                            "weight_kg": None if item.weight_kg is None else str(item.weight_kg),
+                            "contents": [
+                                {
+                                    "sku": component.sku,
+                                    "name": component.name,
+                                    "qty": str(component.qty),
+                                    "unit": component.unit,
+                                    "category": component.category,
+                                }
+                                for component in item.contents
+                            ],
+                        }
                         for item in params.available_hardware_kits
                     ],
+                    "handle_policy": (
+                        None
+                        if handle_policy is None
+                        else {
+                            "policy_id": handle_policy.policy_id,
+                            "version": handle_policy.version,
+                            "slots": [
+                                {
+                                    "opening_type": slot.opening_type.value,
+                                    "leaf_slot": slot.leaf_slot,
+                                    "leaf_handedness": slot.leaf_handedness,
+                                    "handle_domain_slot": slot.handle_domain_slot,
+                                    "host_member_side": slot.host_member_side.value,
+                                    "horizontal_reference": slot.horizontal_reference,
+                                    "horizontal_offset_mm": str(slot.horizontal_offset_mm),
+                                    "permitted_vertical_references": [
+                                        reference.value
+                                        for reference in slot.permitted_vertical_references
+                                    ],
+                                    "mounting_min_from_leaf_top_mm": str(
+                                        slot.mounting_min_from_leaf_top_mm
+                                    ),
+                                    "mounting_max_from_leaf_top_mm": str(
+                                        slot.mounting_max_from_leaf_top_mm
+                                    ),
+                                }
+                                for slot in handle_policy.slots
+                            ],
+                        }
+                    ),
                     "glass_skus": [item["technical_sku"] for item in glass_rows],
                     "glass_specs": [
                         {
@@ -116,7 +217,7 @@ class DesignOptionsView(APIView):
                         }
                         for item in glass_rows
                     ],
-                    "colors": ["WHITE"],
+                    "colors": list(params.finishes),
                     "coupler_skus": sorted(couplers),
                     "coupler_profiles": [
                         {
@@ -138,6 +239,17 @@ class DesignOptionsView(APIView):
                         for thickness, rule in sorted(params.glazing_bead_rules.items())
                     ],
                     "panel_skus": sorted(params.available_panel_rules),
+                    "panel_choices": [
+                        {
+                            "sku": item.sku,
+                            "name": item.name,
+                            "thickness_mm": str(item.thickness_mm),
+                        }
+                        for item in sorted(
+                            params.available_panel_rules.values(),
+                            key=lambda panel: panel.sku,
+                        )
+                    ],
                     "rebate_depth_mm": str(params.rebate_depth_mm),
                     "sash_overlap_mm": str(params.sash_overlap_mm),
                     "depth_mm": str(params.depth_mm),

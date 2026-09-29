@@ -12,12 +12,20 @@ from production.views import (
     ProductionOrderOpsExportView,
     ProductionOrderOpsFileView,
     ProductionOrderDispatchNoteView,
+    ProductionOrderDispatchNoteVoidView,
     ProductionOrderDispatchNoteDteView,
+    ProductionOrderDispatchNoteEnvioView,
     ProductionOrderInstallationView,
     ProductionOrderLabelsView,
     ProductionOrderCncFileView,
+    ProductionOrderCutPackView,
+    ProductionOrderCancelView,
+    ProductionOrderMaterialRecheckView,
+    ProductionOrderPackView,
     ProductionOrderDetailView,
     ProductionOrderListView,
+    ProductionStationQueueView,
+    ProductionOrderOptimizeCompareView,
     ProductionOrderOptimizeView,
     ProductionOrderPackingView,
     ProductionPrepView,
@@ -28,10 +36,24 @@ from production.views import (
     ProductionReleaseView,
     ProductionStepTransitionView,
     WorkCenterListView,
+    WorkCenterSeedDefaultsView,
+    CncWorkspaceView,
+    CncToolListView,
+    CncToolDetailView,
+    CncMachineListView,
+    CncMachineDetailView,
+    CncReadinessView,
+    CncProgramListView,
+    CncProgramFileView,
 )
 
 urlpatterns = [
     path("prep/", ProductionPrepView.as_view(), name="production-prep"),
+    path(
+        "station-queue/",
+        ProductionStationQueueView.as_view(),
+        name="production-station-queue",
+    ),
     path("orders/", ProductionOrderListView.as_view(), name="production-orders"),
     path(
         "orders/<uuid:order_id>/trace/",
@@ -52,6 +74,11 @@ urlpatterns = [
         "orders/<uuid:order_id>/optimize/",
         ProductionOrderOptimizeView.as_view(),
         name="production-order-optimize",
+    ),
+    path(
+        "orders/<uuid:order_id>/optimize/compare/",
+        ProductionOrderOptimizeCompareView.as_view(),
+        name="production-order-optimize-compare",
     ),
     path(
         "orders/<uuid:order_id>/cnc-export/",
@@ -89,6 +116,16 @@ urlpatterns = [
         name="production-order-packing",
     ),
     path(
+        "orders/<uuid:order_id>/cut-pack/",
+        ProductionOrderCutPackView.as_view(),
+        name="production-order-cut-pack",
+    ),
+    path(
+        "orders/<uuid:order_id>/production-pack/",
+        ProductionOrderPackView.as_view(),
+        name="production-order-pack",
+    ),
+    path(
         "orders/<uuid:order_id>/labels/",
         ProductionOrderLabelsView.as_view(),
         name="production-order-labels",
@@ -124,9 +161,19 @@ urlpatterns = [
         name="production-order-dispatch-note",
     ),
     path(
+        "orders/<uuid:order_id>/dispatch-note-void/",
+        ProductionOrderDispatchNoteVoidView.as_view(),
+        name="production-order-dispatch-note-void",
+    ),
+    path(
         "orders/<uuid:order_id>/dispatch-note-dte/",
         ProductionOrderDispatchNoteDteView.as_view(),
         name="production-order-dispatch-note-dte",
+    ),
+    path(
+        "orders/<uuid:order_id>/dispatch-note-envio/",
+        ProductionOrderDispatchNoteEnvioView.as_view(),
+        name="production-order-dispatch-note-envio",
     ),
     path(
         "orders/<uuid:order_id>/install/",
@@ -137,6 +184,16 @@ urlpatterns = [
         "orders/<uuid:order_id>/remake/",
         ProductionOrderRemakeView.as_view(),
         name="production-order-remake",
+    ),
+    path(
+        "orders/<uuid:order_id>/cancel/",
+        ProductionOrderCancelView.as_view(),
+        name="production-order-cancel",
+    ),
+    path(
+        "orders/<uuid:order_id>/material-recheck/",
+        ProductionOrderMaterialRecheckView.as_view(),
+        name="production-order-material-recheck",
     ),
     path(
         "steps/<uuid:step_id>/transition/",
@@ -154,4 +211,37 @@ urlpatterns = [
         name="production-release",
     ),
     path("work-centers/", WorkCenterListView.as_view(), name="production-work-centers"),
+    path(
+        "work-centers/seed-defaults/",
+        WorkCenterSeedDefaultsView.as_view(),
+        name="production-work-centers-seed",
+    ),
+    path("cnc/workspace/", CncWorkspaceView.as_view(), name="production-cnc-workspace"),
+    path("cnc/tools/", CncToolListView.as_view(), name="production-cnc-tools"),
+    path(
+        "cnc/tools/<uuid:tool_id>/",
+        CncToolDetailView.as_view(),
+        name="production-cnc-tool",
+    ),
+    path("cnc/machines/", CncMachineListView.as_view(), name="production-cnc-machines"),
+    path(
+        "cnc/machines/<uuid:machine_id>/",
+        CncMachineDetailView.as_view(),
+        name="production-cnc-machine",
+    ),
+    path(
+        "orders/<uuid:order_id>/cnc/readiness/",
+        CncReadinessView.as_view(),
+        name="production-order-cnc-readiness",
+    ),
+    path(
+        "orders/<uuid:order_id>/cnc/programs/",
+        CncProgramListView.as_view(),
+        name="production-order-cnc-programs",
+    ),
+    path(
+        "cnc/programs/<uuid:program_id>/file/<str:filename>",
+        CncProgramFileView.as_view(),
+        name="production-cnc-program-file",
+    ),
 ]

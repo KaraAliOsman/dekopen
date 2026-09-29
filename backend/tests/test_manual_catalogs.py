@@ -381,6 +381,42 @@ def test_response_serializers_emit_provenance_triple():
     assert output["review_pending"] is True
 
 
+def test_review_requires_matching_revision(monkeypatch):
+    """CAT-07: a review stamps what the reviewer read — If-Match is mandatory."""
+    import catalogs.service as service
+    from authentication.errors import ContractAPIException
+
+    row = {
+        "id": "11111111-1111-1111-1111-111111111111",
+        "org_id": "22222222-2222-2222-2222-222222222222",
+        "read_only": False,
+        "revision": "sha256:current",
+    }
+    monkeypatch.setattr(service, "retrieve", lambda *args, **kwargs: dict(row))
+
+    with pytest.raises(ContractAPIException) as missing:
+        service.review(service.ARTICLES, row["org_id"], row["id"], row["id"])
+    assert missing.value.contract_code == "catalog_stale_edit"
+    assert missing.value.status_code == 409
+
+    with pytest.raises(ContractAPIException):
+        service.review(
+            service.ARTICLES, row["org_id"], row["id"], row["id"],
+            expected_revision='"sha256:older"',
+        )
+
+
+def test_bead_resource_is_reviewable():
+    import catalogs.service as service
+
+    assert service.BEADS.extra_columns == (
+        "data_provenance",
+        "technical_reviewed_at",
+        "technical_reviewed_by",
+        "review_pending",
+    )
+
+
 def test_engine_result_serializers_carry_unknown_weight():
     from engine_api.serializers import GlassPieceSerializer, LeafWeightSerializer
 

@@ -13,10 +13,12 @@ import {
 import { t } from "../../i18n/es-CL";
 import {
   type Box,
+  clampViewToBox,
   fitTransform,
   IDENTITY,
   panBy,
   SCALE_100,
+  shouldRefitView,
   type ViewTransform,
   zoomAt,
 } from "./viewport";
@@ -42,11 +44,16 @@ export function CanvasViewport({
   contentBox,
   selectionBox,
   status,
+  contentEpoch = 0,
   children,
 }: {
   contentBox: Box;
   selectionBox: Box | null;
   status: string;
+  /** Bumped by the caller when the content is REPLACED wholesale (starter
+   * pick, another design loaded) — a manual pan/zoom latch must not leave
+   * the new product rendered off-viewport. */
+  contentEpoch?: number;
   children: ReactNode;
 }): JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -68,9 +75,12 @@ export function CanvasViewport({
   // contentBox changes (the async plan arriving later must not jump the view).
   const userInteractedRef = useRef(false);
   const lastFitBoxRef = useRef<Box | null>(null);
+  const lastFitSizeRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
+  const lastEpochRef = useRef(0);
 
   const fit = useCallback(() => {
     lastFitBoxRef.current = contentBox;
+    lastFitSizeRef.current = { w: size.w, h: size.h };
     setView(fitTransform(contentBox, size.w, size.h));
   }, [contentBox, size.w, size.h]);
 
@@ -98,23 +108,50 @@ export function CanvasViewport({
       fit();
       return;
     }
-    // Sheet grew (e.g. the plan arrived after the first fit): refit only
-    // while the user has not taken manual control of the view. Compared by
-    // value — contentBox is rebuilt each render.
+    // A wholesale content replacement breaks the manual-view latch: the new
+    // product would render wherever the old pan/zoom left it — potentially
+    // fully off-screen ("blank canvas" on a starter pick).
+    const epochChanged = contentEpoch !== lastEpochRef.current;
+    if (epochChanged) {
+      lastEpochRef.current = contentEpoch;
+      userInteractedRef.current = false;
+    }
+    // Sheet grew (e.g. the plan arrived after the first fit) or the container
+    // itself resized (the /new page collapses once a starter applies — a stale
+    // transform would clip the drawing off the viewport): refit in both cases,
+    // only while the user has not taken manual control of the view. Compared
+    // by value — contentBox is rebuilt each render.
     const last = lastFitBoxRef.current;
-    const sameBox =
-      last !== null &&
-      last.x === contentBox.x &&
-      last.y === contentBox.y &&
-      last.w === contentBox.w &&
-      last.h === contentBox.h;
-    if (!sameBox && !userInteractedRef.current) fit();
-  }, [fit, size, contentBox]);
+    const boxChanged =
+      last === null ||
+      last.x !== contentBox.x ||
+      last.y !== contentBox.y ||
+      last.w !== contentBox.w ||
+      last.h !== contentBox.h;
+    const resized = lastFitSizeRef.current.w !== size.w || lastFitSizeRef.current.h !== size.h;
+    if (
+      shouldRefitView({
+        contentEpochChanged: epochChanged,
+        boxChanged,
+        containerResized: resized,
+        userInteracted: userInteractedRef.current,
+      })
+    )
+      fit();
+  }, [fit, size, contentBox, contentEpoch]);
 
-  // Space held → pan mode. Listen on window so it works wherever focus sits.
+  // Space held → pan mode. Listen on window so it works wherever focus sits —
+  // except inside form fields, where Space must type a space.
   useEffect(() => {
     const down = (event: KeyboardEvent) => {
-      if (event.code === "Space") spaceRef.current = true;
+      const target = event.target as HTMLElement | null;
+      const editing =
+        target !== null &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable);
+      if (event.code === "Space" && !editing) spaceRef.current = true;
     };
     const up = (event: KeyboardEvent) => {
       if (event.code === "Space") spaceRef.current = false;
@@ -126,6 +163,12 @@ export function CanvasViewport({
       window.removeEventListener("keyup", up);
     };
   }, []);
+
+  // Wheel handler is bound once — latest box/size reach it through refs.
+  const boxRef = useRef(contentBox);
+  const sizeRef = useRef(size);
+  boxRef.current = contentBox;
+  sizeRef.current = size;
 
   // Native wheel listener: React's delegated wheel events are passive and
   // cannot preventDefault for zoom-to-cursor.
@@ -142,9 +185,23 @@ export function CanvasViewport({
           zoomAt(current, event.clientX - rect.left, event.clientY - rect.top, factor),
         );
       } else if (event.shiftKey) {
-        setView((current) => panBy(current, -event.deltaY, 0));
+        setView((current) =>
+          clampViewToBox(
+            panBy(current, -event.deltaY, 0),
+            boxRef.current,
+            sizeRef.current.w,
+            sizeRef.current.h,
+          ),
+        );
       } else {
-        setView((current) => panBy(current, -event.deltaX, -event.deltaY));
+        setView((current) =>
+          clampViewToBox(
+            panBy(current, -event.deltaX, -event.deltaY),
+            boxRef.current,
+            sizeRef.current.w,
+            sizeRef.current.h,
+          ),
+        );
       }
     };
     host.addEventListener("wheel", onWheel, { passive: false });
@@ -164,7 +221,14 @@ export function CanvasViewport({
   function onPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    setView((current) => panBy(current, event.clientX - drag.x, event.clientY - drag.y));
+    setView((current) =>
+      clampViewToBox(
+        panBy(current, event.clientX - drag.x, event.clientY - drag.y),
+        contentBox,
+        size.w,
+        size.h,
+      ),
+    );
     drag.x = event.clientX;
     drag.y = event.clientY;
   }
@@ -177,31 +241,37 @@ export function CanvasViewport({
   }
 
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
-    if (event.shiftKey && event.key === "!") {
+    // event.code pins shortcuts to physical keys — `key` varies across
+    // keyboard layouts (Shift+2 is "@" in US, `"` in es-CL).
+    if (event.shiftKey && event.code === "Digit1") {
       event.preventDefault();
       fit();
-    } else if (event.shiftKey && (event.key === "@" || event.key === '"')) {
+    } else if (event.shiftKey && event.code === "Digit2") {
       event.preventDefault();
       if (selectionBox) {
         userInteractedRef.current = true;
         setView(fitTransform(selectionBox, size.w, size.h));
       }
-    } else if (event.shiftKey && event.key === ")") {
+    } else if (event.shiftKey && event.code === "Digit0") {
       event.preventDefault();
       userInteractedRef.current = true;
       setView((current) => zoomAt(current, size.w / 2, size.h / 2, SCALE_100 / current.scale));
     } else if (event.key === "ArrowLeft") {
       userInteractedRef.current = true;
-      setView((current) => panBy(current, PAN_STEP, 0));
+      setView((current) => clampViewToBox(panBy(current, PAN_STEP, 0), contentBox, size.w, size.h));
     } else if (event.key === "ArrowRight") {
       userInteractedRef.current = true;
-      setView((current) => panBy(current, -PAN_STEP, 0));
+      setView((current) =>
+        clampViewToBox(panBy(current, -PAN_STEP, 0), contentBox, size.w, size.h),
+      );
     } else if (event.key === "ArrowUp") {
       userInteractedRef.current = true;
-      setView((current) => panBy(current, 0, PAN_STEP));
+      setView((current) => clampViewToBox(panBy(current, 0, PAN_STEP), contentBox, size.w, size.h));
     } else if (event.key === "ArrowDown") {
       userInteractedRef.current = true;
-      setView((current) => panBy(current, 0, -PAN_STEP));
+      setView((current) =>
+        clampViewToBox(panBy(current, 0, -PAN_STEP), contentBox, size.w, size.h),
+      );
     }
   }
 
@@ -256,7 +326,14 @@ export function CanvasViewport({
       onPointerCancel={endDrag}
       onKeyDown={onKeyDown}
     >
-      <svg className="canvas-sheet" role="img" data-testid="assembly-sheet">
+      {/* role="group" keeps the interactive member nodes in the AT tree —
+          "img" would flatten 90+ focusable bays/members into one picture. */}
+      <svg
+        className="canvas-sheet"
+        role="group"
+        aria-label={t("assembly.frontView")}
+        data-testid="assembly-sheet"
+      >
         <g transform={`translate(${view.tx} ${view.ty}) scale(${view.scale})`}>
           <ViewportScaleContext.Provider value={scaleContext}>
             {children}
@@ -289,13 +366,30 @@ export function CanvasViewport({
         >
           +
         </button>
+        {/* Fit lives on the island, not only in the % menu — after wheel-pan
+         * the product can sit fully off-canvas and Encajar is the recovery. */}
+        <button
+          type="button"
+          className="viewport-button"
+          aria-label={t("canvas.fit")}
+          title={t("canvas.fit")}
+          onClick={fit}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+            <path
+              d="M1 4.5V1h3.5M7.5 1H11v3.5M11 7.5V11H7.5M4.5 11H1V7.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.4"
+            />
+          </svg>
+        </button>
         {menuOpen && (
-          <div className="viewport-menu" role="menu">
-            {menu.map((item) => (
+          <div className="viewport-menu">
+            {menu.map((item, index) => (
               <button
-                key={item.label}
+                key={`${item.label}-${index}`}
                 type="button"
-                role="menuitem"
                 className="viewport-menu__item"
                 disabled={item.disabled}
                 onClick={() => {

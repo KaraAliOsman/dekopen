@@ -16,7 +16,7 @@ from django.db import transaction
 from authentication.errors import ContractAPIException, contract_error
 from documents.repository import documentary_backend
 from documents.storage import SupabaseDocumentStorage
-from ingest.extract import extract, kind_for, safe_file_name
+from ingest.extract import extract, kind_for, safe_file_name, sniffed_kind
 from ingest.parser import candidates_from_rows, candidates_from_text
 from jobs import service as jobs_service
 from pricing.repository import rows
@@ -104,6 +104,12 @@ def create_import(
             422,
             "import_file_invalid",
             "El nombre del archivo contiene caracteres no permitidos.",
+        )
+    if not sniffed_kind(kind, content):
+        raise contract_error(
+            422,
+            "import_file_mismatch",
+            "El contenido del archivo no coincide con su extensión.",
         )
     # Fast-fail before the storage write; the authoritative gate re-locks the
     # row inside the atomic block below.

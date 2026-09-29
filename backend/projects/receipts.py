@@ -21,10 +21,11 @@ from uuid import UUID
 from django.utils import timezone
 
 from authentication.errors import contract_error
-from documents.repository import documentary_backend
+from documents.repository import documentary_backend, decoded
 from documents.renderers import render_payment_receipt
 from documents.storage import SupabaseDocumentStorage
 from pricing.repository import one, rows
+from projects import org_branding
 
 SIGNED_URL_TTL_SECONDS = 600
 
@@ -87,6 +88,7 @@ def issue_receipt(
     collected = _collected(org_id, UUID(project_id_s))
     payload = {
         "receipt_code": receipt_code,
+        "organization": org_branding.branding_for_snapshot(org_id=org_id),
         "issued_at": timezone.now().isoformat(),
         "project": {
             "code": project["code"],
@@ -159,8 +161,12 @@ def receipt_access(
 ) -> dict:
     with documentary_backend():
         receipt = rows(
-            "SELECT * FROM public.payment_receipts "
-            "WHERE org_id=%s AND project_id=%s AND payment_id=%s",
+            "SELECT receipt.*, payment.voided_at AS payment_voided_at,"
+            " payment.void_reason AS payment_void_reason"
+            " FROM public.payment_receipts receipt"
+            " JOIN public.project_payments payment"
+            " ON payment.id=receipt.payment_id AND payment.org_id=receipt.org_id"
+            " WHERE receipt.org_id=%s AND receipt.project_id=%s AND receipt.payment_id=%s",
             [str(org_id), str(project_id), str(payment_id)],
         )
         if not receipt:
@@ -168,8 +174,46 @@ def receipt_access(
                 404, "payment_receipt_not_found", "El comprobante no está disponible."
             )
         receipt = receipt[0]
-        signed_url = SupabaseDocumentStorage().signed_url(
-            str(receipt["storage_object_key"]), expires_in=SIGNED_URL_TTL_SECONDS
+        storage = SupabaseDocumentStorage()
+        object_key = str(receipt["storage_object_key"])
+        # A voided payment's original artifact stays sealed and untouched — the
+        # annulled render is created lazily alongside and served instead.
+        if receipt.get("payment_voided_at") and not receipt.get("annulled_object_key"):
+            payload = decoded(str(receipt["payload_json"]))
+            payload["voided"] = {
+                "at": receipt["payment_voided_at"].isoformat()
+                if hasattr(receipt["payment_voided_at"], "isoformat")
+                else receipt["payment_voided_at"],
+                "reason": receipt["payment_void_reason"],
+            }
+            identifier = hashlib.sha256(
+                json.dumps(payload, sort_keys=True).encode("utf-8")
+            ).hexdigest()
+            content, media_type = render_payment_receipt(
+                payload, pdf_identifier=identifier
+            )
+            annulled_key = object_key.replace(".pdf", "_anulado.pdf")
+            storage.upload_immutable(annulled_key, content, media_type)
+            try:
+                one(
+                    "UPDATE public.payment_receipts SET annulled_object_key=%s,"
+                    " annulled_file_sha256=%s, annulled_byte_size=%s"
+                    " WHERE id=%s AND org_id=%s AND annulled_object_key IS NULL"
+                    " RETURNING id",
+                    [annulled_key, _file_sha256(content), len(content),
+                     str(receipt["id"]), str(org_id)],
+                )
+                object_key = annulled_key
+            except Exception:
+                try:
+                    storage.delete_object(annulled_key)
+                except Exception:  # noqa: BLE001
+                    pass
+                raise
+        elif receipt.get("annulled_object_key"):
+            object_key = str(receipt["annulled_object_key"])
+        signed_url = storage.signed_url(
+            object_key, expires_in=SIGNED_URL_TTL_SECONDS
         )
     return {
         **_receipt_public(receipt),

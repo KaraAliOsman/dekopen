@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+
+const NOOP = () => {};
 
 import { ApiError } from "../../api/apiMutator";
 import { positionsDesignAlternatives } from "../../api/generated/dekopen";
@@ -7,6 +9,12 @@ import { t } from "../../i18n/es-CL";
 import type { MemberGeometry } from "./members";
 import { elevationEnvelopeMm, isProductModel, type ProductJson } from "./productEditing";
 import { ProductFrontSvg } from "./ProductFrontSvg";
+import { webglAvailable } from "./webglAvailable";
+
+// three.js stays behind the dynamic boundary — see renderStudio.
+const LazyStudioImage = lazy(() =>
+  import("./renderStudio").then((mod) => ({ default: mod.StudioImage })),
+);
 
 type Alternative = {
   label: string;
@@ -29,9 +37,6 @@ type Result = {
    * that survives a catalog edit is stale the same way. */
   catalogKey: string;
 };
-
-const NO_ISSUES: never[] = [];
-const NOOP = () => undefined;
 
 function metric(metrics: Record<string, unknown>, key: string): string | null {
   const value = metrics[key];
@@ -234,19 +239,33 @@ export function AlternativesPanel({
                     return (
                       <div key={`alt-${index}`} className="alternative-card">
                         <span className="alternative-card__thumb">
-                          <ProductFrontSvg
-                            product={item.product}
-                            members={members}
-                            selectedId={null}
-                            issues={NO_ISSUES}
-                            disabled
-                            preview
-                            onSelectModule={NOOP}
-                            onAddUnit={NOOP}
-                            onCommitModuleWidth={NOOP}
-                            onCommitTotalWidth={NOOP}
-                            onCommitHeight={NOOP}
-                          />
+                          {webglAvailable() ? (
+                            <Suspense fallback={null}>
+                              <LazyStudioImage
+                                product={item.product}
+                                members={members}
+                                options={{ width: 360, height: 240 }}
+                                alt={item.label}
+                                className="alternative-card__render"
+                              />
+                            </Suspense>
+                          ) : (
+                            /* No WebGL → the technical elevation keeps the
+                             * card legible instead of an empty studio box. */
+                            <ProductFrontSvg
+                              product={item.product}
+                              members={members}
+                              selectedId={null}
+                              issues={[]}
+                              disabled
+                              preview
+                              onSelectModule={NOOP}
+                              onAddUnit={NOOP}
+                              onCommitModuleWidth={NOOP}
+                              onCommitTotalWidth={NOOP}
+                              onCommitHeight={NOOP}
+                            />
+                          )}
                         </span>
                         <p className="alternative-card__label">{item.label}</p>
                         {item.rationale && (

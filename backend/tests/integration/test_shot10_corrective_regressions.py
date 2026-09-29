@@ -158,7 +158,13 @@ def test_invalid_annotation_target_fails_closed(documentary_tenant):
             "JOIN public.manufacturing_placement_policies placement ON placement.system_id=system.id "
             "JOIN public.handle_requirement_policies handles ON handles.system_id=system.id "
             "JOIN public.reinforcement_cut_policies steel ON steel.system_id=system.id "
-            "WHERE placement.org_id IS NULL AND handles.org_id IS NULL AND steel.org_id IS NULL LIMIT 1"
+            "WHERE placement.org_id IS NULL AND handles.org_id IS NULL AND steel.org_id IS NULL "
+        "AND placement.version=(SELECT max(p2.version) FROM public.manufacturing_placement_policies p2 "
+            "WHERE p2.system_id=placement.system_id AND p2.org_id IS NULL) "
+            "AND steel.version=(SELECT max(s2.version) FROM public.reinforcement_cut_policies s2 "
+            "WHERE s2.system_id=steel.system_id AND s2.org_id IS NULL) "
+            "AND handles.version=(SELECT max(h2.version) FROM public.handle_requirement_policies h2 "
+        "WHERE h2.system_id=handles.system_id AND h2.org_id IS NULL) LIMIT 1"
         )
         # Invalid bay_id "B99" that does not exist in single bay geometry
         with pytest.raises(DocumentaryError) as exc_info:
@@ -416,9 +422,13 @@ def test_same_bay_geometry_change_invalidates_documentary_authority(documentary_
         prepared = prepare_documentary_inputs(org_id=org, project_id=project_id)
         evidence = prepared["positions"][0]
         assert evidence["calculation_hash"] != previous["positions"][0]["calculation_hash"]
-        assert evidence["workshop_annotations"] == []
-        assert evidence["glass_polishing"] == []
-        assert evidence["accessory_schedule"] is None
+        # WM3: a surviving bay keeps its recorded workshop annotations across a
+        # re-prepare — the stale-identity guard below is what blocks saving the
+        # old evidence against the new calculation.
+        assert len(evidence["workshop_annotations"]) == 1
+        assert evidence["workshop_annotations"][0]["bay_id"] == "B1"
+        assert len(evidence["glass_polishing"]) == 1
+        assert evidence["accessory_schedule"] is not None
         assert prepared["payment_terms"] == previous["payment_terms"]
         old_input = {key: value for key, value in previous["positions"][0].items()
                      if key not in ("system_name", "placement_options", "handle_options", "reinforcement_options")}
@@ -661,7 +671,10 @@ def test_reviewed_catalog_edit_reopens_readiness(documentary_tenant):
     )
     assert flagged()
     with as_user(owner):
-        catalog_service.review(catalog_service.ARTICLES, org, article_id, owner)
+        row = catalog_service.retrieve(catalog_service.ARTICLES, org, article_id)
+        catalog_service.review(
+            catalog_service.ARTICLES, org, article_id, owner, f'"{row["revision"]}"'
+        )
     assert not flagged()
 
     # Editing the reviewed row's technical values reopens the gate.
@@ -675,7 +688,10 @@ def test_reviewed_catalog_edit_reopens_readiness(documentary_tenant):
 
     # Reviewing again clears it; a further technical edit reopens again.
     with as_user(owner):
-        catalog_service.review(catalog_service.ARTICLES, org, article_id, owner)
+        row = catalog_service.retrieve(catalog_service.ARTICLES, org, article_id)
+        catalog_service.review(
+            catalog_service.ARTICLES, org, article_id, owner, f'"{row["revision"]}"'
+        )
     assert not flagged()
 
     # A never-reviewed authored row (provenance MANUAL, no prior review)

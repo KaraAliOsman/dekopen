@@ -35,11 +35,22 @@ CORE_CONSUMERS: dict[str, Callable[..., object]] = {
 }
 METADATA = {"system_code", "depth_mm"}
 RESERVED = {"sliding_lateral_clearance_mm", "corner_bracket_loss_mm", "hook_depth_mm"}
+# Input-validity authority consumed by the API adapter (finish membership gates
+# `color`), not a formula input — `backend/engine_api/adapter.py` reads it.
+API_BOUNDARY = {"finishes"}
 
 
 def test_every_system_parameter_has_an_explicit_scope() -> None:
-    assert len(CORE_CONSUMERS) == 20 and len(METADATA) == 2 and len(RESERVED) == 3
-    assert set(CORE_CONSUMERS) | METADATA | RESERVED == set(SystemParams.model_fields)
+    assert (
+        len(CORE_CONSUMERS) == 20
+        and len(METADATA) == 2
+        and len(RESERVED) == 3
+        and len(API_BOUNDARY) == 1
+    )
+    assert (
+        set(CORE_CONSUMERS) | METADATA | RESERVED | API_BOUNDARY
+        == set(SystemParams.model_fields)
+    )
     for field, consumer in CORE_CONSUMERS.items():
         reads = {
             node.attr for node in ast.walk(ast.parse(inspect.getsource(consumer)))

@@ -75,6 +75,7 @@ INSTALLED_APPS = [
     "ai_gateway.apps.AiGatewayConfig",
     "ingest.apps.IngestConfig",
     "search.apps.SearchConfig",
+    "automations.apps.AutomationsConfig",
 ]
 
 MIDDLEWARE = [
@@ -129,6 +130,11 @@ SPECTACULAR_SETTINGS = {
     "ENUM_NAME_OVERRIDES": {
         "CatalogProfileRoleEnum": ["FRAME", "SASH", "MULLION_V", "MULLION_H", "INVERSOR", "GLAZING_BEAD", "COUPLER", "ADDITIONAL", "THRESHOLD"],
         "RoleEnum": ["OWNER", "ESTIMATOR", "WORKSHOP_MANAGER", "INSTALLER"],
+        "MembershipRoleEnum": [
+            "OWNER", "ESTIMATOR", "WORKSHOP_MANAGER", "INSTALLER", "OPERATOR",
+        ],
+        "AiAgentHistoryRoleEnum": ["user", "agent"],
+        "QcResultEnum": ["PASS", "FAIL"],
         "UnitEnum": ["kit"],
         "PurchaseUnitEnum": ["BAR"],
         "MaterialEnum": ["PVC", "ALUMINIUM"],
@@ -146,7 +152,16 @@ SPECTACULAR_SETTINGS = {
             "TILT_TURN_LEFT", "TILT_TURN_RIGHT", "TURN_LEFT", "TURN_RIGHT",
         ],
         "SiiEnvioStatusEnum": ["PENDING", "ACCEPTED", "REJECTED"],
+        "OrderStatusEnum": [
+            "DRAFT",
+            "SENT",
+            "PARTIALLY_RECEIVED",
+            "FULFILLED",
+            "CANCELLED",
+        ],
         "StockKindEnum": ["BAR", "SHEET"],
+        "SectionSourceEnum": ["POLYGON", "DXF_REFERENCE"],
+        "BarAuthoritySourceEnum": ["PROFILE", "REINFORCEMENT"],
         "WorkCenterKindEnum": ["CUT", "ASSEMBLY", "GLAZING", "QC", "PACK"],
     },
     "TITLE": "Dekopen API",

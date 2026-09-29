@@ -7,7 +7,7 @@ import pytest
 
 from dekopen_engine.documentary_canonical import file_sha256
 from documents.artifacts import _require_document_role
-from documents.renderers import _doc01, _doc03, _doc06, _doc07, render_pdf_document
+from documents.renderers import _doc01, _doc02, _doc03, _doc06, _doc07, render_pdf_document
 from documents.repository import DocumentaryError
 from documents.serializers import HandleIntentSerializer
 from documents.storage import SIGNED_URL_TTL_SECONDS, SupabaseDocumentStorage
@@ -268,7 +268,7 @@ def test_client_document_escapes_input_and_never_contains_raw_cost() -> None:
     html = _doc01(revision_snapshot())
     assert "Cliente &lt;Seguro&gt;" in html
     assert "60000.00" not in html
-    assert "$ 119.000" in html
+    assert "$\u00a0119.000" in html
 
 
 def test_client_quote_includes_deterministic_opening_drawings() -> None:
@@ -280,8 +280,37 @@ def test_client_quote_includes_deterministic_opening_drawings() -> None:
         "glass_spec": "4-12-4 Float Incoloro", "children": [],
     }
     sliding_html = _doc01(sliding)
-    assert sliding_html.count('marker-end="url(#arrow-1)"') == 2
+    # Card-scoped marker ids (the hero re-draws the same position) — each
+    # sliding panel still emits exactly one arrow in its product card.
+    assert sliding_html.count('marker-end="url(#arrow-1-c1)"') == 2
     assert _doc01(sliding) == sliding_html
+
+
+def test_client_quote_renders_door_openings() -> None:
+    """DOOR_ENTRY/DOOR_DOUBLE leaves draw a dashed swing arc — a door in the
+    project must never 500 the customer quote."""
+    for opening in ("DOOR_ENTRY", "DOOR_DOUBLE"):
+        snapshot = revision_snapshot()
+        snapshot["positions"][0]["parametric_tree"] = {  # type: ignore[index]
+            "id": "B1", "type": "BAY", "opening_type": opening,
+            "door_handedness": "LEFT",
+            "glass_spec": "4-12-4 Float Incoloro", "children": [],
+        }
+        html = _doc01(snapshot)
+        assert "<svg" in html
+        assert "stroke-dasharray" in html
+
+
+def test_client_quote_renders_discount_fraction_as_percent() -> None:
+    """discount_pct is a fraction (0.10 = 10%) — the proposal must print the
+    percent the customer negotiated, never the raw fraction."""
+    snapshot = revision_snapshot()
+    snapshot["positions"][0]["discount_pct"] = "0.10"  # type: ignore[index]
+    snapshot["positions"][0]["price_net"] = "119000"  # type: ignore[index]
+    html = _doc01(snapshot)
+    assert "-10%" in html
+    assert "descuento del 10%" in html
+    assert "0.1 %" not in html and "0.1%" not in html
 
 
 def test_client_quote_draws_stacked_assembly_as_a_column() -> None:
@@ -369,8 +398,10 @@ def test_workshop_order_prints_annotations_drawing_and_assembly_matrix() -> None
     assert "150.00" in html
     assert "Matriz de ensamble" in html
     assert "BELONGS_TO_LEAF" in html and "REINFORCES" in html
-    # heterogeneous endpoints resolve to the printed piece codes, not raw ids
-    assert "M-01" in html and "R-01" in html and "I-01" in html and "H-01" in html
+    # heterogeneous endpoints resolve to the printed physical piece codes —
+    # P{position}-U{unit}-{kind}{seq} — not raw ids nor bare spec letters
+    assert "P01-U01-M01" in html and "P01-U01-M02·R" in html
+    assert "P01-U01-I01" in html and "P01-U01-MAN01" in html
     matrix = html.split("Matriz de ensamble", 1)[1]
     assert "a" * 64 not in matrix and "b" * 64 not in matrix
     assert "c" * 64 not in matrix and "e" * 64 not in matrix
@@ -383,7 +414,7 @@ def test_qc_is_blank_and_cost_report_uses_frozen_not_recorded_authority() -> Non
     assert "Diferencia ≤ 1.50 mm" in qc
     assert "________________" in qc
     cost = _doc07(revision_snapshot())
-    assert "60000.00" in cost
+    assert "$\u00a060.000" in cost
     assert "NO REGISTRADA" in cost
     assert "valor: —" in cost
     invalid = {**revision_snapshot(), "realized_waste": {"status": "RECORDED", "value": "0"}}
@@ -423,13 +454,14 @@ def test_xlsx_is_deterministic_exact_text_and_no_formula_authority(
     workbook = load_workbook(BytesIO(first), read_only=True, data_only=False)
     try:
         sheet = workbook["Pedido de vidrios"]
-        assert sheet["E8"].value == "876.00"
-        assert sheet["F8"].value == "1076.00"
-        assert sheet["G8"].value == 2
-        assert sheet["I8"].value == "TOP/LEFT"
-        assert sheet["L8"].value == "1.885152"
-        assert sheet["A9"].value == "TOTAL"
-        assert sheet["L9"].value == "1.885152"
+        assert sheet["A6"].value == "L01"
+        assert sheet["E6"].value == "876.00"
+        assert sheet["F6"].value == "1076.00"
+        assert sheet["G6"].value == 2
+        assert sheet["I6"].value == "SUP/IZQ"
+        assert sheet["L6"].value == "1.885152"
+        assert sheet["A7"].value == "TOTAL"
+        assert sheet["L7"].value == "1.885152"
         assert not any(
             isinstance(cell.value, str) and cell.value.startswith("=")
             for row in sheet.iter_rows() for cell in row
@@ -439,9 +471,40 @@ def test_xlsx_is_deterministic_exact_text_and_no_formula_authority(
     profile, _ = render_order_xlsx("DOC-04", order_snapshot("SUPPLIER_PROFILE_PO"))
     profile_workbook = load_workbook(BytesIO(profile), read_only=True)
     try:
-        assert profile_workbook["Pedido de perfiles"]["F8"].value == "5800.00"
+        assert profile_workbook["Pedido de perfiles"]["F6"].value == "5800.00"
     finally:
         profile_workbook.close()
+
+
+def test_doc02_pdf_is_the_supplier_facing_glass_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("WEASYPRINT_DLL_DIRECTORIES", "C:\\msys64\\ucrt64\\bin")
+    snapshot = order_snapshot("SUPPLIER_GLASS_PO")
+    content, media_type = render_pdf_document(
+        "DOC-02", snapshot, pdf_identifier="c" * 64
+    )
+    assert content.startswith(b"%PDF-")
+    assert media_type == "application/pdf"
+    with pytest.raises(DocumentaryError) as error:
+        _doc02(order_snapshot("SUPPLIER_PROFILE_PO"))
+    assert error.value.code == "document_scope_mismatch"
+
+
+def test_doc08_generic_order_covers_hardware_and_panel_only() -> None:
+    hardware, media = render_order_xlsx("DOC-08", order_snapshot("SUPPLIER_HARDWARE_PO"))
+    assert media.endswith("sheet")
+    workbook = load_workbook(BytesIO(hardware), read_only=True)
+    try:
+        sheet = workbook["Orden de compra"]
+        assert sheet["B6"].value == "HARDWARE" or sheet["B6"].value == "PROFILE"
+        assert sheet["E6"].value == 2
+    finally:
+        workbook.close()
+    panel, _ = render_order_xlsx("DOC-08", order_snapshot("SUPPLIER_PANEL_PO"))
+    assert panel[:2] == b"PK"
+    for wrong in ("SUPPLIER_GLASS_PO", "SUPPLIER_PROFILE_PO"):
+        with pytest.raises(DocumentaryError) as error:
+            render_order_xlsx("DOC-08", order_snapshot(wrong))
+        assert error.value.code == "document_scope_mismatch"
 
 
 def test_xlsx_formula_like_text_stays_literal_never_a_formula() -> None:
@@ -460,11 +523,11 @@ def test_xlsx_formula_like_text_stays_literal_never_a_formula() -> None:
         sheet = workbook["Pedido de vidrios"]
         assert sheet["B2"].value == "+SUM(A1:A2)"
         assert sheet["B3"].value == "=1+1"
-        assert sheet["B8"].value == "@SUM(A1:A2), =cmd|' /C calc'!A0"
-        assert sheet["C8"].value == "-1+2"
-        assert sheet["D8"].value == "@FILTER(A:A)"
-        assert sheet["J8"].value == "-FACHADA"
-        assert sheet["K8"].value == '=HYPERLINK("http://x"), +POW(2,3)'
+        assert sheet["B6"].value == "@SUM(A1:A2), =cmd|' /C calc'!A0"
+        assert sheet["C6"].value == "-1+2"
+        assert sheet["D6"].value == "@FILTER(A:A)"
+        assert sheet["J6"].value == "-FACHADA"
+        assert sheet["K6"].value == '+POW(2,3), =HYPERLINK("http://x")'
         assert all(
             cell.data_type != "f" for row in sheet.iter_rows() for cell in row
         )
@@ -476,16 +539,16 @@ def test_xlsx_formula_like_text_stays_literal_never_a_formula() -> None:
     profile_line["category"] = "@PROFILE"
     profile_line["purchasing_sku"] = "-BUY"
     profile_line["physical_stock_identity"] = "=STOCK+1"
-    profile_line["specification"]["cutting_profile_id"] = "+CUT"
+    profile_line["source_trace_labels"] = ["+TRACE"]
     profile, _ = render_order_xlsx("DOC-04", profile_snapshot)
     profile_workbook = load_workbook(BytesIO(profile), read_only=True, data_only=False)
     try:
         sheet = profile_workbook["Pedido de perfiles"]
-        assert sheet["A8"].value == "=REQ"
-        assert sheet["B8"].value == "@PROFILE"
-        assert sheet["D8"].value == "-BUY"
-        assert sheet["E8"].value == "=STOCK+1"
-        assert sheet["I8"].value == "+CUT"
+        assert sheet["A6"].value == "L01"
+        assert sheet["B6"].value == "@PROFILE"
+        assert sheet["D6"].value == "-BUY"
+        assert sheet["E6"].value in (None, "")
+        assert sheet["I6"].value == "+TRACE"
         assert all(
             cell.data_type != "f" for row in sheet.iter_rows() for cell in row
         )
@@ -501,8 +564,8 @@ def test_xlsx_empty_text_cells_roundtrip_as_empty() -> None:
     workbook = load_workbook(BytesIO(content), read_only=True, data_only=False)
     try:
         sheet = workbook["Pedido de perfiles"]
-        assert sheet["C8"].value in (None, "")
-        assert sheet["E8"].value in (None, "")
+        assert sheet["C6"].value in (None, "")
+        assert sheet["E6"].value in (None, "")
         assert all(
             cell.data_type != "f" for row in sheet.iter_rows() for cell in row
         )
@@ -573,3 +636,62 @@ def test_signed_url_uses_fixed_ttl_and_is_not_artifact_identity(
             "http://127.0.0.1:25321/storage/v1/object/sign/documents/key"
             "?token=transient"
         )
+
+
+def test_artifact_list_passes_role_and_returns_items(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The index must forward the tenant role — _DOCUMENT_ROLES filtering is
+    what keeps a document type the role cannot open out of the metadata."""
+    from contextlib import contextmanager
+    from uuid import uuid4
+
+    from rest_framework.test import APIClient
+
+    from documents import views as document_views
+
+    org_id = uuid4()
+    project_id = uuid4()
+    version_id = uuid4()
+    seen: dict[str, object] = {}
+
+    @contextmanager
+    def fake_scope(request, allowed):
+        assert set(allowed) == {"OWNER", "ESTIMATOR", "WORKSHOP_MANAGER"}
+        tenant = SimpleNamespace(
+            active_organization=SimpleNamespace(role="WORKSHOP_MANAGER"),
+        )
+        yield SimpleNamespace(user_id=uuid4()), tenant, org_id
+
+    def fake_list(*, org_id, project_id, role):  # noqa: ANN001
+        seen["role"] = role
+        seen["org_id"] = org_id
+        seen["project_id"] = project_id
+        return [
+            {
+                "id": str(uuid4()),
+                "document_type": "DOC-01",
+                "format": "PDF",
+                "artifact_scope": "PROJECT_REVISION",
+                "project_version_id": str(version_id),
+                "order_id": None,
+                "order_type": None,
+                "revision_code": "REV-A",
+                "byte_size": 128,
+                "created_at": "2026-09-25T00:00:00Z",
+            }
+        ]
+
+    monkeypatch.setattr(document_views, "documentary_scope", fake_scope)
+    monkeypatch.setattr(document_views, "list_artifacts", fake_list)
+    client = APIClient()
+    client.force_authenticate(
+        user=SimpleNamespace(is_authenticated=True), token=object()
+    )
+    response = client.get(f"/api/v1/documents/projects/{project_id}/artifacts/")
+    assert response.status_code == 200
+    assert seen["role"] == "WORKSHOP_MANAGER"
+    assert seen["org_id"] == org_id
+    assert seen["project_id"] == project_id
+    [item] = response.data["artifacts"]
+    assert item["project_version_id"] == str(version_id)
+    assert item["document_type"] == "DOC-01"
+    assert item["revision_code"] == "REV-A"

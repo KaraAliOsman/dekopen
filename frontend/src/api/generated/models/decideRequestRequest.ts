@@ -14,6 +14,8 @@ export interface DecideRequestRequest {
    * @maxLength 255
    */
   decided_by: string;
+  /** @maxLength 32 */
+  decided_rut?: string;
   /** @maxLength 500 */
   note?: string;
 }

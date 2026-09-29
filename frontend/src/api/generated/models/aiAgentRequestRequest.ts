@@ -22,6 +22,8 @@ export interface AiAgentRequestRequest {
    */
   goal: string;
   product?: AiAgentRequestRequestProduct;
+  /** @maxLength 64 */
+  product_sig?: string;
   history?: AiAgentHistoryRequest[];
   /**
    * @minLength 8

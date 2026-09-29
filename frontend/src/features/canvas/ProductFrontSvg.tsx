@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 
 import type { ProductIssue } from "../../api/generated/models";
+import { fmtMm, parseLocaleNumber } from "../../format";
 import { t } from "../../i18n/es-CL";
 import type { IntentNode } from "./intentEditing";
 import { isSlidingOpening, resolvedSlidingLayout } from "./intentEditing";
+import { OPENING_OPTIONS } from "./openings";
 import { memberSurface, type MemberSurface } from "./materials";
 import { contourOutset, contourPathD, insetContourPoints, pointsPathD } from "./contourGeometry";
 import type { MemberGeometry } from "./members";
@@ -11,9 +13,16 @@ import {
   elevationLayoutMm,
   MIN_MODULE_WIDTH_MM,
   resolveStacks,
+  type FramelessEdge,
+  type FramelessFittingJson,
+  type FramelessSpecJson,
   type ProductJson,
 } from "./productEditing";
 import { useViewportScale } from "./CanvasViewport";
+// The front view's fills/strokes live in canvas.css — importing it here
+// keeps the renderer self-contained: surfaces outside the editor
+// (/benchmark, thumbnails, alternatives) get the same real drawing.
+import "./canvas.css";
 
 /** Front elevation of the compositional product as a real fenestration
  * drawing: frame/sash/mullion/bead/threshold members at their catalog face
@@ -55,19 +64,23 @@ function SvgDim({
 }): JSX.Element {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
+  const [invalid, setInvalid] = useState(false);
   useEffect(() => {
-    if (!editing) setDraft(value);
+    if (!editing) {
+      setDraft(value);
+      setInvalid(false);
+    }
   }, [value, editing]);
   const fontSize = 34;
   if (!editing || disabled) {
+    // Click target: an invisible padded pill around the glyphs — the text
+    // alone is a few px at fit zoom, so most clicks used to miss and hit the
+    // bay behind instead. Hover/focus shows the pill as an edit affordance.
+    const hitWidth = Math.max(fmtMm(value).length * fontSize * 0.62 + 36, 96);
+    const hitHeight = fontSize + 22;
     return (
-      <text
-        className={`canvas-dim${active ? " is-active" : ""}`}
-        x={x}
-        y={y}
-        fontSize={fontSize}
-        textAnchor="middle"
-        dominantBaseline="central"
+      <g
+        className={`canvas-dim-wrap${active ? " is-active" : ""}`}
         role="button"
         aria-label={label}
         tabIndex={disabled ? -1 : 0}
@@ -79,27 +92,64 @@ function SvgDim({
           }
         }}
       >
-        {value}
-      </text>
+        <rect
+          className="canvas-dim-hit"
+          x={x - hitWidth / 2}
+          y={y - hitHeight / 2}
+          width={hitWidth}
+          height={hitHeight}
+          rx={10}
+        />
+        <text
+          className="canvas-dim"
+          x={x}
+          y={y}
+          fontSize={fontSize}
+          textAnchor="middle"
+          dominantBaseline="central"
+          pointerEvents="none"
+        >
+          {fmtMm(value)}
+        </text>
+      </g>
     );
   }
   return (
     <foreignObject x={x - 70} y={y - fontSize} width={140} height={fontSize + 26}>
       <input
-        className="canvas-dim-input"
+        className={`canvas-dim-input${invalid ? " is-invalid" : ""}`}
         aria-label={label}
+        aria-invalid={invalid || undefined}
         autoFocus
         inputMode="decimal"
         value={draft}
-        onChange={(event) => setDraft(event.target.value)}
+        onChange={(event) => {
+          setDraft(event.target.value);
+          setInvalid(false);
+        }}
         onFocus={(event) => event.target.select()}
         onBlur={() => {
           const normalized = normalizeDimension(draft);
-          if (normalized !== null && normalized !== value) onCommit(normalized);
+          if (normalized === null) {
+            // Reject like Enter does — flag the editor and stay open so a
+            // mistyped dimension never silently snaps back.
+            setDraft(value);
+            setInvalid(true);
+            return;
+          }
+          if (normalized !== value) onCommit(normalized);
           setEditing(false);
         }}
         onKeyDown={(event) => {
-          if (event.key === "Enter") event.currentTarget.blur();
+          // Enter on an unparseable value keeps the editor open and flags
+          // it — reverting silently reads as the input being ignored.
+          if (event.key === "Enter") {
+            if (normalizeDimension(draft) === null) {
+              setInvalid(true);
+            } else {
+              event.currentTarget.blur();
+            }
+          }
           if (event.key === "Escape") {
             setDraft(value);
             event.currentTarget.blur();
@@ -110,9 +160,14 @@ function SvgDim({
   );
 }
 
+/** Sanity ceiling for a typed dimension: well past any real module/assembly
+ * size, it exists to catch slips (e.g. a stray comma) — not an engineering
+ * bound; kit/system limits still apply downstream. */
+const MAX_DIMENSION_MM = 30000;
+
 function normalizeDimension(candidate: string): string | null {
-  const value = Number(candidate.trim().replace(",", ".").replace(/[°\s]/g, ""));
-  if (!Number.isFinite(value) || value <= 0) return null;
+  const value = parseLocaleNumber(candidate.trim().replace(/[°\s]/g, ""));
+  if (value === null || value <= 0 || value > MAX_DIMENSION_MM) return null;
   return value.toFixed(2);
 }
 
@@ -123,15 +178,17 @@ export function OpeningGlyph({
   y,
   w,
   h,
+  doorHinge,
 }: {
   opening: string | null | undefined;
   x: number;
   y: number;
   w: number;
   h: number;
+  doorHinge?: "left" | "right";
 }): JSX.Element {
-  const padX = w * 0.12;
-  const padY = h * 0.12;
+  const padX = w * 0.2;
+  const padY = h * 0.2;
   const left = x + padX;
   const right = x + w - padX;
   const top = y + padY;
@@ -147,8 +204,13 @@ export function OpeningGlyph({
       {kind.includes("LEFT") && (
         <polyline points={`${left},${top} ${right},${cy} ${left},${bottom}`} fill="none" />
       )}
-      {(kind.startsWith("TILT") || kind === "AWNING") && (
+      {kind.startsWith("TILT") && (
         <polyline points={`${left},${bottom} ${cx},${top} ${right},${bottom}`} fill="none" />
+      )}
+      {/* Awning is top-hinged — its triangle mirrors the issued doc (base at
+          the top edge), not the tilt glyph. */}
+      {kind === "AWNING" && (
+        <polyline points={`${left},${top} ${cx},${bottom} ${right},${top}`} fill="none" />
       )}
       {kind.startsWith("SLIDING") &&
         (() => {
@@ -169,7 +231,25 @@ export function OpeningGlyph({
             );
           });
         })()}
-      {kind === "DOOR_ENTRY" && <line x1={left} y1={top} x2={right} y2={bottom} opacity={0.35} />}
+      {/* A door glyph shows its swing: quarter-arc centred on the bottom
+       * hinge corner plus a jamb tick on the hinge side. */}
+      {kind === "DOOR_ENTRY" &&
+        (() => {
+          const hingeX = doorHinge === "right" ? right : left;
+          const sweepTo =
+            doorHinge === "right" ? right - Math.min(w, h) * 0.8 : left + Math.min(w, h) * 0.8;
+          const arcR = Math.min(w, h) * 0.8;
+          const sweep = doorHinge === "right" ? 1 : 0;
+          return (
+            <>
+              <line x1={hingeX} y1={top} x2={hingeX} y2={bottom} opacity={0.5} />
+              <path
+                d={`M ${sweepTo} ${bottom} A ${arcR} ${arcR} 0 0 ${sweep} ${hingeX} ${bottom - arcR}`}
+                fill="none"
+              />
+            </>
+          );
+        })()}
       {kind === "FIXED" && <line x1={left} y1={top} x2={right} y2={bottom} opacity={0.18} />}
     </g>
   );
@@ -267,19 +347,199 @@ function InsulatedRing({ pane }: { pane: Region }): JSX.Element | null {
   );
 }
 
+/** A glass-only module (mandate §14): the pane IS the module — drawn edge to
+ * edge, never with a phantom frame. Declared supports run along their edge
+ * (continuous CHANNEL seat, spaced CLAMPS) and fittings mark their edge/corner
+ * positions. Support/fitting marks are presentation conventions; articles and
+ * counts come from the model. */
+function FramelessModule({
+  spec,
+  x,
+  top,
+  w,
+  h,
+}: {
+  spec: FramelessSpecJson;
+  x: number;
+  top: number;
+  w: number;
+  h: number;
+}): JSX.Element {
+  const channelD = Math.min(24, Math.min(w, h) * 0.18);
+  const clamp = Math.min(26, Math.min(w, h) * 0.22);
+  const edgeRect = (edge: FramelessEdge, depth: number): Region => {
+    if (edge === "top") return { x, y: top, w, h: depth };
+    if (edge === "bottom") return { x, y: top + h - depth, w, h: depth };
+    if (edge === "left") return { x, y: top, w: depth, h };
+    return { x: x + w - depth, y: top, w: depth, h };
+  };
+  const along = (edge: FramelessEdge, index: number, count: number): Region => {
+    const frac = count <= 1 ? 0.5 : (index + 0.5) / count;
+    const horizontal = edge === "top" || edge === "bottom";
+    const rect = edgeRect(edge, channelD);
+    const offset = clamp / 2;
+    return horizontal
+      ? { x: rect.x + rect.w * frac - offset, y: rect.y, w: clamp, h: clamp }
+      : { x: rect.x, y: rect.y + rect.h * frac - offset, w: clamp, h: clamp };
+  };
+  // Fittings have no positional authority in the model — mark them by kind at
+  // conventional spots: corner patches, left-edge hinges, right-edge locks,
+  // top connectors, bottom supports. A seal draws as the dashed inset line.
+  const fittingSpot = (kind: FramelessFittingJson["kind"], index: number): Region => {
+    const size = Math.min(20, Math.min(w, h) * 0.16);
+    const spots: Record<FramelessFittingJson["kind"], Region> = {
+      PATCH_FITTING: [
+        { x, y: top, w: size, h: size },
+        { x: x + w - size, y: top, w: size, h: size },
+        { x, y: top + h - size, w: size, h: size },
+        { x: x + w - size, y: top + h - size, w: size, h: size },
+      ][index % 4] as Region,
+      CLAMP: along("bottom", index, 3),
+      HINGE: along("left", index, 3),
+      LOCK: along("right", index, 3),
+      CONNECTOR: along("top", index, 3),
+      SEAL: { x, y: top, w: size, h: size },
+      SUPPORT: along("bottom", index + 1, 4),
+    };
+    const spot = spots[kind];
+    return {
+      x: spot.x,
+      y: spot.y,
+      w: Math.min(spot.w, size),
+      h: Math.min(spot.h, size),
+    };
+  };
+  const fittingIndex = new Map<string, number>();
+  return (
+    <g className="module-frameless">
+      <rect className="module-glass" x={x} y={top} width={w} height={h} />
+      {w > 30 && h > 30 && (
+        <line
+          className="glass-sheen"
+          x1={x + w * 0.18}
+          y1={top + h * 0.82}
+          x2={x + w * 0.82}
+          y2={top + h * 0.18}
+        />
+      )}
+      {(spec.exposed_edges ?? []).map((edge) => {
+        const rect = edgeRect(edge, Math.min(10, channelD * 0.5));
+        return (
+          <rect
+            key={`exposed-${edge}`}
+            className="frameless-exposed"
+            x={rect.x}
+            y={rect.y}
+            width={rect.w}
+            height={rect.h}
+          />
+        );
+      })}
+      {spec.supports.map((support, index) => {
+        if (support.kind === "CHANNEL") {
+          const rect = edgeRect(support.edge, channelD);
+          return (
+            <rect
+              key={`support-${index}`}
+              className="frameless-channel"
+              x={rect.x}
+              y={rect.y}
+              width={rect.w}
+              height={rect.h}
+            >
+              <title>
+                {support.article_sku
+                  ? `${t("assembly.framelessKindChannel")} · ${support.article_sku}`
+                  : t("assembly.framelessKindChannel")}
+              </title>
+            </rect>
+          );
+        }
+        return Array.from({ length: Math.max(support.qty, 1) }, (_, at) => {
+          const rect = along(support.edge, at, Math.max(support.qty, 1));
+          return (
+            <rect
+              key={`support-${index}-${at}`}
+              className="frameless-clamp"
+              x={rect.x}
+              y={rect.y}
+              width={rect.w}
+              height={rect.h}
+            >
+              <title>
+                {support.article_sku
+                  ? `${t("assembly.framelessKindClamps")} · ${support.article_sku}`
+                  : t("assembly.framelessKindClamps")}
+              </title>
+            </rect>
+          );
+        });
+      })}
+      {spec.fittings.some((fitting) => fitting.kind === "SEAL") && (
+        <rect
+          className="frameless-seal"
+          x={x + 6}
+          y={top + 6}
+          width={Math.max(w - 12, 0)}
+          height={Math.max(h - 12, 0)}
+        />
+      )}
+      {spec.fittings
+        .filter((fitting) => fitting.kind !== "SEAL")
+        .flatMap((fitting) => {
+          const index = fittingIndex.get(fitting.kind) ?? 0;
+          fittingIndex.set(fitting.kind, index + fitting.qty);
+          return Array.from({ length: Math.max(fitting.qty, 1) }, (_, at) => {
+            const rect = fittingSpot(fitting.kind, index + at);
+            return (
+              <rect
+                key={`fitting-${fitting.kind}-${index + at}`}
+                className={`frameless-fitting frameless-fitting--${fitting.kind.toLowerCase()}`}
+                x={rect.x}
+                y={rect.y}
+                width={rect.w}
+                height={rect.h}
+              >
+                <title>
+                  {fitting.sku
+                    ? `${t(`assembly.fittingKind.${fitting.kind}`)} · ${fitting.sku}`
+                    : t(`assembly.fittingKind.${fitting.kind}`)}
+                </title>
+              </rect>
+            );
+          });
+        })}
+    </g>
+  );
+}
+
 /** Handle lever on the sash's handle edge (≈55% up, EN convention). */
 function HandleLever({
   x,
   y,
   side,
+  invalid,
+  declaredMm,
 }: {
   x: number;
   y: number;
   side: "left" | "right";
+  /** The declared datum landed off the leaf — the drawing shows the
+   * handle where it clamped AND flags it, never silently corrects. */
+  invalid?: boolean;
+  declaredMm?: number;
 }): JSX.Element {
   const dir = side === "left" ? 1 : -1;
   return (
-    <g className="handle-lever" aria-hidden="true">
+    <g className={`handle-lever${invalid ? " is-datum-invalid" : ""}`} aria-hidden={!invalid}>
+      {invalid && (
+        <>
+          <title>
+            {t("assembly.handleDatumOutOfRange").replace("{declared}", String(declaredMm ?? ""))}
+          </title>
+          <circle className="handle-datum-flag" cx={x} cy={y} r={11} />
+        </>
+      )}
       <line x1={x} y1={y - 10} x2={x} y2={y + 16} strokeWidth={5} strokeLinecap="round" />
       <line x1={x} y1={y} x2={x + dir * 18} y2={y} strokeWidth={5} strokeLinecap="round" />
     </g>
@@ -294,12 +554,16 @@ function Bay({
   members,
   selected = false,
   onSelect,
+  moduleBottom,
 }: {
   node: IntentNode;
   region: Region;
   members: MemberGeometry;
   selected?: boolean;
   onSelect?(): void;
+  /** Sheet-space y of the module's outer bottom edge — the datum the
+   * declared handle height measures up from (OUTER_BOTTOM authority). */
+  moduleBottom?: number;
 }): JSX.Element {
   const opening = node.opening_type ?? "FIXED";
   const bead = members.beadFor(node.glass_thickness_mm ?? null);
@@ -310,6 +574,16 @@ function Bay({
         onClick: (event: React.MouseEvent) => {
           event.stopPropagation();
           onSelect();
+        },
+        role: "button" as const,
+        "aria-label": `${t("intent.bay")} · ${t(OPENING_OPTIONS.find(([value]) => value === opening)?.[1] ?? "intent.fixed")}`,
+        tabIndex: 0,
+        onKeyDown: (event: React.KeyboardEvent) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.stopPropagation();
+            event.preventDefault();
+            onSelect();
+          }
         },
         style: { cursor: "pointer" },
       }
@@ -343,6 +617,22 @@ function Bay({
         className={`module-bay module-bay--sliding${selected ? " is-selected" : ""}${onSelect ? " bay-pickable" : ""}`}
         {...baySelectProps}
       >
+        {/* Rail notation: two head/sill grooves behind the leaves — the
+         * corredera reading a reviewer could not see (review M3). */}
+        <line
+          className="sliding-track"
+          x1={region.x}
+          y1={region.y + 4}
+          x2={region.x + region.w}
+          y2={region.y + 4}
+        />
+        <line
+          className="sliding-track"
+          x1={region.x}
+          y1={region.y + region.h - 4}
+          x2={region.x + region.w}
+          y2={region.y + region.h - 4}
+        />
         {order.map(({ panel, index }) => {
           const slotX = region.x + pitch * index;
           if (panel.kind === "FIXED") {
@@ -415,7 +705,18 @@ function Bay({
               )}
               <path
                 className="sliding-arrow"
-                d={`M${midX - arrow} ${midY} H${midX + arrow} M${midX + arrow * 0.5} ${midY - arrow * 0.4} L${midX + arrow} ${midY}`}
+                // Travel convention shared with the 3D pose: a leaf opens
+                // toward its neighbouring slot — leaves in the left half of
+                // the bay slide right, the right half slides left. The
+                // product model declares no travel, so this stays a
+                // presentation convention, not manufacturing truth.
+                d={(() => {
+                  const dir = index * 2 < panels.length ? 1 : -1;
+                  const tip = midX + arrow * dir;
+                  const tail = midX - arrow * dir;
+                  const barb = tip - dir * arrow * 0.5;
+                  return `M${tail} ${midY} H${tip} M${barb} ${midY - arrow * 0.4} L${tip} ${midY} L${barb} ${midY + arrow * 0.4}`;
+                })()}
                 fill="none"
               />
             </g>
@@ -457,11 +758,29 @@ function Bay({
     ? { x: glass.x + bead, y: glass.y + bead, w: glass.w - bead * 2, h: glass.h - bead * 2 }
     : glass;
   const isPanel = Boolean(node.panel_article_sku);
+  // DIN: the opening name is the hinge side; the handle sits opposite. A
+  // door carries no side in its opening type — the declared
+  // `door_handedness` (hinge side) decides, defaulting to hinge-left.
   const handleSide = opening.includes("LEFT")
     ? "right"
-    : opening.includes("RIGHT") || isDoor
+    : opening.includes("RIGHT")
       ? "left"
-      : null;
+      : isDoor
+        ? node.door_handedness === "RIGHT"
+          ? "left"
+          : "right"
+        : null;
+  // OUTER_BOTTOM datum resolution shared with the 3D scene: a declared
+  // height that lands off the leaf is reported (is-datum-invalid flag),
+  // not silently clamped into a plausible-looking position.
+  const declaredRaw = Number(node.handle_height_mm);
+  const declaredMm = Number.isFinite(declaredRaw) && declaredRaw > 0 ? declaredRaw : null;
+  const heightMm = declaredMm ?? 1050;
+  const rawDatum =
+    moduleBottom !== undefined ? moduleBottom - heightMm : sashArea.y + sashArea.h - heightMm;
+  const datumInvalid =
+    declaredMm !== null && (rawDatum < sashArea.y || rawDatum > sashArea.y + sashArea.h);
+  const datumY = Math.min(Math.max(rawDatum, sashArea.y + 60), sashArea.y + sashArea.h - 60);
 
   return (
     <g
@@ -505,7 +824,9 @@ function Bay({
             width={Math.max(pane.w, 0)}
             height={Math.max(pane.h, 0)}
           />
-          {pane.w > 30 && pane.h > 30 && (
+          {/* The sheen only belongs on inert glass — under an operable leaf
+           * it crosses the opening glyph and reads as a scribble. */}
+          {pane.w > 30 && pane.h > 30 && !node.opening_type && (
             <line
               className="glass-sheen"
               x1={pane.x + pane.w * 0.18}
@@ -528,7 +849,14 @@ function Bay({
         />
       )}
       {pane.w > 60 && pane.h > 60 && (
-        <OpeningGlyph opening={node.opening_type} x={pane.x} y={pane.y} w={pane.w} h={pane.h} />
+        <OpeningGlyph
+          opening={node.opening_type}
+          x={pane.x}
+          y={pane.y}
+          w={pane.w}
+          h={pane.h}
+          doorHinge={node.door_handedness === "RIGHT" ? "right" : "left"}
+        />
       )}
       {handleSide && operable && (
         <HandleLever
@@ -537,8 +865,15 @@ function Bay({
               ? sashArea.x + sashArea.w - sashT * 0.55
               : sashArea.x + sashT * 0.55
           }
-          y={sashArea.y + sashArea.h * 0.55}
+          // The lever mounts at the declared height measured up from the
+          // module's outer bottom edge — the OUTER_BOTTOM datum the
+          // manufacturing authority resolves (1050 mm when undeclared). A
+          // declared value that lands off the leaf draws clamped AND
+          // flagged — the incompatibility is shown, never hidden.
+          y={datumY}
           side={handleSide}
+          invalid={datumInvalid}
+          declaredMm={declaredMm ?? undefined}
         />
       )}
       {isDoor && operable && (
@@ -588,6 +923,10 @@ function ModuleTree({
   moduleId,
   selectedBayId,
   onSelectBay,
+  selectedDivisionId = null,
+  onSelectDivision,
+  showSplitDims = false,
+  moduleBottom,
 }: {
   node: IntentNode;
   region: Region;
@@ -606,6 +945,13 @@ function ModuleTree({
   moduleId: string;
   selectedBayId?: string | null;
   onSelectBay?: (bayId: string) => void;
+  /** Division (mullion/transom) selection + technical split labels. */
+  selectedDivisionId?: string | null;
+  onSelectDivision?: (divisionId: string) => void;
+  showSplitDims?: boolean;
+  /** Sheet-space y of the module's outer bottom edge, threaded to bays for
+   * the declared handle datum. */
+  moduleBottom?: number;
 }): JSX.Element {
   if (node.type === "ROOT" && node.children?.length === 1 && node.children[0]) {
     return (
@@ -620,6 +966,10 @@ function ModuleTree({
         moduleId={moduleId}
         selectedBayId={selectedBayId}
         onSelectBay={onSelectBay}
+        selectedDivisionId={selectedDivisionId}
+        onSelectDivision={onSelectDivision}
+        showSplitDims={showSplitDims}
+        moduleBottom={moduleBottom}
       />
     );
   }
@@ -675,34 +1025,11 @@ function ModuleTree({
           moduleId={moduleId}
           selectedBayId={selectedBayId}
           onSelectBay={onSelectBay}
+          selectedDivisionId={selectedDivisionId}
+          onSelectDivision={onSelectDivision}
+          showSplitDims={showSplitDims}
+          moduleBottom={moduleBottom}
         />
-        <Member
-          x={bar.x}
-          y={bar.y}
-          w={Math.max(bar.w, 0)}
-          h={Math.max(bar.h, 0)}
-          surface={memberSurface(mullion?.material ?? members.frame.material)}
-          className="member-mullion"
-        />
-        {onDividerDown && (
-          <rect
-            className={`divider-grip${vertical ? " is-vertical" : " is-horizontal"}`}
-            x={vertical ? axis - grip / 2 : bar.x}
-            y={vertical ? bar.y : axis - grip / 2}
-            width={vertical ? grip : Math.max(bar.w, 0)}
-            height={vertical ? Math.max(bar.h, 0) : grip}
-            onPointerDown={(event) =>
-              onDividerDown({
-                event,
-                divisionId: node.id,
-                vertical,
-                localOrigin,
-                regionLoMm: lo,
-                extentMm: extent,
-              })
-            }
-          />
-        )}
         <ModuleTree
           node={second!}
           region={secondRegion}
@@ -714,7 +1041,66 @@ function ModuleTree({
           moduleId={moduleId}
           selectedBayId={selectedBayId}
           onSelectBay={onSelectBay}
+          selectedDivisionId={selectedDivisionId}
+          onSelectDivision={onSelectDivision}
+          moduleBottom={moduleBottom}
+          showSplitDims={showSplitDims}
         />
+        {/* The mullion, its dim and the grip draw after both subtrees so the
+            bar stays selectable and its label stays visible where the second
+            region's bays overlap the hit zone. */}
+        <Member
+          x={bar.x}
+          y={bar.y}
+          w={Math.max(bar.w, 0)}
+          h={Math.max(bar.h, 0)}
+          surface={memberSurface(mullion?.material ?? members.frame.material)}
+          className={`member-mullion${selectedDivisionId === node.id ? " is-selected" : ""}`}
+        />
+        {showSplitDims && (
+          <text
+            className="split-dim"
+            x={vertical ? bar.x + bar.w + 6 : bar.x + 8}
+            y={vertical ? bar.y + 16 : bar.y - 6}
+          >
+            {offset.toFixed(0)}
+          </text>
+        )}
+        {(onDividerDown || onSelectDivision) && (
+          <rect
+            className={`divider-grip${vertical ? " is-vertical" : " is-horizontal"}${selectedDivisionId === node.id ? " is-selected" : ""}`}
+            x={vertical ? axis - grip / 2 : bar.x}
+            y={vertical ? bar.y : axis - grip / 2}
+            width={vertical ? grip : Math.max(bar.w, 0)}
+            height={vertical ? Math.max(bar.h, 0) : grip}
+            onClick={(event) => {
+              event.stopPropagation();
+              onSelectDivision?.(node.id);
+            }}
+            onPointerDown={(event) =>
+              onDividerDown?.({
+                event,
+                divisionId: node.id,
+                vertical,
+                localOrigin,
+                regionLoMm: lo,
+                extentMm: extent,
+              })
+            }
+          />
+        )}
+        {(onDividerDown || onSelectDivision) && (vertical ? bar.h : bar.w) > grip * 1.6 && (
+          <g className="divider-grip-dots" pointerEvents="none" aria-hidden="true">
+            {[-1, 0, 1].map((slot) => (
+              <circle
+                key={slot}
+                cx={vertical ? axis : bar.x + bar.w / 2 + slot * grip * 0.22}
+                cy={vertical ? bar.y + bar.h / 2 + slot * grip * 0.22 : axis}
+                r={Math.max(grip * 0.07, 1.4)}
+              />
+            ))}
+          </g>
+        )}
       </>
     );
   }
@@ -725,6 +1111,7 @@ function ModuleTree({
       members={members}
       selected={selectedBayId === node.id}
       onSelect={onSelectBay ? () => onSelectBay(node.id) : undefined}
+      moduleBottom={moduleBottom}
     />
   );
 }
@@ -732,7 +1119,7 @@ function ModuleTree({
 const TOP_GUTTER = 150;
 const SIDE_GUTTER = 130;
 const BOTTOM_GUTTER = 120;
-const LEFT_GUTTER = 170;
+const LEFT_GUTTER = 195;
 
 /** Architectural dimension run: extension lines from the measured edge out
  * to the dim line (overshooting it slightly), diagonal ticks at each mark,
@@ -999,9 +1386,17 @@ export function frontLayout(product: ProductJson): FrontLayout {
   };
 }
 
+function isFrontLayout(value: ProductJson | FrontLayout): value is FrontLayout {
+  return "rects" in value && "totalW" in value;
+}
+
+function asLayout(value: ProductJson | FrontLayout): FrontLayout {
+  return isFrontLayout(value) ? value : frontLayout(value);
+}
+
 /** The drawable extent of the front elevation including gutters and chains. */
-export function frontBounds(product: ProductJson) {
-  const { totalW, height, lift, dip, leftOver, rightOver } = frontLayout(product);
+export function frontBounds(source: ProductJson | FrontLayout) {
+  const { totalW, height, lift, dip, leftOver, rightOver } = asLayout(source);
   return {
     x: -LEFT_GUTTER - leftOver,
     y: -TOP_GUTTER,
@@ -1011,9 +1406,9 @@ export function frontBounds(product: ProductJson) {
 }
 
 /** Sheet-space box of a module's frame — the Shift+2 / zoom-to-selection target. */
-export function frontModuleBox(product: ProductJson, moduleId: string | null) {
+export function frontModuleBox(source: ProductJson | FrontLayout, moduleId: string | null) {
   if (!moduleId) return null;
-  const layout = frontLayout(product);
+  const layout = asLayout(source);
   const rect = layout.rects.find((item) => item.module.id === moduleId);
   if (!rect) return null;
   const top = layout.height - rect.sill - rect.h;
@@ -1082,12 +1477,16 @@ export function ProductFrontContent({
   members,
   selectedId,
   selectedBayId = null,
+  selectedDivisionId = null,
   issues,
   disabled,
   preview = false,
   divideTool = null,
+  dimLevel = "design",
   onSelectModule,
   onSelectBay,
+  onSelectDivision,
+  onSelectCoupling,
   onContextMenuModule,
   onAddUnit,
   onCommitModuleWidth,
@@ -1116,6 +1515,15 @@ export function ProductFrontContent({
   /** The leaf inside the selected module that owns the selection ring —
    * a composite selection highlights the bay, not the whole module. */
   selectedBayId?: string | null;
+  /** The selected division node (mullion/transom) — highlights its bar. */
+  selectedDivisionId?: string | null;
+  /** §04-E dimension verbosity: overview = overall W/H only, design adds
+   * per-column widths, technical adds split offsets + member heights. */
+  dimLevel?: "overview" | "design" | "technical";
+  onSelectDivision?(moduleId: string, divisionId: string): void;
+  /** Click the coupler band between members → selects the coupling (the
+   * object that owns the joint, not either neighbor module). */
+  onSelectCoupling?(couplingId: string): void;
   /** Right-click on a module: select it and open the registry menu at the
    * cursor — commands always resolve against the clicked element, never a
    * stale earlier selection. */
@@ -1131,8 +1539,13 @@ export function ProductFrontContent({
   const { couplings } = product.assembly;
   const frameT = members.frame.faceWidthMm;
   const frameSurface = memberSurface(members.frame.material);
-  const { rects, columns, joints, totalW, height, lift } = frontLayout(product);
-  const issueMap = severityByModule(issues);
+  // Layout derivation runs over every module — memoize so seam/division
+  // drags (per-pointermove renders) don't rebuild the whole elevation.
+  const { rects, columns, joints, totalW, height, lift } = useMemo(
+    () => frontLayout(product),
+    [product],
+  );
+  const issueMap = useMemo(() => severityByModule(issues), [issues]);
   const midY = height / 2;
   const interactive = !preview && !disabled;
   const sheetScale = useViewportScale();
@@ -1342,7 +1755,10 @@ export function ProductFrontContent({
     if (!rects.some((item) => item.module.id === moduleId)) return;
     if (hovered) {
       onCommitDivide(moduleId, hovered.bayId, hovered.mm.toFixed(2));
-    } else {
+    } else if (clientX === undefined && clientY === undefined) {
+      // Only a keyboard commit (no pointer position) may fall back to
+      // centering the primary bay — a pointer click that landed on frame,
+      // coupler or empty canvas must not guess a bay.
       onCommitDivide(moduleId, null);
     }
   };
@@ -1372,10 +1788,10 @@ export function ProductFrontContent({
       {/* the drawing band lifts for arc overshoot: sill stays shared. */}
       <g transform={`translate(0 ${lift})`}>
         {/* height chain */}
-        <DimRun marks={[0, height]} edge={0} at={-110} vertical={true} />
-        <g transform={`rotate(-90 ${-110} ${midY})`}>
+        <DimRun marks={[0, height]} edge={0} at={-160} vertical={true} />
+        <g transform={`rotate(-90 ${-160} ${midY})`}>
           <SvgDim
-            x={-110}
+            x={-160}
             y={midY}
             value={height.toFixed(2)}
             label={t("assembly.height")}
@@ -1383,25 +1799,65 @@ export function ProductFrontContent({
             onCommit={onCommitHeight}
           />
         </g>
-        {/* per-column width chain — stacked members share the column span */}
-        <DimRun
-          marks={columns.flatMap((column) => [column.x, column.x + column.w])}
-          edge={height}
-          at={height + 80}
-          vertical={false}
-        />
-        {columns.map((column) => (
-          <SvgDim
-            key={`dim-${column.rootId}`}
-            x={column.x + column.w / 2}
-            y={height + 80}
-            value={column.w.toFixed(2)}
-            label={`${t("assembly.module")} ${column.rootId} ${t("assembly.width")}`}
-            active={column.rootId === selectedId}
-            disabled={disabled}
-            onCommit={(value) => onCommitModuleWidth(column.rootId, value)}
-          />
-        ))}
+        {/* per-column width chain — stacked members share the column span
+            (design/technical only: overview keeps the overall W/H). */}
+        {dimLevel !== "overview" && (
+          <>
+            <DimRun
+              marks={columns.flatMap((column) => [column.x, column.x + column.w])}
+              edge={height}
+              at={height + 80}
+              vertical={false}
+            />
+            {columns.map((column) => (
+              <SvgDim
+                key={`dim-${column.rootId}`}
+                x={column.x + column.w / 2}
+                y={height + 80}
+                value={column.w.toFixed(2)}
+                label={`${t("assembly.module")} ${column.rootId} ${t("assembly.width")}`}
+                active={column.rootId === selectedId}
+                disabled={disabled}
+                onCommit={(value) => onCommitModuleWidth(column.rootId, value)}
+              />
+            ))}
+          </>
+        )}
+        {/* technical adds member heights for stacked columns — a transom
+            over a unit is dimensioned like a shop drawing, right gutter. */}
+        {dimLevel === "technical" &&
+          columns.map((column, columnIndex) => {
+            const membersOf = rects.filter(
+              (rect) =>
+                rect.x + rect.w / 2 >= column.x && rect.x + rect.w / 2 <= column.x + column.w,
+            );
+            if (membersOf.length < 2) return null;
+            const marks = [
+              ...new Set(
+                membersOf.flatMap((rect) => [height - rect.sill, height - rect.sill - rect.h]),
+              ),
+            ].sort((a, b) => a - b);
+            return (
+              <g key={`member-dims-${column.rootId}-${columnIndex}`}>
+                <DimRun
+                  marks={marks}
+                  edge={column.x + column.w}
+                  at={column.x + column.w + 30}
+                  vertical={true}
+                />
+                {membersOf.map((rect) => (
+                  <text
+                    key={`member-dim-${rect.module.id}`}
+                    className="member-dim"
+                    x={column.x + column.w + 38}
+                    y={height - rect.sill - rect.h / 2}
+                  >
+                    {rect.h.toFixed(0)}
+                  </text>
+                ))}
+              </g>
+            );
+          })}
         <AddHandle
           x={-70}
           y={midY}
@@ -1455,7 +1911,11 @@ export function ProductFrontContent({
                       : undefined,
                   })}
             >
-              {module.contour ? (
+              {module.frameless ? (
+                <g transform={`translate(${x} ${top})`}>
+                  <FramelessModule spec={module.frameless} x={0} top={0} w={w} h={h} />
+                </g>
+              ) : module.contour ? (
                 <g transform={`translate(${x} ${top})`}>
                   <path
                     className="member-frame"
@@ -1465,7 +1925,7 @@ export function ProductFrontContent({
                     strokeWidth={2}
                   />
                   <path
-                    className="module-opening"
+                    className="module-opening module-opening--lite"
                     d={pointsPathD(insetContourPoints(module.contour, frameT), h)}
                   />
                 </g>
@@ -1494,6 +1954,13 @@ export function ProductFrontContent({
                         ? (bayId) => onSelectBay(module.id, bayId)
                         : undefined
                     }
+                    selectedDivisionId={selectedDivisionId}
+                    onSelectDivision={
+                      interactive && !divideTool && onSelectDivision
+                        ? (divisionId) => onSelectDivision(module.id, divisionId)
+                        : undefined
+                    }
+                    showSplitDims={dimLevel === "technical"}
                     node={module.tree}
                     region={{
                       x: x + frameT,
@@ -1502,6 +1969,7 @@ export function ProductFrontContent({
                       h: h - frameT * 2,
                     }}
                     localOrigin={{ x, y: top }}
+                    moduleBottom={top + h}
                     members={members}
                     liveOffsets={liveOffsets}
                     hitMm={hitMm}
@@ -1529,26 +1997,36 @@ export function ProductFrontContent({
             members.couplerFor(coupling?.coupler_profile_sku ?? null)?.material ??
               members.frame.material,
           );
-          return joint.kind === "column" ? (
-            <Member
-              key={joint.couplingId ?? `joint-${index}`}
-              x={joint.x - width / 2}
-              y={height - joint.top}
-              w={width}
-              h={joint.top}
-              surface={surface}
-              className="member-coupler"
-            />
-          ) : (
-            <Member
-              key={joint.couplingId ?? `joint-${index}`}
-              x={joint.x}
-              y={height - joint.y - width / 2}
-              w={joint.w}
-              h={width}
-              surface={surface}
-              className="member-coupler"
-            />
+          const pickable = interactive && !divideTool && onSelectCoupling && joint.couplingId;
+          const jointRect =
+            joint.kind === "column"
+              ? { x: joint.x - width / 2, y: height - joint.top, w: width, h: joint.top }
+              : { x: joint.x, y: height - joint.y - width / 2, w: joint.w, h: width };
+          const selectedJoint = selectedId === joint.couplingId;
+          return (
+            <g key={joint.couplingId ?? `joint-${index}`}>
+              <Member
+                x={jointRect.x}
+                y={jointRect.y}
+                w={jointRect.w}
+                h={jointRect.h}
+                surface={surface}
+                className={`member-coupler${selectedJoint ? " is-selected" : ""}`}
+              />
+              {pickable && (
+                <rect
+                  className={`joint-hit${selectedJoint ? " is-selected" : ""}`}
+                  x={jointRect.x}
+                  y={jointRect.y}
+                  width={jointRect.w}
+                  height={jointRect.h}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (joint.couplingId) onSelectCoupling?.(joint.couplingId);
+                  }}
+                />
+              )}
+            </g>
           );
         })}
         {/* Seam grips render above the coupler members so the drag target is
@@ -1563,15 +2041,29 @@ export function ProductFrontContent({
               Math.max(12, Math.min(column.w, neighbor?.w ?? column.w) * 0.5),
             );
             return (
-              <rect
-                key={`seam-${index}`}
-                className="seam-grip"
-                x={column.x + column.w - seamW / 2}
-                y={0}
-                width={seamW}
-                height={height}
-                onPointerDown={beginSeamDrag(index)}
-              />
+              <g key={`seam-${index}`}>
+                <rect
+                  className="seam-grip"
+                  x={column.x + column.w - seamW / 2}
+                  y={0}
+                  width={seamW}
+                  height={height}
+                  onPointerDown={beginSeamDrag(index)}
+                />
+                {/* Resting drag affordance: three dots mid-seam so the grip
+                  doesn't need a lucky hover to be discovered. */}
+                {height > seamW * 2.4 &&
+                  [-1, 0, 1].map((slot) => (
+                    <circle
+                      key={slot}
+                      className="seam-grip-dot"
+                      cx={column.x + column.w}
+                      cy={height / 2 + slot * seamW * 0.5}
+                      r={Math.max(seamW * 0.1, 1.4)}
+                      pointerEvents="none"
+                    />
+                  ))}
+              </g>
             );
           })}
         {seamDrag && seamLeftMm !== null && seamRightMm !== null && (

@@ -1,7 +1,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
 SET LOCAL search_path = public, private, auth, extensions, pg_temp;
-SELECT plan(17);
+SELECT plan(18);
 
 -- §B RBAC matrix — functional verification that PostgREST (the
 -- `authenticated` role) is at least as restrictive as the Django role gates.
@@ -52,7 +52,7 @@ INSERT INTO public.ai_audit_logs (
 VALUES (
     '33333333-3333-4333-8333-333333333333',
     'cccccccc-0000-4000-8000-000000000001',
-    'design_assist', 'mimo-v2.6-pro', 'v1', now() + interval '30 days',
+    'design_assist', 'primalabs-ai/MiMo-V2.6-Pro-RL', 'v1', now() + interval '30 days',
     '{}'::jsonb, '{}'::jsonb, 'hash'
 );
 
@@ -209,6 +209,12 @@ SELECT policies_are(
     'public', 'clients',
     ARRAY['clients_member_read', 'clients_member_insert', 'clients_member_update'],
     'clients exposes member-read + estimator-write policies only'
+);
+
+SELECT enum_has_labels(
+    'public', 'org_role',
+    ARRAY['OWNER', 'ESTIMATOR', 'WORKSHOP_MANAGER', 'INSTALLER', 'OPERATOR'],
+    'org_role carries the OPERATOR station role'
 );
 
 SELECT * FROM finish();

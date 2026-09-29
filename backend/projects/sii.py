@@ -45,7 +45,8 @@ DTE_CREDIT_NOTE = 61
 DTE_GUIA = 52
 IND_TRASLADO_VENTA = 1
 IND_TRASLADO_INTERNO = 5
-_RUT_COMPACT = re.compile(r"^(\d{7,8})([\dK])$")
+# 5-digit bodies exist in practice (older corporate RUTs start near 10000).
+_RUT_COMPACT = re.compile(r"^(\d{5,8})([\dK])$")
 
 
 try:
@@ -450,11 +451,13 @@ def _render_dte(
     referencia: str = "",
     iddoc_extra: str = "",
     qty_item: int | None = None,
+    detalles: list | None = None,
 ) -> str:
-    """Minimal DTE skeleton shared by 33/52/61: Encabezado + one Detalle +
-    the TED (DD + FRMT SHA1withRSA stamped by the CAF key). A None deal
-    emits the amount-less shape a guía de despacho carries: Totales and
-    MontoItem stay present with 0 — the DTE schema requires them — and
+    """Minimal DTE skeleton shared by 33/52/61: Encabezado + Detalle line(s) +
+    the TED (DD + FRMT SHA1withRSA stamped by the CAF key). ``detalles`` emits
+    per-position lines; without it a single summary line carries the neto. A
+    None deal emits the amount-less shape a guía de despacho carries: Totales
+    and MontoItem stay present with 0 — the DTE schema requires them — and
     QtyItem carries the moved units."""
     if deal is not None:
         # A DTE is a peso document: a foreign-currency deal would lose its
@@ -522,7 +525,7 @@ def _render_dte(
     dd = (
         f"<DD><RE>{caf['rut_emisor']}</RE><TD>{tipo}</TD><F>{folio}</F>"
         f"<FE>{fecha}</FE><RR>{receptor}</RR><RSR>{escape(receptor_name[:40])}</RSR>"
-        f"<MNT>{total}</MNT><IT1>{escape(item)}</IT1>{caf['caf_xml']}"
+        f"<MNT>{total}</MNT><IT1>{escape(item[:40])}</IT1>{caf['caf_xml']}"
         f"<TSTED>{tsted}</TSTED></DD>"
     )
     frmt = _sign_dd(dd, caf["rsask"], _row_aad(str(caf["org_id"]), caf))
@@ -543,14 +546,31 @@ def _render_dte(
             else f"<Totales><MntTotal>{total}</MntTotal></Totales>"
         )
         + "</Encabezado>"
-        f"<Detalle><NroLinDet>1</NroLinDet><NmbItem>{escape(item)}</NmbItem>"
         + (
-            f"<QtyItem>{qty_item}</QtyItem>"
-            if qty_item is not None
-            else ""
+            "".join(
+                f"<Detalle><NroLinDet>{index}</NroLinDet>"
+                f"<NmbItem>{escape(line['nmb'][:80])}</NmbItem>"
+                + (
+                    f"<QtyItem>{line['qty']}</QtyItem>"
+                    if line.get("qty") is not None
+                    else ""
+                )
+                + f"<MontoItem>{line['monto']}</MontoItem></Detalle>"
+                for index, line in enumerate(detalles, start=1)
+            )
+            if detalles
+            else (
+                f"<Detalle><NroLinDet>1</NroLinDet>"
+                f"<NmbItem>{escape(item)}</NmbItem>"
+                + (
+                    f"<QtyItem>{qty_item}</QtyItem>"
+                    if qty_item is not None
+                    else ""
+                )
+                + f"<MontoItem>{neto}</MontoItem></Detalle>"
+            )
         )
-        + f"<MontoItem>{neto}</MontoItem>"
-        + f"</Detalle>{referencia}"
+        + f"{referencia}"
         f'<TED version="1.0">{dd}<FRMT algoritmo="SHA1withRSA">{frmt}</FRMT></TED>'
         f"<TmstFirma>{tsted}</TmstFirma></Documento></DTE>"
     )
@@ -589,7 +609,10 @@ def _receptor(payload: dict) -> tuple[str, str, str]:
 
 
 def _dte_xml(*, folio: int, invoice: dict, caf: dict, issued_at) -> str:
-    """DTE-33: one Detalle referencing the sealed quotation."""
+    """DTE-33: one Detalle per sold position when the sealed payload carries
+    reconciling line nets; otherwise the single summary line. IdDoc also
+    carries the payment form: FmaPago 1 when the invoice was fully collected
+    at issue, 2 for credit, plus TermPagoGlosa with the sealed terms."""
     payload = (
         invoice["payload_json"]
         if isinstance(invoice["payload_json"], dict)
@@ -599,6 +622,41 @@ def _dte_xml(*, folio: int, invoice: dict, caf: dict, issued_at) -> str:
     revision = payload.get("revision_code") or "REV-A"
     positions = payload.get("positions") or []
     item = f"Según cotización {revision} - {len(positions)} posición(es)"
+    neto = int(Decimal(str(payload["deal"]["total_net"])))
+    detalles = None
+    if positions and all(
+        position.get("price_net") is not None
+        and Decimal(str(position["price_net"]))
+        == Decimal(str(position["price_net"])).to_integral_value()
+        for position in positions
+    ):
+        lines = [
+            {
+                "nmb": (
+                    f"Pos. {position.get('position_index')} "
+                    f"{position.get('typology') or 'item'} "
+                    f"{position.get('width_mm')}x{position.get('height_mm')}mm"
+                ),
+                "qty": position.get("quantity"),
+                "monto": int(Decimal(str(position["price_net"]))),
+            }
+            for position in positions
+        ]
+        # The SII validates MntNeto against the Detalle sum — a rounding gap
+        # rejects the folio, so a non-reconciling set falls back to the
+        # single summary line instead of emitting a wrong document.
+        if sum(line["monto"] for line in lines) == neto:
+            detalles = lines
+    balance = payload.get("balance") or {}
+    amount_due = balance.get("amount_due")
+    fma_pago = 1 if amount_due is not None and Decimal(str(amount_due)) == 0 else 2
+    terms = (
+        str(payload.get("project", {}).get("payment_terms") or "").strip()[:45]
+    )
+    iddoc_extra = (
+        f"<FmaPago>{fma_pago}</FmaPago>"
+        + (f"<TermPagoGlosa>{escape(terms)}</TermPagoGlosa>" if terms else "")
+    )
     return _render_dte(
         tipo=DTE_FACTURA,
         folio=folio,
@@ -609,6 +667,8 @@ def _dte_xml(*, folio: int, invoice: dict, caf: dict, issued_at) -> str:
         item=item,
         caf=caf,
         issued_at=issued_at,
+        iddoc_extra=iddoc_extra,
+        detalles=detalles,
     )
 
 
@@ -651,6 +711,47 @@ def _dte_xml_credit_note(
         issued_at=issued_at,
         referencia=referencia,
     )
+
+
+def _seal_repr(
+    *,
+    storage,
+    org_id_s: str,
+    project_id_s: str,
+    dte_row_id: str,
+    dte_xml: bytes,
+    parent_storage_key: str,
+) -> None:
+    """Seal the "PDF tributario": fiscal cover composed from the stamped XML
+    plus the untouched sealed body. An emit that fails here must abort the
+    whole transaction — a stamped folio without its printable identity is a
+    broken artifact, not a best-effort extra."""
+    from projects import sii_repr  # heavy deps (weasyprint) load lazily
+
+    parent_pdf = storage.download(parent_storage_key)
+    content = sii_repr.compose_tributario_pdf(
+        dte_xml=dte_xml, parent_pdf=parent_pdf
+    )
+    content_hash = _sha256(content)
+    object_key = (
+        f"org_{org_id_s}/projects/{project_id_s}/dtes/"
+        f"repr-{dte_row_id}_{content_hash[:16]}.pdf"
+    )
+    storage.upload_immutable(object_key, content, "application/pdf")
+    try:
+        one(
+            "UPDATE public.project_dtes SET "
+            "repr_storage_object_key=%s, repr_file_sha256=%s "
+            "WHERE id=%s RETURNING id",
+            [object_key, content_hash, dte_row_id],
+            "sii_dte_missing",
+        )
+    except Exception:
+        try:
+            storage.delete_object(object_key)
+        except Exception:  # noqa: BLE001 — cleanup must not mask the real failure
+            pass
+        raise
 
 
 def emit_dte(*, org_id: UUID, project: dict, invoice_id: UUID, actor_id: UUID) -> dict:
@@ -778,6 +879,14 @@ def emit_dte(*, org_id: UUID, project: dict, invoice_id: UUID, actor_id: UUID) -
                         issued_at,
                     ],
                 )
+                _seal_repr(
+                    storage=storage,
+                    org_id_s=org_id_s,
+                    project_id_s=project_id_s,
+                    dte_row_id=str(row["id"]),
+                    dte_xml=content,
+                    parent_storage_key=str(invoice["storage_object_key"]),
+                )
             except Exception:
                 try:
                     storage.delete_object(object_key)
@@ -808,9 +917,18 @@ def dte_access(*, org_id: UUID, project_id: UUID, invoice_id: UUID) -> dict:
         signed_url = SupabaseDocumentStorage().signed_url(
             str(found["storage_object_key"]), expires_in=SIGNED_URL_TTL_SECONDS
         )
+        tributario_url = (
+            SupabaseDocumentStorage().signed_url(
+                str(found.get("repr_storage_object_key")),
+                expires_in=SIGNED_URL_TTL_SECONDS,
+            )
+            if found.get("repr_storage_object_key")
+            else None
+        )
     return {
         **_dte_public(found),
         "signed_url": signed_url,
+        "tributario_signed_url": tributario_url,
         "expires_in": SIGNED_URL_TTL_SECONDS,
     }
 
@@ -866,6 +984,7 @@ def emit_credit_note_dte(
     invoice_id: UUID,
     actor_id: UUID,
     reason: str | None = None,
+    amount: object = None,
 ) -> dict:
     """Timbra the electronic annulment of a stamped factura: seals the nota
     de crédito document AND its DTE-61 in one transaction — a factura the
@@ -875,6 +994,15 @@ def emit_credit_note_dte(
     credit note and UNIQUE(org_id, credit_note_id) on the DTE make a
     retried emit replay the same artifacts."""
     org_id_s, project_id_s, invoice_id_s = str(org_id), str(project["id"]), str(invoice_id)
+    if amount is not None:
+        # A DTE-61's <Monto> itemization is a different emission shape — a
+        # partial fiscal credit is not silently downgraded to a full one.
+        raise contract_error(
+            422,
+            "credit_note_dte_partial_unsupported",
+            "La nota de crédito electrónica anula la factura completa — "
+            "para un abono parcial emite la nota de crédito interna.",
+        )
     object_key: str | None = None
     credit_object_key: str | None = None
     try:
@@ -1028,6 +1156,14 @@ def emit_credit_note_dte(
                         issued_at,
                     ],
                 )
+                _seal_repr(
+                    storage=storage,
+                    org_id_s=org_id_s,
+                    project_id_s=project_id_s,
+                    dte_row_id=str(row["id"]),
+                    dte_xml=content,
+                    parent_storage_key=str(credit_note["storage_object_key"]),
+                )
             except Exception:
                 try:
                     storage.delete_object(object_key)
@@ -1064,9 +1200,18 @@ def credit_note_dte_access(*, org_id: UUID, project_id: UUID, invoice_id: UUID) 
         signed_url = SupabaseDocumentStorage().signed_url(
             str(found["storage_object_key"]), expires_in=SIGNED_URL_TTL_SECONDS
         )
+        tributario_url = (
+            SupabaseDocumentStorage().signed_url(
+                str(found.get("repr_storage_object_key")),
+                expires_in=SIGNED_URL_TTL_SECONDS,
+            )
+            if found.get("repr_storage_object_key")
+            else None
+        )
     return {
         **_dte_public(found),
         "signed_url": signed_url,
+        "tributario_signed_url": tributario_url,
         "expires_in": SIGNED_URL_TTL_SECONDS,
     }
 
@@ -1127,10 +1272,12 @@ def _receptor_guia_interno(project: dict, caf: dict) -> tuple[str, str, str]:
 
 
 def _dte_xml_dispatch_note(
-    *, folio: int, note: dict, caf: dict, issued_at, ind_traslado: int
+    *, folio: int, note: dict, caf: dict, issued_at, ind_traslado: int,
+    deal: dict | None = None,
 ) -> str:
-    """DTE-52: an amount-less traslado whose <Referencia> points back at
-    the work order it ships."""
+    """DTE-52: a traslado whose <Referencia> points back at the work order
+    it ships — amount-less only for traslado interno; a venta guía stamps
+    the sealed deal's totals."""
     payload = (
         note["payload_json"]
         if isinstance(note["payload_json"], dict)
@@ -1150,10 +1297,10 @@ def _dte_xml_dispatch_note(
     fch_ref = note_issued.astimezone(_SII_TZ).date().isoformat()
     referencia = (
         f"<Referencia><NroLinRef>1</NroLinRef>"
-        f"<TpoDocRef>OT</TpoDocRef>"
+        f"<TpoDocRef>802</TpoDocRef>"
         f"<FolioRef>{escape(order_code[:18])}</FolioRef>"
         f"<FchRef>{fch_ref}</FchRef>"
-        f"<RazonRef>Orden de trabajo</RazonRef></Referencia>"
+        f"<RazonRef>Orden de trabajo {escape(order_code)}</RazonRef></Referencia>"
     )
     return _render_dte(
         tipo=DTE_GUIA,
@@ -1161,7 +1308,7 @@ def _dte_xml_dispatch_note(
         receptor=receptor,
         receptor_name=receptor_name,
         receptor_extra=receptor_extra,
-        deal=None,
+        deal=deal,
         item=item,
         caf=caf,
         issued_at=issued_at,
@@ -1195,7 +1342,7 @@ def emit_dispatch_note_dte(
             )
             note = rows(
                 "SELECT * FROM public.dispatch_notes "
-                "WHERE work_order_id=%s AND org_id=%s",
+                "WHERE work_order_id=%s AND org_id=%s AND voided_at IS NULL",
                 [order_id_s, org_id_s],
             )
             if not note:
@@ -1236,6 +1383,27 @@ def emit_dispatch_note_dte(
                     "sii_caf_exhausted",
                     "No hay folios CAF tipo 52 disponibles — cargue un CAF en Configuración.",
                 )
+            deal = None
+            if ind_traslado != IND_TRASLADO_INTERNO:
+                # IndTraslado=1 declares a sale — stamp the sealed revision's
+                # totals, never a $0 guía the SII would see as a falsified
+                # venta. Traslado interno (5) legitimately carries no deal.
+                from projects import invoices  # lazy: invoices → sii_envio → sii
+
+                sealed = invoices._sealed_deal(org_id, order["project_id"])
+                if sealed is None:
+                    raise contract_error(
+                        422,
+                        "guia_venta_requires_sealed_deal",
+                        "La guía de venta requiere una revisión emitida con "
+                        "totales — use traslado interno o emita la revisión.",
+                    )
+                deal = {
+                    "total_net": sealed["net"],
+                    "total_tax": sealed["tax"],
+                    "total_gross": sealed["gross"],
+                    "currency": sealed["currency"],
+                }
             issued_at = timezone.now()
             content = _encode_dte(
                 _dte_xml_dispatch_note(
@@ -1244,6 +1412,7 @@ def emit_dispatch_note_dte(
                     caf=caf,
                     issued_at=issued_at,
                     ind_traslado=ind_traslado,
+                    deal=deal,
                 )
             )
             moved = rows(
@@ -1307,6 +1476,14 @@ def emit_dispatch_note_dte(
                         issued_at,
                     ],
                 )
+                _seal_repr(
+                    storage=storage,
+                    org_id_s=org_id_s,
+                    project_id_s=str(order["project_id"]),
+                    dte_row_id=str(row["id"]),
+                    dte_xml=content,
+                    parent_storage_key=str(note["storage_object_key"]),
+                )
             except Exception:
                 try:
                     storage.delete_object(object_key)
@@ -1339,8 +1516,17 @@ def dispatch_note_dte_access(*, org_id: UUID, order_id: UUID) -> dict:
         signed_url = SupabaseDocumentStorage().signed_url(
             str(found["storage_object_key"]), expires_in=SIGNED_URL_TTL_SECONDS
         )
+        tributario_url = (
+            SupabaseDocumentStorage().signed_url(
+                str(found.get("repr_storage_object_key")),
+                expires_in=SIGNED_URL_TTL_SECONDS,
+            )
+            if found.get("repr_storage_object_key")
+            else None
+        )
     return {
         **_dte_public(found),
         "signed_url": signed_url,
+        "tributario_signed_url": tributario_url,
         "expires_in": SIGNED_URL_TTL_SECONDS,
     }

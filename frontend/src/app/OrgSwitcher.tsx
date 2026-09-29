@@ -60,12 +60,11 @@ export function OrgSwitcher(): JSX.Element | null {
         )}
       </button>
       {open && others.length > 0 && (
-        <ul className="shell-menu" role="menu" aria-label={t("shell.switchOrg")}>
+        <ul className="shell-menu" aria-label={t("shell.switchOrg")}>
           {others.map((member) => (
             <li key={member.organization_id}>
               <button
                 type="button"
-                role="menuitem"
                 className="shell-menu__item"
                 onClick={() => void switchOrganization(member.organization_id)}
               >

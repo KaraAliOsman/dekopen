@@ -12,7 +12,7 @@ import base64
 from uuid import UUID, uuid4
 
 from django.conf import settings
-from django.db import connection
+from django.db import connection, transaction
 import httpx
 import pytest
 from pytest_django.plugin import DjangoDbBlocker
@@ -219,6 +219,43 @@ def test_rollback_clears_claims_and_role(real_rows: RLSFixtures) -> None:
     assert_no_context()
 
 
+def test_nested_context_restores_outer_role_and_claims(real_rows: RLSFixtures) -> None:
+    """SET LOCAL ROLE is transaction-scoped, not savepoint-scoped: without an
+    explicit restore, exiting the inner context leaves the outer transaction
+    running as `authenticated` — a job worker's own writes (job_runs UPDATE)
+    then get permission-denied. Pin the restore inside a live outer tx."""
+    with transaction.atomic():
+        with authenticated_rls_context(real_rows.tokens["A"].claims):
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT current_setting('role', true)")
+                assert cursor.fetchone()[0] == "authenticated"
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT current_setting('role', true), "
+                "current_setting('request.jwt.claims', true)"
+            )
+            role, claims = cursor.fetchone()
+        assert role == "none"
+        assert claims in (None, "")
+
+
+def test_documentary_backend_restores_authenticated_on_exit(real_rows: RLSFixtures) -> None:
+    """Nested backend-role context must hand the request's `authenticated`
+    role back, not strand the caller on documentary_backend or none."""
+    from documents.repository import documentary_backend
+
+    with transaction.atomic():
+        with authenticated_rls_context(real_rows.tokens["A"].claims):
+            with documentary_backend():
+                with connection.cursor() as cursor:
+                    cursor.execute("SELECT current_setting('role', true)")
+                    assert cursor.fetchone()[0] == "documentary_backend"
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT current_setting('role', true)")
+                assert cursor.fetchone()[0] == "authenticated"
+        assert_no_context()
+
+
 def test_no_leak_between_open_connections_or_successive_requests(real_rows: RLSFixtures) -> None:
     probe = connection.copy(alias="rls_probe")
     try:
@@ -395,7 +432,7 @@ def test_shot06_all_28_catalog_fields_reach_typed_engine(real_rows: RLSFixtures)
     expected_fields = expected.model_dump()
     actual_fields["available_hardware_kits"] = sorted(actual_fields["available_hardware_kits"], key=lambda k: k["sku"])
     expected_fields["available_hardware_kits"] = sorted(expected_fields["available_hardware_kits"], key=lambda k: k["sku"])
-    assert len(SystemParams.model_fields) == len(actual_fields) == 25
+    assert len(SystemParams.model_fields) == len(actual_fields) == 26
     # The demo seed declares the same synthetic per-article masses the engine
     # fixture carries — mass authority must reach the typed model
     # field-for-field rather than arriving through a fallback.
@@ -488,14 +525,23 @@ def test_ai_context_projections_execute_against_real_schema(
                 [org_id],
             )
             project_id = cursor.fetchone()[0]
+            cursor.execute(
+                "INSERT INTO public.clients (org_id, name, created_by) VALUES (%s, %s, %s) RETURNING id",
+                [org_id, "RLS fixture client", uuid4()],
+            )
+            client_id = cursor.fetchone()[0]
         covered = []
         for surface in sorted(REQUIRED_REFS):
             needed = REQUIRED_REFS[surface]
-            if needed and set(needed) != {"project_id"}:
+            if needed and set(needed) not in ({"project_id"}, {"client_id"}):
                 # position/work_order refs need entities this fixture does not
                 # create; every other projection's SQL must execute for real.
                 continue
-            refs = {"project_id": str(project_id)} if needed else {}
+            refs = {}
+            if needed == ("project_id",):
+                refs = {"project_id": str(project_id)}
+            elif needed == ("client_id",):
+                refs = {"client_id": str(client_id)}
             context = build_context(org_id, surface, refs)
             assert context["surface"] == surface
             assert context["organization"]["name"]

@@ -7,13 +7,21 @@ import { AuthSessionProvider } from "./auth/AuthSessionProvider";
 import "./index.css";
 import "./styles/tokens.css";
 import { ThemeProvider } from "./theme/ThemeProvider";
-import { ConfirmProvider } from "./ui";
+import { ConfirmProvider, ToastProvider } from "./ui";
 import "./ui/ui.css";
 
 const container = document.getElementById("root");
 if (container === null) throw new Error("Frontend root element is missing");
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Route re-mounts shouldn't instantly re-hit the API — most reads
+      // stay accurate within 30 s and mutations invalidate explicitly.
+      staleTime: 30_000,
+    },
+  },
+});
 
 createRoot(container).render(
   <StrictMode>
@@ -21,7 +29,9 @@ createRoot(container).render(
       <ThemeProvider>
         <AuthSessionProvider>
           <ConfirmProvider>
-            <App />
+            <ToastProvider>
+              <App />
+            </ToastProvider>
           </ConfirmProvider>
         </AuthSessionProvider>
       </ThemeProvider>

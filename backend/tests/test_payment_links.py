@@ -55,7 +55,7 @@ def _integration(**over):
         "api_url": "https://sandbox.flow.cl/api",
         "api_key": "AB12CD34EF56",
         "secret_key": "S3CR3T-KEY-0987",
-        "payer_return_url": None,
+        "payer_return_url": "https://app.test/pago/retorno",
         "enabled": True,
         "created_at": "2026-09-23T10:00:00+00:00",
         "updated_at": "2026-09-23T10:00:00+00:00",
@@ -108,14 +108,24 @@ def _payment_row(**over):
 def _patch_env(monkeypatch, rows_impl, client=None):
     monkeypatch.setattr(payment_links, "documentary_backend", _noop)
     monkeypatch.setattr(payment_links.transaction, "atomic", _noop)
-    monkeypatch.setattr(payment_links, "rows", rows_impl)
+
+    def with_collected(sql, params=None):
+        if "COALESCE(SUM(amount)" in sql:
+            return [{"collected": Decimal("0")}]
+        return rows_impl(sql, params)
+
+    monkeypatch.setattr(payment_links, "rows", with_collected)
     monkeypatch.setattr(
         payment_links, "project_row", staticmethod(lambda *a, **k: {"name": "P-1"})
     )
     monkeypatch.setattr(
         payment_links,
         "_deal",
-        lambda *a, **k: {"total": Decimal("250000"), "currency": "CLP"},
+        lambda *a, **k: {
+            "total": Decimal("250000"),
+            "currency": "CLP",
+            "sealed_revision": "REV-A",
+        },
     )
     receipts = []
     monkeypatch.setattr(
@@ -347,7 +357,11 @@ def test_confirm_settles_on_live_deal_for_legacy_link(monkeypatch):
     receipts = _patch_env(monkeypatch, fake_rows, client=client)
     out = payment_links.confirm_link(link_id=link["id"], token="tok-1")
     assert out["link"]["status"] == "PAID"
-    assert receipts[0]["deal"] == {"total": Decimal("250000"), "currency": "CLP"}
+    assert receipts[0]["deal"] == {
+        "total": Decimal("250000"),
+        "currency": "CLP",
+        "sealed_revision": "REV-A",
+    }
 
 
 def test_confirm_settles_without_any_deal(monkeypatch):

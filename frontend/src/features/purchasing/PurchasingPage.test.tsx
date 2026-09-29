@@ -3,6 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { apiMutator } from "../../api/apiMutator";
 import { t } from "../../i18n/es-CL";
+import { ConfirmProvider } from "../../ui";
 import { PurchasingPage } from "./PurchasingPage";
 
 const identity = vi.hoisted(() => ({ id: "tenant-a", role: "WORKSHOP_MANAGER" }));
@@ -31,6 +32,7 @@ const glassRequirement = {
   quantity: "4",
   specification: {},
   source_trace: ["5".repeat(64), "6".repeat(64)],
+  source_trace_labels: ["I-01", null],
 };
 const profileRequirement = {
   id: "req-profile",
@@ -81,6 +83,51 @@ function mockState(overrides: Record<string, unknown> = {}) {
   vi.mocked(apiMutator).mockImplementation((url) => {
     if (String(url).endsWith("purchasing/versions/"))
       return Promise.resolve({ data: { versions: [versionItem] } });
+    if (String(url).endsWith("purchasing/orders/"))
+      return Promise.resolve({
+        data: {
+          orders: [
+            {
+              id: "order-idx-1",
+              order_code: "OC-HW-7",
+              order_type: "SUPPLIER_HARDWARE_PO",
+              status: "SENT",
+              supplier_identity: "76.1-2",
+              supplier_name: "Vorne SPA",
+              expected_at: "2026-10-01",
+              sent_at: null,
+              created_at: "2026-09-01T00:00:00Z",
+              project_id: "project-a",
+              project_code: "P-002",
+              project_version_id: versionItem.id,
+              revision_code: "REV-A",
+              line_count: "3",
+              total_qty: "10",
+              good_qty: "2",
+              outstanding_qty: "8",
+            },
+            {
+              id: "order-idx-2",
+              order_code: "OC-GL-2",
+              order_type: "SUPPLIER_GLASS_PO",
+              status: "DRAFT",
+              supplier_identity: null,
+              supplier_name: "Vidrios SPA",
+              expected_at: null,
+              sent_at: null,
+              created_at: "2026-09-02T00:00:00Z",
+              project_id: "project-a",
+              project_code: "P-002",
+              project_version_id: versionItem.id,
+              revision_code: "REV-A",
+              line_count: "1",
+              total_qty: "4",
+              good_qty: "0",
+              outstanding_qty: "4",
+            },
+          ],
+        },
+      });
     if (String(url).includes(`purchasing/versions/${versionItem.id}/`))
       return Promise.resolve(state(overrides));
     return Promise.resolve({ data: {} });
@@ -90,7 +137,9 @@ function mockState(overrides: Record<string, unknown> = {}) {
 function renderPage() {
   return render(
     <MemoryRouter>
-      <PurchasingPage />
+      <ConfirmProvider>
+        <PurchasingPage />
+      </ConfirmProvider>
     </MemoryRouter>,
   );
 }
@@ -102,25 +151,36 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-it.each(["ESTIMATOR", "INSTALLER"])("denies S19 to %s without fetching", (role) => {
+it.each(["INSTALLER"])("denies S19 to %s without fetching", (role) => {
   identity.role = role;
   renderPage();
   expect(screen.getByRole("alert")).toHaveTextContent(t("purchasing.denied"));
   expect(apiMutator).not.toHaveBeenCalled();
 });
 
+it("opens read-only to ESTIMATOR: coverage visible, no write controls", async () => {
+  identity.role = "ESTIMATOR";
+  mockState();
+  renderPage();
+  await screen.findByText("4 unidades");
+  expect(
+    screen.queryByRole("combobox", { name: t("purchasing.chooseSupplier") }),
+  ).not.toBeInTheDocument();
+  expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+});
+
 it("renders immutable quantities without editable inputs", async () => {
   mockState();
   renderPage();
-  const cell = await screen.findByText("4 EA");
+  const cell = await screen.findByText("4 unidades");
   expect(cell.closest("td")).not.toContainHTML("input");
-  expect(screen.getByText("7 BAR")).toBeInTheDocument();
+  expect(screen.getByText("7 barras")).toBeInTheDocument();
 });
 
 it("offers only suppliers eligible for the requirement key", async () => {
   mockState();
   renderPage();
-  const row = (await screen.findByText("4 EA")).closest("tr")!;
+  const row = (await screen.findByText("4 unidades")).closest("tr")!;
   const select = within(row).getByLabelText(t("purchasing.chooseSupplier"));
   const options = within(select)
     .getAllByRole("option")
@@ -132,7 +192,7 @@ it("offers only suppliers eligible for the requirement key", async () => {
 it("keeps batch confirmation disabled until the type is fully allocated and attested", async () => {
   mockState();
   renderPage();
-  const section = (await screen.findByText("4 EA")).closest("section")!;
+  const section = (await screen.findByText("4 unidades")).closest("section")!;
   const confirm = within(section).getByRole("button", { name: t("purchasing.confirm") });
   expect(confirm).toBeDisabled();
   const checkbox = within(section).getByLabelText(t("purchasing.confirmCheckbox"));
@@ -151,7 +211,7 @@ it("confirms an allocated type only after explicit attestation", async () => {
     ],
   });
   renderPage();
-  const section = (await screen.findByText("4 EA")).closest("section")!;
+  const section = (await screen.findByText("4 unidades")).closest("section")!;
   const confirm = within(section).getByRole("button", { name: t("purchasing.confirm") });
   expect(confirm).toBeDisabled();
   fireEvent.click(within(section).getByLabelText(t("purchasing.confirmCheckbox")));
@@ -190,20 +250,21 @@ it("sends a draft order only after explicit attestation", async () => {
   await waitFor(() =>
     expect(apiMutator).toHaveBeenCalledWith(
       "/api/v1/purchasing/orders/order-1/send/",
-      expect.objectContaining({ body: JSON.stringify({ confirmed: true }) }),
+      expect.objectContaining({
+        body: JSON.stringify({ confirmed: true, expected_at: null, sent_to: null }),
+      }),
     ),
   );
 });
 
-it("renders string source traces as complete identities, not characters", async () => {
+it("renders trace labels with a short digest fallback for unlabelled ids", async () => {
   mockState();
   renderPage();
-  const cell = (await screen.findByText("4 EA")).closest("tr")!;
-  const trace = "5".repeat(64);
-  // Old behavior enumerated characters via Object.entries on the string,
-  // producing "0=5 · 1=5 · ..." rows and never the complete identity.
-  expect(within(cell).getByText(trace)).toBeInTheDocument();
-  expect(within(cell).getByText("6".repeat(64))).toBeInTheDocument();
+  const cell = (await screen.findByText("4 unidades")).closest("tr")!;
+  // "5".repeat(64) carries the I-01 label; "6".repeat(64) has none and renders
+  // as a truncated digest — never char-by-char enumeration.
+  expect(within(cell).getByText("I-01")).toBeInTheDocument();
+  expect(within(cell).getByText(`${"6".repeat(12)}…`)).toBeInTheDocument();
   expect(within(cell).queryByText(/^0=/)).not.toBeInTheDocument();
 });
 
@@ -221,7 +282,7 @@ it("shows workshop managers only document actions the backend authorizes", async
     ],
   });
   renderPage();
-  await screen.findByText("4 EA");
+  await screen.findByText("4 unidades");
   for (const key of ["purchasing.doc03", "purchasing.doc05", "purchasing.doc06"] as const)
     expect(screen.getByText(t(key))).toBeInTheDocument();
   expect(screen.getByText(t("purchasing.doc02"))).toBeInTheDocument();
@@ -233,7 +294,7 @@ it("shows the owner every document action including DOC-01 and DOC-07", async ()
   identity.role = "OWNER";
   mockState();
   renderPage();
-  await screen.findByText("4 EA");
+  await screen.findByText("4 unidades");
   for (const key of [
     "purchasing.doc01",
     "purchasing.doc03",
@@ -250,7 +311,7 @@ it("surfaces a load failure without fabricating requirements", async () => {
   await waitFor(() =>
     expect(screen.getByRole("alert")).toHaveTextContent(t("purchasing.loadError")),
   );
-  expect(screen.queryByText("4 EA")).not.toBeInTheDocument();
+  expect(screen.queryByText("4 unidades")).not.toBeInTheDocument();
 });
 
 it("drops the stale revision when the newly selected version fails to load", async () => {
@@ -273,7 +334,7 @@ it("drops the stale revision when the newly selected version fails to load", asy
     expect(screen.getByRole("alert")).toHaveTextContent(t("purchasing.loadError")),
   );
   expect(screen.queryByText("P-001")).not.toBeInTheDocument();
-  expect(screen.queryByText("4 EA")).not.toBeInTheDocument();
+  expect(screen.queryByText("4 unidades")).not.toBeInTheDocument();
   expect(screen.queryByText(t("purchasing.doc03"))).not.toBeInTheDocument();
 });
 
@@ -292,7 +353,7 @@ it("submits eligibility keys in canonical order even when visual order differs",
     eligibilities: [],
   });
   renderPage();
-  const section = (await screen.findByText("4 EA")).closest("section")!;
+  const section = (await screen.findByText("4 unidades")).closest("section")!;
   const form = section.querySelector("details.purchasing-eligibility form")!;
   expect(form).not.toBeNull();
   fireEvent.change(form.querySelector('input[name="supplier_identity"]')!, {
@@ -345,4 +406,18 @@ it("maps backend blocker codes to actionable labels", async () => {
       exact: false,
     }),
   ).toBeInTheDocument();
+});
+
+it("lists org-wide orders with supplier, expected date and outstanding, filtered by status", async () => {
+  mockState();
+  renderPage();
+  const index = (await screen.findByText(t("purchasing.indexTitle"))).closest("section")!;
+  expect(within(index).getByText("OC-HW-7")).toBeInTheDocument();
+  expect(within(index).getByText("OC-GL-2")).toBeInTheDocument();
+  expect(within(index).getByText("Vorne SPA")).toBeInTheDocument();
+  expect(within(index).getByText("2026-10-01")).toBeInTheDocument();
+  expect(within(index).getByText("8")).toBeInTheDocument();
+  fireEvent.click(within(index).getByRole("button", { name: t("purchasing.sent") }));
+  expect(within(index).getByText("OC-HW-7")).toBeInTheDocument();
+  expect(within(index).queryByText("OC-GL-2")).not.toBeInTheDocument();
 });

@@ -1,18 +1,20 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
 SET LOCAL search_path = public, private, auth, extensions, pg_temp;
-SELECT plan(9);
+SELECT plan(10);
 
 SELECT has_table('public', 'deliveries', 'deliveries table exists');
 SELECT has_column('public', 'deliveries', 'scheduled_date', 'schedule date captured');
 SELECT has_column('public', 'deliveries', 'installer_name', 'crew captured');
+SELECT has_column('public', 'deliveries', 'unit_indexes', 'trip carries a manifest unit subset');
 SELECT ok(
     EXISTS (
         SELECT 1 FROM pg_indexes
         WHERE schemaname = 'public' AND tablename = 'deliveries'
+          AND indexname = 'deliveries_one_open_trip'
           AND indexdef LIKE '%UNIQUE%order_id%'
     ),
-    'one active delivery per order'
+    'one open trip per order; resolved trips leave history'
 );
 SELECT ok(
     (SELECT relrowsecurity FROM pg_class WHERE relname = 'deliveries'),

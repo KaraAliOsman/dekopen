@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ApiError } from "../../api/apiMutator";
 import {
   projectPaymentIntegrationStatus,
@@ -7,7 +8,6 @@ import {
   projectPaymentLinksList,
 } from "../../api/generated/dekopen";
 import type {
-  PaymentIntegrationStatus,
   PaymentKindEnum,
   PaymentLink,
   PaymentLinkStatusEnum,
@@ -52,8 +52,41 @@ export function ProjectPaymentLinksPanel({
   onChanged: () => void;
   onDirtyChange?: (dirty: boolean) => void;
 }): JSX.Element {
-  const [links, setLinks] = useState<PaymentLink[]>([]);
-  const [integration, setIntegration] = useState<PaymentIntegrationStatus | null>(null);
+  const queryClient = useQueryClient();
+  // Dedupe under react-query: StrictMode double-mounts and the cobranza
+  // summary were each re-firing this list.
+  const linksKey = ["projects", "payment-links", orgId, projectId] as const;
+  const linksQuery = useQuery<PaymentLink[]>({
+    queryKey: linksKey,
+    queryFn: async ({ signal }) => {
+      const response = await projectPaymentLinksList(projectId, {
+        signal,
+        headers: { "X-Organization-ID": orgId },
+      });
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      return response.data.links;
+    },
+  });
+  const links = linksQuery.data ?? [];
+  const setLinks = (updater: (previous: PaymentLink[]) => PaymentLink[]) =>
+    queryClient.setQueryData(linksKey, updater(linksQuery.data ?? []));
+  // Integration status is write-scoped — readers (e.g. taller) only need the
+  // links list; fetching it would 403 for them.
+  const integrationQuery = useQuery({
+    queryKey: ["projects", "payment-integration", orgId],
+    enabled: canWrite,
+    queryFn: async ({ signal }) => {
+      const response = await projectPaymentIntegrationStatus({
+        signal,
+        headers: { "X-Organization-ID": orgId },
+      });
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      return response.data;
+    },
+    // An absent/unconfigured provider only hides the hint — never fails the list.
+    retry: false,
+  });
+  const integration = integrationQuery.data ?? null;
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -72,26 +105,9 @@ export function ProjectPaymentLinksPanel({
     [],
   );
 
-  const load = useCallback(async () => {
-    const current = ++generation.current;
-    try {
-      const [linksResponse, statusResponse] = await Promise.all([
-        projectPaymentLinksList(projectId, requestOptions),
-        // Integration status is write-scoped — readers (e.g. taller) only
-        // need the links list; fetching it would 403 for them.
-        canWrite ? projectPaymentIntegrationStatus(requestOptions) : Promise.resolve(null),
-      ]);
-      if (generation.current !== current) return;
-      if (linksResponse.status === 200) setLinks(linksResponse.data.links);
-      if (statusResponse?.status === 200) setIntegration(statusResponse.data);
-    } catch {
-      if (generation.current === current) setMessage(t("projects.paymentLinksLoadError"));
-    }
-  }, [projectId, canWrite]); // eslint-disable-line react-hooks/exhaustive-deps
-
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (linksQuery.isError) setMessage(t("projects.paymentLinksLoadError"));
+  }, [linksQuery.isError]);
 
   const formDirty =
     showForm &&
@@ -288,7 +304,7 @@ export function ProjectPaymentLinksPanel({
           </tbody>
         </table>
       )}
-      {links.length === 0 && !showForm && (
+      {links.length === 0 && !showForm && !message && (
         <p className="settings-hint">{t("projects.paymentLinksEmpty")}</p>
       )}
     </section>

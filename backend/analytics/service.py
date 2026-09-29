@@ -27,6 +27,20 @@ def operational_summary(*, org_id: UUID) -> dict[str, Any]:
         return _summary(org_id)
 
 
+def failed_jobs_count(*, org_id: UUID) -> int:
+    """Failed background jobs for the dashboard attention queue. job_runs is
+    a service-owned table (service_role grant only) — callers run this as the
+    connection owner, outside the member-facing RLS context, with the explicit
+    org filter; the same pattern the jobs API's job_scope uses."""
+    return int(
+        one(
+            "SELECT count(*) AS n FROM public.job_runs "
+            "WHERE org_id = %s AND state = 'FAILED'",
+            [str(org_id)],
+        )["n"]
+    )
+
+
 def _summary(org_id: UUID) -> dict[str, Any]:
     work_orders = _counts_by(
         """
@@ -80,14 +94,54 @@ def _summary(org_id: UUID) -> dict[str, Any]:
                AND o.status = 'COMPLETED' AND o.payload_json ? 'packing'
                AND NOT EXISTS (
                    SELECT 1 FROM public.dispatch_notes dn
-                   WHERE dn.org_id = o.org_id AND dn.work_order_id = o.id))
+                   WHERE dn.org_id = o.org_id AND dn.work_order_id = o.id
+                     AND dn.voided_at IS NULL))
                 AS dispatch_ready,
             (SELECT count(*) FROM public.profile_systems s
              WHERE s.org_id = %s
                AND (s.rebate_depth_mm IS NULL
-                    OR s.end_milling_overlap_mm IS NULL)) AS catalog_gaps
+                    OR s.end_milling_overlap_mm IS NULL)) AS catalog_gaps,
+            (SELECT count(*) FROM public.production_steps s
+             JOIN public.orders o ON o.id = s.order_id AND o.org_id = s.org_id
+             WHERE s.org_id = %s AND s.status = 'BLOCKED'
+               AND o.status NOT IN ('CANCELLED', 'INSTALLED')) AS steps_blocked,
+            (SELECT count(DISTINCT a.project_id) FROM public.customer_approvals a
+             JOIN public.project_versions v
+               ON v.id = a.project_version_id AND v.org_id = a.org_id
+             JOIN public.projects p
+               ON p.id = a.project_id AND p.org_id = a.org_id
+             WHERE a.org_id = %s AND a.status = 'PENDING'
+               AND a.expires_at > now()
+               AND p.current_revision = v.revision_code
+               AND p.status = 'QUOTED') AS approvals_pending,
+            (SELECT count(*) FROM public.projects p
+             WHERE p.org_id = %s AND p.status = 'QUOTED'
+               AND NOT EXISTS (
+                   SELECT 1 FROM public.customer_approvals a
+                   JOIN public.project_versions v
+                     ON v.id = a.project_version_id AND v.org_id = a.org_id
+                   WHERE a.org_id = p.org_id AND a.project_id = p.id
+                     AND v.revision_code = p.current_revision))
+                AS quotes_unsent,
+            (SELECT count(*) FROM public.projects p
+             WHERE p.org_id = %s AND p.status = 'QUOTED'
+               AND EXISTS (
+                   SELECT 1 FROM public.customer_approvals a
+                   JOIN public.project_versions v
+                     ON v.id = a.project_version_id AND v.org_id = a.org_id
+                   WHERE a.org_id = p.org_id AND a.project_id = p.id
+                     AND v.revision_code = p.current_revision)
+               AND NOT EXISTS (
+                   SELECT 1 FROM public.customer_approvals a
+                   JOIN public.project_versions v
+                     ON v.id = a.project_version_id AND v.org_id = a.org_id
+                   WHERE a.org_id = p.org_id AND a.project_id = p.id
+                     AND v.revision_code = p.current_revision
+                     AND (a.status = 'APPROVED'
+                          OR (a.status = 'PENDING' AND a.expires_at > now()))))
+                AS quotes_stale
         """,
-        [str(org_id)] * 4,
+        [str(org_id)] * 8,
     )
     lead = one(
         """
@@ -148,10 +202,63 @@ def _summary(org_id: UUID) -> dict[str, Any]:
             (SELECT count(*) FROM public.project_positions WHERE org_id = %s)
                 AS positions,
             (SELECT count(*) FROM public.project_versions
-             WHERE org_id = %s) AS sealed_versions
+             WHERE org_id = %s) AS sealed_versions,
+            (SELECT count(*) FROM public.projects
+             WHERE org_id = %s AND status = 'DRAFT') AS drafts,
+            (SELECT count(*) FROM public.projects
+             WHERE org_id = %s AND status = 'QUOTED') AS quoted,
+            (SELECT count(*) FROM public.projects
+             WHERE org_id = %s AND status = 'APPROVED') AS approved,
+            (SELECT count(*) FROM public.projects
+             WHERE org_id = %s AND status = 'IN_PRODUCTION') AS in_production
         """,
-        [str(org_id), str(org_id), str(org_id)],
+        [str(org_id)] * 7,
     )
+    # Money stays per currency — a CLP collected total must never absorb a USD
+    # pipeline figure without an FX authority.
+    commercial = [
+        {
+            "currency": str(row["currency"]),
+            "quoted": str(row["quoted"]),
+            "booked": str(row["booked"]),
+            "collected": str(row["collected"]),
+        }
+        for row in rows(
+            """
+            SELECT cur.currency,
+                COALESCE(SUM(p.total_price_gross)
+                    FILTER (WHERE p.status = 'QUOTED'), 0) AS quoted,
+                COALESCE(SUM(p.total_price_gross)
+                    FILTER (WHERE p.status IN
+                        ('APPROVED','IN_PRODUCTION','COMPLETED')), 0) AS booked,
+                COALESCE(SUM(pay.collected), 0) AS collected
+            FROM public.projects p
+            JOIN LATERAL (
+                -- A project's deal currency is the one sealed into its live
+                -- applied pricing operation (same authority the payments flow
+                -- reads); projects carries no currency column of its own.
+                SELECT o.request->>'currency' AS currency
+                FROM public.pricing_operations o
+                WHERE o.org_id = p.org_id AND o.project_id = p.id
+                  AND o.state = 'APPLIED'
+                  AND COALESCE(o.revision_code, 'REV-A') = p.current_revision
+                  AND (p.pricing_reset_at IS NULL
+                       OR o.approved_at > p.pricing_reset_at)
+                ORDER BY o.approved_at DESC, o.id DESC LIMIT 1
+            ) cur ON true
+            LEFT JOIN LATERAL (
+                SELECT SUM(pp.amount) AS collected
+                FROM public.project_payments pp
+                WHERE pp.org_id = p.org_id AND pp.project_id = p.id
+                  AND pp.voided_at IS NULL
+            ) pay ON true
+            WHERE p.org_id = %s AND p.total_price_gross IS NOT NULL
+            GROUP BY cur.currency
+            ORDER BY cur.currency
+            """,
+            [str(org_id)],
+        )
+    ]
     recent = [
         {
             "event": str(row["event"]),
@@ -183,5 +290,6 @@ def _summary(org_id: UUID) -> dict[str, Any]:
         "deliveries": {k: int(v or 0) for k, v in deliveries.items()},
         "documents": documents,
         "projects": {k: int(v or 0) for k, v in projects.items()},
+        "commercial": commercial,
         "recent_events": recent,
     }

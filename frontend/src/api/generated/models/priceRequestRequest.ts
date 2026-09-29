@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { CurrencyEnum } from "./currencyEnum";
+import type { ExtraChargeRequest } from "./extraChargeRequest";
 import type { PricingModeEnum } from "./pricingModeEnum";
 import type { SegmentEnum } from "./segmentEnum";
 
@@ -26,6 +27,8 @@ export interface PriceRequestRequest {
   /** @pattern ^-?\d{0,2}(?:\.\d{0,4})?$ */
   target_margin?: string;
   segment?: SegmentEnum;
+  /** @maxItems 10 */
+  extras?: ExtraChargeRequest[];
   confirmed?: boolean;
   /**
    * @minLength 1

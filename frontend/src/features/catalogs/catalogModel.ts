@@ -1,6 +1,12 @@
 import * as client from "../../api/generated/dekopen";
 import type {
+  ErrorResponse,
+  SectionImportResponse,
   SystemWriteRequest,
+  SystemWorkspace,
+  ProcessProfileOption,
+  WorkCenter,
+  WorkCenterRequestRequest,
   ArticleWriteRequest,
   BeadWriteRequest,
   KitWriteRequest,
@@ -11,6 +17,7 @@ import type {
   ArticleResponse,
   BeadResponse,
   KitResponse,
+  EvidenceRow,
 } from "../../api/generated/models";
 
 export type SystemWrite = SystemWriteRequest;
@@ -54,7 +61,16 @@ export type CatalogData = { [R in Resource]: Row<R>[] };
 
 export type Field = {
   name: string;
-  kind: "text" | "decimal" | "integer" | "boolean" | "select" | "system" | "bead";
+  kind:
+    | "text"
+    | "decimal"
+    | "integer"
+    | "boolean"
+    | "select"
+    | "system"
+    | "bead"
+    | "csv"
+    | "processProfile";
   optional?: boolean;
   places?: number;
   maxLength?: number;
@@ -100,6 +116,13 @@ export const schemas: Record<Resource, Group[]> = {
         text("name", 150),
         text("code", 50),
         material,
+        // §06 system identity — who makes it, which family, what it covers.
+        text("manufacturer", 255, true),
+        text("family", 150, true),
+        { name: "applications", kind: "csv", optional: true, maxLength: 60 },
+        // Finishes the series sells — feeds the estimator's Acabado picker.
+        { name: "finishes", kind: "csv", optional: true, maxLength: 50 },
+        { name: "process_profile_id", kind: "processProfile", optional: true },
         decimal("depth_mm"),
         integer("chamber_count"),
         integer("version"),
@@ -247,8 +270,17 @@ export const schemas: Record<Resource, Group[]> = {
   ],
 };
 
-// Decimal strings remain strings throughout form state and transport.
-export const exact = (value: string): string => value.trim().replace(",", ".");
+// Decimal strings remain strings throughout form state and transport —
+// precision is the contract ("0.1000000000000000001" reaches the engine
+// untouched). Only the es-CL thousands-dot pattern normalizes: "1.500" is
+// fifteen hundred, never 1.5.
+export const exact = (value: string): string => {
+  const text = value.trim();
+  if (/^[+-]?\d{1,3}(?:\.\d{3})+(?:,\d+)?$/.test(text)) {
+    return text.replaceAll(".", "").replace(",", ".");
+  }
+  return text.replace(",", ".");
+};
 
 /** §15 section authoring state — structured like the kit `contents` list:
  * vertices/axes carry stable keys for the editable tables; string decimals
@@ -367,8 +399,16 @@ export function initialDraft(
       source[field.name] == null
         ? field.name === "system_id"
           ? (systemId ?? "")
-          : ""
-        : String(source[field.name]),
+          : // A required select renders its first option visually; the draft
+            // must start there too or it would silently submit "".
+            row === undefined && field.kind === "select" && !field.optional
+            ? (field.options?.[0] ?? "")
+            : row === undefined && field.kind === "boolean"
+              ? "true"
+              : ""
+        : Array.isArray(source[field.name])
+          ? (source[field.name] as string[]).join(", ")
+          : String(source[field.name]),
     ]),
   );
 }
@@ -381,11 +421,16 @@ export function writeFromDraft<R extends Resource>(
 ): Writes[R] {
   const values: Record<
     string,
-    string | number | boolean | null | HardwareComponent[] | ProfileSectionRequest
+    string | number | boolean | null | string[] | HardwareComponent[] | ProfileSectionRequest
   > = {};
   for (const field of fieldsFor(resource)) {
     const value = draft[field.name]?.trim() ?? "";
-    if (value === "" && field.optional) {
+    if (field.kind === "csv") {
+      values[field.name] = value
+        .split(",")
+        .map((item) => item.trim())
+        .filter((item) => item !== "");
+    } else if (value === "" && field.optional) {
       values[field.name] = null;
     } else if (field.kind === "integer") {
       // Integer counters only; never dimensions, weights, quantities or money.
@@ -396,11 +441,13 @@ export function writeFromDraft<R extends Resource>(
         count < -2147483648 ||
         count > 2147483647
       )
-        throw new Error("Invalid integer");
+        throw new Error(`Invalid integer: ${field.name}`);
       values[field.name] = count;
     } else if (field.kind === "boolean") {
-      if (value !== "true" && value !== "false") throw new Error("Missing boolean");
+      if (value !== "true" && value !== "false") throw new Error(`Missing boolean: ${field.name}`);
       values[field.name] = value === "true";
+    } else if (field.kind === "processProfile") {
+      values[field.name] = value === "" ? null : value;
     } else {
       values[field.name] = field.kind === "decimal" ? exact(value) : value;
     }
@@ -466,14 +513,75 @@ export function catalogApi(orgId: string) {
         throw new Error("catalog_write_failed");
       return response.data as Row<R>;
     },
-    async review<R extends Resource>(resource: R, id: string): Promise<Row<R>> {
-      // Glazing rows have no provenance — never called for them by the UI.
+    async workspace(systemId: string, signal?: AbortSignal): Promise<SystemWorkspace> {
+      const response = await client.catalogSystemWorkspace(systemId, {
+        ...options,
+        signal,
+      });
+      if (response.status !== 200) throw new Error("catalog_read_failed");
+      return response.data;
+    },
+    async sectionImport(file: File): Promise<SectionImportResponse> {
+      const response = await client.catalogSectionImportCreate({ file }, options);
+      if (response.status !== 200) {
+        const detail = (response.data as ErrorResponse).error;
+        throw new Error(detail?.code ?? "section_import_failed");
+      }
+      return response.data;
+    },
+    async processProfiles(signal?: AbortSignal): Promise<ProcessProfileOption[]> {
+      const response = await client.catalogProcessProfileList({ ...options, signal });
+      if (response.status !== 200) throw new Error("catalog_read_failed");
+      return response.data.items;
+    },
+    async evidence(systemId: string, signal?: AbortSignal): Promise<EvidenceRow[]> {
+      const response = await client.catalogEvidenceList(
+        { system_id: systemId },
+        { ...options, signal },
+      );
+      if (response.status !== 200) throw new Error("catalog_evidence_read_failed");
+      return response.data.items;
+    },
+    async reviewEvidence(id: string, state: "REVIEWED" | "REJECTED"): Promise<EvidenceRow> {
+      const response = await client.catalogEvidenceReview(id, { review_state: state }, options);
+      if (response.status !== 200) throw new Error("catalog_evidence_review_failed");
+      return response.data;
+    },
+    async workCenters(signal?: AbortSignal): Promise<WorkCenter[]> {
+      const response = await client.productionWorkCenters({ ...options, signal });
+      if (response.status !== 200) throw new Error("work_centers_read_failed");
+      return response.data.centers;
+    },
+    async upsertWorkCenter(body: WorkCenterRequestRequest): Promise<WorkCenter> {
+      const response = await client.productionWorkCentersCreate(body, options);
+      if (response.status !== 200 && response.status !== 201) {
+        const detail = (response.data as ErrorResponse).error;
+        throw new Error(detail?.code ?? "work_center_write_failed");
+      }
+      return response.data;
+    },
+    async seedWorkCenters(): Promise<WorkCenter[]> {
+      const response = await client.productionWorkCentersSeedDefaults(options);
+      if (response.status !== 200) throw new Error("work_centers_seed_failed");
+      return response.data.centers;
+    },
+    async review<R extends Resource>(resource: R, row: Row<R>): Promise<Row<R>> {
+      // If-Match is required by the API: a review must approve the revision
+      // the reviewer actually read, not a later edit (409 on drift).
+      const headers = {
+        headers: {
+          ...options.headers,
+          "If-Match": `"${(row as { revision?: string }).revision ?? ""}"`,
+        },
+      };
       const response =
         resource === "systems"
-          ? await client.catalogSystemReview(id, options)
+          ? await client.catalogSystemReview(row.id, headers)
           : resource === "articles"
-            ? await client.catalogArticleReview(id, options)
-            : await client.catalogKitReview(id, options);
+            ? await client.catalogArticleReview(row.id, headers)
+            : resource === "glazing"
+              ? await client.catalogBeadReview(row.id, headers)
+              : await client.catalogKitReview(row.id, headers);
       if (response.status !== 200) throw new Error("catalog_review_failed");
       return response.data as Row<R>;
     },

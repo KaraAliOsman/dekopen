@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+from decimal import Decimal
 from uuid import UUID
 
 from django.db import connection, transaction
@@ -26,6 +27,7 @@ from documents.repository import documentary_backend
 from documents.renderers import render_credit_note
 from documents.storage import SupabaseDocumentStorage
 from pricing.repository import one, rows
+from projects import org_branding
 
 logger = logging.getLogger(__name__)
 
@@ -33,14 +35,19 @@ SIGNED_URL_TTL_SECONDS = 600
 
 
 def _credit_note_public(row) -> dict:
+    payload = (
+        row["payload_json"]
+        if isinstance(row["payload_json"], dict)
+        else json.loads(row["payload_json"])
+    )
     return {
         "id": str(row["id"]),
         "credit_code": row["credit_code"],
         "invoice_id": str(row["invoice_id"]),
-        "invoice_code": row["payload_json"].get("invoice", {}).get("invoice_code")
-        if isinstance(row["payload_json"], dict)
-        else json.loads(row["payload_json"]).get("invoice", {}).get("invoice_code"),
+        "invoice_code": payload.get("invoice", {}).get("invoice_code"),
         "project_id": str(row["project_id"]),
+        "partial": payload.get("credit_partial") is True,
+        "credit_amount_gross": payload.get("credit_amount_gross"),
         "created_at": row["created_at"].isoformat()
         if hasattr(row["created_at"], "isoformat")
         else row["created_at"],
@@ -54,6 +61,7 @@ def issue_credit_note(
     invoice_id: UUID,
     actor_id: UUID,
     reason: str | None,
+    amount: Decimal | None = None,
 ) -> dict:
     """Seal a nota de crédito annulling ``invoice_id``. Called from the emit
     endpoint inside a transaction: an org-scoped advisory lock serializes
@@ -109,6 +117,25 @@ def issue_credit_note(
             )
             if existing:
                 return _credit_note_public(existing[0])
+            credit_amount: Decimal | None = None
+            if amount is not None:
+                invoice_deal = invoice_payload.get("deal") or {}
+                raw_total = invoice_deal.get("total_gross")
+                if raw_total is None:
+                    raise contract_error(
+                        422,
+                        "credit_note_amount_unverifiable",
+                        "La factura no tiene un total verificable para un "
+                        "crédito parcial.",
+                    )
+                total_gross = Decimal(str(raw_total))
+                if amount > total_gross:
+                    raise contract_error(
+                        422,
+                        "credit_note_amount_exceeds",
+                        "El monto acredita más que el total de la factura.",
+                    )
+                credit_amount = amount
             row, object_key = seal_credit_note(
                 invoice=invoice,
                 org_id_s=org_id_s,
@@ -116,6 +143,7 @@ def issue_credit_note(
                 project=project,
                 reason=reason,
                 actor_id=actor_id,
+                credit_amount=credit_amount,
             )
     except Exception:
         if object_key is not None:
@@ -132,6 +160,7 @@ def seal_credit_note(
     project: dict,
     reason: str | None,
     actor_id: UUID,
+    credit_amount: Decimal | None = None,
 ) -> tuple[dict, str]:
     """Render, upload and insert the sealed counter-document for ``invoice``.
 
@@ -151,6 +180,7 @@ def seal_credit_note(
     reason_text = (reason or "").strip() or None
     payload = {
         "credit_code": credit_code,
+        "organization": org_branding.branding_for_snapshot(org_id=UUID(org_id_s)),
         "issued_at": timezone.now().isoformat(),
         "reason": reason_text,
         "invoice": {
@@ -167,6 +197,17 @@ def seal_credit_note(
         },
         "positions": invoice_payload.get("positions") or [],
         "deal": invoice_payload.get("deal") or {},
+        "credit_amount_gross": (
+            str(credit_amount)
+            if credit_amount is not None
+            else None
+        ),
+        "credit_partial": (
+            credit_amount is not None
+            and (invoice_payload.get("deal") or {}).get("total_gross") is not None
+            and credit_amount
+            < Decimal(str(invoice_payload["deal"]["total_gross"]))
+        ),
     }
     identifier = hashlib.sha256(
         json.dumps(payload, sort_keys=True).encode("utf-8")
@@ -260,11 +301,26 @@ def credit_note_access(*, org_id: UUID, project_id: UUID, credit_note_id: UUID) 
                 404, "credit_note_not_found", "La nota de crédito no está disponible."
             )
         note = note[0]
-        signed_url = SupabaseDocumentStorage().signed_url(
+        storage = SupabaseDocumentStorage()
+        signed_url = storage.signed_url(
             str(note["storage_object_key"]), expires_in=SIGNED_URL_TTL_SECONDS
+        )
+        repr_row = rows(
+            "SELECT repr_storage_object_key FROM public.project_dtes "
+            "WHERE org_id=%s AND credit_note_id=%s",
+            [str(org_id), str(credit_note_id)],
+        )
+        tributario_signed_url = (
+            storage.signed_url(
+                str(repr_row[0].get("repr_storage_object_key")),
+                expires_in=SIGNED_URL_TTL_SECONDS,
+            )
+            if repr_row and repr_row[0].get("repr_storage_object_key")
+            else None
         )
     return {
         **_credit_note_public(note),
         "signed_url": signed_url,
+        "tributario_signed_url": tributario_signed_url,
         "expires_in": SIGNED_URL_TTL_SECONDS,
     }

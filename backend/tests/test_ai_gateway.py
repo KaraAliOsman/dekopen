@@ -1,5 +1,6 @@
 """AI gateway invoke: entitlement prechecks, white-label responses, audit binding."""
 
+import contextlib
 import json
 from contextlib import contextmanager
 from uuid import uuid4
@@ -1499,3 +1500,832 @@ def test_source_resolves_canonical_path_to_provider(monkeypatch):
     assert captured[0]["input_payload"]["source"]["id"] == str(source_id)
     assert "storage_path" not in captured[0]["input_payload"]
     assert "document_url" not in captured[0]["input_payload"]
+
+
+def test_openai_provider_image_payload_is_true_multimodal(monkeypatch):
+    """A scanned drawing reaches the model as an image_url content part —
+    inline data URI when the gateway fetched the bytes, the signed URL as
+    fallback — never as text the model has to pretend it can open."""
+    from ai_gateway.providers import OpenAICompatibleProvider
+
+    monkeypatch.setenv("AI_GATEWAY_MIMO_API_KEY", "k")
+    monkeypatch.setenv("AI_GATEWAY_MIMO_BASE_URL", "https://mimo.example/v1")
+    _allow_dns(monkeypatch)
+    provider = OpenAICompatibleProvider(provider="MIMO")
+    route = _route(provider="MIMO", provider_model="mimo-v1-pro")
+
+    _, body = provider._wire_request(
+        route=route,
+        capability="vision_ocr",
+        input_payload={
+            "file_name": "plano.png",
+            "kind": "IMAGE",
+            "source": {"kind": "document_import", "id": "x"},
+            "document_url": "https://signed.example/doc",
+            "_document_image": {"mime": "image/png", "data": "aGk="},
+        },
+        provider_options={},
+    )
+    content = body["messages"][1]["content"]
+    assert isinstance(content, list)
+    assert content[0] == {
+        "type": "image_url",
+        "image_url": {"url": "data:image/png;base64,aGk="},
+    }
+    text = json.loads(content[1]["text"])
+    # Transport artifacts never reach the model's text.
+    assert text == {
+        "file_name": "plano.png",
+        "kind": "IMAGE",
+        "source": {"kind": "document_import", "id": "x"},
+    }
+
+    # Oversize / failed inline fetch: the signed URL still rides image_url.
+    _, body = provider._wire_request(
+        route=route,
+        capability="vision_ocr",
+        input_payload={
+            "kind": "IMAGE",
+            "file_name": "plano.png",
+            "document_url": "https://signed.example/doc",
+        },
+        provider_options={},
+    )
+    content = body["messages"][1]["content"]
+    assert content[0]["image_url"]["url"] == "https://signed.example/doc"
+    assert "document_url" not in json.loads(content[1]["text"])
+
+    # Non-image kinds keep the whole payload as text (PDF URL stays).
+    _, body = provider._wire_request(
+        route=route,
+        capability="vision_ocr",
+        input_payload={
+            "kind": "PDF",
+            "file_name": "tabla.pdf",
+            "document_url": "https://signed.example/doc",
+        },
+        provider_options={},
+    )
+    user = json.loads(body["messages"][1]["content"])
+    assert user["document_url"] == "https://signed.example/doc"
+
+
+def test_catalog_system_drilldown_projection(monkeypatch):
+    """§06-H — catalog?surface query with system_id returns the deep
+    workspace projection: readiness, rosters, review queue, counts."""
+    from uuid import uuid4
+    from ai_gateway import context as context_module
+
+    system_id = uuid4()
+    workspace = {
+        "system": {
+            "id": system_id,
+            "code": "DEMO_60",
+            "name": "Serie Demo",
+            "material": "PVC",
+            "manufacturer_name": "Demo",
+            "family_name": "60",
+            "read_only": False,
+            "data_provenance": "MANUAL",
+            "review_pending": False,
+            "revision": "abc",
+        },
+        "articles": [
+            {"id": uuid4(), "sku": "A-1", "name": "Marco", "role": "FRAME",
+             "review_pending": True, "revision": "r1",
+             "section_revision": None, "section_revised_by": None,
+             "data_provenance": "LEGACY_UNVERIFIED",
+             "section": {"source": "DXF_REFERENCE", "drawing_ref": "x"}},
+        ],
+        "beads": [],
+        "kits": [{"id": uuid4(), "code": "K1", "label": "Kit", "review_pending": False}],
+        "reinforcements": [],
+        "purchase_mappings": [],
+        "process_profile": {"code": "P1", "label": "Std", "version": "1"},
+    }
+    monkeypatch.setattr(
+        "catalogs.service.system_workspace",
+        lambda org_id, sid: workspace,
+    )
+    monkeypatch.setattr(
+        "catalogs.readiness.catalog_readiness",
+        lambda sid, org_id: {"levels": [{"level": "DESIGN_VALID", "ok": False, "blockers": [
+            {"code": "technical_catalog", "missing_authority": "junquillos",
+             "affected": "x", "why": "y", "action": "z"}]}]},
+    )
+    out = context_module._catalog_system(uuid4(), system_id)
+    assert out["system"]["code"] == "DEMO_60"
+    assert out["readiness"]["levels"][0]["blockers"][0]["code"] == "technical_catalog"
+    assert out["counts"]["articles"] == 1 and out["counts"]["sections_dxf"] == 1
+    assert out["review_queue"][0]["label"] == "A-1"
+    assert out["articles"][0]["revision"] == "r1"
+
+
+def _agent_env(monkeypatch, document, job_id):
+    """Agent run with provider, context and job persistence faked."""
+    from ai_gateway import agent, service
+
+    monkeypatch.setattr(
+        service, "invoke",
+        lambda **kw: {
+            "output": json.dumps(document),
+            "credits_debited": 1,
+            "audit_id": str(uuid4()),
+            "model": "mimo-v2.6-pro",
+        },
+    )
+    entity_id = str(uuid4())
+    monkeypatch.setattr(
+        agent, "build_context",
+        lambda *a, **k: {"surface": "dashboard", "entity": {"id": entity_id}},
+    )
+    calls = {}
+    monkeypatch.setattr(
+        agent.jobs, "create_job",
+        lambda **kw: {"id": str(job_id), "transcript": []},
+    )
+    monkeypatch.setattr(
+        agent.jobs, "finish_job",
+        lambda **kw: calls.update(kw) or {"id": str(job_id)},
+    )
+    return calls, entity_id
+
+
+def _agent_document(entity_id, **extra):
+    document = {
+        "reply": "El proyecto tiene dos posiciones cotizadas.",
+        "plan": [{"label": "Revisar estado"}, {"label": "Resumir"}],
+        "claims": [
+            {"text": "La entidad existe", "evidence": [entity_id]},
+            {"text": "Afirmación inventada", "evidence": [str(uuid4())]},
+        ],
+        "references": [entity_id],
+        "steps": [],
+        "queries": [],
+        "warnings": [],
+    }
+    document.update(extra)
+    return document
+
+
+def test_act_persists_job_and_grounds_claims(monkeypatch):
+    from ai_gateway import agent
+
+    job_id = uuid4()
+    calls, entity_id = _agent_env(
+        monkeypatch, _agent_document("placeholder"), job_id
+    )
+    # rebuild document now that the real entity id is known
+    import ai_gateway.service as service_module
+    document = _agent_document(entity_id)
+    monkeypatch.setattr(
+        service_module, "invoke",
+        lambda **kw: {
+            "output": json.dumps(document),
+            "credits_debited": 1,
+            "audit_id": str(uuid4()),
+            "model": "mimo-v2.6-pro",
+        },
+    )
+    out = agent.act(
+        org_id=uuid4(), user_id=uuid4(), surface="dashboard", refs={},
+        goal="resume", product=None, history=[], operation_key="k",
+    )
+    assert out["job_id"] == str(job_id)
+    assert out["state"] == "SUCCEEDED"
+    assert out["claims"] == [{"text": "La entidad existe", "evidence": [entity_id]}]
+    assert any("sin evidencia" in w for w in out["warnings"])
+    assert calls["state"] == "SUCCEEDED"
+    assert calls["transcript"][0]["role"] == "user"
+    assert calls["transcript"][1]["role"] == "agent"
+
+
+def test_mock_agent_emits_design_ops_on_position_surface():
+    """P1-2: the mock must exercise the ops card → apply path — a mutation
+    goal on a position with a live product produces a real ops step."""
+    from ai_gateway.providers import _agent_output
+
+    out = _agent_output(
+        {
+            "goal": "haz todas las hojas oscilobatientes",
+            "surface": "position",
+            "context": {
+                "organization": {"name": "Org"},
+                "product": {"modules": [{"id": "m1"}, {"id": "m2"}], "couplings": []},
+            },
+            "observations": [],
+        }
+    )
+    ops_steps = [step for step in out["steps"] if step["kind"] == "ops"]
+    assert ops_steps and ops_steps[0]["ops"]
+    assert all(op["op"] == "set_opening" for op in ops_steps[0]["ops"])
+
+
+def test_mock_agent_emits_batch_ops_on_editable_project():
+    """The batch card must stay exercisable under mock too — an edit goal
+    on an editable project drafts a batch_ops step targeting all positions."""
+    from ai_gateway.providers import _MOCK_BATCH_OPS, _agent_output
+
+    out = _agent_output(
+        {
+            "goal": "todas las fijas a oscilobatiente",
+            "surface": "project",
+            "context": {
+                "editable": True,
+                "positions": [{"id": str(uuid4())}],
+            },
+            "observations": [],
+        }
+    )
+    batch = [step for step in out["steps"] if step["kind"] == "batch_ops"]
+    assert batch and batch[0]["targets"]["typology"] == "ALL"
+    assert all(op["op"] in _MOCK_BATCH_OPS for op in batch[0]["ops"])
+
+
+def test_act_records_evidence_labels_for_cited_ids(monkeypatch):
+    """Claim evidence renders as entity names in the workspace — the turn
+    carries the UUID → label map the context supplied."""
+    from ai_gateway import agent
+
+    job_id = uuid4()
+    calls, entity_id = _agent_env(
+        monkeypatch, _agent_document("placeholder"), job_id
+    )
+    import ai_gateway.service as service_module
+    document = _agent_document(entity_id)
+    monkeypatch.setattr(
+        service_module, "invoke",
+        lambda **kw: {
+            "output": json.dumps(document),
+            "credits_debited": 1, "audit_id": str(uuid4()), "model": "m",
+        },
+    )
+    monkeypatch.setattr(
+        agent, "build_context",
+        lambda *a, **k: {
+            "surface": "dashboard",
+            "entity": {"id": entity_id, "code": "PRJ-77"},
+        },
+    )
+    out = agent.act(
+        org_id=uuid4(), user_id=uuid4(), surface="dashboard", refs={},
+        goal="resume", product=None, history=[], operation_key="k",
+    )
+    assert out["evidence_labels"][entity_id] == "PRJ-77"
+    assert calls["transcript"][1]["evidence_labels"][entity_id] == "PRJ-77"
+
+
+def test_act_questions_wait_for_user(monkeypatch):
+    from ai_gateway import agent
+
+    job_id = uuid4()
+    calls, _ = _agent_env(monkeypatch, {}, job_id)
+    import ai_gateway.service as service_module
+    monkeypatch.setattr(
+        service_module, "invoke",
+        lambda **kw: {
+            "output": json.dumps({
+                "reply": "Necesito saber qué proyecto.",
+                "questions": ["¿Sobre qué proyecto?"],
+                "steps": [], "queries": [], "warnings": [],
+            }),
+            "credits_debited": 1, "audit_id": str(uuid4()), "model": "m",
+        },
+    )
+    out = agent.act(
+        org_id=uuid4(), user_id=uuid4(), surface="dashboard", refs={},
+        goal="hazlo", product=None, history=[], operation_key="k",
+    )
+    assert out["state"] == "WAITING_FOR_USER"
+    assert calls["state"] == "WAITING_FOR_USER"
+
+
+def test_act_artifacts_validate_against_allowlist(monkeypatch):
+    from ai_gateway import agent
+
+    job_id = uuid4()
+    calls, entity_id = _agent_env(monkeypatch, {}, job_id)
+    import ai_gateway.service as service_module
+    monkeypatch.setattr(
+        service_module, "invoke",
+        lambda **kw: {
+            "output": json.dumps({
+                "reply": "Te dejé un borrador.",
+                "steps": [
+                    {"kind": "artifact", "artifact": {
+                        "kind": "quote_draft", "title": "Borrador",
+                        "payload": {"note": "borrador"}, "references": [entity_id]}},
+                    {"kind": "artifact", "artifact": {
+                        "kind": "exploit", "title": "x", "payload": {}}},
+                ],
+                "queries": [], "warnings": [],
+            }),
+            "credits_debited": 1, "audit_id": str(uuid4()), "model": "m",
+        },
+    )
+    out = agent.act(
+        org_id=uuid4(), user_id=uuid4(), surface="dashboard", refs={},
+        goal="borrador", product=None, history=[], operation_key="k",
+    )
+    assert len(out["artifacts"]) == 1
+    assert out["artifacts"][0]["kind"] == "quote_draft"
+    assert out["artifacts"][0]["references"] == [entity_id]
+
+
+def test_act_failure_marks_retryable(monkeypatch):
+    from ai_gateway import agent, service
+
+    job_id = uuid4()
+    calls = {}
+    monkeypatch.setattr(
+        agent.jobs, "create_job",
+        lambda **kw: {"id": str(job_id), "transcript": []},
+    )
+    monkeypatch.setattr(
+        agent.jobs, "finish_job",
+        lambda **kw: calls.update(kw) or {"id": str(job_id)},
+    )
+    monkeypatch.setattr(
+        agent, "build_context",
+        lambda *a, **k: {"surface": "dashboard"},
+    )
+    monkeypatch.setattr(
+        service, "invoke",
+        lambda **kw: {"output": "not-json", "credits_debited": 1,
+                      "audit_id": "a", "model": "m"},
+    )
+    import pytest
+    with pytest.raises(Exception):
+        agent.act(
+            org_id=uuid4(), user_id=uuid4(), surface="dashboard", refs={},
+            goal="x", product=None, history=[], operation_key="k",
+        )
+    # A failed round must not write inside the doomed transaction — the view
+    # records FAILED_RETRYABLE in a fresh scope after the rollback.
+    assert calls == {}
+
+
+def test_resume_job_claims_settled_states_only(monkeypatch):
+    from ai_gateway import jobs
+    import pytest
+
+    def fake_rows(sql, params):
+        if sql.startswith("UPDATE"):
+            return []  # claim lost — state already moved
+        return [{"state": "RUNNING"}]
+
+    monkeypatch.setattr(jobs, "rows", fake_rows)
+    with pytest.raises(ValueError, match="ai_job_running"):
+        jobs.resume_job(job_id=uuid4(), transcript=[], org_id=uuid4(), user_id=uuid4())
+
+
+def test_resume_job_reports_terminal(monkeypatch):
+    from ai_gateway import jobs
+    import pytest
+
+    def fake_rows(sql, params):
+        if sql.startswith("UPDATE"):
+            return []
+        return [{"state": "CANCELED"}]
+
+    monkeypatch.setattr(jobs, "rows", fake_rows)
+    with pytest.raises(ValueError, match="ai_job_terminal"):
+        jobs.resume_job(job_id=uuid4(), transcript=[], org_id=uuid4(), user_id=uuid4())
+
+
+def test_record_failure_appends_turns(monkeypatch):
+    from ai_gateway import jobs
+
+    written = {}
+    monkeypatch.setattr(
+        jobs, "rows",
+        lambda sql, params: written.update(sql=sql, params=params)
+        or [{"id": "j1"}],
+    )
+    result = jobs.record_failure(
+        job_id=uuid4(), transcript_before=[], goal="hazlo", error_code="boom"
+    )
+    assert result == {"id": "j1"}
+    assert "FAILED_RETRYABLE" in written["sql"]
+    # The failure record only lands while the job still sits in a committed
+    # in-flight state — never over a CANCELED or already-finished row.
+    assert "'PLANNING','RUNNING'" in written["sql"]
+
+
+def test_record_failure_binds_claimed_generation(monkeypatch):
+    """A late failure record must not overwrite a different round's committed
+    transcript — the UPDATE only lands while the row still carries exactly the
+    transcript this round claimed."""
+    from ai_gateway import jobs
+
+    written = {}
+    monkeypatch.setattr(
+        jobs, "rows",
+        lambda sql, params: written.update(sql=sql, params=params) or [],
+    )
+    claimed = [{"role": "user", "text": "primera instrucción"}]
+    result = jobs.record_failure(
+        job_id=uuid4(),
+        transcript_before=claimed,
+        goal="hazlo",
+        error_code="boom",
+    )
+    assert result is None  # no row carried the claimed generation
+    assert "transcript = %s::jsonb" in written["sql"]
+    import json
+    assert json.loads(written["params"][-1]) == claimed
+
+
+def test_list_jobs_includes_plan_and_pages_by_cursor(monkeypatch):
+    """The rail serializes plan (required field) and older pages are
+    reachable through the created_at cursor, not dropped past the limit."""
+    from ai_gateway import jobs
+
+    written = {}
+    monkeypatch.setattr(
+        jobs, "rows",
+        lambda sql, params: written.update(sql=sql, params=params) or [],
+    )
+    jobs.list_jobs(org_id=uuid4(), user_id=uuid4(), before="2026-09-20T10:00:00Z")
+    assert " plan," in written["sql"]
+    assert "created_at < %s" in written["sql"]
+    assert written["params"][-2] == "2026-09-20T10:00:00Z"
+
+    written.clear()
+    jobs.list_jobs(org_id=uuid4(), user_id=uuid4())
+    assert "created_at < %s" not in written["sql"]
+
+
+def _agent_client(monkeypatch):
+    """Authenticated client whose documentary_scope is a canned resolution."""
+    from types import SimpleNamespace
+
+    from rest_framework.test import APIClient
+
+    from ai_gateway import views as ai_views
+
+    org_id = uuid4()
+    token = SimpleNamespace(user_id=uuid4())
+
+    @contextmanager
+    def fake_scope(request, roles=None):
+        yield token, None, org_id
+
+    monkeypatch.setattr(ai_views, "documentary_scope", fake_scope)
+    client = APIClient()
+    client.force_authenticate(
+        user=SimpleNamespace(is_authenticated=True), token=object()
+    )
+    return client, token, org_id
+
+
+def _post_message(client, job_id, **body):
+    return client.post(
+        f"/api/v1/ai/jobs/{job_id}/messages/", body, format="json"
+    )
+
+
+def test_job_message_forwards_live_product(monkeypatch):
+    """A follow-up on a position job must carry the current product — design
+    ops validate against it, not a snapshot stored when the job was born.
+    The run itself executes on the durable worker, so the product lands in
+    the enqueued payload."""
+    from ai_gateway import jobs
+    from jobs import service as job_service
+
+    client, _, org_id = _agent_client(monkeypatch)
+    job_id = uuid4()
+    transcript = [{"role": "user", "text": "hazlo"}]
+    seen: dict = {}
+    monkeypatch.setattr(
+        jobs, "get_job",
+        lambda **kw: {
+            "id": str(job_id), "surface": "position", "state": "SUCCEEDED",
+            "refs": {"position_id": "p1"}, "transcript": transcript,
+        },
+    )
+    # job_runs sits behind the service-role switch — the DB cursor is outside
+    # this test's contract, so stub the wrapper like enqueue itself. The
+    # QUEUED flip is likewise an ai_jobs write under the backend role.
+    monkeypatch.setattr(
+        job_service, "job_backend", lambda: contextlib.nullcontext()
+    )
+    monkeypatch.setattr(jobs, "mark_queued", lambda **kw: True)
+    monkeypatch.setattr(
+        job_service, "enqueue",
+        lambda **kw: seen.update(kw) or ({"id": uuid4()}, True),
+    )
+    product = {"modules": [{"id": "m1"}]}
+    response = _post_message(
+        client, job_id, message="cambia el ancho", product=product
+    )
+    assert response.status_code == 202
+    assert response.json() == {"job_id": str(job_id), "state": "QUEUED"}
+    assert seen["job_type"] == "ai.agent.run"
+    assert seen["payload"]["product"] == product
+    assert seen["payload"]["goal"] == "cambia el ancho"
+    assert seen["payload"]["mode"] == "resume"
+    assert seen["payload"]["ai_job_id"] == str(job_id)
+    # The enqueued payload must satisfy the run serializer the worker
+    # validates against — transcript turns carry {role, text/reply}, the
+    # payload contract is {role, content}; a shape drift here is the
+    # job_payload_invalid 409 the dock surfaced.
+    from ai_gateway.serializers import AiAgentRunSerializer
+
+    run_serializer = AiAgentRunSerializer(data=seen["payload"])
+    assert run_serializer.is_valid(), run_serializer.errors
+
+
+def test_agent_run_handler_records_failure(monkeypatch):
+    """A contract error raised by the agent mid-run is a failed round: after
+    the worker's transaction rolls back, the job lands FAILED_RETRYABLE bound
+    to the transcript generation this round claimed."""
+    from authentication.errors import contract_error
+    from jobs.registry import JobContext, JobPermanentError
+    from ai_gateway import handlers, jobs, agent
+
+    job_id = uuid4()
+    org_id = uuid4()
+    user_id = uuid4()
+    transcript = [{"role": "user", "text": "hazlo"}]
+    monkeypatch.setattr(
+        jobs, "get_job",
+        lambda **kw: {
+            "id": str(job_id), "surface": "position", "state": "SUCCEEDED",
+            "transcript": transcript,
+        },
+    )
+    monkeypatch.setattr(jobs, "resume_job", lambda **kw: {"id": str(job_id)})
+    monkeypatch.setattr(jobs, "mark_running", lambda **kw: True)
+    monkeypatch.setattr(jobs, "job_state", lambda **kw: "RUNNING")
+    monkeypatch.setattr(jobs, "cancel_requested", lambda **kw: False)
+
+    def boom(**kw):
+        raise contract_error(422, "ai_agent_ungrounded", "sin evidencia")
+
+    monkeypatch.setattr(agent, "act", boom)
+    failures: list[dict] = []
+    monkeypatch.setattr(
+        jobs, "record_failure",
+        lambda **kw: failures.append(kw) or {"id": str(job_id)},
+    )
+    context = JobContext(
+        job_id=uuid4(), org_id=org_id, created_by=user_id,
+        attempt=1, max_attempts=3,
+        payload={"ai_job_id": str(job_id), "mode": "resume",
+                 "surface": "position", "refs": {}, "goal": "sigue",
+                 "operation_key": "k-12345678"},
+    )
+    monkeypatch.setattr(
+        handlers, "_claims", lambda ctx: "{}"
+    )
+    monkeypatch.setattr(handlers, "_set_claims", lambda cursor, ctx: None)
+
+    class _Atomic:
+        def __call__(self, *args, **kwargs):
+            return self
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        handlers, "transaction", SimpleNamespace(atomic=_Atomic())
+    )
+
+    class _Cur:
+        def execute(self, *a, **k):
+            return None
+        def fetchone(self):
+            return ("ESTIMATOR",)
+
+    class _Conn:
+        def cursor(self):
+            return self
+        def __enter__(self):
+            return _Cur()
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(handlers, "connection", _Conn())
+
+    import pytest as _pytest
+    with _pytest.raises(JobPermanentError) as exc:
+        handlers.ai_agent_run(dict(context.payload), context, lambda p: None)
+    assert str(exc.value) == "ai_agent_ungrounded"
+    assert len(failures) == 1
+    assert failures[0]["transcript_before"] == transcript
+    assert failures[0]["error_code"] == "ai_agent_ungrounded"
+
+
+def test_job_message_contract_error_before_claim_not_recorded(monkeypatch):
+    """Pre-execution contract errors (missing job, conflicts, validation)
+    never touch the row — there is no failed round to record."""
+    from ai_gateway import jobs
+
+    client, _, org_id = _agent_client(monkeypatch)
+    monkeypatch.setattr(jobs, "get_job", lambda **kw: None)
+    failures: list[dict] = []
+    monkeypatch.setattr(
+        jobs, "record_failure", lambda **kw: failures.append(kw)
+    )
+    response = _post_message(client, uuid4(), message="sigue")
+    assert response.status_code == 404
+    assert failures == []
+
+
+def test_finish_job_persists_plan(monkeypatch):
+    """The dedicated plan column receives the round's plan — a question-only
+    follow-up keeps the last real plan via the CASE guard."""
+    from ai_gateway import jobs
+
+    written = {}
+    monkeypatch.setattr(
+        jobs, "rows",
+        lambda sql, params: written.update(sql=sql, params=params)
+        or [{"id": uuid4()}],
+    )
+    jobs.finish_job(
+        job_id=uuid4(), state="SUCCEEDED", transcript=[],
+        plan=[{"label": "Revisar estado"}], artifacts=[], warnings=[],
+        result=None,
+    )
+    assert "plan = CASE" in written["sql"]
+    assert json.loads(written["params"][2]) == [{"label": "Revisar estado"}]
+
+
+def test_act_accumulates_artifacts_across_rounds(monkeypatch):
+    """A follow-up round's artifacts add to the job shelf — earlier drafts
+    stay inspectable; the transcript keeps only the round's own."""
+    from ai_gateway import agent
+
+    job_id = uuid4()
+    calls, entity_id = _agent_env(
+        monkeypatch, _agent_document("placeholder"), job_id
+    )
+    import ai_gateway.service as service_module
+    document = _agent_document(
+        entity_id,
+        steps=[{
+            "kind": "artifact",
+            "artifact": {
+                "kind": "quote_draft",
+                "title": "Cotización preliminar",
+                "payload": {"estado": "borrador"},
+                "references": [entity_id],
+            },
+        }],
+    )
+    monkeypatch.setattr(
+        service_module, "invoke",
+        lambda **kw: {
+            "output": json.dumps(document),
+            "credits_debited": 1,
+            "audit_id": str(uuid4()),
+            "model": "mimo-v2.6-pro",
+        },
+    )
+    prior = {
+        "kind": "product_draft",
+        "title": "Borrador previo",
+        "payload": {"positions": 2},
+        "references": [],
+        "tool": "create_draft",
+    }
+    out = agent.act(
+        org_id=uuid4(), user_id=uuid4(), surface="dashboard", refs={},
+        goal="prepara la cotización", product=None, history=[],
+        operation_key="k",
+        job={"id": str(job_id), "transcript": [], "artifacts": [prior]},
+    )
+    assert [a["title"] for a in calls["artifacts"]] == [
+        "Borrador previo", "Cotización preliminar",
+    ]
+    assert [a["title"] for a in out["artifacts"]] == [
+        "Borrador previo", "Cotización preliminar",
+    ]
+    assert calls["transcript"][1]["artifacts"][0]["title"] == (
+        "Cotización preliminar"
+    )
+    assert calls["plan"] == [
+        {"label": "Revisar estado"}, {"label": "Resumir"},
+    ]
+
+
+def test_job_message_digest_shows_prior_proposals(monkeypatch):
+    """Follow-up history must carry what the agent already proposed — a
+    stripped transcript let the model re-emit a duplicate step as new."""
+    import contextlib
+
+    from ai_gateway import jobs
+    from jobs import service as job_service
+
+    client, _, org_id = _agent_client(monkeypatch)
+    job_id = uuid4()
+    transcript = [
+        {"role": "user", "text": "haz todas 2F"},
+        {
+            "role": "agent",
+            "reply": "Propongo tres cambios.",
+            "steps": [{"kind": "ops", "label": "3 vanos → abatible 2F"}],
+            "artifacts": [{"kind": "product_draft", "title": "Borrador A"}],
+        },
+    ]
+    seen: dict = {}
+    monkeypatch.setattr(
+        jobs, "get_job",
+        lambda **kw: {
+            "id": str(job_id), "surface": "position", "state": "SUCCEEDED",
+            "refs": {"position_id": "p1"}, "transcript": transcript,
+        },
+    )
+    monkeypatch.setattr(
+        job_service, "job_backend", lambda: contextlib.nullcontext()
+    )
+    monkeypatch.setattr(jobs, "mark_queued", lambda **kw: "SUCCEEDED")
+    monkeypatch.setattr(
+        job_service, "enqueue",
+        lambda **kw: seen.update(kw) or ({"id": uuid4()}, True),
+    )
+    response = _post_message(client, job_id, message="otra vez por favor")
+    assert response.status_code == 202
+    agent_turn = seen["payload"]["history"][-1]
+    assert agent_turn["role"] == "agent"
+    assert "propuso" in agent_turn["content"]
+    assert "3 vanos" in agent_turn["content"]
+    assert "Borrador A" in agent_turn["content"]
+    # Resume history was rebuilt server-side — it may ground the next round.
+    assert seen["payload"]["history_trusted"] is True
+
+
+def test_job_message_second_concurrent_submit_409s(monkeypatch):
+    """The mark_queued race loser must leave with a conflict — two parallel
+    act() loops on one job was the double-run finding."""
+    import contextlib
+
+    from ai_gateway import jobs
+    from jobs import service as job_service
+
+    client, _, _org = _agent_client(monkeypatch)
+    job_id = uuid4()
+    monkeypatch.setattr(
+        jobs, "get_job",
+        lambda **kw: {
+            "id": str(job_id), "surface": "position", "state": "SUCCEEDED",
+            "refs": {}, "transcript": [{"role": "user", "text": "hazlo"}],
+        },
+    )
+    monkeypatch.setattr(
+        job_service, "job_backend", lambda: contextlib.nullcontext()
+    )
+    # The atomic guard lost: another follow-up already moved the row.
+    monkeypatch.setattr(jobs, "mark_queued", lambda **kw: None)
+    enqueued = []
+    monkeypatch.setattr(
+        job_service, "enqueue", lambda **kw: enqueued.append(kw) or ({}, True)
+    )
+    response = _post_message(client, job_id, message="dale")
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "ai_job_running"
+    assert enqueued == []
+
+
+def test_job_message_enqueue_failure_restores_state(monkeypatch):
+    """An enqueue failure after the QUEUED flip must restore the settled
+    state — the flip commits in the request's autocommit, so a stranded
+    QUEUED would wedge the job with no live run."""
+    import contextlib
+
+    from ai_gateway import jobs
+    from jobs import service as job_service
+
+    client, _, _org = _agent_client(monkeypatch)
+    job_id = uuid4()
+    monkeypatch.setattr(
+        jobs, "get_job",
+        lambda **kw: {
+            "id": str(job_id), "surface": "position", "state": "SUCCEEDED",
+            "refs": {}, "transcript": [{"role": "user", "text": "hazlo"}],
+        },
+    )
+    monkeypatch.setattr(
+        job_service, "job_backend", lambda: contextlib.nullcontext()
+    )
+    monkeypatch.setattr(jobs, "mark_queued", lambda **kw: "SUCCEEDED")
+    restored = []
+    monkeypatch.setattr(
+        jobs, "restore_queued",
+        lambda **kw: restored.append(kw["previous"]) or True,
+    )
+
+    def boom(**kw):
+        raise job_service.JobServiceError("job_payload_invalid")
+
+    monkeypatch.setattr(job_service, "enqueue", boom)
+    response = _post_message(client, job_id, message="dale")
+    assert response.status_code == 409
+    assert restored == ["SUCCEEDED"]

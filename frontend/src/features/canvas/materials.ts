@@ -25,10 +25,24 @@ const SURFACES: Record<string, MemberSurface> = {
     highlight: "var(--member-pvc-highlight)",
     detail: "chamber",
   },
+  /** Foil-laminated PVC — still a multi-chamber polymer profile under
+   * the film; only the skin reads wood. */
+  PVC_FOIL: {
+    fill: "var(--member-foil-fill)",
+    edge: "var(--member-foil-edge)",
+    highlight: "var(--member-foil-highlight)",
+    detail: "chamber",
+  },
   ALUMINIUM: {
     fill: "var(--member-aluminium-fill)",
     edge: "var(--member-aluminium-edge)",
     highlight: "var(--member-aluminium-highlight)",
+    detail: "thermal",
+  },
+  ALUMINIUM_ANTHRACITE: {
+    fill: "var(--member-anthracite-fill)",
+    edge: "var(--member-anthracite-edge)",
+    highlight: "var(--member-anthracite-highlight)",
     detail: "thermal",
   },
 };

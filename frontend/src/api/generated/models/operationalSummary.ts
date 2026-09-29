@@ -5,6 +5,7 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { OperationalSummaryCommercialItem } from "./operationalSummaryCommercialItem";
 import type { OperationalSummaryDeliveries } from "./operationalSummaryDeliveries";
 import type { OperationalSummaryDocuments } from "./operationalSummaryDocuments";
 import type { OperationalSummaryInventory } from "./operationalSummaryInventory";
@@ -26,5 +27,6 @@ export interface OperationalSummary {
   deliveries: OperationalSummaryDeliveries;
   documents: OperationalSummaryDocuments;
   projects: OperationalSummaryProjects;
+  commercial: OperationalSummaryCommercialItem[];
   recent_events: unknown[];
 }

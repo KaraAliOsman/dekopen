@@ -4,7 +4,15 @@
  * Narrow views over the trace payload's open dicts — every value shown is
  * evidence stored at seal time, never recomputed client-side. */
 
+import { fmtMm } from "../../format";
 import { t } from "../../i18n/es-CL";
+import {
+  opFaceLabel,
+  opKindLabel,
+  opReferenceLabel,
+  remnantStatusLabel,
+  stockKindLabel,
+} from "./labels";
 import type {
   ProductionOrderTracePlan,
   ProductionOrderTraceStock,
@@ -46,17 +54,41 @@ type TraceRemnant = {
   height_mm?: string;
   sheet_workshop_sku?: string;
   origin?: string;
+  rack_location?: string;
 };
 
-type PieceMatch = {
+export type PieceMatch = {
   work_order?: { id?: string; order_code?: string; status?: string };
   location?: {
     kind?: string;
     bar_index?: number;
     sheet_index?: number;
-    piece?: { role?: string; length_mm?: string; bay_id?: string; leaf_id?: string };
+    position_code?: string;
+    location_code?: string;
+    piece?: {
+      role?: string;
+      length_mm?: string;
+      bay_id?: string;
+      leaf_id?: string;
+      code?: string;
+      unit_index?: number;
+      sequence?: number;
+      x_mm?: number | string;
+    };
   };
   steps?: Array<{ sequence?: number; code?: string; label?: string; status?: string }>;
+  operations?: Array<{
+    operation_id?: string;
+    kind?: string;
+    member_label?: string;
+    u_mm?: string;
+    reference?: string;
+    face?: string;
+    depth_mm?: string;
+    tool_id?: string;
+    sequence_no?: number;
+    station?: string;
+  }>;
 };
 
 function _bars(plan: ProductionOrderTracePlan): TraceBar[] {
@@ -159,10 +191,11 @@ export function TraceStock({ stock }: { stock: ProductionOrderTraceStock }) {
         <ul className="production-trace-remnants">
           {remnants.map((remnant) => (
             <li key={remnant.id}>
-              {remnant.kind} · {remnant.status}
-              {remnant.length_mm ? ` · ${remnant.length_mm} mm` : ""}
-              {remnant.width_mm ? ` × ${remnant.width_mm}` : ""}
-              {remnant.height_mm ? ` × ${remnant.height_mm}` : ""}
+              {remnant.rack_location ? <strong>{remnant.rack_location} · </strong> : null}
+              {stockKindLabel(remnant.kind)} · {remnantStatusLabel(remnant.status)}
+              {remnant.length_mm ? ` · ${fmtMm(remnant.length_mm)} mm` : ""}
+              {remnant.width_mm ? ` × ${fmtMm(remnant.width_mm)}` : ""}
+              {remnant.height_mm ? ` × ${fmtMm(remnant.height_mm)}` : ""}
               {remnant.sheet_workshop_sku ? ` · ${remnant.sheet_workshop_sku}` : ""}
             </li>
           ))}
@@ -172,28 +205,85 @@ export function TraceStock({ stock }: { stock: ProductionOrderTraceStock }) {
   );
 }
 
-export function TracePieceMatches({ report }: { report: ProductionPieceTrace }) {
+export function TracePieceMatches({
+  report,
+  onSelectOrder,
+}: {
+  report: ProductionPieceTrace;
+  onSelectOrder?: (orderId: string, stepCode?: string) => void;
+}) {
   const matches = (report.matches as PieceMatch[] | undefined) ?? [];
   if (!matches.length) {
     return <p className="production-trace-empty">{t("production.tracePieceNone")}</p>;
   }
   return (
     <ul className="production-trace-matches">
-      {matches.map((match, index) => (
-        <li key={`${match.work_order?.id ?? "wo"}-${index}`}>
-          <strong>{match.work_order?.order_code ?? "—"}</strong>
-          {" · "}
-          {match.location?.kind}
-          {match.location?.kind === "BAR"
-            ? ` · ${t("production.traceBar")} ${match.location.bar_index ?? "—"}`
-            : ` · ${t("production.traceSheet")} ${match.location?.sheet_index ?? "—"}`}
-          {match.location?.piece?.role ? ` · ${match.location.piece.role}` : ""}
-          {match.location?.piece?.length_mm ? ` · ${match.location.piece.length_mm} mm` : ""}
-          {match.steps?.length
-            ? ` · ${match.steps.filter((s) => s.status === "DONE").length}/${match.steps.length} ${t("production.stepsShort")}`
-            : ""}
-        </li>
-      ))}
+      {matches.map((match, index) => {
+        const body = (
+          <>
+            <strong>{match.work_order?.order_code ?? "—"}</strong>
+            {" · "}
+            {stockKindLabel(match.location?.kind)}
+            {match.location?.kind === "BAR"
+              ? ` · ${t("production.traceBar")} ${match.location.bar_index ?? "—"}`
+              : ` · ${t("production.traceSheet")} ${match.location?.sheet_index ?? "—"}`}
+            {match.location?.kind === "BAR" && match.location?.piece?.sequence != null
+              ? ` · #${match.location.piece.sequence}`
+              : ""}
+            {match.location?.kind === "BAR" && match.location?.piece?.x_mm != null
+              ? ` · x ${fmtMm(match.location.piece.x_mm)}`
+              : ""}
+            {match.location?.piece?.code ? ` · ${match.location.piece.code}` : ""}
+            {match.location?.piece?.unit_index != null
+              ? ` · u${match.location.piece.unit_index}`
+              : ""}
+            {match.location?.position_code ? ` · ${match.location.position_code}` : ""}
+            {match.location?.location_code ? ` · ${match.location.location_code}` : ""}
+            {match.location?.piece?.role ? ` · ${match.location.piece.role}` : ""}
+            {match.location?.piece?.length_mm
+              ? ` · ${fmtMm(match.location.piece.length_mm)} mm`
+              : ""}
+            {match.steps?.length
+              ? ` · ${match.steps.filter((s) => s.status === "DONE").length}/${match.steps.length} ${t("production.stepsShort")}`
+              : ""}
+            {match.operations?.length ? (
+              <ul className="production-trace-ops">
+                {match.operations.map((op) => (
+                  <li key={op.operation_id}>
+                    {op.member_label ? `${op.member_label} · ` : ""}
+                    {op.sequence_no ? `${op.sequence_no}. ` : ""}
+                    {opKindLabel(op.kind)}
+                    {op.u_mm ? ` · u ${op.u_mm} mm` : ""}
+                    {op.reference ? ` · ${opReferenceLabel(op.reference)}` : ""}
+                    {op.face ? ` · ${opFaceLabel(op.face)}` : ""}
+                    {op.depth_mm ? ` · ${op.depth_mm} mm` : ""}
+                    {op.tool_id ? ` · ${op.tool_id}` : ""}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </>
+        );
+        const orderId = match.work_order?.id;
+        // The op's station names the step the scanned piece belongs to —
+        // deep-link opens that card, not just the order.
+        const station = match.operations?.find((op) => op.station)?.station;
+        return (
+          <li key={`${orderId ?? "wo"}-${index}`}>
+            {orderId && onSelectOrder ? (
+              <button
+                type="button"
+                className="production-trace-match"
+                onClick={() => onSelectOrder(orderId, station)}
+              >
+                {body}
+              </button>
+            ) : (
+              body
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }

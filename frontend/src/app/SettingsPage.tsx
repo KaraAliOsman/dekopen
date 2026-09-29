@@ -1,8 +1,13 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type RefObject } from "react";
 import { Link } from "react-router-dom";
 
 import { ApiError } from "../api/apiMutator";
 import {
+  getOrganizationBrandingLogoReadUrl,
+  organizationBrandingGet,
+  organizationBrandingLogoDelete,
+  organizationBrandingLogoUpload,
+  organizationBrandingSave,
   projectPaymentIntegrationSave,
   projectPaymentIntegrationStatus,
   siiCafRegister,
@@ -10,24 +15,57 @@ import {
   siiCertificateStatus,
   siiCertificateUpload,
 } from "../api/generated/dekopen";
+import { apiFetchBlob } from "../api/apiMutator";
 import type {
   ApiUrlEnum,
   Membership,
   PaymentIntegrationStatus,
-  RoleEnum,
+  MembershipRoleEnum,
   SiiCaf,
   SiiCertificate,
 } from "../api/generated/models";
+import { PageHeader } from "../ui";
 import { useAuthSession } from "../auth/AuthSessionProvider";
+import { formatDate } from "../features/money";
 import { t, type TranslationKey } from "../i18n/es-CL";
+import { MOD_K_HINT, MOD_KEY_HINT } from "../platform";
 import { useTheme } from "../theme/ThemeProvider";
 
-const ROLE_KEYS: Record<RoleEnum, TranslationKey> = {
+const ROLE_KEYS: Record<MembershipRoleEnum, TranslationKey> = {
   OWNER: "settings.roleOwner",
   ESTIMATOR: "settings.roleEstimator",
   WORKSHOP_MANAGER: "settings.roleWorkshopManager",
   INSTALLER: "settings.roleInstaller",
+  OPERATOR: "settings.roleOperator",
 };
+
+function FilePick({
+  inputRef,
+  accept,
+  file,
+  onFile,
+}: {
+  inputRef: RefObject<HTMLInputElement>;
+  accept: string;
+  file: File | null;
+  onFile: (file: File | null) => void;
+}): JSX.Element {
+  return (
+    <span className="file-field">
+      <input
+        ref={inputRef}
+        type="file"
+        accept={accept}
+        className="file-input-hidden"
+        onChange={(event) => onFile(event.target.files?.[0] ?? null)}
+      />
+      <button type="button" className="secondary-action" onClick={() => inputRef.current?.click()}>
+        {t("settings.fileChoose")}
+      </button>
+      <span className="file-field__name">{file ? file.name : t("settings.fileNone")}</span>
+    </span>
+  );
+}
 
 function MembershipRow({ membership }: { membership: Membership }): JSX.Element {
   return (
@@ -76,7 +114,9 @@ function FlowIntegrationCard({ orgId }: { orgId: string }): JSX.Element {
       const response = await projectPaymentIntegrationSave(
         {
           api_url: apiUrl,
-          api_key: apiKey.trim() || (status?.api_key_preview ?? "").replace("…", ""),
+          // Blank = keep the stored key — never echo the masked preview back
+          // as if it were the credential.
+          ...(apiKey.trim() ? { api_key: apiKey.trim() } : {}),
           ...(secretKey.trim() ? { secret_key: secretKey.trim() } : {}),
           payer_return_url: returnUrl.trim(),
           enabled,
@@ -96,7 +136,7 @@ function FlowIntegrationCard({ orgId }: { orgId: string }): JSX.Element {
 
   return (
     <div className="settings-card">
-      <h2 className="eyebrow">{t("settings.flow")}</h2>
+      <h3 className="eyebrow">{t("settings.flow")}</h3>
       <p className="settings-hint">{t("settings.flowHint")}</p>
       <p>
         <span
@@ -163,6 +203,8 @@ function FlowIntegrationCard({ orgId }: { orgId: string }): JSX.Element {
 
 function SiiCafCard({ orgId }: { orgId: string }): JSX.Element {
   const [items, setItems] = useState<SiiCaf[]>([]);
+  const [pickFile, setPickFile] = useState<File | null>(null);
+  const pickRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
   const requestOptions = { headers: { "X-Organization-ID": orgId } };
@@ -183,10 +225,7 @@ function SiiCafCard({ orgId }: { orgId: string }): JSX.Element {
 
   async function upload(event: FormEvent): Promise<void> {
     event.preventDefault();
-    const input = (event.target as HTMLFormElement).querySelector<HTMLInputElement>(
-      "input[type=file]",
-    );
-    const file = input?.files?.[0];
+    const file = pickFile;
     if (!file) return;
     const cafXml = await file.text();
     const form = event.target as HTMLFormElement;
@@ -207,7 +246,8 @@ function SiiCafCard({ orgId }: { orgId: string }): JSX.Element {
         requestOptions,
       );
       if (response.status !== 201) throw new ApiError(response.status, response.data);
-      if (input) input.value = "";
+      if (pickRef.current) pickRef.current.value = "";
+      setPickFile(null);
       setMessage({ text: t("settings.siiCafUploaded"), error: false });
       await load();
     } catch {
@@ -219,7 +259,7 @@ function SiiCafCard({ orgId }: { orgId: string }): JSX.Element {
 
   return (
     <div className="settings-card">
-      <h2 className="eyebrow">{t("settings.siiTitle")}</h2>
+      <h3 className="eyebrow">{t("settings.siiTitle")}</h3>
       {message && <p className={message.error ? "form-error" : "settings-hint"}>{message.text}</p>}
       {items.length === 0 ? (
         <p className="settings-hint">{t("settings.siiCafEmpty")}</p>
@@ -248,7 +288,12 @@ function SiiCafCard({ orgId }: { orgId: string }): JSX.Element {
       <form className="payments-form" onSubmit={upload}>
         <label>
           {t("settings.siiCafFile")}
-          <input type="file" accept=".xml,text/xml" required />
+          <FilePick
+            inputRef={pickRef}
+            accept=".xml,text/xml"
+            file={pickFile}
+            onFile={setPickFile}
+          />
         </label>
         <label>
           {t("settings.siiGiro")}
@@ -278,6 +323,8 @@ function SiiCafCard({ orgId }: { orgId: string }): JSX.Element {
 
 function SiiCertificateCard({ orgId }: { orgId: string }): JSX.Element {
   const [certificate, setCertificate] = useState<SiiCertificate | null>(null);
+  const [pickFile, setPickFile] = useState<File | null>(null);
+  const pickRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
   const requestOptions = { headers: { "X-Organization-ID": orgId } };
@@ -298,10 +345,7 @@ function SiiCertificateCard({ orgId }: { orgId: string }): JSX.Element {
 
   async function upload(event: FormEvent): Promise<void> {
     event.preventDefault();
-    const input = (event.target as HTMLFormElement).querySelector<HTMLInputElement>(
-      "input[type=file]",
-    );
-    const file = input?.files?.[0];
+    const file = pickFile;
     if (!file) return;
     const form = event.target as HTMLFormElement;
     const field = (name: string) =>
@@ -325,7 +369,8 @@ function SiiCertificateCard({ orgId }: { orgId: string }): JSX.Element {
         requestOptions,
       );
       if (response.status !== 201) throw new ApiError(response.status, response.data);
-      if (input) input.value = "";
+      if (pickRef.current) pickRef.current.value = "";
+      setPickFile(null);
       setMessage({ text: t("settings.siiCertUploaded"), error: false });
       await load();
     } catch {
@@ -337,7 +382,7 @@ function SiiCertificateCard({ orgId }: { orgId: string }): JSX.Element {
 
   return (
     <div className="settings-card">
-      <h2 className="eyebrow">{t("settings.siiCertTitle")}</h2>
+      <h3 className="eyebrow">{t("settings.siiCertTitle")}</h3>
       {message && <p className={message.error ? "form-error" : "settings-hint"}>{message.text}</p>}
       {certificate === null ? (
         <p className="settings-hint">{t("settings.siiCertEmpty")}</p>
@@ -353,7 +398,7 @@ function SiiCertificateCard({ orgId }: { orgId: string }): JSX.Element {
           </div>
           <div className="settings-row">
             <dt>{t("settings.siiCertValidUntil")}</dt>
-            <dd>{certificate.valid_to.slice(0, 10)}</dd>
+            <dd>{formatDate(certificate.valid_to)}</dd>
           </div>
           <div className="settings-row">
             <dt>{t("settings.siiCertResolution")}</dt>
@@ -364,7 +409,7 @@ function SiiCertificateCard({ orgId }: { orgId: string }): JSX.Element {
       <form className="payments-form" onSubmit={upload}>
         <label>
           {t("settings.siiCertFile")}
-          <input type="file" accept=".pfx,.p12" required />
+          <FilePick inputRef={pickRef} accept=".pfx,.p12" file={pickFile} onFile={setPickFile} />
         </label>
         <label>
           {t("settings.siiCertPassword")}
@@ -388,91 +433,370 @@ function SiiCertificateCard({ orgId }: { orgId: string }): JSX.Element {
   );
 }
 
+function OrgBrandingCard({ orgId }: { orgId: string }): JSX.Element {
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [pickFile, setPickFile] = useState<File | null>(null);
+  const pickRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
+  const [form, setForm] = useState({
+    commercial_name: "",
+    giro: "",
+    brand_address: "",
+    brand_phone: "",
+    brand_email: "",
+  });
+  const requestOptions = { headers: { "X-Organization-ID": orgId } };
+
+  const load = useCallback(async () => {
+    try {
+      const response = await organizationBrandingGet(requestOptions);
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      setForm({
+        commercial_name: response.data.commercial_name ?? "",
+        giro: response.data.giro ?? "",
+        brand_address: response.data.brand_address ?? "",
+        brand_phone: response.data.brand_phone ?? "",
+        brand_email: response.data.brand_email ?? "",
+      });
+      if (response.data.brand_logo_key) {
+        try {
+          const { blob } = await apiFetchBlob(getOrganizationBrandingLogoReadUrl());
+          setLogoUrl((previous) => {
+            if (previous) URL.revokeObjectURL(previous);
+            return URL.createObjectURL(blob);
+          });
+        } catch {
+          setLogoUrl(null);
+        }
+      } else {
+        setLogoUrl(null);
+      }
+    } catch {
+      setMessage({ text: t("settings.brandingLoadError"), error: true });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function save(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    const field = (name: keyof typeof form) => form[name].trim() || null;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const response = await organizationBrandingSave(
+        {
+          commercial_name: field("commercial_name"),
+          giro: field("giro"),
+          brand_address: field("brand_address"),
+          brand_phone: field("brand_phone"),
+          brand_email: field("brand_email"),
+        },
+        requestOptions,
+      );
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      setMessage({ text: t("settings.brandingSaved"), error: false });
+    } catch {
+      setMessage({ text: t("settings.brandingSaveError"), error: true });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function upload(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    const file = pickFile;
+    if (!file) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const response = await organizationBrandingLogoUpload({ file }, requestOptions);
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      if (pickRef.current) pickRef.current.value = "";
+      setPickFile(null);
+      setMessage({ text: t("settings.brandingLogoUploaded"), error: false });
+      await load();
+    } catch {
+      setMessage({ text: t("settings.brandingSaveError"), error: true });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeLogo(): Promise<void> {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const response = await organizationBrandingLogoDelete(requestOptions);
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      setMessage({ text: t("settings.brandingSaved"), error: false });
+      await load();
+    } catch {
+      setMessage({ text: t("settings.brandingSaveError"), error: true });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="settings-card">
+      <h3 className="eyebrow">{t("settings.branding")}</h3>
+      <p className="settings-hint">{t("settings.brandingHint")}</p>
+      {message && <p className={message.error ? "form-error" : "settings-hint"}>{message.text}</p>}
+      <div className="settings-branding-preview">
+        {logoUrl ? (
+          <img
+            className="settings-branding-logo"
+            src={logoUrl}
+            alt={t("settings.brandingLogoAlt")}
+          />
+        ) : (
+          <p className="settings-hint">{t("settings.brandingLogoEmpty")}</p>
+        )}
+      </div>
+      <form className="payments-form" onSubmit={save}>
+        <label>
+          {t("settings.brandingName")}
+          <input
+            maxLength={255}
+            value={form.commercial_name}
+            onChange={(event) =>
+              setForm((prev) => ({ ...prev, commercial_name: event.target.value }))
+            }
+          />
+        </label>
+        <label>
+          {t("settings.brandingGiro")}
+          <input
+            maxLength={255}
+            value={form.giro}
+            onChange={(event) => setForm((prev) => ({ ...prev, giro: event.target.value }))}
+          />
+        </label>
+        <label>
+          {t("settings.brandingAddress")}
+          <input
+            maxLength={255}
+            value={form.brand_address}
+            onChange={(event) =>
+              setForm((prev) => ({ ...prev, brand_address: event.target.value }))
+            }
+          />
+        </label>
+        <label>
+          {t("settings.brandingPhone")}
+          <input
+            maxLength={64}
+            value={form.brand_phone}
+            onChange={(event) => setForm((prev) => ({ ...prev, brand_phone: event.target.value }))}
+          />
+        </label>
+        <label>
+          {t("settings.brandingEmail")}
+          <input
+            type="email"
+            maxLength={255}
+            value={form.brand_email}
+            onChange={(event) => setForm((prev) => ({ ...prev, brand_email: event.target.value }))}
+          />
+        </label>
+        <div className="payments-form-actions">
+          <button type="submit" className="primary-action" disabled={busy}>
+            {t("settings.brandingSave")}
+          </button>
+        </div>
+      </form>
+      <form className="payments-form" onSubmit={upload}>
+        <label>
+          {t("settings.brandingLogo")}
+          <FilePick
+            inputRef={pickRef}
+            accept="image/png,image/jpeg,image/webp"
+            file={pickFile}
+            onFile={setPickFile}
+          />
+        </label>
+        <div className="payments-form-actions">
+          <button type="submit" className="primary-action" disabled={busy}>
+            {t("settings.brandingLogoUpload")}
+          </button>
+          {logoUrl && (
+            <button type="button" className="secondary-action" disabled={busy} onClick={removeLogo}>
+              {t("settings.brandingLogoRemove")}
+            </button>
+          )}
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export function SettingsPage(): JSX.Element {
   const auth = useAuthSession();
   const { theme, toggleTheme } = useTheme();
   const me = auth.me;
   const org = me?.active_organization;
   const isOwner = org?.role === "OWNER";
+  const canWriteDocs = org?.role === "OWNER" || org?.role === "ESTIMATOR";
 
   return (
     <section className="settings" aria-labelledby="page-title">
-      <header className="dashboard-head">
-        <div>
-          <h1 id="page-title">{t("settings.title")}</h1>
-          <p className="dashboard-sub">{org?.name ?? t("org.none")}</p>
-        </div>
-      </header>
+      <PageHeader
+        context={org?.name ?? t("org.none")}
+        headingId="page-title"
+        title={t("settings.title")}
+      />
 
-      <div className="settings-grid">
-        <div className="settings-card">
-          <h2 className="eyebrow">{t("settings.account")}</h2>
-          <dl className="settings-list">
-            <div className="settings-row">
-              <dt>{t("settings.email")}</dt>
-              <dd className="settings-mono">{me?.user.email}</dd>
-            </div>
-            <div className="settings-row">
-              <dt>{t("settings.twoFactor")}</dt>
-              <dd>{me?.aal === "aal2" ? t("settings.aal2") : t("settings.aal1")}</dd>
-            </div>
-            <div className="settings-row">
-              <dt>{t("settings.role")}</dt>
-              <dd>{org ? t(ROLE_KEYS[org.role]) : "—"}</dd>
-            </div>
-          </dl>
-        </div>
-
-        <div className="settings-card">
-          <h2 className="eyebrow">{t("settings.appearance")}</h2>
-          <div className="settings-theme" role="radiogroup" aria-label={t("settings.theme")}>
-            {(["light", "dark"] as const).map((option) => (
-              <button
-                key={option}
-                type="button"
-                role="radio"
-                aria-checked={theme === option}
-                className="settings-theme-option"
-                data-active={theme === option}
-                onClick={() => {
-                  if (theme !== option) toggleTheme();
-                }}
-              >
-                {option === "light" ? t("settings.light") : t("settings.dark")}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {me !== null && me.memberships.length > 0 && (
+      <section aria-labelledby="settings-group-account" className="settings-group">
+        <h2 id="settings-group-account" className="settings-group__title">
+          {t("settings.groupAccount")}
+        </h2>
+        <div className="settings-grid">
           <div className="settings-card">
-            <h2 className="eyebrow">{t("settings.memberships")}</h2>
-            <ul className="settings-list settings-plain">
-              {me.memberships.map((membership) => (
-                <MembershipRow key={membership.organization_id} membership={membership} />
+            <h3 className="eyebrow">{t("settings.account")}</h3>
+            <dl className="settings-list">
+              <div className="settings-row">
+                <dt>{t("settings.email")}</dt>
+                <dd className="settings-mono">{me?.user.email}</dd>
+              </div>
+              <div className="settings-row">
+                <dt>{t("settings.twoFactor")}</dt>
+                <dd>{me?.aal === "aal2" ? t("settings.aal2") : t("settings.aal1")}</dd>
+              </div>
+              <div className="settings-row">
+                <dt>{t("settings.role")}</dt>
+                <dd>{org ? t(ROLE_KEYS[org.role]) : "—"}</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div className="settings-card">
+            <h3 className="eyebrow">{t("settings.appearance")}</h3>
+            <div
+              className="settings-theme"
+              role="radiogroup"
+              aria-label={t("settings.theme")}
+              onKeyDown={(event) => {
+                // Roving radio contract — arrows move the checked choice.
+                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+                event.preventDefault();
+                const next = theme === "light" ? "dark" : "light";
+                if (next !== theme) {
+                  toggleTheme();
+                  const options = event.currentTarget.querySelectorAll('[role="radio"]');
+                  (options[next === "light" ? 0 : 1] as HTMLElement | undefined)?.focus();
+                }
+              }}
+            >
+              {(["light", "dark"] as const).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  role="radio"
+                  aria-checked={theme === option}
+                  className="settings-theme-option"
+                  data-active={theme === option}
+                  tabIndex={theme === option ? 0 : -1}
+                  onClick={() => {
+                    if (theme !== option) toggleTheme();
+                  }}
+                >
+                  {option === "light" ? t("settings.light") : t("settings.dark")}
+                </button>
               ))}
-            </ul>
-          </div>
-        )}
-
-        {isOwner && org !== undefined && <FlowIntegrationCard orgId={org.id} />}
-
-        {isOwner && org !== undefined && <SiiCafCard orgId={org.id} />}
-
-        {isOwner && org !== undefined && <SiiCertificateCard orgId={org.id} />}
-
-        {isOwner && (
-          <div className="settings-card">
-            <h2 className="eyebrow">{t("settings.billing")}</h2>
-            <p className="settings-hint">{t("settings.billingHint")}</p>
-            <div className="settings-links">
-              <Link to="/settings/billing">{t("settings.billingPage")}</Link>
-              <Link to="/settings/wallet">{t("settings.walletPage")}</Link>
-              <Link to="/pricing/cost-lists">{t("pricing.lists")}</Link>
             </div>
           </div>
-        )}
-      </div>
+
+          {me !== null && me.memberships.length > 0 && (
+            <div className="settings-card">
+              <h3 className="eyebrow">{t("settings.memberships")}</h3>
+              <ul className="settings-list settings-plain">
+                {me.memberships.map((membership) => (
+                  <MembershipRow key={membership.organization_id} membership={membership} />
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Every role gets the shortcuts reference — without it the
+           * non-owner settings page ends after three small cards (review m9). */}
+          <div className="settings-card">
+            <h3 className="eyebrow">{t("settings.shortcuts")}</h3>
+            <dl className="settings-list">
+              <div className="settings-row">
+                <dt>{t("settings.shortcutPalette")}</dt>
+                <dd>
+                  <kbd>{MOD_K_HINT}</kbd> / <kbd>/</kbd>
+                </dd>
+              </div>
+              <div className="settings-row">
+                <dt>{t("settings.shortcutEsc")}</dt>
+                <dd>
+                  <kbd>Esc</kbd>
+                </dd>
+              </div>
+              <div className="settings-row">
+                <dt>{t("settings.shortcutUndo")}</dt>
+                <dd>
+                  <kbd>{MOD_KEY_HINT}Z</kbd> / <kbd>{MOD_KEY_HINT}Shift Z</kbd>
+                </dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+      </section>
+
+      {canWriteDocs && org !== undefined && (
+        <section aria-labelledby="settings-group-docs" className="settings-group">
+          <h2 id="settings-group-docs" className="settings-group__title">
+            {t("settings.groupDocs")}
+          </h2>
+          <div className="settings-grid">
+            <OrgBrandingCard orgId={org.id} />
+          </div>
+        </section>
+      )}
+
+      {isOwner && org !== undefined && (
+        <section aria-labelledby="settings-group-charging" className="settings-group">
+          <h2 id="settings-group-charging" className="settings-group__title">
+            {t("settings.groupCharging")}
+          </h2>
+          <div className="settings-grid">
+            <FlowIntegrationCard orgId={org.id} />
+            <SiiCafCard orgId={org.id} />
+            <SiiCertificateCard orgId={org.id} />
+          </div>
+        </section>
+      )}
+
+      {isOwner && (
+        <section aria-labelledby="settings-group-plan" className="settings-group">
+          <h2 id="settings-group-plan" className="settings-group__title">
+            {t("settings.groupPlan")}
+          </h2>
+          <div className="settings-grid">
+            <div className="settings-card">
+              <h3 className="eyebrow">{t("settings.billing")}</h3>
+              <p className="settings-hint">{t("settings.billingHint")}</p>
+              <div className="settings-links">
+                <Link className="ui-backlink" to="/settings/billing">
+                  {t("settings.billingPage")}
+                </Link>
+                <Link className="ui-backlink" to="/settings/wallet">
+                  {t("settings.walletPage")}
+                </Link>
+                <Link className="ui-backlink" to="/pricing/cost-lists">
+                  {t("pricing.lists")}
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
     </section>
   );
 }

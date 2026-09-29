@@ -227,9 +227,21 @@ def pieces_from_result(
             sagitta_mm=steel.sagitta_mm,
         )
         rows[key] = (piece, rows.get(key, (piece, 0))[1] + steel.qty)
-    return [piece.model_copy(update={"unit_index": index})
-            for key in sorted(rows) for piece, qty in [rows[key]]
-            for index in range(1, qty + 1)]
+    # unit_index is the physical unit ordinal (1..order quantity) — callers
+    # stamping a per-unit piece list leave it at 1 and the work-order loop
+    # assigns the real unit. Identical copies within one unit keep one spec
+    # hash but disambiguate piece_id like nested panes do (V-01-02), so the
+    # (position, piece_id, unit_index) identity key stays unique.
+    return [
+        piece.model_copy(update={
+            "unit_index": 1,
+            "piece_id": (
+                piece.piece_id if qty == 1 else f"{piece.piece_id}-{index:02d}"
+            ),
+        })
+        for key in sorted(rows) for piece, qty in [rows[key]]
+        for index in range(1, qty + 1)
+    ]
 
 
 def _piece_order(piece: CutPiece) -> tuple[Decimal, str, str, str, str, str, str, int]:
@@ -312,6 +324,16 @@ def _bfd_fill(
 # lexicographically descending on the longest piece first so reconstruction is
 # fully determined. State-space cap keeps the deep tier bounded.
 _DEEP_STATE_CAP = 200_000
+# The pattern space is the product of per-length capacities — it explodes long
+# before the demand-state cap does (a dozen distinct lengths on a long bar is
+# already unmanageable). Both caps abort to the fast tier; traversal order is
+# fixed, so the abort is deterministic for a given input.
+_DEEP_PATTERN_CAP = 20_000
+_DEEP_SOLVE_CAP = 1_000_000
+
+
+class _DeepBudgetExceeded(Exception):
+    pass
 
 
 def _enumerate_patterns(
@@ -321,6 +343,8 @@ def _enumerate_patterns(
     patterns: list[tuple[int, ...]] = []
 
     def walk(index: int, used: Decimal, counts: list[int]) -> None:
+        if len(patterns) > _DEEP_PATTERN_CAP:
+            raise _DeepBudgetExceeded
         if index == len(lengths):
             if any(counts):
                 patterns.append(tuple(counts))
@@ -352,12 +376,20 @@ def _deep_bins(
         states *= count + 1
         if states > _DEEP_STATE_CAP:
             return None
-    patterns = _enumerate_patterns(lengths, usable, kerf)
+    try:
+        patterns = _enumerate_patterns(lengths, usable, kerf)
+    except _DeepBudgetExceeded:
+        return None
 
     from functools import lru_cache
 
+    expansions = [0]
+
     @lru_cache(maxsize=None)
     def solve(state: tuple[int, ...]) -> tuple[int, tuple[int, ...]] | None:
+        expansions[0] += 1
+        if expansions[0] > _DEEP_SOLVE_CAP:
+            raise _DeepBudgetExceeded
         if not any(state):
             return (0, ())
         best: tuple[int, tuple[int, ...]] | None = None
@@ -374,7 +406,10 @@ def _deep_bins(
                 best = candidate
         return best
 
-    solved = solve(demand)
+    try:
+        solved = solve(demand)
+    except _DeepBudgetExceeded:
+        return None
     if solved is None:
         return None
     pools: dict[Decimal, list[CutPiece]] = {}

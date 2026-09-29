@@ -1,7 +1,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
 SET LOCAL search_path = public, private, auth, extensions, pg_temp;
-SELECT plan(15);
+SELECT plan(17);
 
 SELECT has_table('public', 'inventory_items', 'inventory items table exists');
 SELECT has_table('public', 'inventory_movements', 'movement ledger table exists');
@@ -90,6 +90,14 @@ SELECT ok(
         WHERE tgname = 'guard_inventory_org' AND NOT tgisinternal
     ) = 3,
     'tenant guard protects receipts, receipt lines, and movements'
+);
+SELECT has_column(
+    'public', 'inventory_movements', 'rack_location',
+    'movements carry the physical rack the stock touched'
+);
+SELECT has_column(
+    'public', 'inventory_movements', 'actor_label',
+    'movements carry a human label of who recorded them'
 );
 SELECT * FROM finish();
 ROLLBACK;

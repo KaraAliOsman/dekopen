@@ -87,8 +87,8 @@ async function setupEstimator(): Promise<FixtureUser> {
 async function authenticate(page: Page, fixture: FixtureUser): Promise<void> {
   await page.goto("/login");
   await page.getByLabel("Correo").fill(fixture.email);
-  await page.getByRole("button", { name: "Enviar Magic Link" }).click();
-  await expect(page.getByRole("status")).toContainText("Revisa el buzón local");
+  await page.getByRole("button", { name: "Enviar enlace de acceso" }).click();
+  await expect(page.getByRole("status")).toContainText("Revisa tu correo para continuar");
   const message = await waitForMagicLink({
     baseUrl: mailpitUrl,
     supabaseUrl,
@@ -161,11 +161,11 @@ test("G1 canvas uses runtime discovery, transactional dimensions, snapping and <
   await expect(page.getByLabel("Ancho nominal (mm)")).toHaveValue("1000.00");
   await expect(page.getByLabel("Alto nominal (mm)")).toHaveValue("1000.00");
   await expect(page.getByText("FIXED", { exact: true })).toBeVisible();
-  await expect(page.getByTestId("canvas-glass-dimension")).toHaveText("910.00 × 910.00 mm");
-  await expect(page.getByTestId("technical-frame")).toHaveText("1006.00 mm");
-  await expect(page.getByTestId("technical-reinforcement")).toHaveText("970.00 mm");
-  await expect(page.getByTestId("technical-glass")).toHaveText("910.00 × 910.00 mm");
-  await expect(page.getByTestId("technical-bead")).toHaveText("919.00 mm");
+  await expect(page.getByTestId("canvas-glass-dimension")).toHaveText("910 × 910 mm");
+  await expect(page.getByTestId("technical-frame")).toHaveText("1006 mm");
+  await expect(page.getByTestId("technical-reinforcement")).toHaveText("970 mm");
+  await expect(page.getByTestId("technical-glass")).toHaveText("910 × 910 mm");
+  await expect(page.getByTestId("technical-bead")).toHaveText("919 mm");
   expect(calculationRequests).toBe(1);
 
   const width = page.getByLabel("Ancho nominal (mm)");
@@ -214,7 +214,7 @@ test("G1 canvas uses runtime discovery, transactional dimensions, snapping and <
   );
   await page.mouse.up();
   await expect(width).toHaveValue("1050.00");
-  await expect(page.getByTestId("canvas-glass-dimension")).toHaveText("960.00 × 910.00 mm");
+  await expect(page.getByTestId("canvas-glass-dimension")).toHaveText("960 × 910 mm");
   const snappedRequest = await snappedRequestPromise;
   expect(snappedRequest.postDataJSON().nominal_width_mm).toBe("1050.00");
 
@@ -247,7 +247,7 @@ for (const theme of ["light", "dark"] as const) {
   }) => {
     await authenticate(page, await setupEstimator());
     await page.goto("/projects/demo/positions/g1/edit");
-    await expect(page.getByTestId("technical-frame")).toHaveText("1006.00 mm");
+    await expect(page.getByTestId("technical-frame")).toHaveText("1006 mm");
     if (theme === "dark") await page.getByRole("button", { name: "Cambiar tema" }).click();
     const optimization = page.waitForResponse(
       (response) =>
@@ -263,7 +263,7 @@ for (const theme of ["light", "dark"] as const) {
       purchase_list: Array<{ commercial_sku: string }>;
       workshop_cut_plan: Array<{ cuts: Array<{ workshop_sku: string; length_mm: string }> }>;
     };
-    expect(cuts.purchase_list.map((line) => line.commercial_sku)).toContain("DEMO-BAR-MARCO");
+    expect(cuts.purchase_list.map((line) => line.commercial_sku)).toContain("COMPRA-MARCO");
     expect(
       cuts.workshop_cut_plan
         .flatMap((bar) => bar.cuts)
@@ -309,12 +309,12 @@ for (const theme of ["light", "dark"] as const) {
     await expect(modal.locator(".is-corrected")).toHaveCSS("animation-duration", "0.3s");
     await modal.getByRole("button", { name: "Corte 1D", exact: true }).click();
     await expect(modal.getByRole("heading", { name: "Pedido", exact: true })).toBeVisible();
-    await expect(modal.getByText("DEMO-BAR-MARCO", { exact: true })).toBeVisible();
+    await expect(modal.getByText("COMPRA-MARCO", { exact: true })).toBeVisible();
     await expect(modal.getByRole("heading", { name: "Plan de corte de taller" })).toBeVisible();
     await expect(modal.getByText("MARCO", { exact: true }).first()).toBeVisible();
     await modal.screenshot({ path: `test-results/shot07-${theme}.png` });
     await modal.getByRole("button", { name: "Cerrar revisión" }).click();
     await expect(modal).not.toBeVisible();
-    await expect(page.getByTestId("canvas-glass-dimension")).toHaveText("910.00 × 910.00 mm");
+    await expect(page.getByTestId("canvas-glass-dimension")).toHaveText("910 × 910 mm");
   });
 }

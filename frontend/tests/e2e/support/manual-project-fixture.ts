@@ -44,8 +44,8 @@ async function authenticate(
 ): Promise<void> {
   await page.goto("/login");
   await page.getByLabel("Correo", { exact: true }).fill(email);
-  await page.getByRole("button", { name: "Enviar Magic Link", exact: true }).click();
-  await expect(page.getByRole("status")).toContainText("Revisa el buzón local");
+  await page.getByRole("button", { name: "Enviar enlace de acceso", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("Revisa tu correo para continuar");
 
   const message = await waitForMagicLink({
     baseUrl: mailpitUrl,
@@ -81,7 +81,10 @@ export const test = base.extend<{
         signal: AbortSignal.timeout(15_000),
       });
       if (!response.ok) {
-        throw new Error(`Fixture ${method} ${path.split("?")[0]}: HTTP ${response.status}`);
+        const detail = (await response.text()).slice(0, 400);
+        throw new Error(
+          `Fixture ${method} ${path.split("?")[0]}: HTTP ${response.status} — ${detail}`,
+        );
       }
       return response;
     }
@@ -277,10 +280,13 @@ export const test = base.extend<{
       expect(kits).toHaveLength(1);
       const kit = kits[0]!;
 
-      // Existing synthetic KIT-TURN contains no component quantities.
-      // Fail on authority changes instead of decoding exact JSONB decimals
-      // through JavaScript binary floating point.
-      expect(text(kit.contents).replaceAll(/\s/g, "")).toBe("[]");
+      // KIT-TURN carries categorized contents (hinge/lever/lock). Assert the
+      // component SKU set — not the exact decimal serialization, which
+      // JavaScript binary floating point cannot round-trip.
+      const contentsText = text(kit.contents);
+      for (const sku of ["DEMO-BIS-60", "DEMO-MAN-PRACT", "DEMO-CREM-60"]) {
+        expect(contentsText).toContain(sku);
+      }
       expect(kit.opening_type).toBe("TURN");
       await insert("hardware_kits", {
         ...kit,

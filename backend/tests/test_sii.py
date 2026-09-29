@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
 from authentication.errors import ContractAPIException
 from projects import credit_notes as credit_notes_module
+from projects import invoices as invoices_module
 from projects import sii
 
 
@@ -95,6 +96,7 @@ def _invoice_row(over=None):
                 {"position_index": 1, "typology": "SLIDING_2L", "quantity": 2}
             ],
         },
+        "storage_object_key": "org_x/invoices/fac-0001.pdf",
         "created_at": "2026-10-01T10:00:00+00:00",
     }
     row.update(over or {})
@@ -161,6 +163,7 @@ def _credit_note_row(invoice, over=None):
             "deal": invoice["payload_json"]["deal"],
             "positions": invoice["payload_json"]["positions"],
         },
+        "storage_object_key": "org_x/nc/nc-0001.pdf",
         "created_at": "2026-10-03T10:00:00+00:00",
     }
     row.update(over or {})
@@ -189,6 +192,7 @@ def _dispatch_note_row(order, over=None):
             "totals": {"units": 2},
             "dispatch": {"dispatched_by": str(uuid4()), "note": None},
         },
+        "storage_object_key": "org_x/gd/gd-0001.pdf",
         "created_at": "2026-10-04T10:00:00+00:00",
     }
     row.update(over or {})
@@ -222,6 +226,7 @@ def _patch_env(
     order=None,
     note=None,
     existing_dte52=None,
+    sealed_deal=None,
 ):
     def fake_one(sql, params=None, *args, **kw):
         text = str(sql)
@@ -299,6 +304,12 @@ def _patch_env(
     )
     monkeypatch.setattr(
         credit_notes_module, "_purge_unreferenced_credit_note", lambda **kw: None
+    )
+    # The fiscal-cover composition is exercised by its own test; emit tests
+    # stub it so they stay unit-fast.
+    monkeypatch.setattr(sii, "_seal_repr", lambda **kw: None)
+    monkeypatch.setattr(
+        invoices_module, "_sealed_deal", lambda org_id, project_id: sealed_deal
     )
 
 
@@ -500,6 +511,23 @@ def test_dte_access_missing_raises_404(monkeypatch):
     with pytest.raises(ContractAPIException) as excinfo:
         sii.dte_access(org_id=uuid4(), project_id=uuid4(), invoice_id=uuid4())
     assert excinfo.value.contract_code == "dte_not_found"
+
+
+def test_emit_credit_note_dte_rejects_partial_amount(monkeypatch):
+    from decimal import Decimal
+
+    storage = _Storage()
+    _patch_env(monkeypatch, storage)
+    with pytest.raises(ContractAPIException) as excinfo:
+        sii.emit_credit_note_dte(
+            org_id=uuid4(),
+            project={"id": uuid4()},
+            invoice_id=uuid4(),
+            actor_id=uuid4(),
+            amount=Decimal("1000"),
+        )
+    assert excinfo.value.contract_code == "credit_note_dte_partial_unsupported"
+    assert storage.uploads == []
 
 
 def test_emit_credit_note_dte_references_parent_folio(monkeypatch):
@@ -960,6 +988,14 @@ def test_emit_dispatch_note_dte_stamps_and_replays(monkeypatch):
         over={"dte_type": 52, "dispatch_note_id": str(note["id"]), "invoice_id": None},
     )
     existing52 = []
+    sealed = {
+        "version_id": uuid4(),
+        "revision_code": "REV-A",
+        "net": 1000000,
+        "tax": 190000,
+        "gross": 1190000,
+        "currency": "CLP",
+    }
     _patch_env(
         monkeypatch,
         storage,
@@ -968,6 +1004,7 @@ def test_emit_dispatch_note_dte_stamps_and_replays(monkeypatch):
         cafs=[caf52],
         insert_row=insert_row,
         existing_dte52=existing52,
+        sealed_deal=sealed,
     )
     out = sii.emit_dispatch_note_dte(
         org_id=order["org_id"], order_id=order["id"], actor_id=uuid4()
@@ -979,14 +1016,13 @@ def test_emit_dispatch_note_dte_stamps_and_replays(monkeypatch):
     text = content.decode("iso-8859-1")
     assert "<TipoDTE>52</TipoDTE>" in text
     assert "<IndTraslado>1</IndTraslado>" in text
-    # Amount-less guía: the schema still requires Totales/MontoItem —
-    # they stamp as 0 while QtyItem carries the moved units.
-    assert "<Totales><MntTotal>0</MntTotal></Totales>" in text
-    assert "<MontoItem>0</MontoItem>" in text
-    assert "<MntNeto>" not in text
+    # A venta guía carries real money: the sealed commercial deal stamps
+    # neto/IVA/total on the document the SII sees.
+    assert "<Totales><MntNeto>1000000</MntNeto>" in text
+    assert "<MntTotal>1190000</MntTotal>" in text
     assert "<QtyItem>2</QtyItem>" in text
     assert (
-        "<NroLinRef>1</NroLinRef><TpoDocRef>OT</TpoDocRef>"
+        "<NroLinRef>1</NroLinRef><TpoDocRef>802</TpoDocRef>"
         "<FolioRef>OT-0042</FolioRef><FchRef>2026-10-04</FchRef>" in text
     )
     assert "<DirRecep>Av. Los Robles 123, Concepción</DirRecep>" in text
@@ -998,6 +1034,32 @@ def test_emit_dispatch_note_dte_stamps_and_replays(monkeypatch):
         org_id=order["org_id"], order_id=order["id"], actor_id=uuid4()
     )
     assert replay["folio"] == 1 and len(storage.uploads) == 1
+
+
+def test_emit_dispatch_note_dte_venta_requires_sealed_deal(monkeypatch):
+    # IndTraslado=1 declares a sale — without a sealed revision deal the
+    # emit refuses rather than stamping a $0 guía the SII reads as venta.
+    storage = _Storage()
+    order = _order_row()
+    caf52 = _caf_row(
+        sii._parse_caf(_caf_xml(tipo=52, desde=1, hasta=10)[0]),
+        org_id=order["org_id"],
+        actual=0,
+    )
+    _patch_env(
+        monkeypatch,
+        storage,
+        order=order,
+        note=_dispatch_note_row(order),
+        cafs=[caf52],
+        sealed_deal=None,
+    )
+    with pytest.raises(ContractAPIException) as excinfo:
+        sii.emit_dispatch_note_dte(
+            org_id=order["org_id"], order_id=order["id"], actor_id=uuid4()
+        )
+    assert excinfo.value.contract_code == "guia_venta_requires_sealed_deal"
+    assert storage.uploads == []
 
 
 def test_emit_dispatch_note_dte_ind_traslado_5(monkeypatch):
@@ -1124,7 +1186,17 @@ def test_emit_dispatch_note_dte_requires_receptor_rut(monkeypatch):
         actual=0,
     )
     _patch_env(
-        monkeypatch, storage, order=order, note=note, cafs=[caf52]
+        monkeypatch,
+        storage,
+        order=order,
+        note=note,
+        cafs=[caf52],
+        sealed_deal={
+            "net": 1000000,
+            "tax": 190000,
+            "gross": 1190000,
+            "currency": "CLP",
+        },
     )
     with pytest.raises(ContractAPIException) as excinfo:
         sii.emit_dispatch_note_dte(
@@ -1147,3 +1219,142 @@ def test_dispatch_note_dte_access_signs_the_stored_object(monkeypatch):
     out = sii.dispatch_note_dte_access(org_id=order["org_id"], order_id=order["id"])
     assert out["folio"] == 3 and out["dte_type"] == 52
     assert dte["storage_object_key"] in out["signed_url"]
+
+
+_FIXTURE_DTE_XML = (
+    '<?xml version="1.0" encoding="ISO-8859-1"?>'
+    '<DTE xmlns="http://www.sii.cl/SiiDte" version="1.0">'
+    '<Documento ID="F33T7">'
+    "<Encabezado><IdDoc><TipoDTE>33</TipoDTE>"
+    "<Folio>7</Folio><FchEmis>2026-10-02</FchEmis></IdDoc>"
+    "<Emisor><RUTEmisor>76123456-0</RUTEmisor>"
+    "<RznSoc>Ventanas &amp; Cía.</RznSoc></Emisor>"
+    "<Receptor><RUTRecep>76543210-3</RUTRecep>"
+    "<RznSocRecep>Cliente Uno</RznSocRecep></Receptor>"
+    "<Totales><MntTotal>1190</MntTotal></Totales></Encabezado>"
+    "<Detalle><NroLinDet>1</NroLinDet><NmbItem>VENTANA</NmbItem>"
+    "<MontoItem>1000</MontoItem></Detalle>"
+    '<TED version="1.0"><DD><RE>76123456-0</RE><TD>33</TD>'
+    "<F>7</F><ND>0</ND><RR>76543210-3</RR><RSR>C</RSR>"
+    "<MNT>1190</MNT><IT1>VENTANA</IT1><CAF/>"
+    "<TSTED>2026-10-02T10:00:00</TSTED></DD>"
+    '<FRMT algoritmo="SHA1withRSA">eA==</FRMT></TED>'
+    "<TmstFirma>2026-10-02T10:00:00</TmstFirma>"
+    "</Documento></DTE>"
+).encode("iso-8859-1")
+
+
+def test_tributario_composes_fiscal_cover_and_body():
+    # The stamped copy opens with the fiscal identity page — emisor RUT,
+    # folio, TED barcode — then the sealed document body, untouched.
+    from io import BytesIO
+
+    from pypdf import PdfReader, PdfWriter
+
+    from projects import sii_repr
+
+    body = PdfWriter()
+    body.add_blank_page(width=200, height=200)
+    buf = BytesIO()
+    body.write(buf)
+    out = sii_repr.compose_tributario_pdf(
+        dte_xml=_FIXTURE_DTE_XML, parent_pdf=buf.getvalue()
+    )
+    pages = PdfReader(BytesIO(out)).pages
+    assert len(pages) == 2
+    cover = pages[0].extract_text()
+    assert "76123456-0" in cover
+    assert "FOLIO" in cover and "7" in cover
+    assert "Factura" in cover
+    assert "Cía" in cover  # entity-escaped company name renders correctly
+
+
+def test_tributario_refuses_xml_without_ted():
+    import pytest
+
+    from projects import sii_repr
+
+    with pytest.raises(ContractAPIException) as excinfo:
+        sii_repr.compose_tributario_pdf(dte_xml=b"<DTE/>", parent_pdf=b"%PDF")
+    assert excinfo.value.contract_code == "sii_dte_xml_unreadable"
+
+
+def test_emit_dte_itemizes_positions_and_payment_form(monkeypatch):
+    """F24: a payload carrying reconciling per-position nets emits one
+    Detalle each plus FmaPago/TermPagoGlosa instead of one lump line."""
+    storage = _Storage()
+    invoice = _invoice_row()
+    invoice["payload_json"]["positions"] = [
+        {
+            "position_index": 1,
+            "typology": "SLIDING_2L",
+            "quantity": 2,
+            "width_mm": "1200.00",
+            "height_mm": "1500.00",
+            "price_net": "400000",
+        },
+        {
+            "position_index": 2,
+            "typology": "FIXED",
+            "quantity": 1,
+            "width_mm": "800.00",
+            "height_mm": "900.00",
+            "price_net": "600000",
+        },
+    ]
+    invoice["payload_json"]["project"]["payment_terms"] = (
+        "50% anticipo, saldo contra entrega"
+    )
+    invoice["payload_json"]["balance"] = {
+        "collected": "500000",
+        "amount_due": "690000",
+    }
+    caf = _caf_row(_parse(), org_id=invoice["org_id"], actual=0)
+    _patch_env(
+        monkeypatch,
+        storage,
+        cafs=[caf],
+        invoice=invoice,
+        insert_row=_dte_row(invoice["id"], folio=1),
+    )
+    sii.emit_dte(
+        org_id=invoice["org_id"],
+        project={"id": invoice["project_id"]},
+        invoice_id=invoice["id"],
+        actor_id=uuid4(),
+    )
+    text = storage.uploads[0][1].decode("iso-8859-1")
+    assert text.count("<Detalle>") == 2
+    assert "<NmbItem>Pos. 1 SLIDING_2L 1200.00x1500.00mm</NmbItem>" in text
+    assert "<QtyItem>2</QtyItem>" in text
+    assert "<MontoItem>400000</MontoItem>" in text
+    assert "<MontoItem>600000</MontoItem>" in text
+    assert "<FmaPago>2</FmaPago>" in text
+    assert "<TermPagoGlosa>50% anticipo, saldo contra entrega</TermPagoGlosa>" in text
+
+
+def test_emit_dte_falls_back_when_lines_do_not_reconcile(monkeypatch):
+    """Missing or non-integral line nets keep the single summary line — a
+    DTE whose Detalle sum contradicts MntNeto would be rejected by the SII."""
+    storage = _Storage()
+    invoice = _invoice_row()
+    invoice["payload_json"]["positions"] = [
+        {"position_index": 1, "typology": "FIXED", "quantity": 1}
+    ]
+    caf = _caf_row(_parse(), org_id=invoice["org_id"], actual=0)
+    _patch_env(
+        monkeypatch,
+        storage,
+        cafs=[caf],
+        invoice=invoice,
+        insert_row=_dte_row(invoice["id"], folio=1),
+    )
+    sii.emit_dte(
+        org_id=invoice["org_id"],
+        project={"id": invoice["project_id"]},
+        invoice_id=invoice["id"],
+        actor_id=uuid4(),
+    )
+    text = storage.uploads[0][1].decode("iso-8859-1")
+    assert text.count("<Detalle>") == 1
+    assert "Según cotización REV-A" in text

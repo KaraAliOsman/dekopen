@@ -9,7 +9,7 @@ from uuid import UUID
 from django.db import DatabaseError
 from django.http import HttpResponse
 from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -20,13 +20,18 @@ from authentication.errors import contract_error
 from authentication.serializers import ACTIVE_ORGANIZATION_HEADER
 from dekopen_engine.cutting import InvalidCutContract
 from documents.repository import DocumentaryError
-from documents.views import ERRORS, documentary_scope, validate
+from documents.views import DOCUMENTARY_ERROR_DETAILS, ERRORS, documentary_scope, validate
 from engine_api.repository import SystemNotFound
-from production import service
+from production import cnc, service
 from production.trace import trace_piece, trace_version, trace_work_order
 from production.confirmations import confirmation_access, confirm_delivery
 from production.dispatch_notes import dispatch_note_access
-from projects import sii
+from projects import sii, sii_envio
+from projects.serializers import (
+    SiiEnvioAccessSerializer,
+    SiiEnvioSendSerializer,
+    SiiEnvioSerializer,
+)
 from production.serializers import (
     ProductionPrepSerializer,
     DeliveryConfirmRequestSerializer,
@@ -36,12 +41,26 @@ from production.serializers import (
     DeliveryScheduleRequestSerializer,
     DeliveryTransitionRequestSerializer,
     CncExportSerializer,
+    CncGenerateRequestSerializer,
+    CncMachineListSerializer,
+    CncMachinePatchSerializer,
+    CncMachineRequestSerializer,
+    CncMachineSerializer,
+    CncProgramListSerializer,
+    CncProgramSerializer,
+    CncReadinessSerializer,
+    CncToolListSerializer,
+    CncToolPatchSerializer,
+    CncToolRequestSerializer,
+    CncToolSerializer,
+    CncWorkspaceSerializer,
     DxfExportSerializer,
     OpsExportSerializer,
     DispatchNoteAccessSerializer,
     DispatchNoteDteAccessSerializer,
     DispatchNoteDteEmitSerializer,
     DispatchNoteDteSerializer,
+    DispatchNoteVoidSerializer,
     DispatchRequestSerializer,
     InstallationRequestSerializer,
     PackingLabelsSerializer,
@@ -49,23 +68,32 @@ from production.serializers import (
     ProductionOrderTraceSerializer,
     ProductionVersionTraceSerializer,
     ProductionPieceTraceSerializer,
+    ProductionStationQueueSerializer,
     ProductionOrderDetailSerializer,
     RemakeRequestSerializer,
     ProductionOrderListSerializer,
     ProductionReleaseSerializer,
+    MaterialRecheckSerializer,
     StepTransitionRequestSerializer,
     StepTransitionSerializer,
     WorkCenterListSerializer,
+    WorkOrderCancelRequestSerializer,
     WorkCenterRequestSerializer,
     WorkCenterSerializer,
+    WorkOrderOptimizeCompareRequestSerializer,
+    WorkOrderOptimizeCompareSerializer,
     WorkOrderOptimizeRequestSerializer,
     WorkOrderOptimizeSerializer,
 )
 
 logger = logging.getLogger(__name__)
 
-_READERS = ("OWNER", "ESTIMATOR", "WORKSHOP_MANAGER", "INSTALLER")
+_READERS = ("OWNER", "ESTIMATOR", "WORKSHOP_MANAGER", "INSTALLER", "OPERATOR")
 _STEP_ACTORS = ("OWNER", "WORKSHOP_MANAGER", "INSTALLER")
+# Station steps are workshop authority — INSTALLER's field role ends at
+# delivery/installation confirmation, not at weld/glaze/QC sign-off.
+_WORKSHOP_STEP_ACTORS = ("OWNER", "WORKSHOP_MANAGER", "OPERATOR")
+_LEDGER_WRITERS = ("OWNER", "ESTIMATOR")
 _WRITERS = ("OWNER", "WORKSHOP_MANAGER")
 
 
@@ -79,6 +107,7 @@ def public_production_errors():
             status_code,
             error.code,
             error.public_detail
+            or DOCUMENTARY_ERROR_DETAILS.get(error.code)
             or "La operación de producción fue rechazada; revisa la orden y el paso.",
             error_extra=error.extra or None,
         ) from error
@@ -180,14 +209,18 @@ class ProductionStepTransitionView(APIView):
     def post(self, request, step_id: UUID):
         data = validate(StepTransitionRequestSerializer, request.data)
         with public_production_errors():
-            with documentary_scope(request, _STEP_ACTORS) as (token, _, org_id):
+            with documentary_scope(request, _WORKSHOP_STEP_ACTORS) as (token, tenant, org_id):
                 output = service.transition_step(
                     org_id=org_id,
                     step_id=step_id,
                     action=data["action"],
                     actor_id=token.user_id,
+                    actor_role=str(tenant.active_organization.role),
                     note=data.get("note"),
                     qc_result=data.get("qc_result"),
+                    qc_check=data.get("qc_check"),
+                    qc_item=data.get("qc_item"),
+                    ops_done=data.get("ops_done"),
                 )
         return Response(output)
 
@@ -211,6 +244,54 @@ class ProductionOrderRemakeView(APIView):
                     note=data.get("note"),
                 )
         return Response(output, status=201)
+
+
+class ProductionOrderCancelView(APIView):
+    @extend_schema(
+        operation_id="production_order_cancel",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=WorkOrderCancelRequestSerializer,
+        responses={200: ProductionOrderDetailSerializer, **ERRORS},
+        tags=["production"],
+    )
+    def post(self, request, order_id: UUID):
+        with public_production_errors():
+            data = validate(WorkOrderCancelRequestSerializer, request.data)
+            if not data.get("confirmed"):
+                raise DocumentaryError(
+                    "order_cancel_confirmation_required",
+                    detail=(
+                        "Anular la orden libera sus reservas de material: "
+                        "confirma la acción para continuar."
+                    ),
+                )
+            with documentary_scope(request, _WRITERS) as (token, _, org_id):
+                output = service.cancel_work_order(
+                    org_id=org_id,
+                    order_id=order_id,
+                    actor_id=token.user_id,
+                    note=data.get("note"),
+                )
+        return Response(output)
+
+
+class ProductionOrderMaterialRecheckView(APIView):
+    @extend_schema(
+        operation_id="production_order_material_recheck",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={200: MaterialRecheckSerializer, **ERRORS},
+        tags=["production"],
+    )
+    def post(self, request, order_id: UUID):
+        with public_production_errors():
+            with documentary_scope(request, _WRITERS) as (token, _, org_id):
+                output = service.recheck_work_order_material(
+                    org_id=org_id,
+                    order_id=order_id,
+                    actor_id=token.user_id,
+                )
+        return Response(output)
 
 
 class ProductionOrderCncExportView(APIView):
@@ -300,6 +381,52 @@ class ProductionOrderDxfFileView(APIView):
         download_name, content = found
         response = HttpResponse(content, content_type="application/dxf")
         response["Content-Disposition"] = f'attachment; filename="{download_name}"'
+        return response
+
+
+class ProductionOrderCutPackView(APIView):
+    @extend_schema(
+        operation_id="production_order_cut_pack",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={(200, "application/pdf"): OpenApiTypes.STR, **ERRORS},
+        tags=["production"],
+    )
+    def get(self, request, order_id: UUID):
+        with public_production_errors():
+            with documentary_scope(request, _READERS) as (_, _, org_id):
+                from production.cut_pack import render_cut_pack
+
+                content, download_name = render_cut_pack(
+                    org_id=org_id, order_id=order_id
+                )
+        response = HttpResponse(content, content_type="application/pdf")
+        response["Content-Disposition"] = (
+            f'attachment; filename="{download_name}"'
+        )
+        return response
+
+
+class ProductionOrderPackView(APIView):
+    @extend_schema(
+        operation_id="production_order_pack",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={(200, "application/pdf"): OpenApiTypes.STR, **ERRORS},
+        tags=["production"],
+    )
+    def get(self, request, order_id: UUID):
+        with public_production_errors():
+            with documentary_scope(request, _READERS) as (_, _, org_id):
+                from production.pack import render_production_pack
+
+                content, download_name = render_production_pack(
+                    org_id=org_id, order_id=order_id
+                )
+        response = HttpResponse(content, content_type="application/pdf")
+        response["Content-Disposition"] = (
+            f'attachment; filename="{download_name}"'
+        )
         return response
 
 
@@ -423,6 +550,28 @@ class ProductionOrderDispatchView(APIView):
                     order_id=order_id,
                     actor_id=token.user_id,
                     note=data.get("note"),
+                    unit_indexes=data.get("unit_indexes"),
+                )
+        return Response(output)
+
+
+class ProductionOrderDispatchNoteVoidView(APIView):
+    @extend_schema(
+        operation_id="production_order_dispatch_note_void",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=DispatchNoteVoidSerializer,
+        responses={200: ProductionOrderDetailSerializer, **ERRORS},
+        tags=["production"],
+    )
+    def post(self, request, order_id: UUID):
+        data = validate(DispatchNoteVoidSerializer, request.data)
+        with public_production_errors():
+            with documentary_scope(request, _WRITERS) as (token, _, org_id):
+                output = service.void_dispatch_note(
+                    org_id=org_id,
+                    order_id=order_id,
+                    actor_id=token.user_id,
+                    reason=data.get("reason"),
                 )
         return Response(output)
 
@@ -430,15 +579,31 @@ class ProductionOrderDispatchView(APIView):
 class ProductionOrderDispatchNoteView(APIView):
     @extend_schema(
         operation_id="production_order_dispatch_note",
-        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        parameters=[
+            ACTIVE_ORGANIZATION_HEADER,
+            OpenApiParameter(
+                "note",
+                OpenApiTypes.UUID,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Open a specific dispatch note when the order has partial-delivery notes",
+            ),
+        ],
         request=None,
         responses={200: DispatchNoteAccessSerializer, **ERRORS},
         tags=["production"],
     )
     def get(self, request, order_id: UUID):
+        note_param = request.query_params.get("note")
+        try:
+            note_id = UUID(str(note_param)) if note_param else None
+        except ValueError:
+            raise DocumentaryError("dispatch_note_not_found")
         with public_production_errors():
             with documentary_scope(request, _READERS) as (_, _, org_id):
-                output = dispatch_note_access(org_id=org_id, order_id=order_id)
+                output = dispatch_note_access(
+                    org_id=org_id, order_id=order_id, note_id=note_id
+                )
         return Response(output)
 
 
@@ -473,6 +638,41 @@ class ProductionOrderDispatchNoteDteView(APIView):
         with public_production_errors():
             with documentary_scope(request, _READERS) as (_, _, org_id):
                 output = sii.dispatch_note_dte_access(
+                    org_id=org_id, order_id=order_id
+                )
+        return Response(output)
+
+
+class ProductionOrderDispatchNoteEnvioView(APIView):
+    @extend_schema(
+        operation_id="production_order_dispatch_note_dte_envio_send",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=SiiEnvioSendSerializer,
+        responses={201: SiiEnvioSerializer, **ERRORS},
+        tags=["production"],
+    )
+    def post(self, request, order_id: UUID):
+        data = validate(SiiEnvioSendSerializer, request.data)
+        with public_production_errors():
+            with documentary_scope(request, _WRITERS) as (token, _, org_id):
+                output = sii_envio.send_dispatch_note_envio(
+                    org_id=org_id,
+                    order_id=order_id,
+                    actor_id=token.user_id,
+                    resubmit=bool(data.get("resubmit")),
+                )
+        return Response(output, status=201)
+
+    @extend_schema(
+        operation_id="production_order_dispatch_note_dte_envio",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        responses={200: SiiEnvioAccessSerializer, **ERRORS},
+        tags=["production"],
+    )
+    def get(self, request, order_id: UUID):
+        with public_production_errors():
+            with documentary_scope(request, _READERS) as (_, _, org_id):
+                output = sii_envio.dispatch_note_envio_access(
                     org_id=org_id, order_id=order_id
                 )
         return Response(output)
@@ -513,6 +713,21 @@ class WorkCenterListView(APIView):
         return Response(output, status=201 if created else 200)
 
 
+class WorkCenterSeedDefaultsView(APIView):
+    @extend_schema(
+        operation_id="production_work_centers_seed_defaults",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={200: WorkCenterListSerializer, **ERRORS},
+        tags=["production"],
+    )
+    def post(self, request):
+        with public_production_errors():
+            with documentary_scope(request, _WRITERS) as (_, _, org_id):
+                output = service.seed_default_work_centers(org_id=org_id)
+        return Response(output)
+
+
 class ProductionOrderOptimizeView(APIView):
     @extend_schema(
         operation_id="production_order_optimize",
@@ -529,8 +744,31 @@ class ProductionOrderOptimizeView(APIView):
                     org_id=org_id,
                     order_id=order_id,
                     actor_id=token.user_id,
-                    color=data["color"],
+                    color=data.get("color"),
                     cutting_profile_code=data.get("cutting_profile_code"),
+                    strategy=data["strategy"],
+                )
+        return Response(output)
+
+
+class ProductionOrderOptimizeCompareView(APIView):
+    @extend_schema(
+        operation_id="production_order_optimize_compare",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=WorkOrderOptimizeCompareRequestSerializer,
+        responses={200: WorkOrderOptimizeCompareSerializer, **ERRORS},
+        tags=["production"],
+    )
+    def post(self, request, order_id: UUID):
+        data = validate(WorkOrderOptimizeCompareRequestSerializer, request.data)
+        with public_production_errors():
+            # Preview only — readers can compare, writers still hold the
+            # commit authority on an actual plan.
+            with documentary_scope(request, _READERS) as (_, _, org_id):
+                output = service.compare_optimization_strategies(
+                    org_id=org_id,
+                    order_id=order_id,
+                    color=data.get("color") or "",
                 )
         return Response(output)
 
@@ -570,6 +808,7 @@ class ProductionOrderDeliveryView(APIView):
                     contact_phone=data.get("contact_phone"),
                     installer_name=data.get("installer_name"),
                     notes=data.get("notes"),
+                    unit_indexes=data.get("unit_indexes"),
                 )
         return Response(output)
 
@@ -585,7 +824,30 @@ class ProductionOrderDeliveryConfirmView(APIView):
     def post(self, request, order_id: UUID):
         data = validate(DeliveryConfirmRequestSerializer, request.data)
         with public_production_errors():
-            with documentary_scope(request, _STEP_ACTORS) as (token, _, org_id):
+            with documentary_scope(request, _READERS) as (token, tenant, org_id):
+                # Confirming a delivery signs a sealed POD — limited to the
+                # roles the deliveries UPDATE policy allows, otherwise the
+                # RLS-denied row surfaces as a misleading 404.
+                if tenant.active_organization.role not in (
+                    "OWNER",
+                    "WORKSHOP_MANAGER",
+                    "INSTALLER",
+                    "ESTIMATOR",
+                ):
+                    raise contract_error(
+                        403,
+                        "delivery_confirm_denied",
+                        "Confirmar una entrega requiere un rol de oficina "
+                        "o instalación — el rol Operador no firma entregas.",
+                    )
+                # A cobro en terreno writes the money ledger + a sealed
+                # comprobante — field crews sign PODs, they don't collect.
+                if data.get("payment") and tenant.active_organization.role not in _LEDGER_WRITERS:
+                    raise contract_error(
+                        403,
+                        "payment_role_denied",
+                        "Registrar un cobro requiere el rol Estimador u Owner.",
+                    )
                 confirmation = confirm_delivery(
                     org_id=org_id,
                     order_id=order_id,
@@ -607,15 +869,31 @@ class ProductionOrderDeliveryConfirmView(APIView):
 class ProductionOrderDeliveryConfirmationView(APIView):
     @extend_schema(
         operation_id="production_order_delivery_confirmation",
-        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        parameters=[
+            ACTIVE_ORGANIZATION_HEADER,
+            OpenApiParameter(
+                "delivery",
+                OpenApiTypes.UUID,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Open a POD for a specific trip when the order has partial deliveries",
+            ),
+        ],
         request=None,
         responses={200: DeliveryConfirmationAccessSerializer, **ERRORS},
         tags=["production"],
     )
     def get(self, request, order_id: UUID):
+        delivery_param = request.query_params.get("delivery")
+        try:
+            delivery_id = UUID(str(delivery_param)) if delivery_param else None
+        except ValueError:
+            raise DocumentaryError("delivery_not_found")
         with public_production_errors():
             with documentary_scope(request, _READERS) as (_, _, org_id):
-                output = confirmation_access(org_id=org_id, order_id=order_id)
+                output = confirmation_access(
+                    org_id=org_id, order_id=order_id, delivery_id=delivery_id
+                )
         return Response(output)
 
 
@@ -683,3 +961,206 @@ class ProductionVersionTraceView(APIView):
             with documentary_scope(request, _READERS) as (_, _, org_id):
                 output = trace_version(org_id=org_id, version_id=version_id)
         return Response(output)
+
+
+class ProductionStationQueueView(APIView):
+    """Cross-order floor view: open steps grouped by station — what each
+    bench/cell has queued, which one is next, which are blocked."""
+
+    @extend_schema(
+        operation_id="production_station_queue",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={200: ProductionStationQueueSerializer, **ERRORS},
+        tags=["production"],
+    )
+    def get(self, request):
+        with public_production_errors():
+            with documentary_scope(request, _READERS) as (_, _, org_id):
+                output = service.station_queue(org_id=org_id)
+        return Response(output)
+
+
+class CncWorkspaceView(APIView):
+    @extend_schema(
+        operation_id="production_cnc_workspace",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={200: CncWorkspaceSerializer, **ERRORS},
+        tags=["production", "cnc"],
+    )
+    def get(self, request):
+        with public_production_errors():
+            with documentary_scope(request, _READERS) as (_, _, org_id):
+                output = cnc.cnc_workspace(org_id=org_id)
+        return Response(output)
+
+
+class CncToolListView(APIView):
+    @extend_schema(
+        operation_id="production_cnc_tools",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={200: CncToolListSerializer, **ERRORS},
+        tags=["production", "cnc"],
+    )
+    def get(self, request):
+        with public_production_errors():
+            with documentary_scope(request, _READERS) as (_, _, org_id):
+                return Response({"tools": cnc.list_tools(org_id=org_id)})
+
+    @extend_schema(
+        operation_id="production_cnc_tool_create",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=CncToolRequestSerializer,
+        responses={201: CncToolSerializer, **ERRORS},
+        tags=["production", "cnc"],
+    )
+    def post(self, request):
+        data = validate(CncToolRequestSerializer, request.data)
+        with public_production_errors():
+            with documentary_scope(request, _WRITERS) as (token, _, org_id):
+                output = cnc.create_tool(
+                    org_id=org_id, actor_id=token.user_id, data=data
+                )
+        return Response(output, status=201)
+
+
+class CncToolDetailView(APIView):
+    @extend_schema(
+        operation_id="production_cnc_tool_update",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=CncToolPatchSerializer,
+        responses={200: CncToolSerializer, **ERRORS},
+        tags=["production", "cnc"],
+    )
+    def patch(self, request, tool_id: UUID):
+        data = validate(CncToolPatchSerializer, request.data)
+        with public_production_errors():
+            with documentary_scope(request, _WRITERS) as (token, _, org_id):
+                output = cnc.update_tool(
+                    org_id=org_id, tool_id=tool_id, data=data
+                )
+        return Response(output)
+
+
+class CncMachineListView(APIView):
+    @extend_schema(
+        operation_id="production_cnc_machines",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={200: CncMachineListSerializer, **ERRORS},
+        tags=["production", "cnc"],
+    )
+    def get(self, request):
+        with public_production_errors():
+            with documentary_scope(request, _READERS) as (_, _, org_id):
+                return Response({"machines": cnc.list_machines(org_id=org_id)})
+
+    @extend_schema(
+        operation_id="production_cnc_machine_create",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=CncMachineRequestSerializer,
+        responses={201: CncMachineSerializer, **ERRORS},
+        tags=["production", "cnc"],
+    )
+    def post(self, request):
+        data = validate(CncMachineRequestSerializer, request.data)
+        with public_production_errors():
+            with documentary_scope(request, _WRITERS) as (token, _, org_id):
+                output = cnc.create_machine(
+                    org_id=org_id, actor_id=token.user_id, data=data
+                )
+        return Response(output, status=201)
+
+
+class CncMachineDetailView(APIView):
+    @extend_schema(
+        operation_id="production_cnc_machine_update",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=CncMachinePatchSerializer,
+        responses={200: CncMachineSerializer, **ERRORS},
+        tags=["production", "cnc"],
+    )
+    def patch(self, request, machine_id: UUID):
+        data = validate(CncMachinePatchSerializer, request.data)
+        with public_production_errors():
+            with documentary_scope(request, _WRITERS) as (token, _, org_id):
+                output = cnc.update_machine(
+                    org_id=org_id, machine_id=machine_id, data=data
+                )
+        return Response(output)
+
+
+class CncReadinessView(APIView):
+    @extend_schema(
+        operation_id="production_order_cnc_readiness",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={200: CncReadinessSerializer, **ERRORS},
+        tags=["production", "cnc"],
+    )
+    def get(self, request, order_id: UUID):
+        with public_production_errors():
+            with documentary_scope(request, _READERS) as (_, _, org_id):
+                output = cnc.cnc_readiness(org_id=org_id, order_id=order_id)
+        return Response(output)
+
+
+class CncProgramListView(APIView):
+    @extend_schema(
+        operation_id="production_order_cnc_programs",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={200: CncProgramListSerializer, **ERRORS},
+        tags=["production", "cnc"],
+    )
+    def get(self, request, order_id: UUID):
+        with public_production_errors():
+            with documentary_scope(request, _READERS) as (_, _, org_id):
+                return Response(
+                    {"programs": cnc.list_programs(org_id=org_id, order_id=order_id)}
+                )
+
+    @extend_schema(
+        operation_id="production_order_cnc_program_generate",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=CncGenerateRequestSerializer,
+        responses={201: CncProgramSerializer, **ERRORS},
+        tags=["production", "cnc"],
+    )
+    def post(self, request, order_id: UUID):
+        data = validate(CncGenerateRequestSerializer, request.data)
+        with public_production_errors():
+            with documentary_scope(request, _WRITERS) as (token, _, org_id):
+                output = cnc.generate_program(
+                    org_id=org_id,
+                    order_id=order_id,
+                    machine_id=UUID(data["machine_id"]),
+                    member_id=data["member_id"],
+                    actor_id=token.user_id,
+                )
+        return Response(output, status=201)
+
+
+class CncProgramFileView(APIView):
+    @extend_schema(
+        operation_id="production_cnc_program_file",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={(200, "application/json"): OpenApiTypes.STR, (200, "text/csv"): OpenApiTypes.STR, **ERRORS},
+        tags=["production", "cnc"],
+    )
+    def get(self, request, program_id: UUID, filename: str):
+        with public_production_errors():
+            with documentary_scope(request, _READERS) as (_, _, org_id):
+                resolved = cnc.program_file(
+                    org_id=org_id, program_id=program_id, filename=filename
+                )
+                if resolved is None:
+                    raise DocumentaryError("cnc_file_not_found")
+                name, content = resolved
+        mime = "text/csv" if filename.endswith(".csv") else "application/json"
+        response = HttpResponse(content, content_type=f"{mime}; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="{name}"'
+        return response

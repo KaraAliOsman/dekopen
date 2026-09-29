@@ -1,11 +1,16 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { ApiError } from "../../api/apiMutator";
 import { UnsavedChangesGuard } from "../../app/UnsavedChangesGuard";
+import { useAssistantSurface } from "../assistant/assistantContext";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
+import { fmtMm } from "../../format";
 import { t } from "../../i18n/es-CL";
 import { CatalogImportsPanel } from "./CatalogImportsPanel";
+import { SystemWorkspaceView } from "./SystemWorkspace";
 import { SectionPreviewSvg } from "../canvas/SectionPreviewSvg";
-import { useConfirm } from "../../ui";
+import { SectionImportPanel } from "./SectionImportPanel";
+import { Button, DeniedState, PageHeader, Tabs, useConfirm } from "../../ui";
+import type { ProcessProfileOption } from "../../api/generated/models";
 import {
   HARDWARE_COMPONENT_CATEGORIES,
   catalogApi,
@@ -28,8 +33,21 @@ type Label = Parameters<typeof t>[0];
 const ct = (key: string) => t(`catalog.${key}` as Label);
 const resources: Resource[] = ["systems", "articles", "glazing", "hardware-kits"];
 
+const DETAIL_KEYS: Record<string, Label> = {
+  "catalogs.errors.not_found": "catalog.errNotFound",
+  "catalogs.errors.referenced": "catalog.errReferenced",
+  "catalogs.errors.section_file_missing": "catalog.errSectionFileMissing",
+  "catalogs.errors.section_file_name": "catalog.errSectionFileName",
+  "catalogs.errors.section_file_size": "catalog.errSectionFileSize",
+  "catalogs.errors.section_storage": "catalog.errSectionStorage",
+  "catalogs.errors.stale_edit": "catalog.errStaleEdit",
+};
+
 function failure(error: unknown): string {
   if (!(error instanceof ApiError)) return ct("errorNetwork");
+  const payload = error.payload as { error?: { detail?: unknown } } | null;
+  const detail = payload?.error?.detail;
+  if (typeof detail === "string" && DETAIL_KEYS[detail]) return t(DETAIL_KEYS[detail]);
   if (error.status === 401 || error.status === 403) return ct("errorPermission");
   if (error.status === 404) return ct("errorMissing");
   if (error.status === 409) return ct("errorConflict");
@@ -40,13 +58,19 @@ function failure(error: unknown): string {
 function itemName(resource: Resource, row: Row<Resource>, data: CatalogData): string {
   if (resource === "glazing" && "bead_article_id" in row) {
     const article = data.articles.find((item) => item.id === row.bead_article_id);
-    return `${article?.name ?? ct("beadUnavailable")} · ${row.glass_thickness_mm} ${ct("mm")}`;
+    return `${article?.name ?? ct("beadUnavailable")} · ${fmtMm(row.glass_thickness_mm)} ${ct("mm")}`;
   }
   return "name" in row ? row.name : ct("record");
 }
 
 function itemCode(row: Row<Resource>): string {
   return "sku" in row ? row.sku : "code" in row ? row.code : "";
+}
+
+/** Import-generated codes embed a UUID (TEST-0f41dce9…) — render the short
+ * form in lists; the full code stays in the tooltip. */
+function shortCode(code: string): string {
+  return code.length > 16 ? `${code.slice(0, 16)}…` : code;
 }
 
 function systemReadinessLabel(system: Row<"systems">): string {
@@ -58,13 +82,21 @@ function systemReadinessLabel(system: Row<"systems">): string {
   // Quote-ready systems still surface the higher levels: a system that can be
   // priced but can't reach the shop floor is honest about which level blocks.
   const parts = [ct("readyFixed")];
+  const shown = new Set<string>();
   for (const name of ["PRODUCTION_READY", "CNC_READY"]) {
     const level = readiness.levels?.find((entry) => entry.level === name);
     if (level && level.ok === false && level.blockers.length > 0) {
+      // First blocker names the gate; the ladder in the system workspace lists
+      // the rest — a cell joined on '·' per blocker became an unreadable run-on.
+      const first = level.blockers.at(0)?.code;
+      // The same missing authority gates several levels — state it once.
+      if (first && shown.has(first)) continue;
+      if (first) shown.add(first);
+      const extra = level.blockers.length > 1 ? ` (+${level.blockers.length - 1})` : "";
       parts.push(
-        `${ct(name === "PRODUCTION_READY" ? "readinessProduction" : "readinessCnc")}: ${level.blockers
-          .map((blocker) => ct(`readiness.${blocker.code}`))
-          .join(" · ")}`,
+        `${ct(name === "PRODUCTION_READY" ? "readinessProduction" : "readinessCnc")}: ${ct(
+          `readiness.${first}`,
+        )}${extra}`,
       );
     }
   }
@@ -76,7 +108,7 @@ export function CatalogPage(): JSX.Element {
   const organization = me?.active_organization;
   if (status !== "ready") return <p role="status">{ct("loading")}</p>;
   if (!organization || !["OWNER", "WORKSHOP_MANAGER", "ESTIMATOR"].includes(organization.role))
-    return <p role="alert">{ct("permission")}</p>;
+    return <DeniedState reason={ct("permission")} />;
 
   return (
     <CatalogWorkspace
@@ -92,12 +124,21 @@ function CatalogWorkspace({ orgId, role }: { orgId: string; role: string }): JSX
   const [data, setData] = useState<CatalogData | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [resource, setResource] = useState<Resource>("systems");
+  // The detail pane's landing view for a selected system: the §06 workspace
+  // is the system home; the tabbed records stay one click away for CRUD.
+  const [detailTab, setDetailTab] = useState<"workspace" | "records">("workspace");
   const [editor, setEditor] = useState<{ resource: Resource; id?: string } | null>(null);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [reload, setReload] = useState(0);
+  // The workspace aggregates the same records under one fetch — saves must
+  // invalidate its cache without forcing a whole-list refetch.
+  const [workspaceKey, setWorkspaceKey] = useState(0);
+  // The assistant answers inside the selected system's catalog context —
+  // readiness blockers, review queue, entity rosters — not the bare list.
+  useAssistantSurface(selected ? "catalog" : null, selected ? { system_id: selected } : undefined);
   const lifetime = useRef<AbortController | null>(null);
   // Catalog CRUD accepts OWNER/WORKSHOP_MANAGER — an estimator reads the
   // catalog and writes only through the import-review flow.
@@ -148,14 +189,17 @@ function CatalogWorkspace({ orgId, role }: { orgId: string; role: string }): JSX
     }
     setEditor(null);
     setNotice(ct("saved"));
+    // The system workspace aggregates these records — a record-level
+    // accept() alone would leave its fields/readiness/related rows stale.
+    setWorkspaceKey((value) => value + 1);
   }
 
   const [reviewing, setReviewing] = useState<string | null>(null);
-  async function reviewRow<R extends Resource>(kind: R, id: string) {
-    setReviewing(id);
+  async function reviewRow<R extends Resource>(kind: R, row: Row<R>) {
+    setReviewing(row.id);
     setNotice("");
     try {
-      accept(kind, await api.review(kind, id));
+      accept(kind, await api.review(kind, row));
       setNotice(ct("reviewed"));
     } catch (caught) {
       setNotice(failure(caught));
@@ -171,6 +215,7 @@ function CatalogWorkspace({ orgId, role }: { orgId: string; role: string }): JSX
     // Reload relationships after deletion: the server decides referential behavior.
     if (kind === "systems" && id === selected) setSelected(null);
     setReload((value) => value + 1);
+    setWorkspaceKey((value) => value + 1);
   }
 
   if (loading) return <p role="status">{ct("loading")}</p>;
@@ -202,24 +247,24 @@ function CatalogWorkspace({ orgId, role }: { orgId: string; role: string }): JSX
 
   return (
     <section className="catalog">
-      <header className="catalog-heading">
-        <div>
-          <h1>{ct("title")}</h1>
-          <p>{ct("subtitle")}</p>
-        </div>
-        {canEdit && (
-          <button
-            type="button"
-            disabled={editor !== null}
-            onClick={() => {
-              setNotice("");
-              setEditor({ resource: "systems" });
-            }}
-          >
-            {ct("newSystem")}
-          </button>
-        )}
-      </header>
+      <PageHeader
+        actions={
+          canEdit ? (
+            <Button
+              disabled={editor !== null}
+              onClick={() => {
+                setNotice("");
+                setEditor({ resource: "systems" });
+              }}
+              variant="primary"
+            >
+              {ct("newSystem")}
+            </Button>
+          ) : undefined
+        }
+        context={ct("subtitle")}
+        title={ct("title")}
+      />
 
       <p className="catalog-status" role="status" aria-live="polite">
         {notice}
@@ -231,7 +276,10 @@ function CatalogWorkspace({ orgId, role }: { orgId: string; role: string }): JSX
         systems={data.systems
           .filter((system) => !system.is_global)
           .map((system) => ({ id: system.id, name: system.name, code: system.code }))}
-        onConfirmed={() => setReload((value) => value + 1)}
+        onConfirmed={() => {
+          setReload((value) => value + 1);
+          setWorkspaceKey((value) => value + 1);
+        }}
       />
 
       <div className="catalog-layout">
@@ -254,18 +302,23 @@ function CatalogWorkspace({ orgId, role }: { orgId: string; role: string }): JSX
                   disabled={editor !== null}
                   onClick={() => {
                     setSelected(system.id);
+                    setDetailTab("workspace");
                     setNotice("");
                   }}
                 >
-                  <strong>{system.name}</strong>
-                  <span>
-                    {system.code} · {ct(`option.${system.material}`)}
+                  <strong>
+                    {system.manufacturer ? `${system.manufacturer} ` : ""}
+                    {system.name}
+                  </strong>
+                  <span title={system.code}>
+                    {system.family ? `${system.family} · ` : ""}
+                    {shortCode(system.code)} · {ct(`option.${system.material}`)} · v{system.version}
                   </span>
                   <small>
                     {system.is_global ? ct("global") : ct("own")}
                     {system.is_demo ? ` · ${ct("demo")}` : ""}
+                    {system.review_pending ? ` · ${ct("reviewPending")}` : ""}
                     {" · "}
-
                     <span>{systemReadinessLabel(system)}</span>
                   </small>
                 </button>
@@ -301,113 +354,151 @@ function CatalogWorkspace({ orgId, role }: { orgId: string; role: string }): JSX
             {currentSystem?.is_demo && <p>{ct("demoHelp")}</p>}
           </header>
 
-          <nav className="catalog-tabs" aria-label={ct("sections")}>
-            {resources.map((kind) => (
-              <button
-                key={kind}
-                type="button"
-                aria-pressed={resource === kind}
-                disabled={editor !== null || (selected === null && kind !== "hardware-kits")}
-                onClick={() => {
-                  setResource(kind);
-                  setNotice("");
-                }}
-              >
-                {ct(kind)}
-              </button>
-            ))}
-          </nav>
+          <Tabs
+            items={[
+              ...(currentSystem
+                ? [
+                    {
+                      disabled: editor !== null,
+                      id: "workspace",
+                      label: ct("workspaceTab"),
+                    },
+                  ]
+                : []),
+              ...resources.map((kind) => ({
+                disabled: editor !== null || (selected === null && kind !== "hardware-kits"),
+                id: kind,
+                label: ct(kind),
+              })),
+            ]}
+            label={ct("sections")}
+            onChange={(id) => {
+              if (id === "workspace") {
+                setDetailTab("workspace");
+              } else {
+                setResource(id as (typeof resources)[number]);
+                setDetailTab("records");
+              }
+              setNotice("");
+            }}
+            value={detailTab === "workspace" ? "workspace" : resource}
+          />
 
-          <div className="catalog-toolbar">
-            <h3>{ct(resource)}</h3>
-            {resource !== "systems" && canEdit && (
-              <button
-                type="button"
-                disabled={editor !== null || (selected === null && resource !== "hardware-kits")}
-                onClick={() => {
-                  setNotice("");
-                  setEditor({ resource });
-                }}
-              >
-                {ct("create")}
-              </button>
-            )}
-          </div>
-
-          {!rows.length ? (
-            <p className="catalog-empty">{ct("empty")}</p>
+          {currentSystem && detailTab === "workspace" ? (
+            <SystemWorkspaceView
+              api={api}
+              systemId={currentSystem.id}
+              canEdit={canEdit && currentSystem.read_only === false}
+              reloadKey={workspaceKey}
+              onEdit={(kind, id) => {
+                setNotice("");
+                setEditor({ resource: kind, id });
+              }}
+              onDeleted={(kind, id) => removed(kind, id)}
+              onShowRecords={(kind) => {
+                setResource(kind);
+                setDetailTab("records");
+              }}
+            />
           ) : (
-            <div className="catalog-table-scroll">
-              <table>
-                <caption className="catalog-sr-only">{ct(resource)}</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">{ct("field.name")}</th>
-                    <th scope="col">{ct("field.code")}</th>
-                    <th scope="col">{ct("state")}</th>
-                    <th scope="col">{ct("actions")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.id}>
-                      <th scope="row">{itemName(resource, row, data)}</th>
-                      <td>{itemCode(row)}</td>
-                      <td>
-                        {row.read_only !== false ? ct("readOnly") : ct("own")}
-                        {"is_active" in row && (
-                          <span> · {ct(row.is_active ? "active" : "inactive")}</span>
-                        )}
-                        {"data_provenance" in row &&
-                          (row.data_provenance === "LEGACY_UNVERIFIED" ||
-                            row.review_pending === true) && (
-                            <span className="catalog-provenance-legacy">
-                              {" · "}
-                              {ct(
-                                row.data_provenance === "LEGACY_UNVERIFIED"
-                                  ? "provenanceLegacy"
-                                  : "reviewPending",
+            <>
+              <div className="catalog-toolbar">
+                <h3>{ct(resource)}</h3>
+                {resource !== "systems" && canEdit && (
+                  <button
+                    type="button"
+                    disabled={
+                      editor !== null || (selected === null && resource !== "hardware-kits")
+                    }
+                    onClick={() => {
+                      setNotice("");
+                      setEditor({ resource });
+                    }}
+                  >
+                    {ct("create")}
+                  </button>
+                )}
+              </div>
+
+              {!rows.length ? (
+                <p className="catalog-empty">{ct("empty")}</p>
+              ) : (
+                <div className="catalog-table-scroll">
+                  <table>
+                    <caption className="catalog-sr-only">{ct(resource)}</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">{ct("field.name")}</th>
+                        <th scope="col">{ct("field.code")}</th>
+                        <th scope="col">{ct("state")}</th>
+                        <th scope="col">{ct("actions")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((row) => (
+                        <tr key={row.id}>
+                          <th scope="row">{itemName(resource, row, data)}</th>
+                          <td>{itemCode(row)}</td>
+                          <td>
+                            {row.read_only !== false ? ct("readOnly") : ct("own")}
+                            {"is_active" in row && (
+                              <span> · {ct(row.is_active ? "active" : "inactive")}</span>
+                            )}
+                            {"data_provenance" in row &&
+                              (row.data_provenance === "LEGACY_UNVERIFIED" ||
+                                row.review_pending === true) && (
+                                <span className="catalog-provenance-legacy">
+                                  {" · "}
+                                  {ct(
+                                    row.data_provenance === "LEGACY_UNVERIFIED"
+                                      ? "provenanceLegacy"
+                                      : "reviewPending",
+                                  )}
+                                </span>
                               )}
-                            </span>
-                          )}
-                      </td>
-                      <td>
-                        <button
-                          type="button"
-                          aria-label={`${ct(row.read_only === false && canEdit ? "edit" : "view")} ${itemName(resource, row, data)}`}
-                          disabled={editor !== null}
-                          onClick={() => {
-                            setNotice("");
-                            setEditor({ resource, id: row.id });
-                          }}
-                        >
-                          {ct(row.read_only === false && canEdit ? "edit" : "view")}
-                          <span className="catalog-sr-only"> {itemName(resource, row, data)}</span>
-                        </button>
-                        {canEdit &&
-                          "data_provenance" in row &&
-                          (row.data_provenance === "LEGACY_UNVERIFIED" ||
-                            row.review_pending === true) &&
-                          row.read_only === false && (
+                          </td>
+                          <td>
                             <button
                               type="button"
-                              aria-label={`${ct("markReviewed")} ${itemName(resource, row, data)}`}
-                              disabled={editor !== null || reviewing !== null}
-                              onClick={() => void reviewRow(resource, row.id)}
+                              aria-label={`${ct(row.read_only === false && canEdit ? "edit" : "view")} ${itemName(resource, row, data)}`}
+                              disabled={editor !== null}
+                              onClick={() => {
+                                setNotice("");
+                                setEditor({ resource, id: row.id });
+                              }}
                             >
-                              {reviewing === row.id ? ct("reviewing") : ct("markReviewed")}
+                              {ct(row.read_only === false && canEdit ? "edit" : "view")}
                               <span className="catalog-sr-only">
                                 {" "}
                                 {itemName(resource, row, data)}
                               </span>
                             </button>
-                          )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                            {canEdit &&
+                              "data_provenance" in row &&
+                              (row.data_provenance === "LEGACY_UNVERIFIED" ||
+                                row.review_pending === true) &&
+                              row.read_only === false && (
+                                <button
+                                  type="button"
+                                  aria-label={`${ct("markReviewed")} ${itemName(resource, row, data)}`}
+                                  disabled={editor !== null || reviewing !== null}
+                                  onClick={() => void reviewRow(resource, row)}
+                                >
+                                  {reviewing === row.id ? ct("reviewing") : ct("markReviewed")}
+                                  <span className="catalog-sr-only">
+                                    {" "}
+                                    {itemName(resource, row, data)}
+                                  </span>
+                                </button>
+                              )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
           )}
 
           {editor && (
@@ -462,6 +553,7 @@ function CatalogEditor({
   const [sectionDraft, setSectionDraft] = useState<SectionDraft>(() =>
     initialSectionDraft(row && "section" in row ? row.section : null),
   );
+  const [sectionImportOpen, setSectionImportOpen] = useState(false);
   const confirm = useConfirm();
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -476,6 +568,30 @@ function CatalogEditor({
     (article) => article.system_id === draft.system_id && article.role === "GLAZING_BEAD",
   );
   const noBeads = resource === "glazing" && beadOptions.length === 0;
+  const [profiles, setProfiles] = useState<ProcessProfileOption[] | null>(null);
+
+  useEffect(() => {
+    // The binding picker loads only when the systems editor needs it — the
+    // option list caps at 200 profiles, so one lazy fetch per editor mount.
+    // Per-effect `active` flag, not a shared loaded-ref: a StrictMode remount
+    // (or a transient abort) must be free to refetch — the old ref guard left
+    // the picker permanently empty after its first request was aborted.
+    if (resource !== "systems") return;
+    const controller = new AbortController();
+    let active = true;
+    void api
+      .processProfiles(controller.signal)
+      .then((items) => {
+        if (active) setProfiles(items);
+      })
+      .catch(() => {
+        if (active) setProfiles([]);
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [api, resource]);
 
   useEffect(() => {
     alive.current = true;
@@ -492,6 +608,9 @@ function CatalogEditor({
   function change(name: string, value: string) {
     setDirty(true);
     setError("");
+    // Editing after an uncertain create is explicit intent to produce a
+    // (different) row — release the retry lock the failure left behind.
+    setUncertainCreate(false);
     setDraft((current) => ({
       ...current,
       [name]: value,
@@ -502,6 +621,7 @@ function CatalogEditor({
   function changeSection(next: (current: SectionDraft) => SectionDraft) {
     setDirty(true);
     setError("");
+    setUncertainCreate(false);
     setSectionDraft(next);
   }
 
@@ -512,11 +632,40 @@ function CatalogEditor({
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (readOnly || inFlight.current || noBeads || uncertainCreate) return;
+    // noValidate suppresses the browser's English bubbles; name the first
+    // empty/malformed required field in es-CL and land focus on its control.
+    const fields = schemas[resource].flatMap((group) => group.fields);
+    const missing = fields.find(
+      (field) => !field.optional && (draft[field.name] ?? "").trim() === "",
+    );
+    const malformed = fields.find((field) => {
+      const raw = (draft[field.name] ?? "").trim();
+      if (raw === "") return false;
+      if (field.kind === "decimal")
+        return !new RegExp(`^-?[0-9]+([.,][0-9]{1,${field.places ?? 2}})?$`).test(raw);
+      if (field.kind === "integer") return !/^-?\d+$/.test(raw);
+      return false;
+    });
+    const failed = missing ?? malformed;
+    if (failed) {
+      setError(
+        missing
+          ? `${ct("fieldRequired")} — ${ct(`field.${failed.name}`)}`
+          : `${ct("errorValidation")} — ${ct(`field.${failed.name}`)}`,
+      );
+      document.getElementById(`catalog-${resource}-${failed.name}`)?.focus();
+      return;
+    }
     let body;
     try {
       body = writeFromDraft(resource, draft, contents, sectionDraft);
-    } catch {
-      setError(ct("errorValidation"));
+    } catch (caught) {
+      // writeFromDraft tags the failing field ("Invalid integer: sku") — name
+      // it so the reviewer doesn't hunt the whole form.
+      const failed = /: ([a-z_]+)$/.exec(caught instanceof Error ? caught.message : "")?.[1];
+      setError(
+        failed ? `${ct("errorValidation")} — ${ct(`field.${failed}`)}` : ct("errorValidation"),
+      );
       return;
     }
     inFlight.current = true;
@@ -575,16 +724,21 @@ function CatalogEditor({
               value: article.id,
               label: `${article.name} · ${article.sku}`,
             }))
-          : field.kind === "boolean"
-            ? [
-                { value: "true", label: ct("active") },
-                { value: "false", label: ct("inactive") },
-              ]
-            : (field.options ?? []).map((option) => ({
-                value: option,
-                label: ct(`option.${option}`),
-              }));
-    const select = ["system", "bead", "boolean", "select"].includes(field.kind);
+          : field.kind === "processProfile"
+            ? (profiles ?? []).map((profile) => ({
+                value: profile.id,
+                label: `${profile.label} · ${profile.code} v${profile.version}${profile.org_id === null ? ` · ${ct("global")}` : ""}`,
+              }))
+            : field.kind === "boolean"
+              ? [
+                  { value: "true", label: ct("active") },
+                  { value: "false", label: ct("inactive") },
+                ]
+              : (field.options ?? []).map((option) => ({
+                  value: option,
+                  label: ct(`option.${option}`),
+                }));
+    const select = ["system", "bead", "boolean", "select", "processProfile"].includes(field.kind);
     const unknownOption =
       select && value !== "" && !options.some((option) => option.value === value);
     return (
@@ -641,12 +795,20 @@ function CatalogEditor({
             onChange={(event) => change(field.name, event.target.value)}
           />
         )}
+        {/* An empty process-profile picker is actionable information — the
+            system falls back to GENERIC_LEGACY routing until one is declared,
+            which is exactly the blocker the readiness ladder reports. */}
+        {field.kind === "processProfile" && profiles !== null && profiles.length === 0 ? (
+          <small className="catalog-field-hint" role="status">
+            {ct("noProcessProfiles")}
+          </small>
+        ) : null}
       </label>
     );
   }
 
   return (
-    <form className="catalog-editor" onSubmit={submit} aria-busy={busy}>
+    <form className="catalog-editor" onSubmit={submit} aria-busy={busy} noValidate>
       <UnsavedChangesGuard dirty={dirty} message={ct("discard")} />
       <header className="catalog-toolbar">
         <h3 ref={firstControl} tabIndex={-1}>
@@ -690,6 +852,29 @@ function CatalogEditor({
             </label>
             {sectionDraft.enabled && (
               <>
+                {!readOnly && !sectionImportOpen && (
+                  <button type="button" onClick={() => setSectionImportOpen(true)}>
+                    {ct("sectionImport.open")}
+                  </button>
+                )}
+                {!readOnly && sectionImportOpen && (
+                  <SectionImportPanel
+                    api={api}
+                    onClose={() => setSectionImportOpen(false)}
+                    onApply={(pick) => {
+                      changeSection((current) => ({
+                        ...current,
+                        source: "DXF_REFERENCE",
+                        drawing_ref: pick.drawingRef,
+                        vertices: pick.vertices.map((vertex) => ({
+                          key: crypto.randomUUID(),
+                          ...vertex,
+                        })),
+                      }));
+                      setSectionImportOpen(false);
+                    }}
+                  />
+                )}
                 <div className="catalog-fields">
                   <label htmlFor={`catalog-${resource}-section-source`}>
                     <span>{ct("field.source")}</span>

@@ -47,17 +47,17 @@ describe("OperatorStepCard legacy op routing", () => {
     const { unmount } = render(
       <OperatorStepCard step={step("WELD")} trace={trace} traceBusy={false} />,
     );
-    expect(screen.queryByText("END_MACHINING")).toBeNull();
+    expect(screen.queryByText("Mecanizado de extremo")).toBeNull();
     expect(screen.queryByText("B1")).toBeNull();
     unmount();
 
     render(<OperatorStepCard step={step("MACHINING")} trace={trace} traceBusy={false} />);
-    expect(screen.getByText("END_MACHINING")).toBeTruthy();
+    expect(screen.getByText("Mecanizado de extremo")).toBeTruthy();
     cleanup();
 
     render(<OperatorStepCard step={step("CUT")} trace={trace} traceBusy={false} />);
     expect(screen.getByText("B1")).toBeTruthy();
-    expect(screen.queryByText("END_MACHINING")).toBeNull();
+    expect(screen.queryByText("Mecanizado de extremo")).toBeNull();
   });
 
   it("a declared station_map routes ops to their mapped station", () => {
@@ -67,6 +67,6 @@ describe("OperatorStepCard legacy op routing", () => {
       HANDLE_PREP: "HARDWARE",
     });
     render(<OperatorStepCard step={step("HARDWARE")} trace={trace} traceBusy={false} />);
-    expect(screen.queryByText("END_MACHINING")).toBeNull();
+    expect(screen.queryByText("Mecanizado de extremo")).toBeNull();
   });
 });

@@ -1,0 +1,41 @@
+# dekopen order=OT-P-000006-REV-A-03 plan=22e093b6cfbc emitted=2026-09-28T21:57:51.296358+00:00
+sequence_no,operation_id,kind,host_kind,host,coordinate_system,reference,face,x_mm,y_mm,u_mm,angle_left_deg,angle_right_deg,depth_mm,tool_id,basis,piece_id,piece_label,unit_index,sequence,bar_sku
+1,bda0959d1b56e615ab7c1c6143366197,SAW_CUT,BAR,bar:1,BAR_AXIS,bar_left_edge,,15.00,,,90.0,90.0,,saw,cut_plan.head_trim,,,,,COMPRA-ACERO-HOJA
+2,ad9952c15bc8c98e3d6ff0fdd2b31df4,SAW_CUT,BAR,bar:1,BAR_AXIS,bar_left_edge,,1081.00,,,90.0,90.0,,saw,cut_plan.placement,abedc4ed5bdf40053faf549df624511e0d7c4a32c5b961163d9bb9039374ad9b-01,P03-U01-M05·R · P03-U01-M08·R,1,1,COMPRA-ACERO-HOJA
+3,9b90c7fc03b127c8e2184821838a3964,SAW_CUT,BAR,bar:1,BAR_AXIS,bar_left_edge,,2151.00,,,90.0,90.0,,saw,cut_plan.placement,abedc4ed5bdf40053faf549df624511e0d7c4a32c5b961163d9bb9039374ad9b-02,P03-U01-M05·R · P03-U01-M08·R,1,2,COMPRA-ACERO-HOJA
+4,9876da6a2c9db907ba629f79b87ff679,SAW_CUT,BAR,bar:1,BAR_AXIS,bar_left_edge,,3021.00,,,90.0,90.0,,saw,cut_plan.placement,c49ce12536a363ce3394bb2f5c9dc565db3f5d0f0bc89d5deb5388584a76e1d4-01,P03-U01-M06·R · P03-U01-M07·R,1,3,COMPRA-ACERO-HOJA
+5,16c6ea3226e364a935bcae30676bd457,SAW_CUT,BAR,bar:1,BAR_AXIS,bar_left_edge,,3891.00,,,90.0,,,saw,cut_plan.placement,c49ce12536a363ce3394bb2f5c9dc565db3f5d0f0bc89d5deb5388584a76e1d4-02,P03-U01-M06·R · P03-U01-M07·R,1,4,COMPRA-ACERO-HOJA
+6,65c450048ebce86f51c05df91238bb3a,SAW_CUT,BAR,bar:1,BAR_AXIS,bar_left_edge,,5985.00,,,90.0,90.0,,saw,cut_plan.tail_trim,,,,,COMPRA-ACERO-HOJA
+7,1fc0690d1a92444b1bcc76ce65c2fdd8,SAW_CUT,BAR,bar:2,BAR_AXIS,bar_left_edge,,15.00,,,90.0,90.0,,saw,cut_plan.head_trim,,,,,COMPRA-ACERO-MARCO
+8,a7d6cfa0771d3284b7cfea3a136931ed,SAW_CUT,BAR,bar:2,BAR_AXIS,bar_left_edge,,1185.00,,,90.0,90.0,,saw,cut_plan.placement,01cb4ffaa629b3dd3ffd8284f9d6af2fd244749261cca41e2d24c2a4fc029d82-01,P03-U01-M01·R · P03-U01-M04·R,1,1,COMPRA-ACERO-MARCO
+9,85f9af13ceb6598c2633538236967c3d,SAW_CUT,BAR,bar:2,BAR_AXIS,bar_left_edge,,2359.00,,,90.0,90.0,,saw,cut_plan.placement,01cb4ffaa629b3dd3ffd8284f9d6af2fd244749261cca41e2d24c2a4fc029d82-02,P03-U01-M01·R · P03-U01-M04·R,1,2,COMPRA-ACERO-MARCO
+10,891036a8ce46c77dc7fb83d94e495e2c,SAW_CUT,BAR,bar:2,BAR_AXIS,bar_left_edge,,3333.00,,,90.0,90.0,,saw,cut_plan.placement,2362145b8bd79da10592b5bcfe1d84a8e78a57ea2d23da23610971a9914eb5b8-01,P03-U01-M02·R · P03-U01-M03·R,1,3,COMPRA-ACERO-MARCO
+11,e5b4950086eeb58188fb955cf8e2c88b,SAW_CUT,BAR,bar:2,BAR_AXIS,bar_left_edge,,4307.00,,,90.0,,,saw,cut_plan.placement,2362145b8bd79da10592b5bcfe1d84a8e78a57ea2d23da23610971a9914eb5b8-02,P03-U01-M02·R · P03-U01-M03·R,1,4,COMPRA-ACERO-MARCO
+12,053680d0683b9caaaf445fc096536066,SAW_CUT,BAR,bar:2,BAR_AXIS,bar_left_edge,,5985.00,,,90.0,90.0,,saw,cut_plan.tail_trim,,,,,COMPRA-ACERO-MARCO
+13,a2a4b6ee4e01727eaa2de7a6662f3557,SAW_CUT,BAR,bar:3,BAR_AXIS,bar_left_edge,,15.00,,,45.0,45.0,,saw,cut_plan.head_trim,,,,,COMPRA-HOJA
+14,dff209b160654c2f06350e5ce28f548e,SAW_CUT,BAR,bar:3,BAR_AXIS,bar_left_edge,,1117.00,,,45.0,45.0,,saw,cut_plan.placement,081992c4165db8ea3b85467aa56ace2f21992a7485b076a7791c0d1e4a9f81ac-01,P03-U01-M05 · P03-U01-M08,1,1,COMPRA-HOJA
+15,61aa9e1c6fca2ee08214b185aafc4c6f,SAW_CUT,BAR,bar:3,BAR_AXIS,bar_left_edge,,2223.00,,,45.0,45.0,,saw,cut_plan.placement,081992c4165db8ea3b85467aa56ace2f21992a7485b076a7791c0d1e4a9f81ac-02,P03-U01-M05 · P03-U01-M08,1,2,COMPRA-HOJA
+16,b44cc52ee26c1b1f43a26c5e698ac94c,SAW_CUT,BAR,bar:3,BAR_AXIS,bar_left_edge,,3129.00,,,45.0,45.0,,saw,cut_plan.placement,c21348b493fcf233fed6e832a36e0222e7754c3a48ef1d582a493774f935b7cb-01,P03-U01-M06 (mec.) · P03-U01-M07,1,3,COMPRA-HOJA
+17,457466e1e635f5b049a6a4f5c9ee316c,SAW_CUT,BAR,bar:3,BAR_AXIS,bar_left_edge,,4035.00,,,45.0,,,saw,cut_plan.placement,c21348b493fcf233fed6e832a36e0222e7754c3a48ef1d582a493774f935b7cb-02,P03-U01-M06 (mec.) · P03-U01-M07,1,4,COMPRA-HOJA
+18,6e6139a194002fe37397c0a6c82c43db,SAW_CUT,BAR,bar:3,BAR_AXIS,bar_left_edge,,5985.00,,,45.0,45.0,,saw,cut_plan.tail_trim,,,,,COMPRA-HOJA
+19,74beeba8f4d2706f6ceb23feb6007b00,SAW_CUT,BAR,bar:4,BAR_AXIS,bar_left_edge,,15.00,,,45.0,45.0,,saw,cut_plan.head_trim,,,,,COMPRA-JQ-10
+20,3da9bffbce18a606c283452bd9a67af4,SAW_CUT,BAR,bar:4,BAR_AXIS,bar_left_edge,,1000.00,,,45.0,,,saw,cut_plan.placement,5d54b8f7940cba7f03075fba016a001edf0fb5062bc0c9b5df602dd066d54613-01,P03-U01-M09 · P03-U01-M12,1,1,COMPRA-JQ-10
+21,7e18273c2ba9ac05fd0b03dc73a06216,SAW_CUT,BAR,bar:4,BAR_AXIS,bar_left_edge,,1199.00,,,45.0,45.0,,saw,cut_plan.tail_trim,,,,,COMPRA-JQ-10
+22,6d1545eff5b9f69f9cab2e83eb1e892c,SAW_CUT,BAR,bar:5,BAR_AXIS,bar_left_edge,,15.00,,,45.0,45.0,,saw,cut_plan.head_trim,,,,,COMPRA-JQ-10
+23,8182ee98bc832abf7e83d4acb18bebc0,SAW_CUT,BAR,bar:5,BAR_AXIS,bar_left_edge,,1000.00,,,45.0,,,saw,cut_plan.placement,5d54b8f7940cba7f03075fba016a001edf0fb5062bc0c9b5df602dd066d54613-02,P03-U01-M09 · P03-U01-M12,1,1,COMPRA-JQ-10
+24,c5ed6e009284d275f687fe7fa065d0b1,SAW_CUT,BAR,bar:5,BAR_AXIS,bar_left_edge,,1199.00,,,45.0,45.0,,saw,cut_plan.tail_trim,,,,,COMPRA-JQ-10
+25,520a9caf2c2103cddf373a82004413e5,SAW_CUT,BAR,bar:6,BAR_AXIS,bar_left_edge,,15.00,,,45.0,45.0,,saw,cut_plan.head_trim,,,,,COMPRA-JQ-10
+26,682c965abab11f4e491dced6adeb67ed,SAW_CUT,BAR,bar:6,BAR_AXIS,bar_left_edge,,800.00,,,45.0,45.0,,saw,cut_plan.placement,ace8eced0e0b26243c0fd9cef188b1024222397db419fae6a2c530821e064508-01,P03-U01-M10 · P03-U01-M11,1,1,COMPRA-JQ-10
+27,6eed15e5ecd4cb42e9e7c2b74da1b990,SAW_CUT,BAR,bar:6,BAR_AXIS,bar_left_edge,,1589.00,,,45.0,,,saw,cut_plan.placement,ace8eced0e0b26243c0fd9cef188b1024222397db419fae6a2c530821e064508-02,P03-U01-M10 · P03-U01-M11,1,2,COMPRA-JQ-10
+28,dd1799ebfdc01c1dde2e4907ff2ca2fc,SAW_CUT,BAR,bar:6,BAR_AXIS,bar_left_edge,,5985.00,,,45.0,45.0,,saw,cut_plan.tail_trim,,,,,COMPRA-JQ-10
+29,5d9a3c9b971339ebb10def45490649a3,SAW_CUT,BAR,bar:7,BAR_AXIS,bar_left_edge,,15.00,,,45.0,45.0,,saw,cut_plan.head_trim,,,,,COMPRA-MARCO
+30,a73f1ce845502f302d33b7c0910d0ceb,SAW_CUT,BAR,bar:7,BAR_AXIS,bar_left_edge,,1221.00,,,45.0,,,saw,cut_plan.placement,154f22a28f11447fe1f4a6973cd77fd25c536993e46c72b41b35c81dadd330df-01,P03-U01-M01 · P03-U01-M04,1,1,COMPRA-MARCO
+31,eddbd4ec0d3d57f66589a448aea3bae5,SAW_CUT,BAR,bar:7,BAR_AXIS,bar_left_edge,,1225.00,,,45.0,45.0,,saw,cut_plan.tail_trim,,,,,COMPRA-MARCO
+32,204d512fd913177e1837e7314a121d28,SAW_CUT,BAR,bar:8,BAR_AXIS,bar_left_edge,,15.00,,,45.0,45.0,,saw,cut_plan.head_trim,,,,,COMPRA-MARCO
+33,6061d6d03fc2dc62eaff4421617683c2,SAW_CUT,BAR,bar:8,BAR_AXIS,bar_left_edge,,1221.00,,,45.0,,,saw,cut_plan.placement,154f22a28f11447fe1f4a6973cd77fd25c536993e46c72b41b35c81dadd330df-02,P03-U01-M01 · P03-U01-M04,1,1,COMPRA-MARCO
+34,a02040eabe2e5b4a5761a5a6d508849e,SAW_CUT,BAR,bar:8,BAR_AXIS,bar_left_edge,,1235.00,,,45.0,45.0,,saw,cut_plan.tail_trim,,,,,COMPRA-MARCO
+35,db559cdd481cc13a930412fed04050c7,SAW_CUT,BAR,bar:9,BAR_AXIS,bar_left_edge,,15.00,,,45.0,45.0,,saw,cut_plan.head_trim,,,,,COMPRA-MARCO
+36,6c68bba9495f5451a4f3598179c3dbcf,SAW_CUT,BAR,bar:9,BAR_AXIS,bar_left_edge,,1021.00,,,45.0,45.0,,saw,cut_plan.placement,9b1f579137ff8096b60b83d3c4d5289d487d447c3a104dcc5b91e7f287f5786c-01,P03-U01-M02 · P03-U01-M03,1,1,COMPRA-MARCO
+37,28d2adcfb668bf1ae0f4767cfb21f438,SAW_CUT,BAR,bar:9,BAR_AXIS,bar_left_edge,,2031.00,,,45.0,,,saw,cut_plan.placement,9b1f579137ff8096b60b83d3c4d5289d487d447c3a104dcc5b91e7f287f5786c-02,P03-U01-M02 · P03-U01-M03,1,2,COMPRA-MARCO
+38,48a1c30d6ae4a09ed7abb7fd8616aeac,SAW_CUT,BAR,bar:9,BAR_AXIS,bar_left_edge,,4545.00,,,45.0,45.0,,saw,cut_plan.tail_trim,,,,,COMPRA-MARCO
+39,da3a6ff1d27616eaed1e8eba73fde1bf,HANDLE_PREP,MEMBER,ebaecccbed03cc559d751c8a3cf8bc916692815f2eca374c6b6e2a40013947d2,MEMBER_PLAN,member_start,INSIDE_FACE,62.00,500.0000,448.0000,,,,drill,handle_requirement_policy:DEMO_60_HANDLES_V2@2,ebaecccbed03cc559d751c8a3cf8bc916692815f2eca374c6b6e2a40013947d2,P03-U01-M06,,,

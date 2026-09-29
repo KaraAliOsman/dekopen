@@ -87,10 +87,98 @@ def list_remnants(
         parameters.append(status)
     items = rows(
         f"{_SELECT} WHERE {' AND '.join(clauses)}"
-        " ORDER BY kind, status, length_mm NULLS LAST, width_mm NULLS LAST, id",
+        " ORDER BY kind, status, length_mm NULLS LAST, width_mm NULLS LAST, id"
+        " LIMIT 500",
         parameters,
     )
-    return {"remnants": [_remnant_row(r) for r in items]}
+    # Resolve the work order a remnant is reserved for (or came from) into its
+    # human code — the operator never sees a UUID.
+    order_ids = {
+        str(value)
+        for r in items
+        for value in (
+            r["reserved_order_id"],
+            r["origin_order_id"],
+            r["consumed_order_id"],
+        )
+        if value
+    }
+    codes = (
+        {
+            str(row["id"]): str(row["order_code"])
+            for row in rows(
+                "SELECT id, order_code FROM public.orders"
+                " WHERE org_id = %s AND id = ANY(%s::uuid[])",
+                [str(org_id), sorted(order_ids)],
+            )
+        }
+        if order_ids
+        else {}
+    )
+    remnants = [_remnant_row(r) for r in items]
+    for entry in remnants:
+        entry["reserved_order_code"] = codes.get(entry["reserved_order_id"])
+        entry["origin_order_code"] = codes.get(entry["origin_order_id"])
+    # Resolve the bar authority into the commercial SKU a rack worker reads —
+    # a remnant with no article identity is just an anonymous drop. Sheet
+    # remnants already carry sheet_workshop_sku.
+    authority_ids = [
+        entry["stock_authority_id"] for entry in remnants if entry["stock_authority_id"]
+    ]
+    skus: dict[str, object] = {}
+    if authority_ids:
+        for table in ("profile_purchase_mappings", "reinforcement_articles"):
+            for row in rows(
+                f"SELECT id::text AS id, commercial_sku FROM public.{table} "
+                "WHERE id = ANY(%s::uuid[])",
+                [authority_ids],
+            ):
+                skus[str(row["id"])] = row["commercial_sku"]
+    for entry in remnants:
+        entry["article_sku"] = (
+            skus.get(entry["stock_authority_id"]) if entry["stock_authority_id"] else None
+        )
+    return {"remnants": remnants}
+
+
+def list_bar_authorities(*, org_id: UUID) -> dict[str, object]:
+    """Active BAR stock authorities the operator can register a drop against —
+    profiles and reinforcements merged into one pick list, same scope the
+    optimizer feeds from (org rows plus global ones)."""
+    profile = rows(
+        """
+        SELECT id::text AS id, commercial_sku,
+               physical_stock_identity::text AS physical_stock_identity,
+               stock_color
+        FROM public.profile_purchase_mappings
+        WHERE (org_id = %s OR org_id IS NULL) AND is_active
+        ORDER BY commercial_sku
+        """,
+        [str(org_id)],
+    )
+    reinforcement = rows(
+        """
+        SELECT id::text AS id, commercial_sku,
+               physical_stock_identity::text AS physical_stock_identity,
+               stock_color
+        FROM public.reinforcement_articles
+        WHERE (org_id = %s OR org_id IS NULL) AND is_active
+        ORDER BY commercial_sku
+        """,
+        [str(org_id)],
+    )
+    authorities = [
+        {
+            "id": row["id"],
+            "commercial_sku": row["commercial_sku"],
+            "physical_stock_identity": row["physical_stock_identity"],
+            "stock_color": row["stock_color"],
+            "source": source,
+        }
+        for source, found in (("PROFILE", profile), ("REINFORCEMENT", reinforcement))
+        for row in found
+    ]
+    return {"authorities": authorities}
 
 
 def create_remnant(
@@ -363,6 +451,9 @@ def _evict_remnant_claim(
     # refuses until a fresh optimize re-reserves — and drop the machine
     # exports rendered from the old plan, whose fingerprints are now stale.
     optimization["invalidated"] = True
+    # The UI names the offending drop in the alert banner — the raw id is the
+    # only identity left (the remnant row is already scrapped/released).
+    optimization["invalidated_by"] = str(remnant_id)
     for export_key in ("cnc_export", "dxf_export", "operations_export"):
         payload.pop(export_key, None)
     remnant_key = str(remnant_id)
@@ -437,3 +528,48 @@ def record_produced_remnants(
         )
         inserted += 1
     return inserted
+
+
+def remnant_label(*, org_id: UUID, remnant_id: UUID) -> dict[str, object]:
+    """Printable rack tag for one remnant — §5 barcode readiness.
+
+    The QR payload encodes the remnant's stable identity the same way the
+    cut-pack and unit labels do; a floor scanner resolves it to this row.
+    Rendering (sheet vs bar dimensions) happens on the client — this returns
+    the raw fields plus the pre-rendered QR SVG."""
+    import segno
+
+    row = one(
+        f"{_SELECT} WHERE id = %s AND org_id = %s",
+        [str(remnant_id), str(org_id)],
+        "remnant_not_found",
+    )
+    remnant = _remnant_row(row)
+    identity = remnant["sheet_workshop_sku"]
+    if not identity and remnant["stock_authority_id"]:
+        for table in ("profile_purchase_mappings", "reinforcement_articles"):
+            found = rows(
+                f"SELECT commercial_sku FROM public.{table} WHERE id = %s",
+                [remnant["stock_authority_id"]],
+            )
+            if found:
+                identity = str(found[0]["commercial_sku"])
+                break
+    if not identity:
+        # An anonymous drop still gets a printable identity — material · color
+        # before the raw identity UUID.
+        identity = (
+            " · ".join(
+                part for part in (remnant.get("material"), remnant.get("color"))
+                if part
+            )
+            or remnant["physical_stock_identity"]
+            or "—"
+        )
+    payload = f"DEKOPEN|REMNANT|{remnant['id']}"
+    return {
+        "remnant": remnant,
+        "identity": identity,
+        "qr_payload": payload,
+        "qr_svg": segno.make(payload, error="m").svg_inline(border=2, scale=6),
+    }
