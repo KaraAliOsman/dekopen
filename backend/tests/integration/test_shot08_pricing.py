@@ -621,7 +621,8 @@ def test_pricing_http_valid_preview_remains_successful(committed_commercial_rows
     assert body['project_net']=='500'
     assert body['project_tax']=='95'
     assert body['project_gross']=='595'
-    assert body['lines']==[{'position_index':1,'line_net':'500'}]
+    assert body['lines']==[{'position_index':1,'quantity':1,'unit_price':'499.8074',
+                            'discount_pct':'0.0000','line_net':'500'}]
 
 
 def privileged_role():

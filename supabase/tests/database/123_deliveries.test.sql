@@ -1,7 +1,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
 SET LOCAL search_path = public, private, auth, extensions, pg_temp;
-SELECT plan(9);
+SELECT plan(10);
 
 SELECT has_table('public', 'deliveries', 'deliveries table exists');
 SELECT has_column('public', 'deliveries', 'scheduled_date', 'schedule date captured');
