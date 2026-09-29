@@ -252,10 +252,20 @@ def create_link(*, org_id: UUID, project_id: UUID, actor_id: UUID, data: dict) -
         )
         if live:
             live_link = live[0]
-            if (
-                Decimal(str(live_link["amount"])) == amount
+            # Reuse only a genuinely identical charge: same payer, subject,
+            # amount and kind, already minted (PENDING carries the payer URL;
+            # DISPATCHING/UNCERTAIN have no usable URL to hand back). Any
+            # mismatch means a different request — refusing is safer than
+            # handing out a charge meant for someone else.
+            reusable = (
+                str(live_link["status"]) == "PENDING"
+                and live_link["url"]
+                and Decimal(str(live_link["amount"])) == amount
                 and str(live_link["kind"]) == kind
-            ):
+                and str(live_link["payer_email"]) == data["payer_email"].strip()
+                and str(live_link["subject"]) == subject[:200]
+            )
+            if reusable:
                 return {"link": _public_link(live_link)}
             raise contract_error(
                 409,

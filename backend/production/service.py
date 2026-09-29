@@ -1912,25 +1912,33 @@ def transition_step(
             )
             optimization = (_decoded(payload_row["payload_json"]).get("optimization") or {})
             plan_remnants = optimization.get("remnants") or {}
-            # Every remnant the plan claims must still be RESERVED for this
-            # order — an operator can unreserve a drop manually, and another
-            # order may then have taken it; completing on the stale plan
-            # would settle stock the saw never had.
+            # Every remnant the plan claims must still belong to this order —
+            # an operator can unreserve a drop manually, and another order
+            # may then have taken it; completing on the stale plan would
+            # settle stock the saw never had.
             planned_ids = {
                 str(entry["id"])
                 for entry in (plan_remnants.get("consumed") or [])
                 if entry.get("id")
             }
             if planned_ids:
-                still_reserved = rows(
+                # An order can carry several bar-cutting stations (CUT +
+                # PROFILE_CUT + REINFORCEMENT_CUT): the first to complete
+                # settles the drop, so later stations must accept remnants
+                # already CONSUMED by this order — only a remnant that left
+                # the order's hands (released, scrapped, or consumed by
+                # another order) means the saw never had it.
+                accounted = rows(
                     """
                     SELECT id FROM public.inventory_remnants
-                    WHERE org_id = %s AND reserved_order_id = %s
-                      AND status = 'RESERVED' AND id = ANY(%s::uuid[])
+                    WHERE org_id = %s AND id = ANY(%s::uuid[])
+                      AND ((status = 'RESERVED' AND reserved_order_id = %s)
+                           OR (status = 'CONSUMED' AND consumed_order_id = %s))
                     """,
-                    [str(org_id), str(step["order_id"]), sorted(planned_ids)],
+                    [str(org_id), sorted(planned_ids),
+                     str(step["order_id"]), str(step["order_id"])],
                 )
-                if {str(r["id"]) for r in still_reserved} != planned_ids:
+                if {str(r["id"]) for r in accounted} != planned_ids:
                     raise DocumentaryError("work_order_remnant_released")
             consumed = remnants_service.consume_order_remnants(
                 org_id=org_id, order_id=step["order_id"]

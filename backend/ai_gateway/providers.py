@@ -201,10 +201,13 @@ class HttpProvider:
         ) as response:
             response.raise_for_status()
             content = bytearray()
-            for chunk in response.iter_bytes(65536):
-                # httpx's read timeout bounds each socket op — a provider
-                # drip-feeding bytes would still pin a RUNNING job forever.
-                # The whole exchange must fit the configured wall-clock.
+            # iter_raw yields on every socket arrival — iter_bytes would
+            # buffer to chunk size, letting a drip feed stall the deadline
+            # check itself. Any wait still bounded by httpx's read timeout;
+            # this check bounds the whole exchange's wall-clock. Already-
+            # buffered responses (mock transports) yield everything at once.
+            stream = response.iter_bytes(65536) if response.is_stream_consumed else response.iter_raw()
+            for chunk in stream:
                 if time.monotonic() - started > self.timeout:
                     raise ProviderError("ai_provider_error")
                 content += chunk
