@@ -170,6 +170,14 @@ def _patch_env(monkeypatch, storage, *, order=None, delivery=None, existing=None
         )
 
     storage.payment_data = []
+    storage.receipt_calls = []
+    monkeypatch.setattr(
+        confirmations,
+        "issue_receipt",
+        lambda *, org_id, project, payment, actor_id, deal: storage.receipt_calls.append(
+            {"payment_id": payment["id"], "deal": deal}
+        ),
+    )
     monkeypatch.setattr(confirmations, "one", fake_one)
     monkeypatch.setattr(confirmations, "rows", fake_rows)
     monkeypatch.setattr(
@@ -230,6 +238,77 @@ def test_confirm_with_payment_inserts_cobro(monkeypatch):
     cobro = storage.payment_data[0]
     assert cobro["operation_key"].startswith("pod:")
     assert cobro["amount"] == 50000 and cobro["kind"] == "SALDO"
+
+
+def test_confirm_open_trip_query_tolerates_a_delivered_sibling(monkeypatch):
+    """Partial deliveries leave a DELIVERED trip beside the ON_ROUTE one —
+    the select must LIMIT to the preferred row or the second confirm dies
+    on ambiguous_authority (phase-10 live defect)."""
+    storage = _Storage()
+    order, _delivery = _patch_env(monkeypatch, storage)
+    captured = []
+    base_one = confirmations.one
+
+    def recording_one(sql, params=None, not_found=None):
+        if "FROM public.deliveries" in sql:
+            captured.append(sql)
+        return base_one(sql, params, not_found)
+
+    monkeypatch.setattr(confirmations, "one", recording_one)
+    confirmations.confirm_delivery(
+        org_id=uuid4(),
+        order_id=order["id"],
+        actor_id=uuid4(),
+        receiver_name="Juan Pérez",
+        receiver_rut=None,
+        signature_b64=_SIG_B64,
+        payment=None,
+    )
+    (delivery_sql,) = [s for s in captured if "ON_ROUTE" in s]
+    assert "LIMIT 1" in delivery_sql
+
+
+def test_confirm_signature_only_pod_does_not_lock_project(monkeypatch):
+    """INSTALLER signs PODs — FOR UPDATE on projects would hit the
+    ledger-role lock policy. Only a cobro needs the lock."""
+    storage = _Storage()
+    order, _delivery = _patch_env(monkeypatch, storage)
+    locks = []
+    base_row = confirmations.project_row
+    monkeypatch.setattr(
+        confirmations,
+        "project_row",
+        lambda *a, lock=False, **k: (locks.append(lock), base_row(*a, **k))[1],
+    )
+    confirmations.confirm_delivery(
+        org_id=uuid4(),
+        order_id=order["id"],
+        actor_id=uuid4(),
+        receiver_name="Juan Pérez",
+        receiver_rut=None,
+        signature_b64=_SIG_B64,
+        payment=None,
+    )
+    assert locks == [False]
+
+    storage2 = _Storage()
+    order2, _d2 = _patch_env(monkeypatch, storage2)
+    locks.clear()
+    monkeypatch.setattr(
+        confirmations,
+        "project_row",
+        lambda *a, lock=False, **k: (locks.append(lock), base_row(*a, **k))[1],
+    )
+    confirmations.confirm_delivery(
+        org_id=uuid4(),
+        order_id=order2["id"],
+        actor_id=uuid4(),
+        receiver_name="Juan Pérez",
+        receiver_rut=None,
+        signature_b64=_SIG_B64,
+        payment={"amount": "50000", "method": "CASH", "kind": "SALDO"},
+    )
+    assert locks == [True]
 
 
 def test_confirm_replays_existing_row_without_rerender(monkeypatch):

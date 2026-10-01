@@ -1,3 +1,4 @@
+import { fmtMm, parseLocaleNumber } from "../../format";
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import "./canvas.css";
@@ -6,10 +7,17 @@ import type {
   DesignOptions,
   EngineAssemblyCalculateResponse,
   GlassSpecChoice,
+  KitChoice,
+  PanelChoice,
   ProductIssue,
 } from "../../api/generated/models";
 import { t, type TranslationKey } from "../../i18n/es-CL";
-import { resolveCommands, useRegisterCommands } from "../commands/registry";
+import {
+  formatShortcut,
+  resolveCommands,
+  useCommandShortcuts,
+  useRegisterCommands,
+} from "../commands/registry";
 import type { CommandContext, EditorTool } from "../commands/types";
 import { useCanvasStore } from "./canvasStore";
 import { assemblyCommands } from "./assemblyCommands";
@@ -23,6 +31,8 @@ import { CanvasViewport } from "./CanvasViewport";
 import { ObjectTree } from "./ObjectTree";
 import { buildObjectTree } from "./objectTree";
 import { resolveMembers, type MemberGeometry } from "./members";
+import { bayEnvelopeMm, rankKits } from "./kitCompatibility";
+import { SectionView } from "./SectionView";
 import { SectionPreviewSvg } from "./SectionPreviewSvg";
 import {
   frontBounds,
@@ -35,16 +45,17 @@ import {
 import { useAssemblyCalculation } from "./useAssemblyCalculation";
 import type { IntentNode, Opening, SlidingLayout, SplitType } from "./intentEditing";
 import {
+  findNode,
   intentBays,
   isSlidingOpening,
   resolvedSlidingLayout,
-  selectedBay,
   topIntent,
   updateBay,
   SLIDING_PRESETS,
 } from "./intentEditing";
 import {
   addAdjacentUnit,
+  canRemoveModuleDivision,
   equalizeCouplingAngles,
   equalizeModuleWidths,
   moduleGlassSku,
@@ -53,6 +64,7 @@ import {
   modulePanelSku,
   modulePrimaryBay,
   moveModuleDivision,
+  removeModuleDivision,
   removeUnit,
   resizeModuleSeam,
   scaleModuleWidths,
@@ -116,6 +128,10 @@ const ISSUE_KEYS: Record<string, TranslationKey> = {
   frameless_opening_unsupported: "assembly.issue.framelessOpening",
   frameless_panel_unsupported: "assembly.issue.framelessPanel",
   frameless_article_unknown: "assembly.issue.framelessArticleUnknown",
+  member_exceeds_stock: "assembly.issue.memberExceedsStock",
+  hardware_kit_incompatible: "assembly.issue.hardwareKitIncompatible",
+  hardware_kit_overweight: "assembly.issue.hardwareKitOverweight",
+  hardware_undecidable: "assembly.issue.hardwareUndecidable",
 };
 
 /** Engine failure reasons arrive as `str(error)` — member ids and field
@@ -141,6 +157,14 @@ export const REASON_KEYS: [RegExp, TranslationKey][] = [
   [/adjacent fixed panels/i, "assembly.reason.slidingFixedAdjacent"],
   [/cannot share a track/i, "assembly.reason.slidingSameTrack"],
   [/at least one moving panel/i, "assembly.reason.slidingNoMoving"],
+  [/frame inset collapsed the glass pocket/i, "assembly.reason.glassPocketCollapsed"],
+  [/handle height requires explicit/i, "assembly.reason.handleHeightMigration"],
+  [/polishing authority/i, "assembly.reason.polishingAuthority"],
+  [/requires policy placement/i, "assembly.reason.policyPlacement"],
+  [/requires all four bead offsets/i, "assembly.reason.beadOffsets"],
+  [/no compatible hardware kit/i, "assembly.reason.noHardwareKit"],
+  [/hardware compatibility undecidable|leaf mass unknown/i, "assembly.reason.hardwareUndecidable"],
+  [/ambiguous hardware kits/i, "assembly.reason.ambiguousHardware"],
 ];
 
 export function issueText(
@@ -149,10 +173,17 @@ export function issueText(
   couplings: CouplingJson[],
 ): string {
   const key = ISSUE_KEYS[issue.code];
-  let text = key ? t(key) : issue.code;
+  // Unmapped engine codes still read as sentences — a chip that shows
+  // "R02_LEAF_PROPORTION" asks the user to decode our own identifier.
+  let text = key ? t(key) : issue.code.toLowerCase().replace(/_/g, " ");
   for (const [name, value] of Object.entries(issue.params)) {
     if (name === "reason") continue;
-    text = text.replace(`{${name}}`, value);
+    // Engine params arrive as str(Decimal) — "345.00" reads as technical
+    // noise in a sentence; trim to the human form.
+    const human = /^-?\d+\.\d+0*$/.test(value)
+      ? value.replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "")
+      : value;
+    text = text.replace(`{${name}}`, human);
   }
   const [kind, id] = issue.target.split(":", 2);
   const ordinal =
@@ -180,24 +211,39 @@ export function issueText(
   return text;
 }
 
+const MAX_MM = 30000;
+
 function normalizeMm(candidate: string): string | null {
-  const value = Number(candidate.replace(",", "."));
-  if (!Number.isFinite(value) || value <= 0) return null;
+  const value = parseLocaleNumber(candidate);
+  if (value === null || value <= 0 || value > MAX_MM) return null;
   return value.toFixed(2);
 }
 
 function normalizeAngle(candidate: string): string | null {
-  const value = Number(candidate.replace(",", "."));
-  if (!Number.isFinite(value) || Math.abs(value) >= 90) return null;
+  const value = parseLocaleNumber(candidate);
+  if (value === null || Math.abs(value) >= 90) return null;
   return value.toFixed(1);
 }
 
 /** Contour coordinates are signed: zero/negative carry meaning (a vertical
  * side, an inward arc). Bounds keep the corner ordering the engine requires. */
 function normalizeRange(candidate: string, min: number, max: number): string | null {
-  const value = Number(candidate.replace(",", "."));
-  if (!Number.isFinite(value) || value < min || value >= max) return null;
+  const value = parseLocaleNumber(candidate);
+  if (value === null || value < min || value >= max) return null;
   return value.toFixed(2);
+}
+
+/* Pickers label an option the way an estimator reads the catalog — the
+ * composition/panel name first, the SKU as the qualifier. A bare SKU
+ * ("GLASS-BASE") forces decoding shorthand mid-design. */
+function glassLabel(sku: string, specs: GlassSpecChoice[]): string {
+  const spec = specs.find((item) => item.sku === sku)?.spec;
+  return spec ? `${spec} · ${sku}` : sku;
+}
+
+function panelLabel(sku: string, choices: PanelChoice[]): string {
+  const name = choices.find((item) => item.sku === sku)?.name;
+  return name ? `${name} · ${sku}` : sku;
 }
 
 type DraftFieldProps = {
@@ -207,6 +253,9 @@ type DraftFieldProps = {
   disabled: boolean;
   onCommit(value: string): void;
   normalize(candidate: string): string | null;
+  /** Constraint shown when Enter rejects the value (e.g. the ±90° band on
+   * coupling angles) — a silent revert reads as the field ignoring input. */
+  rejectHint?: string;
 };
 
 function DraftField({
@@ -216,28 +265,63 @@ function DraftField({
   disabled,
   onCommit,
   normalize,
+  rejectHint,
 }: DraftFieldProps): JSX.Element {
   const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value]);
+  const [invalid, setInvalid] = useState(false);
+  useEffect(() => {
+    setDraft(value);
+    setInvalid(false);
+  }, [value]);
   return (
-    <label className="assembly-field">
+    <label className={`assembly-field${invalid ? " is-invalid" : ""}`}>
       {label ? <span>{label}</span> : null}
-      <input
-        value={draft}
-        disabled={disabled}
-        inputMode="decimal"
-        onChange={(event) => setDraft(event.target.value)}
-        onBlur={() => {
-          const normalized = normalize(draft);
-          if (normalized === null) setDraft(value);
-          else if (normalized !== value) onCommit(normalized);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") event.currentTarget.blur();
-          if (event.key === "Escape") setDraft(value);
-        }}
-      />
-      <span className="assembly-unit">{unit}</span>
+      <span className="assembly-input-wrap">
+        <input
+          value={draft}
+          disabled={disabled}
+          inputMode="decimal"
+          aria-invalid={invalid || undefined}
+          onFocus={(event) => event.currentTarget.select()}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            setInvalid(false);
+          }}
+          onBlur={() => {
+            const normalized = normalize(draft);
+            if (normalized === null) {
+              // Revert to the last valid value but keep the field flagged —
+              // a silent snap-back reads as the input being ignored.
+              setDraft(value);
+              setInvalid(true);
+            } else {
+              if (normalized !== value) onCommit(normalized);
+              setInvalid(false);
+            }
+          }}
+          onKeyDown={(event) => {
+            // Enter on an unparseable value keeps the field open and flags
+            // it — reverting silently reads as the input being ignored.
+            if (event.key === "Enter") {
+              if (normalize(draft) === null) {
+                setInvalid(true);
+              } else {
+                event.currentTarget.blur();
+              }
+            }
+            if (event.key === "Escape") {
+              setInvalid(false);
+              setDraft(value);
+            }
+          }}
+        />
+        <span className="assembly-unit">{unit}</span>
+      </span>
+      {invalid ? (
+        <span className="assembly-field-error" role="alert">
+          {rejectHint ?? t("assembly.fieldRejected")}
+        </span>
+      ) : null}
     </label>
   );
 }
@@ -419,7 +503,7 @@ function FramelessSection({
         {spec.supports.map((support, index) => (
           <li key={index} className="frameless-row">
             <select
-              aria-label={t("assembly.framelessSupports")}
+              aria-label={t("assembly.framelessEdge")}
               value={support.edge}
               disabled={busy}
               onChange={(event) => setSupport(index, { edge: event.target.value as FramelessEdge })}
@@ -431,7 +515,7 @@ function FramelessSection({
               ))}
             </select>
             <select
-              aria-label={t("assembly.framelessSupports")}
+              aria-label={t("assembly.framelessKind")}
               value={support.kind}
               disabled={busy}
               onChange={(event) =>
@@ -479,7 +563,7 @@ function FramelessSection({
             <button
               type="button"
               className="ghost-button is-danger"
-              aria-label="×"
+              aria-label={`${t("assembly.framelessRemoveItem")} ${t("assembly.framelessSupports")} ${index + 1}`}
               disabled={busy}
               onClick={() =>
                 update({ ...spec, supports: spec.supports.filter((_, at) => at !== index) })
@@ -513,7 +597,7 @@ function FramelessSection({
         {spec.fittings.map((fitting, index) => (
           <li key={index} className="frameless-row">
             <select
-              aria-label={t("assembly.framelessFittings")}
+              aria-label={t("assembly.framelessKind")}
               value={fitting.kind}
               disabled={busy}
               onChange={(event) =>
@@ -548,7 +632,7 @@ function FramelessSection({
             <button
               type="button"
               className="ghost-button is-danger"
-              aria-label="×"
+              aria-label={`${t("assembly.framelessRemoveItem")} ${t("assembly.framelessFittings")} ${index + 1}`}
               disabled={busy}
               onClick={() =>
                 update({ ...spec, fittings: spec.fittings.filter((_, at) => at !== index) })
@@ -779,6 +863,10 @@ function BayInspector({
   glassSpecs,
   glazingThicknesses,
   panelSkus,
+  panelChoices,
+  kits,
+  members,
+  leafWeightKg,
   busy,
   commit,
   onAskAssistant,
@@ -790,6 +878,11 @@ function BayInspector({
   glassSpecs: GlassSpecChoice[];
   glazingThicknesses: string[];
   panelSkus: string[];
+  panelChoices: PanelChoice[];
+  kits: KitChoice[];
+  members: MemberGeometry;
+  /** Engine-resolved leaf mass; null = undecidable (never assumed). */
+  leafWeightKg: number | null;
   busy: boolean;
   commit(next: ProductJson): void;
   onAskAssistant?(): void;
@@ -801,21 +894,59 @@ function BayInspector({
   const bayOrdinal = bays.findIndex((node) => node.id === bay.id) + 1;
   const moduleOrdinal = product.assembly.modules.findIndex((item) => item.id === module.id) + 1;
   const isTopBay = topIntent(module.tree).id === bay.id;
+  const recentGlass = useCanvasStore((state) => state.recentGlass);
+  const pushRecentGlass = useCanvasStore((state) => state.pushRecentGlass);
+  const favoriteGlass = useCanvasStore((state) => state.favoriteGlass);
+  const toggleFavoriteGlass = useCanvasStore((state) => state.toggleFavoriteGlass);
 
   function patchBay(patch: Partial<IntentNode>): void {
     commit(setModuleTree(product, module.id, updateBay(module.tree, bay.id, patch)));
   }
 
+  function pickGlass(sku: string | null): void {
+    if (sku) pushRecentGlass(sku);
+    patchBay({
+      glass_article_sku: sku,
+      glass_spec:
+        sku == null ? bay.glass_spec : (glassSpecs.find((item) => item.sku === sku)?.spec ?? null),
+    });
+  }
+
   function pickOpening(next: Opening): void {
     if (next === "DOOR_ENTRY" && !isTopBay) return;
     // Mirrors setModuleOpening's normalization at leaf scope: a sliding pick
-    // seeds the 2-leaf preset, a non-door bay never keeps a panel sku.
+    // seeds the 2-leaf preset, a non-door bay never keeps a panel sku, and a
+    // door always carries declared handedness (manufacture refuses to guess).
     patchBay({
       opening_type: next,
       sliding_layout: next === "SLIDING" ? structuredClone(SLIDING_PRESETS.SLIDING_2L!) : null,
       panel_article_sku: next === "DOOR_ENTRY" ? (bay.panel_article_sku ?? null) : null,
+      door_handedness: next === "DOOR_ENTRY" ? (bay.door_handedness ?? "LEFT") : null,
     });
   }
+
+  // Hardware picker context: bay envelope from the intent tree + the
+  // engine's leaf mass. The select ranks valid kits first; incompatible
+  // kits stay consultable with their reason but are not selectable as if
+  // they were equivalent (mandate 04). The engine re-checks at save.
+  const operable = opening !== "FIXED" && !(isDoor && bay.panel_article_sku);
+  const leafEnvelope = operable
+    ? bayEnvelopeMm(module.tree, bay.id, Number(module.width_mm), Number(module.height_mm), {
+        vertical: members.mullionV?.faceWidthMm ?? 0,
+        horizontal: members.mullionH?.faceWidthMm ?? 0,
+      })
+    : null;
+  const kitEvaluations = operable
+    ? rankKits(kits, {
+        opening,
+        leafWidthMm: leafEnvelope ? Math.round(leafEnvelope.w * 10) / 10 : null,
+        leafHeightMm: leafEnvelope ? Math.round(leafEnvelope.h * 10) / 10 : null,
+        leafWeightKg,
+      })
+    : [];
+  const selectableKits = kitEvaluations.filter((item) => item.fit !== "incompatible");
+  const incompatibleKits = kitEvaluations.filter((item) => item.fit === "incompatible");
+  const selectedKitEval = kitEvaluations.find((item) => item.kit.sku === bay.hardware_set_sku);
 
   return (
     <section className="assembly-inspector" aria-label={t("assembly.bay")}>
@@ -824,6 +955,31 @@ function BayInspector({
           {t("assembly.bay")} {bayOrdinal} · {t("assembly.module")} {moduleOrdinal}
         </h4>
       </header>
+      <ProvenanceStrip
+        items={[
+          { label: t("assembly.opening"), state: "DECLARED" },
+          // A panelled door leaf is complete without glass — name the panel,
+          // not a "Sin definir Vidrio" chip for a leaf that has none.
+          isDoor && bay.panel_article_sku
+            ? { label: t("assembly.panel"), state: "VERIFIED" as const }
+            : {
+                label: t("assembly.glass"),
+                state: bay.glass_article_sku
+                  ? ("VERIFIED" as const)
+                  : opening === "FIXED" || isDoor
+                    ? ("UNKNOWN" as const)
+                    : ("BLOCKED" as const),
+              },
+          {
+            label: t("assembly.glassThickness"),
+            state: bay.glass_thickness_mm ? "DECLARED" : "UNKNOWN",
+          },
+          {
+            label: t("assembly.handleHeight"),
+            state: bay.handle_height_mm ? "DECLARED" : "UNKNOWN",
+          },
+        ]}
+      />
       <details className="inspector-section" open>
         <summary>{t("assembly.opening")}</summary>
         <div className="opening-grid" role="group" aria-label={t("assembly.opening")}>
@@ -848,6 +1004,22 @@ function BayInspector({
             );
           })}
         </div>
+        {isDoor && (
+          <label className="assembly-field">
+            <span>{t("assembly.hingeSide")}</span>
+            <select
+              aria-label={t("assembly.hingeSide")}
+              disabled={busy}
+              value={bay.door_handedness ?? "LEFT"}
+              onChange={(event) =>
+                patchBay({ door_handedness: event.target.value as "LEFT" | "RIGHT" })
+              }
+            >
+              <option value="LEFT">{t("assembly.hingeLeft")}</option>
+              <option value="RIGHT">{t("assembly.hingeRight")}</option>
+            </select>
+          </label>
+        )}
         {isDoor && !isTopBay && <p className="assembly-hint">{t("assembly.doorTopOnly")}</p>}
       </details>
       {slidingLayout && (
@@ -857,6 +1029,60 @@ function BayInspector({
           busy={busy}
           onChange={(next) => commit(setModuleSlidingLayout(product, module.id, next, bay.id))}
         />
+      )}
+      {operable && kits.length > 0 && (
+        <details className="inspector-section" open={bay.hardware_set_sku != null}>
+          <summary>{t("assembly.hardware")}</summary>
+          <label className="assembly-field">
+            <span>{t("assembly.hardwareKit")}</span>
+            <select
+              aria-label={t("assembly.hardwareKit")}
+              disabled={busy}
+              value={bay.hardware_set_sku ?? ""}
+              onChange={(event) => patchBay({ hardware_set_sku: event.target.value || null })}
+            >
+              <option value="">{t("assembly.hardwareAuto")}</option>
+              {bay.hardware_set_sku != null &&
+                !selectableKits.some((item) => item.kit.sku === bay.hardware_set_sku) && (
+                  <option value={bay.hardware_set_sku}>{bay.hardware_set_sku}</option>
+                )}
+              {selectableKits.map((item) => (
+                <option key={item.kit.sku} value={item.kit.sku}>
+                  {item.kit.name}
+                  {item.fit === "undecidable" ? ` · ${t("assembly.kitUndecidable")}` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          {selectedKitEval && selectedKitEval.fit !== "compatible" && (
+            <p className="assembly-hint" role="status">
+              {selectedKitEval.fit === "undecidable"
+                ? t("assembly.kitUndecidableHint")
+                : t("assembly.kitIncompatibleHint")}
+              {" — "}
+              {selectedKitEval.reasons
+                .map((reason) => t(`assembly.kitReason.${reason}` as TranslationKey))
+                .join(" · ")}
+            </p>
+          )}
+          {incompatibleKits.length > 0 && (
+            <ul
+              className="assembly-kit-incompatible"
+              aria-label={t("assembly.kitIncompatibleList")}
+            >
+              {incompatibleKits.map((item) => (
+                <li key={item.kit.sku}>
+                  <span>{item.kit.name}</span>
+                  <small>
+                    {item.reasons
+                      .map((reason) => t(`assembly.kitReason.${reason}` as TranslationKey))
+                      .join(" · ")}
+                  </small>
+                </li>
+              ))}
+            </ul>
+          )}
+        </details>
       )}
       <details className="inspector-section" open>
         <summary>{t("inspector.glazing")}</summary>
@@ -884,29 +1110,74 @@ function BayInspector({
         </label>
         <label className="assembly-field">
           <span>{t("assembly.glass")}</span>
-          <select
-            aria-label={t("assembly.glass")}
-            disabled={busy}
-            value={bay.glass_article_sku ?? ""}
-            onChange={(event) => {
-              const sku = event.target.value || null;
-              patchBay({
-                glass_article_sku: sku,
-                glass_spec:
-                  sku == null
-                    ? bay.glass_spec
-                    : (glassSpecs.find((item) => item.sku === sku)?.spec ?? null),
-              });
-            }}
-          >
-            <option value="">{t("assembly.noGlass")}</option>
-            {glassSkus.map((sku) => (
-              <option key={sku} value={sku}>
-                {sku}
-              </option>
-            ))}
-          </select>
+          <span className="assembly-field__row">
+            <select
+              aria-label={t("assembly.glass")}
+              disabled={busy}
+              value={bay.glass_article_sku ?? ""}
+              onChange={(event) => pickGlass(event.target.value || null)}
+            >
+              <option value="">{t("assembly.noGlass")}</option>
+              {glassSkus.map((sku) => (
+                <option key={sku} value={sku}>
+                  {glassLabel(sku, glassSpecs)}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className={`star-toggle${
+                favoriteGlass.includes(bay.glass_article_sku ?? "") ? " is-active" : ""
+              }`}
+              aria-label={t("assembly.favoriteGlass")}
+              aria-pressed={favoriteGlass.includes(bay.glass_article_sku ?? "")}
+              disabled={busy || bay.glass_article_sku == null}
+              onClick={() => {
+                if (bay.glass_article_sku) toggleFavoriteGlass(bay.glass_article_sku);
+              }}
+            >
+              ★
+            </button>
+          </span>
         </label>
+        {favoriteGlass.some((sku) => glassSkus.includes(sku)) && (
+          <div className="recents" aria-label={t("assembly.favoriteGlass")}>
+            <span className="recents__label">{t("assembly.favoriteGlass")}</span>
+            {favoriteGlass
+              .filter((sku) => sku !== bay.glass_article_sku && glassSkus.includes(sku))
+              .map((sku) => (
+                <button
+                  key={sku}
+                  type="button"
+                  className="recents__chip recents__chip--favorite"
+                  disabled={busy}
+                  title={sku}
+                  onClick={() => pickGlass(sku)}
+                >
+                  {sku}
+                </button>
+              ))}
+          </div>
+        )}
+        {recentGlass.some((sku) => glassSkus.includes(sku)) && (
+          <div className="recents" aria-label={t("assembly.recentGlass")}>
+            <span className="recents__label">{t("assembly.recentGlass")}</span>
+            {recentGlass
+              .filter((sku) => sku !== bay.glass_article_sku && glassSkus.includes(sku))
+              .map((sku) => (
+                <button
+                  key={sku}
+                  type="button"
+                  className="recents__chip"
+                  disabled={busy}
+                  title={sku}
+                  onClick={() => pickGlass(sku)}
+                >
+                  {sku}
+                </button>
+              ))}
+          </div>
+        )}
         {isDoor && (
           <label className="assembly-field">
             <span>{t("assembly.panel")}</span>
@@ -919,14 +1190,14 @@ function BayInspector({
               <option value="">{t("assembly.noPanel")}</option>
               {panelSkus.map((sku) => (
                 <option key={sku} value={sku}>
-                  {sku}
+                  {panelLabel(sku, panelChoices)}
                 </option>
               ))}
             </select>
           </label>
         )}
         <DraftField
-          label={t("quotation.handleHeight")}
+          label={t("assembly.handleHeight")}
           value={bay.handle_height_mm ?? ""}
           unit="mm"
           disabled={busy}
@@ -941,6 +1212,140 @@ function BayInspector({
           </button>
         </div>
       )}
+    </section>
+  );
+}
+
+/** §04-D technical provenance: which declared values are catalog-backed
+ * (VERIFIED), which are user intent (DECLARED), which are missing
+ * (UNKNOWN) and which block the design (BLOCKED). Rendered as a compact
+ * strip at the top of every inspector so the states are always obvious. */
+type FieldState = "VERIFIED" | "DECLARED" | "UNKNOWN" | "BLOCKED";
+
+function ProvenanceStrip({
+  items,
+}: {
+  items: { label: string; state: FieldState }[];
+}): JSX.Element {
+  return (
+    <ul className="prov-strip" aria-label={t("prov.title")}>
+      {items.map((item, index) => (
+        <li
+          key={`${item.label}-${index}`}
+          className={`prov-chip prov-chip--${item.state.toLowerCase()}`}
+          title={t(`prov.${item.state.toLowerCase()}` as TranslationKey)}
+        >
+          <span className="prov-chip__state">
+            {t(`prov.${item.state.toLowerCase()}` as TranslationKey)}
+          </span>
+          {item.label}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Mullion/transom inspector — a division is a real object: its offset is
+ * editable, its profile is catalog authority, its bays are one click away,
+ * and merging it back is an explicit domain op (never index surgery). */
+function DivisionInspector({
+  module,
+  division,
+  product,
+  busy,
+  commit,
+  onSelect,
+  onAskAssistant,
+}: {
+  module: ProductModuleJson;
+  division: IntentNode;
+  product: ProductJson;
+  busy: boolean;
+  commit(next: ProductJson): void;
+  onSelect(id: string): void;
+  onAskAssistant?(): void;
+}): JSX.Element {
+  const vertical = division.type === "SPLIT_V";
+  const children = division.children ?? [];
+  const removable = canRemoveModuleDivision(product, module.id, division.id);
+  const bays = intentBays(module.tree);
+  const childLabel = (child: IntentNode): string =>
+    child.type === "BAY"
+      ? `${t("assembly.bay")} ${bays.findIndex((node) => node.id === child.id) + 1}`
+      : child.type === "SPLIT_V"
+        ? t("assembly.mullionV")
+        : child.type === "SPLIT_H"
+          ? t("assembly.transomH")
+          : child.id;
+  return (
+    <section className="assembly-inspector" aria-label={t("assembly.division")}>
+      <header className="assembly-inspector__header">
+        <h4>{vertical ? t("assembly.mullionV") : t("assembly.transomH")}</h4>
+      </header>
+      <ProvenanceStrip
+        items={[
+          { label: t("inspector.divisionType"), state: "DECLARED" },
+          { label: t("assembly.splitOffset"), state: "DECLARED" },
+          {
+            label: t("assembly.mullionProfile"),
+            state: division.mullion_profile_sku ? "VERIFIED" : "UNKNOWN",
+          },
+        ]}
+      />
+      <details className="inspector-section" open>
+        <summary>{t("inspector.dimensions")}</summary>
+        <DraftField
+          label={t("assembly.splitOffset")}
+          value={division.split_offset_mm ?? ""}
+          unit="mm"
+          disabled={busy}
+          normalize={normalizeMm}
+          onCommit={(value) => commit(moveModuleDivision(product, module.id, division.id, value))}
+        />
+        <div className="inspector-field">
+          <span className="inspector-field__label">{t("assembly.mullionProfile")}</span>
+          <code className="inspector-field__value">
+            {division.mullion_profile_sku ?? t("prov.unknown")}
+          </code>
+        </div>
+      </details>
+      <details className="inspector-section" open>
+        <summary>{t("assembly.divisionBays")}</summary>
+        <ul className="division-children">
+          {children.map((child) => (
+            <li key={child.id}>
+              <button
+                type="button"
+                className="link-button"
+                onClick={() => onSelect(`${module.id}/${child.id}`)}
+              >
+                {childLabel(child)}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </details>
+      <div className="inspector-actions">
+        <button
+          type="button"
+          className="ghost-button ghost-button--danger"
+          disabled={busy || !removable}
+          onClick={() => {
+            const kept = children[0]?.id;
+            commit(removeModuleDivision(product, module.id, division.id));
+            onSelect(kept ? `${module.id}/${kept}` : module.id);
+          }}
+        >
+          {t("assembly.removeSplit")}
+        </button>
+        {!removable && <p className="assembly-hint">{t("assembly.removeSplitNested")}</p>}
+        {removable && <p className="assembly-hint">{t("assembly.removeSplitKeeps")}</p>}
+        {onAskAssistant && (
+          <button type="button" className="ghost-button" disabled={busy} onClick={onAskAssistant}>
+            {t("assistant.modifyWith")}
+          </button>
+        )}
+      </div>
     </section>
   );
 }
@@ -969,11 +1374,19 @@ function TechnicalPanel({
   moduleId,
   bayId,
   moduleIndex,
+  members,
+  bayNode,
+  widthMm,
 }: {
   evaluation: EngineAssemblyCalculateResponse | null;
   moduleId?: string;
   bayId?: string | null;
   moduleIndex?: (moduleId: string) => number;
+  /** The declared member sections + bay the §05 section view cuts through
+   * — same product model as the canvas, never a separate drawing. */
+  members?: MemberGeometry;
+  bayNode?: IntentNode | null;
+  widthMm?: number;
 }): JSX.Element {
   const entries = (evaluation?.modules ?? []).filter(
     (entry) => !moduleId || entry.module_id === moduleId,
@@ -987,6 +1400,12 @@ function TechnicalPanel({
   }
   return (
     <div className="tech-panel">
+      {members && widthMm !== undefined && widthMm > 0 && (
+        <details className="inspector-section" open>
+          <summary>{t("assembly.sectionView")}</summary>
+          <SectionView bay={bayNode ?? null} members={members} widthMm={widthMm} />
+        </details>
+      )}
       {entries.map((entry) => {
         const result = entry.result;
         const ordinal = moduleIndex ? moduleIndex(entry.module_id) : 0;
@@ -1114,6 +1533,7 @@ function ModuleInspector({
   glassSpecs,
   glazingThicknesses,
   panelSkus,
+  panelChoices,
   mullionSkus,
   couplerSkus,
   busy,
@@ -1127,6 +1547,7 @@ function ModuleInspector({
   glassSpecs: GlassSpecChoice[];
   glazingThicknesses: string[];
   panelSkus: string[];
+  panelChoices: PanelChoice[];
   mullionSkus: Partial<Record<SplitType, string>>;
   couplerSkus: string[];
   busy: boolean;
@@ -1160,6 +1581,19 @@ function ModuleInspector({
           ×
         </button>
       </header>
+      <ProvenanceStrip
+        items={[
+          { label: t("inspector.dimensions"), state: "DECLARED" },
+          {
+            label: t("assembly.glass"),
+            state: moduleGlassSku(module) !== null ? "VERIFIED" : "UNKNOWN",
+          },
+          {
+            label: t("assembly.coupler"),
+            state: couplerSkus.length > 0 ? "VERIFIED" : "UNKNOWN",
+          },
+        ]}
+      />
       <details className="inspector-section" open>
         <summary>{t("assembly.opening")}</summary>
         <div className="opening-grid" role="group" aria-label={t("assembly.opening")}>
@@ -1321,7 +1755,7 @@ function ModuleInspector({
             <option value="">{t("assembly.noGlass")}</option>
             {glassSkus.map((sku) => (
               <option key={sku} value={sku}>
-                {sku}
+                {glassLabel(sku, glassSpecs)}
               </option>
             ))}
           </select>
@@ -1340,7 +1774,7 @@ function ModuleInspector({
               <option value="">{t("assembly.noPanel")}</option>
               {panelSkus.map((sku) => (
                 <option key={sku} value={sku}>
-                  {sku}
+                  {panelLabel(sku, panelChoices)}
                 </option>
               ))}
             </select>
@@ -1382,12 +1816,23 @@ function CouplingInspector({
           {t("assembly.coupling")} {ordinal}
         </h4>
       </header>
+      <ProvenanceStrip
+        items={[
+          { label: t("assembly.angle"), state: "DECLARED" },
+          { label: t("inspector.couplingType"), state: "DECLARED" },
+          {
+            label: t("assembly.coupler"),
+            state: coupling.coupler_profile_sku ? "VERIFIED" : "UNKNOWN",
+          },
+        ]}
+      />
       <DraftField
         label={t("assembly.angle")}
         value={coupling.angle_deg}
         unit="°"
         disabled={busy}
         normalize={normalizeAngle}
+        rejectHint={t("assembly.fieldAngleRange")}
         onCommit={(value) => commit(setCouplingAngle(product, coupling.id, value))}
       />
       <label className="assembly-field">
@@ -1413,6 +1858,11 @@ function CouplingInspector({
           type="button"
           className="ghost-button"
           disabled={busy || Number(coupling.angle_deg) === 0}
+          title={
+            Number(coupling.angle_deg) === 0
+              ? t("assembly.straightenDisabled")
+              : t("assembly.straightenHint")
+          }
           onClick={() => commit(setCouplingAngle(product, coupling.id, "0"))}
         >
           {t("assembly.straighten")}
@@ -1455,6 +1905,7 @@ export function AssemblyEditor({
   onEvaluationChange,
   positionId,
   positionPanel,
+  contentEpoch = 0,
   optionsReady = options !== undefined,
 }: {
   organizationId: string;
@@ -1467,6 +1918,9 @@ export function AssemblyEditor({
   onEvaluationChange(evaluation: EngineAssemblyCalculateResponse | null): void;
   positionId: string | null;
   positionPanel?: JSX.Element;
+  /** Bumped when the product is replaced wholesale (starter pick) so the
+   * canvas viewport re-fits even after the user took manual pan/zoom control. */
+  contentEpoch?: number;
   /** The system's design options have hydrated (or errored) — paid AI
    * generation must not start on an empty catalog signature. Defaults to
    * the options value's presence for callers without a loading state. */
@@ -1480,6 +1934,8 @@ export function AssemblyEditor({
   const redoHistory = useCanvasStore((state) => state.redo);
   const canUndo = useCanvasStore((state) => state.past.length > 0);
   const canRedo = useCanvasStore((state) => state.future.length > 0);
+  const specClipboard = useCanvasStore((state) => state.specClipboard);
+  const lastMutation = useCanvasStore((state) => state.lastMutation);
   const product = inputs.product;
   const { evaluation, isPending, errorCode } = useAssemblyCalculation(organizationId, inputs);
   const issues = evaluation?.issues ?? [];
@@ -1493,8 +1949,12 @@ export function AssemblyEditor({
   const [view3dOpen, setView3dOpen] = useState(false);
   /** Queued prompt for the assistant — "" means focus only. Every "…with
    * DEKOPEN" affordance funnels here; the human always confirms. */
-  const [assistantDraft, setAssistantDraft] = useState<string | null>(null);
+  const [assistantDraft, setAssistantDraft] = useState<{
+    text: string;
+    submit?: boolean;
+  } | null>(null);
   const assistantSectionRef = useRef<HTMLDivElement>(null);
+  const issuesListRef = useRef<HTMLUListElement>(null);
   /** Canvas context menu — cursor position, closed on action/outside/Escape. */
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
@@ -1514,6 +1974,7 @@ export function AssemblyEditor({
       left: Math.max(0, Math.min(contextMenu.x, window.innerWidth - rect.width)),
       top: Math.max(0, Math.min(contextMenu.y, window.innerHeight - rect.height)),
     });
+    menu.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
   }, [contextMenu]);
 
   useEffect(() => {
@@ -1522,9 +1983,9 @@ export function AssemblyEditor({
 
   /** Every "…with DEKOPEN" affordance: scroll the assistant into view and
    * hand it a prompt draft — "" focuses the field untouched. */
-  function askAssistant(prompt: string): void {
+  function askAssistant(prompt: string, submit = false): void {
     assistantSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    setAssistantDraft(prompt);
+    setAssistantDraft({ text: prompt, submit });
   }
 
   useEffect(() => {
@@ -1566,44 +2027,9 @@ export function AssemblyEditor({
       : null,
   );
 
-  if (!product) {
-    return (
-      <section className="assembly-editor assembly-editor--empty">
-        <div className="assembly-canvas canvas-empty">
-          <p className="assembly-hint">{t("assembly.pickStarter")}</p>
-        </div>
-        <aside className="assembly-side">
-          {positionPanel ?? <p className="assembly-hint">{t("assembly.elementHint")}</p>}
-        </aside>
-      </section>
-    );
-  }
-  const productJson = product;
-  const modules = product.assembly.modules;
-  const couplings = product.assembly.couplings;
-  const selectedModule = modules.find((module) => module.id === selection);
-  const selectedCoupling = couplings.find((coupling) => coupling.id === selection);
-  // Leaf granularity: canvas bay clicks and tree leaf rows select the
-  // composite "moduleId/bayId" — resolved back into (module, bay node) here.
-  const baySelection = selection?.includes("/") ? selection.split("/") : null;
-  const selectedBayModule = baySelection
-    ? modules.find((module) => module.id === baySelection[0])
-    : undefined;
-  const selectedBayNode = (() => {
-    if (!baySelection || !selectedBayModule) return null;
-    try {
-      return baySelection[1] !== undefined
-        ? selectedBay(selectedBayModule.tree, baySelection[1])
-        : null;
-    } catch {
-      return null;
-    }
-  })();
-  // isPending also holds while the query is disabled (no system/product yet).
-  // Evaluation is non-blocking: an in-flight recalc keeps the canvas live —
-  // react-query keys on the product so stale results never land on newer
-  // state, and save still requires the fresh engine verdict upstream.
-  const evaluating = isPending && inputs.systemId !== null;
+  // Hooks before the empty branch — a starter pick flips product
+  // null→object on the SAME mounted instance, so any early return placed
+  // ahead of a hook crashes with "Rendered more hooks".
   const busy = disabled;
   const mullionSkus: Partial<Record<SplitType, string>> = useMemo(
     () => ({
@@ -1613,15 +2039,20 @@ export function AssemblyEditor({
     [options],
   );
 
-  const front = frontLayout(product);
-  const frontBox = frontBounds(product);
-  const planBox = couplings.length > 0 && evaluation?.plan ? planBounds(evaluation.plan) : null;
-  const selectionBox = frontModuleBox(product, selectedModule?.id ?? null);
+  // One layout pass per product commit — bounds/selection boxes derive from
+  // the memo instead of recomputing the elevation four times per render.
+  const front = useMemo(() => (product ? frontLayout(product) : null), [product]);
+  const frontBox = useMemo(() => (front ? frontBounds(front) : null), [front]);
+  const selectionBox = useMemo(
+    () => (front ? frontModuleBox(front, selection) : null),
+    [front, selection],
+  );
 
   // The shared command registry: palette, keyboard and AI all dispatch the
   // same typed commands; `commit` inside is the single undoable transaction.
-  const commandCtx = useMemo<CommandContext>(
-    () => ({
+  const commandCtx = useMemo<CommandContext | null>(() => {
+    if (!product) return null;
+    return {
       product,
       selection,
       catalog: {
@@ -1636,34 +2067,106 @@ export function AssemblyEditor({
       select,
       setTool,
       focusAssistant: () => askAssistant(""),
-      undo: undoHistory,
-      redo: redoHistory,
+      undo: () => {
+        if (useCanvasStore.getState().past.length === 0) return;
+        undoHistory();
+        onChanged();
+      },
+      redo: () => {
+        if (useCanvasStore.getState().future.length === 0) return;
+        redoHistory();
+        onChanged();
+      },
       canUndo,
       canRedo,
-    }),
+      specClipboard,
+      writeSpecClipboard: useCanvasStore.getState().setSpecClipboard,
+      lastMutation,
+      recordMutation: useCanvasStore.getState().recordMutation,
+    };
     // `commit` is re-declared per render and always sees current inputs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [
-      product,
-      selection,
-      options,
-      glassSkus,
-      couplerSkus,
-      panelSkus,
-      mullionSkus,
-      busy,
-      select,
-      undoHistory,
-      redoHistory,
-      canUndo,
-      canRedo,
-    ],
-  );
+  }, [
+    product,
+    selection,
+    options,
+    glassSkus,
+    couplerSkus,
+    panelSkus,
+    mullionSkus,
+    busy,
+    select,
+    undoHistory,
+    redoHistory,
+    canUndo,
+    canRedo,
+    specClipboard,
+    lastMutation,
+  ]);
   const surface = useMemo(
-    () => ({ commands: resolveCommands(commandCtx, assemblyCommands(commandCtx)) }),
+    () =>
+      commandCtx ? { commands: resolveCommands(commandCtx, assemblyCommands(commandCtx)) } : null,
     [commandCtx],
   );
+  // Every chord the surface advertises (menus, palette) is reserved while the
+  // editor is mounted — a filtered-out command's shortcut must not leak to
+  // the browser (Ctrl+D opened the bookmark dialog).
+  const reservedShortcuts = useMemo(() => {
+    if (!commandCtx) return [];
+    const specs = assemblyCommands(commandCtx);
+    return specs.flatMap((spec) => {
+      const s = spec.shortcut;
+      return s === undefined ? [] : Array.isArray(s) ? [...s] : [s];
+    });
+  }, [commandCtx]);
   useRegisterCommands(surface);
+  useCommandShortcuts(surface, reservedShortcuts);
+  const objectTree = useMemo(
+    () => (product ? buildObjectTree(product, members, issues, t, options) : null),
+    [product, members, issues, options],
+  );
+
+  if (!product || !front || !frontBox || !commandCtx || !surface || !objectTree) {
+    return (
+      <section className="assembly-editor assembly-editor--empty">
+        <div className="assembly-canvas canvas-empty">
+          <p className="assembly-hint">{t("assembly.pickStarter")}</p>
+        </div>
+        <aside className="assembly-side">
+          {positionPanel ?? <p className="assembly-hint">{t("assembly.elementHint")}</p>}
+        </aside>
+      </section>
+    );
+  }
+
+  const productJson = product;
+  const modules = product.assembly.modules;
+  const couplings = product.assembly.couplings;
+  const selectedModule = modules.find((module) => module.id === selection);
+  const selectedCoupling = couplings.find((coupling) => coupling.id === selection);
+  // Leaf granularity: canvas bay clicks and tree leaf rows select the
+  // composite "moduleId/bayId" — resolved back into (module, bay node) here.
+  const treeSelection = selection?.includes("/") ? selection.split("/") : null;
+  const selectedTreeModule = treeSelection
+    ? modules.find((module) => module.id === treeSelection[0])
+    : undefined;
+  const selectedNode = (() => {
+    if (!treeSelection || !selectedTreeModule || treeSelection[1] === undefined) return null;
+    return findNode(selectedTreeModule.tree, treeSelection[1]);
+  })();
+  const selectedBayModule = selectedNode?.type === "BAY" ? selectedTreeModule : undefined;
+  const selectedBayNode = selectedNode?.type === "BAY" ? selectedNode : null;
+  const selectedDivisionModule =
+    selectedNode && (selectedNode.type === "SPLIT_V" || selectedNode.type === "SPLIT_H")
+      ? selectedTreeModule
+      : undefined;
+  const selectedDivisionNode = selectedDivisionModule ? selectedNode : null;
+  // isPending also holds while the query is disabled (no system/product yet).
+  // Evaluation is non-blocking: an in-flight recalc keeps the canvas live —
+  // react-query keys on the product so stale results never land on newer
+  // state, and save still requires the fresh engine verdict upstream.
+  const evaluating = isPending && inputs.systemId !== null;
+  const planBox = couplings.length > 0 && evaluation?.plan ? planBounds(evaluation.plan) : null;
   const statusText = `${front.totalW.toFixed(0)} × ${front.height.toFixed(0)} mm`;
   // Labels derive from actual product membership — selection ids are
   // arbitrary strings, so a coupling legitimately named "coupling-x" must
@@ -1676,9 +2179,11 @@ export function AssemblyEditor({
     ? `${t("assembly.module")} ${modules.findIndex((item) => item.id === selection) + 1}`
     : selectedBayModule && selectedBayNode
       ? `${t("assembly.bay")} ${bayOrdinal} · ${t("assembly.module")} ${modules.findIndex((item) => item.id === selectedBayModule.id) + 1}`
-      : selectedCoupling
-        ? `${t("assembly.coupling")} ${couplings.findIndex((item) => item.id === selection) + 1}`
-        : null;
+      : selectedDivisionModule && selectedDivisionNode
+        ? `${selectedDivisionNode.type === "SPLIT_V" ? t("assembly.mullionV") : t("assembly.transomH")} · ${t("assembly.module")} ${modules.findIndex((item) => item.id === selectedDivisionModule.id) + 1}`
+        : selectedCoupling
+          ? `${t("assembly.coupling")} ${couplings.findIndex((item) => item.id === selection) + 1}`
+          : null;
 
   const divideToolType = tool === "split_v" ? "SPLIT_V" : tool === "split_h" ? "SPLIT_H" : null;
 
@@ -1725,10 +2230,6 @@ export function AssemblyEditor({
     setTool("select");
     select(id);
   }
-  const objectTree = useMemo(
-    () => buildObjectTree(product, members, issues, t),
-    [product, members, issues],
-  );
 
   function coupleUnit(side: "left" | "right"): void {
     const next = addAdjacentUnit(productJson, side);
@@ -1840,6 +2341,13 @@ export function AssemblyEditor({
               if (id !== null && modules.some((module) => module.id === id)) pickModule(id);
               else select(id);
             }}
+            onContextMenu={(id, pos) => {
+              // The tree is an editing surface too — right-click selects the
+              // object and opens the same command menu the canvas offers.
+              if (modules.some((module) => module.id === id)) pickModule(id);
+              else select(id);
+              setContextMenu(pos);
+            }}
             title={t("tree.title")}
           />
         </div>
@@ -1850,8 +2358,25 @@ export function AssemblyEditor({
           event.preventDefault();
           setContextMenu({ x: event.clientX, y: event.clientY });
         }}
+        onKeyDown={(event) => {
+          // Keyboard context-menu trigger — Shift+F10 or the dedicated
+          // ContextMenu key opens the same menu, centered on the canvas.
+          if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+            event.preventDefault();
+            const rect = event.currentTarget.getBoundingClientRect();
+            setContextMenu({
+              x: rect.left + rect.width / 2,
+              y: rect.top + rect.height / 2,
+            });
+          }
+        }}
       >
-        <CanvasViewport contentBox={frontBox} selectionBox={selectionBox} status={statusText}>
+        <CanvasViewport
+          contentBox={frontBox}
+          selectionBox={selectionBox}
+          status={statusText}
+          contentEpoch={contentEpoch}
+        >
           <ProductFrontContent
             product={product}
             members={members}
@@ -1859,9 +2384,15 @@ export function AssemblyEditor({
             issues={issues}
             disabled={busy}
             divideTool={divideToolType}
+            dimLevel={detail}
             onSelectModule={pickModule}
             onSelectBay={(moduleId, bayId) => select(`${moduleId}/${bayId}`)}
+            onSelectDivision={(moduleId, divisionId) => select(`${moduleId}/${divisionId}`)}
+            onSelectCoupling={(couplingId) => select(couplingId)}
             selectedBayId={selectedBayModule && selectedBayNode ? selectedBayNode.id : null}
+            selectedDivisionId={
+              selectedDivisionModule && selectedDivisionNode ? selectedDivisionNode.id : null
+            }
             onContextMenuModule={(moduleId, pos) => {
               select(moduleId);
               setContextMenu(pos);
@@ -1895,6 +2426,8 @@ export function AssemblyEditor({
               className="plan-inset__svg"
               viewBox={`${planBox.x} ${planBox.y} ${planBox.w} ${planBox.h}`}
               preserveAspectRatio="xMidYMid meet"
+              role="img"
+              aria-label={t("assembly.planView")}
             >
               <BowPlanContent
                 plan={evaluation.plan}
@@ -1934,7 +2467,14 @@ export function AssemblyEditor({
                 ×
               </button>
             </div>
-            <Suspense fallback={<div className="model3d-loading">{t("assembly.loading3d")}</div>}>
+            <Suspense
+              fallback={
+                <div className="model3d-loading" role="status">
+                  <span className="model3d-loading__bar" aria-hidden="true" />
+                  {t("assembly.loading3d")}
+                </div>
+              }
+            >
               <Model3DView
                 product={product}
                 members={members}
@@ -1964,6 +2504,32 @@ export function AssemblyEditor({
           }}
           onMouseDown={(event) => event.stopPropagation()}
           onContextMenu={(event) => event.preventDefault()}
+          onKeyDown={(event) => {
+            // APG menu contract — arrows cycle, Home/End jump, Esc closes.
+            if (
+              event.key !== "ArrowDown" &&
+              event.key !== "ArrowUp" &&
+              event.key !== "Home" &&
+              event.key !== "End"
+            ) {
+              return;
+            }
+            const items = Array.from(
+              event.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+            );
+            if (!items.length) return;
+            event.preventDefault();
+            const index = items.indexOf(document.activeElement as HTMLElement);
+            const next =
+              event.key === "Home"
+                ? items[0]
+                : event.key === "End"
+                  ? items[items.length - 1]
+                  : items[
+                      (index + (event.key === "ArrowDown" ? 1 : items.length - 1)) % items.length
+                    ];
+            next?.focus();
+          }}
         >
           {surface.commands
             .filter((command) => !command.params?.length)
@@ -1978,7 +2544,10 @@ export function AssemblyEditor({
                   setContextMenu(null);
                 }}
               >
-                {command.title}
+                <span className="context-menu__label">{command.title}</span>
+                {command.shortcut && (
+                  <kbd className="context-menu__hint">{formatShortcut(command.shortcut)}</kbd>
+                )}
               </button>
             ))}
           {selectedLabel && (
@@ -2010,12 +2579,48 @@ export function AssemblyEditor({
             </button>
           ))}
         </div>
+        {issues.length > 0 && (
+          <ul className="assembly-issues" aria-label={t("assembly.issues")} ref={issuesListRef}>
+            {issues.map((issue, index) => (
+              <li key={`${issue.code}-${index}`}>
+                <button
+                  type="button"
+                  className={`issue-chip issue-chip--${issue.severity}`}
+                  onClick={() => {
+                    const target = issue.target;
+                    if (target.startsWith("module:") || target.startsWith("coupling:")) {
+                      select(target.slice(target.indexOf(":") + 1));
+                    }
+                  }}
+                >
+                  {issueText(issue, modules, couplings)}
+                </button>
+                <button
+                  type="button"
+                  className="issue-fix"
+                  title={t("assistant.fixWith")}
+                  onClick={() =>
+                    askAssistant(
+                      `${t("assistant.fixPrompt")} ${issueText(issue, modules, couplings)}`,
+                      true,
+                    )
+                  }
+                >
+                  {t("assistant.fixWith")}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
         {detail === "technical" ? (
           <TechnicalPanel
             evaluation={evaluation}
             moduleId={selectedBayModule?.id ?? selectedModule?.id}
             bayId={selectedBayNode && selectedBayModule ? selectedBayNode.id : null}
             moduleIndex={(moduleId) => modules.findIndex((module) => module.id === moduleId) + 1}
+            members={members}
+            bayNode={selectedBayNode}
+            widthMm={Number((selectedBayModule ?? selectedModule)?.width_mm) || undefined}
           />
         ) : detail === "overview" ? (
           selectedModule ? (
@@ -2063,7 +2668,9 @@ export function AssemblyEditor({
                 ],
                 [
                   t("quotation.handleHeight"),
-                  selectedBayNode.handle_height_mm ? `${selectedBayNode.handle_height_mm} mm` : "—",
+                  selectedBayNode.handle_height_mm
+                    ? `${fmtMm(selectedBayNode.handle_height_mm)} mm`
+                    : "—",
                 ],
                 ...(selectedBayNode.opening_type === "DOOR_ENTRY"
                   ? [
@@ -2071,6 +2678,12 @@ export function AssemblyEditor({
                         string,
                         string,
                       ],
+                      [
+                        t("assembly.hingeSide"),
+                        selectedBayNode.door_handedness === "RIGHT"
+                          ? t("assembly.hingeRight")
+                          : t("assembly.hingeLeft"),
+                      ] as [string, string],
                     ]
                   : []),
               ]}
@@ -2099,6 +2712,7 @@ export function AssemblyEditor({
             glassSpecs={options?.glass_specs ?? []}
             glazingThicknesses={options?.glazing_thicknesses ?? []}
             panelSkus={panelSkus}
+            panelChoices={options?.panel_choices ?? []}
             mullionSkus={mullionSkus}
             couplerSkus={couplerSkus}
             busy={busy}
@@ -2114,12 +2728,42 @@ export function AssemblyEditor({
             module={selectedBayModule}
             bay={selectedBayNode}
             product={product}
+            kits={options?.hardware_kits ?? []}
+            members={members}
+            leafWeightKg={
+              evaluation?.modules
+                ?.find((item) => item.module_id === selectedBayModule.id)
+                ?.result?.leaf_weights?.find((w) => w.bay_id === selectedBayNode.id)
+                ?.total_weight_kg != null
+                ? Number(
+                    evaluation.modules
+                      .find((item) => item.module_id === selectedBayModule.id)!
+                      .result!.leaf_weights!.find((w) => w.bay_id === selectedBayNode.id)!
+                      .total_weight_kg,
+                  )
+                : null
+            }
             glassSkus={glassSkus}
             glassSpecs={options?.glass_specs ?? []}
             glazingThicknesses={options?.glazing_thicknesses ?? []}
             panelSkus={panelSkus}
+            panelChoices={options?.panel_choices ?? []}
             busy={busy}
             commit={commit}
+            onAskAssistant={
+              selectedLabel
+                ? () => askAssistant(t("assistant.modifyPrompt").replace("{target}", selectedLabel))
+                : undefined
+            }
+          />
+        ) : selectedDivisionModule && selectedDivisionNode ? (
+          <DivisionInspector
+            module={selectedDivisionModule}
+            division={selectedDivisionNode}
+            product={product}
+            busy={busy}
+            commit={commit}
+            onSelect={(id) => select(id)}
             onAskAssistant={
               selectedLabel
                 ? () => askAssistant(t("assistant.modifyPrompt").replace("{target}", selectedLabel))
@@ -2145,7 +2789,6 @@ export function AssemblyEditor({
             <p className="assembly-hint">{t("assembly.elementHint")}</p>
           </section>
         )}
-        {positionPanel}
         {product && (
           <div ref={assistantSectionRef}>
             <AssistantPanel
@@ -2181,38 +2824,6 @@ export function AssemblyEditor({
             />
           </div>
         )}
-        {issues.length > 0 && (
-          <ul className="assembly-issues" aria-label={t("assembly.issues")}>
-            {issues.map((issue, index) => (
-              <li key={`${issue.code}-${index}`}>
-                <button
-                  type="button"
-                  className={`issue-chip issue-chip--${issue.severity}`}
-                  onClick={() => {
-                    const target = issue.target;
-                    if (target.startsWith("module:") || target.startsWith("coupling:")) {
-                      select(target.slice(target.indexOf(":") + 1));
-                    }
-                  }}
-                >
-                  {issueText(issue, modules, couplings)}
-                </button>
-                <button
-                  type="button"
-                  className="issue-fix"
-                  title={t("assistant.fixWith")}
-                  onClick={() =>
-                    askAssistant(
-                      `${t("assistant.fixPrompt")} ${issueText(issue, modules, couplings)}`,
-                    )
-                  }
-                >
-                  {t("assistant.fixWith")}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
       </div>
       <footer className="assembly-statusbar">
         <span
@@ -2243,6 +2854,12 @@ export function AssemblyEditor({
               ) {
                 select(first.target.slice(first.target.indexOf(":") + 1));
               }
+              // The list sits at the top of the inspector column — surface
+              // it so the click visibly resolves to the issues, not silence.
+              issuesListRef.current?.scrollIntoView({
+                behavior: "smooth",
+                block: "nearest",
+              });
             }}
           >
             {t("assembly.issueCount").replace("{count}", String(issues.length))}

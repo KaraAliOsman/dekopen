@@ -8,7 +8,14 @@ from dekopen_engine.weight import ExactLeafWeight, with_hardware_weight
 
 
 class NoCompatibleHardwareKit(ValueError):
-    pass
+    """No declared kit satisfies the leaf. `context` carries the leaf size
+    and the compatible kits' dimensional envelope when the failure is
+    dimensional, so the API can name the real constraint instead of an
+    opaque identifier."""
+
+    def __init__(self, message: str, *, context: dict[str, str] | None = None) -> None:
+        super().__init__(message)
+        self.context = context or {}
 
 
 class AmbiguousHardwareKit(ValueError):
@@ -70,8 +77,29 @@ def evaluate_hardware_candidates(
 def resolve_hardware_evaluations(
     evaluations: list[HardwareCandidateEvaluation], *, opening: BayOpeningType,
     explicit_sku: str | None = None,
+    leaf_width_mm: Decimal | None = None,
+    leaf_height_mm: Decimal | None = None,
 ) -> tuple[HardwareKitRule, ExactLeafWeight]:
     candidates = [candidate for candidate in evaluations if candidate.compatible]
+    # Kits matching opening and rail but failing a concrete check — their
+    # merged envelope is the constraint the user must satisfy.
+    matched = [
+        candidate for candidate in evaluations
+        if candidate.opening_match and candidate.rail_match
+    ]
+
+    def failure_context(axis: str) -> dict[str, str]:
+        context: dict[str, str] = {"axis": axis, "opening": explicit_sku or opening.value}
+        if leaf_width_mm is not None and leaf_height_mm is not None:
+            context["leaf_width_mm"] = str(leaf_width_mm)
+            context["leaf_height_mm"] = str(leaf_height_mm)
+        if matched:
+            context["kit_min_width_mm"] = str(min(c.kit.min_leaf_width_mm for c in matched))
+            context["kit_max_width_mm"] = str(max(c.kit.max_leaf_width_mm for c in matched))
+            context["kit_min_height_mm"] = str(min(c.kit.min_leaf_height_mm for c in matched))
+            context["kit_max_height_mm"] = str(max(c.kit.max_leaf_height_mm for c in matched))
+        return context
+
     if not candidates:
         undecidable = [
             candidate for candidate in evaluations
@@ -86,9 +114,33 @@ def resolve_hardware_evaluations(
             })
             raise NoCompatibleHardwareKit(
                 "Hardware compatibility undecidable — leaf mass unknown: "
-                + ", ".join(reasons)
+                + ", ".join(reasons),
+                context=failure_context("undecidable"),
             )
-        raise NoCompatibleHardwareKit(f"No compatible hardware kit: {explicit_sku or opening.value}")
+        # Axis of failure: a kit whose envelope the leaf escapes fails on
+        # size; a kit it fits that still rejects carries a mass violation.
+        if matched and all(c.width_match and c.height_match for c in matched):
+            axis = "weight"
+        elif matched:
+            axis = "size"
+        else:
+            axis = ""
+        context = failure_context(axis)
+        if axis == "weight":
+            overweight = [c for c in matched if c.weight_match is False]
+            totals = [
+                c.exact_total_weight.total_weight_kg
+                for c in overweight
+                if c.exact_total_weight.total_weight_kg is not None
+            ]
+            if totals:
+                context["leaf_weight_kg"] = str(min(totals))
+                context["kit_max_weight_kg"] = str(
+                    max(c.kit.max_leaf_weight_kg for c in matched)
+                )
+        raise NoCompatibleHardwareKit(
+            f"No compatible hardware kit: {explicit_sku or opening.value}", context=context,
+        )
     if len(candidates) != 1:
         raise AmbiguousHardwareKit(f"Ambiguous hardware kits: {opening.value}")
     return candidates[0].kit, candidates[0].exact_total_weight

@@ -1,0 +1,235 @@
+{
+  "counts_by_kind": {
+    "HANDLE_PREP": 1
+  },
+  "declared_intent_gaps": [],
+  "issues": [],
+  "machine": {
+    "clamp_zones": [
+      {
+        "end_mm": "1150",
+        "label": "Mordaza A",
+        "start_mm": "900"
+      }
+    ],
+    "controller_family": "neutral",
+    "coordinate_systems": [
+      "MEMBER_PLAN",
+      "BAR_AXIS"
+    ],
+    "encoding": "utf-8",
+    "machine_id": "CNC-01",
+    "max_member_length_mm": "7000",
+    "name": "Centro mecanizado demo",
+    "postprocessor_id": "neutral-ops-v1",
+    "postprocessor_version": "1.0.0",
+    "safe_margin_mm": "40",
+    "supported_faces": null,
+    "supported_kinds": [
+      "SAW_CUT",
+      "DRILL",
+      "SLOT",
+      "DRAINAGE",
+      "VENTILATION",
+      "HANDLE_PREP",
+      "LOCK_PREP",
+      "HINGE_PREP",
+      "CORNER_CONNECTOR",
+      "T_CONNECTOR",
+      "MILLING",
+      "END_MACHINING",
+      "ROUTING",
+      "GASKET_MARK",
+      "CUSTOM"
+    ],
+    "tools": [
+      {
+        "compatible_kinds": [
+          "SAW_CUT"
+        ],
+        "diameter_mm": null,
+        "kind": "SAW_BLADE",
+        "max_depth_mm": null,
+        "name": "Disco tronzadora 500",
+        "tool_id": "saw",
+        "working_length_mm": null
+      },
+      {
+        "compatible_kinds": [
+          "END_MACHINING"
+        ],
+        "diameter_mm": "60",
+        "kind": "END_MILL",
+        "max_depth_mm": "80",
+        "name": "Fresa de cajera",
+        "tool_id": "end_mill",
+        "working_length_mm": null
+      },
+      {
+        "compatible_kinds": [
+          "HANDLE_PREP",
+          "DRILL",
+          "SLOT"
+        ],
+        "diameter_mm": "5",
+        "kind": "DRILL_BIT",
+        "max_depth_mm": "15",
+        "name": "Broca 5mm",
+        "tool_id": "drill",
+        "working_length_mm": null
+      }
+    ],
+    "units": "MM"
+  },
+  "members": {
+    "ebaecccbed03cc559d751c8a3cf8bc916692815f2eca374c6b6e2a40013947d2": {
+      "angle_left_deg": "45.0",
+      "angle_right_deg": "45.0",
+      "axis": "VERTICAL",
+      "bay_id": "p3",
+      "cut_length_mm": "902.00",
+      "end": {
+        "x_mm": "52.00",
+        "y_mm": "948.00"
+      },
+      "leaf_id": null,
+      "leaf_slot": "PRIMARY",
+      "material": "PVC",
+      "role": "SASH",
+      "sagitta_mm": null,
+      "start": {
+        "x_mm": "52.00",
+        "y_mm": "52.00"
+      },
+      "workshop_sku": "HOJA"
+    }
+  },
+  "operation_count": 1,
+  "operations": [
+    {
+      "angle_left_deg": null,
+      "angle_right_deg": null,
+      "basis": "handle_requirement_policy:DEMO_60_HANDLES_V2@2",
+      "coordinate_system": "MEMBER_PLAN",
+      "depth_mm": null,
+      "detail": {
+        "bay_id": "p3",
+        "feature": "point_prep",
+        "handle_domain_slot": "PRIMARY",
+        "leaf_id": "",
+        "requested_height_mm": "448.0000",
+        "vertical_reference": "LEAF_BOTTOM",
+        "workshop_sku": "HOJA"
+      },
+      "face": "INSIDE_FACE",
+      "host": "ebaecccbed03cc559d751c8a3cf8bc916692815f2eca374c6b6e2a40013947d2",
+      "host_kind": "MEMBER",
+      "kind": "HANDLE_PREP",
+      "operation_id": "da3a6ff1d27616eaed1e8eba73fde1bf",
+      "reference": "member_start",
+      "sequence_no": 1,
+      "tool_id": "drill",
+      "u_mm": "448.0000",
+      "x_mm": "62.00",
+      "y_mm": "500.0000"
+    }
+  ],
+  "order_code": "OT-P-000006-REV-A-03",
+  "piece_labels": {
+    "01cb4ffaa629b3dd3ffd8284f9d6af2fd244749261cca41e2d24c2a4fc029d82-01": "P03-U01-M01\u00b7R \u00b7 P03-U01-M04\u00b7R",
+    "01cb4ffaa629b3dd3ffd8284f9d6af2fd244749261cca41e2d24c2a4fc029d82-02": "P03-U01-M01\u00b7R \u00b7 P03-U01-M04\u00b7R",
+    "021aeb7e63d6810d72bf9639a07025f6d545c8e342edf93982c03561e727cbdc": "P03-U01-M07\u00b7R",
+    "045c25bc21dacb6f5cf49653ed8a876c9f5506f0ef9ae0613ed9e6b5809866aa": "P03-U01-M03",
+    "04718b37f2b19b02a42f6d76e49e79d9237e645d17410bf08af5606098beb347": "P01-U01-M05",
+    "053b7910bab00fa434ffec77627ddf96f16bb36c6235107afdf37b59f44b631e": "P01-U02-M04\u00b7R",
+    "081992c4165db8ea3b85467aa56ace2f21992a7485b076a7791c0d1e4a9f81ac-01": "P03-U01-M05 \u00b7 P03-U01-M08",
+    "081992c4165db8ea3b85467aa56ace2f21992a7485b076a7791c0d1e4a9f81ac-02": "P03-U01-M05 \u00b7 P03-U01-M08",
+    "091ec87bb45e5fa381d2669c7cc7b8247451b2de9d6518b05f0994d8ae12980f": "P01-U01-M01\u00b7R",
+    "09cfc5395c29f626711112348a7042430d1cab92fece9c12a90aeada034f75b2": "P01-U01-M04\u00b7R",
+    "0a0ac67c279c8c636873d61144685881038685103d92a913285d78c7b7b415a0": "P02-U01-M08",
+    "0a6bb67c87b54187532a236da37244d2e000b357ea5da6fcfd0e22e536bf60b4": "P01-U01-M08",
+    "0b7fdbd5b46b4e77a928216d2576436ac493873d805ea4c3661cbb975be4e260": "P01-U01-M06",
+    "0c843e3cc1023cd2c97c33bcbad001a37c959263e06b446dbd08e9109151e122": "P01-U01-M02",
+    "0cb98c2a0fe47c656628c6971a858d388a9eaa5e83159080f3d6861bd49aea6f": "P03-U01-M02\u00b7R",
+    "154f22a28f11447fe1f4a6973cd77fd25c536993e46c72b41b35c81dadd330df-01": "P03-U01-M01 \u00b7 P03-U01-M04",
+    "154f22a28f11447fe1f4a6973cd77fd25c536993e46c72b41b35c81dadd330df-02": "P03-U01-M01 \u00b7 P03-U01-M04",
+    "18bf7317080f368ad056a154c7daa9373dfdc20f3d33f7f2eabdf3bdb4f80987": "P03-U01-M05",
+    "1cbfbffec4c251547d5a6aacb5f064761a644be44714bf2931dd7d67df2867a8": "P01-U02-M03\u00b7R",
+    "2362145b8bd79da10592b5bcfe1d84a8e78a57ea2d23da23610971a9914eb5b8-01": "P03-U01-M02\u00b7R \u00b7 P03-U01-M03\u00b7R",
+    "2362145b8bd79da10592b5bcfe1d84a8e78a57ea2d23da23610971a9914eb5b8-02": "P03-U01-M02\u00b7R \u00b7 P03-U01-M03\u00b7R",
+    "2755fad7b1f26979796eeed57d2f9a831ba4cc2ef3a7dac1a3e0d85c1af70965": "P03-U01-M04\u00b7R",
+    "39696630ef95f98a798700d45315f91508be2729a9265d1ff0a1ce6ae7e68664": "P03-U01-M10",
+    "3f17a470c6d15cb6f835500ce57ff16ee275ae3a721567172253abb0d256730e": "P03-U01-M01",
+    "4496599815197a2b45c39b4d17323404195caca963f20f75ab5fe1f5f3d94126": "P01-U02-M08",
+    "4ab20f1827413dcf1bf0e394b16d7d69361cd61452e0f230716f22b3b3d044ef": "P03-U01-M05\u00b7R",
+    "4f4461d2455097da877a69a6e7efe68e4a56ed229b901bd7d3b4464b1c82c6f2": "P01-U01-M03\u00b7R",
+    "54fb46e33b76c8f37b8b6a38c11fa3a003f6319d5ea68fbc13557c04f6b5af9b": "P02-U01-M02",
+    "55c2fb38f33a3350ac41d7b054fd8abb8d7b11855ccf376f92c894bf2777e445": "P02-U01-M04\u00b7R",
+    "55d13c317f76ebd46bcad4cff6967809643bb1427aaaa90a806b6f23dbf0d736": "P01-U02-M02\u00b7R",
+    "56aff523a9e396304e6960ef1af47d2db422db1044602b7e720daac1a80c639f": "P03-U01-M08\u00b7R",
+    "56ba95c1122d4f15667994556e07c75a78abfa0863cc0a3be3eab1786a1cc669": "P01-U01-M07",
+    "5d54b8f7940cba7f03075fba016a001edf0fb5062bc0c9b5df602dd066d54613-01": "P03-U01-M09 \u00b7 P03-U01-M12",
+    "5d54b8f7940cba7f03075fba016a001edf0fb5062bc0c9b5df602dd066d54613-02": "P03-U01-M09 \u00b7 P03-U01-M12",
+    "5d5b8cb3b64c44d22ad3144c23f2b1f70bacf8cbad3103556d5cd0322846b9f7": "P03-U01-M09",
+    "6158fed94bc0f744c0842b2892e126f9623f222554ffe7faf544d128dbf0de1e": "P01-U02-M02",
+    "6be894a693b6ba0bf4027b572ad1c103d7dbe54f3df0297a4ce81f08a5fdec05": "P01-U02-M07",
+    "7a599fd6ac116e2895689f986beaf545ce761fba3ba0f629b419d086db399ab2": "P03-U01-M02",
+    "7e3c01ccabc93d84a873686dbfb3f50a9cbcc9c21f7e28cac2b7bae6c0ab94f0": "P01-U02-M01\u00b7R",
+    "7f09f1398d710caf63515eaa794c0b1cbf986b163e68d6482de93639ebe0ce90": "P03-U01-M04",
+    "802809bf85e9054355e319bfe82a749daaf03f6d85423d1b48a7e4214b437b8b": "P03-U01-M11",
+    "803131c117b01ce3dff2b656e8aaafa82fecf962fd03d4cbbabe41bff3a22886": "P02-U01-M06",
+    "82a872b399325601f5420c4f0d54b2071d3079d6ef6549397e2c38f62634148f": "P02-U01-M02\u00b7R",
+    "903417566b9aafe8dfdde1fedb1407a0984713cc03f1bb9d1fc14f082b695fca": "P03-U01-M03\u00b7R",
+    "9aad25f128f0715c2059cbae272bc2d98991e2aa6e6b6d981bd20af731fe931d": "P03-U01-M07",
+    "9b1f579137ff8096b60b83d3c4d5289d487d447c3a104dcc5b91e7f287f5786c-01": "P03-U01-M02 \u00b7 P03-U01-M03",
+    "9b1f579137ff8096b60b83d3c4d5289d487d447c3a104dcc5b91e7f287f5786c-02": "P03-U01-M02 \u00b7 P03-U01-M03",
+    "9ebf86cf9ddaaa73baa90c94adbd2d74a604eb4b6ba7c8e86b6e73e63aebb827": "P03-U01-M12",
+    "a01a71003a1282d6c422e50d121ba577c160c47aac001369d973b0cf44c457d8": "P02-U01-M01",
+    "a5321c24b35010abdd7107429a5421773bfd0fb75314d59ea8ff46a2c7ffc931": "P01-U01-M02\u00b7R",
+    "a66833e12be048764286729c7129e04329257b73cf12c6ba90a7f1e76b0328f5": "P02-U01-M03\u00b7R",
+    "abedc4ed5bdf40053faf549df624511e0d7c4a32c5b961163d9bb9039374ad9b-01": "P03-U01-M05\u00b7R \u00b7 P03-U01-M08\u00b7R",
+    "abedc4ed5bdf40053faf549df624511e0d7c4a32c5b961163d9bb9039374ad9b-02": "P03-U01-M05\u00b7R \u00b7 P03-U01-M08\u00b7R",
+    "ace8eced0e0b26243c0fd9cef188b1024222397db419fae6a2c530821e064508-01": "P03-U01-M10 \u00b7 P03-U01-M11",
+    "ace8eced0e0b26243c0fd9cef188b1024222397db419fae6a2c530821e064508-02": "P03-U01-M10 \u00b7 P03-U01-M11",
+    "b1be7e186924bc061541d63ca6589b4d106b9363c51cf445cb7670f146cd2e77": "P02-U01-M01\u00b7R",
+    "b8f89a375e42ef26ee4816bd220438c500701f2f3adabf1b5d7c2bcd70d3e408": "P02-U01-M04",
+    "bfa7264323cbb7315563f54056008f4281ddfe41d4774e81ef31e195f8e26978": "P01-U02-M04",
+    "c21348b493fcf233fed6e832a36e0222e7754c3a48ef1d582a493774f935b7cb-01": "P03-U01-M06 (mec.) \u00b7 P03-U01-M07",
+    "c21348b493fcf233fed6e832a36e0222e7754c3a48ef1d582a493774f935b7cb-02": "P03-U01-M06 (mec.) \u00b7 P03-U01-M07",
+    "c49ce12536a363ce3394bb2f5c9dc565db3f5d0f0bc89d5deb5388584a76e1d4-01": "P03-U01-M06\u00b7R \u00b7 P03-U01-M07\u00b7R",
+    "c49ce12536a363ce3394bb2f5c9dc565db3f5d0f0bc89d5deb5388584a76e1d4-02": "P03-U01-M06\u00b7R \u00b7 P03-U01-M07\u00b7R",
+    "c73b21d7ccb9037396affa827d4b5a94367006cb9ce4b36df66d09b1dc8f1294": "P03-U01-M01\u00b7R",
+    "d1e187cf65bc745235581931874175f15aeb921d4f903c1b9ed459790a2015a7": "P03-U01-M08",
+    "d2958063d9f8f1fe2bf637bd814c4a88e9eeb7fc7990d572f0d128f72457be1e": "P03-U01-M06\u00b7R",
+    "d610d6b0905c3eabd4b7ac75591f00aaa41270b04f52f021779da4e5e025f7fd": "P02-U01-M07",
+    "d7590d11e03ce98c3066e591163d1e2f8970a2275cd3b059fccc23b2aa81bf4f": "P01-U02-M06",
+    "decea75c6d905661c01b25d541a08a7fc6a7adc99ad849d3c20574b9375fe54f": "P01-U01-M04",
+    "e254dbb2736499466adf31a03855c6bd3ede9e251027c223adaaea40290f3381": "P01-U01-M03",
+    "e89774353d1dfc23c4299bdbf0ae189867480b9bc125dba407776ce356d10c2b": "P02-U01-M05",
+    "ea17d88860ceda20d86c0f1f8397b0a87d1b7fdddb551c15cdf54c4271d07b37": "P01-U02-M05",
+    "ebaecccbed03cc559d751c8a3cf8bc916692815f2eca374c6b6e2a40013947d2": "P03-U01-M06",
+    "edeac09c23016549f6557f5dd2fc63d71c45b43f3f8d0bc0ec5211b4196814f5": "P01-U01-M01",
+    "ef2a98a940b10fb988b9b14d6fb5fbd8bcc9df655ffdc12683c906e32c57ad32": "P01-U02-M03",
+    "f858b04367866655934afb025a5a219354e7c500cb9ec6d2d0275c9fa7fdf304": "P02-U01-M03",
+    "fc1ab555a3b5251a74addbe9edac002c442299728d0cdd91fc78aef169d5a4ff": "P01-U02-M01"
+  },
+  "plan_seed": "8a2ef53ab198920fa2997ad3e9dc51f6f99d1af6cdc8085e58ac6a900d5e6478",
+  "project_code": "P-000006",
+  "revision_code": "REV-A",
+  "schema": "dekopen_ops_v1",
+  "unemitted_kinds": [
+    "CORNER_CONNECTOR",
+    "CUSTOM",
+    "DRAINAGE",
+    "DRILL",
+    "END_MACHINING",
+    "GASKET_MARK",
+    "HINGE_PREP",
+    "LOCK_PREP",
+    "MILLING",
+    "ROUTING",
+    "SLOT",
+    "T_CONNECTOR",
+    "VENTILATION"
+  ]
+}

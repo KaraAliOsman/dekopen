@@ -4,6 +4,7 @@ import { t } from "../../i18n/es-CL";
 
 export type SignaturePadHandle = {
   dataURL: () => string | null;
+  renderTyped: (name: string) => void;
   clear: () => void;
 };
 
@@ -21,6 +22,32 @@ const SignaturePad = forwardRef<SignaturePadHandle, { onDraw?: (hasDrawing: bool
     useImperativeHandle(ref, () => ({
       dataURL: () =>
         strokes.current > 0 && canvasRef.current ? canvasRef.current.toDataURL("image/png") : null,
+      renderTyped: (name: string) => {
+        // Typed-name signature — the same PNG artifact a drawn signature
+        // produces, so the sealed POD is identical in kind. Keyboard-only
+        // receivers sign with their name; the canvas stays draw-capable.
+        const canvas = canvasRef.current;
+        const ctx = canvas?.getContext("2d");
+        if (!canvas || !ctx) return;
+        ctx.clearRect(0, 0, WIDTH, HEIGHT);
+        ctx.strokeStyle = getComputedStyle(canvas).color;
+        ctx.fillStyle = ctx.strokeStyle;
+        ctx.font = "italic 500 34px Georgia, 'Times New Roman', serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(name, WIDTH / 2, HEIGHT / 2 - 6, WIDTH - 40);
+        ctx.font = "11px sans-serif";
+        ctx.globalAlpha = 0.55;
+        ctx.fillText(t("production.signatureTypedMark"), WIDTH / 2, HEIGHT - 18);
+        ctx.globalAlpha = 1;
+        ctx.beginPath();
+        ctx.moveTo(60, HEIGHT - 34);
+        ctx.lineTo(WIDTH - 60, HEIGHT - 34);
+        ctx.stroke();
+        strokes.current = 1;
+        setEmpty(false);
+        onDraw?.(true);
+      },
       clear: () => {
         const ctx = canvasRef.current?.getContext("2d");
         ctx?.clearRect(0, 0, WIDTH, HEIGHT);
@@ -98,7 +125,14 @@ const SignaturePad = forwardRef<SignaturePadHandle, { onDraw?: (hasDrawing: bool
 
     return (
       <div className="signature-pad">
-        <canvas ref={canvasRef} width={WIDTH} height={HEIGHT} className="signature-pad-canvas" />
+        <canvas
+          ref={canvasRef}
+          width={WIDTH}
+          height={HEIGHT}
+          className="signature-pad-canvas"
+          role="img"
+          aria-label={t("production.deliverySignatureLabel")}
+        />
         {empty ? (
           <span className="signature-pad-hint">{t("production.deliverySignatureHint")}</span>
         ) : null}

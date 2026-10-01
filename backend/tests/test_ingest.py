@@ -339,7 +339,7 @@ def test_terminal_failure_marks_import_failed(monkeypatch):
     import ingest.handlers as handlers
 
     calls = []
-    monkeypatch.setattr(handlers, "transaction", _NullAtomic())
+    monkeypatch.setattr(handlers, "worker_claims", lambda claims: _backend())
     monkeypatch.setattr(handlers, "connection", _FakeConnection())
     monkeypatch.setattr(
         "ingest.service.extract_for_import",
@@ -372,7 +372,7 @@ def test_non_terminal_failure_leaves_import_pending(monkeypatch):
     import ingest.handlers as handlers
 
     calls = []
-    monkeypatch.setattr(handlers, "transaction", _NullAtomic())
+    monkeypatch.setattr(handlers, "worker_claims", lambda claims: _backend())
     monkeypatch.setattr(handlers, "connection", _FakeConnection())
     monkeypatch.setattr(
         "ingest.service.extract_for_import",
@@ -638,7 +638,7 @@ def test_create_import_removes_orphaned_upload_on_insert_failure(monkeypatch):
             project_id=uuid4(),
             actor_id=uuid4(),
             file_name="lista.pdf",
-            content=b"%PDF",
+            content=b"%PDF-1.4 fake",
             content_type="application/pdf",
         )
     assert len(stored) == 1
@@ -662,7 +662,7 @@ def test_create_import_rejects_long_filename(monkeypatch):
             project_id=uuid4(),
             actor_id=uuid4(),
             file_name="x" * 250 + ".pdf",
-            content=b"%PDF",
+            content=b"%PDF-1.4 fake",
             content_type="application/pdf",
         )
     assert getattr(caught.value, "contract_code", None) == "import_file_invalid"
@@ -697,7 +697,7 @@ def test_create_import_rejects_path_like_filenames(monkeypatch):
                 project_id=uuid4(),
                 actor_id=uuid4(),
                 file_name=bad_name,
-                content=b"%PDF",
+                content=b"%PDF-1.4 fake",
                 content_type="application/pdf",
             )
         assert getattr(caught.value, "contract_code", None) == "import_file_invalid"
@@ -785,7 +785,7 @@ def test_create_import_enqueues_under_service_role(monkeypatch):
         project_id=row["project_id"],
         actor_id=uuid4(),
         file_name="lista.pdf",
-        content=b"%PDF",
+        content=b"%PDF-1.4 fake",
         content_type="application/pdf",
     )
     assert entered == ["doc", "job"]
@@ -851,7 +851,7 @@ def test_extract_membership_revoked_marks_import_failed(monkeypatch):
 
             return _Cursor()
 
-    monkeypatch.setattr(handlers, "transaction", _NullAtomic())
+    monkeypatch.setattr(handlers, "worker_claims", lambda claims: _backend())
     monkeypatch.setattr(handlers, "connection", _NoMembership())
     monkeypatch.setattr(
         "ingest.service.extract_for_import",
@@ -908,7 +908,7 @@ def test_create_import_rejects_non_editable_project(monkeypatch):
             project_id=uuid4(),
             actor_id=uuid4(),
             file_name="lista.pdf",
-            content=b"%PDF",
+            content=b"%PDF-1.4 fake",
             content_type="application/pdf",
         )
     assert caught.value.contract_code == "commercial_revision_required"

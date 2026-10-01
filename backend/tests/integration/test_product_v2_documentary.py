@@ -75,7 +75,7 @@ def _bow_tree(
                 "opening_type": "TURN_LEFT" if operable and index == 2 else "FIXED",
                 "glass_spec": "4-12-4 Float Incoloro",
                 "glass_thickness_mm": "24.00",
-                "glass_article_sku": "GLASS-BASE",
+                "glass_article_sku": "VIDRIO-BASE",
             },
         }
 
@@ -138,15 +138,15 @@ def _seed_bow_project(
             "assembly fixture list",
         )
         for sku, unit in (
-            ("DEMO-BAR-MARCO", "BAR"),
-            ("DEMO-BAR-JQ-10", "BAR"),
-            ("DEMO-BAR-JQ-24", "BAR"),
-            ("DEMO-STEEL-BAR-MARCO", "BAR"),
-            ("DEMO-BAR-COPLE-60", "BAR"),
-            ("DEMO-BAR-HOJA", "BAR"),
-            ("DEMO-STEEL-BAR-HOJA", "BAR"),
+            ("COMPRA-MARCO", "BAR"),
+            ("COMPRA-JQ-10", "BAR"),
+            ("COMPRA-JQ-24", "BAR"),
+            ("COMPRA-ACERO-MARCO", "BAR"),
+            ("COMPRA-COPLE-60", "BAR"),
+            ("COMPRA-HOJA", "BAR"),
+            ("COMPRA-ACERO-HOJA", "BAR"),
             ("KIT-TURN", "KIT"),
-            ("GLASS-BASE", "M2"),
+            ("VIDRIO-BASE", "M2"),
         ):
             admin_write(
                 "cost-items", org,
@@ -188,7 +188,13 @@ def _seed_bow_project(
             "JOIN public.handle_requirement_policies handles ON handles.system_id=system.id "
             "JOIN public.reinforcement_cut_policies steel ON steel.system_id=system.id "
             "WHERE system.id=%s AND placement.org_id IS NULL AND handles.org_id IS NULL "
-            "AND steel.org_id IS NULL",
+            "AND steel.org_id IS NULL "
+            "AND placement.version=(SELECT max(p2.version) FROM public.manufacturing_placement_policies p2 "
+            "WHERE p2.system_id=placement.system_id AND p2.org_id IS NULL) "
+            "AND steel.version=(SELECT max(s2.version) FROM public.reinforcement_cut_policies s2 "
+            "WHERE s2.system_id=steel.system_id AND s2.org_id IS NULL) "
+            "AND handles.version=(SELECT max(h2.version) FROM public.handle_requirement_policies h2 "
+            "WHERE h2.system_id=handles.system_id AND h2.org_id IS NULL) ",
             [system_id],
         )
         save_documentary_inputs(
@@ -237,7 +243,13 @@ def _policies(org: UUID) -> dict[str, object]:
         "JOIN public.handle_requirement_policies handles ON handles.system_id=system.id "
         "JOIN public.reinforcement_cut_policies steel ON steel.system_id=system.id "
         "WHERE system.id=%s AND placement.org_id IS NULL AND handles.org_id IS NULL "
-        "AND steel.org_id IS NULL",
+        "AND steel.org_id IS NULL "
+            "AND placement.version=(SELECT max(p2.version) FROM public.manufacturing_placement_policies p2 "
+            "WHERE p2.system_id=placement.system_id AND p2.org_id IS NULL) "
+            "AND steel.version=(SELECT max(s2.version) FROM public.reinforcement_cut_policies s2 "
+            "WHERE s2.system_id=steel.system_id AND s2.org_id IS NULL) "
+            "AND handles.version=(SELECT max(h2.version) FROM public.handle_requirement_policies h2 "
+            "WHERE h2.system_id=handles.system_id AND h2.org_id IS NULL) ",
         [system_id],
     )
 

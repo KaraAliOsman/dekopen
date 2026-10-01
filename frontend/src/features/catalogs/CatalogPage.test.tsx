@@ -208,6 +208,11 @@ function button(key: TranslationKey) {
   return screen.getByRole("button", { name: t(key) });
 }
 
+// Section navigation is a real tablist — tabs are role=tab, not button.
+function navTab(key: TranslationKey) {
+  return screen.getByRole("tab", { name: t(key) });
+}
+
 function change(key: TranslationKey, value: string) {
   fireEvent.change(
     screen.getByLabelText(
@@ -234,7 +239,7 @@ function editorForm(): HTMLFormElement {
 }
 
 async function openKit(name = kit().name, readOnly = false) {
-  fireEvent.click(button("catalog.hardware-kits"));
+  fireEvent.click(navTab("catalog.hardware-kits"));
   fireEvent.click(
     await screen.findByRole("button", {
       name: `${t(readOnly ? "catalog.view" : "catalog.edit")} ${name}`,
@@ -243,7 +248,7 @@ async function openKit(name = kit().name, readOnly = false) {
 }
 
 async function openArticle(name = article().name, readOnly = false) {
-  fireEvent.click(button("catalog.articles"));
+  fireEvent.click(navTab("catalog.articles"));
   fireEvent.click(
     await screen.findByRole("button", {
       name: `${t(readOnly ? "catalog.view" : "catalog.edit")} ${name}`,
@@ -329,6 +334,8 @@ describe("CatalogPage client permissions", () => {
 
   it("keeps a global system read-only, including a direct submit event", async () => {
     await mount();
+    // The workspace is the system home — the ficha record lives one tab away.
+    fireEvent.click(navTab("catalog.systems"));
     fireEvent.click(
       screen.getByRole("button", {
         name: `${t("catalog.view")} ${system().name}`,
@@ -592,7 +599,7 @@ describe("Catalog creation recovery", () => {
       new TypeError("Network response lost"),
     );
     await mount();
-    fireEvent.click(button("catalog.hardware-kits"));
+    fireEvent.click(navTab("catalog.hardware-kits"));
     fireEvent.click(button("catalog.create"));
     for (const [key, value] of Object.entries(kitWrite())) {
       if (value !== null && key !== "contents") {
@@ -613,7 +620,7 @@ describe("CatalogPage article section editor", () => {
   it("authors a declared section on create — polygon, depth and axes reach the request", async () => {
     vi.mocked(client.catalogArticleCreate).mockResolvedValue(created(article()));
     await mount();
-    fireEvent.click(button("catalog.articles"));
+    fireEvent.click(navTab("catalog.articles"));
     fireEvent.click(button("catalog.create"));
     for (const [key, value] of Object.entries(articleWrite())) {
       if (value !== null && key !== "section" && key !== "system_id") {
@@ -665,7 +672,7 @@ describe("CatalogPage article section editor", () => {
   it("refuses an incomplete declared section instead of writing it", async () => {
     vi.mocked(client.catalogArticleCreate).mockResolvedValue(created(article()));
     await mount();
-    fireEvent.click(button("catalog.articles"));
+    fireEvent.click(navTab("catalog.articles"));
     fireEvent.click(button("catalog.create"));
     for (const [key, value] of Object.entries(articleWrite())) {
       if (value !== null && key !== "section" && key !== "system_id") {

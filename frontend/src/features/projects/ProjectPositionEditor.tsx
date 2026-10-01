@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { fmtMm } from "../../format";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -19,18 +20,32 @@ import { useAuthSession } from "../../auth/AuthSessionProvider";
 import { ApiError } from "../../api/apiMutator";
 import { UnsavedChangesGuard } from "../../app/UnsavedChangesGuard";
 import { useShellLeaf } from "../../app/shellLeaf";
-import { t } from "../../i18n/es-CL";
+import { t, tDynamic, tOptional } from "../../i18n/es-CL";
+import { DeniedState } from "../../ui";
 import { type CanvasDesignInputs, useCanvasStore } from "../canvas/canvasStore";
-import { AssemblyEditor } from "../canvas/AssemblyEditor";
+import { useProject } from "./useProject";
+import { AssemblyEditor, issueText } from "../canvas/AssemblyEditor";
+import { useAssistantSurface } from "../assistant/assistantContext";
+import { intentBays } from "../canvas/intentEditing";
 import type { IntentNode, Opening } from "../canvas/intentEditing";
-import { starterContextSize, type StarterDefinition } from "../canvas/designLibrary";
+import {
+  starterContextSize,
+  starterNominalSize,
+  type StarterDefinition,
+} from "../canvas/designLibrary";
 import { resolveMembers } from "../canvas/members";
+import {
+  clearPositionDraft,
+  positionDraftKey,
+  type PositionDraft,
+  readPositionDraft,
+  writePositionDraft,
+} from "./positionDraft";
 import { StarterGallery } from "../canvas/StarterGallery";
 import {
   elevationEnvelopeMm,
   isProductModel,
   isSingleUnit,
-  removeUnit,
   wrapTreeAsProduct,
   type ProductJson,
 } from "../canvas/productEditing";
@@ -43,12 +58,42 @@ export function ProjectPositionEditor(): JSX.Element {
   const copyId = posId ? "" : (query.get("copy") ?? "");
   const preferredSystem = posId || copyId ? null : query.get("system");
   const org = useAuthSession().me?.active_organization;
-  if (!org || !["OWNER", "ESTIMATOR"].includes(org.role))
-    return <p role="alert">{t("projects.denied")}</p>;
+  const canEdit = Boolean(org && ["OWNER", "ESTIMATOR"].includes(org.role));
+  // The editor must not mount on a closed revision — the backend's editable()
+  // gate would 409 every save, so check BEFORE the canvas store and dirty
+  // tracking initialize (review: the «Nuevo vano» dead-end on quoted deals).
+  const projectQuery = useProject(canEdit && id ? id : null);
+  if (!canEdit) return <DeniedState reason={t("projects.denied")} />;
+  const project = projectQuery.data;
+  // Mirrors backend editable(): a closed revision is status≠DRAFT, a sealed
+  // version row for current_revision, or an applied pricing authority.
+  const locked = Boolean(
+    project &&
+    (project.status !== "DRAFT" ||
+      project.versions?.some((version) => version.revision_code === project.current_revision) ||
+      project.current_pricing_operation_id),
+  );
+  if (locked) {
+    return (
+      <div className="ui-empty ui-empty--denied">
+        <svg className="ui-empty__glyph" aria-hidden="true" viewBox="0 0 16 16">
+          <rect x="3" y="7" width="10" height="7" rx="1.5" />
+          <path d="M5.5 7V5.5a2.5 2.5 0 0 1 5 0V7" />
+        </svg>
+        <p className="ui-empty__title">{t("projects.editorLockedTitle")}</p>
+        <p className="ui-empty__body">{t("projects.editorLockedBody")}</p>
+        <div className="ui-empty__action">
+          <Link className="ui-button" to={`/projects/${id}`}>
+            {t("projects.editorLockedBack")}
+          </Link>
+        </div>
+      </div>
+    );
+  }
   return (
     <PositionWorkspace
-      key={`${org.id}:${id}:${posId}:${copyId}`}
-      orgId={org.id}
+      key={`${org!.id}:${id}:${posId}:${copyId}`}
+      orgId={org!.id}
       preferredSystem={preferredSystem}
       projectId={id}
       positionId={posId}
@@ -85,6 +130,7 @@ function resolveDefaults(
   mullionSkus: { SPLIT_V?: string; SPLIT_H?: string },
   glassThicknessMm?: string,
   panelSku?: string,
+  glassArticleSku?: string,
 ): ProductJson {
   let next = product;
   if (couplerSkus.length === 1) {
@@ -112,13 +158,31 @@ function resolveDefaults(
       node.type === "BAY" &&
       glassThicknessMm !== undefined &&
       (!node.glass_thickness_mm || !node.glass_spec);
+    // A bay can carry thickness/spec without the article (e.g. a pasted spec
+    // on a catalog whose glass article was added later) — the select reads the
+    // article key, so a missing one leaves phantom glass that eval rejects.
+    const missingGlassArticle =
+      node.type === "BAY" &&
+      !node.glass_article_sku &&
+      glassArticleSku !== undefined &&
+      ((node.glass_thickness_mm !== null && node.glass_thickness_mm !== undefined) ||
+        glassThicknessMm !== undefined);
     const missingPanel =
       node.type === "BAY" &&
       node.opening_type === "DOOR_ENTRY" &&
       !node.panel_article_sku &&
       panelSku !== undefined;
+    // A door without declared handedness cannot freeze — manufacturing
+    // refuses to guess the hinge side, so autofill declares the default.
+    const missingHandedness =
+      node.type === "BAY" && node.opening_type === "DOOR_ENTRY" && node.door_handedness == null;
     return (
-      missingMullion || missingGlass || missingPanel || (node.children?.some(needsFill) ?? false)
+      missingMullion ||
+      missingGlass ||
+      missingGlassArticle ||
+      missingPanel ||
+      missingHandedness ||
+      (node.children?.some(needsFill) ?? false)
     );
   };
   const fill = (node: IntentNode): IntentNode => {
@@ -135,8 +199,23 @@ function resolveDefaults(
         updated = { ...updated, glass_thickness_mm: glassThicknessMm };
       if (!updated.glass_spec) updated = { ...updated, glass_spec: glassThicknessMm };
     }
+    if (
+      updated.type === "BAY" &&
+      !updated.glass_article_sku &&
+      glassArticleSku !== undefined &&
+      updated.glass_thickness_mm
+    ) {
+      updated = { ...updated, glass_article_sku: glassArticleSku };
+    }
     if (updated.type === "BAY" && updated.opening_type === "DOOR_ENTRY" && panelSku !== undefined) {
       if (!updated.panel_article_sku) updated = { ...updated, panel_article_sku: panelSku };
+    }
+    if (
+      updated.type === "BAY" &&
+      updated.opening_type === "DOOR_ENTRY" &&
+      updated.door_handedness == null
+    ) {
+      updated = { ...updated, door_handedness: "LEFT" };
     }
     return { ...updated, children: node.children?.map(fill) };
   };
@@ -156,26 +235,50 @@ function resolveDefaults(
 }
 
 /** The design object that save() would send — used both by save and by the
- * dirty baseline, so they can never disagree about what "unchanged" means. */
-function designPayload(inputs: CanvasDesignInputs): PositionDesignRequest | null {
+ * dirty baseline, so they can never disagree about what "unchanged" means.
+ * The finish choice is validated against the series' declared colors — never
+ * a hardcoded white, and a catalog option the engine can't map stays
+ * unsaveable instead of throwing. */
+function designPayload(
+  inputs: CanvasDesignInputs,
+  allowedColors: string[],
+): PositionDesignRequest | null {
   const product = inputs.product;
-  if (product === null || !inputs.systemId || inputs.color !== "WHITE") return null;
+  // The picker's options come from the system's declared finishes — a color
+  // outside that set stays displayed and selectable but unsaveable, never
+  // silently coerced.
+  const color = allowedColors.includes(inputs.color) ? inputs.color : null;
+  if (product === null || !inputs.systemId || color === null) return null;
   const single = isSingleUnit(product) ? product.assembly.modules[0] : undefined;
   return single !== undefined
     ? {
         system_id: inputs.systemId,
         nominal_width_mm: single.width_mm,
         nominal_height_mm: single.height_mm,
-        color: inputs.color,
+        color,
         parametric_tree: single.tree,
       }
     : {
         system_id: inputs.systemId,
         nominal_width_mm: elevationEnvelopeMm(product).width.toFixed(2),
         nominal_height_mm: elevationEnvelopeMm(product).height.toFixed(2),
-        color: inputs.color,
+        color,
         parametric_tree: product,
       };
+}
+
+/** The unsaved-changes identity — the live inputs themselves, not the
+ * save payload: a canvas design with no system picked yet produces no
+ * payload at all, and comparing `null` to `null` would call work that
+ * doesn't exist yet "unchanged" and let a reload discard it silently. */
+function designIdentity(inputs: CanvasDesignInputs): string {
+  return canonicalize({
+    color: inputs.color,
+    nominalHeightMm: inputs.nominalHeightMm,
+    nominalWidthMm: inputs.nominalWidthMm,
+    product: inputs.product,
+    systemId: inputs.systemId,
+  });
 }
 
 /** JSON.stringify with recursively sorted keys — a stable identity for
@@ -229,6 +332,16 @@ function PositionWorkspace({
   const [uncertainCreate, setUncertainCreate] = useState(false);
   const [assemblyEval, setAssemblyEval] = useState<EngineAssemblyCalculateResponse | null>(null);
   const [createdId, setCreatedId] = useState<string | null>(null);
+  // Bump when a starter replaces the product — the canvas re-fits even if
+  // the user had panned/zoomed the previous drawing away.
+  const [viewEpoch, setViewEpoch] = useState(0);
+  // Unsaved-draft buffer: a reload used to silently discard the design.
+  // A pending draft is offered back explicitly — never auto-applied.
+  const draftKey = positionDraftKey(orgId, positionId || null, copyId || null);
+  const [pendingDraft, setPendingDraft] = useState<PositionDraft | null>(null);
+  // When opened via ?copy=<id>, the source vano's index for the banner that
+  // explains what's conserved — the copy is intent, not identity.
+  const [copiedFrom, setCopiedFrom] = useState<string | null>(null);
   // New positions open on the design library (the start point); saved ones go
   // straight to the canvas — picking a starter collapses it.
   const [libraryOpen, setLibraryOpen] = useState(!positionId && !copyId);
@@ -236,6 +349,21 @@ function PositionWorkspace({
   const inputs = useCanvasStore((s) => s.inputs);
   const canUndo = useCanvasStore((s) => s.past.length > 0);
   const canRedo = useCanvasStore((s) => s.future.length > 0);
+  // The assistant's "this" is the user's current canvas selection — a
+  // volatile ref: it reaches the context projection but never keys the
+  // durable thread/job (VOLATILE_REFS strips it server-side, and the dock
+  // keys threads on stable refs).
+  const canvasSelection = useCanvasStore((s) => s.selection);
+  useAssistantSurface(
+    positionId ? "position" : null,
+    positionId
+      ? {
+          project_id: projectId,
+          position_id: positionId,
+          ...(canvasSelection ? { selection: canvasSelection } : {}),
+        }
+      : undefined,
+  );
   const systemId = inputs.systemId ?? "";
   const requestOptions = { headers: { "X-Organization-ID": orgId } };
 
@@ -258,16 +386,45 @@ function PositionWorkspace({
     enabled: !!systemId,
     retry: false,
   });
+  // Finishes the series declares. A stored finish it stopped offering still
+  // displays — the picker lists it once — but can't save: the engine's color
+  // contract is the authority, not this list's length.
+  const declaredColors = options.data?.colors ?? [];
+  const colorChoices =
+    inputs.color && !declaredColors.includes(inputs.color)
+      ? [...declaredColors, inputs.color]
+      : declaredColors;
 
   useEffect(() => {
     let active = true;
+    const offerDraftIfDivergent = (
+      baselineDesign: string,
+      baselineLocation: string,
+      baselineQuantity: string,
+    ) => {
+      const draft = readPositionDraft(draftKey);
+      if (!draft) return;
+      if (
+        designIdentity(draft.inputs) !== baselineDesign ||
+        draft.location !== baselineLocation ||
+        draft.quantity !== baselineQuantity
+      )
+        setPendingDraft(draft);
+      else clearPositionDraft(draftKey);
+    };
     if (!positionId && !copyId) {
       const blank = initial();
       // Onboarding hands its picked system over via ?system= so the first
       // position opens on the catalog context the user already chose.
       if (preferredSystem) blank.systemId = preferredSystem;
       useCanvasStore.getState().loadDesign(blank);
-      setBaseline({ design: canonicalize(designPayload(blank)), location: "", quantity: "1" });
+      const baselineDesign = designIdentity(blank);
+      setBaseline({
+        design: baselineDesign,
+        location: "",
+        quantity: "1",
+      });
+      offerDraftIfDivergent(baselineDesign, "", "1");
       setLoaded(true);
     } else
       void positionsRetrieve(positionId || copyId, { headers: { "X-Organization-ID": orgId } })
@@ -277,7 +434,6 @@ function PositionWorkspace({
             throw new Error("unavailable");
           const item = response.data;
 
-          if (item.design.color !== "WHITE") throw new Error("unsupported color");
           const tree = item.design.parametric_tree;
           const product: ProductJson = isProductModel(tree)
             ? tree
@@ -286,25 +442,35 @@ function PositionWorkspace({
                 item.design.nominal_width_mm,
                 item.design.nominal_height_mm,
               );
-          useCanvasStore.getState().loadDesign({
+          const loadedInputs = {
             systemId: item.design.system_id,
             nominalWidthMm: item.design.nominal_width_mm,
             nominalHeightMm: item.design.nominal_height_mm,
-            color: "WHITE",
+            // A stored finish the series no longer declares still renders —
+            // the picker lists it once so the field is honest, while
+            // designPayload refuses to save a finish the engine can't map.
+            color: item.design.color,
             parametricTree:
               product.assembly.modules.at(0)?.tree ??
               ({ id: "m1", type: "BAY", opening_type: "FIXED" } as IntentNode),
             product,
-          });
+          };
+          useCanvasStore.getState().loadDesign(loadedInputs);
+          setCopiedFrom(copyId ? `P${item.position_index}` : null);
           setSaved(copyId ? null : item);
           setBaseline(
             copyId
               ? null
               : {
-                  design: canonicalize(item.design),
+                  design: designIdentity(loadedInputs),
                   location: item.location_tag ?? "",
                   quantity: String(item.quantity),
                 },
+          );
+          offerDraftIfDivergent(
+            designIdentity(loadedInputs),
+            item.location_tag ?? "",
+            String(item.quantity),
           );
           setLocation(item.location_tag ?? "");
           setQuantity(String(item.quantity));
@@ -319,7 +485,7 @@ function PositionWorkspace({
       generation.current += 1;
       useCanvasStore.getState().reset();
     };
-  }, [orgId, projectId, positionId, copyId, preferredSystem]);
+  }, [orgId, projectId, positionId, copyId, preferredSystem, draftKey]);
 
   // Once catalog options arrive, fill uniquely-determined SKUs (coupler when
   // the series has exactly one, mullions for splits created by starters).
@@ -337,6 +503,7 @@ function PositionWorkspace({
         ? options.data.glazing_thicknesses[0]
         : undefined,
       options.data.panel_skus.length === 1 ? options.data.panel_skus[0] : undefined,
+      options.data.glass_skus.length === 1 ? options.data.glass_skus[0] : undefined,
     );
     if (resolved !== product) {
       // Deterministic normalization is not a user step: folding it into
@@ -344,52 +511,6 @@ function PositionWorkspace({
       useCanvasStore.getState().replaceInputs({ ...inputs, product: resolved });
     }
   }, [inputs, options.data]);
-
-  useEffect(() => {
-    function onKey(event: KeyboardEvent): void {
-      const target = event.target;
-      if (
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement ||
-        target instanceof HTMLSelectElement
-      )
-        return;
-      if (event.key === "Escape") {
-        useCanvasStore.getState().select(null);
-        return;
-      }
-      if (event.key === "Delete" || event.key === "Backspace") {
-        const state = useCanvasStore.getState();
-        const product = state.inputs.product;
-        if (
-          product !== null &&
-          product.assembly.modules.length > 1 &&
-          product.assembly.modules.some((module) => module.id === state.selection)
-        ) {
-          event.preventDefault();
-          state.commitInputs({
-            ...state.inputs,
-            product: removeUnit(product, state.selection),
-          });
-          state.select(null);
-          setResult(null);
-          setAssemblyEval(null);
-        }
-        return;
-      }
-      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
-      const key = event.key.toLowerCase();
-      if (key === "z") {
-        event.preventDefault();
-        applyHistory(event.shiftKey ? "redo" : "undo");
-      } else if (key === "y") {
-        event.preventDefault();
-        applyHistory("redo");
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
 
   function applyHistory(direction: "undo" | "redo"): void {
     const store = useCanvasStore.getState();
@@ -418,9 +539,60 @@ function PositionWorkspace({
     );
   }, []);
 
+  // designIdentity deep-serializes the product — memoize on the inputs
+  // reference so location/quantity keystrokes skip the canonicalization.
+  const identity = useMemo(() => designIdentity(inputs), [inputs]);
+
+  const isDirty =
+    baseline === null
+      ? true
+      : identity !== baseline.design ||
+        location !== baseline.location ||
+        quantity !== baseline.quantity;
+
+  // Debounced draft write — clears once the design matches the saved state
+  // again (including right after a successful save).
+  useEffect(() => {
+    if (!loaded) return;
+    if (!isDirty) {
+      clearPositionDraft(draftKey);
+      return;
+    }
+    const timer = setTimeout(
+      () => writePositionDraft(draftKey, { inputs, location, quantity, savedAt: Date.now() }),
+      600,
+    );
+    return () => clearTimeout(timer);
+  }, [loaded, isDirty, identity, location, quantity, draftKey, inputs]);
+
   const assemblyUnsaveable =
     assemblyEval?.status === "INVALID" ||
     (assemblyEval?.modules ?? []).some((module) => module.result == null);
+  // Only flag once the options payload actually arrived — an empty declared
+  // list pre-load is "unknown", not "undeclared".
+  const colorUndeclared =
+    options.data !== undefined && inputs.color !== null && !declaredColors.includes(inputs.color);
+  const quantityInvalid = !/^[1-9]\d*$/.test(quantity) || Number(quantity) > 2147483647;
+  // Local, cheap check: a bay with neither glass nor panel fill can never
+  // evaluate — name it so the disabled Guardar isn't a silent dead end.
+  const fillUnassigned = (inputs.product?.assembly.modules ?? []).some((module) =>
+    intentBays(module.tree).some((bay) => !bay.glass_spec && !bay.panel_article_sku),
+  );
+  // A disabled Guardar must name the first real blocker ("la hoja queda bajo
+  // el ancho mínimo del herraje"), not a generic "revisa los parámetros".
+  const saveBlockReason = quantityInvalid
+    ? t("projects.qtyInvalid")
+    : colorUndeclared
+      ? t("projects.colorNotDeclared")
+      : fillUnassigned
+        ? t("projects.glazingMissing")
+        : assemblyUnsaveable && assemblyEval !== null && assemblyEval.issues.length > 0
+          ? issueText(
+              assemblyEval.issues[0]!,
+              inputs.product?.assembly.modules ?? [],
+              inputs.product?.assembly.couplings ?? [],
+            )
+          : null;
 
   async function save(): Promise<void> {
     if (
@@ -429,7 +601,8 @@ function PositionWorkspace({
       !result ||
       assemblyUnsaveable ||
       busy ||
-      inputs.color !== "WHITE" ||
+      !options.data ||
+      !declaredColors.includes(inputs.color) ||
       inputs.product === null ||
       !systemId ||
       !/^[1-9]\d*$/.test(quantity) ||
@@ -442,7 +615,7 @@ function PositionWorkspace({
     setMessage("");
     // A lone unit persists in the classic documentary shape; real assemblies
     // save as product-v2. The in-canvas model is always compositional.
-    const design = designPayload(inputs) as PositionDesignRequest;
+    const design = designPayload(inputs, declaredColors) as PositionDesignRequest;
     const body = {
       location_tag: location,
       quantity: Number(quantity),
@@ -462,7 +635,7 @@ function PositionWorkspace({
       const value = response.data as PositionResponse;
       setSaved(value);
       setResult(value.bom);
-      setBaseline({ design: canonicalize(design), location, quantity });
+      setBaseline({ design: designIdentity(inputs), location, quantity });
       setMessage(t("projects.saved"));
       // The unsaved-changes blocker still sees dirty=true until the baseline
       // commits, so the post-create navigation must wait for the next render.
@@ -479,22 +652,52 @@ function PositionWorkspace({
     }
   }
 
+  // Ctrl/⌘+S saves the position — without it the chord hits the browser's
+  // save-page dialog mid-edit. The ref keeps the listener on the freshest
+  // closure (save reads live state).
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        void saveRef.current();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   if (!loaded) return <p role={message ? "alert" : "status"}>{message || t("projects.loading")}</p>;
-  const dirty =
-    baseline === null
-      ? true
-      : canonicalize(designPayload(inputs)) !== baseline.design ||
-        location !== baseline.location ||
-        quantity !== baseline.quantity;
+  const dirty = isDirty;
+  const restoreDraft = (draft: PositionDraft) => {
+    const store = useCanvasStore.getState();
+    store.loadDesign(draft.inputs);
+    setLocation(draft.location);
+    setQuantity(draft.quantity);
+    setLibraryOpen(false);
+    setViewEpoch((epoch) => epoch + 1);
+    setPendingDraft(null);
+    setMessage("");
+  };
   const product = inputs.product;
   const pickStarter = (definition: StarterDefinition) => {
     const { widthMm, heightMm } = starterContextSize(product);
-    const nextProduct = definition.build(widthMm, heightMm);
+    // The library card previews the starter at its nominal size — building
+    // it smaller than that can land a leaf under the hardware minimum (a
+    // 1000 mm "Dos hojas" makes two ~440 mm sashes). Floor at nominal so a
+    // starter always produces what its thumbnail promised.
+    const nominal = starterNominalSize(definition.key);
+    const nextProduct = definition.build(
+      Math.max(widthMm, nominal.widthMm),
+      Math.max(heightMm, nominal.heightMm),
+    );
     const store = useCanvasStore.getState();
     store.commitInputs({ ...inputs, product: nextProduct });
     // Coupled starters mint fresh module ids — a stale selection would leave
     // the inspector pointed at a module that no longer exists.
     store.select(nextProduct.assembly.modules[0]?.id ?? null);
+    setViewEpoch((epoch) => epoch + 1);
     setLibraryOpen(false);
     onAssemblyChanged();
   };
@@ -527,7 +730,12 @@ function PositionWorkspace({
       <UnsavedChangesGuard dirty={dirty} message={t("projects.leaveUnsaved")} />
       <header className="projects-header">
         <div>
-          <Link to={`/projects/${projectId}`}>{t("projects.back")}</Link>
+          <Link
+            className="ui-backlink ui-backlink--back"
+            to={projectId ? `/projects/${projectId}` : "/projects"}
+          >
+            {t("projects.back")}
+          </Link>
           <h1>{location || t("projects.position")}</h1>
         </div>
         <span role="status">
@@ -545,93 +753,178 @@ function PositionWorkspace({
         </button>
         <button
           className="primary-action"
-          disabled={uncertainCreate || busy || !result || assemblyUnsaveable}
-          title={!result || assemblyUnsaveable ? t("projects.saveBlocked") : undefined}
+          disabled={
+            uncertainCreate ||
+            busy ||
+            !result ||
+            !options.data ||
+            assemblyUnsaveable ||
+            quantityInvalid ||
+            colorUndeclared
+          }
+          title={
+            saveBlockReason !== null
+              ? `${t("projects.saveBlocked")}: ${saveBlockReason}`
+              : !result || assemblyUnsaveable
+                ? t("projects.saveBlocked")
+                : `${t("projects.save")} (Ctrl+S)`
+          }
           onClick={() => void save()}
         >
           {t("projects.save")}
         </button>
-        {loaded && (assemblyUnsaveable || result === null) && (
-          <span className="handle-pending">{t("projects.saveBlocked")}</span>
-        )}
       </header>
+      {/* The blocked hint lives BELOW the header row — inside the flex it
+       * pushed Deshacer/Guardar left whenever it appeared, and a click aimed
+       * at Guardar landed on Deshacer (silent undo). */}
+      {loaded && (busy || assemblyUnsaveable || result === null || saveBlockReason !== null) && (
+        <p className="handle-pending" role="status">
+          {busy
+            ? t("projects.savingBusy")
+            : (saveBlockReason ??
+              (fillUnassigned ? t("projects.glazingMissing") : t("projects.saveBlocked")))}
+        </p>
+      )}
       {message && <p role="status">{message}</p>}
-      <fieldset className="position-head" disabled={busy}>
-        <label className="position-head__field">
-          <span>{t("projects.location")}</span>
-          <input value={location} onChange={(e) => setLocation(e.target.value)} />
-        </label>
-        <label className="position-head__field">
-          <span>{t("pricing.quantity")}</span>
-          <input
-            inputMode="numeric"
-            value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
-          />
-        </label>
-        <label className="position-head__field position-head__field--wide">
-          <span>{t("projects.system")}</span>
-          <select
-            className="assembly-select"
-            aria-label={t("projects.system")}
-            value={systemId}
-            onChange={(e) => {
-              const next = e.target.value || null;
-              if (inputs.systemId !== next) {
-                useCanvasStore.getState().commitInputs({ ...inputs, systemId: next });
-                setMessage("");
-              }
+      {copyId && loaded && copiedFrom && (
+        <div className="draft-banner" role="status">
+          <span>{t("projects.copyNotice").replace("{src}", copiedFrom)}</span>
+        </div>
+      )}
+      {pendingDraft !== null && (
+        <div className="draft-banner" role="status">
+          <span>
+            {t("projects.draftFound").replace(
+              "{time}",
+              new Date(pendingDraft.savedAt).toLocaleString("es-CL", {
+                dateStyle: "short",
+                timeStyle: "short",
+              }),
+            )}
+          </span>
+          <button type="button" onClick={() => restoreDraft(pendingDraft)}>
+            {t("projects.restoreDraft")}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              clearPositionDraft(draftKey);
+              setPendingDraft(null);
             }}
           >
-            <option value="">{t("projects.chooseSystem")}</option>
-            {systems.data
-              ?.filter((system) => system.quote_ready)
-              .map((system) => (
-                <option key={system.id} value={system.id}>
-                  {system.name}
-                  {system.is_demo ? ` · ${t("projects.synthetic")}` : ""}
+            {t("projects.discardDraft")}
+          </button>
+        </div>
+      )}
+      <fieldset className="position-head" disabled={busy}>
+        {/* <fieldset> can't be a flex container — the row wraps the fields
+            so the strip stays horizontal. */}
+        <div className="position-head__row">
+          <label className="position-head__field">
+            <span>{t("projects.location")}</span>
+            <input
+              aria-label={t("projects.location")}
+              placeholder={t("projects.locationPlaceholder")}
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+            />
+          </label>
+          <label className="position-head__field">
+            <span>{t("pricing.quantity")}</span>
+            <input
+              inputMode="numeric"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+            />
+          </label>
+          <label className="position-head__field position-head__field--wide">
+            <span>{t("projects.system")}</span>
+            <select
+              className="assembly-select"
+              aria-label={t("projects.system")}
+              value={systemId}
+              onChange={(e) => {
+                const next = e.target.value || null;
+                if (inputs.systemId !== next) {
+                  useCanvasStore.getState().commitInputs({ ...inputs, systemId: next });
+                  setMessage("");
+                }
+              }}
+            >
+              <option value="">{t("projects.chooseSystem")}</option>
+              {systems.data
+                ?.filter((system) => system.quote_ready)
+                .map((system) => (
+                  <option key={system.id} value={system.id}>
+                    {system.name}
+                    {system.is_demo ? ` · ${t("projects.synthetic")}` : ""}
+                  </option>
+                ))}
+            </select>
+          </label>
+          {(systems.isError || options.isError) && (
+            <p className="position-head__alert" role="alert">
+              {t("projects.catalogError")}
+            </p>
+          )}
+          {(systems.isPending || (systemId && options.isPending)) && (
+            <p className="position-head__alert" role="status">
+              {t("projects.loading")}
+            </p>
+          )}
+          <label className="position-head__color">
+            <span>{t("projects.color")}</span>
+            <select
+              className="assembly-select"
+              aria-label={t("projects.color")}
+              disabled={busy || declaredColors.length === 0}
+              value={inputs.color}
+              onChange={(event) =>
+                useCanvasStore.getState().commitInputs({
+                  ...inputs,
+                  color: event.target.value as CanvasDesignInputs["color"],
+                })
+              }
+            >
+              {colorChoices.length === 0 && <option value={inputs.color}>{inputs.color}</option>}
+              {colorChoices.map((color) => (
+                <option key={color} value={color}>
+                  {tDynamic("projects.color", color)}
                 </option>
               ))}
-          </select>
-        </label>
-        {(systems.isError || options.isError) && (
-          <p className="position-head__alert" role="alert">
-            {t("projects.catalogError")}
-          </p>
-        )}
-        {(systems.isPending || (systemId && options.isPending)) && (
-          <p className="position-head__alert" role="status">
-            {t("projects.loading")}
-          </p>
-        )}
-        <p className="position-head__hint">{t("projects.colorWhite")}</p>
+            </select>
+          </label>
+        </div>
       </fieldset>
-      <div className="position-workspace">
-        <details
-          className="starter-library"
-          open={libraryOpen}
-          onToggle={(event) => setLibraryOpen(event.currentTarget.open)}
-        >
-          <summary>{t("assembly.starterLibrary")}</summary>
-          <StarterGallery
-            members={resolveMembers(options.data)}
+      <div className="position-body">
+        <div className="position-workspace">
+          <details
+            className="starter-library"
+            open={libraryOpen}
+            onToggle={(event) => setLibraryOpen(event.currentTarget.open)}
+          >
+            <summary>{t("assembly.starterLibrary")}</summary>
+            <StarterGallery
+              members={resolveMembers(options.data)}
+              disabled={busy}
+              onPick={pickStarter}
+            />
+          </details>
+          <AssemblyEditor
+            organizationId={orgId}
+            couplerSkus={options.data?.coupler_skus ?? []}
+            glassSkus={options.data?.glass_skus ?? []}
+            panelSkus={options.data?.panel_skus ?? []}
+            options={options.data}
+            optionsReady={options.data !== undefined || options.isError}
             disabled={busy}
-            onPick={pickStarter}
+            onChanged={onAssemblyChanged}
+            onEvaluationChange={onAssemblyEvaluation}
+            positionId={saved?.id ?? null}
+            positionPanel={positionPanel}
+            contentEpoch={viewEpoch}
           />
-        </details>
-        <AssemblyEditor
-          organizationId={orgId}
-          couplerSkus={options.data?.coupler_skus ?? []}
-          glassSkus={options.data?.glass_skus ?? []}
-          panelSkus={options.data?.panel_skus ?? []}
-          options={options.data}
-          optionsReady={options.data !== undefined || options.isError}
-          disabled={busy}
-          onChanged={onAssemblyChanged}
-          onEvaluationChange={onAssemblyEvaluation}
-          positionId={saved?.id ?? null}
-          positionPanel={positionPanel}
-        />
+        </div>
       </div>
       {result ? (
         <ProjectBom result={result} />
@@ -661,7 +954,7 @@ export function ProjectBom({ result }: { result: EngineCalculateResponse }): JSX
               <tr key={index}>
                 <td>{cut.sku}</td>
                 <td>
-                  {cut.length_mm}
+                  {fmtMm(cut.length_mm)}
                   <CutBar lengthMm={Number(cut.length_mm)} maxMm={longestCut} />
                 </td>
                 <td>{cut.qty}</td>
@@ -683,8 +976,8 @@ export function ProjectBom({ result }: { result: EngineCalculateResponse }): JSX
             {result.glasses.map((glass, index) => (
               <tr key={index}>
                 <td>{index + 1}</td>
-                <td>{glass.width_mm}</td>
-                <td>{glass.height_mm}</td>
+                <td>{fmtMm(glass.width_mm)}</td>
+                <td>{fmtMm(glass.height_mm)}</td>
               </tr>
             ))}
           </tbody>
@@ -710,7 +1003,7 @@ export function ProjectBom({ result }: { result: EngineCalculateResponse }): JSX
               {(result.fittings ?? []).map((item, index) => (
                 <tr key={index}>
                   <td>{item.sku}</td>
-                  <td>{item.kind}</td>
+                  <td>{tOptional(`assembly.fittingKind.${item.kind}`) ?? item.kind}</td>
                   <td>{item.qty}</td>
                 </tr>
               ))}
@@ -734,7 +1027,7 @@ export function ProjectBom({ result }: { result: EngineCalculateResponse }): JSX
                 <tr key={index}>
                   <td>{item.reinforcement_sku || item.parent_profile_sku}</td>
                   <td>
-                    {item.length_mm}
+                    {fmtMm(item.length_mm)}
                     <CutBar lengthMm={Number(item.length_mm)} maxMm={longestCut} />
                   </td>
                   <td>{item.qty}</td>
@@ -759,8 +1052,8 @@ export function ProjectBom({ result }: { result: EngineCalculateResponse }): JSX
               {result.panels.map((item, index) => (
                 <tr key={index}>
                   <td>{item.name}</td>
-                  <td>{item.width_mm}</td>
-                  <td>{item.height_mm}</td>
+                  <td>{fmtMm(item.width_mm)}</td>
+                  <td>{fmtMm(item.height_mm)}</td>
                 </tr>
               ))}
             </tbody>

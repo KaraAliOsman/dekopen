@@ -27,10 +27,10 @@ SELECT is((SELECT count(*) FROM public.hardware_kits WHERE weight_kg = 2.50
     AND sku IN ('KIT-TILT-TURN','KIT-TURN','KIT-AWNING-16','KIT-SLIDING','KIT-DOOR-MULTIPOINT')),
     5::BIGINT, 'all five DEMO kits persist their exact weight');
 SELECT is((SELECT contents FROM public.hardware_kits WHERE sku = 'KIT-AWNING-16'),
-    '[{"sku":"DEMO-STAY-16","name":"Compás a fricción 16\"","qty":2,"unit":"unit"}]'::JSONB,
+    '[{"sku":"DEMO-STAY-16","name":"Compás a fricción 16\"","qty":2,"unit":"unit","category":"FITTING"},{"sku":"DEMO-MAN-PROY","name":"Manilla central proyectante Demo","qty":1,"unit":"unit","category":"HANDLE"}]'::JSONB,
     'awning retains approved nested contents');
 SELECT is((SELECT contents FROM public.hardware_kits WHERE sku = 'KIT-DOOR-MULTIPOINT'),
-    '[{"sku":"DEMO-LOCK-MULTIPOINT","name":"Cerradura multipunto Demo","qty":1,"unit":"unit"}]'::JSONB,
+    '[{"sku":"DEMO-LOCK-MULTIPOINT","name":"Cerradura multipunto Demo","qty":1,"unit":"unit","category":"LOCK"},{"sku":"DEMO-BIS-PUERTA","name":"Bisagra puerta reforzada Demo","qty":3,"unit":"unit","category":"HINGE"},{"sku":"DEMO-MAN-PUERTA","name":"Par manilla puerta + cilindro Demo","qty":1,"unit":"set","category":"HANDLE"}]'::JSONB,
     'door retains approved nested contents');
 SELECT is((SELECT name::TEXT FROM public.hardware_kits WHERE sku = 'KIT-TILT-TURN'),
     'Kit Vorne OB 100kg', 'OB name changes without changing SKU');
@@ -104,7 +104,7 @@ SELECT is((SELECT ARRAY[sliding_glazing_deduction_width_mm,
     FROM public.profile_systems WHERE code = 'DEMO_60'),
     ARRAY[20.00, 20.00, 7.00], 'DEMO_60 has exactly the three approved authorities');
 SELECT is((SELECT count(*) FROM public.profile_articles WHERE sku <> 'UMBRAL-ALU'
-    AND material = 'PVC'), 9::BIGINT, 'historical DEMO articles have explicit PVC material');
+    AND material = 'PVC'), 10::BIGINT, 'historical DEMO articles have explicit PVC material');
 SELECT is((SELECT count(*) FROM pg_constraint WHERE conrelid = 'public.infill_articles'::REGCLASS
     AND contype = 'p'), 1::BIGINT, 'panel catalog has a primary key');
 SELECT ok(EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'public.infill_articles'::REGCLASS

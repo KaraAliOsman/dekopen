@@ -1,5 +1,7 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Session } from "@supabase/supabase-js";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "../api/apiMutator";
@@ -78,13 +80,21 @@ function DraftSurface(): JSX.Element {
     <>
       <span data-testid="status">{auth.status}</span>
       <button onClick={() => void auth.selectOrganization("org-B")}>Select draft B</button>
-      {auth.status === "ready" ? <CommercialPricingPage /> : null}
+      {auth.status === "ready" ? (
+        <MemoryRouter>
+          <CommercialPricingPage />
+        </MemoryRouter>
+      ) : null}
     </>
   );
 }
 
 function mount(child: JSX.Element = <Probe />): void {
-  render(<AuthSessionProvider>{child}</AuthSessionProvider>);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <AuthSessionProvider>{child}</AuthSessionProvider>
+    </QueryClientProvider>,
+  );
 }
 
 function seedCanvas(): void {
@@ -279,6 +289,37 @@ describe("authoritative session and active-organization boundary", () => {
     act(() => fake.callback?.("TOKEN_REFRESHED", sessionFor("unit-user", "refreshed-token")));
     await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent("ready"));
     expect(canvasSnapshot()).toEqual(before);
+  });
+
+  it("never leaves ready while a same-user token refresh re-resolves", async () => {
+    // The mid-session "resolving" dip unmounted every guarded route and
+    // wiped in-flight editor drafts (designer review P0-2).
+    const seen: string[] = [];
+    function StatusSpy(): null {
+      seen.push(useAuthSession().status);
+      return null;
+    }
+    mount(<StatusSpy />);
+    await waitFor(() => expect(seen).toContain("ready"));
+    seen.length = 0;
+    vi.mocked(authMe).mockResolvedValueOnce(result("org-A"));
+    act(() => fake.callback?.("TOKEN_REFRESHED", sessionFor("unit-user", "refreshed-token")));
+    await waitFor(() => expect(authMe).toHaveBeenCalledTimes(2));
+    expect(seen).not.toContain("resolving");
+    expect(seen[seen.length - 1]).toBe("ready");
+  });
+
+  it("retains the resolved context when a same-user refresh fetch fails", async () => {
+    mount();
+    await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent("ready"));
+    vi.mocked(authMe).mockRejectedValueOnce(new Error("network down"));
+    await act(async () => {
+      fake.callback?.("TOKEN_REFRESHED", sessionFor("unit-user", "refreshed-token"));
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(authMe).toHaveBeenCalledTimes(2));
+    expect(screen.getByTestId("status")).toHaveTextContent("ready");
+    expect(screen.getByTestId("active-org")).toHaveTextContent("org-A");
   });
 
   it("cannot expose tenant A design through CommercialDraft after selecting tenant B", async () => {

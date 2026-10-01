@@ -14,6 +14,10 @@ export type JobsListParams = {
    */
   limit?: number;
   /**
+   * @minimum 0
+   */
+  offset?: number;
+  /**
    * * `QUEUED` - QUEUED
    * * `RUNNING` - RUNNING
    * * `SUCCEEDED` - SUCCEEDED

@@ -36,6 +36,10 @@ class VerticalReference(str, Enum):
 class PlacementOffsetV1(EngineModel):
     x_mm: Decimal
     y_mm: Decimal
+    # Slot-pitch multiplier: sliding leaf origins scale with the bay, so
+    # the authority declares the slot multiple and the trace's slot_pitch_mm
+    # resolves it to millimetres. x = x_mm + x_pitches · pitch.
+    x_pitches: Decimal = Decimal("0")
 
 
 class ManufacturingPlacementPolicyV1(EngineModel):
@@ -54,6 +58,156 @@ class ManufacturingPlacementPolicyV1(EngineModel):
         return self
 
 
+def _json_decimal(value: object, field: str) -> Decimal:
+    """Coerce a JSONB numeric into Decimal — accepts native numbers and
+    decimal-formatted strings, rejects everything else (bool, NaN, dicts)."""
+    if isinstance(value, bool):
+        raise ManufacturingAuthorityError(f"{field} is not a number")
+    if isinstance(value, (int, Decimal, str)):
+        try:
+            parsed = Decimal(str(value))
+        except Exception as error:
+            raise ManufacturingAuthorityError(f"{field} is not a number") from error
+        if not parsed.is_finite():
+            raise ManufacturingAuthorityError(f"{field} is not a number")
+        return parsed
+    raise ManufacturingAuthorityError(f"{field} is not a number")
+
+
+def handle_policy_from_json(raw: object) -> HandleRequirementPolicyV1:
+    """Canonical JSONB → HandleRequirementPolicyV1 parse.
+
+    ``authority`` columns store plain JSON; strict model_validate cannot
+    accept it because JSON has no enum instances. This parser coerces each
+    declared field explicitly (str→enum, str/number→Decimal) and then lets
+    the strict model validate the assembled structure — malformed payloads
+    raise ``ManufacturingAuthorityError`` either way.
+    """
+    if not isinstance(raw, dict) or not isinstance(raw.get("slots"), list):
+        raise ManufacturingAuthorityError("invalid_handle_policy")
+    try:
+        slots = []
+        for item in raw["slots"]:
+            if not isinstance(item, dict):
+                raise ManufacturingAuthorityError("invalid_handle_policy")
+            if item.get("horizontal_reference") not in (
+                "HOST_MEMBER_AXIS", "HOST_MEMBER_CENTER",
+            ):
+                raise ManufacturingAuthorityError("invalid_handle_policy")
+            if item.get("leaf_handedness") is not None and item["leaf_handedness"] not in (
+                "LEFT", "RIGHT",
+            ):
+                raise ManufacturingAuthorityError("invalid_handle_policy")
+            side = MemberSide(str(item["host_member_side"]))
+            if side not in (MemberSide.LEFT, MemberSide.RIGHT, MemberSide.BOTTOM):
+                raise ManufacturingAuthorityError("invalid_handle_policy")
+            slots.append(HandleSlotRuleV1(
+                opening_type=BayOpeningType(str(item["opening_type"])),
+                leaf_slot=None if item.get("leaf_slot") is None else str(item["leaf_slot"]),
+                leaf_handedness=item.get("leaf_handedness"),
+                handle_domain_slot=str(item["handle_domain_slot"]),
+                host_member_side=side,
+                horizontal_reference=item["horizontal_reference"],
+                horizontal_offset_mm=_json_decimal(item["horizontal_offset_mm"],
+                                                   "horizontal_offset_mm"),
+                permitted_vertical_references=[
+                    VerticalReference(str(reference))
+                    for reference in item["permitted_vertical_references"]
+                ],
+                mounting_min_from_leaf_top_mm=_json_decimal(
+                    item["mounting_min_from_leaf_top_mm"],
+                    "mounting_min_from_leaf_top_mm"),
+                mounting_max_from_leaf_top_mm=_json_decimal(
+                    item["mounting_max_from_leaf_top_mm"],
+                    "mounting_max_from_leaf_top_mm"),
+            ))
+        if int(raw["schema_version"]) != 1:
+            raise ManufacturingAuthorityError("invalid_handle_policy")
+        return HandleRequirementPolicyV1(
+            schema_version=1, policy_id=str(raw["policy_id"]),
+            version=int(raw["version"]), slots=slots,
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        if isinstance(error, ManufacturingAuthorityError):
+            raise
+        raise ManufacturingAuthorityError("invalid_handle_policy") from error
+
+
+def _placement_offset_from_json(value: object) -> PlacementOffsetV1:
+    if not isinstance(value, dict):
+        raise ManufacturingAuthorityError("invalid_placement_policy")
+    return PlacementOffsetV1(
+        x_mm=_json_decimal(value.get("x_mm"), "x_mm"),
+        y_mm=_json_decimal(value.get("y_mm"), "y_mm"),
+        x_pitches=_json_decimal(value.get("x_pitches", "0"), "x_pitches"),
+    )
+
+
+def placement_policy_from_json(raw: object) -> ManufacturingPlacementPolicyV1:
+    """Canonical JSONB → ManufacturingPlacementPolicyV1 parse."""
+    if not isinstance(raw, dict):
+        raise ManufacturingAuthorityError("invalid_placement_policy")
+    try:
+        leaves = raw["sliding_leaf_offsets"]
+        infills = raw["sliding_infill_offsets"]
+        beads = raw["bead_offsets"]
+        if not isinstance(leaves, dict) or not isinstance(infills, dict) or not isinstance(beads, dict):
+            raise ManufacturingAuthorityError("invalid_placement_policy")
+        if int(raw["schema_version"]) != 1:
+            raise ManufacturingAuthorityError("invalid_placement_policy")
+        return ManufacturingPlacementPolicyV1(
+            schema_version=1,
+            policy_id=str(raw["policy_id"]),
+            version=int(raw["version"]),
+            sliding_leaf_offsets={str(key): _placement_offset_from_json(item)
+                                  for key, item in leaves.items()},
+            sliding_infill_offsets={str(key): _placement_offset_from_json(item)
+                                    for key, item in infills.items()},
+            bead_offsets={MemberSide(str(key)): _placement_offset_from_json(item)
+                          for key, item in beads.items()},
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        if isinstance(error, ManufacturingAuthorityError):
+            raise
+        raise ManufacturingAuthorityError("invalid_placement_policy") from error
+
+
+def reinforcement_policy_from_json(raw: object) -> ReinforcementCutPolicyV1:
+    """Canonical JSONB → ReinforcementCutPolicyV1 parse."""
+    if not isinstance(raw, dict) or not isinstance(raw.get("rules"), list):
+        raise ManufacturingAuthorityError("invalid_reinforcement_policy")
+    try:
+        rules = []
+        for item in raw["rules"]:
+            if not isinstance(item, dict) or item.get("length_authority") != "EXISTING_ENGINE":
+                raise ManufacturingAuthorityError("invalid_reinforcement_policy")
+            if item.get("compatible_with_existing_length") is not True:
+                raise ManufacturingAuthorityError("invalid_reinforcement_policy")
+            rules.append(ReinforcementCutRuleV1(
+                role=ProfileRole(str(item["role"])),
+                profile_angle_left=_json_decimal(item["profile_angle_left"],
+                                                 "profile_angle_left"),
+                profile_angle_right=_json_decimal(item["profile_angle_right"],
+                                                  "profile_angle_right"),
+                reinforcement_angle_left=_json_decimal(item["reinforcement_angle_left"],
+                                                       "reinforcement_angle_left"),
+                reinforcement_angle_right=_json_decimal(item["reinforcement_angle_right"],
+                                                        "reinforcement_angle_right"),
+                length_authority="EXISTING_ENGINE",
+                compatible_with_existing_length=True,
+            ))
+        if int(raw["schema_version"]) != 1:
+            raise ManufacturingAuthorityError("invalid_reinforcement_policy")
+        return ReinforcementCutPolicyV1(
+            schema_version=1, policy_id=str(raw["policy_id"]),
+            version=int(raw["version"]), rules=rules,
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        if isinstance(error, ManufacturingAuthorityError):
+            raise
+        raise ManufacturingAuthorityError("invalid_reinforcement_policy") from error
+
+
 class HandleIntentV1(EngineModel):
     schema_version: Literal[1] = 1
     bay_id: str
@@ -67,8 +221,16 @@ class HandleSlotRuleV1(EngineModel):
     opening_type: BayOpeningType
     leaf_slot: str | None = None
     handle_domain_slot: str
-    host_member_side: Literal[MemberSide.LEFT, MemberSide.RIGHT]
-    horizontal_reference: Literal["HOST_MEMBER_AXIS"] = "HOST_MEMBER_AXIS"
+    # Optional handedness pin: a rule carrying LEFT/RIGHT applies only to
+    # leaves whose declared handedness (door hinge side) matches it, so a
+    # mirrored door mounts its handle on the opposite free stile. A rule
+    # with no handedness is a wildcard; declared-handedness rules win over
+    # it when both would match.
+    leaf_handedness: Literal["LEFT", "RIGHT"] | None = None
+    host_member_side: Literal[MemberSide.LEFT, MemberSide.RIGHT, MemberSide.BOTTOM]
+    horizontal_reference: Literal["HOST_MEMBER_AXIS", "HOST_MEMBER_CENTER"] = (
+        "HOST_MEMBER_AXIS"
+    )
     horizontal_offset_mm: Decimal
     permitted_vertical_references: list[VerticalReference] = Field(min_length=1)
     mounting_min_from_leaf_top_mm: Decimal = Field(ge=Decimal("0"))
@@ -161,6 +323,8 @@ class LeafAssemblyFactV1(EngineModel):
     leaf_id: str | None
     leaf_slot: str
     opening_type: BayOpeningType
+    # Declared door hinge side, when the leaf carries one.
+    door_handedness: Literal["LEFT", "RIGHT"] | None = None
     rect: TraceRectV1
 
 
@@ -253,8 +417,16 @@ def _segment_for_side(rect: TraceRectV1, side: MemberSide) -> TraceSegmentV1:
 
 
 def _offset_rect(rect: TraceRectV1, offset: PlacementOffsetV1,
-                 width_mm: Decimal, height_mm: Decimal) -> TraceRectV1:
-    return TraceRectV1(x_mm=rect.x_mm + offset.x_mm, y_mm=rect.y_mm + offset.y_mm,
+                 width_mm: Decimal, height_mm: Decimal,
+                 slot_pitch_mm: Decimal | None = None) -> TraceRectV1:
+    x = rect.x_mm + offset.x_mm
+    if offset.x_pitches != 0:
+        if slot_pitch_mm is None:
+            raise ManufacturingAuthorityError(
+                "Placement authority needs the leaf's slot pitch"
+            )
+        x += offset.x_pitches * slot_pitch_mm
+    return TraceRectV1(x_mm=x, y_mm=rect.y_mm + offset.y_mm,
                        width_mm=width_mm, height_mm=height_mm)
 
 
@@ -346,6 +518,7 @@ def project_manufacturing_facts_v1(
                 _one_offset(placement_policy.sliding_leaf_offsets, leaf.leaf_slot, "sliding leaf"),
                 leaf.finished_width_mm,
                 leaf.finished_height_mm,
+                leaf.slot_pitch_mm,
             )
         leaf_rects[leaf.semantic_leaf_id] = rect
         target = (leaf.bay_id, leaf.leaf_id)
@@ -373,6 +546,7 @@ def project_manufacturing_facts_v1(
             leaf_id=leaf.leaf_id,
             leaf_slot=leaf.leaf_slot,
             opening_type=leaf.opening_type,
+            door_handedness=leaf.door_handedness,
             rect=rect,
         ))
 
@@ -541,8 +715,36 @@ def project_manufacturing_facts_v1(
             slot_rule for slot_rule in handle_policy.slots
             if slot_rule.opening_type is leaf.opening_type
             and (slot_rule.leaf_slot is None or slot_rule.leaf_slot == leaf.leaf_slot)
+            and (
+                slot_rule.leaf_handedness is None
+                or slot_rule.leaf_handedness == leaf.door_handedness
+            )
         ]
+        # A declared-handedness leaf prefers rules pinned to that
+        # handedness over wildcard rules for the same domain slot —
+        # per slot, so a wildcard rule for a slot with no pinned entry
+        # still applies.
+        if leaf.door_handedness is not None:
+            pinned_slots = {
+                slot_rule.handle_domain_slot
+                for slot_rule in handle_rules
+                if slot_rule.leaf_handedness == leaf.door_handedness
+            }
+            handle_rules = [
+                slot_rule
+                for slot_rule in handle_rules
+                if slot_rule.leaf_handedness is not None
+                or slot_rule.handle_domain_slot not in pinned_slots
+            ]
         if not handle_rules:
+            if leaf.opening_type is BayOpeningType.DOOR_ENTRY and any(
+                slot_rule.opening_type is BayOpeningType.DOOR_ENTRY
+                and slot_rule.leaf_handedness is not None
+                for slot_rule in handle_policy.slots
+            ):
+                raise ManufacturingAuthorityError(
+                    "Door leaf handedness is undeclared"
+                )
             raise ManufacturingAuthorityError("Handle requirement policy has no rule for a physical leaf")
         rules_by_slot: dict[str, int] = {}
         for slot_rule in handle_rules:
@@ -573,7 +775,10 @@ def project_manufacturing_facts_v1(
             maximum = leaf_rect.y_mm + handle_rule.mounting_max_from_leaf_top_mm
             if y_mm < minimum or y_mm > maximum:
                 raise ManufacturingAuthorityError("Handle point is outside its mounting region")
-            x_mm = host.start.x_mm + handle_rule.horizontal_offset_mm
+            if handle_rule.horizontal_reference == "HOST_MEMBER_CENTER":
+                x_mm = (host.start.x_mm + host.end.x_mm) / Decimal("2") + handle_rule.horizontal_offset_mm
+            else:
+                x_mm = host.start.x_mm + handle_rule.horizontal_offset_mm
             handle_id = documentary_sha256_v1({
                 "kind": "handle", **scope, "position_id": position_id,
                 "position_index": position_index, "repetition_index": repetition_index,

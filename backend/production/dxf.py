@@ -27,9 +27,21 @@ def _pairs(*items: object) -> str:
     return "\n".join(str(item) for item in items) + "\n"
 
 
+def _ascii(text: str) -> str:
+    """AC1015 predates UTF-8 — labels go out ASCII-only so strict CAM
+    importers never see mojibake (e.g. '·' arriving as 'Â·')."""
+    return (
+        text.replace("·", "-").replace("⟳", "(rot)")
+        .encode("ascii", "replace").decode("ascii")
+    )
+
+
 def _lwpoly(layer: str, points: Iterable[tuple[Decimal, Decimal]]) -> str:
     pts = list(points)
-    out = ["0", "LWPOLYLINE", "8", layer, "90", str(len(pts)), "70", "1"]
+    out = [
+        "0", "LWPOLYLINE", "100", "AcDbEntity", "8", layer,
+        "100", "AcDbPolyline", "90", str(len(pts)), "70", "1",
+    ]
     for x, y in pts:
         out.extend(("10", _fmt(x), "20", _fmt(y)))
     return "\n".join(out) + "\n"
@@ -43,7 +55,7 @@ def _rect(layer: str, x: Decimal, y: Decimal, w: Decimal, h: Decimal) -> str:
 
 def _line(layer: str, x1: Decimal, y1: Decimal, x2: Decimal, y2: Decimal) -> str:
     return _pairs(
-        "0", "LINE", "8", layer,
+        "0", "LINE", "100", "AcDbEntity", "8", layer, "100", "AcDbLine",
         "10", _fmt(x1), "20", _fmt(y1), "30", "0",
         "11", _fmt(x2), "21", _fmt(y2), "31", "0",
     )
@@ -51,9 +63,9 @@ def _line(layer: str, x1: Decimal, y1: Decimal, x2: Decimal, y2: Decimal) -> str
 
 def _text(layer: str, x: Decimal, y: Decimal, height: Decimal, content: str) -> str:
     return _pairs(
-        "0", "TEXT", "8", layer,
+        "0", "TEXT", "100", "AcDbEntity", "8", layer, "100", "AcDbText",
         "10", _fmt(x), "20", _fmt(y), "30", "0",
-        "40", _fmt(height), "1", content, "7", "STANDARD",
+        "40", _fmt(height), "1", _ascii(content), "7", "STANDARD",
     )
 
 
@@ -93,7 +105,21 @@ def _dxf(entities: str, extmax_x: Decimal, extmax_y: Decimal) -> str:
     )
 
 
-def _sheet_entities(sheet: dict) -> tuple[str, Decimal, Decimal]:
+def _placement_code(piece: dict, codes: dict[str, str] | None) -> str:
+    """Printed piece identity: the member/infill code when the caller
+    resolved one, else a short id — never the raw 64-hex hash wall."""
+    piece_id = str(piece.get("piece_id") or "?")
+    code = piece_id if len(piece_id) <= 12 else piece_id[:10]
+    if codes:
+        code = codes.get(str(piece.get("piece_id") or ""), code)
+    if piece.get("unit_index") is not None:
+        code += f"-U{piece['unit_index']}"
+    return code
+
+
+def _sheet_entities(
+    sheet: dict, codes: dict[str, str] | None
+) -> tuple[str, Decimal, Decimal]:
     width = Decimal(str(sheet.get("sheet_width_mm") or 0))
     height = Decimal(str(sheet.get("sheet_height_mm") or 0))
     entities = _rect("OUTLINE", Decimal(0), Decimal(0), width, height)
@@ -103,9 +129,7 @@ def _sheet_entities(sheet: dict) -> tuple[str, Decimal, Decimal]:
         w = Decimal(str(placement.get("width_mm") or 0))
         h = Decimal(str(placement.get("height_mm") or 0))
         entities += _rect("CUT", x, y, w, h)
-        piece = f"{placement.get('piece_id') or '?'}"
-        if placement.get("unit_index") is not None:
-            piece += f"·U{placement['unit_index']}"
+        piece = _placement_code(placement, codes)
         entities += _text(
             "LABEL", x + _LABEL_HEIGHT, y + h / 2, _SHEET_LABEL_HEIGHT,
             f"{piece} {w}x{h}",
@@ -113,7 +137,9 @@ def _sheet_entities(sheet: dict) -> tuple[str, Decimal, Decimal]:
     return entities, width, height
 
 
-def _bars_entities(bars: list[dict]) -> tuple[str, Decimal]:
+def _bars_entities(
+    bars: list[dict], codes: dict[str, str] | None
+) -> tuple[str, Decimal]:
     entities = ""
     max_x = Decimal(0)
     for index, bar in enumerate(
@@ -125,7 +151,7 @@ def _bars_entities(bars: list[dict]) -> tuple[str, Decimal]:
         entities += _text(
             "LABEL", Decimal(0), base_y - _LABEL_HEIGHT - Decimal(4),
             _LABEL_HEIGHT,
-            f"{bar.get('commercial_sku') or ''} · stock {stock}",
+            f"{bar.get('commercial_sku') or ''} stock {stock}",
         )
         if stock > max_x:
             max_x = stock
@@ -148,9 +174,7 @@ def _bars_entities(bars: list[dict]) -> tuple[str, Decimal]:
             angles = "/".join(
                 str(a) for a in (cut.get("angle_left"), cut.get("angle_right")) if a
             )
-            piece = f"{cut.get('piece_id') or '?'}"
-            if cut.get("unit_index") is not None:
-                piece += f"·U{cut['unit_index']}"
+            piece = _placement_code(cut, codes)
             label = f"{piece} {length}"
             if angles:
                 label += f" {angles}"
@@ -162,18 +186,22 @@ def _bars_entities(bars: list[dict]) -> tuple[str, Decimal]:
     return entities, max_x
 
 
-def dxf_files(optimization: dict) -> dict[str, str]:
+def dxf_files(
+    optimization: dict, codes: dict[str, str] | None = None
+) -> dict[str, str]:
     """Deterministic machine files: one ``sheet_<n>.dxf`` per nested sheet and
-    a single ``bars.dxf`` when the bar plan exists."""
+    a single ``bars.dxf`` when the bar plan exists. ``codes`` optionally
+    maps piece_id → workshop piece code (M-xx/I-xx) so labels match the
+    printed packs instead of carrying raw hash prefixes."""
     files: dict[str, str] = {}
     for sheet in sorted(
         optimization.get("sheets") or [], key=lambda s: int(s.get("sheet_index") or 0)
     ):
-        entities, width, height = _sheet_entities(sheet)
+        entities, width, height = _sheet_entities(sheet, codes)
         files[f"sheet_{sheet.get('sheet_index')}.dxf"] = _dxf(entities, width, height)
     bars = (optimization.get("bars") or {}).get("workshop_cut_plan") or []
     if bars:
-        entities, max_x = _bars_entities(bars)
+        entities, max_x = _bars_entities(bars, codes)
         row_count = len(bars)
         files["bars.dxf"] = _dxf(
             entities,

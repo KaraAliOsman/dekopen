@@ -22,4 +22,6 @@ export interface JobRun {
   started_at: string | null;
   /** @nullable */
   completed_at: string | null;
+  /** @nullable */
+  ai_job_id?: string | null;
 }

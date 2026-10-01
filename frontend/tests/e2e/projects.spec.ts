@@ -5,6 +5,7 @@ import type {
   PositionResponse,
   ProjectResponse,
 } from "../../src/api/generated/models";
+import { fmtMm } from "../../src/format";
 import { test } from "./support/manual-project-fixture";
 
 test.use({ viewport: { width: 1366, height: 768 }, actionTimeout: 15_000 });
@@ -43,7 +44,7 @@ async function screenshot(page: Page, info: TestInfo, name: string): Promise<voi
 /** The desk grid is select-then-act: click the vano's row so the side pane
  * offers its actions, then return the action link inside it. */
 async function card(page: Page, location: string, action: string) {
-  await page.locator(".position-grid [role='listitem']").filter({ hasText: location }).click();
+  await page.locator(".position-grid [role='option']").filter({ hasText: location }).click();
   return page.locator(".project-desk__side").getByRole("link", { name: action, exact: true });
 }
 
@@ -52,11 +53,18 @@ test("SHOT-10 real project core path and visual evidence", async ({ page, manual
 
   const projectName = `E2E sintético ${crypto.randomUUID()}`;
   const save = () => page.getByRole("button", { name: "Guardar", exact: true }).click();
-  const back = () => page.getByRole("link", { name: "Volver al proyecto", exact: true }).click();
+  // Navigation uses the editor's own backlink ("Volver al proyecto"). React
+  // Query may serve the project from its fresh cache without a fetch, so the
+  // reload makes the backend round-trip (and in-memory reset) explicit.
+  const back = () => page.getByRole("link", { name: /Volver al proyecto/ }).click();
+  const toProjects = () => page.getByRole("link", { name: /‹ Proyectos/ }).click();
+  const freshRead = () => page.reload();
 
   await page.goto("/projects");
   await expect(page.getByText("No hay proyectos que coincidan.", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Crear proyecto", exact: true }).click();
+  // Extended identity fields live under the collapsed "Datos adicionales" section.
+  await page.locator("summary", { hasText: "Datos adicionales" }).click();
 
   const metadata = [
     ["Nombre del proyecto", projectName],
@@ -191,13 +199,16 @@ test("SHOT-10 real project core path and visual evidence", async ({ page, manual
   await expect(page.getByText("Guardado", { exact: true })).toBeVisible();
 
   const bom = page.locator("details.project-bom");
-  await bom.locator("summary").click();
+  await bom.waitFor({ state: "attached" });
+  await bom.evaluate((element) => {
+    (element as HTMLDetailsElement).open = true;
+  });
   const profileRows = bom.locator("table").first().locator("tbody tr");
   await expect(profileRows).toHaveCount(editedBom.profile_cuts.length);
   for (const [index, cut] of editedBom.profile_cuts.entries()) {
     await expect(profileRows.nth(index).locator("td")).toHaveText([
       cut.sku,
-      cut.length_mm,
+      fmtMm(cut.length_mm),
       String(cut.qty),
     ]);
   }
@@ -220,15 +231,26 @@ test("SHOT-10 real project core path and visual evidence", async ({ page, manual
   });
 
   // Leave both editor and project; full reload removes in-memory UI state.
-  await responseTo(page, "GET", projectApi, 200, back);
   await back();
+  await expect(page).toHaveURL(new RegExp(`${projectPath}$`));
+  const projectResponse = await responseTo<ProjectResponse>(
+    page,
+    "GET",
+    projectApi,
+    200,
+    freshRead,
+  );
+  expect(projectResponse.status).toBe("DRAFT");
+  expect(projectResponse.pricing_current).toBe(false);
+  expect(projectResponse.position_count).toBe(1);
+  await toProjects();
   await expect(page).toHaveURL(/\/projects$/);
   await page.reload();
 
   const reopenedProject = await responseTo<ProjectResponse>(page, "GET", projectApi, 200, () =>
     page
       .getByRole("link", {
-        name: `${project.code} · ${projectName}`,
+        name: projectName,
         exact: true,
       })
       .click(),
@@ -245,11 +267,17 @@ test("SHOT-10 real project core path and visual evidence", async ({ page, manual
   await expect(
     page.locator(".opening-grid").getByRole("button", { name: "Abatible derecha", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
-  await bom.locator("summary").click();
+  // The canvas sheet overlays the summary on this layout; open the details
+  // declaratively instead of clicking through the overlay.
+  await bom.waitFor({ state: "attached" });
+  await bom.evaluate((element) => {
+    (element as HTMLDetailsElement).open = true;
+  });
   await bom.scrollIntoViewIfNeeded();
   await screenshot(page, info, "03-reopened-bom");
 
-  await responseTo(page, "GET", projectApi, 200, back);
+  await back();
+  await expect(page).toHaveURL(new RegExp(`${projectPath}$`));
   await responseTo(page, "GET", positionApi, 200, () =>
     card(page, "Cocina original", "Duplicar vano").then((link) => link.click()),
   );
@@ -269,7 +297,9 @@ test("SHOT-10 real project core path and visual evidence", async ({ page, manual
   await expect(page).toHaveURL(new RegExp(`${projectPath}/positions/${duplicate.id}/edit$`));
   await expect(page.getByText("Guardado", { exact: true })).toBeVisible();
 
-  const source = await responseTo<ProjectResponse>(page, "GET", projectApi, 200, back);
+  await back();
+  await expect(page).toHaveURL(new RegExp(`${projectPath}$`));
+  const source = await responseTo<ProjectResponse>(page, "GET", projectApi, 200, freshRead);
   expect(source.position_count).toBe(2);
   expect(source.positions!.find((item) => item.id === saved.id)).toEqual(saved);
 
@@ -307,7 +337,7 @@ test("SHOT-10 real project core path and visual evidence", async ({ page, manual
     () => page.reload(),
   );
   expect(reopenedClone.positions).toEqual(clone.positions);
-  await expect(page.locator(".position-grid [role='listitem']")).toHaveCount(2);
+  await expect(page.locator(".position-grid [role='option']")).toHaveCount(2);
   await page.getByRole("heading", { level: 1 }).scrollIntoViewIfNeeded();
   await screenshot(page, info, "04-reopened-draft-clone");
 

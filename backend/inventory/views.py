@@ -15,10 +15,11 @@ from rest_framework.views import APIView
 from authentication.errors import contract_error
 from authentication.serializers import ACTIVE_ORGANIZATION_HEADER
 from documents.repository import DocumentaryError
-from documents.views import ERRORS, documentary_scope, validate
+from documents.views import DOCUMENTARY_ERROR_DETAILS, ERRORS, documentary_scope, validate
 from inventory import service
 from inventory import remnants as remnants_service
 from inventory.serializers import (
+    BarAuthorityListSerializer,
     InventoryMovementRequestSerializer,
     InventoryMovementSerializer,
     InventoryMovementsSerializer,
@@ -28,13 +29,14 @@ from inventory.serializers import (
     OrderReceivingSerializer,
     RemnantCreateSerializer,
     RemnantListQuerySerializer,
+    RemnantLabelSerializer,
     RemnantListSerializer,
     RemnantSerializer,
 )
 
 logger = logging.getLogger(__name__)
 
-_READERS = ("OWNER", "ESTIMATOR", "WORKSHOP_MANAGER")
+_READERS = ("OWNER", "ESTIMATOR", "WORKSHOP_MANAGER", "OPERATOR")
 _WRITERS = ("OWNER", "WORKSHOP_MANAGER")
 
 
@@ -48,6 +50,7 @@ def public_inventory_errors():
             status_code,
             error.code,
             error.public_detail
+            or DOCUMENTARY_ERROR_DETAILS.get(error.code)
             or "La operación de inventario fue rechazada; revisa el pedido y las cantidades.",
             error_extra=error.extra or None,
         ) from error
@@ -117,6 +120,8 @@ class InventoryMovementsView(APIView):
                     quantity=data["quantity"],
                     lot_code=data.get("lot_code"),
                     note=data["note"],
+                    rack_location=data.get("rack_location"),
+                    actor_label=token.email or None,
                 )
         return Response(output)
 
@@ -155,8 +160,24 @@ class OrderReceiptCreateView(APIView):
                     receipt_key=data["receipt_key"],
                     note=data.get("note"),
                     lines=data["lines"],
+                    actor_label=token.email or None,
                 )
         return Response(output, status=201 if created else 200)
+
+
+class BarAuthorityListView(APIView):
+    @extend_schema(
+        operation_id="inventory_bar_authorities",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={200: BarAuthorityListSerializer, **ERRORS},
+        tags=["inventory"],
+    )
+    def get(self, request):
+        with public_inventory_errors():
+            with documentary_scope(request, _READERS) as (_, _, org_id):
+                output = remnants_service.list_bar_authorities(org_id=org_id)
+        return Response(output)
 
 
 class RemnantListView(APIView):
@@ -240,3 +261,20 @@ class RemnantReleaseView(_RemnantTransitionView):
     )
     def post(self, request, remnant_id: UUID):
         return super().post(request, remnant_id)
+
+
+class RemnantLabelView(APIView):
+    @extend_schema(
+        operation_id="inventory_remnant_label",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={200: RemnantLabelSerializer, **ERRORS},
+        tags=["inventory"],
+    )
+    def get(self, request, remnant_id: UUID):
+        with public_inventory_errors():
+            with documentary_scope(request, _READERS) as (_, _, org_id):
+                output = remnants_service.remnant_label(
+                    org_id=org_id, remnant_id=remnant_id,
+                )
+        return Response(output)

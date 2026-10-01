@@ -1,19 +1,26 @@
+import { fmtMm } from "../../format";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { ApiError } from "../../api/apiMutator";
 import {
   documentaryArtifactAccess,
   documentaryFreezeRevisionA,
+  documentaryListArtifacts,
   documentaryPrepareInputs,
   documentarySaveInputs,
   productionRelease,
+  projectQuoteApproveInternal,
   projectQuoteLinkCreate,
+  projectQuoteLinkRevoke,
+  projectQuoteLinksList,
   projectsStartSuccessor,
   projectsResetPricing,
 } from "../../api/generated/dekopen";
 import type {
   AccessoryLine,
   AccessorySchedule,
+  ApprovalRecord,
   CoverageEnum,
   PolishingEdges,
   DocumentaryPolicyOption,
@@ -29,7 +36,7 @@ import type {
   WorkshopGlassTarget,
 } from "../../api/generated/models";
 import { t, type TranslationKey } from "../../i18n/es-CL";
-import { formatRevision } from "../../format";
+import { formatDateTime, formatRevision } from "../../format";
 import {
   addDecimal,
   compareDecimal,
@@ -109,6 +116,72 @@ const ORDER_TYPE_KEYS: Record<(typeof ORDER_TYPES)[number], TranslationKey> = {
 };
 
 const EMPTY_EDGES: PolishingEdges = { top: false, right: false, bottom: false, left: false };
+
+const approvalStatusKeys: Record<ApprovalRecord["status"], TranslationKey> = {
+  PENDING: "quotation.linkPending",
+  APPROVED: "quotation.linkApproved",
+  DECLINED: "quotation.linkDeclined",
+  REVOKED: "quotation.linkRevoked",
+};
+
+/** One inspector rule that blocked the freeze, from the 422's
+ * `error.inspector_failures` extra (review WB2). */
+interface InspectorFailure {
+  rule: string;
+  severity: string;
+  title: string;
+  diagnosis: string;
+  recommendation: string;
+  module_id: string | null;
+  bay_id: string | null;
+  leaf_id: string | null;
+}
+
+function readInspectorFailures(payload: unknown): InspectorFailure[] {
+  if (typeof payload !== "object" || payload === null) return [];
+  const error = (payload as { error?: unknown }).error;
+  if (typeof error !== "object" || error === null) return [];
+  const failures = (error as { inspector_failures?: unknown }).inspector_failures;
+  if (!Array.isArray(failures)) return [];
+  return failures.filter(
+    (item): item is InspectorFailure =>
+      typeof item === "object" &&
+      item !== null &&
+      typeof (item as InspectorFailure).rule === "string" &&
+      typeof (item as InspectorFailure).title === "string",
+  );
+}
+
+/** The server's human detail ("Vano 3 · Dormitorio: no hay precio…") beats
+ * the generic toast copy whenever the API supplies one. Plain DRF 400s have
+ * no contract envelope — dig out the first field error with its field name
+ * so a rejected Emitir names what to fix instead of the generic toast. */
+function apiDetail(payload: unknown): string | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const error = (payload as { error?: unknown }).error;
+  const detail =
+    typeof error === "object" && error !== null ? (error as { detail?: unknown }).detail : null;
+  if (typeof detail === "string" && detail.trim()) return detail;
+
+  const fieldError = (node: unknown, path: string): string | null => {
+    if (typeof node === "string" && node.trim()) return path ? `${path}: ${node}` : node;
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        const hit = fieldError(item, path);
+        if (hit) return hit;
+      }
+      return null;
+    }
+    if (typeof node === "object" && node !== null) {
+      for (const [key, value] of Object.entries(node)) {
+        const hit = fieldError(value, path ? `${path}.${key}` : key);
+        if (hit) return hit;
+      }
+    }
+    return null;
+  };
+  return fieldError(payload, "");
+}
 
 function GlassPolishingRow({
   target,
@@ -202,7 +275,7 @@ function CsvMmField({
   disabled: boolean;
   onCommit(value: string[] | null): void;
 }): JSX.Element {
-  const canonical = values?.join(", ") ?? "";
+  const canonical = (values ?? []).map(fmtMm).join(", ");
   const [draft, setDraft] = useState(canonical);
   useEffect(() => setDraft(canonical), [canonical]);
   return (
@@ -219,7 +292,7 @@ function CsvMmField({
           const parsed = parseMmList(draft);
           if (parsed === null) {
             setDraft(canonical);
-          } else if (parsed.join(",") !== (values ?? []).join(",")) {
+          } else if (parsed.join(",") !== (values ?? []).map(fmtMm).join(",")) {
             onCommit(parsed.length > 0 ? parsed : null);
           }
         }}
@@ -231,6 +304,35 @@ function CsvMmField({
       <span className="workshop-unit">mm</span>
     </label>
   );
+}
+
+/** Stored decimals arrive as "300.0000" — the workshop inputs are edited by
+ * people, so display strings normalize to business precision once at load
+ * (fmtMm trims trailing zeros; the field stays editable). */
+function normalizePreparationMm(
+  position: DocumentaryPreparationPosition,
+): DocumentaryPreparationPosition {
+  const annotations = position.workshop_annotations.map((annotation) => ({
+    ...annotation,
+    bottom_drain_holes_mm: annotation.bottom_drain_holes_mm?.map(fmtMm) ?? null,
+    closing_points_perimeter_mm: annotation.closing_points_perimeter_mm?.map(fmtMm) ?? null,
+    continuous_width_mm:
+      annotation.continuous_width_mm == null ? null : fmtMm(annotation.continuous_width_mm),
+  }));
+  const structural = position.structural_inputs.map((input) => ({
+    ...input,
+    required_ix_cm4: input.required_ix_cm4 == null ? null : fmtMm(input.required_ix_cm4),
+  }));
+  const intents = position.handle_intents.map((intent) => ({
+    ...intent,
+    requested_height_mm: intent.requested_height_mm === "" ? "" : fmtMm(intent.requested_height_mm),
+  }));
+  return {
+    ...position,
+    workshop_annotations: annotations,
+    structural_inputs: structural,
+    handle_intents: intents,
+  };
 }
 
 /** Valid input range for the entered height under its vertical reference.
@@ -519,6 +621,7 @@ export function ProjectQuotationPanel({
   orgId,
   canWrite,
   canRelease = false,
+  sharedUrlSeed,
   onChanged,
   onDirtyChange,
 }: {
@@ -528,21 +631,54 @@ export function ProjectQuotationPanel({
   /** OWNER/WORKSHOP_MANAGER — releasing a sealed version creates workshop
    * orders, a warehouse-side authority estimators don't hold. */
   canRelease?: boolean;
+  /** A link minted by the workspace header lands here too — the share row
+   * (WhatsApp/mail/copy) must appear regardless of which button minted it. */
+  sharedUrlSeed?: string;
   onChanged(): Promise<unknown>;
   onDirtyChange?(dirty: boolean): void;
 }): JSX.Element {
   const confirm = useConfirm();
   const prompt = usePrompt();
+  const queryClient = useQueryClient();
   const [preparation, setPreparation] = useState<DocumentaryPreparationResponse | null>(null);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [sharedUrl, setSharedUrl] = useState("");
+  // Header-minted links flow in via sharedUrlSeed — without the sync the
+  // share row only ever appeared when THIS panel's button created the link.
+  useEffect(() => {
+    if (sharedUrlSeed) setSharedUrl(sharedUrlSeed);
+  }, [sharedUrlSeed]);
+  // Inspector rules that blocked the last freeze attempt — the 422's
+  // inspector_failures payload so the estimator sees WHAT failed (WB2).
+  const [inspectorFailures, setInspectorFailures] = useState<InspectorFailure[]>([]);
   const [confirmed, setConfirmed] = useState(false);
   const generation = useRef(0);
   // Which handle intents the app seeded (vs typed by the estimator) —
   // placement/policy changes recompute only the seeded ones.
   const seededIntentKeys = useRef(new Map<string, Set<string>>());
   const requestOptions = { headers: { "X-Organization-ID": orgId } };
+  // Emitted document index: opening an existing artifact is one access call,
+  // not a generation job — the emit path only runs when the slot is empty.
+  const artifactIndex = useQuery({
+    queryKey: ["documents", "artifacts", orgId, project.id],
+    queryFn: async () => {
+      const response = await documentaryListArtifacts(project.id, requestOptions);
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      return response.data.artifacts;
+    },
+  });
+  // The customer-link ledger — same key the workspace header polls, so one
+  // cache feeds both the timeline and the per-link revoke controls here.
+  const approvals = useQuery({
+    queryKey: ["projects", "quote-approvals", orgId, project.id],
+    queryFn: async () => {
+      const response = await projectQuoteLinksList(project.id);
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      return response.data;
+    },
+  });
   useEffect(
     () => () => {
       generation.current += 1;
@@ -567,7 +703,7 @@ export function ProjectQuotationPanel({
           positions: response.data.positions.map((position) => {
             const seeded = seedHandleIntents(mergePreparationSuggestions(position));
             seededIntentKeys.current.set(String(position.position_id), new Set(seeded.seededKeys));
-            return seeded.position;
+            return normalizePreparationMm(seeded.position);
           }),
         });
       }
@@ -715,20 +851,32 @@ export function ProjectQuotationPanel({
 
   async function emit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
+    if (!preparation || !confirmed) return;
+    // A silent early-return reads as a dead button (review PM-C3): name the
+    // first missing gate instead of swallowing the click.
+    if (!project.current_pricing_operation_id) {
+      setMessage(t("quotation.emitNeedsPricing"));
+      return;
+    }
+    if (!preparation.quotation_valid_until) {
+      setMessage(t("quotation.emitNeedsValidUntil"));
+      return;
+    }
+    if (preparation.positions.some((position) => !position.location_tag.trim())) {
+      setMessage(t("quotation.emitNeedsLocation"));
+      return;
+    }
     if (
-      !preparation ||
-      !confirmed ||
-      !project.current_pricing_operation_id ||
-      !preparation.quotation_valid_until ||
       preparation.positions.some(
         (position) =>
-          !position.location_tag.trim() ||
           !position.manufacturing_placement_policy_id ||
           !position.handle_requirement_policy_id ||
           !position.reinforcement_cut_policy_id,
       )
-    )
+    ) {
+      setMessage(t("quotation.emitNeedsPolicies"));
       return;
+    }
     // A generated midpoint is a suggestion, not a choice: it can only seal
     // after the estimator accepts it (one click per position) or edits it.
     if (
@@ -777,6 +925,13 @@ export function ProjectQuotationPanel({
       setPreparation(null);
       setConfirmed(false);
       setDirty(false);
+      setInspectorFailures([]);
+      // A new sealed revision rebases the commercial deal — the header
+      // stepper's "Saldo" must recompute against THIS revision, not the
+      // previously emitted one (review WM5).
+      void queryClient.invalidateQueries({
+        queryKey: ["projects", "payments-summary", orgId, project.id],
+      });
       setMessage(
         `${t("quotation.emitted")} ${formatRevision(frozen.data.revision_code)}${
           frozen.data.production_allowed ? "" : ` · ${t("quotation.quoteOnlyNotice")}`
@@ -785,12 +940,12 @@ export function ProjectQuotationPanel({
       await onChanged();
     } catch (error) {
       if (generation.current !== current) return;
+      setInspectorFailures(error instanceof ApiError ? readInspectorFailures(error.payload) : []);
       setMessage(
-        t(
-          error instanceof ApiError && error.status === 409
-            ? "quotation.conflict"
-            : "quotation.error",
-        ),
+        error instanceof ApiError
+          ? (apiDetail(error.payload) ??
+              t(error.status === 409 ? "quotation.conflict" : "quotation.error"))
+          : t("quotation.error"),
       );
     } finally {
       if (generation.current === current) setBusy(false);
@@ -869,27 +1024,40 @@ export function ProjectQuotationPanel({
     }
   }
 
-  async function openEvidence(versionId: string): Promise<void> {
+  async function openEvidence(versionId: string, revisionCode: string): Promise<void> {
     const current = ++generation.current;
     setBusy(true);
     setMessage("");
     try {
-      setMessage(t("quotation.documentGenerating"));
-      const job = await runJob(
-        {
-          type: "document.artifact.generate",
-          payload: {
-            document_type: "DOC-01",
-            format: "PDF",
-            project_version_id: versionId,
-            order_id: null,
+      // An emitted artifact opens straight through access — no generation
+      // job, no worker round-trip, nothing for the user to wait on.
+      let artifactId = artifactIndex.data?.find(
+        (item) =>
+          item.project_version_id === versionId &&
+          item.document_type === "DOC-01" &&
+          item.format === "PDF",
+      )?.id;
+      if (!artifactId) {
+        setMessage(t("quotation.documentGenerating"));
+        const job = await runJob(
+          {
+            type: "document.artifact.generate",
+            payload: {
+              document_type: "DOC-01",
+              format: "PDF",
+              project_version_id: versionId,
+              order_id: null,
+            },
+            idempotency_key: `doc01:${versionId}`,
           },
-          idempotency_key: `doc01:${versionId}`,
-        },
-        requestOptions,
-      );
-      const artifact = (job.result as { artifact: { id: string } }).artifact;
-      const access = await documentaryArtifactAccess(artifact.id, requestOptions);
+          requestOptions,
+        );
+        artifactId = (job.result as { artifact: { id: string } }).artifact.id;
+        queryClient.invalidateQueries({
+          queryKey: ["documents", "artifacts", orgId, project.id],
+        });
+      }
+      const access = await documentaryArtifactAccess(artifactId, requestOptions);
       if (access.status !== 200) {
         throw new ApiError(access.status, access.data);
       }
@@ -900,7 +1068,7 @@ export function ProjectQuotationPanel({
         const objectUrl = URL.createObjectURL(blob);
         const anchor = document.createElement("a");
         anchor.href = objectUrl;
-        anchor.download = `DOC-01-${versionId}.pdf`;
+        anchor.download = `COT-${project.code}-${revisionCode}.pdf`;
         anchor.click();
         URL.revokeObjectURL(objectUrl);
       }
@@ -916,32 +1084,195 @@ export function ProjectQuotationPanel({
     project.status === "DRAFT" &&
     project.pricing_current &&
     project.current_pricing_operation_id !== null;
-  const canRevise = canWrite && project.status === "QUOTED";
+  // APPROVED stays revisable — the client portal can flip a quote to
+  // APPROVED and still request changes; the sealed revision is immutable
+  // and the successor just needs a fresh approval (review WM7).
+  const canRevise = canWrite && (project.status === "QUOTED" || project.status === "APPROVED");
   const canShare =
     canWrite &&
     (project.status === "QUOTED" || project.status === "APPROVED") &&
     (project.versions?.length ?? 0) > 0;
 
   async function shareQuote(): Promise<void> {
+    const pendingLink = (approvals.data ?? []).find((link) => link.status === "PENDING");
+    if (pendingLink) {
+      const ok = await confirm({
+        title: t("quotation.shareReplacesLink"),
+        confirmLabel: t("quotation.share"),
+      });
+      if (!ok) return;
+    }
     const current = ++generation.current;
     setBusy(true);
     setMessage("");
+    setSharedUrl("");
     try {
       const response = await projectQuoteLinkCreate(project.id, requestOptions);
       if (response.status !== 200) throw new ApiError(response.status, response.data);
       if (generation.current !== current) return;
+      // The header's commercial timeline derives "sent" from the approvals
+      // list — refetch so the freshly created link shows immediately.
+      void queryClient.invalidateQueries({
+        queryKey: ["projects", "quote-approvals", orgId, project.id],
+      });
       const url = `${window.location.origin}${response.data.path}`;
+      setSharedUrl(url);
       try {
         await navigator.clipboard.writeText(url);
-        setMessage(t("quotation.shareCopied"));
+        setMessage(`${t("quotation.shareCopied")} — ${url}`);
       } catch {
-        setMessage(url);
+        setMessage(t("quotation.shareReady"));
       }
     } catch {
       if (generation.current === current) setMessage(t("quotation.error"));
     } finally {
       if (generation.current === current) setBusy(false);
     }
+  }
+
+  async function copySharedUrl(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(sharedUrl);
+      setMessage(`${t("quotation.shareCopied")} — ${sharedUrl}`);
+    } catch {
+      setMessage(sharedUrl);
+    }
+  }
+
+  async function approveInternally(): Promise<void> {
+    const ok = await confirm({
+      title: t("quotation.markApprovedConfirm"),
+      confirmLabel: t("quotation.markApproved"),
+    });
+    if (!ok) return;
+    const current = ++generation.current;
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await projectQuoteApproveInternal(project.id, {}, requestOptions);
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      if (generation.current !== current) return;
+      void queryClient.invalidateQueries({
+        queryKey: ["projects", "quote-approvals", orgId, project.id],
+      });
+      await onChanged();
+      setMessage(t("quotation.markApprovedDone"));
+    } catch {
+      if (generation.current === current) setMessage(t("quotation.error"));
+    } finally {
+      if (generation.current === current) setBusy(false);
+    }
+  }
+
+  async function revokeLink(approvalId: string): Promise<void> {
+    const ok = await confirm({
+      title: t("quotation.linkRevokeConfirm"),
+      confirmLabel: t("quotation.linkRevoke"),
+      danger: true,
+    });
+    if (!ok) return;
+    const current = ++generation.current;
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await projectQuoteLinkRevoke(project.id, approvalId, requestOptions);
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      if (generation.current !== current) return;
+      await queryClient.invalidateQueries({
+        queryKey: ["projects", "quote-approvals", orgId, project.id],
+      });
+      setMessage(t("quotation.linkRevokedDone"));
+    } catch {
+      if (generation.current === current) setMessage(t("quotation.error"));
+    } finally {
+      if (generation.current === current) setBusy(false);
+    }
+  }
+
+  // Consolidated "what's missing" for emission — the same conditions the
+  // submit gate enforces, shown live instead of one native validation bubble
+  // at a time. Each item focuses its field.
+  const emitMissing: { key: string; label: string; targetId?: string }[] = [];
+  if (preparation) {
+    if (!project.current_pricing_operation_id) {
+      emitMissing.push({ key: "pricing", label: t("quotation.missingPricing") });
+    }
+    if (!preparation.payment_terms.trim()) {
+      emitMissing.push({
+        key: "terms",
+        label: t("quotation.paymentTerms"),
+        targetId: "quotation-payment-terms",
+      });
+    }
+    if (!preparation.quotation_valid_until) {
+      emitMissing.push({
+        key: "valid",
+        label: t("quotation.validUntil"),
+        targetId: "quotation-valid-until",
+      });
+    }
+    preparation.positions.forEach((position, index) => {
+      const tag = `${t("quotation.position")} ${index + 1}`;
+      if (!position.location_tag.trim()) {
+        emitMissing.push({
+          key: `loc-${position.position_id}`,
+          label: `${tag} — ${t("projects.location")}`,
+          targetId: `position-location-${position.position_id}`,
+        });
+      }
+      if (!position.manufacturing_placement_policy_id) {
+        emitMissing.push({
+          key: `pl-${position.position_id}`,
+          label: `${tag} — ${t("quotation.placementPolicy")}`,
+          targetId: `placement-policy-${position.position_id}`,
+        });
+      }
+      if (!position.handle_requirement_policy_id) {
+        emitMissing.push({
+          key: `hp-${position.position_id}`,
+          label: `${tag} — ${t("quotation.handlePolicy")}`,
+          targetId: `handle-policy-${position.position_id}`,
+        });
+      }
+      if (!position.reinforcement_cut_policy_id) {
+        emitMissing.push({
+          key: `rf-${position.position_id}`,
+          label: `${tag} — ${t("quotation.reinforcementPolicy")}`,
+          targetId: `reinforcement-policy-${position.position_id}`,
+        });
+      }
+      const pendingSeeds = seededIntentKeys.current.get(String(position.position_id));
+      if (pendingSeeds && pendingSeeds.size > 0) {
+        const domKey = [...pendingSeeds][0]!.split("|").slice(0, 3).join("|");
+        emitMissing.push({
+          key: `seed-${position.position_id}`,
+          label: `${tag} — ${t("quotation.missingSeedConfirm")}`,
+          targetId: `handle-height-${position.position_id}-${domKey}`,
+        });
+      }
+    });
+    if (!confirmed) {
+      emitMissing.push({
+        key: "confirm",
+        label: t("quotation.confirm"),
+        targetId: "quotation-confirm",
+      });
+    }
+  }
+
+  /** production_ready is a load-time snapshot — it can't see policies the
+   * user just picked in this form. A position whose own fields are now
+   * complete shouldn't keep a stale "sólo cotización" warning on screen. */
+  function positionFormComplete(
+    position: DocumentaryPreparationResponse["positions"][number],
+  ): boolean {
+    return Boolean(
+      position.location_tag.trim() &&
+      position.manufacturing_placement_policy_id &&
+      position.handle_requirement_policy_id &&
+      position.reinforcement_cut_policy_id &&
+      !(seededIntentKeys.current.get(String(position.position_id))?.size ?? 0),
+    );
   }
 
   return (
@@ -973,8 +1304,57 @@ export function ProjectQuotationPanel({
             {t("quotation.share")}
           </button>
         )}
+        {canWrite && project.status === "QUOTED" && (
+          <button disabled={busy} onClick={() => void approveInternally()}>
+            {t("quotation.markApproved")}
+          </button>
+        )}
       </header>
       {message && <p role="status">{message}</p>}
+      {sharedUrl && (
+        <div className="quotation-share">
+          <a
+            className="link-button"
+            href={`https://wa.me/?text=${encodeURIComponent(
+              t("quotation.shareBody").replace("{name}", project.name).replace("{url}", sharedUrl),
+            )}`}
+            rel="noreferrer"
+            target="_blank"
+          >
+            {t("quotation.shareWhatsApp")}
+          </a>
+          <a
+            className="link-button"
+            href={`mailto:${project.client_email ?? ""}?subject=${encodeURIComponent(
+              t("quotation.shareSubject").replace("{code}", project.code),
+            )}&body=${encodeURIComponent(
+              t("quotation.shareBody").replace("{name}", project.name).replace("{url}", sharedUrl),
+            )}`}
+          >
+            {t("quotation.shareEmail")}
+          </a>
+          <button className="link-button" onClick={() => void copySharedUrl()} type="button">
+            {t("quotation.shareCopy")}
+          </button>
+        </div>
+      )}
+      {inspectorFailures.length > 0 && (
+        <ul className="quotation-inspector-failures" role="alert">
+          {inspectorFailures.map((failure, index) => (
+            <li key={`${failure.rule}-${failure.bay_id ?? ""}-${index}`}>
+              <strong>{failure.rule}</strong> · {failure.title}
+              {failure.bay_id ? (
+                <>
+                  {" · "}
+                  {t("quotation.inspectorAffected")} {failure.bay_id}
+                  {failure.leaf_id ? `/${failure.leaf_id}` : ""}
+                </>
+              ) : null}
+              {failure.recommendation ? <p>{failure.recommendation}</p> : null}
+            </li>
+          ))}
+        </ul>
+      )}
       {canWrite && project.status === "DRAFT" && !project.pricing_current && (
         <p>{t("quotation.priceFirst")}</p>
       )}
@@ -1008,6 +1388,9 @@ export function ProjectQuotationPanel({
             <fieldset key={position.position_id} disabled={busy}>
               <legend>
                 {t("quotation.position")} {index + 1} · {position.system_name}
+                {!position.production_ready && (
+                  <span className="handle-pending">{t("quotation.quoteOnlyChip")}</span>
+                )}
               </legend>
               <label htmlFor={`position-location-${position.position_id}`}>
                 {t("projects.location")}
@@ -1123,9 +1506,11 @@ export function ProjectQuotationPanel({
                         <div className="handle-leaf">
                           <strong>{requirement.leaf_label}</strong>
                           <span>
-                            {requirement.host_member_side === "LEFT"
-                              ? t("quotation.sideLeft")
-                              : t("quotation.sideRight")}
+                            {requirement.requires_handedness
+                              ? t("quotation.handednessRequired")
+                              : requirement.host_member_side === "LEFT"
+                                ? t("quotation.sideLeft")
+                                : t("quotation.sideRight")}
                             {requirement.handle_domain_slot !== "PRIMARY" &&
                               ` · ${requirement.handle_domain_slot}`}
                           </span>
@@ -1209,7 +1594,23 @@ export function ProjectQuotationPanel({
                 </div>
               )}
               {position.workshop_targets && (
-                <details className="workshop-inputs">
+                <details
+                  className="workshop-inputs"
+                  /* Inspector failures name the exact bay/leaf that needs
+                     workshop data — auto-open the editor that fixes it
+                     (hostile H1: the <details> hid the required fields). */
+                  open={inspectorFailures.some(
+                    (failure) =>
+                      (failure.bay_id != null &&
+                        position.workshop_targets.bays.some(
+                          (bay) => bay.bay_id === failure.bay_id,
+                        )) ||
+                      (failure.leaf_id != null &&
+                        position.workshop_targets.leaves.some(
+                          (leaf) => leaf.leaf_id === failure.leaf_id,
+                        )),
+                  )}
+                >
                   <summary>{t("quotation.workshopData")}</summary>
                   {position.workshop_targets.bays.map((bay) => {
                     const annotation = position.workshop_annotations.find(
@@ -1311,7 +1712,7 @@ export function ProjectQuotationPanel({
                         return (
                           <div className="workshop-target" key={span.target_id}>
                             <strong>
-                              {span.label} · {span.span_mm} mm
+                              {span.label} · {fmtMm(span.span_mm)} mm
                             </strong>
                             <div className="workshop-row">
                               <label className="workshop-field">
@@ -1549,8 +1950,48 @@ export function ProjectQuotationPanel({
               )}
             </fieldset>
           ))}
+          {emitMissing.length > 0 && (
+            <div className="emit-checklist" aria-live="polite">
+              <strong>{t("quotation.missingTitle")}</strong>
+              <ul>
+                {emitMissing.map((item) => (
+                  <li key={item.key}>
+                    {item.targetId ? (
+                      <button
+                        type="button"
+                        className="link-button"
+                        onClick={() => document.getElementById(item.targetId!)?.focus()}
+                      >
+                        {item.label}
+                      </button>
+                    ) : (
+                      item.label
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {preparation.positions.length > 0 &&
+            (preparation.positions.every(
+              (position) => position.production_ready || positionFormComplete(position),
+            ) ? (
+              <p className="emit-outcome">{t("quotation.emitOutcomeReady")}</p>
+            ) : (
+              <p className="emit-outcome emit-outcome--warn" role="note">
+                {t("quotation.emitOutcomeQuoteOnly")}{" "}
+                {preparation.positions
+                  .map((position, index) => ({ position, index }))
+                  .filter(
+                    ({ position }) => !position.production_ready && !positionFormComplete(position),
+                  )
+                  .map(({ index }) => `${t("quotation.position")} ${index + 1}`)
+                  .join(" · ")}
+              </p>
+            ))}
           <label className="quotation-confirm">
             <input
+              id="quotation-confirm"
               required
               type="checkbox"
               checked={confirmed}
@@ -1587,6 +2028,59 @@ export function ProjectQuotationPanel({
           </div>
         </form>
       )}
+      {(approvals.data?.length ?? 0) > 0 && (
+        <div className="quotation-links">
+          <h3>{t("quotation.linksTitle")}</h3>
+          <ul>
+            {approvals.data?.map((link) => {
+              const live = link.status === "PENDING" && Date.parse(link.expires_at) > Date.now();
+              return (
+                <li
+                  className="quotation-link"
+                  data-status={link.status.toLowerCase()}
+                  key={link.id}
+                >
+                  <span className="status-chip" data-status={link.status.toLowerCase()}>
+                    {t(approvalStatusKeys[link.status] ?? "quotation.linkPending")}
+                  </span>
+                  <strong>{formatRevision(link.revision_code)}</strong>
+                  <time dateTime={link.created_at}>{formatDateTime(link.created_at)}</time>
+                  {link.status === "PENDING" && (
+                    <span className="quotation-link__meta">
+                      {live
+                        ? `${t("quotation.linkExpires")} ${formatDateTime(link.expires_at)}`
+                        : t("quotation.linkExpired")}
+                    </span>
+                  )}
+                  {(link.view_count ?? 0) > 0 && (
+                    <span className="quotation-link__meta">
+                      {t("quotation.linkViews").replace("{count}", String(link.view_count))}
+                      {link.last_viewed_at ? ` · ${formatDateTime(link.last_viewed_at)}` : ""}
+                    </span>
+                  )}
+                  {(link.status === "APPROVED" || link.status === "DECLINED") && (
+                    <span className="quotation-link__meta">
+                      {link.decided_by ?? ""}
+                      {link.decided_at ? ` · ${formatDateTime(link.decided_at)}` : ""}
+                      {link.decided_note ? ` · “${link.decided_note}”` : ""}
+                    </span>
+                  )}
+                  {link.status === "REVOKED" && link.revoked_at && (
+                    <span className="quotation-link__meta">
+                      {t("quotation.linkRevokedAt")} {formatDateTime(link.revoked_at)}
+                    </span>
+                  )}
+                  {live && canWrite && (
+                    <button type="button" disabled={busy} onClick={() => void revokeLink(link.id)}>
+                      {t("quotation.linkRevoke")}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
       {(project.versions?.length ?? 0) > 0 && (
         <div className="quotation-history">
           <h3>{t("quotation.history")}</h3>
@@ -1594,9 +2088,7 @@ export function ProjectQuotationPanel({
             {project.versions?.map((version) => (
               <li key={version.id}>
                 <strong>{formatRevision(version.revision_code)}</strong>
-                <time dateTime={version.emitted_at}>
-                  {new Date(version.emitted_at).toLocaleString("es-CL")}
-                </time>
+                <time dateTime={version.emitted_at}>{formatDateTime(version.emitted_at)}</time>
                 <span>
                   {t(
                     version.documentary_complete
@@ -1611,7 +2103,14 @@ export function ProjectQuotationPanel({
                       : "quotation.quoteOnlyChip",
                   )}
                 </span>
-                <button disabled={busy} onClick={() => void openEvidence(version.id)}>
+                {artifactIndex.data?.some(
+                  (item) =>
+                    item.project_version_id === version.id && item.document_type === "DOC-01",
+                ) && <span>{t("quotation.documentEmitted")}</span>}
+                <button
+                  disabled={busy}
+                  onClick={() => void openEvidence(version.id, version.revision_code)}
+                >
                   {t("quotation.openEvidence")}
                 </button>
                 {canRelease ? (

@@ -68,9 +68,12 @@ function renderRoute(path: string, auth: AuthSessionContextValue) {
 }
 
 describe("SHOT-04 application routes", () => {
-  it("redirects an anonymous root session to login", async () => {
+  it("shows anonymous visitors the public landing with an entry to login", async () => {
     renderRoute("/", authValue("anonymous"));
-    expect(await screen.findByTestId("login-page")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /ventana que diseñas/ })).toBeInTheDocument();
+    for (const link of screen.getAllByRole("link", { name: "Entrar" })) {
+      expect(link).toHaveAttribute("href", "/login");
+    }
   });
 
   it("opens the real project list from the authenticated shell", async () => {
@@ -78,7 +81,7 @@ describe("SHOT-04 application routes", () => {
     expect(screen.getByTestId("app-shell")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Proyectos" })).toHaveAttribute("href", "/projects");
     fireEvent.click(screen.getByRole("link", { name: "Proyectos" }));
-    expect(await screen.findByRole("heading", { name: "Proyectos" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Todos los proyectos" })).toBeInTheDocument();
   });
 
   it("routes an OWNER requiring aal2 to the MFA flow", async () => {

@@ -92,7 +92,7 @@ def save_integration(*, org_id: UUID, data: dict) -> dict:
     api_url = str(data.get("api_url") or "https://sandbox.flow.cl/api")
     with transaction.atomic(), documentary_backend():
         existing = rows(
-            "SELECT secret_key FROM public.org_payment_integrations "
+            "SELECT api_key, secret_key FROM public.org_payment_integrations "
             "WHERE org_id=%s AND provider='FLOW'",
             [str(org_id)],
         )
@@ -100,6 +100,11 @@ def save_integration(*, org_id: UUID, data: dict) -> dict:
         if not secret:
             raise contract_error(
                 422, "flow_secret_required", "La clave secreta de Flow es obligatoria."
+            )
+        api_key = data.get("api_key") or (existing[0]["api_key"] if existing else None)
+        if not api_key:
+            raise contract_error(
+                422, "flow_api_key_required", "La api key de Flow es obligatoria."
             )
         rows(
             """
@@ -118,7 +123,7 @@ def save_integration(*, org_id: UUID, data: dict) -> dict:
             [
                 str(org_id),
                 api_url,
-                data["api_key"].strip(),
+                api_key.strip(),
                 secret.strip(),
                 (data.get("payer_return_url") or "").strip() or None,
                 bool(data.get("enabled", True)),
@@ -161,10 +166,40 @@ def create_link(*, org_id: UUID, project_id: UUID, actor_id: UUID, data: dict) -
         raise contract_error(422, "payment_kind_invalid", "Tipo de cobro no válido.")
     subject = (data.get("subject") or "").strip() or f"{project['name']} — pago {kind.lower()}"
     # Freeze the deal the payer agrees to — settlement must be able to seal a
-    # comprobante even if pricing is reset while the customer is paying.
+    # comprobante even if pricing is reset while the customer is paying. An
+    # unpriced/unsealed project can never produce a charge (F19): a mailed
+    # Flow link collects real money against nothing.
     deal = _deal(org_id, project_id, project)
-    deal_total = str(deal["total"]) if deal else None
-    deal_currency = deal["currency"] if deal else None
+    if deal is None or deal["sealed_revision"] is None:
+        raise contract_error(
+            422,
+            "payment_requires_sealed_deal",
+            "Emite una revisión de cotización antes de crear un cobro.",
+        )
+    # Flow charges CLP — a USD deal would collect the USD number in pesos and
+    # write the result into the currency-less payments ledger, corrupting the
+    # balance the comprobante and the portal then report.
+    if deal["currency"] != "CLP":
+        raise contract_error(
+            422,
+            "payment_currency_unsupported",
+            "El cobro online solo está disponible en pesos (CLP); registra el pago manual en Cobranza.",
+        )
+    with documentary_backend():
+        collected = rows(
+            "SELECT COALESCE(SUM(amount), 0) AS collected FROM public.project_payments "
+            "WHERE org_id=%s AND project_id=%s AND voided_at IS NULL",
+            [str(org_id), str(project_id)],
+        )
+    balance = deal["total"] - Decimal(str(collected[0]["collected"]))
+    if amount > balance:
+        raise contract_error(
+            422,
+            "payment_exceeds_balance",
+            "El cobro supera el saldo pendiente del proyecto.",
+        )
+    deal_total = str(deal["total"])
+    deal_currency = deal["currency"]
     with transaction.atomic(), documentary_backend():
         integration = rows(
             "SELECT * FROM public.org_payment_integrations "
@@ -177,6 +212,19 @@ def create_link(*, org_id: UUID, project_id: UUID, actor_id: UUID, data: dict) -
                 "flow_not_configured",
                 "Configura la integración Flow en Ajustes primero.",
             )
+        return_url = integration[0]["payer_return_url"] or (
+            settings.BILLING_FRONTEND_ORIGIN.rstrip("/") + "/pago/retorno"
+            if settings.BILLING_FRONTEND_ORIGIN
+            else ""
+        )
+        if not return_url:
+            # A relative return URL handed to Flow leaves the link stuck
+            # UNCERTAIN forever — fail before the dispatch claim commits.
+            raise contract_error(
+                422,
+                "payer_return_not_configured",
+                "Configura la URL de retorno del pagador (BILLING_FRONTEND_ORIGIN o la integración Flow) antes de crear cobros online.",
+            )
         existing = rows(
             "SELECT * FROM public.project_payment_links WHERE org_id=%s AND operation_key=%s",
             [str(org_id), data["operation_key"]],
@@ -188,6 +236,43 @@ def create_link(*, org_id: UUID, project_id: UUID, actor_id: UUID, data: dict) -
                     409, "payment_operation_conflict", "La operación ya existe en otro proyecto."
                 )
             return {"link": _public_link(link)}
+        # One live claim per deal: the project slot serializes mints, so the
+        # live-link check below can never race a concurrent create. Two
+        # outstanding Flow charges on one deal is an over-collection path.
+        rows(
+            "SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",
+            [f"project_payment_links:{org_id}:{project_id}"],
+        )
+        live = rows(
+            "SELECT * FROM public.project_payment_links "
+            "WHERE org_id=%s AND project_id=%s "
+            "AND status IN ('DISPATCHING','PENDING','UNCERTAIN') "
+            "ORDER BY created_at, id",
+            [str(org_id), str(project_id)],
+        )
+        if live:
+            live_link = live[0]
+            # Reuse only a genuinely identical charge: same payer, subject,
+            # amount and kind, already minted (PENDING carries the payer URL;
+            # DISPATCHING/UNCERTAIN have no usable URL to hand back). Any
+            # mismatch means a different request — refusing is safer than
+            # handing out a charge meant for someone else.
+            reusable = (
+                str(live_link["status"]) == "PENDING"
+                and live_link["url"]
+                and Decimal(str(live_link["amount"])) == amount
+                and str(live_link["kind"]) == kind
+                and str(live_link["payer_email"]) == data["payer_email"].strip()
+                and str(live_link["subject"]) == subject[:200]
+            )
+            if reusable:
+                return {"link": _public_link(live_link)}
+            raise contract_error(
+                409,
+                "payment_link_pending_exists",
+                "Ya existe un cobro en línea vigente para este proyecto — "
+                "usa el link existente o espera su resultado.",
+            )
         link = rows(
             """
             INSERT INTO public.project_payment_links(
@@ -215,9 +300,6 @@ def create_link(*, org_id: UUID, project_id: UUID, actor_id: UUID, data: dict) -
     # marks the link UNCERTAIN; recovery is a GET, never a second POST.
     client = _client(integration)
     callback_origin = settings.BILLING_CALLBACK_ORIGIN.rstrip("/")
-    return_url = integration["payer_return_url"] or (
-        settings.BILLING_FRONTEND_ORIGIN.rstrip("/") + "/pago/retorno"
-    )
     try:
         created = client.create_payment(
             order=str(data["operation_key"]),
@@ -295,9 +377,10 @@ def _settle(*, org_id: UUID, link_id: UUID, verified: dict, client: FlowClient) 
             return {"link": _public_link(link)}
         if verified["status"] == 1:
             rows(
-                "UPDATE public.project_payment_links SET status='PENDING', updated_at=now() "
+                "UPDATE public.project_payment_links SET status='PENDING', "
+                "flow_order=%s, updated_at=now() "
                 "WHERE org_id=%s AND id=%s AND status='DISPATCHING' RETURNING id",
-                [str(org_id), str(link_id)],
+                [verified["flowOrder"], str(org_id), str(link_id)],
             )
             return {"link": _public_link(link)}
         if verified["status"] in (3, 4):
@@ -310,6 +393,26 @@ def _settle(*, org_id: UUID, link_id: UUID, verified: dict, client: FlowClient) 
             return {"link": _public_link(link)}
         # status 2 — settled. The ledger's UNIQUE (org_id, operation_key) is the
         # dedup boundary: webhook retries and recoveries converge on one row.
+        # The project row lock serializes against a manual payment landing
+        # between link mint and provider settle — the mint-time balance cap is
+        # stale by then. The money did arrive (provider-verified) so the ledger
+        # must record it; if the balance shrank under the link amount the
+        # receipt documents the excess instead of silently over-collecting.
+        project = project_row(org_id, link["project_id"], lock=True)
+        live_deal = _deal(org_id, link["project_id"], project)
+        over = Decimal("0")
+        if live_deal is not None:
+            collected = rows(
+                "SELECT COALESCE(SUM(amount), 0) AS collected FROM public.project_payments "
+                "WHERE org_id=%s AND project_id=%s AND voided_at IS NULL",
+                [str(org_id), str(link["project_id"])],
+            )[0]["collected"]
+            over = Decimal(str(link["amount"])) - (
+                Decimal(str(live_deal["total"])) - Decimal(str(collected))
+            )
+        note = f"Cobro en línea — link {link['id']}"
+        if over > 0:
+            note += f" — excede el saldo por {over} (conciliar devolución)"
         payment = rows(
             """
             INSERT INTO public.project_payments(
@@ -326,7 +429,7 @@ def _settle(*, org_id: UUID, link_id: UUID, verified: dict, client: FlowClient) 
                 str(link["kind"]),
                 str(Decimal(str(link["amount"]))),
                 f"FLOW {verified['flowOrder']}",
-                f"Cobro en línea — link {link['id']}",
+                note,
                 None,
                 timezone.now(),
             ],
@@ -342,9 +445,7 @@ def _settle(*, org_id: UUID, link_id: UUID, verified: dict, client: FlowClient) 
         # authority: the comprobante always reflects the total the link
         # presented to the payer — the deal frozen at creation — then the
         # live deal for links minted before the freeze, else an empty
-        # snapshot.
-        project = project_row(org_id, link["project_id"])
-        live_deal = _deal(org_id, link["project_id"], project)
+        # snapshot. (project/live_deal resolved above, inside the row lock.)
         if link.get("deal_total") is not None:
             deal = {
                 "total": Decimal(str(link["deal_total"])),
@@ -367,6 +468,19 @@ def _settle(*, org_id: UUID, link_id: UUID, verified: dict, client: FlowClient) 
             "WHERE org_id=%s AND id=%s RETURNING *",
             [verified["flowOrder"], str(payment[0]["id"]), str(org_id), str(link_id)],
         )[0]
+        # §08: the provider-verified settle queues the commercial refresh the
+        # same way a manual payment does — inside the tx, keyed to the
+        # payment row it minted.
+        from automations.service import emit
+
+        emit(
+            "automation.commercial_refresh",
+            org_id=org_id,
+            actor_id=link["created_by"],
+            idempotency_key=f"auto:comm:{link['project_id']}:{payment[0]['id']}",
+            project_id=str(link["project_id"]),
+            payment_id=str(payment[0]["id"]),
+        )
     return {"link": _public_link(link)}
 
 

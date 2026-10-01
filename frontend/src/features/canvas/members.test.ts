@@ -17,6 +17,7 @@ const CATALOG: DesignOptions = {
     },
   ],
   glazing_thicknesses: ["24.00", "28.00"],
+  handle_policy: null,
   hardware_kits: [],
   glass_skus: [],
   glass_specs: [],
@@ -27,6 +28,7 @@ const CATALOG: DesignOptions = {
     { glass_thickness_mm: "28.00", bead_width_mm: "15.00", sku: "BEAD-28" },
   ],
   panel_skus: [],
+  panel_choices: [],
   colors: ["WHITE"],
   rebate_depth_mm: "20.00",
   sash_overlap_mm: "8.00",
@@ -77,6 +79,31 @@ it("returns the neutral bead convention for unknown thicknesses", () => {
   expect(members.beadFor("24.00")).toBe(18); // catalog match still wins
 });
 
+it("beadSpecFor returns the catalog bead member, section included", () => {
+  const section = {
+    source: "POLYGON" as const,
+    polygon: [
+      { x_mm: "0", y_mm: "0" },
+      { x_mm: "12", y_mm: "0" },
+      { x_mm: "12", y_mm: "10" },
+      { x_mm: "0", y_mm: "10" },
+    ],
+    depth_mm: "10.00",
+  };
+  const members = resolveMembers({
+    ...CATALOG,
+    glazing_beads: [
+      { glass_thickness_mm: "24.00", bead_width_mm: "18.00", sku: "BEAD-24", section },
+      { glass_thickness_mm: "28.00", bead_width_mm: "15.00", sku: "BEAD-28" },
+    ],
+  });
+  expect(members.beadSpecFor("24.00")?.section?.source).toBe("POLYGON");
+  expect(members.beadSpecFor("24.00")?.sku).toBe("BEAD-24");
+  expect(members.beadSpecFor("28.00")?.section).toBeNull();
+  expect(members.beadSpecFor("999.00")).toBeNull();
+  expect(members.beadSpecFor(null)).toBeNull();
+});
+
 it("carries a declared catalog section through to the member spec", () => {
   const section = {
     source: "POLYGON" as const,
@@ -95,4 +122,69 @@ it("carries a declared catalog section through to the member spec", () => {
   expect(members.frame.section?.source).toBe("POLYGON");
   expect(members.frame.section?.polygon).toHaveLength(4);
   expect(members.sash.section).toBeNull();
+});
+
+it("signature invalidates on kit contents and handle-policy changes, not on shape alone", () => {
+  const base = resolveMembers({
+    ...CATALOG,
+    hardware_kits: [
+      {
+        sku: "K1",
+        name: "Kit",
+        opening_type: "TURN",
+        min_leaf_width_mm: "400",
+        max_leaf_width_mm: "1600",
+        min_leaf_height_mm: "400",
+        max_leaf_height_mm: "2400",
+        max_leaf_weight_kg: "120",
+        weight_kg: null,
+        contents: [{ sku: "H", name: "hinge", qty: "3", unit: "unit", category: "HINGE" }],
+      },
+    ],
+  });
+  const same = resolveMembers({
+    ...CATALOG,
+    hardware_kits: [
+      {
+        sku: "K1",
+        name: "Kit",
+        opening_type: "TURN",
+        min_leaf_width_mm: "400",
+        max_leaf_width_mm: "1600",
+        min_leaf_height_mm: "400",
+        max_leaf_height_mm: "2400",
+        max_leaf_weight_kg: "120",
+        weight_kg: null,
+        contents: [{ sku: "H", name: "hinge", qty: "3", unit: "unit", category: "HINGE" }],
+      },
+    ],
+  });
+  const moreHinges = resolveMembers({
+    ...CATALOG,
+    hardware_kits: [
+      {
+        sku: "K1",
+        name: "Kit",
+        opening_type: "TURN",
+        min_leaf_width_mm: "400",
+        max_leaf_width_mm: "1600",
+        min_leaf_height_mm: "400",
+        max_leaf_height_mm: "2400",
+        max_leaf_weight_kg: "120",
+        weight_kg: null,
+        contents: [{ sku: "H", name: "hinge", qty: "4", unit: "unit", category: "HINGE" }],
+      },
+    ],
+  });
+  const withPolicy = resolveMembers({
+    ...CATALOG,
+    handle_policy: {
+      policy_id: "p1",
+      version: 1,
+      slots: [],
+    } as never,
+  });
+  expect(base.signature).toBe(same.signature);
+  expect(base.signature).not.toBe(moreHinges.signature);
+  expect(base.signature).not.toBe(withPolicy.signature);
 });

@@ -27,4 +27,9 @@ export interface DeliveryScheduleRequestRequest {
   installer_name?: string;
   /** @maxLength 500 */
   notes?: string;
+  /**
+   * @nullable
+   * @items.minimum 1
+   */
+  unit_indexes?: number[] | null;
 }

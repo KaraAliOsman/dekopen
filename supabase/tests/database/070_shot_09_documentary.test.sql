@@ -1,14 +1,14 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET LOCAL search_path=public,extensions;
-SELECT plan(76);
+SELECT plan(101);
 SELECT ok(relrowsecurity,relname||' has RLS') FROM pg_class
  WHERE relnamespace='public'::regnamespace AND relname IN
  ('manufacturing_placement_policies','handle_requirement_policies','reinforcement_cut_policies',
   'glass_purchase_mappings','hardware_purchase_mappings','panel_purchase_authorities',
   'project_documentary_inputs','position_documentary_inputs','purchase_projections',
   'purchase_requirement_lines','supplier_eligibility_versions','purchase_allocations',
-  'order_allocation_batches','order_requirement_lines','document_artifacts') ORDER BY relname;
+  'order_allocation_batches','order_requirement_lines','document_artifacts','suppliers') ORDER BY relname;
 SELECT ok(EXISTS(SELECT 1 FROM pg_roles WHERE rolname='documentary_backend'
    AND NOT rolsuper AND NOT rolbypassrls AND NOT rolcanlogin),
   'documentary_backend has no login or RLS bypass');
@@ -45,6 +45,8 @@ SELECT lives_ok($$INSERT INTO position_documentary_inputs(position_id,project_id
  FROM manufacturing_placement_policies placement,handle_requirement_policies handles,reinforcement_cut_policies steel
  WHERE placement.system_id=handles.system_id AND handles.system_id=steel.system_id
    AND placement.org_id IS NULL AND handles.org_id IS NULL AND steel.org_id IS NULL
+   AND handles.version=(SELECT max(h2.version) FROM handle_requirement_policies h2 WHERE h2.system_id=handles.system_id AND h2.org_id IS NULL)
+   AND placement.version=(SELECT max(p2.version) FROM manufacturing_placement_policies p2 WHERE p2.system_id=placement.system_id AND p2.org_id IS NULL)
    AND placement.system_id=(SELECT id FROM profile_systems WHERE code='DEMO_60')$$,'typed position inputs accept global scoped policies');
 INSERT INTO manufacturing_placement_policies(id,system_id,org_id,version,authority)
  SELECT '88690000-0000-4000-8000-000000000009',id,'88600000-0000-4000-8000-000000000002',1,
@@ -54,6 +56,7 @@ SELECT throws_ok($$INSERT INTO position_documentary_inputs(position_id,project_i
  SELECT '88630000-0000-4000-8000-000000000003','88620000-0000-4000-8000-000000000003','88600000-0000-4000-8000-000000000001','88690000-0000-4000-8000-000000000009',handles.id,steel.id,'[]','[]','[]','[]','{"coverage":"NONE_REQUIRED","items":[]}','88610000-0000-4000-8000-000000000001'
  FROM handle_requirement_policies handles,reinforcement_cut_policies steel
  WHERE handles.system_id=steel.system_id AND handles.org_id IS NULL AND steel.org_id IS NULL
+   AND handles.version=(SELECT max(h2.version) FROM handle_requirement_policies h2 WHERE h2.system_id=handles.system_id AND h2.org_id IS NULL)
    AND handles.system_id=(SELECT id FROM profile_systems WHERE code='DEMO_60')$$,'23503','documentary_policy_scope_mismatch','foreign tenant policy cannot bind');
 
 SELECT throws_ok($$INSERT INTO project_versions(project_id,org_id,revision_code,snapshot_json,emitted_by,pricing_operation_id,canonical_version,bom_hash,snapshot_sha256,production_allowed,documentary_complete)
@@ -105,9 +108,23 @@ SELECT throws_ok($$DELETE FROM purchase_allocations$$,'42501','confirmed_allocat
 
 SELECT lives_ok($$INSERT INTO orders(id,org_id,project_id,order_type,order_code,status,supplier_name,payload_json,project_version_id,allocation_batch_id,supplier_eligibility_id,bom_hash,revision_snapshot_sha256,purchase_projection_hash,allocation_identity,order_snapshot_hash,supplier_identity,supplier_details,confirmed_by,confirmed_at)
  VALUES('88710000-0000-4000-8000-000000000001','88600000-0000-4000-8000-000000000001','88620000-0000-4000-8000-000000000001','SUPPLIER_GLASS_PO','PO-S09-1','DRAFT','Proveedor 1','{}','88650000-0000-4000-8000-000000000001','88700000-0000-4000-8000-000000000001','88680000-0000-4000-8000-000000000001','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','1111111111111111111111111111111111111111111111111111111111111111','7777777777777777777777777777777777777777777777777777777777777777','8888888888888888888888888888888888888888888888888888888888888888','SUP-1','{}','88610000-0000-4000-8000-000000000003',now())$$,'supplier order binds batch, eligibility, and frozen hashes');
-SELECT lives_ok($$UPDATE orders SET status='SENT',sent_by='88610000-0000-4000-8000-000000000003',sent_at=now(),updated_at=now() WHERE id='88710000-0000-4000-8000-000000000001'$$,'explicit send transitions DRAFT to SENT');
+SELECT lives_ok($$UPDATE orders SET status='SENT',sent_by='88610000-0000-4000-8000-000000000003',sent_at=now(),expected_at='2026-12-31',sent_to='compras@proveedor.cl',updated_at=now() WHERE id='88710000-0000-4000-8000-000000000001'$$,'explicit send transitions DRAFT to SENT and captures the promised date and destination');
+SELECT col_is_null('public','orders','expected_at','promised delivery date is optional (captured, never invented)');
+SELECT col_is_null('public','orders','sent_to','send destination is optional (captured, never invented)');
+SELECT throws_ok($$UPDATE orders SET expected_at='2027-01-15' WHERE id='88710000-0000-4000-8000-000000000001'$$,'42501','order_evidence_immutable','promised date is immutable once sent');
+SELECT throws_ok($$UPDATE orders SET sent_to='otro@proveedor.cl' WHERE id='88710000-0000-4000-8000-000000000001'$$,'42501','order_evidence_immutable','send destination is immutable once sent');
 SELECT throws_ok($$UPDATE orders SET order_code='PO-S09-X' WHERE id='88710000-0000-4000-8000-000000000001'$$,'42501','order_evidence_immutable','confirmed order payload is immutable');
 SELECT throws_ok($$DELETE FROM orders WHERE id='88710000-0000-4000-8000-000000000001'$$,'42501','order_evidence_immutable','supplier order cannot be deleted');
+SELECT lives_ok($$UPDATE orders SET status='PARTIALLY_RECEIVED',updated_at=now() WHERE id='88710000-0000-4000-8000-000000000001'$$,'a sent order advances to partially received when goods arrive');
+SELECT lives_ok($$UPDATE orders SET status='FULFILLED',updated_at=now() WHERE id='88710000-0000-4000-8000-000000000001'$$,'a partially received order advances to fulfilled');
+SELECT throws_ok($$UPDATE orders SET status='CANCELLED',cancelled_by='88610000-0000-4000-8000-000000000003',cancelled_at=now(),updated_at=now() WHERE id='88710000-0000-4000-8000-000000000001'$$,'42501','order_evidence_immutable','a fulfilled order can never be cancelled');
+SELECT lives_ok($$INSERT INTO orders(id,org_id,project_id,order_type,order_code,status,supplier_name,payload_json,project_version_id,allocation_batch_id,supplier_eligibility_id,bom_hash,revision_snapshot_sha256,purchase_projection_hash,allocation_identity,order_snapshot_hash,supplier_identity,supplier_details,confirmed_by,confirmed_at)
+ VALUES('88740000-0000-4000-8000-000000000001','88600000-0000-4000-8000-000000000001','88620000-0000-4000-8000-000000000001','SUPPLIER_GLASS_PO','PO-S09-3','DRAFT','Proveedor 2','{}','88650000-0000-4000-8000-000000000001','88700000-0000-4000-8000-000000000001','88680000-0000-4000-8000-000000000001','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','2222222222222222222222222222222222222222222222222222222222222222','3333333333333333333333333333333333333333333333333333333333333333','9999999999999999999999999999999999999999999999999999999999999999','SUP-2','{}','88610000-0000-4000-8000-000000000003',now())$$,'a second draft order exists for cancellation');
+SELECT throws_ok($$UPDATE orders SET status='CANCELLED',updated_at=now() WHERE id='88740000-0000-4000-8000-000000000001'$$,'42501','order_evidence_immutable','cancel requires operator identity and timestamp');
+SELECT lives_ok($$UPDATE orders SET status='SENT',sent_by='88610000-0000-4000-8000-000000000003',sent_at=now(),updated_at=now() WHERE id='88740000-0000-4000-8000-000000000001'$$,'a draft order sends with operator evidence');
+SELECT lives_ok($$UPDATE orders SET status='PARTIALLY_RECEIVED',updated_at=now() WHERE id='88740000-0000-4000-8000-000000000001'$$,'a sent order receives partially');
+SELECT lives_ok($$UPDATE orders SET status='CANCELLED',cancelled_by='88610000-0000-4000-8000-000000000003',cancelled_at=now(),updated_at=now() WHERE id='88740000-0000-4000-8000-000000000001'$$,'a partially received order can be cancelled — received lines stay as evidence');
+SELECT throws_ok($$UPDATE orders SET status='SENT',sent_by='88610000-0000-4000-8000-000000000003',sent_at=now(),updated_at=now() WHERE id='88740000-0000-4000-8000-000000000001'$$,'42501','order_evidence_immutable','a cancelled order cannot be sent');
 SELECT lives_ok($$INSERT INTO order_requirement_lines(id,order_id,requirement_line_id,project_id,project_version_id,org_id,order_type,bom_hash,revision_snapshot_sha256,quantity,line_snapshot,line_hash)
  VALUES('88720000-0000-4000-8000-000000000001','88710000-0000-4000-8000-000000000001','88670000-0000-4000-8000-000000000001','88620000-0000-4000-8000-000000000001','88650000-0000-4000-8000-000000000001','88600000-0000-4000-8000-000000000001','SUPPLIER_GLASS_PO','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',2,'{}','9999999999999999999999999999999999999999999999999999999999999999')$$,'order line binds the exact order and requirement');
 SELECT lives_ok($$INSERT INTO orders(org_id,project_id,order_type,order_code,payload_json)
@@ -167,5 +184,29 @@ SELECT throws_ok($$INSERT INTO project_versions(project_id,org_id,revision_code,
  VALUES('88620000-0000-4000-8000-000000000002','88600000-0000-4000-8000-000000000001','REV-A','{}','88610000-0000-4000-8000-000000000001','SHOT09_V1','88640000-0000-4000-8000-000000000004','DOCUMENTARY_CANONICAL_V1','dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',TRUE,TRUE)$$,'23514',NULL,'V1 revision without bom_hash is rejected');
 SELECT lives_ok($$INSERT INTO project_versions(project_id,org_id,revision_code,snapshot_json,emitted_by,authority_version,pricing_operation_id,canonical_version,bom_hash,snapshot_sha256,production_allowed,documentary_complete)
  VALUES('88620000-0000-4000-8000-000000000002','88600000-0000-4000-8000-000000000001','REV-A','{}','88610000-0000-4000-8000-000000000001','SHOT09_V1','88640000-0000-4000-8000-000000000004','DOCUMENTARY_CANONICAL_V1','cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc','dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',TRUE,TRUE)$$,'a new V1 revision still satisfies the full contract after upgrade');
+SELECT lives_ok($$INSERT INTO supplier_eligibility_versions(id,project_id,project_version_id,org_id,bom_hash,snapshot_sha256,order_type,supplier_identity,supplier_name,supplier_details,eligible_requirement_keys,evidence,version,content_hash,created_by)
+ VALUES('88680000-0000-4000-8000-000000000009','88620000-0000-4000-8000-000000000001','88650000-0000-4000-8000-000000000001','88600000-0000-4000-8000-000000000001','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','SUPPLIER_HARDWARE_PO','SUP-3','Vorne SPA','{}','["2222222222222222222222222222222222222222222222222222222222222222"]','{}',1,'5454545454545454545454545454545454545454545454545454545454545454','88610000-0000-4000-8000-000000000003')$$,'hardware supplier eligibility binds to the frozen version');
+SELECT lives_ok($$INSERT INTO order_allocation_batches(id,project_id,project_version_id,org_id,bom_hash,snapshot_sha256,order_type,allocation_hash,confirmed_by,confirmed_at)
+ VALUES('88700000-0000-4000-8000-000000000009','88620000-0000-4000-8000-000000000001','88650000-0000-4000-8000-000000000001','88600000-0000-4000-8000-000000000001','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','SUPPLIER_HARDWARE_PO','5656565656565656565656565656565656565656565656565656565656565656','88610000-0000-4000-8000-000000000003',now())$$,'hardware allocation batch exists for the DOC-08 fixture');
+SELECT lives_ok($$INSERT INTO orders(id,org_id,project_id,order_type,order_code,status,supplier_name,payload_json,project_version_id,allocation_batch_id,supplier_eligibility_id,bom_hash,revision_snapshot_sha256,purchase_projection_hash,allocation_identity,order_snapshot_hash,supplier_identity,supplier_details,confirmed_by,confirmed_at)
+ VALUES('88750000-0000-4000-8000-000000000001','88600000-0000-4000-8000-000000000001','88620000-0000-4000-8000-000000000001','SUPPLIER_HARDWARE_PO','PO-S09-9','DRAFT','Vorne SPA','{}','88650000-0000-4000-8000-000000000001','88700000-0000-4000-8000-000000000009','88680000-0000-4000-8000-000000000009','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','1111111111111111111111111111111111111111111111111111111111111111','5757575757575757575757575757575757575757575757575757575757575757','5858585858585858585858585858585858585858585858585858585858585858','SUP-3','{}','88610000-0000-4000-8000-000000000003',now())$$,'hardware order exists for the generic order document');
+SELECT lives_ok($$INSERT INTO document_artifacts(id,org_id,project_id,project_version_id,artifact_scope,artifact_scope_id,document_type,format,order_id,order_type,bom_hash,revision_snapshot_sha256,storage_bucket,storage_object_key,file_sha256,media_type,byte_size,created_by)
+ VALUES('88760000-0000-4000-8000-000000000001','88600000-0000-4000-8000-000000000001','88620000-0000-4000-8000-000000000001','88650000-0000-4000-8000-000000000001','ORDER','88750000-0000-4000-8000-000000000001','DOC-08','PDF','88750000-0000-4000-8000-000000000001','SUPPLIER_HARDWARE_PO','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','documents','org_88600000-0000-4000-8000-000000000001/projects/88620000-0000-4000-8000-000000000001/REV-A/doc08.pdf','5959595959595959595959595959595959595959595959595959595959595959','application/pdf',1024,'88610000-0000-4000-8000-000000000001')$$,'DOC-08 binds the hardware order slot');
+SELECT throws_ok($$INSERT INTO document_artifacts(org_id,project_id,project_version_id,artifact_scope,artifact_scope_id,document_type,format,order_id,order_type,bom_hash,revision_snapshot_sha256,storage_bucket,storage_object_key,file_sha256,media_type,byte_size,created_by)
+ VALUES('88600000-0000-4000-8000-000000000001','88620000-0000-4000-8000-000000000001','88650000-0000-4000-8000-000000000001','ORDER','88710000-0000-4000-8000-000000000001','DOC-08','PDF','88710000-0000-4000-8000-000000000001','SUPPLIER_GLASS_PO','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','documents','org_88600000-0000-4000-8000-000000000001/projects/88620000-0000-4000-8000-000000000001/REV-A/doc08g.pdf','6060606060606060606060606060606060606060606060606060606060606060','application/pdf',1024,'88610000-0000-4000-8000-000000000001')$$,'23514',NULL,'DOC-08 cannot claim a glass order');
+SELECT lives_ok($$INSERT INTO suppliers(org_id,tax_id,name) VALUES('88600000-0000-4000-8000-000000000001','76.111-2','Vorne SPA')$$,'org supplier entry binds a tax id');
+SELECT lives_ok($$INSERT INTO suppliers(org_id,tax_id,name) VALUES('88600000-0000-4000-8000-000000000001','76.111-3','Seguridad Alu')$$,'a second supplier coexists');
+SELECT throws_ok($$INSERT INTO suppliers(org_id,tax_id,name) VALUES('88600000-0000-4000-8000-000000000001','76.111-2','Otra Vidrieria')$$,'23505',NULL,'one supplier per org tax id');
+SELECT lives_ok($$INSERT INTO suppliers(org_id,tax_id,name) VALUES('88600000-0000-4000-8000-000000000002','76.111-2','Otra Org')$$,'same tax id may exist for another org');
+SELECT throws_ok($$INSERT INTO suppliers(org_id,tax_id,name) VALUES('88600000-0000-4000-8000-000000000001','','Sin nombre')$$,'23514',NULL,'empty tax id rejected');
+SELECT ok(
+    EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE schemaname = 'public' AND tablename = 'projects'
+          AND policyname = 'project_documentary_backend_lock'
+          AND cmd = 'UPDATE'
+    ),
+    'documentary_backend can lock project rows (POD confirm) without gaining UPDATE grants'
+);
 SELECT * FROM finish();
 ROLLBACK;

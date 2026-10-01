@@ -50,7 +50,7 @@ def test_purchase_tenant_precedence_and_ambiguity(real_rows: RLSFixtures) -> Non
     with authenticated_rls_context(real_rows.tokens["A"].claims):
         global_stock = repo.profile_stock(real_rows.demo_system, org, "MARCO", "WHITE")
         assert global_stock.stock_length_mm == Decimal("6000.00")
-        assert global_stock.commercial_sku == "DEMO-BAR-MARCO"
+        assert global_stock.commercial_sku == "COMPRA-MARCO"
     clone = copy_fixed_catalog(org, global_scope=True)
     with fixture_cursor() as cursor:
         cursor.execute(
@@ -96,7 +96,7 @@ def test_missing_stock_and_default_steel_exact_authority(real_rows: RLSFixtures)
         with pytest.raises(MissingStockAuthority):
             repo.profile_stock(real_rows.demo_system, org, "UNKNOWN", "WHITE")
         steel, ix = repo.reinforcement_stock(real_rows.demo_system, org, "MARCO", None, "WHITE")
-        assert steel.workshop_sku == "DEMO-STEEL-MARCO"
+        assert steel.workshop_sku == "ACERO-MARCO"
         assert steel.material.value == "STEEL"
         assert steel.stock_length_mm == Decimal("6000.00")
         assert ix is None
@@ -178,7 +178,7 @@ def test_derived_http_real_auth_scope_and_owner_mfa(real_rows: RLSFixtures, endp
     assert response.status_code == 200
     assert response.data["source_calculation_hash"] == before.data["calculation_hash"]
     if endpoint == "optimize-cut":
-        assert any(line["commercial_sku"] == "DEMO-BAR-MARCO" for line in response.data["purchase_list"])
+        assert any(line["commercial_sku"] == "COMPRA-MARCO" for line in response.data["purchase_list"])
         assert any(cut["workshop_sku"] == "MARCO" and cut["length_mm"] == "1006.00"
                    for bar in response.data["workshop_cut_plan"] for cut in bar["cuts"])
     assert client.post(path, {**request, "cuts": []}, format="json").status_code == 400

@@ -40,4 +40,6 @@ export interface DocumentaryPreparationPosition {
   workshop_targets: WorkshopTargets;
   workshop_suggestions: WorkshopAnnotation[];
   polishing_suggestions: GlassPolishing[];
+  production_ready: boolean;
+  documentary_ready: boolean;
 }

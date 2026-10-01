@@ -3,7 +3,7 @@ from decimal import Decimal
 import pytest
 from pydantic import ValidationError
 
-from dekopen_engine import BayOpeningType, MaterialType, ParametricNode, ProfileRole, RailType, SystemParams, calculate_geometry
+from dekopen_engine import BayOpeningType, MaterialType, ParametricNode, ProductModel, ProfileRole, RailType, SystemParams, calculate_geometry
 from dekopen_engine.geometry import compute_geometry
 from dekopen_engine.hardware import AmbiguousHardwareKit, NoCompatibleHardwareKit, normalize_opening_type, resolve_hardware_kit
 from dekopen_engine.weight import ExactLeafWeight, base_leaf_weight, with_hardware_weight
@@ -181,3 +181,79 @@ def test_missing_geometry_authority_is_rejected(demo_60_params: SystemParams, fi
     del values[field]
     with pytest.raises(ValidationError, match=field):
         SystemParams.model_validate(values)
+
+
+def _assembly_product(width_mm: str, opening: BayOpeningType) -> ProductModel:
+    from dekopen_engine.models import NodeType
+
+    return ProductModel.model_validate(
+        {
+            "version": "product-v2",
+            "assembly": {
+                "modules": [
+                    {
+                        "id": "m1",
+                        "width_mm": D(width_mm),
+                        "height_mm": D("1400"),
+                        "tree": ParametricNode.model_validate(
+                            {
+                                "id": "B1",
+                                "type": NodeType.BAY,
+                                "opening_type": opening,
+                                "glass_spec": "4-16-4",
+                                "glass_thickness_mm": D("24"),
+                                "glass_article_sku": "DVH-4-16-4",
+                            }
+                        ),
+                    }
+                ],
+                "couplings": [],
+            },
+        }
+    )
+
+
+def test_undersized_leaf_emits_typed_hardware_issue_with_envelope(
+    demo_60_params: SystemParams,
+) -> None:
+    """The designer-report defect: a leaf under the kit's minimum width must
+    surface as a typed issue naming the real envelope — not an opaque
+    "revisa los parámetros" geometry failure."""
+    from dekopen_engine.product import evaluate_product
+
+    evaluation = evaluate_product(
+        _assembly_product("300", BayOpeningType.TILT_TURN_LEFT), demo_60_params
+    )
+    issue = next(
+        item for item in evaluation.issues if item.code == "hardware_kit_incompatible"
+    )
+    assert issue.severity.value == "error"
+    assert issue.target == "module:m1"
+    assert issue.params["axis"] == "size"
+    assert issue.params["kit_min_width_mm"] == "450"
+    assert issue.params["kit_max_width_mm"] == "1400"
+    assert issue.params["kit_min_height_mm"] == "600"
+    assert issue.params["kit_max_height_mm"] == "2400"
+    assert issue.params["opening"] == "TILT_TURN_LEFT"
+    assert D(issue.params["leaf_width_mm"]) < D("450")
+
+
+def test_opening_mismatch_without_kit_stays_a_reasoned_failure(
+    demo_60_params: SystemParams,
+) -> None:
+    """No opening+rail match at all → no dimensional envelope to cite; the
+    issue falls back to module_geometry_failed with the reason param."""
+    from dekopen_engine.product import evaluate_product
+
+    only_sliding = demo_60_params.model_copy(
+        update={
+            "available_hardware_kits": [
+                kit for kit in demo_60_params.available_hardware_kits if kit.sku == "KIT-SLIDING"
+            ]
+        }
+    )
+    evaluation = evaluate_product(
+        _assembly_product("900", BayOpeningType.TILT_TURN_LEFT), only_sliding
+    )
+    issue = next(item for item in evaluation.issues if item.code == "module_geometry_failed")
+    assert "No compatible hardware kit" in issue.params["reason"]

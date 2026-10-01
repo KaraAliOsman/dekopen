@@ -309,7 +309,9 @@ export function BowPlanSvg(props: BowPlanSvgProps): JSX.Element {
       className="bow-plan-svg"
       viewBox={`${bounds.x} ${bounds.y} ${bounds.w} ${bounds.h}`}
       role="img"
+      aria-label={t("assembly.planView")}
     >
+      <title>{t("assembly.planView")}</title>
       <BowPlanContent {...props} />
     </svg>
   );

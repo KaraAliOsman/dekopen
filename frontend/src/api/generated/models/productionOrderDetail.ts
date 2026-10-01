@@ -7,7 +7,10 @@
  */
 import type { ProductionNextStep } from "./productionNextStep";
 import type { ProductionOrderDetailDispatchNoteDte } from "./productionOrderDetailDispatchNoteDte";
+import type { ProductionOrderDetailDispatchNotesItem } from "./productionOrderDetailDispatchNotesItem";
 import type { ProductionOrderDetailPayload } from "./productionOrderDetailPayload";
+import type { ProductionOrderDetailRemakeReason } from "./productionOrderDetailRemakeReason";
+import type { ProductionOrderMaking } from "./productionOrderMaking";
 import type { ProductionStep } from "./productionStep";
 import type { ProductionStepEvent } from "./productionStepEvent";
 
@@ -25,14 +28,22 @@ export interface ProductionOrderDetail {
   next_step: ProductionNextStep | null;
   dispatch_ready: boolean;
   shortage: number;
+  version_shortage: number;
+  /** @nullable */
+  remake_reason?: ProductionOrderDetailRemakeReason;
   created_at: string;
   /** @nullable */
   project_version_id?: string | null;
   payload?: ProductionOrderDetailPayload;
   steps: ProductionStep[];
   events: ProductionStepEvent[];
+  making?: ProductionOrderMaking | null;
+  /** @nullable */
+  delivery_address?: string | null;
   /** @nullable */
   dispatch_note_code?: string | null;
+  dispatch_note_voided: boolean;
   /** @nullable */
   dispatch_note_dte?: ProductionOrderDetailDispatchNoteDte;
+  dispatch_notes?: ProductionOrderDetailDispatchNotesItem[];
 }

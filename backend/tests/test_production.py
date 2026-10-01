@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from datetime import date, datetime
+import hashlib
 import json
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -19,6 +20,17 @@ from production import service, views as production_views
 @contextmanager
 def _atomic():
     yield
+
+
+def _write_via(fake_rows):
+    """`production.service.write` fake that keeps the same capture list —
+    bare UPDATE/DELETE statements land in `write`, not `rows`."""
+
+    def fake_write(query, params=()):
+        fake_rows(query, params)
+        return 1
+
+    return fake_write
 
 
 def _tenant(role: str, org_id):
@@ -185,6 +197,34 @@ def test_routing_follows_the_declared_profile_stations() -> None:
     ]
 
 
+def test_routing_keeps_the_station_an_emitting_op_is_mapped_to() -> None:
+    """Manager #7: the op map and the materials heuristic are two
+    authorities for 'does this station have work'. A bare handle-bearing
+    door with HANDLE_PREP routed to HARDWARE and no hardware_items must
+    still land the HARDWARE step — else the op is unclaimed at the floor."""
+    profile = _profile("ALU_DOOR", [
+        {"code": "CUT", "when": "auto"},
+        {"code": "MACHINING", "when": "auto"},
+        {"code": "HARDWARE", "when": "auto"},
+        {"code": "GLAZE", "when": "auto"},
+        {"code": "QC", "when": "required"},
+        {"code": "PACK", "when": "required"},
+    ], operation_station_map={"HANDLE_PREP": "HARDWARE"})
+    engine = {
+        "profile_cuts": [{"sku": "x", "role": "SASH"}],
+        "glasses": [{"a": 1}],
+        "panels": [],
+        "reinforcements": [],
+        "hardware_items": [],
+        "fittings": [],
+    }
+    routing = service._routing(engine, profile=profile, has_handles=True)
+    assert "HARDWARE" in routing
+    # And no ghost station when nothing emits to it either.
+    routing = service._routing(engine, profile=profile, has_handles=False)
+    assert "HARDWARE" not in routing
+
+
 def test_frameless_profile_never_acquires_joining_stations() -> None:
     """The pane is the product: FRAMELESS_GLASS has no WELD/CRIMP in its
     template regardless of the associated system's material family."""
@@ -342,9 +382,14 @@ def test_release_rejects_not_allowed_version() -> None:
 
 
 def test_release_creates_work_order_with_steps() -> None:
-    # Legacy version (no frozen process_facts) → honest generic ladder.
     snapshot = {
-        "positions": [{"id": _POSITION_ID, "system_id": str(uuid4())}],
+        "positions": [
+            {
+                "id": _POSITION_ID,
+                "system_id": str(uuid4()),
+                "process_facts": _SNAPSHOT["positions"][0]["process_facts"],
+            }
+        ],
         "bom": _SNAPSHOT["bom"],
     }
     version = _version_row(snapshot)
@@ -380,7 +425,7 @@ def test_release_creates_work_order_with_steps() -> None:
         "production.service.rows", side_effect=fake_rows
     ), patch("production.service.transaction.atomic", side_effect=_atomic), patch(
         "production.service.documentary_backend", side_effect=_atomic
-    ), patch(
+    ), patch("production.service.write", side_effect=_write_via(fake_rows)), patch(
         "production.service.production_stock.coverage_for_version", return_value={"shortages": 0}
     ):
         output = service.release_production(
@@ -388,7 +433,9 @@ def test_release_creates_work_order_with_steps() -> None:
         )
     assert output["released"] == 1 and output["created"] == 1
     step_inserts = [q for q in inserted_rows if "production_steps" in q]
-    assert len(step_inserts) == 5  # CUT ASSEMBLE GLAZE QC PACK
+    # The sealed PVC_WELDED profile routes: CUT WELD CLEAN SASH_ASSEMBLE
+    # HARDWARE GLAZE QC PACK (MACHINING has no work in this BOM).
+    assert len(step_inserts) == 8
     event_inserts = [q for q in inserted_rows if "production_step_events" in q]
     assert len(event_inserts) == 1
 
@@ -462,7 +509,7 @@ def test_release_routes_steps_by_declared_process_profile() -> None:
         "production.service.rows", side_effect=fake_rows
     ), patch("production.service.transaction.atomic", side_effect=_atomic), patch(
         "production.service.documentary_backend", side_effect=_atomic
-    ), patch(
+    ), patch("production.service.write", side_effect=_write_via(fake_rows)), patch(
         "production.service.production_stock.coverage_for_version", return_value={"shortages": 0}
     ):
         output = service.release_production(
@@ -515,7 +562,7 @@ def test_release_freezes_process_authority_into_the_payload() -> None:
         "production.service.rows", side_effect=fake_rows
     ), patch("production.service.transaction.atomic", side_effect=_atomic), patch(
         "production.service.documentary_backend", side_effect=_atomic
-    ), patch(
+    ), patch("production.service.write", side_effect=_write_via(fake_rows)), patch(
         "production.service.production_stock.coverage_for_version", return_value={"shortages": 0}
     ), patch("production.service._work_order_payload", side_effect=capture):
         service.release_production(
@@ -528,16 +575,16 @@ def test_release_freezes_process_authority_into_the_payload() -> None:
     assert authority["operation_station_map"]["END_MACHINING"] == "MACHINING"
 
 
-def test_release_without_frozen_facts_uses_legacy_fallback() -> None:
-    """Versions sealed before the authority model have no process_facts —
-    their facts are never reinterpreted through a later catalog revision."""
+def test_release_without_process_authority_is_refused() -> None:
+    """Versions sealed without a bound process profile carry
+    resolved_via='generic_fallback' — release must refuse rather than ship
+    an invented routing (review CAT-04). The remedy is re-sealing the
+    position under a catalog with real process authority."""
     snapshot = {
         "positions": [{"id": _POSITION_ID, "system_id": str(uuid4())}],
         "bom": [dict(_SNAPSHOT["bom"][0])],
     }
     version = _version_row(snapshot)
-    order_id = uuid4()
-    payloads: list[dict[str, object]] = []
 
     def fake_one(query, params=(), code=None):
         if "project_versions" in query:
@@ -545,52 +592,22 @@ def test_release_without_frozen_facts_uses_legacy_fallback() -> None:
         raise AssertionError(query)
 
     def fake_rows(query, params=()):
-        if "FROM public.manufacturing_process_profiles" in query:
-            return [
-                {
-                    "id": "22222222-2222-3333-4444-555555555555",
-                    "code": "GENERIC_LEGACY",
-                    "version": 1,
-                    "joining_method": "NONE",
-                    "stations": [
-                        {"code": "CUT", "when": "auto"},
-                        {"code": "ASSEMBLE", "when": "auto"},
-                        {"code": "GLAZE", "when": "auto"},
-                        {"code": "QC", "when": "required"},
-                        {"code": "PACK", "when": "required"},
-                    ],
-                    "operation_station_map": {"SAW_CUT": "CUT"},
-                }
-            ]
-        if "INSERT INTO public.orders" in query:
-            return [{"id": order_id}]
-        if "FROM public.orders" in query and "GROUP BY" in query:
-            return [{"id": order_id, "order_code": "OT", "order_type": "WORKSHOP_OT",
-                     "status": "RELEASED", "payload_json": {},
-                     "project_version_id": version["id"], "created_at": "x",
-                     "steps_total": 0, "steps_done": 0}]
+        if "revision_code" in query:
+            return [{"code": version["revision_code"]}]
         return []
-
-    original = service._work_order_payload
-
-    def capture(*args, **kwargs):
-        payload = original(*args, **kwargs)
-        payloads.append(payload)
-        return payload
 
     with patch("production.service.one", side_effect=fake_one), patch(
         "production.service.rows", side_effect=fake_rows
-    ), patch("production.service.transaction.atomic", side_effect=_atomic), patch(
-        "production.service.documentary_backend", side_effect=_atomic
     ), patch(
-        "production.service.production_stock.coverage_for_version", return_value={"shortages": 0}
-    ), patch("production.service._work_order_payload", side_effect=capture):
-        service.release_production(
-            org_id=uuid4(), version_id=version["id"], actor_id=uuid4()
-        )
-    authority = payloads[0]["process_authority"]
-    assert authority["code"] == "GENERIC_LEGACY"
-    assert authority["resolved_via"] == "generic_fallback"
+        "production.service.transaction.atomic", side_effect=_atomic
+    ), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ):
+        with pytest.raises(DocumentaryError) as error:
+            service.release_production(
+                org_id=uuid4(), version_id=version["id"], actor_id=uuid4()
+            )
+    assert error.value.code == "production_process_unresolved"
 
 
 def test_release_replay_returns_existing() -> None:
@@ -627,7 +644,7 @@ def test_release_replay_returns_existing() -> None:
         "production.service.rows", side_effect=fake_rows
     ), patch("production.service.transaction.atomic", side_effect=_atomic), patch(
         "production.service.documentary_backend", side_effect=_atomic
-    ), patch(
+    ), patch("production.service.write", side_effect=_write_via(fake_rows)), patch(
         "production.service.production_stock.coverage_for_version", return_value={"shortages": 0}
     ):
         output = service.release_production(
@@ -641,7 +658,15 @@ def _transition_fakes(step: dict, order_status: str):
         if "SELECT order_id FROM public.production_steps" in query:
             return {"order_id": step["order_id"]}
         if "FROM public.orders" in query:
-            return {"id": step["order_id"], "status": order_status}
+            return {
+                "id": step["order_id"],
+                "status": order_status,
+                # Consuming steps refuse to START without a live cut plan —
+                # give the stub order a valid one.
+                "payload_json": {"optimization": {"plan": {"bars": []}}},
+            }
+        if "sequence < %s" in query:
+            return {"remaining": 0}
         if "FOR UPDATE OF s" in query:
             return step
         raise AssertionError(query)
@@ -731,6 +756,35 @@ def test_unassigned_step_refuses_progress_until_a_center_exists() -> None:
     assert error.value.code == "work_center_unassigned"
 
 
+def test_start_refused_while_an_earlier_step_is_open() -> None:
+    # Routing is sequential: GLAZE may not start while CUT is still open —
+    # the stepper is a sequence, not a checklist.
+    step = _step_row(status="READY", code="GLAZE", sequence=2)
+
+    def fake_one(query, params=(), code=None):
+        if "SELECT order_id FROM public.production_steps" in query:
+            return {"order_id": step["order_id"]}
+        if "FROM public.orders" in query:
+            return {"id": step["order_id"], "status": "IN_PROGRESS"}
+        if "FOR UPDATE OF s" in query:
+            return step
+        if "sequence < %s" in query:
+            return {"remaining": 1}
+        raise AssertionError(query)
+
+    with patch("production.service.one", side_effect=fake_one), patch(
+        "production.service.rows", side_effect=lambda *a, **k: []
+    ), patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ):
+        with pytest.raises(DocumentaryError) as error:
+            service.transition_step(
+                org_id=uuid4(), step_id=step["id"], action="START",
+                actor_id=uuid4(), note=None,
+            )
+    assert error.value.code == "step_sequence_blocked"
+
+
 def test_unassigned_step_adopts_a_later_activated_center() -> None:
     step = _step_row(status="READY", code="CUT")
     center = {"id": uuid4(), "code": "SAW-1", "name": "Saw"}
@@ -741,6 +795,8 @@ def test_unassigned_step_adopts_a_later_activated_center() -> None:
             return {"order_id": step["order_id"]}
         if "FOR UPDATE OF s" in query:
             return step
+        if "sequence < %s" in query:
+            return {"remaining": 0}
         if "SELECT status::text" in query:
             return {"status": "IN_PROGRESS"}
         if "FROM public.production_steps s" in query:
@@ -749,7 +805,11 @@ def test_unassigned_step_adopts_a_later_activated_center() -> None:
         if "FROM public.production_steps" in query:
             return {"total": 2, "done": 0, "blocked": 0, "in_progress": 1}
         if "UPDATE public.orders" in query or "FROM public.orders" in query:
-            return {"id": step["order_id"], "status": "IN_PROGRESS"}
+            return {
+                "id": step["order_id"],
+                "status": "IN_PROGRESS",
+                "payload_json": {"optimization": {"plan": {"bars": []}}},
+            }
         raise AssertionError(query)
 
     def fake_rows(query, params=(), code=None):
@@ -760,7 +820,9 @@ def test_unassigned_step_adopts_a_later_activated_center() -> None:
 
     with patch("production.service.one", side_effect=fake_one), patch(
         "production.service.rows", side_effect=fake_rows
-    ), patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+    ), patch("production.service.write", side_effect=_write_via(fake_rows)), patch(
+        "production.service.transaction.atomic", side_effect=_atomic
+    ), patch(
         "production.service.documentary_backend", side_effect=_atomic
     ):
         service.transition_step(
@@ -798,6 +860,179 @@ def test_note_action_requires_text() -> None:
             actor_id=uuid4(), note="   ",
         )
     assert error.value.code == "step_note_required"
+
+
+def _qc_fakes(step: dict):
+    def fake_one(query, params=(), code=None):
+        if "SELECT order_id FROM public.production_steps" in query:
+            return {"order_id": step["order_id"]}
+        if "FROM public.orders" in query and "FOR UPDATE" in query:
+            return {"id": step["order_id"], "status": "IN_PROGRESS"}
+        if "FOR UPDATE OF s" in query:
+            return step
+        if "status::text AS status" in query:
+            return {"status": "IN_PROGRESS"}
+        if "COUNT(*)" in query and "production_steps" in query:
+            return {"total": 3, "done": 0, "blocked": 0, "in_progress": 1}
+        if "UPDATE public.orders SET status" in query:
+            return {"status": "IN_PROGRESS"}
+        if "FROM public.production_steps s" in query:
+            return step
+        raise AssertionError(query)
+
+    return fake_one
+
+
+def test_qc_check_records_structured_event() -> None:
+    step = _step_row(status="IN_PROGRESS", code="QC")
+    inserted = []
+
+    def fake_rows(query, params=()):
+        if "INSERT INTO public.production_step_events" in query:
+            inserted.append(params)
+        return []
+
+    with patch("production.service.one", side_effect=_qc_fakes(step)), patch(
+        "production.service.rows", side_effect=fake_rows
+    ), patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ):
+        output = service.transition_step(
+            org_id=uuid4(), step_id=step["id"], action="QC_CHECK",
+            actor_id=uuid4(), note=None,
+            qc_check={
+                "check": "Medida total", "expected": "1200mm",
+                "actual": "1201mm", "item_code": "M-01", "result": "PASS",
+            },
+        )
+    assert output["step"]["status"] == "IN_PROGRESS"
+    assert len(inserted) == 1
+    params = inserted[0]
+    assert params[3] == "QC_CHECK"
+    payload = json.loads(params[5])
+    assert payload["qc_check"]["check"] == "Medida total"
+    assert payload["qc_check"]["actual"] == "1201mm"
+    assert payload["qc_check"]["item_code"] == "M-01"
+    assert payload["qc_check"]["result"] == "PASS"
+
+
+def test_qc_check_rejected_on_non_qc_step() -> None:
+    step = _step_row(status="IN_PROGRESS", code="CUT")
+
+    with patch("production.service.one", side_effect=_qc_fakes(step)), patch(
+        "production.service.rows", side_effect=lambda *a, **k: []
+    ), patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ):
+        with pytest.raises(DocumentaryError) as error:
+            service.transition_step(
+                org_id=uuid4(), step_id=step["id"], action="QC_CHECK",
+                actor_id=uuid4(), note=None,
+                qc_check={"check": "x", "result": "PASS"},
+            )
+    assert error.value.code == "step_transition_invalid"
+
+
+def test_qc_check_requires_payload() -> None:
+    with pytest.raises(DocumentaryError) as error:
+        service.transition_step(
+            org_id=uuid4(), step_id=uuid4(), action="QC_CHECK",
+            actor_id=uuid4(), note=None,
+        )
+    assert error.value.code == "qc_check_required"
+
+
+def test_qc_check_requires_valid_result() -> None:
+    with pytest.raises(DocumentaryError) as error:
+        service.transition_step(
+            org_id=uuid4(), step_id=uuid4(), action="QC_CHECK",
+            actor_id=uuid4(), note=None,
+            qc_check={"check": "Medida", "result": "MAYBE"},
+        )
+    assert error.value.code == "qc_check_result_invalid"
+
+
+def test_qc_check_not_allowed_with_other_actions() -> None:
+    with pytest.raises(DocumentaryError) as error:
+        service.transition_step(
+            org_id=uuid4(), step_id=uuid4(), action="START",
+            actor_id=uuid4(), note=None,
+            qc_check={"check": "Medida", "result": "PASS"},
+        )
+    assert error.value.code == "step_transition_invalid"
+
+
+def test_optimization_stats_aggregates_plan() -> None:
+    plan = {
+        "bars": {
+            "workshop_cut_plan": [
+                {"cuts": [{}, {}, {}], "waste_mm": "250.00", "source": "NEW"},
+                {"cuts": [{}], "waste_mm": "10.00", "source": "REMNANT"},
+            ],
+            "purchase_list": [{"qty_bars": 2}],
+        },
+        "sheets": [{"placements": [{}, {}]}],
+        "sheet_purchases": [{"qty_sheets": 1}],
+        "unnested": [{"reason": "shaped_glass_outline"}],
+        "consumed_bars": [{"id": "x"}], "consumed_sheets": [],
+        "produced_bars": [{"stock_authority_id": "a", "remainder_mm": "800"}],
+        "produced_sheets": [],
+        "runtime_ms": 42,
+    }
+    stats = service._optimization_stats(plan)
+    assert stats["bars_total"] == 2
+    assert stats["bars_remnant"] == 1 and stats["bars_new"] == 1
+    assert stats["cuts_total"] == 4
+    assert stats["waste_mm"] == "260.00"
+    assert stats["sheets_total"] == 1 and stats["pieces_sheets"] == 2
+    assert stats["unnested_count"] == 1
+    assert stats["purchase_bars"] == 2 and stats["purchase_sheets"] == 1
+    assert stats["remnants_consumed"] == 1 and stats["remnants_produced"] == 1
+    assert stats["runtime_ms"] == 42
+
+
+def test_compare_strategies_runs_fast_and_deep() -> None:
+    order = {
+        "id": uuid4(), "order_code": "OT-1",
+        "payload_json": {"position_id": "p1", "system_id": "s1"},
+    }
+    plans = []
+
+    def fake_plan(**kwargs):
+        plans.append(kwargs["strategy"])
+        return {
+            "bars": {"workshop_cut_plan": [{"cuts": [{}], "waste_mm": "5"}]},
+            "sheets": [], "sheet_purchases": [], "unnested": [],
+            "consumed_bars": [], "consumed_sheets": [],
+            "produced_bars": [], "produced_sheets": [],
+            "runtime_ms": 7 if kwargs["strategy"] == "fast" else 70,
+        }
+
+    def fake_context(**kwargs):
+        return (
+            order, "BLANCO", {"positions": [{"id": "p1", "system_id": "s1"}]},
+            object(), 1,
+        )
+
+    payload_patches = patch(
+        "production.service._order_optimize_context", side_effect=fake_context
+    ), patch(
+        "production.service._compute_optimization", side_effect=fake_plan
+    ), patch(
+        "production.service._decoded", side_effect=lambda raw: raw
+    ), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    )
+    with payload_patches[0], payload_patches[1], payload_patches[2], payload_patches[3]:
+        output = service.compare_optimization_strategies(
+            org_id=uuid4(), order_id=order["id"], color=""
+        )
+    assert plans == ["fast", "deep"]
+    assert output["order_code"] == "OT-1"
+    assert [row["strategy"] for row in output["strategies"]] == ["fast", "deep"]
+    assert output["strategies"][0]["runtime_ms"] == 7
+    assert output["strategies"][1]["runtime_ms"] == 70
+    assert output["strategies"][0]["waste_mm"] == "5"
 
 
 def test_hold_event_only_appended_once() -> None:
@@ -876,7 +1111,7 @@ def test_order_code_scopes_to_project() -> None:
         "production.service.rows", side_effect=fake_rows
     ), patch("production.service.transaction.atomic", side_effect=_atomic), patch(
         "production.service.documentary_backend", side_effect=_atomic
-    ), patch(
+    ), patch("production.service.write", side_effect=_write_via(fake_rows)), patch(
         "production.service._ensure_work_centers", return_value=({}, set())
     ), patch(
         "production.service.production_stock.coverage_for_version", return_value={"shortages": 0}
@@ -885,6 +1120,61 @@ def test_order_code_scopes_to_project() -> None:
             org_id=uuid4(), version_id=version["id"], actor_id=uuid4()
         )
     assert seen["order_code"] == "OT-PRO-77-REV-A-01"
+
+
+def test_list_work_centers_never_writes() -> None:
+    """A GET must not self-seed — an empty org's work_centers blocker is
+    honest until someone seeds explicitly or releases a work order."""
+    org_id = uuid4()
+    seen: list[str] = []
+
+    def fake_rows(query: str, params=None):
+        seen.append(query)
+        assert "FROM public.work_centers" in query
+        assert params == [str(org_id)]
+        return []
+
+    with patch("production.service.rows", side_effect=fake_rows), patch(
+        "production.service._ensure_work_centers"
+    ) as ensure, patch("production.service.write") as write_mock:
+        output = service.list_work_centers(org_id=org_id)
+    assert output == {"centers": []}
+    assert len(seen) == 1
+    ensure.assert_not_called()
+    write_mock.assert_not_called()
+
+
+def test_seed_default_work_centers_explicit() -> None:
+    org_id = uuid4()
+    center = {
+        "id": uuid4(), "code": "CUT-01", "name": "Corte", "kind": "CUT",
+        "display_order": 1, "active": True,
+    }
+    with patch(
+        "production.service._ensure_work_centers", return_value=({"CUT": center}, {"CUT"})
+    ) as ensure, patch(
+        "production.service.rows", return_value=[center]
+    ) as list_rows:
+        output = service.seed_default_work_centers(org_id=org_id)
+    ensure.assert_called_once_with(org_id)
+    assert output == {"centers": [center]}
+    list_rows.assert_called_once()
+
+
+def test_work_center_seed_endpoint_forwards_scope(monkeypatch) -> None:
+    # _client_with_scope asserts the role is inside the view's allowed scope,
+    # so this also proves the endpoint gates on _WRITERS, not _READERS.
+    client, token, org_id = _client_with_scope(monkeypatch, "WORKSHOP_MANAGER")
+    seen = {}
+
+    def fake_seed(*, org_id):
+        seen["org_id"] = org_id
+        return {"centers": []}
+
+    monkeypatch.setattr(service, "seed_default_work_centers", fake_seed)
+    response = client.post("/api/v1/production/work-centers/seed-defaults/")
+    assert response.status_code == 200
+    assert seen["org_id"] == org_id
 
 
 def test_work_center_upsert_reports_created() -> None:
@@ -948,8 +1238,71 @@ def test_orders_list_allows_installer(monkeypatch) -> None:
     assert response.status_code == 200
 
 
+def test_step_transition_denies_installer(monkeypatch) -> None:
+    org_id = uuid4()
+    token = SimpleNamespace(user_id=uuid4(), claims={}, aal="aal1")
+
+    @contextmanager
+    def fake_scope(request, allowed):
+        from authentication.errors import contract_error
+
+        if "INSTALLER" in allowed:
+            yield token, _tenant("INSTALLER", org_id), org_id
+        else:
+            raise contract_error(403, "documentary_permission_denied", "denied")
+            yield
+
+    monkeypatch.setattr(production_views, "documentary_scope", fake_scope)
+    client = APIClient()
+    client.force_authenticate(user=SimpleNamespace(is_authenticated=True), token=object())
+    response = client.post(
+        f"/api/v1/production/steps/{uuid4()}/transition/",
+        {"action": "START"},
+        format="json",
+    )
+    assert response.status_code == 403
+
+
+def test_delivery_confirm_payment_denies_installer(monkeypatch) -> None:
+    client, _, _ = _client_with_scope(monkeypatch, "INSTALLER")
+    response = client.post(
+        f"/api/v1/production/orders/{uuid4()}/delivery/confirm/",
+        {
+            "receiver_name": "Cliente",
+            "signature_png": "aGVsbG8=",
+            "payment": {"amount": "1500000", "method": "CASH"},
+        },
+        format="json",
+    )
+    assert response.status_code == 403
+
+
+def test_delivery_confirm_payment_allows_estimator(monkeypatch) -> None:
+    client, token, _ = _client_with_scope(monkeypatch, "ESTIMATOR")
+
+    def fake_confirm(**kwargs):
+        return {"id": uuid4()}
+
+    monkeypatch.setattr(
+        "production.views.confirm_delivery", fake_confirm
+    )
+    monkeypatch.setattr(
+        service, "get_delivery", lambda *, org_id, order_id: {"delivery": {}}
+    )
+    response = client.post(
+        f"/api/v1/production/orders/{uuid4()}/delivery/confirm/",
+        {
+            "receiver_name": "Cliente",
+            "signature_png": "aGVsbG8=",
+            "payment": {"amount": "1500000", "method": "CASH"},
+        },
+        format="json",
+    )
+    assert response.status_code == 201
+
+
 def test_step_transition_forwards_action(monkeypatch) -> None:
-    client, token, _ = _client_with_scope(monkeypatch, "INSTALLER")
+    client, token, _ = _client_with_scope(monkeypatch, "WORKSHOP_MANAGER")
     seen = {}
 
     def fake_transition(**kwargs):
@@ -1072,7 +1425,10 @@ def test_optimize_work_order_builds_bar_plan_and_event() -> None:
     assert output["optimization"]["units"] == 2
     pieces_arg = cut.call_args[0][0]
     assert len(pieces_arg) == 4  # qty 2 per unit x 2 units
-    assert len({p.unit_index for p in pieces_arg}) == 4  # unique per-unit identity
+    # unit_index is the physical unit ordinal (u1/u2 on workshop labels);
+    # identical in-unit copies are disambiguated inside piece_id.
+    assert {p.unit_index for p in pieces_arg} == {1, 2}
+    assert len({(p.piece_id, p.unit_index) for p in pieces_arg}) == 4
     writes = seen["writes"]
     assert any("payload_json" in q for q in writes)
     assert any("WO_OPTIMIZED" in q for q in writes)
@@ -1211,7 +1567,7 @@ def test_release_seals_system_from_snapshot_positions() -> None:
         "production.service.rows", side_effect=fake_rows
     ), patch("production.service.transaction.atomic", side_effect=_atomic), patch(
         "production.service.documentary_backend", side_effect=_atomic
-    ), patch(
+    ), patch("production.service.write", side_effect=_write_via(fake_rows)), patch(
         "production.service._ensure_work_centers", return_value=({}, set())
     ), patch(
         "production.service.production_stock.coverage_for_version", return_value={"shortages": 0}
@@ -1236,6 +1592,7 @@ def test_release_seals_glass_polishing_from_snapshot_positions() -> None:
                 "id": _POSITION_ID,
                 "system_id": str(uuid4()),
                 "glass_polishing": polishing,
+                "process_facts": _SNAPSHOT["positions"][0]["process_facts"],
             }
         ],
         "bom": _SNAPSHOT["bom"],
@@ -1257,7 +1614,7 @@ def test_release_seals_glass_polishing_from_snapshot_positions() -> None:
         "production.service.rows", side_effect=fake_rows
     ), patch("production.service.transaction.atomic", side_effect=_atomic), patch(
         "production.service.documentary_backend", side_effect=_atomic
-    ), patch(
+    ), patch("production.service.write", side_effect=_write_via(fake_rows)), patch(
         "production.service._ensure_work_centers", return_value=({}, set())
     ), patch(
         "production.service.production_stock.coverage_for_version", return_value={"shortages": 0}
@@ -1289,6 +1646,75 @@ def test_optimize_rejects_completed_order() -> None:
     assert error.value.code == "work_order_completed"
 
 
+def test_optimize_rejects_cancelled_order() -> None:
+    order_id = uuid4()
+
+    def fake_one(query, params=(), code=None):
+        if "FOR UPDATE" in query:
+            return {
+                "id": order_id, "order_code": "OT", "status": "CANCELLED",
+                "payload_json": {},
+            }
+        raise AssertionError(query)
+
+    with patch("production.service.one", side_effect=fake_one), patch(
+        "production.service.transaction.atomic", return_value=_atomic()
+    ), patch("production.service.documentary_backend", return_value=_atomic()):
+        with pytest.raises(DocumentaryError) as error:
+            service.optimize_work_order(
+                org_id=uuid4(), order_id=order_id, actor_id=uuid4(), color="BLANCO",
+            )
+    assert error.value.code == "work_order_cancelled"
+
+
+def test_cnc_generate_rejects_cancelled_order() -> None:
+    from production import cnc
+
+    order_id = uuid4()
+    bundle = {
+        "order": {"id": order_id, "order_code": "OT", "status": "CANCELLED"}
+    }
+    with patch("production.cnc._order_ops", return_value=bundle):
+        with pytest.raises(DocumentaryError) as error:
+            cnc.generate_program(
+                org_id=uuid4(), order_id=order_id, machine_id=uuid4(),
+                member_id="M-1", actor_id=uuid4(),
+            )
+    assert error.value.code == "work_order_cancelled"
+
+
+def test_cnc_generate_rejects_malformed_machine_id(monkeypatch) -> None:
+    client, _, _ = _client_with_scope(monkeypatch, "WORKSHOP_MANAGER")
+    monkeypatch.setattr(
+        production_views.cnc,
+        "generate_program",
+        lambda **kwargs: {"program": {}},
+    )
+    response = client.post(
+        f"/api/v1/production/orders/{uuid4()}/cnc/programs/",
+        {"machine_id": "not-a-uuid", "member_id": "M-1"},
+        format="json",
+    )
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "machine_id_invalid"
+
+
+def test_cancelled_order_error_maps_to_409(monkeypatch) -> None:
+    client, _, _ = _client_with_scope(monkeypatch, "WORKSHOP_MANAGER")
+
+    def fake_optimize(**kwargs):
+        raise DocumentaryError("work_order_cancelled")
+
+    monkeypatch.setattr(service, "optimize_work_order", fake_optimize)
+    response = client.post(
+        f"/api/v1/production/orders/{uuid4()}/optimize/",
+        {"color": "BLANCO"},
+        format="json",
+    )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "work_order_cancelled"
+
+
 def test_optimize_rejects_replan_after_consumed_step() -> None:
     # A DONE material-consuming step already settled its reservations —
     # replanning would strand the fresh holds forever (no second DONE
@@ -1305,7 +1731,7 @@ def test_optimize_rejects_replan_after_consumed_step() -> None:
 
     def fake_rows(query, params=()):
         if "production_steps" in query:
-            return [{"code": "CUT"}]
+            return [{"code": "CUT", "status": "DONE"}]
         raise AssertionError(query)
 
     with patch("production.service.one", side_effect=fake_one), patch(
@@ -1319,6 +1745,68 @@ def test_optimize_rejects_replan_after_consumed_step() -> None:
                 color="BLANCO",
             )
     assert error.value.code == "work_order_replan_after_consumption"
+
+
+def test_optimize_rejects_replan_while_consuming_step_in_progress() -> None:
+    # An IN_PROGRESS consuming step is physically cutting plan A — replanning
+    # mid-cut would silently restock its claims under a different plan.
+    order_id = uuid4()
+
+    def fake_one(query, params=(), code=None):
+        if "FOR UPDATE" in query:
+            return {
+                "id": order_id, "order_code": "OT", "status": "IN_PRODUCTION",
+                "payload_json": {},
+            }
+        raise AssertionError(query)
+
+    def fake_rows(query, params=()):
+        if "production_steps" in query:
+            return [{"code": "GLAZE", "status": "IN_PROGRESS"}]
+        raise AssertionError(query)
+
+    with patch("production.service.one", side_effect=fake_one), patch(
+        "production.service.rows", side_effect=fake_rows
+    ), patch(
+        "production.service.transaction.atomic", return_value=_atomic()
+    ), patch("production.service.documentary_backend", return_value=_atomic()):
+        with pytest.raises(DocumentaryError) as error:
+            service.optimize_work_order(
+                org_id=uuid4(), order_id=order_id, actor_id=uuid4(),
+                color="BLANCO",
+            )
+    assert error.value.code == "work_order_replan_step_in_progress"
+
+
+def test_optimize_rejects_color_contradicting_sealed_payload() -> None:
+    # The sealed color is authoritative — optimizing a FOILED order against
+    # WHITE stock variants would cut the wrong finish.
+    order_id = uuid4()
+
+    def fake_one(query, params=(), code=None):
+        if "FOR UPDATE" in query:
+            return {
+                "id": order_id, "order_code": "OT", "status": "IN_PRODUCTION",
+                "payload_json": {"color": "FOILED"},
+            }
+        raise AssertionError(query)
+
+    def fake_rows(query, params=()):
+        if "production_steps" in query:
+            return []
+        raise AssertionError(query)
+
+    with patch("production.service.one", side_effect=fake_one), patch(
+        "production.service.rows", side_effect=fake_rows
+    ), patch(
+        "production.service.transaction.atomic", return_value=_atomic()
+    ), patch("production.service.documentary_backend", return_value=_atomic()):
+        with pytest.raises(DocumentaryError) as error:
+            service.optimize_work_order(
+                org_id=uuid4(), order_id=order_id, actor_id=uuid4(),
+                color="WHITE",
+            )
+    assert error.value.code == "optimize_color_mismatch"
 
 
 def test_complete_step_rejects_material_shortage() -> None:
@@ -1562,7 +2050,14 @@ def test_optimize_sheet_piece_ids_unique_per_unit() -> None:
         "production.service.optimize_cut", return_value=cut_result
     ), patch(
         "production.service._sheet_rules",
-        return_value={"by_sku": {}, "by_thickness": {"4.00": [rule]}},
+        return_value={
+            "by_sku": {},
+            "by_thickness": {},
+            # The piece's article_sku is the substrate key — a sheet that
+            # declares glass_sku V4 hosts it; same-thickness sheets of other
+            # substrates never do.
+            "by_glass": {"V4": [rule]},
+        },
     ), patch("production.service.nest_rects", side_effect=fake_nest), patch(
         "production.service.remnants_service"
     ) as rem, patch(
@@ -1587,10 +2082,32 @@ def test_optimize_sheet_piece_ids_unique_per_unit() -> None:
 
 
 def test_optimize_requires_color() -> None:
-    with pytest.raises(DocumentaryError) as error:
-        service.optimize_work_order(
-            org_id=uuid4(), order_id=uuid4(), actor_id=uuid4(), color="  ",
-        )
+    # No sealed color on the payload and none supplied — nothing authoritative
+    # to optimize against.
+    order_id = uuid4()
+
+    def fake_one(query, params=(), code=None):
+        if "FOR UPDATE" in query:
+            return {
+                "id": order_id, "order_code": "OT", "status": "RELEASED",
+                "payload_json": {},
+            }
+        raise AssertionError(query)
+
+    def fake_rows(query, params=()):
+        if "production_steps" in query:
+            return []
+        raise AssertionError(query)
+
+    with patch("production.service.one", side_effect=fake_one), patch(
+        "production.service.rows", side_effect=fake_rows
+    ), patch(
+        "production.service.transaction.atomic", return_value=_atomic()
+    ), patch("production.service.documentary_backend", return_value=_atomic()):
+        with pytest.raises(DocumentaryError) as error:
+            service.optimize_work_order(
+                org_id=uuid4(), order_id=order_id, actor_id=uuid4(), color="  ",
+            )
     assert error.value.code == "optimize_color_required"
 
 
@@ -1614,12 +2131,19 @@ def test_optimize_post_forwards_scope(monkeypatch) -> None:
 
 
 def test_optimize_post_rejects_blank_color(monkeypatch) -> None:
+    # Blank color passes the serializer (sealed payload color can fill it) and
+    # the service decides — an unsealed order with nothing supplied 422s.
     client, _, _ = _client_with_scope(monkeypatch, "WORKSHOP_MANAGER")
+
+    def fake_optimize(**kwargs):
+        raise DocumentaryError("optimize_color_required")
+
+    monkeypatch.setattr(service, "optimize_work_order", fake_optimize)
     response = client.post(
         f"/api/v1/production/orders/{uuid4()}/optimize/",
         {"color": " "}, format="json",
     )
-    assert response.status_code == 400
+    assert response.status_code == 422
 
 
 
@@ -1690,6 +2214,7 @@ def test_qc_fail_blocks_step_and_holds_order(monkeypatch) -> None:
             step_id=step_id,
             action="COMPLETE",
             actor_id=uuid4(),
+            actor_role="WORKSHOP_MANAGER",
             note="rotura en esmerilado",
             qc_result="FAIL",
         )
@@ -1778,6 +2303,12 @@ def test_create_remake_clones_order_and_steps(monkeypatch) -> None:
     def fake_rows(sql_text: str, params: object = ()) -> list[dict]:
         lowered = " ".join(sql_text.lower().split())
         writes.append((lowered, list(params)))
+        # The remake carries the QC failure that motivated it.
+        if "production_step_events" in lowered and "qc_result" in lowered:
+            return [{"payload": {"qc_item": "V-02", "note": "vidrio rayado"}}]
+        # No inactive work centers — the step copy keeps every assignment.
+        if "set work_center_id = null" in lowered:
+            return []
         return [{"id": str(remake_id)}]
 
     monkeypatch.setattr("production.service.one", fake_one)
@@ -1796,6 +2327,7 @@ def test_create_remake_clones_order_and_steps(monkeypatch) -> None:
     payload = json.loads(order_insert[3])
     assert "optimization" not in payload
     assert payload["remake_of"] == str(order_id)
+    assert payload["remake_reason"] == {"qc_item": "V-02", "note": "vidrio rayado"}
     assert order_insert[2] == "OT-P-AAA-01-RM-02"
     steps_copy = next(
         s2 for s2, _ in writes if "insert into public.production_steps" in s2 and "select" in s2
@@ -1894,10 +2426,11 @@ def test_export_cnc_files_writes_deterministic_csv(monkeypatch) -> None:
     assert sorted(out["files"]) == ["bars.csv", "sheets.csv"]
     bars_csv = stored["files"]["bars.csv"]
     lines = bars_csv.strip().split("\n")
-    assert lines[0].startswith("bar_index,")
-    assert "M-02" in lines[1] and "M-01" in lines[2]  # stored cut sequence
-    assert lines[1].split(",")[3] == "1"  # sequence_in_bar column
-    assert "45.0" in lines[1] and "90.0" in lines[2]  # saw angles exported
+    assert lines[0].startswith("# dekopen order=OT-P-AAA-01 plan=")
+    assert lines[1].startswith("bar_index,")
+    assert "M-02" in lines[2] and "M-01" in lines[3]  # stored cut sequence
+    assert lines[2].split(",")[3] == "1"  # sequence_in_bar column
+    assert "45.0" in lines[2] and "90.0" in lines[3]  # saw angles exported
     assert stored["schema"] == "work_order_cnc_export_v2"
     assert stored["optimization_fingerprint"]
     sheets_csv = stored["files"]["sheets.csv"]
@@ -1968,7 +2501,10 @@ def test_export_dxf_files_writes_deterministic_geometry(monkeypatch) -> None:
                 "order_code": "OT-P-AAA-01",
                 "status": "IN_PROGRESS",
                 "payload_json": {"optimization": optimization},
+                "project_version_id": str(uuid4()),
             }
+        if "project_versions" in lowered:
+            return {"snapshot_json": {}}
         raise AssertionError(f"unexpected one(): {lowered}")
 
     monkeypatch.setattr("production.service.one", fake_one)
@@ -1987,13 +2523,16 @@ def test_export_dxf_files_writes_deterministic_geometry(monkeypatch) -> None:
     assert sorted(out["files"]) == ["bars.dxf", "sheet_1.dxf"]
     sheet = stored["files"]["sheet_1.dxf"]
     assert sheet.startswith("0\nSECTION\n2\nHEADER") and sheet.endswith("0\nEOF\n")
-    assert "AC1015" in sheet and "V-01·U2 800x600" in sheet
+    # ASCII-only labels (AC1015-era DXF) and AcDb subclass markers.
+    assert "AC1015" in sheet and "V-01-U2 800x600" in sheet
+    assert "100\nAcDbPolyline" in sheet and "100\nAcDbText" in sheet
     bars = stored["files"]["bars.dxf"]
-    assert "M-02·U1 1200 45.0/45.0" in bars and "MARCO-60" in bars
+    assert "M-02-U1 1200 45.0/45.0" in bars and "MARCO-60" in bars
+    assert "100\nAcDbLine" in bars
     # Saw consumption matches optimize_cut: head trim once (mark at 15),
     # then each piece length + one kerf → piece ends at 1215 and 2719.
     for mark_x in ("10\n15\n20", "10\n1215\n20", "10\n2719\n20"):
-        assert f"8\nMARK\n{mark_x}" in bars
+        assert f"AcDbLine\n{mark_x}" in bars
     assert "10\n1200\n20" not in bars
     assert stored["schema"] == "work_order_dxf_export_v1"
     assert stored["optimization_fingerprint"]
@@ -2112,7 +2651,24 @@ def test_export_operations_seals_machine_neutral_document(monkeypatch) -> None:
         out = service.export_operations(
             org_id=org_id, order_id=order_id, actor_id=uuid4()
         )
-    assert sorted(out["files"]) == ["operations.csv", "operations.json"]
+    assert sorted(out["files"]) == [
+        "manifest.json",
+        "operations.csv",
+        "operations.json",
+    ]
+    manifest = json.loads(out["files"]["manifest.json"])
+    assert manifest["schema"] == "dekopen_export_manifest_v1"
+    assert manifest["kind"] == "ops_export"
+    assert manifest["order_code"] == "OT-OPS-01"
+    # The manifest's per-file hash must verify the shipped content — the
+    # operator checks identity without opening each file.
+    for name in ("operations.csv", "operations.json"):
+        entry = manifest["files"][name]
+        assert (
+            hashlib.sha256(out["files"][name].encode("utf-8")).hexdigest()
+            == entry["sha256"]
+        )
+        assert entry["bytes"] == len(out["files"][name].encode("utf-8"))
     update = next(p for s, p in writes if "update public.orders" in s)
     stored = json.loads(update[0])["operations_export"]
     assert stored["schema"] == "work_order_ops_export_v1"
@@ -2233,12 +2789,16 @@ def test_dispatch_requires_completed_and_is_idempotent(monkeypatch) -> None:
             "id": str(order_id),
             "order_code": "OT-1",
             "status": captured_status["row"]["status"],
-            "payload_json": {},
+            "payload_json": {"packing": {"units": [{"code": "U-1"}]}},
             "project_id": str(project_id),
         }
 
     def fake_rows_dispatch(sql_text: str, params: list) -> list:
         lowered = " ".join(sql_text.lower().split())
+        if "from public.dispatch_notes" in lowered:
+            # After the first dispatch the sealed guía covers unit 1 — a
+            # replay sees full coverage and returns without re-issuing.
+            return [{"unit_indexes": [1]}] if note_calls else []
         if "update public.orders set status" in lowered:
             captured_status["row"]["status"] = "DISPATCHED"
         if "insert into public.production_step_events" in lowered:
@@ -2273,6 +2833,143 @@ def test_dispatch_requires_completed_and_is_idempotent(monkeypatch) -> None:
     event_payload = json.loads(updates[0][1][3])
     assert event_payload["dispatch_note"] == "GD-0001"
     assert out2["order"]["status"] == "DISPATCHED"
+
+
+def test_dispatch_requires_delivery_or_note(monkeypatch) -> None:
+    org_id, order_id = uuid4(), uuid4()
+
+    def fake_one(sql_text: str, params: list, code: str = "not_found") -> dict:
+        return {
+            "id": str(order_id),
+            "order_code": "OT-1",
+            "status": "COMPLETED",
+            "payload_json": {"packing": {"units": [{"code": "U-1"}]}},
+            "project_id": str(uuid4()),
+        }
+
+    def fake_rows(sql_text: str, params: list) -> list:
+        lowered = " ".join(sql_text.lower().split())
+        if "from public.deliveries" in lowered or "from public.dispatch_notes" in lowered:
+            return []
+        return [{"id": "ok"}]
+
+    monkeypatch.setattr("production.service.one", fake_one)
+    monkeypatch.setattr("production.service.rows", fake_rows)
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ), pytest.raises(DocumentaryError, match="dispatch_requires_delivery"):
+        service.dispatch_work_order(org_id=org_id, order_id=order_id, actor_id=uuid4())
+
+
+def test_dispatch_note_void_reverts_order_and_records_event(monkeypatch) -> None:
+    org_id, order_id = uuid4(), uuid4()
+    captured_status: dict[str, dict] = {"row": {"status": "DISPATCHED"}}
+    calls: list[tuple[str, list]] = []
+
+    voided = {"done": False}
+
+    def fake_one(sql_text: str, params: list, code: str = "not_found") -> dict:
+        lowered = " ".join(sql_text.lower().split())
+        if "for update" in lowered:
+            return {
+                "id": str(order_id),
+                "order_code": "OT-1",
+                "status": captured_status["row"]["status"],
+                "payload_json": {},
+                "project_id": str(uuid4()),
+            }
+        if "update public.dispatch_notes" in lowered:
+            voided["done"] = True
+        return {
+            "id": str(uuid4()),
+            "note_code": "GD-0001",
+        }
+
+    def fake_rows(sql_text: str, params: list) -> list:
+        lowered = " ".join(sql_text.lower().split())
+        if "from public.deliveries" in lowered or "from public.project_dtes" in lowered:
+            return []
+        if "from public.dispatch_notes" in lowered:
+            return [] if voided["done"] else [{"id": "live"}]
+        if "update public.orders set status" in lowered:
+            captured_status["row"]["status"] = "COMPLETED"
+        if "insert into public.production_step_events" in lowered:
+            calls.append((lowered, list(params)))
+        return [{"id": "ok"}]
+
+    monkeypatch.setattr("production.service.one", fake_one)
+    monkeypatch.setattr("production.service.rows", fake_rows)
+    monkeypatch.setattr(
+        "production.service.get_work_order",
+        lambda **kw: {"order": {"status": captured_status["row"]["status"]}},
+    )
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ):
+        with pytest.raises(DocumentaryError, match="dispatch_note_void_reason_required"):
+            service.void_dispatch_note(
+                org_id=org_id, order_id=order_id, actor_id=uuid4(), reason=" "
+            )
+        out = service.void_dispatch_note(
+            org_id=org_id,
+            order_id=order_id,
+            actor_id=uuid4(),
+            reason="Dirección equivocada",
+        )
+    assert captured_status["row"]["status"] == "COMPLETED"
+    assert out["order"]["status"] == "COMPLETED"
+    assert "'wo_dispatch_voided'" in calls[0][0]
+    payload = json.loads(calls[0][1][3])
+    assert payload["note_code"] == "GD-0001"
+    assert payload["reason"] == "Dirección equivocada"
+
+
+def test_dispatch_note_void_refuses_stamped_or_delivered(monkeypatch) -> None:
+    org_id, order_id = uuid4(), uuid4()
+    guard: dict[str, bool] = {"delivery": True, "dte": False}
+
+    def fake_one(sql_text: str, params: list, code: str = "not_found") -> dict:
+        lowered = " ".join(sql_text.lower().split())
+        if "for update" in lowered:
+            return {
+                "id": str(order_id),
+                "order_code": "OT-1",
+                "status": "DISPATCHED",
+                "payload_json": {},
+            }
+        return {"id": str(uuid4()), "note_code": "GD-0001"}
+
+    def fake_rows(sql_text: str, params: list) -> list:
+        lowered = " ".join(sql_text.lower().split())
+        if "from public.deliveries" in lowered:
+            return [{"id": "d1"}] if guard["delivery"] else []
+        if "from public.project_dtes" in lowered:
+            return [{"id": "t1"}] if guard["dte"] else []
+        return [{"id": "ok"}]
+
+    monkeypatch.setattr("production.service.one", fake_one)
+    monkeypatch.setattr("production.service.rows", fake_rows)
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ):
+        with pytest.raises(
+            DocumentaryError, match="dispatch_note_void_delivery_exists"
+        ):
+            service.void_dispatch_note(
+                org_id=org_id,
+                order_id=order_id,
+                actor_id=uuid4(),
+                reason="Anular",
+            )
+        guard["delivery"] = False
+        guard["dte"] = True
+        with pytest.raises(DocumentaryError, match="dispatch_note_void_stamped"):
+            service.void_dispatch_note(
+                org_id=org_id,
+                order_id=order_id,
+                actor_id=uuid4(),
+                reason="Anular",
+            )
 
 
 def test_remake_code_embeds_id_fragment_for_long_sources(monkeypatch) -> None:
@@ -2514,7 +3211,9 @@ def test_installation_requires_dispatched_and_is_idempotent(monkeypatch) -> None
     def fake_rows(sql_text: str, params: list) -> list:
         lowered = " ".join(sql_text.lower().split())
         if "from public.deliveries" in lowered:
-            return []
+            return [{"status": "DELIVERED"}]
+        if "from public.delivery_confirmations" in lowered:
+            return [{"id": "ce-1"}]
         if "update public.orders set status" in lowered:
             captured["status"] = "INSTALLED"
         if "insert into public.production_step_events" in lowered:
@@ -2583,18 +3282,31 @@ def test_delivery_schedule_upserts_and_records_event(monkeypatch) -> None:
         "updated_at": __import__("datetime").datetime(2026, 9, 23),
     }
 
+    inserted = {"done": False}
+
     def fake_one(sql_text: str, params: list, code: str = "not_found") -> dict:
         lowered = " ".join(sql_text.lower().split())
-        if "insert into public.deliveries" in lowered:
+        if "insert into public.deliveries" in lowered or "update public.deliveries" in lowered:
+            inserted["done"] = True
             return dict(delivery_row)
-        return {"id": str(order_id), "order_code": "OT-1", "status": "COMPLETED"}
+        return {
+            "id": str(order_id), "order_code": "OT-1", "status": "COMPLETED",
+            "payload_json": {},
+        }
 
     def fake_rows(sql_text: str, params: list) -> list:
         lowered = " ".join(sql_text.lower().split())
-        if "left join public.deliveries d" in lowered:
-            return [dict(delivery_row)]
-        if "from public.deliveries" in lowered:
+        if "from public.orders o" in lowered:
+            return [
+                {
+                    "id": str(order_id), "order_code": "OT-1",
+                    "payload_json": {},
+                }
+            ]
+        if "from public.delivery_confirmations" in lowered:
             return []
+        if "from public.deliveries" in lowered:
+            return [dict(delivery_row)] if inserted["done"] else []
         if "insert into public.production_step_events" in lowered:
             events.append((lowered, list(params)))
         return [{"id": "ok"}]
@@ -2631,7 +3343,16 @@ def test_delivery_schedule_replay_adds_no_duplicate_event(monkeypatch) -> None:
 
     def fake_rows(sql_text: str, params: list) -> list:
         lowered = " ".join(sql_text.lower().split())
-        if "left join public.deliveries d" in lowered or "from public.deliveries" in lowered:
+        if "from public.orders o" in lowered:
+            return [
+                {
+                    "id": str(order_id), "order_code": "OT-1",
+                    "payload_json": {},
+                }
+            ]
+        if "from public.delivery_confirmations" in lowered:
+            return []
+        if "from public.deliveries" in lowered:
             return [dict(stored)]
         if "insert into public.production_step_events" in lowered:
             events.append((lowered, list(params)))
@@ -2639,7 +3360,10 @@ def test_delivery_schedule_replay_adds_no_duplicate_event(monkeypatch) -> None:
 
     monkeypatch.setattr(
         "production.service.one",
-        lambda *_a, **_k: {"id": str(order_id), "order_code": "OT-1", "status": "DISPATCHED"},
+        lambda *_a, **_k: {
+            "id": str(order_id), "order_code": "OT-1", "status": "DISPATCHED",
+            "payload_json": {},
+        },
     )
     monkeypatch.setattr("production.service.rows", fake_rows)
     monkeypatch.setattr("production.confirmations.rows", lambda *_a, **_k: [])
@@ -2686,7 +3410,7 @@ def test_delivery_transition_rejected_after_installation(monkeypatch) -> None:
     ):
         with pytest.raises(DocumentaryError, match="order_already_installed"):
             service.transition_delivery(
-                org_id=org_id, order_id=order_id, actor_id=uuid4(), to_status="DELIVERED"
+                org_id=org_id, order_id=order_id, actor_id=uuid4(), to_status="FAILED"
             )
 
 
@@ -2750,6 +3474,8 @@ def test_delivery_transition_requires_dispatched_order(monkeypatch) -> None:
             service.transition_delivery(
                 org_id=org_id, order_id=order_id, actor_id=uuid4(), to_status="ON_ROUTE"
             )
+        # DELIVERED is not a manual transition — only confirm_delivery (the
+        # sealed-POD path) may stamp it.
         with pytest.raises(DocumentaryError, match="delivery_transition_invalid"):
             service.transition_delivery(
                 org_id=org_id, order_id=order_id, actor_id=uuid4(), to_status="DELIVERED"
@@ -2760,7 +3486,7 @@ def test_delivery_transition_requires_dispatched_order(monkeypatch) -> None:
             )
 
 
-def test_delivery_transition_delivers_and_replays(monkeypatch) -> None:
+def test_delivery_transition_fails_and_replays(monkeypatch) -> None:
     org_id, order_id = uuid4(), uuid4()
     order = {"id": str(order_id), "order_code": "OT-1", "status": "DISPATCHED"}
     delivery = {"id": uuid4(), "status": "ON_ROUTE"}
@@ -2786,14 +3512,183 @@ def test_delivery_transition_delivers_and_replays(monkeypatch) -> None:
         "production.service.documentary_backend", side_effect=_atomic
     ):
         out = service.transition_delivery(
-            org_id=org_id, order_id=order_id, actor_id=uuid4(), to_status="DELIVERED"
+            org_id=org_id, order_id=order_id, actor_id=uuid4(), to_status="FAILED"
         )
         replay = service.transition_delivery(
-            org_id=org_id, order_id=order_id, actor_id=uuid4(), to_status="DELIVERED"
+            org_id=org_id, order_id=order_id, actor_id=uuid4(), to_status="FAILED"
         )
-    assert out["delivery"]["status"] == "DELIVERED"
-    assert replay["delivery"]["status"] == "DELIVERED"
-    assert len(events) == 1 and events[0][1][2] == "WO_DELIVERY_DELIVERED"
+    assert out["delivery"]["status"] == "FAILED"
+    assert replay["delivery"]["status"] == "FAILED"
+    assert len(events) == 1 and events[0][1][2] == "WO_DELIVERY_FAILED"
+
+
+_PACKING_TWO_UNITS = {
+    "quantity": 2,
+    "packing": {
+        "schema": "work_order_packing_v1",
+        "units": [
+            {"unit_index": 1, "label_code": "OT-1-U01"},
+            {"unit_index": 2, "label_code": "OT-1-U02"},
+        ],
+    },
+}
+
+
+def test_dispatch_partial_units_seals_trip_subset(monkeypatch) -> None:
+    """A partial dispatch seals one guía per trip; a subset already covered
+    replays, an overlapping subset refuses, and the saldo stays pending."""
+    org_id, order_id = uuid4(), uuid4()
+    state = {"status": "COMPLETED", "notes": []}
+    issued: list[dict] = []
+
+    def fake_one(sql_text: str, params: list, code: str = "not_found") -> dict:
+        return {
+            "id": str(order_id),
+            "order_code": "OT-1",
+            "status": state["status"],
+            "payload_json": dict(_PACKING_TWO_UNITS),
+            "project_id": str(uuid4()),
+        }
+
+    def fake_rows(sql_text: str, params: list) -> list:
+        lowered = " ".join(sql_text.lower().split())
+        if "from public.dispatch_notes" in lowered:
+            return list(state["notes"])
+        if "update public.orders set status" in lowered:
+            state["status"] = "DISPATCHED"
+        if "from public.deliveries" in lowered:
+            return [{"id": "d1"}]
+        return [{"id": "ok"}]
+
+    def fake_issue(**kwargs):
+        issued.append(kwargs)
+        row = {"note_code": f"GD-{len(issued):04d}", "unit_indexes": kwargs.get("unit_indexes")}
+        state["notes"].append(row)
+        return row
+
+    monkeypatch.setattr("production.service.one", fake_one)
+    monkeypatch.setattr("production.service.rows", fake_rows)
+    monkeypatch.setattr("production.service.issue_dispatch_note", fake_issue)
+    monkeypatch.setattr("production.service.project_row", lambda *a, **k: {"code": "P-1"})
+    monkeypatch.setattr(
+        "production.service.get_work_order",
+        lambda **kw: {"order": {"status": state["status"]}},
+    )
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ):
+        service.dispatch_work_order(
+            org_id=org_id, order_id=order_id, actor_id=uuid4(), unit_indexes=[1]
+        )
+        assert state["status"] == "DISPATCHED"
+        assert issued[0]["unit_indexes"] == [1]
+        # Replay of the covered subset — no new guía.
+        service.dispatch_work_order(
+            org_id=org_id, order_id=order_id, actor_id=uuid4(), unit_indexes=[1]
+        )
+        assert len(issued) == 1
+        # Partial overlap is refused: one bulto never rides two guías.
+        with pytest.raises(DocumentaryError, match="dispatch_units_already_dispatched"):
+            service.dispatch_work_order(
+                org_id=org_id, order_id=order_id, actor_id=uuid4(), unit_indexes=[1, 2]
+            )
+        # The saldo dispatches as a second trip sealing unit 2 only.
+        service.dispatch_work_order(org_id=org_id, order_id=order_id, actor_id=uuid4())
+        assert issued[1]["unit_indexes"] == [2]
+        # Nothing pending — default replay returns current state.
+        service.dispatch_work_order(org_id=org_id, order_id=order_id, actor_id=uuid4())
+        assert len(issued) == 2
+
+
+def test_delivery_schedule_pending_balance_and_trips(monkeypatch) -> None:
+    """Trip 2 defaults to the undelivered saldo; delivered units refuse."""
+    org_id, order_id = uuid4(), uuid4()
+    dt = __import__("datetime").datetime(2026, 9, 23)
+    delivered_trip = {
+        "id": uuid4(), "org_id": org_id, "order_id": order_id,
+        "scheduled_date": "2026-09-24", "time_window": "AM",
+        "address": "X 1", "contact_name": None, "contact_phone": None,
+        "installer_name": None, "notes": None, "status": "DELIVERED",
+        "unit_indexes": [1], "scheduled_by": uuid4(),
+        "created_at": dt, "updated_at": dt,
+    }
+    stored_rows: list[dict] = [dict(delivered_trip)]
+    inserted: list[dict] = []
+
+    def fake_one(sql_text: str, params: list, code: str = "not_found") -> dict:
+        lowered = " ".join(sql_text.lower().split())
+        if "insert into public.deliveries" in lowered:
+            row = dict(delivered_trip)
+            row.update(
+                id=uuid4(), status="SCHEDULED", unit_indexes=params[10],
+            )
+            inserted.append(row)
+            stored_rows.append(row)
+            return row
+        return {
+            "id": str(order_id), "order_code": "OT-1", "status": "DISPATCHED",
+            "payload_json": dict(_PACKING_TWO_UNITS),
+        }
+
+    def fake_rows(sql_text: str, params: list) -> list:
+        lowered = " ".join(sql_text.lower().split())
+        if "from public.orders o" in lowered:
+            return [
+                {
+                    "id": str(order_id), "order_code": "OT-1",
+                    "payload_json": json.dumps(dict(_PACKING_TWO_UNITS)),
+                }
+            ]
+        if "from public.delivery_confirmations" in lowered:
+            return []
+        if "from public.deliveries" in lowered:
+            return list(stored_rows)
+        return [{"id": "ok"}]
+
+    monkeypatch.setattr("production.service.one", fake_one)
+    monkeypatch.setattr("production.service.rows", fake_rows)
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ):
+        # Delivered units can't be scheduled again.
+        with pytest.raises(DocumentaryError, match="delivery_units_already_delivered"):
+            service.schedule_delivery(
+                org_id=org_id, order_id=order_id, actor_id=uuid4(),
+                scheduled_date="2026-09-26", time_window="AM", address="X 1",
+                unit_indexes=[1],
+            )
+        # Default scope after trip 1 = the pending saldo only.
+        out = service.schedule_delivery(
+            org_id=org_id, order_id=order_id, actor_id=uuid4(),
+            scheduled_date="2026-09-26", time_window="PM", address="X 1",
+        )
+        assert inserted[0]["unit_indexes"] == [2]
+        assert out["pending_units"] == []
+        assert out["delivered_units"] == [1]
+        assert len(out["deliveries"]) == 2
+
+
+def test_installation_requires_all_units_delivered(monkeypatch) -> None:
+    """Partial delivery must not close installation: the saldo is still out."""
+    org_id, order_id = uuid4(), uuid4()
+    monkeypatch.setattr(
+        "production.service.one",
+        lambda *_a, **_k: {
+            "id": str(order_id), "order_code": "OT-1", "status": "DISPATCHED",
+            "payload_json": json.dumps(dict(_PACKING_TWO_UNITS)),
+        },
+    )
+    monkeypatch.setattr(
+        "production.service.rows",
+        lambda *_a, **_k: [{"status": "DELIVERED", "unit_indexes": [1]}],
+    )
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ):
+        with pytest.raises(DocumentaryError, match="installation_requires_delivered"):
+            service.confirm_installation(
+                org_id=org_id, order_id=order_id, actor_id=uuid4()
+            )
 
 
 def test_prep_lists_approved_versions_without_orders(monkeypatch) -> None:
@@ -2864,4 +3759,683 @@ def test_public_order_surfaces_workflow_flags() -> None:
 
     order["payload_json"] = json.dumps({"prep": {"shortages": 2}})
     output = service._public_order(order)
-    assert output["shortage"] == 2
+    # The prep count is version scope, never the order's own — it surfaces
+    # under version_shortage while shortage stays the order's reservations.
+    assert output["shortage"] == 0
+    assert output["version_shortage"] == 2
+
+
+def test_get_work_order_decodes_event_payload_strings(monkeypatch) -> None:
+    """JSONB can surface as a raw string — Historial reads payload.qc_item."""
+    org_id, order_id, version_id = uuid4(), uuid4(), uuid4()
+
+    def fake_one(sql_text: str, params: list, code: str = "not_found") -> dict:
+        lowered = " ".join(sql_text.lower().split())
+        if "from public.project_versions" in lowered:
+            return {"snapshot_json": json.dumps({"project": {"delivery_address": "x"}})}
+        return {
+            "id": str(order_id),
+            "order_code": "OT-1",
+            "order_type": "WORKSHOP_OT",
+            "status": "IN_PROGRESS",
+            "payload_json": {},
+            "project_version_id": str(version_id),
+            "created_at": "2026-09-23T00:00:00Z",
+            "steps_total": 1,
+            "steps_done": 0,
+            "next_step_code": "CUT",
+            "has_dispatch_note": False,
+        }
+
+    def fake_rows(sql_text: str, params: object = ()) -> list[dict]:
+        lowered = " ".join(sql_text.lower().split())
+        if "production_step_events" in lowered:
+            return [
+                {
+                    "id": str(uuid4()),
+                    "step_id": str(uuid4()),
+                    "event": "QC_FAILED",
+                    "actor_id": None,
+                    "actor_label": "ops",
+                    "payload": json.dumps({"qc_item": "M-03", "qc_result": "FAIL"}),
+                    "created_at": "2026-09-23T00:00:00Z",
+                    "step_code": "QC",
+                }
+            ]
+        return []
+
+    monkeypatch.setattr("production.service.one", fake_one)
+    monkeypatch.setattr("production.service.rows", fake_rows)
+    with patch("production.service.documentary_backend", side_effect=_atomic):
+        output = service.get_work_order(org_id=org_id, order_id=order_id)
+    assert output["events"][0]["payload"] == {"qc_item": "M-03", "qc_result": "FAIL"}
+
+
+# ── Work-order cancel + material recheck (factory-floor review) ─────────────
+
+
+def test_cancel_work_order_releases_stock_and_stamps(monkeypatch) -> None:
+    org_id, order_id, actor_id = uuid4(), uuid4(), uuid4()
+    writes: list[tuple[str, list]] = []
+
+    def fake_one(sql_text: str, params: list, code: str = "not_found") -> dict:
+        lowered = " ".join(sql_text.lower().split())
+        if "for update" in lowered:
+            return {
+                "id": str(order_id),
+                "order_code": "OT-P-AAA-01",
+                "status": "RELEASED",
+                "payload_json": {},
+            }
+        if "count(*) as open" in lowered:
+            return {"open": 2}
+        raise AssertionError(f"unexpected one(): {lowered}")
+
+    def fake_rows(sql_text: str, params: object = ()) -> list[dict]:
+        lowered = " ".join(sql_text.lower().split())
+        writes.append((lowered, list(params)))
+        if "from public.deliveries" in lowered:
+            return []
+        return [{"id": str(uuid4())}]
+
+    remnant_calls: list[dict] = []
+    monkeypatch.setattr("production.service.one", fake_one)
+    monkeypatch.setattr("production.service.rows", fake_rows)
+    monkeypatch.setattr(
+        "production.service.production_stock.release_for_order", lambda **kw: 3
+    )
+    monkeypatch.setattr(
+        "production.service.remnants_service.release_reservations",
+        lambda **kw: remnant_calls.append(kw),
+    )
+    monkeypatch.setattr(
+        "production.service.get_work_order",
+        lambda **kw: {"id": str(kw["order_id"])},
+    )
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ):
+        result = service.cancel_work_order(
+            org_id=org_id,
+            order_id=order_id,
+            actor_id=actor_id,
+            note="cambio de cliente",
+        )
+    cancel_sql = next(
+        s2 for s2, _ in writes if "set status = 'cancelled'" in s2
+    )
+    assert "cancelled_by" in cancel_sql and "cancelled_at" in cancel_sql
+    event_params = next(p2 for s2, p2 in writes if "'wo_cancelled'" in s2)
+    payload = json.loads(event_params[3])
+    assert payload["order_code"] == "OT-P-AAA-01"
+    assert payload["note"] == "cambio de cliente"
+    assert payload["reservations_released"] == 3
+    assert payload["steps_open"] == 2
+    assert remnant_calls and remnant_calls[0]["order_id"] == order_id
+    assert result["id"] == str(order_id)
+
+
+def test_cancel_work_order_is_idempotent(monkeypatch) -> None:
+    org_id, order_id = uuid4(), uuid4()
+    monkeypatch.setattr(
+        "production.service.one",
+        lambda *_a, **_k: {
+            "id": str(order_id),
+            "order_code": "OT-P-AAA-01",
+            "status": "CANCELLED",
+            "payload_json": {},
+        },
+    )
+    def fail_rows(*_a, **_k):
+        raise AssertionError("cancel must not write when already cancelled")
+
+    monkeypatch.setattr("production.service.rows", fail_rows)
+    monkeypatch.setattr(
+        "production.service.get_work_order",
+        lambda **kw: {"status": "CANCELLED"},
+    )
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ):
+        result = service.cancel_work_order(
+            org_id=org_id, order_id=order_id, actor_id=uuid4(), note=None
+        )
+    assert result["status"] == "CANCELLED"
+
+
+@pytest.mark.parametrize("status", ["DISPATCHED", "INSTALLED"])
+def test_cancel_work_order_refuses_shipped_orders(monkeypatch, status) -> None:
+    org_id, order_id = uuid4(), uuid4()
+    monkeypatch.setattr(
+        "production.service.one",
+        lambda *_a, **_k: {
+            "id": str(order_id),
+            "order_code": "OT-P-AAA-01",
+            "status": status,
+            "payload_json": {},
+        },
+    )
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ), pytest.raises(DocumentaryError, match="work_order_cancel_unavailable"):
+        service.cancel_work_order(
+            org_id=org_id, order_id=order_id, actor_id=uuid4(), note=None
+        )
+
+
+def test_cancel_work_order_refuses_open_delivery(monkeypatch) -> None:
+    org_id, order_id = uuid4(), uuid4()
+    monkeypatch.setattr(
+        "production.service.one",
+        lambda *_a, **_k: {
+            "id": str(order_id),
+            "order_code": "OT-P-AAA-01",
+            "status": "RELEASED",
+            "payload_json": {},
+        },
+    )
+    monkeypatch.setattr(
+        "production.service.rows",
+        lambda *_a, **_k: [{"id": str(uuid4())}],
+    )
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ), pytest.raises(DocumentaryError, match="work_order_delivery_open"):
+        service.cancel_work_order(
+            org_id=org_id, order_id=order_id, actor_id=uuid4(), note=None
+        )
+
+
+def test_recheck_material_settles_arrived_stock(monkeypatch) -> None:
+    org_id, order_id, actor_id = uuid4(), uuid4(), uuid4()
+    reservations = [
+        {"sku": "MARCO-60", "kind": "BAR", "reserved": "6.00", "short": "4.00"},
+        {"sku": "GLASS-4", "kind": "SHEET", "reserved": "1", "short": "0"},
+        {
+            "sku": "VIEJO",
+            "kind": "BAR",
+            "reserved": "2.00",
+            "short": "0",
+            "consumed_at": "2026-09-20T10:00:00Z",
+        },
+    ]
+    settled = [
+        {"sku": "MARCO-60", "kind": "BAR", "reserved": "10.00", "short": "0.00"},
+        reservations[1],
+        reservations[2],
+    ]
+    payload = {"optimization": {"stock_reservations": reservations}}
+    writes: list[tuple[str, list]] = []
+    recheck_calls: list[dict] = []
+
+    def fake_one(sql_text: str, params: list, code: str = "not_found") -> dict:
+        return {
+            "id": str(order_id),
+            "order_code": "OT-P-AAA-01",
+            "status": "RELEASED",
+            "payload_json": payload,
+        }
+
+    def fake_rows(sql_text: str, params: object = ()) -> list[dict]:
+        writes.append((" ".join(sql_text.lower().split()), list(params)))
+        return [{"id": str(uuid4())}]
+
+    def fake_recheck(**kw):
+        recheck_calls.append(kw)
+        return settled
+
+    monkeypatch.setattr("production.service.one", fake_one)
+    monkeypatch.setattr("production.service.rows", fake_rows)
+    monkeypatch.setattr(
+        "production.service.production_stock.recheck_reservations", fake_recheck
+    )
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ):
+        output = service.recheck_work_order_material(
+            org_id=org_id, order_id=order_id, actor_id=actor_id
+        )
+    assert recheck_calls[0]["reservations"] is reservations
+    assert output["shortage"] == 0
+    update_params = next(
+        p2 for s2, p2 in writes if "update public.orders" in s2 and "payload_json" in s2
+    )
+    saved = json.loads(update_params[0])
+    assert saved["optimization"]["stock_reservations"] == settled
+    event_params = next(
+        p2 for s2, p2 in writes if "'wo_material_recheck'" in s2
+    )
+    event_payload = json.loads(event_params[3])
+    assert event_payload["shortages_before"] == 1
+    assert event_payload["shortages_after"] == 0
+    assert event_payload["filled"] == ["MARCO-60"]
+
+
+def test_recheck_material_refuses_without_plan(monkeypatch) -> None:
+    org_id, order_id = uuid4(), uuid4()
+    monkeypatch.setattr(
+        "production.service.one",
+        lambda *_a, **_k: {
+            "id": str(order_id),
+            "order_code": "OT-P-AAA-01",
+            "status": "RELEASED",
+            "payload_json": {},
+        },
+    )
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ), pytest.raises(DocumentaryError, match="work_order_plan_missing"):
+        service.recheck_work_order_material(
+            org_id=org_id, order_id=order_id, actor_id=uuid4()
+        )
+
+
+def test_recheck_material_refuses_cancelled_order(monkeypatch) -> None:
+    org_id, order_id = uuid4(), uuid4()
+    monkeypatch.setattr(
+        "production.service.one",
+        lambda *_a, **_k: {
+            "id": str(order_id),
+            "order_code": "OT-P-AAA-01",
+            "status": "CANCELLED",
+            "payload_json": {},
+        },
+    )
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ), pytest.raises(DocumentaryError, match="work_order_cancelled"):
+        service.recheck_work_order_material(
+            org_id=org_id, order_id=order_id, actor_id=uuid4()
+        )
+
+
+def _step_transition_fakes(
+    monkeypatch, *, step_status: str, order_status: str, membership_role: str
+) -> tuple[list, dict, dict]:
+    """Wire `one`/`rows` for transition_step: step_ref → order → step →
+    membership → refresh (status/totals/update) → fresh step."""
+    org_order = {"id": str(uuid4()), "status": order_status, "payload_json": {},
+                 "project_version_id": str(uuid4())}
+    step = {
+        "id": str(uuid4()), "order_id": org_order["id"], "status": step_status,
+        "sequence": 2, "code": "WELD", "label": "Soldadura",
+        "work_center_id": str(uuid4()), "started_at": None, "finished_at": None,
+        "actor_id": None, "note": "faltan perfiles", "work_center_code": "SOL-01",
+        "work_center_name": "Soldadora",
+    }
+    fresh = {**step, "status": "READY", "note": None}
+    writes: list[tuple[str, list]] = []
+
+    def fake_one(sql_text: str, params: list, code: str = "not_found") -> dict:
+        lowered = " ".join(sql_text.lower().split())
+        if "tenancy_memberships" in lowered:
+            return {"role": membership_role}
+        if "for update of s" in lowered:
+            return step
+        if "for update" in lowered and "public.orders" in lowered:
+            return org_order
+        if "select order_id from public.production_steps" in lowered:
+            return {"order_id": org_order["id"]}
+        if "select status::text as status from public.orders" in lowered:
+            return {"status": order_status}
+        if "count(*) as total" in lowered:
+            return {"total": 2, "done": 0, "blocked": 0, "in_progress": 1}
+        if "update public.orders" in lowered and "returning status::text" in lowered:
+            return {"status": "IN_PROGRESS"}
+        if "from public.production_steps s" in lowered:
+            return fresh
+        raise AssertionError(f"unexpected one(): {lowered}")
+
+    def fake_rows(sql_text: str, params: object = ()) -> list[dict]:
+        writes.append((" ".join(sql_text.lower().split()), list(params)))
+        return [{"id": str(uuid4())}]
+
+    monkeypatch.setattr("production.service.one", fake_one)
+    monkeypatch.setattr("production.service.rows", fake_rows)
+    monkeypatch.setattr(
+        "production.service.write",
+        lambda *a, **k: writes.append((" ".join(a[0].lower().split()), [])) or 1,
+    )
+    return writes, step, org_order
+
+
+def test_unblock_step_refuses_operator_role(monkeypatch) -> None:
+    _step_transition_fakes(
+        monkeypatch,
+        step_status="BLOCKED",
+        order_status="HOLD",
+        membership_role="OPERATOR",
+    )
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ), pytest.raises(DocumentaryError, match="unblock_requires_supervisor"):
+        service.transition_step(
+            org_id=uuid4(),
+            step_id=uuid4(),
+            action="UNBLOCK",
+            actor_id=uuid4(),
+            note=None,
+            actor_role="OPERATOR",
+        )
+
+
+def test_unblock_step_looks_up_membership_when_role_absent(monkeypatch) -> None:
+    _step_transition_fakes(
+        monkeypatch,
+        step_status="BLOCKED",
+        order_status="HOLD",
+        membership_role="OPERATOR",
+    )
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ), pytest.raises(DocumentaryError, match="unblock_requires_supervisor"):
+        service.transition_step(
+            org_id=uuid4(),
+            step_id=uuid4(),
+            action="UNBLOCK",
+            actor_id=uuid4(),
+            note=None,
+        )
+
+
+def test_unblock_step_allows_workshop_manager(monkeypatch) -> None:
+    writes, step, org_order = _step_transition_fakes(
+        monkeypatch,
+        step_status="BLOCKED",
+        order_status="HOLD",
+        membership_role="WORKSHOP_MANAGER",
+    )
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ):
+        result = service.transition_step(
+            org_id=uuid4(),
+            step_id=uuid4(),
+            action="UNBLOCK",
+            actor_id=uuid4(),
+            note="llegó el perfil",
+            actor_role="WORKSHOP_MANAGER",
+        )
+    step_update = next(
+        s2 for s2, _ in writes if "update public.production_steps" in s2 and "status" in s2
+    )
+    assert "coalesce(%(actor_id)s" in step_update
+    event = next(
+        p2
+        for s2, p2 in writes
+        if "insert into public.production_step_events" in s2 and "step_id" in s2
+    )
+    assert event[3] == "STEP_UNBLOCKED"
+    assert result["step"]["status"] == "READY"
+    assert result["order_status"] == "IN_PROGRESS"
+
+
+def test_step_transition_refuses_cancelled_order(monkeypatch) -> None:
+    _step_transition_fakes(
+        monkeypatch,
+        step_status="READY",
+        order_status="CANCELLED",
+        membership_role="WORKSHOP_MANAGER",
+    )
+    with patch("production.service.transaction.atomic", side_effect=_atomic), patch(
+        "production.service.documentary_backend", side_effect=_atomic
+    ), pytest.raises(DocumentaryError, match="work_order_cancelled"):
+        service.transition_step(
+            org_id=uuid4(),
+            step_id=uuid4(),
+            action="START",
+            actor_id=uuid4(),
+            note=None,
+            actor_role="WORKSHOP_MANAGER",
+        )
+
+
+def test_cancel_endpoint_requires_confirmation(monkeypatch) -> None:
+    client, _token, _org_id = _client_with_scope(monkeypatch, "WORKSHOP_MANAGER")
+    response = client.post(
+        f"/api/v1/production/orders/{uuid4()}/cancel/",
+        {"confirmed": False},
+        format="json",
+    )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "order_cancel_confirmation_required"
+
+
+def test_cancel_endpoint_forwards_confirmed(monkeypatch) -> None:
+    client, token, org_id = _client_with_scope(monkeypatch, "WORKSHOP_MANAGER")
+    seen: dict = {}
+
+    def fake_cancel(**kwargs):
+        seen.update(kwargs)
+        return {"id": str(kwargs["order_id"]), "status": "CANCELLED"}
+
+    monkeypatch.setattr(service, "cancel_work_order", fake_cancel)
+    order_id = uuid4()
+    response = client.post(
+        f"/api/v1/production/orders/{order_id}/cancel/",
+        {"confirmed": True, "note": "duplicada"},
+        format="json",
+    )
+    assert response.status_code == 200
+    assert seen["org_id"] == org_id
+    assert seen["actor_id"] == token.user_id
+    assert seen["note"] == "duplicada"
+
+
+def test_cancel_endpoint_denies_operator(monkeypatch) -> None:
+    org_id = uuid4()
+    token = SimpleNamespace(user_id=uuid4(), claims={}, aal="aal1")
+
+    @contextmanager
+    def fake_scope(request, allowed):
+        from authentication.errors import contract_error
+
+        if "OPERATOR" in allowed:
+            yield token, _tenant("OPERATOR", org_id), org_id
+        else:
+            raise contract_error(403, "documentary_permission_denied", "denied")
+
+    monkeypatch.setattr(production_views, "documentary_scope", fake_scope)
+    client = APIClient()
+    client.force_authenticate(user=SimpleNamespace(is_authenticated=True), token=object())
+    response = client.post(
+        f"/api/v1/production/orders/{uuid4()}/cancel/",
+        {"confirmed": True},
+        format="json",
+    )
+    assert response.status_code == 403
+
+
+def test_material_recheck_endpoint_forwards(monkeypatch) -> None:
+    client, token, org_id = _client_with_scope(monkeypatch, "WORKSHOP_MANAGER")
+    seen: dict = {}
+
+    def fake_recheck(**kwargs):
+        seen.update(kwargs)
+        return {
+            "order_id": str(kwargs["order_id"]),
+            "order_code": "OT-1",
+            "shortage": 0,
+            "stock_reservations": [],
+        }
+
+    monkeypatch.setattr(service, "recheck_work_order_material", fake_recheck)
+    order_id = uuid4()
+    response = client.post(
+        f"/api/v1/production/orders/{order_id}/material-recheck/"
+    )
+    assert response.status_code == 200
+    assert seen["org_id"] == org_id
+    assert seen["actor_id"] == token.user_id
+
+
+def _cutpack_snapshot() -> dict:
+    """Two identical units of one position — 4 same-spec profile pieces and
+    a reinforcement per unit, exercising the physical P-U-M identity."""
+    def fact(rep: int, ids: tuple[str, str], reinf: str) -> dict:
+        return {
+            "position_id": "pos-1",
+            "position_index": 2,
+            "repetition_index": rep,
+            "nominal_width_mm": "1000.00",
+            "nominal_height_mm": "1000.00",
+            "members": [
+                {
+                    "member_id": ids[0], "bay_id": "B1",
+                    "workshop_sku": "MARCO-60",
+                    "cut_length_mm": "1000.00",
+                    "angle_left": "45.00", "angle_right": "45.00",
+                    "identity": {"role": "FRAME", "position_id": "pos-1"},
+                },
+                {
+                    "member_id": ids[1], "bay_id": "B1",
+                    "workshop_sku": "MARCO-60",
+                    "cut_length_mm": "1000.00",
+                    "angle_left": "45.00", "angle_right": "45.00",
+                    "identity": {"role": "FRAME", "position_id": "pos-1"},
+                },
+            ],
+            "reinforcements": [{
+                "reinforcement_id": reinf,
+                "parent_member_id": ids[1],
+                "workshop_sku": "ACERO",
+                "cut_length_mm": "940.00",
+                "angle_left": "90.00", "angle_right": "90.00",
+            }],
+            "infills": [], "leaves": [], "handles": [], "relationships": [],
+        }
+
+    return {
+        "positions": [{"id": "pos-1", "position_index": 2}],
+        "manufacturing": [
+            fact(1, ("a" * 64, "b" * 64), "e" * 64),
+            fact(2, ("c" * 64, "d" * 64), "f" * 64),
+        ],
+    }
+
+
+def _cutpack_optimization(*, with_units: bool = True) -> dict:
+    def cut(seq: int, kind: str, sku: str, unit: int | None) -> dict:
+        out = {
+            "sequence": seq, "piece_id": f"spec-{seq}",
+            "source_kind": kind, "workshop_sku": sku,
+            "length_mm": "1000.00" if kind == "PROFILE" else "940.00",
+            "angle_left": "45.00" if kind == "PROFILE" else "90.00",
+            "angle_right": "45.00" if kind == "PROFILE" else "90.00",
+            "role": "FRAME", "bay_id": "B1", "leaf_id": "",
+            "source_position_id": "pos-1",
+        }
+        if with_units:
+            out["unit_index"] = unit
+        return out
+
+    return {
+        "color": "WHITE", "units": 2, "strategy": "FAST",
+        "stats": {"bars_new": 2, "bars_remnant": 0, "cuts_total": 6,
+                  "unnested_count": 0},
+        "bars": {
+            "metrics": {"bars": 2, "cuts": 6, "process_waste_mm": "40",
+                        "reusable_remnant_mm": "1950",
+                        "productive_length_mm": "5880"},
+            "workshop_cut_plan": [
+                {
+                    "bar_index": 1, "commercial_sku": "COMPRA-MARCO",
+                    "material": "PVC", "color": "WHITE", "source": "NEW",
+                    "stock_length_mm": "6000.00", "head_trim_mm": "15.00",
+                    "tail_trim_mm": "15.00", "kerf_mm": "5.00",
+                    "kerf_total_mm": "15.00", "remainder_mm": "1955.00",
+                    "remainder_reusable": True, "yield_pct": "65.7",
+                    "cuts": [
+                        cut(1, "PROFILE", "MARCO-60", 1),
+                        cut(2, "PROFILE", "MARCO-60", 2),
+                        cut(3, "PROFILE", "MARCO-60", 1),
+                        cut(4, "PROFILE", "MARCO-60", 2),
+                    ],
+                },
+                {
+                    "bar_index": 2, "commercial_sku": "COMPRA-ACERO",
+                    "material": "STEEL", "color": "WHITE", "source": "NEW",
+                    "stock_length_mm": "2000.00", "head_trim_mm": "15.00",
+                    "tail_trim_mm": "15.00", "kerf_mm": "5.00",
+                    "kerf_total_mm": "5.00", "remainder_mm": "85.00",
+                    "remainder_reusable": False, "yield_pct": "94.0",
+                    "cuts": [
+                        cut(5, "REINFORCEMENT", "ACERO", 1),
+                        cut(6, "REINFORCEMENT", "ACERO", 2),
+                    ],
+                },
+            ],
+        },
+    }
+
+
+def test_cut_pack_resolves_physical_piece_identity_per_unit() -> None:
+    from documents.renderers import _cut_member_map, _piece_labels
+    from production.cut_pack import _pack_html
+
+    snapshot = _cutpack_snapshot()
+    labels = _piece_labels(snapshot)
+    html = _pack_html(
+        order={"order_code": "OT-TEST-01"},
+        optimization=_cutpack_optimization(),
+        snapshot=snapshot,
+        labels=labels,
+        cut_map=_cut_member_map(snapshot, labels),
+        infills={},
+        bar_meta={},
+        remnant_racks={},
+        fingerprint="f" * 64,
+    )
+    for code in (
+        "P02-U01-M01", "P02-U01-M02", "P02-U02-M01", "P02-U02-M02",
+        "P02-U01-M02·R", "P02-U02-M02·R",
+    ):
+        # once in the diagram label plus once in the table row — no third
+        # occurrence would mean a physical piece printed twice.
+        assert html.count(f">{code}<") >= 2, code
+    # conservation line closes under the declared convention on both bars
+    assert html.count("cierra exacto") == 2
+    assert "diferencia sin asignar" not in html
+
+
+def test_cut_pack_falls_back_to_spec_codes_without_unit_index() -> None:
+    from documents.renderers import _cut_member_map, _piece_labels
+    from production.cut_pack import _pack_html
+
+    snapshot = _cutpack_snapshot()
+    labels = _piece_labels(snapshot)
+    html = _pack_html(
+        order={"order_code": "OT-TEST-01"},
+        optimization=_cutpack_optimization(with_units=False),
+        snapshot=snapshot,
+        labels=labels,
+        cut_map=_cut_member_map(snapshot, labels),
+        infills={},
+        bar_meta={},
+        remnant_racks={},
+        fingerprint="f" * 64,
+    )
+    # grouped spec labels list the physical identities instead of "+3"
+    assert "P02-U01-M01" in html and "P02-U02-M02" in html
+
+
+def test_cut_pack_flags_non_conserving_bar() -> None:
+    from documents.renderers import _cut_member_map, _piece_labels
+    from production.cut_pack import _pack_html
+
+    snapshot = _cutpack_snapshot()
+    labels = _piece_labels(snapshot)
+    optimization = _cutpack_optimization()
+    optimization["bars"]["workshop_cut_plan"][0]["stock_length_mm"] = "5900.00"
+    html = _pack_html(
+        order={"order_code": "OT-TEST-01"},
+        optimization=optimization,
+        snapshot=snapshot,
+        labels=labels,
+        cut_map=_cut_member_map(snapshot, labels),
+        infills={},
+        bar_meta={},
+        remnant_racks={},
+        fingerprint="f" * 64,
+    )
+    assert "diferencia sin asignar" in html

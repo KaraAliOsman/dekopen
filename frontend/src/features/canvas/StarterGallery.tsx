@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import type { ProductIssue } from "../../api/generated/models";
 import { t } from "../../i18n/es-CL";
@@ -55,24 +55,49 @@ export function StarterGallery({
       }),
     [],
   );
+  const [query, setQuery] = useState("");
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return previews;
+    return previews.filter(({ definition }) =>
+      `${t(definition.titleKey)} ${t(definition.hintKey)}`.toLowerCase().includes(needle),
+    );
+  }, [previews, query]);
   return (
-    <div className="starter-gallery" role="list" aria-label={t("assembly.starterLibrary")}>
-      {previews.map(({ definition, product }) => (
-        <div key={definition.key} role="listitem" className="starter-card-wrap">
-          <button
-            type="button"
-            className="starter-card"
-            disabled={disabled}
-            onClick={() => onPick(definition)}
-          >
-            <span className="starter-thumb">
-              <StarterThumb product={product} members={members} />
-            </span>
-            <span className="starter-card-title">{t(definition.titleKey)}</span>
-            <span className="starter-card-hint">{t(definition.hintKey)}</span>
-          </button>
+    <div className="starter-gallery-wrap">
+      <label className="starter-search">
+        <input
+          type="search"
+          value={query}
+          placeholder={t("assembly.starterSearch")}
+          aria-label={t("assembly.starterSearch")}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+      </label>
+      {filtered.length === 0 ? (
+        <p className="starter-empty" role="status">
+          {t("assembly.starterNoMatch")}
+        </p>
+      ) : (
+        <div className="starter-gallery" role="list" aria-label={t("assembly.starterLibrary")}>
+          {filtered.map(({ definition, product }) => (
+            <div key={definition.key} role="listitem" className="starter-card-wrap">
+              <button
+                type="button"
+                className="starter-card"
+                disabled={disabled}
+                onClick={() => onPick(definition)}
+              >
+                <span className="starter-thumb">
+                  <StarterThumb product={product} members={members} />
+                </span>
+                <span className="starter-card-title">{t(definition.titleKey)}</span>
+                <span className="starter-card-hint">{t(definition.hintKey)}</span>
+              </button>
+            </div>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }

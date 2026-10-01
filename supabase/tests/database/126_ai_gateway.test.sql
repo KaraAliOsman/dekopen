@@ -25,12 +25,12 @@ SELECT ok(
 );
 SELECT ok(
     (SELECT count(*) = 9 FROM public.ai_routes
-      WHERE provider = 'MIMO' AND provider_model = 'mimo-v2.6-pro' AND enabled),
-    'all nine capabilities are pinned to mimo-v2.6-pro'
+      WHERE provider = 'MIMO' AND provider_model = 'primalabs-ai/MiMo-V2.6-Pro-RL' AND enabled),
+    'all nine capabilities are pinned to primalabs-ai/MiMo-V2.6-Pro-RL'
 );
 SELECT ok(
     (SELECT count(*) = 0 FROM public.ai_routes
-      WHERE provider <> 'MIMO' OR provider_model <> 'mimo-v2.6-pro'),
+      WHERE provider <> 'MIMO' OR provider_model <> 'primalabs-ai/MiMo-V2.6-Pro-RL'),
     'no route may resolve to another provider or model'
 );
 SELECT ok(

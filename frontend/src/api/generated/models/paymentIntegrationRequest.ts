@@ -9,11 +9,7 @@ import type { ApiUrlEnum } from "./apiUrlEnum";
 
 export interface PaymentIntegrationRequest {
   api_url: ApiUrlEnum;
-  /**
-   * @minLength 10
-   * @maxLength 100
-   */
-  api_key: string;
+  api_key?: string;
   secret_key?: string;
   /** @maxLength 500 */
   payer_return_url?: string;

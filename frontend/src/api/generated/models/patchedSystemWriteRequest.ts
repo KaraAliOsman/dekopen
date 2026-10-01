@@ -77,4 +77,26 @@ export interface PatchedSystemWriteRequest {
    */
   version?: number;
   is_active?: boolean;
+  /**
+   * @maxLength 255
+   * @nullable
+   */
+  manufacturer?: string | null;
+  /**
+   * @maxLength 150
+   * @nullable
+   */
+  family?: string | null;
+  /**
+   * @items.minLength 1
+   * @items.maxLength 60
+   */
+  applications?: string[];
+  /**
+   * @items.minLength 1
+   * @items.maxLength 50
+   */
+  finishes?: string[];
+  /** @nullable */
+  process_profile_id?: string | null;
 }

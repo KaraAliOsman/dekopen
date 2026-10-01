@@ -15,7 +15,7 @@ from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.x509.oid import NameOID
 from lxml import etree
 
-from authentication.errors import ContractAPIException
+from authentication.errors import ContractAPIException, contract_error
 from projects import sii, sii_envio
 
 
@@ -163,19 +163,19 @@ def _cert_row(org_id, pfx, password="secret", over=None):
     return row
 
 
-def _dte_xml(folio=7):
+def _dte_xml(folio=7, tipo=33):
     return (
         '<?xml version="1.0" encoding="ISO-8859-1"?>'
         '<DTE xmlns="http://www.sii.cl/SiiDte" version="1.0">'
-        f'<Documento ID="F33T{folio}">'
-        "<Encabezado><IdDoc><TipoDTE>33</TipoDTE>"
+        f'<Documento ID="F{tipo}T{folio}">'
+        f"<Encabezado><IdDoc><TipoDTE>{tipo}</TipoDTE>"
         f"<Folio>{folio}</Folio><FchEmis>2026-10-02</FchEmis></IdDoc>"
         "<Emisor><RUTEmisor>76123456-0</RUTEmisor></Emisor>"
         "<Receptor><RUTRecep>76543210-3</RUTRecep></Receptor>"
         "<Totales><MntTotal>1190</MntTotal></Totales></Encabezado>"
         "<Detalle><NroLinDet>1</NroLinDet><NmbItem>VENTANA</NmbItem>"
         "<QtyItem>1</QtyItem><MontoItem>1000</MontoItem></Detalle>"
-        '<TED version="1.0"><DD><RE>76123456-0</RE><TD>33</TD>'
+        f'<TED version="1.0"><DD><RE>76123456-0</RE><TD>{tipo}</TD>'
         f"<F>{folio}</F><ND>0</ND><RR>76543210-3</RR><RSR>C</RSR>"
         "<MNT>1190</MNT><IT1>VENTANA</IT1><CAF/>"
         "<TSTED>2026-10-02T10:00:00</TSTED></DD>"
@@ -212,6 +212,8 @@ def _patch_envio(
     caf=None,
     client=None,
     insert_row=None,
+    order=None,
+    note=None,
 ):
     state = {"inserted": None}
     monkeypatch.setenv("SII_WS_ENVIO_MOCK", "1")
@@ -274,8 +276,16 @@ def _patch_envio(
             }
         if "FROM public.sii_cafs" in text:
             if caf is None:
-                raise ContractAPIException(404, "sii_caf_missing", "x")
+                raise contract_error(404, "sii_caf_missing", "x")
             return caf
+        if "FROM public.orders" in text:
+            if order is None:
+                raise contract_error(404, "work_order_not_found", "x")
+            return order
+        if "FROM public.dispatch_notes" in text:
+            if note is None:
+                raise contract_error(404, "dispatch_note_missing", "x")
+            return note
         if "pg_advisory_xact_lock" in text:
             return {}
         return {}
@@ -563,6 +573,97 @@ def test_send_envio_requires_dte():
                 org_id=uuid4(), project_id=uuid4(), invoice_id=uuid4(), actor_id=uuid4()
             )
     assert error.value.contract_code == "sii_dte_missing"
+
+
+def test_send_credit_note_envio_submits_dte61():
+    # The NC's DTE-61 resolves by credit_note_id — the annulment only
+    # exists for the SII once its envelope is submitted.
+    storage = _Storage()
+    org_id, invoice_id, cn_id = uuid4(), uuid4(), uuid4()
+    caf = _caf(org_id)
+    dte = _dte_row(
+        org_id, invoice_id, caf["id"], folio=9,
+        over={"dte_type": 61, "credit_note_id": cn_id},
+    )
+    pfx, _key, cert = _pfx()
+    storage.objects[dte["storage_object_key"]] = _dte_xml(folio=9, tipo=61)
+    with pytest.MonkeyPatch.context() as mp:
+        mp.delenv("SII_WS_ENVIO_URL", raising=False)
+        _patch_envio(mp, storage, dte=[dte], certs=[], caf=caf)
+        cert_row = _cert_row(org_id, pfx)
+        _patch_envio(mp, storage, dte=[dte], certs=[cert_row], caf=caf)
+        result = sii_envio.send_credit_note_envio(
+            org_id=org_id,
+            project_id=dte["project_id"],
+            credit_note_id=cn_id,
+            actor_id=uuid4(),
+        )
+    assert result["status"] == "ACCEPTED"
+    assert result["track_id"].startswith("MOCK-")
+    root = etree.fromstring(storage.uploads[0][1])
+    assert root.tag == "{http://www.sii.cl/SiiDte}EnvioDTE"
+    documento = sii_envio._find_id(root, "F61T9")
+    _verify_signature(documento, cert)
+
+
+def test_send_credit_note_envio_requires_dte():
+    with pytest.MonkeyPatch.context() as mp:
+        _patch_envio(mp, _Storage(), dte=[])
+        with pytest.raises(ContractAPIException) as error:
+            sii_envio.send_credit_note_envio(
+                org_id=uuid4(),
+                project_id=uuid4(),
+                credit_note_id=uuid4(),
+                actor_id=uuid4(),
+            )
+    assert error.value.contract_code == "sii_dte_missing"
+
+
+def test_send_dispatch_note_envio_resolves_through_order():
+    # Production routes name a work order; the envío resolves
+    # order → guía → DTE-52 and submits the same sealed envelope.
+    storage = _Storage()
+    org_id, order_id, note_id = uuid4(), uuid4(), uuid4()
+    caf = _caf(org_id)
+    dte = _dte_row(
+        org_id, None, caf["id"], folio=4,
+        over={"dte_type": 52, "invoice_id": None, "dispatch_note_id": note_id},
+    )
+    pfx, _key, cert = _pfx()
+    storage.objects[dte["storage_object_key"]] = _dte_xml(folio=4, tipo=52)
+    order = {"id": order_id, "org_id": org_id, "project_id": dte["project_id"]}
+    note = {"id": note_id, "work_order_id": order_id, "org_id": org_id}
+    with pytest.MonkeyPatch.context() as mp:
+        mp.delenv("SII_WS_ENVIO_URL", raising=False)
+        _patch_envio(
+            mp, storage, dte=[dte], certs=[], caf=caf,
+            order=order, note=note,
+        )
+        cert_row = _cert_row(org_id, pfx)
+        _patch_envio(
+            mp, storage, dte=[dte], certs=[cert_row], caf=caf,
+            order=order, note=note,
+        )
+        result = sii_envio.send_dispatch_note_envio(
+            org_id=org_id, order_id=order_id, actor_id=uuid4()
+        )
+    assert result["status"] == "ACCEPTED"
+    root = etree.fromstring(storage.uploads[0][1])
+    documento = sii_envio._find_id(root, "F52T4")
+    _verify_signature(documento, cert)
+
+
+def test_send_dispatch_note_envio_requires_note():
+    with pytest.MonkeyPatch.context() as mp:
+        _patch_envio(
+            mp, _Storage(), dte=[],
+            order={"id": uuid4(), "org_id": uuid4(), "project_id": uuid4()},
+        )
+        with pytest.raises(ContractAPIException) as error:
+            sii_envio.send_dispatch_note_envio(
+                org_id=uuid4(), order_id=uuid4(), actor_id=uuid4()
+            )
+    assert error.value.contract_code == "dispatch_note_missing"
 
 
 def test_send_envio_requires_certificate():

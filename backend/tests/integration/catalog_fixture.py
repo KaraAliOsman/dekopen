@@ -18,6 +18,15 @@ def _jsonb_columns(table):
     }
 
 
+def decode_jsonb_columns(table: str, row: dict) -> dict:
+    """Re-decode a `rows()` dict's jsonb columns before `json_text`
+    re-encoding — every clone helper must pass through this."""
+    for column in _jsonb_columns(table):
+        if isinstance(row.get(column), str):
+            row[column] = json.loads(row[column])
+    return row
+
+
 def copy_fixed_catalog(org, code="DEMO_60", global_scope=False):
     """Clone a global system into an unreferenced, unlocked copy.
 
@@ -54,12 +63,15 @@ def copy_fixed_catalog(org, code="DEMO_60", global_scope=False):
                     value[key] = identities[value[key]]
             insert(table, value)
     infill_ids = {}
+    kit_ids = {}
     for table in ("hardware_kits", "infill_articles", "inspector_rule_configs",
-                  "glass_purchase_mappings"):
+                  "glass_purchase_mappings", "fitting_purchase_mappings"):
         for row in rows(f"SELECT * FROM public.{table} WHERE system_id=%s AND org_id IS NULL", [source["id"]]):
             value = {**row, "id": uuid4(), "system_id": target, "org_id": scope_org}
             if table == "infill_articles":
                 infill_ids[row["id"]] = value["id"]
+            if table == "hardware_kits":
+                kit_ids[row["id"]] = value["id"]
             insert(table, value)
     for old, new in infill_ids.items():
         for row in rows("SELECT * FROM public.panel_purchase_authorities WHERE infill_article_id=%s AND org_id IS NULL", [old]):
@@ -67,4 +79,7 @@ def copy_fixed_catalog(org, code="DEMO_60", global_scope=False):
     for old, new in identities.items():
         for row in rows("SELECT * FROM public.profile_purchase_mappings WHERE profile_article_id=%s AND org_id IS NULL", [old]):
             insert("profile_purchase_mappings", {**row, "id": uuid4(), "profile_article_id": new, "org_id": scope_org})
+    for old, new in kit_ids.items():
+        for row in rows("SELECT * FROM public.hardware_purchase_mappings WHERE hardware_kit_id=%s AND org_id IS NULL", [old]):
+            insert("hardware_purchase_mappings", {**row, "id": uuid4(), "hardware_kit_id": new, "org_id": scope_org})
     return target

@@ -24,6 +24,11 @@ class InventoryStockItemSerializer(serializers.Serializer):
     on_hand_qty = serializers.DecimalField(max_digits=14, decimal_places=2)
     reserved_qty = serializers.DecimalField(max_digits=14, decimal_places=2)
     available_qty = serializers.DecimalField(max_digits=14, decimal_places=2)
+    incoming_qty = serializers.DecimalField(
+        max_digits=14, decimal_places=2, required=False, default="0"
+    )
+    racks = serializers.CharField(allow_null=True, required=False)
+    spec_text = serializers.CharField(required=False, allow_blank=True)
 
 
 class InventoryStockSerializer(serializers.Serializer):
@@ -48,8 +53,10 @@ class InventoryMovementSerializer(serializers.Serializer):
     order_id = serializers.UUIDField(allow_null=True)
     order_line_id = serializers.UUIDField(allow_null=True)
     lot_code = serializers.CharField(allow_null=True)
+    rack_location = serializers.CharField(allow_null=True, required=False)
     note = serializers.CharField(allow_null=True)
     actor_id = serializers.UUIDField(allow_null=True)
+    actor_label = serializers.CharField(allow_null=True, required=False)
     created_at = serializers.DateTimeField()
 
 
@@ -111,6 +118,7 @@ class InventoryMovementRequestSerializer(StrictSerializer):
     movement_type = serializers.ChoiceField(choices=("ADJUSTMENT", "RETURN", "SCRAP"))
     quantity = serializers.DecimalField(max_digits=14, decimal_places=2, min_value=Decimal("0"))
     lot_code = serializers.CharField(required=False, allow_null=True, max_length=100)
+    rack_location = serializers.CharField(required=False, allow_null=True, max_length=50)
     note = serializers.CharField(max_length=500)
 
 
@@ -140,12 +148,27 @@ class RemnantSerializer(serializers.Serializer):
     consumed_order_id = serializers.UUIDField(allow_null=True)
     rack_location = serializers.CharField(allow_null=True)
     notes = serializers.CharField(allow_null=True)
+    reserved_order_code = serializers.CharField(allow_null=True, required=False)
+    origin_order_code = serializers.CharField(allow_null=True, required=False)
+    article_sku = serializers.CharField(allow_null=True, required=False)
     created_at = serializers.DateTimeField()
     updated_at = serializers.DateTimeField()
 
 
 class RemnantListSerializer(serializers.Serializer):
     remnants = RemnantSerializer(many=True)
+
+
+class BarAuthoritySerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    commercial_sku = serializers.CharField()
+    physical_stock_identity = serializers.UUIDField(allow_null=True)
+    stock_color = serializers.CharField(allow_null=True)
+    source = serializers.ChoiceField(choices=("PROFILE", "REINFORCEMENT"))
+
+
+class BarAuthorityListSerializer(serializers.Serializer):
+    authorities = BarAuthoritySerializer(many=True)
 
 
 class RemnantListQuerySerializer(StrictSerializer):
@@ -196,3 +219,10 @@ class RemnantCreateSerializer(StrictSerializer):
                     "Sheet remnants need sheet_workshop_sku and positive width/height"
                 )
         return data
+
+
+class RemnantLabelSerializer(serializers.Serializer):
+    remnant = RemnantSerializer()
+    identity = serializers.CharField()
+    qr_payload = serializers.CharField()
+    qr_svg = serializers.CharField()

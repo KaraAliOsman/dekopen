@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 import hashlib
 import json
+import logging
 import secrets
 from typing import Iterator
 from uuid import UUID
@@ -13,14 +15,19 @@ from uuid import UUID
 from django.db import DatabaseError, connection, transaction
 from psycopg import sql
 
+from authentication.rls import tx_aborted
 from documents.artifacts import SupabaseDocumentStorage, generate_artifact
+from documents.renderers import finish_label, frozen_glass_specs
 from documents.repository import (
     DocumentaryError,
     decoded,
     documentary_backend,
     one,
     rows,
+    write,
 )
+
+logger = logging.getLogger(__name__)
 
 _TOKEN_BYTES = 32
 _APPROVAL_TTL_DAYS = 30
@@ -44,14 +51,14 @@ def portal_backend() -> Iterator[None]:
     except DatabaseError:
         raise
     except BaseException:
-        if not connection.needs_rollback:
+        if not tx_aborted():
             with connection.cursor() as cursor:
                 cursor.execute(
                     sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(previous))
                 )
         raise
     else:
-        if not connection.needs_rollback:
+        if not tx_aborted():
             with connection.cursor() as cursor:
                 cursor.execute(
                     sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(previous))
@@ -92,6 +99,20 @@ def share_quote(
     token = secrets.token_urlsafe(_TOKEN_BYTES)
     expires_at = datetime.now(timezone.utc) + timedelta(days=_APPROVAL_TTL_DAYS)
     with transaction.atomic(), documentary_backend():
+        # A fresh share supersedes every outstanding link for this revision —
+        # otherwise pending tokens accumulate and stay concurrently valid.
+        rows(
+            "UPDATE public.customer_approvals SET status='REVOKED',revoked_at=%s,"
+            "revoked_by=%s WHERE org_id=%s AND project_id=%s "
+            "AND project_version_id=%s AND status='PENDING' RETURNING id",
+            [
+                datetime.now(timezone.utc),
+                str(actor_id),
+                str(org_id),
+                str(project_id),
+                str(versions[0]["id"]),
+            ],
+        )
         one(
             "INSERT INTO public.customer_approvals "
             "(org_id,project_id,project_version_id,token_hash,expires_at,created_by) "
@@ -108,6 +129,84 @@ def share_quote(
     return {"token": token, "expires_at": expires_at}
 
 
+def revoke_link(
+    *, org_id: UUID, project_id: UUID, approval_id: UUID, actor_id: UUID
+) -> dict[str, object]:
+    """Kill a PENDING link. Decided links stay on the record — revocation is
+    an off switch for an unanswered share, not a way to un-decide a client."""
+    with documentary_backend():
+        approval = one(
+            "SELECT id,status FROM public.customer_approvals "
+            "WHERE id=%s AND org_id=%s AND project_id=%s",
+            [str(approval_id), str(org_id), str(project_id)],
+            "approval_not_found",
+        )
+        if str(approval["status"]) == "REVOKED":
+            return approval
+        if str(approval["status"]) != "PENDING":
+            raise DocumentaryError("approval_not_pending")
+        return one(
+            "UPDATE public.customer_approvals SET status='REVOKED',revoked_at=%s,"
+            "revoked_by=%s WHERE id=%s AND status='PENDING' RETURNING id,status",
+            [datetime.now(timezone.utc), str(actor_id), str(approval_id)],
+        )
+
+
+def list_approvals(*, org_id: UUID, project_id: UUID) -> list[dict[str, object]]:
+    """The org-side record of every link minted for a project: who it went
+    to (the token stays opaque — the link URL is the capability), which
+    revision it carried, and how the client answered."""
+    with documentary_backend():
+        one(
+            "SELECT id FROM public.projects WHERE id=%s AND org_id=%s",
+            [str(project_id), str(org_id)],
+            "project_not_found",
+        )
+        return [
+            {
+                "id": str(row["id"]),
+                "status": str(row["status"]),
+                "revision_code": str(row["revision_code"]),
+                "decided_by": row["decided_by"],
+                "decided_at": row["decided_at"].isoformat()
+                if row["decided_at"]
+                else None,
+                "expires_at": row["expires_at"].isoformat(),
+                "created_at": row["created_at"].isoformat(),
+                "revoked_at": row["revoked_at"].isoformat()
+                if row["revoked_at"]
+                else None,
+                "decided_note": row["decided_note"],
+                "view_count": int(row["view_count"] or 0),
+                "last_viewed_at": row["last_viewed_at"].isoformat()
+                if row["last_viewed_at"]
+                else None,
+            }
+            for row in rows(
+                "SELECT a.id,a.status,a.decided_by,a.decided_at,a.decided_note,"
+                "a.expires_at,a.created_at,a.revoked_at,a.view_count,a.last_viewed_at,"
+                "v.revision_code "
+                "FROM public.customer_approvals a "
+                "JOIN public.project_versions v "
+                "ON v.id = a.project_version_id "
+                "WHERE a.org_id=%s AND a.project_id=%s "
+                "ORDER BY a.created_at DESC",
+                [str(org_id), str(project_id)],
+            )
+        ]
+
+
+def _validity_expired(value: object) -> bool:
+    """Sealed ``quotation_valid_until`` — a malformed date is a data defect,
+    not a crash: the public read must surface a contract error, not a 500."""
+    if not value:
+        return False
+    try:
+        return date.fromisoformat(str(value)) < datetime.now(timezone.utc).date()
+    except ValueError:
+        raise DocumentaryError("quotation_valid_until_invalid") from None
+
+
 def _approval_for_token(token: str) -> dict[str, object]:
     found = rows(
         "SELECT * FROM public.customer_approvals WHERE token_hash=%s",
@@ -116,6 +215,8 @@ def _approval_for_token(token: str) -> dict[str, object]:
     if len(found) != 1:
         raise DocumentaryError("quote_not_found")
     approval = found[0]
+    if approval["status"] == "REVOKED":
+        raise DocumentaryError("quote_revoked")
     if approval["expires_at"] < datetime.now(timezone.utc):
         raise DocumentaryError("quote_expired")
     return approval
@@ -157,13 +258,141 @@ def _live_project(approval: dict[str, object], *, for_update: bool = False) -> d
     )
 
 
-def portal_quote(token: str) -> dict[str, object]:
-    """Public read: the shared quote summary plus the sealed PDF link."""
+def _sealed_positions(version: dict[str, object]) -> list[dict[str, object]]:
+    """The proposal's position cards — immutable snapshot rows, not live data."""
+    snapshot = decoded(version["snapshot_json"])
+    values = snapshot.get("positions") if isinstance(snapshot, dict) else None
+    if not isinstance(values, list):
+        return []
+    positions = []
+    for value in values:
+        if not isinstance(value, dict):
+            continue
+        glass_specs: list[str] = []
+        finish = ""
+        try:
+            glass_specs = frozen_glass_specs(value)
+            finish = finish_label(value.get("color_interior"), value.get("color_exterior"))
+        except DocumentaryError:
+            glass_specs = []
+            finish = ""
+        positions.append({
+            "id": str(value.get("id") or ""),
+            "position_index": value.get("position_index"),
+            "quantity": value.get("quantity"),
+            "typology": value.get("typology"),
+            "location_tag": value.get("location_tag"),
+            "width_mm": str(value.get("width_mm") or ""),
+            "height_mm": str(value.get("height_mm") or ""),
+            "color_interior": value.get("color_interior"),
+            "color_exterior": value.get("color_exterior"),
+            "glass_specs": glass_specs,
+            "finish": finish or None,
+            # Unpriced legacy lines stay null — a "$0" reads as free, never as
+            # "not priced".
+            "price_net": (
+                str(value["price_net"]) if value.get("price_net") is not None else None
+            ),
+            "discount_pct": str(value.get("discount_pct") or "0"),
+            "parametric_tree": value.get("parametric_tree"),
+        })
+    return positions
+
+
+def _sealed_organization(version: dict[str, object]) -> dict[str, object]:
+    """The issuer's white-label identity for the proposal page — commercial
+    name, contact lines and a signed logo URL, all from the sealed snapshot
+    so a later rebrand can't rewrite a live quote."""
+    snapshot = decoded(version["snapshot_json"])
+    org = snapshot.get("organization") if isinstance(snapshot, dict) else None
+    if not isinstance(org, dict):
+        return {}
+    logo_url = None
+    logo_key = org.get("brand_logo_key")
+    if logo_key:
+        try:
+            logo_url = SupabaseDocumentStorage().signed_url(str(logo_key))
+        except Exception:
+            logo_url = None
+    return {
+        "name": org.get("name"),
+        "tax_id": org.get("tax_id"),
+        "commercial_name": org.get("commercial_name"),
+        "brand_address": org.get("brand_address"),
+        "brand_phone": org.get("brand_phone"),
+        "brand_email": org.get("brand_email"),
+        "brand_logo_url": logo_url,
+    }
+
+
+def _sealed_extras(version: dict[str, object]) -> list[dict[str, object]]:
+    """Project-level charges sealed inside the applied pricing request —
+    labeled net amounts the customer should see, never re-derived."""
+    snapshot = decoded(version["snapshot_json"])
+    pricing = snapshot.get("pricing") if isinstance(snapshot, dict) else None
+    request = pricing.get("request") if isinstance(pricing, dict) else None
+    items = request.get("extras") if isinstance(request, dict) else None
+    if not isinstance(items, list):
+        return []
+    return [
+        {"label": str(item.get("label") or ""), "amount": str(item.get("amount") or "0")}
+        for item in items
+        if isinstance(item, dict) and item.get("label")
+    ]
+
+
+def _payment_state(
+    *, org_id: object, project_id: object, gross: Decimal, superseded: bool
+) -> dict[str, object] | None:
+    """The customer's own payment state on the proposal link."""
+    # A superseded link's sealed gross belongs to a dead revision — mixing it
+    # with live payments shows crossed-era numbers under the banner.
+    if superseded:
+        return None
+    payments = rows(
+        "SELECT amount,voided_at FROM public.project_payments "
+        "WHERE org_id=%s AND project_id=%s",
+        [str(org_id), str(project_id)],
+    )
+    if not payments:
+        return None
+    collected = sum(
+        (Decimal(str(p["amount"])) for p in payments if p["voided_at"] is None),
+        Decimal("0"),
+    )
+    balance = gross - collected
+    if collected <= 0:
+        status = "PENDING"
+    elif balance > 0:
+        status = "PARTIAL"
+    else:
+        status = "PAID"
+    return {
+        "status": status,
+        "collected": str(collected),
+        "balance": str(balance),
+    }
+
+
+def portal_quote(token: str, *, track: bool = True) -> dict[str, object]:
+    """Public read: the sealed proposal — positions, issuer, totals, payment."""
     with transaction.atomic(), portal_backend():
         approval = _approval_for_token(token)
         org_id = approval["org_id"]
         _scope_org(org_id)
         version = _bound_version(approval)
+        if track:
+            # The client's open is the sales signal — record it on the link
+            # so the estimator sees "opened N times · last today". Decisions
+            # replay through this reader untracked: a decision row is the
+            # stronger signal, and replays must not write.
+            # Write helper — a bare UPDATE has no result set for rows().
+            write(
+                "UPDATE public.customer_approvals SET view_count=view_count+1,"
+                "first_viewed_at=COALESCE(first_viewed_at, clock_timestamp()),"
+                "last_viewed_at=clock_timestamp() WHERE id=%s AND org_id=%s",
+                [approval["id"], org_id],
+            )
         sealed = _sealed_project(version)
         project = _live_project(approval)
         artifacts = rows(
@@ -178,37 +407,201 @@ def portal_quote(token: str) -> dict[str, object]:
             if artifacts
             else None
         )
+        gross = Decimal(str(sealed.get("total_price_gross") or "0"))
+        superseded = str(project["current_revision"]) != str(version["revision_code"])
+        validity_expired = _validity_expired(sealed.get("quotation_valid_until"))
+        # A live Flow link the estimator already minted is the proposal's next
+        # step — only for CLP deals (the provider charges CLP), and never on a
+        # dead revision, lapsed validity or a rejected proposal: charging a
+        # declined quote is worse than no button.
+        payment_url = None
+        if (
+            str(sealed.get("currency") or "CLP") == "CLP"
+            and not superseded
+            and not validity_expired
+            and str(approval["status"]) != "DECLINED"
+        ):
+            live_link = rows(
+                "SELECT url FROM public.project_payment_links "
+                "WHERE org_id=%s AND project_id=%s AND status='PENDING' AND url IS NOT NULL "
+                "ORDER BY created_at DESC LIMIT 1",
+                [org_id, approval["project_id"]],
+            )
+            if live_link:
+                payment_url = live_link[0]["url"]
+        # Totals absent from the sealed snapshot stay null — a $0 total on a
+        # public proposal reads as a pricing error, never as "not priced".
+        price_net = sealed.get("total_price_net")
+        price_tax = sealed.get("total_price_tax")
+        price_gross = sealed.get("total_price_gross")
         return {
             "schema": "portal_quote_v1",
+            "organization": _sealed_organization(version),
             "project_code": sealed.get("code") or "",
             "project_name": sealed.get("name") or "",
             "client_name": sealed.get("client_name") or "",
-            "project_status": project["status"],
             "revision_code": version["revision_code"],
             "emitted_at": version["emitted_at"].isoformat(),
-            "total_price_net": str(sealed.get("total_price_net") or "0"),
-            "total_price_tax": str(sealed.get("total_price_tax") or "0"),
-            "total_price_gross": str(sealed.get("total_price_gross") or "0"),
-            "valid_until": sealed.get("quotation_valid_until"),
-            "validity_expired": bool(
-                sealed.get("quotation_valid_until")
-                and date.fromisoformat(str(sealed["quotation_valid_until"]))
-                < datetime.now(timezone.utc).date()
+            "currency": sealed.get("currency") or "CLP",
+            "payment_terms": sealed.get("payment_terms"),
+            "notes_commercial": sealed.get("notes_commercial"),
+            "total_price_net": str(price_net) if price_net is not None else None,
+            "total_price_tax": str(price_tax) if price_tax is not None else None,
+            "total_price_gross": str(price_gross) if price_gross is not None else None,
+            "extras": _sealed_extras(version),
+            "positions": _sealed_positions(version),
+            "payment": _payment_state(
+                org_id=org_id,
+                project_id=approval["project_id"],
+                gross=gross,
+                superseded=superseded,
             ),
-            "superseded": str(project["current_revision"]) != str(version["revision_code"]),
+            "payment_url": payment_url,
+            "valid_until": sealed.get("quotation_valid_until"),
+            "validity_expired": validity_expired,
+            "superseded": superseded,
             "expires_at": approval["expires_at"].isoformat(),
             "approval_status": approval["status"],
-            "decided_by": approval["decided_by"],
+            # The decider's name and decline note stay internal — a forwarded
+            # link must not leak them to whoever holds the URL.
+            "decided_by": None,
             "decided_at": (
                 approval["decided_at"].isoformat() if approval["decided_at"] else None
             ),
-            "decided_note": approval["decided_note"],
+            "decided_note": None,
             "quote_pdf_url": signed_url,
         }
 
 
+def _transition_project_approved(
+    *, approval: dict[str, object], version_id: str, now: datetime
+) -> None:
+    """Move the live project to APPROVED and queue its material forecast.
+
+    Runs inside the caller's atomic block. The pricing trigger only allows
+    pricing_backend and its project policy checks the caller's membership
+    role, so the transition asserts the claims the approval delegated:
+    created_by was verified as OWNER/ESTIMATOR when the approval was minted.
+    The status guard makes the write atomic — a concurrent decision that
+    commits first turns this into a no-op.
+    """
+    claims = json.dumps({"sub": str(approval["created_by"])})
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT set_config('request.jwt.claims', %s, true)", [claims]
+        )
+        cursor.execute("SET LOCAL ROLE pricing_backend")
+    updated = rows(
+        "UPDATE public.projects SET status='APPROVED',updated_at=%s "
+        "WHERE id=%s AND org_id=%s AND status='QUOTED' RETURNING id",
+        [now, approval["project_id"], approval["org_id"]],
+    )
+    if len(updated) != 1:
+        # Under the FOR UPDATE lock the only way the guard misses is the
+        # projects policy rejecting the claims principal — the link's
+        # creator left the org. The customer's decision still seals; the
+        # project stays QUOTED for staff to approve off-channel instead of
+        # failing a customer click with a 500.
+        logger.warning(
+            "portal_approval_transition_denied",
+            extra={
+                "approval_id": str(approval["id"]),
+                "created_by": str(approval["created_by"]),
+            },
+        )
+        return
+    # §08: an approved quote queues the material forecast for the version it
+    # decided — the job carries the approval's minted actor as its principal.
+    from automations.service import emit
+
+    emit(
+        "automation.prep_forecast",
+        org_id=UUID(str(approval["org_id"])),
+        actor_id=UUID(str(approval["created_by"])),
+        idempotency_key=f"auto:prep:{version_id}",
+        version_id=version_id,
+    )
+
+
+def approve_internal(
+    *,
+    org_id: UUID,
+    project_id: UUID,
+    actor_id: UUID,
+    actor_label: str,
+    note: str | None,
+) -> dict[str, object]:
+    """Staff records that the customer approved the quote off-channel.
+
+    Mints an already-APPROVED approval row bound to the project's latest
+    sealed version — the same audit shape a customer decision leaves — and
+    runs the same project transition. Outstanding pending links for the
+    revision are revoked: the deal is decided, so no token should stay live.
+    """
+    with documentary_backend():
+        project = one(
+            "SELECT id,status,current_revision FROM public.projects "
+            "WHERE id=%s AND org_id=%s",
+            [str(project_id), str(org_id)],
+            "project_not_found",
+        )
+        live_status = str(project["status"])
+        if live_status == "APPROVED":
+            return {"project_status": "APPROVED"}
+        if live_status != "QUOTED":
+            raise DocumentaryError("quote_approve_requires_quoted")
+        versions = rows(
+            "SELECT id,revision_code FROM public.project_versions "
+            "WHERE project_id=%s AND org_id=%s "
+            "ORDER BY emitted_at DESC,id DESC LIMIT 1",
+            [str(project_id), str(org_id)],
+        )
+        if not versions:
+            raise DocumentaryError("version_not_found")
+        if str(project["current_revision"]) != str(versions[0]["revision_code"]):
+            raise DocumentaryError("quote_approve_revision_mismatch")
+
+    now = datetime.now(timezone.utc)
+    with transaction.atomic(), documentary_backend():
+        write(
+            "UPDATE public.customer_approvals SET status='REVOKED',revoked_at=%s,"
+            "revoked_by=%s WHERE org_id=%s AND project_id=%s "
+            "AND project_version_id=%s AND status='PENDING'",
+            [now, str(actor_id), str(org_id), str(project_id),
+             str(versions[0]["id"])],
+        )
+        internal_token = secrets.token_urlsafe(_TOKEN_BYTES)
+        approval = one(
+            "INSERT INTO public.customer_approvals "
+            "(org_id,project_id,project_version_id,token_hash,status,decided_by,"
+            "decided_at,decided_note,expires_at,created_by) "
+            "VALUES (%s,%s,%s,%s,'APPROVED',%s,%s,%s,%s,%s) "
+            "RETURNING id,org_id,project_id,created_by",
+            [
+                str(org_id),
+                str(project_id),
+                str(versions[0]["id"]),
+                hashlib.sha256(internal_token.encode()).hexdigest(),
+                actor_label,
+                now,
+                note or None,
+                now + timedelta(days=_APPROVAL_TTL_DAYS),
+                str(actor_id),
+            ],
+        )
+        _transition_project_approved(
+            approval=approval, version_id=str(versions[0]["id"]), now=now
+        )
+    return {"project_status": "APPROVED"}
+
+
 def decide_quote(
-    *, token: str, decision: str, decided_by: str, note: str | None
+    *,
+    token: str,
+    decision: str,
+    decided_by: str,
+    note: str | None,
+    decided_rut: str | None = None,
 ) -> dict[str, object]:
     """Approve or decline the shared quote; replays return the sealed state."""
     with transaction.atomic(), portal_backend():
@@ -217,19 +610,19 @@ def decide_quote(
         if approval["status"] == "PENDING":
             version = _bound_version(approval)
             valid_until = _sealed_project(version).get("quotation_valid_until")
-            if valid_until and date.fromisoformat(str(valid_until)) < datetime.now(
-                timezone.utc
-            ).date():
+            if _validity_expired(valid_until):
                 raise DocumentaryError("quote_validity_expired")
             project = _live_project(approval, for_update=True)
             live_status = str(project["status"])
-            if str(project["current_revision"]) != str(version["revision_code"]) or (
-                live_status != "QUOTED"
-                and not (live_status == "APPROVED" and decision == "APPROVED")
-            ):
-                # A successor revision reset the live project, or the quote
-                # already moved on — the link no longer decides anything.
+            if str(project["current_revision"]) != str(version["revision_code"]):
+                # A successor revision replaced the quote this link decided.
                 raise DocumentaryError("quote_link_stale")
+            if live_status != "QUOTED" and not (
+                live_status == "APPROVED" and decision == "APPROVED"
+            ):
+                # The project already moved on — approved or rejected — so
+                # this link no longer decides anything.
+                raise DocumentaryError("quote_already_decided")
             now = datetime.now(timezone.utc)
             # The status guard makes the write atomic: a concurrent decision
             # that commits first turns this into a no-op, and the fresh read
@@ -238,29 +631,18 @@ def decide_quote(
                 "UPDATE public.customer_approvals SET status=%s,decided_by=%s,"
                 "decided_at=%s,decided_note=%s WHERE id=%s AND status='PENDING' "
                 "RETURNING id",
-                [decision, decided_by, now, note or None, approval["id"]],
+                [
+                    decision,
+                    f"{decided_by} · {decided_rut}" if decided_rut else decided_by,
+                    now,
+                    note or None,
+                    approval["id"],
+                ],
             )
             if decided and decision == "APPROVED" and live_status == "QUOTED":
-                # Project status transitions belong to the commercial service:
-                # the pricing trigger and revision guard only allow
-                # pricing_backend, and its project policy checks the caller's
-                # membership role. The approval carries that delegated
-                # authority — created_by was verified as OWNER/ESTIMATOR when
-                # the link was minted — so assert those claims for the
-                # transition, exactly as authenticated_rls_context does for a
-                # real request. The decider is recorded on the approval row.
-                claims = json.dumps({"sub": str(approval["created_by"])})
-                with connection.cursor() as cursor:
-                    cursor.execute(
-                        "SELECT set_config('request.jwt.claims', %s, true)",
-                        [claims],
-                    )
-                    cursor.execute("SET LOCAL ROLE pricing_backend")
-                updated = rows(
-                    "UPDATE public.projects SET status='APPROVED',updated_at=%s "
-                    "WHERE id=%s AND org_id=%s AND status='QUOTED' RETURNING id",
-                    [now, approval["project_id"], approval["org_id"]],
+                _transition_project_approved(
+                    approval=approval,
+                    version_id=str(approval["project_version_id"]),
+                    now=now,
                 )
-                if len(updated) != 1:
-                    raise DocumentaryError("quote_link_stale")
-    return portal_quote(token)
+    return portal_quote(token, track=False)

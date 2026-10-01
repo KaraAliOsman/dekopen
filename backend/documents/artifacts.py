@@ -22,7 +22,7 @@ from documents.xlsx import render_order_xlsx
 logger = logging.getLogger(__name__)
 
 _REVISION_DOCUMENTS = {"DOC-01", "DOC-03", "DOC-05", "DOC-06", "DOC-07"}
-_ORDER_DOCUMENTS = {"DOC-02", "DOC-04"}
+_ORDER_DOCUMENTS = {"DOC-02", "DOC-04", "DOC-08"}
 _DOCUMENT_ROLES = {
     "DOC-01": {"OWNER", "ESTIMATOR"},
     "DOC-02": {"OWNER", "WORKSHOP_MANAGER"},
@@ -31,6 +31,7 @@ _DOCUMENT_ROLES = {
     "DOC-05": {"OWNER", "WORKSHOP_MANAGER"},
     "DOC-06": {"OWNER", "WORKSHOP_MANAGER"},
     "DOC-07": {"OWNER"},
+    "DOC-08": {"OWNER", "WORKSHOP_MANAGER"},
 }
 
 
@@ -80,7 +81,7 @@ def _order_snapshot(order_id: UUID, project_version_id: UUID, org_id: UUID) -> t
     order = one(
         "SELECT id,project_id,project_version_id,org_id,order_type::text,order_code,status,"
         "supplier_name,payload_json::text,bom_hash,revision_snapshot_sha256,"
-        "order_snapshot_hash,confirmed_at FROM public.orders "
+        "order_snapshot_hash,confirmed_at,expected_at,sent_at FROM public.orders "
         "WHERE id=%s AND project_version_id=%s AND org_id=%s",
         [order_id, project_version_id, org_id],
         "order_not_found",
@@ -90,6 +91,17 @@ def _order_snapshot(order_id: UUID, project_version_id: UUID, org_id: UUID) -> t
         raise DocumentaryError("invalid_order_snapshot")
     if documentary_sha256_v1(snapshot) != str(order["order_snapshot_hash"]):
         raise DocumentaryError("order_snapshot_hash_mismatch")
+    # Live order fields overlay the sealed snapshot for display only — the
+    # hash check above already pinned line content; expected_at is set at
+    # send time, after the snapshot was sealed at confirmation.
+    order_block = snapshot.get("order")
+    if isinstance(order_block, dict):
+        order_block["expected_at"] = (
+            None if order["expected_at"] is None else str(order["expected_at"])
+        )
+        order_block["sent_at"] = (
+            None if order["sent_at"] is None else str(order["sent_at"])
+        )
     return order, snapshot
 
 
@@ -104,9 +116,7 @@ def generate_artifact(
         scope = "PROJECT_REVISION"
         scope_id = project_version_id
     elif document_type in _ORDER_DOCUMENTS:
-        if order_id is None or (document_type == "DOC-02" and file_format != "XLSX"):
-            raise DocumentaryError("document_scope_mismatch")
-        if document_type == "DOC-04" and file_format not in ("PDF", "XLSX"):
+        if order_id is None or file_format not in ("PDF", "XLSX"):
             raise DocumentaryError("document_scope_mismatch")
         scope = "ORDER"
         scope_id = order_id
@@ -126,7 +136,7 @@ def generate_artifact(
             # Authority and binding are validated before any slot reuse: an
             # occupied slot never authorizes the request.
             version, frozen_revision = _revision_snapshot(project_version_id, org_id)
-            if document_type in ("DOC-02", "DOC-03", "DOC-04", "DOC-05", "DOC-06"):
+            if document_type in ("DOC-02", "DOC-03", "DOC-04", "DOC-05", "DOC-06", "DOC-08"):
                 if version.get("production_allowed") is not True:
                     raise DocumentaryError("production_document_blocked")
                 if version.get("documentary_complete") is not True:
@@ -220,6 +230,41 @@ def _delete_unreferenced_object(
                 ),
             },
         )
+
+
+def list_artifacts(
+    *, org_id: UUID, project_id: UUID, role: str
+) -> list[dict[str, object]]:
+    """Emitted documents for a project — existence is metadata, not content:
+    rows are filtered to the document types the requester's role may open,
+    and access stays behind signed_artifact_access's per-type role gate."""
+    with documentary_backend():
+        found = rows(
+            "SELECT a.id, a.document_type, a.format, a.artifact_scope,"
+            " a.project_version_id, a.order_id, a.order_type::text,"
+            " a.byte_size, a.created_at, v.revision_code"
+            " FROM public.document_artifacts a"
+            " JOIN public.project_versions v ON v.id = a.project_version_id"
+            " WHERE a.org_id=%s AND a.project_id=%s"
+            " ORDER BY a.created_at DESC, a.id DESC",
+            [org_id, project_id],
+        )
+    return [
+        {
+            "id": str(item["id"]),
+            "document_type": item["document_type"],
+            "format": item["format"],
+            "artifact_scope": item["artifact_scope"],
+            "project_version_id": str(item["project_version_id"]),
+            "order_id": str(item["order_id"]) if item["order_id"] else None,
+            "order_type": item["order_type"],
+            "revision_code": item["revision_code"],
+            "byte_size": item["byte_size"],
+            "created_at": item["created_at"],
+        }
+        for item in found
+        if role in _DOCUMENT_ROLES.get(str(item["document_type"]), set())
+    ]
 
 
 def signed_artifact_access(

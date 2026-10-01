@@ -12,7 +12,9 @@ export function ReadyGuard({ children }: PropsWithChildren): JSX.Element {
     return <p role="status">{t("auth.resolving")}</p>;
   }
   if (auth.status === "anonymous") {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+    return (
+      <Navigate to="/login" replace state={{ from: `${location.pathname}${location.search}` }} />
+    );
   }
   if (auth.status === "mfa_required") {
     return <Navigate to="/auth/mfa" replace />;
@@ -37,7 +39,12 @@ export function ReadyGuard({ children }: PropsWithChildren): JSX.Element {
 
 export function SessionGuard({ children }: PropsWithChildren): JSX.Element {
   const auth = useAuthSession();
+  const location = useLocation();
   if (auth.status === "loading") return <p role="status">{t("auth.resolving")}</p>;
-  if (auth.status === "anonymous") return <Navigate to="/login" replace />;
+  if (auth.status === "anonymous") {
+    return (
+      <Navigate to="/login" replace state={{ from: `${location.pathname}${location.search}` }} />
+    );
+  }
   return <>{children}</>;
 }

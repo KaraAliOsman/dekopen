@@ -117,3 +117,23 @@ def kind_for(file_name: str) -> str | None:
     if lowered.endswith(".csv"):
         return "CSV"
     return None
+
+
+_KIND_MAGIC = {
+    "PDF": (b"%PDF-",),
+    "XLSX": (b"PK\x03\x04",),  # xlsx is a zip container
+    "IMAGE": (b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff"),
+}
+
+
+def sniffed_kind(kind: str, content: bytes) -> bool:
+    """Content must match its declared kind — the file goes to a provider or
+    a parser, so extension alone can't be the authority. CSV carries no
+    signature; the schedule parser's own structure check is the gate."""
+    if kind == "CSV":
+        return True
+    if kind == "IMAGE":
+        if content.startswith(b"RIFF"):
+            return len(content) >= 12 and content[8:12] == b"WEBP"
+        return any(content.startswith(magic) for magic in _KIND_MAGIC["IMAGE"])
+    return any(content.startswith(magic) for magic in _KIND_MAGIC.get(kind, ()))

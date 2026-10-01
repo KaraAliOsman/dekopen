@@ -274,7 +274,12 @@ def test_direct_mutation_denied_for_non_manager_roles(real_rows, role, table):
 
     with authenticated_rls_context(real_rows.tokens["A"].claims):
         with connection.cursor() as cursor:
-            cursor.execute(f"UPDATE public.{table} SET id=id WHERE id=%s", [row_id])
+            # CAT-01: members hold only column-scoped write grants. Probe a
+            # writable column so the policy layer does the denying (non-managers
+            # silently affect zero rows); DELETE is likewise policy-filtered.
+            writable = "glass_thickness_mm" if table == "glazing_bead_matrix" else "name"
+            cursor.execute(
+                f"UPDATE public.{table} SET {writable}={writable} WHERE id=%s", [row_id])
             assert cursor.rowcount == 0
             cursor.execute(f"DELETE FROM public.{table} WHERE id=%s", [row_id])
             assert cursor.rowcount == 0
@@ -293,7 +298,11 @@ def test_manager_cannot_mutate_global_rows_directly(real_rows, table):
     set_role(real_rows, "WORKSHOP_MANAGER")
     with authenticated_rls_context(real_rows.tokens["A"].claims):
         with connection.cursor() as cursor:
-            cursor.execute(f"UPDATE public.{table} SET id=id WHERE org_id IS NULL")
+            # Writable-column probe: the policy, not the privilege layer, keeps
+            # global rows out of a manager's reach (CAT-01).
+            writable = "glass_thickness_mm" if table == "glazing_bead_matrix" else "name"
+            cursor.execute(
+                f"UPDATE public.{table} SET {writable}={writable} WHERE org_id IS NULL")
             assert cursor.rowcount == 0
             cursor.execute(f"DELETE FROM public.{table} WHERE org_id IS NULL")
             assert cursor.rowcount == 0

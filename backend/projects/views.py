@@ -24,6 +24,7 @@ from projects import (
     design_alternatives,
     design_assist,
     invoices,
+    org_branding,
     payment_links,
     payments,
     receipts,
@@ -36,6 +37,8 @@ from projects.serializers import (
     ClientResponseSerializer,
     ClientUpdateSerializer,
     ClientWriteSerializer,
+    OrgBrandingSerializer,
+    OrgBrandingWriteSerializer,
     PaymentIntegrationSerializer,
     PaymentIntegrationStatusSerializer,
     PaymentLinkCreateSerializer,
@@ -265,15 +268,19 @@ class PositionDesignAssistView(APIView):
         data = validate(DesignAssistRequestSerializer, request.data)
         with scope(request, WRITE_ROLES) as (token, _, org):
             try:
+                position = service.position_row(org, position_id)
+                # Ops validate against the position's own catalog authority —
+                # the client's system_id is only the fallback for a position
+                # that doesn't declare one yet (review AI-11).
                 return response(
                     design_assist.assist(
                         org_id=org,
                         user_id=token.user_id,
-                        position=service.position_row(org, position_id),
+                        position=position,
                         product=data["product"],
                         prompt=str(data["prompt"]),
                         operation_key=str(data["operation_key"]),
-                        system_id=data["system_id"],
+                        system_id=position.get("system_id") or data["system_id"],
                     )
                 )
             except ProviderError as error:
@@ -423,6 +430,11 @@ class ProjectPaymentLinkRecoverView(APIView):
                 ) from None
 
 
+# Provider credentials (API key / webhook secret) are owner-level data —
+# estimators operate the ledger, not the payment plumbing.
+_OWNER_ONLY = ("OWNER",)
+
+
 class ProjectPaymentIntegrationView(APIView):
     parser_classes = [DecimalJSONParser]
 
@@ -432,7 +444,7 @@ class ProjectPaymentIntegrationView(APIView):
         **SCHEMA,
     )
     def get(self, request):
-        with scope(request, WRITE_ROLES) as (_, _, org):
+        with scope(request, _OWNER_ONLY) as (_, _, org):
             return response(payment_links.get_integration(org_id=org))
 
     @extend_schema(
@@ -443,7 +455,7 @@ class ProjectPaymentIntegrationView(APIView):
     )
     def put(self, request):
         data = validate(PaymentIntegrationSerializer, request.data)
-        with scope(request, WRITE_ROLES) as (_, _, org):
+        with scope(request, _OWNER_ONLY) as (_, _, org):
             return response(payment_links.save_integration(org_id=org, data=data))
 
 
@@ -475,6 +487,69 @@ class FlowPaymentConfirmView(APIView):
                 "El cobro requiere confirmación del proveedor.",
             ) from None
         return response({"received": True})
+
+
+class OrganizationBrandingView(APIView):
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="organization_branding_get",
+        responses={200: OrgBrandingSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def get(self, request):
+        with scope(request, READ_ROLES) as (_, _, org):
+            return response(org_branding.get_branding(org_id=org))
+
+    @extend_schema(
+        operation_id="organization_branding_save",
+        request=OrgBrandingWriteSerializer,
+        responses={200: OrgBrandingSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def put(self, request):
+        data = validate(OrgBrandingWriteSerializer, request.data)
+        with scope(request, WRITE_ROLES) as (_, _, org):
+            return response(org_branding.save_branding(org_id=org, data=data))
+
+
+class OrganizationBrandingLogoView(APIView):
+    @extend_schema(
+        operation_id="organization_branding_logo_upload",
+        request={"multipart/form-data": {"type": "object", "properties": {"file": {"type": "string", "format": "binary"}}}},
+        responses={200: OrgBrandingSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def put(self, request):
+        file_obj = request.FILES.get("file") if hasattr(request, "FILES") else None
+        if file_obj is None:
+            raise contract_error(400, "brand_logo_missing", "Adjunta un archivo PNG, JPEG o WebP.")
+        content = file_obj.read()
+        with scope(request, WRITE_ROLES) as (_, _, org):
+            return response(org_branding.save_logo(org_id=org, content=content))
+
+    @extend_schema(
+        operation_id="organization_branding_logo_read",
+        responses={200: {"type": "string", "format": "binary"}, **ERRORS},
+        **SCHEMA,
+    )
+    def get(self, request):
+        with scope(request, READ_ROLES) as (_, _, org):
+            content, content_type = org_branding.logo_bytes(org_id=org)
+        return Response(
+            content,
+            content_type=content_type,
+            headers={"Cache-Control": "private, max-age=300"},
+        )
+
+    @extend_schema(
+        operation_id="organization_branding_logo_delete",
+        responses={200: OrgBrandingSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def delete(self, request):
+        with scope(request, WRITE_ROLES) as (_, _, org):
+            return response(org_branding.clear_logo(org_id=org))
 
 
 class ProjectPaymentView(APIView):
@@ -574,6 +649,7 @@ class ProjectCreditNotesView(APIView):
                     invoice_id=invoice_id,
                     actor_id=token.user_id,
                     reason=data.get("reason"),
+                    amount=data.get("amount"),
                 ),
                 status=201,
             )
@@ -654,6 +730,7 @@ class ProjectCreditNoteDteView(APIView):
                     invoice_id=invoice_id,
                     actor_id=token.user_id,
                     reason=data.get("reason"),
+                    amount=data.get("amount"),
                 ),
                 status=201,
             )
@@ -670,6 +747,45 @@ class ProjectCreditNoteDteView(APIView):
                     org_id=org,
                     project_id=project_id,
                     invoice_id=invoice_id,
+                )
+            )
+
+
+class ProjectCreditNoteDteEnvioView(APIView):
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="project_credit_note_dte_envio_send",
+        request=SiiEnvioSendSerializer,
+        responses={201: SiiEnvioSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def post(self, request, project_id, credit_note_id):
+        data = validate(SiiEnvioSendSerializer, request.data)
+        with scope(request, ("OWNER", "WORKSHOP_MANAGER")) as (token, _, org):
+            return response(
+                sii_envio.send_credit_note_envio(
+                    org_id=org,
+                    project_id=project_id,
+                    credit_note_id=credit_note_id,
+                    actor_id=token.user_id,
+                    resubmit=bool(data.get("resubmit")),
+                ),
+                status=201,
+            )
+
+    @extend_schema(
+        operation_id="project_credit_note_dte_envio_access",
+        responses={200: SiiEnvioAccessSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def get(self, request, project_id, credit_note_id):
+        with scope(request, READ_ROLES) as (_, _, org):
+            return response(
+                sii_envio.credit_note_envio_access(
+                    org_id=org,
+                    project_id=project_id,
+                    credit_note_id=credit_note_id,
                 )
             )
 

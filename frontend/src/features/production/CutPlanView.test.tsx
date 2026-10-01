@@ -150,10 +150,10 @@ describe("CutPlanView", () => {
     expect(aside.textContent).toContain("M-60 · B1-1");
     expect(aside.textContent).toContain("Marco");
     expect(aside.textContent).toContain("2000 mm");
-    // member key = [position,bay,leaf,role] — M-01 and M-02 share it;
-    // V-01's role is empty so it's a different member.
+    // member key = interchangeable spec (location+role+sku+measure+angles)
+    // — M-01 (2000 mm) and M-02 (3035 mm) are different physical pieces.
     const members = container.querySelectorAll(".is-member");
-    expect(members.length).toBe(2);
+    expect(members.length).toBe(1);
     expect(first.classList.contains("is-selected")).toBe(true);
   });
 

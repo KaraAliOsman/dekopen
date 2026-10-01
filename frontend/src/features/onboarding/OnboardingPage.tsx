@@ -382,6 +382,7 @@ export function OnboardingPage(): JSX.Element {
                     key={system.id}
                     type="button"
                     role="listitem"
+                    aria-pressed={systemId === system.id}
                     className={`onboarding-system${systemId === system.id ? " is-picked" : ""}`}
                     // A non-quotable system cannot produce the first quote —
                     // offer it for context only; the catalog flow fixes its
@@ -393,6 +394,9 @@ export function OnboardingPage(): JSX.Element {
                     <span className="onboarding-system__meta">
                       <strong>{system.name}</strong>
                       <span className="org-option__sub">{system.code}</span>
+                      {!system.readiness.quote_ready && system.readiness.reasons[0] ? (
+                        <span className="org-option__sub">{system.readiness.reasons[0]}</span>
+                      ) : null}
                     </span>
                     {system.is_demo ? (
                       <StatusBadge
@@ -424,6 +428,7 @@ export function OnboardingPage(): JSX.Element {
             <div className="onboarding-choice">
               <button
                 type="button"
+                aria-pressed={dataChoice === "demo"}
                 className={`onboarding-choice__card${dataChoice === "demo" ? " is-picked" : ""}`}
                 onClick={() => setDataChoice("demo")}
               >
@@ -433,6 +438,7 @@ export function OnboardingPage(): JSX.Element {
               </button>
               <button
                 type="button"
+                aria-pressed={dataChoice === "real"}
                 className={`onboarding-choice__card${dataChoice === "real" ? " is-picked" : ""}`}
                 onClick={() => setDataChoice("real")}
               >
@@ -648,7 +654,7 @@ export function OnboardingPage(): JSX.Element {
             <button
               type="button"
               className="ui-button ui-button--primary"
-              onClick={() => finish("/dashboard")}
+              onClick={() => finish(projectId ? `/projects/${projectId}` : "/dashboard")}
             >
               {t("onboarding.finish")}
             </button>

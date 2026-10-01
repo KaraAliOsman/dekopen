@@ -4,6 +4,7 @@ import { Navigate } from "react-router-dom";
 import { t } from "../i18n/es-CL";
 import { telemetry } from "../telemetry/telemetry";
 import { useAuthSession } from "./AuthSessionProvider";
+import { consumeReturnTo } from "./returnTo";
 import { supabase } from "./supabaseClient";
 
 type FactorState = {
@@ -45,7 +46,7 @@ export function MfaPage(): JSX.Element {
     };
   }, []);
 
-  if (auth.status === "ready") return <Navigate to="/dashboard" replace />;
+  if (auth.status === "ready") return <Navigate to={consumeReturnTo()} replace />;
 
   async function enroll(): Promise<void> {
     if (supabase === null) return;
@@ -113,6 +114,7 @@ export function MfaPage(): JSX.Element {
         <header className="auth-card__header">
           <p className="eyebrow">{t("auth.mfaEyebrow")}</p>
           <h1>{t("auth.mfaTitle")}</h1>
+          <p className="auth-hint">{t("auth.mfaWhy")}</p>
         </header>
         {factor === null ? (
           <button
@@ -126,7 +128,10 @@ export function MfaPage(): JSX.Element {
         ) : (
           <>
             {factor.qrCode ? (
-              <img className="auth-qr" src={factor.qrCode} alt={t("auth.mfaQr")} />
+              <>
+                <img className="auth-qr" src={factor.qrCode} alt={t("auth.mfaQr")} />
+                <p className="auth-hint">{t("auth.mfaHow")}</p>
+              </>
             ) : null}
             {factor.secret ? (
               <p className="auth-hint">

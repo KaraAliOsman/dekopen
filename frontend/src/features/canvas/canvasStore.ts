@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { AnnotationRequest, InspectorDiff } from "../../api/generated/models";
-import { intentBays, type IntentNode } from "./intentEditing";
+import type { SpecClipboard } from "../commands/types";
+import { intentBays, walkIntent, type IntentNode } from "./intentEditing";
 import type { ProductJson } from "./productEditing";
 
 export type DimensionAxis = "width" | "height";
@@ -17,7 +18,9 @@ export type CanvasDesignInputs = {
   systemId: string | null;
   nominalWidthMm: string;
   nominalHeightMm: string;
-  color: "WHITE" | "FOILED";
+  /** Finish code — the series' declared finishes drive the picker; a stored
+   * finish the catalog stopped offering still displays but can't save. */
+  color: string;
   parametricTree: IntentNode;
   /** Compositional product (product-v2). null = classic single unit. */
   product: ProductJson | null;
@@ -59,6 +62,20 @@ type CanvasState = {
   redo(): void;
   viewport: ViewportState;
   snapEnabled: boolean;
+  /** Spec clipboard for copiar/aplicar especificación (§04-G). */
+  specClipboard: SpecClipboard | null;
+  /** Recently used glass skus (most recent first, max 3) — quick chips in
+   * the bay inspector for people designing dozens of windows. */
+  recentGlass: string[];
+  /** Pinned glass skus — a user preference persisted to localStorage, never
+   * part of the product model. */
+  favoriteGlass: string[];
+  /** Last mutating command run through the registry — powers edit.repeat. */
+  lastMutation: { specId: string; args: Record<string, string> } | null;
+  setSpecClipboard(clipboard: SpecClipboard | null): void;
+  pushRecentGlass(sku: string): void;
+  toggleFavoriteGlass(sku: string): void;
+  recordMutation(specId: string, args: Record<string, string>): void;
   setSystemId(systemId: string): void;
   setDraftDimension(draft: DraftDimension): void;
   acceptDimension(axis: DimensionAxis, value: string): void;
@@ -92,6 +109,28 @@ const INITIAL_VIEWPORT: ViewportState = {
   offsetY: 0,
 };
 
+const FAVORITE_GLASS_KEY = "dekopen:favorite-glass";
+
+function loadFavoriteGlass(): string[] {
+  try {
+    const raw = localStorage.getItem(FAVORITE_GLASS_KEY);
+    const parsed: unknown = raw === null ? [] : JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === "string").slice(0, 8)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistFavoriteGlass(favorites: string[]): void {
+  try {
+    localStorage.setItem(FAVORITE_GLASS_KEY, JSON.stringify(favorites));
+  } catch {
+    // Storage unavailable — favorites stay in memory for this session.
+  }
+}
+
 function selectionResolves(inputs: CanvasDesignInputs, id: string): boolean {
   const product = inputs.product;
   // Bay selections carry a composite `moduleId/bayId` — the tree only knows
@@ -102,10 +141,12 @@ function selectionResolves(inputs: CanvasDesignInputs, id: string): boolean {
   if (product !== null) {
     if (product.assembly.modules.some((m) => m.id === id)) return true;
     if (product.assembly.couplings.some((c) => c.id === id)) return true;
+    // Composite "moduleId/nodeId" selects any tree node — a bay OR a split
+    // (mullion/transom are selectable objects, not only leaf bays).
     return product.assembly.modules.some(
       (m) =>
         (moduleId === "" || m.id === moduleId) &&
-        intentBays(m.tree).some((bay) => bay.id === bayId),
+        walkIntent(m.tree).some((node) => node.id === bayId),
     );
   }
   return moduleId === "" && intentBays(inputs.parametricTree).some((bay) => bay.id === id);
@@ -231,6 +272,30 @@ export const useCanvasStore = create<CanvasState>((set) => ({
   },
   viewport: INITIAL_VIEWPORT,
   snapEnabled: true,
+  specClipboard: null,
+  recentGlass: [],
+  favoriteGlass: loadFavoriteGlass(),
+  lastMutation: null,
+  setSpecClipboard(specClipboard) {
+    set({ specClipboard });
+  },
+  pushRecentGlass(sku) {
+    set((state) => ({
+      recentGlass: [sku, ...state.recentGlass.filter((item) => item !== sku)].slice(0, 3),
+    }));
+  },
+  toggleFavoriteGlass(sku) {
+    set((state) => {
+      const favoriteGlass = state.favoriteGlass.includes(sku)
+        ? state.favoriteGlass.filter((item) => item !== sku)
+        : [...state.favoriteGlass, sku].slice(-8);
+      persistFavoriteGlass(favoriteGlass);
+      return { favoriteGlass };
+    });
+  },
+  recordMutation(specId, args) {
+    set({ lastMutation: { specId, args } });
+  },
   setSystemId(systemId) {
     set((state) => ({ inputs: { ...state.inputs, systemId } }));
   },
@@ -263,6 +328,9 @@ export const useCanvasStore = create<CanvasState>((set) => ({
       selection: "g1",
       viewport: INITIAL_VIEWPORT,
       snapEnabled: true,
+      specClipboard: null,
+      recentGlass: [],
+      lastMutation: null,
       past: [],
       future: [],
     });

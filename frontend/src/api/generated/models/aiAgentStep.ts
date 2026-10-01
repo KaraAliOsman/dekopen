@@ -5,12 +5,15 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { AiAgentStepItemsItem } from "./aiAgentStepItemsItem";
 import type { AiAgentStepOpsItem } from "./aiAgentStepOpsItem";
 
 export interface AiAgentStep {
   kind: string;
+  tool?: string;
   label: string;
   path?: string;
   action?: string;
   ops?: AiAgentStepOpsItem[];
+  items?: AiAgentStepItemsItem[];
 }

@@ -3,11 +3,17 @@ import { useEffect, useRef, useState } from "react";
 import { ApiError } from "../../api/apiMutator";
 import { engineCalculate, engineInspect, engineOptimizeCut } from "../../api/generated/dekopen";
 import type { AnnotationRequest, InspectorDiff } from "../../api/generated/models";
+import { fmtMm } from "../../format";
 import { t } from "../../i18n/es-CL";
 import { type CanvasDesignInputs, useCanvasStore } from "../canvas/canvasStore";
 import { calculationKey, requestFromInputs } from "../canvas/useEngineCalculation";
 import { previewDrainDraft, workshopReadiness } from "./inspectorDraft";
 import "./inspector.css";
+
+function fmtValues(value: string[] | undefined): string {
+  const items = Array.isArray(value) ? value : [];
+  return items.length ? `${items.join(", ")} mm` : "—";
+}
 
 function humanError(error: unknown): string {
   if (error instanceof ApiError && typeof error.payload === "object" && error.payload !== null) {
@@ -161,7 +167,9 @@ export function InspectorModal({
         leaf_id: null,
         bottom_drain_holes_mm: positions,
         continuous_width_mm: continuous.trim() || null,
-        finish_class: "WHITE",
+        // Machining finish class follows the design's declared finish —
+        // the workshop annotation domain is WHITE|FOILED (non-white ⇒ foil).
+        finish_class: inputs.color === "WHITE" ? "WHITE" : "FOILED",
         has_coupler: coupler === "" ? null : coupler === "yes",
       },
     ]);
@@ -283,10 +291,10 @@ export function InspectorModal({
           {preview && (
             <aside className="inspector-diff" aria-label={t("inspector.preview")}>
               <p>
-                {t("inspector.before")}: {preview.operations[0]?.old_value.join(", ")} mm
+                {t("inspector.before")}: {fmtValues(preview.operations[0]?.old_value)}
               </p>
               <p>
-                {t("inspector.after")}: {preview.operations[0]?.new_value.join(", ")} mm
+                {t("inspector.after")}: {fmtValues(preview.operations[0]?.new_value)}
               </p>
               <button
                 type="button"
@@ -310,7 +318,7 @@ export function InspectorModal({
             {cutting.data?.purchase_list.map((line, i) => (
               <li key={i}>
                 <strong>{line.commercial_sku}</strong> · {line.qty_bars} {t("inspector.bars")} ·{" "}
-                {line.stock_length_mm} mm · {line.material} · {line.color}
+                {fmtMm(line.stock_length_mm)} mm · {line.material} · {line.color}
               </li>
             ))}
           </ul>
@@ -318,17 +326,17 @@ export function InspectorModal({
           {cutting.data?.workshop_cut_plan.map((bar) => (
             <article key={bar.bar_index}>
               <h4>
-                {t("inspector.bar")} {bar.bar_index} · {bar.stock_length_mm} mm
+                {t("inspector.bar")} {bar.bar_index} · {fmtMm(bar.stock_length_mm)} mm
               </h4>
               <p>
-                {t("inspector.kerf")}: {bar.kerf_total_mm} mm · {t("inspector.trims")}:{" "}
-                {bar.head_trim_mm} / {bar.tail_trim_mm} mm · {t("inspector.remainder")}:{" "}
-                {bar.remainder_mm} mm
+                {t("inspector.kerf")}: {fmtMm(bar.kerf_total_mm)} mm · {t("inspector.trims")}:{" "}
+                {fmtMm(bar.head_trim_mm)} / {fmtMm(bar.tail_trim_mm)} mm ·{" "}
+                {t("inspector.remainder")}: {fmtMm(bar.remainder_mm)} mm
               </p>
               <ol>
                 {bar.cuts.map((cut) => (
                   <li key={cut.sequence}>
-                    <strong>{cut.workshop_sku}</strong> · {cut.length_mm} mm
+                    <strong>{cut.workshop_sku}</strong> · {fmtMm(cut.length_mm)} mm
                   </li>
                 ))}
               </ol>

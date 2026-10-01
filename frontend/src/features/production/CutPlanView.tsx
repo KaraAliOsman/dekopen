@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 
+import type { OptimizeStrategyStats } from "../../api/generated/models";
 import { cutRoleLabel } from "./labels";
-import { t } from "../../i18n/es-CL";
+import { fmtMm, fmtPct } from "../../format";
+import { t, tOptional } from "../../i18n/es-CL";
 
 // Full engine payload contract (backend/production/service.py →
 // dekopen_engine.cutting + nesting, model_dump(mode="json") — every
@@ -79,6 +81,9 @@ export type UnnestedPiece = {
   width_mm: string;
   height_mm: string;
   quantity: number;
+  bay_id?: string | null;
+  leaf_id?: string | null;
+  reason?: string;
 };
 export type OptimizationMetrics = {
   bars?: number;
@@ -108,7 +113,7 @@ export type StockReservation = {
 };
 
 export type RemnantLedger = {
-  consumed?: { id: string; kind: string }[];
+  consumed?: { id: string; kind: string; rack_location?: string | null }[];
   produced_bars?: { stock_authority_id: string; remainder_mm: string }[];
   produced_sheets?: { workshop_sku: string; width_mm: string; height_mm: string }[];
 };
@@ -119,6 +124,8 @@ export type WorkOrderOptimization = {
   optimized_at?: string;
   actor_id?: string;
   strategy?: string;
+  /** The strategy that physically produced this plan (auto → its `chosen`). */
+  applied_strategy?: string;
   bars?: {
     workshop_cut_plan?: CutBar[];
     purchase_list?: PurchaseLine[];
@@ -133,12 +140,17 @@ export type WorkOrderOptimization = {
   remnants?: RemnantLedger;
   stock_reservations?: StockReservation[];
   unmapped_stock_skus?: string[];
+  invalidated?: boolean;
+  invalidated_by?: string;
+  stats?: OptimizeStrategyStats;
 };
 
 type PieceRef = {
   kind: "cut" | "nest";
   key: string;
   code: string;
+  /** Printed workshop code (M-xx/R-xx/I-xx) when the sealed labels resolve. */
+  shopCode?: string;
   piece: CutPlacement | NestPlacement;
 };
 
@@ -147,13 +159,26 @@ function num(value: string | number | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-/** Same member = same source opening + sash/pane + role — cross-highlights
- * every cut/nest belonging to one physical fenestration member. */
+/** Interchangeable piece spec — the same join the printed packs use to list
+ * shared piece codes: location (position/bay/leaf) + role + sku + measure +
+ * angles. Two different frame members of one bay only group when they are
+ * literally the same cut spec. */
 function memberKey(piece: CutPlacement | NestPlacement): string {
-  const role = (piece as CutPlacement).role ?? "";
-  return [piece.source_position_id ?? "-", piece.bay_id ?? "-", piece.leaf_id ?? "-", role].join(
-    "|",
-  );
+  const cut = piece as CutPlacement;
+  const nest = piece as NestPlacement;
+  const measure =
+    cut.length_mm != null
+      ? `L${cut.length_mm}|${cut.angle_left ?? ""}|${cut.angle_right ?? ""}`
+      : `N${nest.width_mm ?? ""}x${nest.height_mm ?? ""}`;
+  return [
+    piece.source_position_id ?? "-",
+    piece.bay_id ?? "-",
+    piece.leaf_id ?? "-",
+    cut.role ?? "",
+    cut.source_kind ?? "",
+    piece.workshop_sku ?? "",
+    measure,
+  ].join("|");
 }
 
 function materialClass(material: string | undefined, kind?: string): string {
@@ -171,11 +196,13 @@ function CutPlanBarSvg({
   bar,
   selectedMember,
   selectedKey,
+  pieceCodes,
   onSelect,
 }: {
   bar: CutBar;
   selectedMember: string | null;
   selectedKey: string | null;
+  pieceCodes: Record<string, string>;
   onSelect: (ref: PieceRef) => void;
 }) {
   const stock = num(bar.stock_length_mm) || 1;
@@ -183,7 +210,11 @@ function CutPlanBarSvg({
   const tail = num(bar.tail_trim_mm);
   const kerf = num(bar.kerf_mm);
   const scaled = (mm: number) => (mm / stock) * 1000;
-  const barH = 56;
+  // The strip is the thing a saw operator reads — it has to stay legible at
+  // arm's length, so the band itself carries most of the height and the
+  // labels stay large inside it (narrow pieces keep their identity in the
+  // legend below, mirroring the printed pack's leader list).
+  const barH = 96;
   let cursor = head;
   const pieces = bar.cuts.map((cut, index) => {
     const x = cursor;
@@ -191,6 +222,7 @@ function CutPlanBarSvg({
     cursor += w + kerf;
     const key = `b${bar.bar_index}-c${index}`;
     const code = `B${bar.bar_index}-${cut.sequence ?? index + 1}`;
+    const shopCode = pieceCodes[cut.piece_id];
     const keyOfPiece = memberKey(cut);
     const selected = selectedKey === key;
     const memberHit = selectedMember !== null && keyOfPiece === selectedMember;
@@ -205,42 +237,40 @@ function CutPlanBarSvg({
         className={`cutplan-cut ${materialClass(cut.material, cut.source_kind)}${
           memberHit ? " is-member" : ""
         }${selected ? " is-selected" : ""}`}
-        onClick={() => onSelect({ kind: "cut", key, code, piece: cut })}
+        onClick={() => onSelect({ kind: "cut", key, code, shopCode, piece: cut })}
         role="button"
         tabIndex={0}
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
-            onSelect({ kind: "cut", key, code, piece: cut });
+            onSelect({ kind: "cut", key, code, shopCode, piece: cut });
           }
         }}
       >
-        <rect x={xSc} y={8} width={Math.max(wSc, 1)} height={barH - 16} rx={2} />
-        {wSc > 52 ? (
-          <text x={mid} y={30} textAnchor="middle" className="cutplan-cut-id">
-            {pieceLabel(cut, code)}
+        <rect x={xSc} y={10} width={Math.max(wSc, 1)} height={barH - 20} rx={2} />
+        {wSc > 60 ? (
+          <text x={mid} y={42} textAnchor="middle" className="cutplan-cut-id">
+            {shopCode ?? pieceLabel(cut, code)}
           </text>
         ) : null}
-        {wSc > 40 ? (
-          <text x={mid} y={46} textAnchor="middle" className="cutplan-cut-len">
-            {cut.length_mm}
+        {wSc > 44 ? (
+          <text x={mid} y={68} textAnchor="middle" className="cutplan-cut-len">
+            {fmtMm(cut.length_mm)}
           </text>
         ) : null}
         {angleL ? (
-          <text x={xSc + 4} y={30} className="cutplan-miter-mark" aria-hidden>
-            ◧
-          </text>
+          <polygon
+            className="cutplan-miter-notch"
+            points={`${xSc + 2},10 ${xSc + 16},10 ${xSc + 2},30`}
+            aria-hidden
+          />
         ) : null}
         {angleR ? (
-          <text
-            x={xSc + wSc - 4}
-            y={30}
-            textAnchor="end"
-            className="cutplan-miter-mark"
+          <polygon
+            className="cutplan-miter-notch"
+            points={`${xSc + wSc - 2},10 ${xSc + wSc - 16},10 ${xSc + wSc - 2},30`}
             aria-hidden
-          >
-            ◨
-          </text>
+          />
         ) : null}
       </g>
     );
@@ -251,50 +281,79 @@ function CutPlanBarSvg({
   const usedEnd = cursor;
   const remainder = Math.max(stock - tail - usedEnd, 0);
   return (
-    <svg
-      className="cutplan-bar"
-      viewBox={`0 0 1000 ${barH}`}
-      role="group"
-      aria-label={`${t("production.optimizeBar")} #${bar.bar_index}`}
-    >
-      <rect
-        className="cutplan-frame"
-        x={0}
-        y={8}
-        width={1000}
-        height={barH - 16}
-        rx={2}
-        pointerEvents="none"
-      />
-      {head > 0 ? (
+    <div className="cutplan-barwrap">
+      <svg
+        className="cutplan-bar"
+        viewBox={`0 0 1000 ${barH}`}
+        role="group"
+        aria-label={`${t("production.optimizeBar")} #${bar.bar_index}`}
+      >
         <rect
-          className="cutplan-trim"
+          className="cutplan-frame"
           x={0}
-          y={8}
-          width={Math.max(scaled(head), 1.5)}
-          height={barH - 16}
+          y={10}
+          width={1000}
+          height={barH - 20}
+          rx={2}
+          pointerEvents="none"
         />
-      ) : null}
-      {pieces}
-      {remainder > 0 ? (
-        <rect
-          className="cutplan-remainder"
-          x={scaled(usedEnd)}
-          y={8}
-          width={Math.max(scaled(remainder), 1)}
-          height={barH - 16}
-        />
-      ) : null}
-      {tail > 0 ? (
-        <rect
-          className="cutplan-trim"
-          x={scaled(stock - tail)}
-          y={8}
-          width={Math.max(scaled(tail), 1.5)}
-          height={barH - 16}
-        />
-      ) : null}
-    </svg>
+        {head > 0 ? (
+          <rect
+            className="cutplan-trim"
+            x={0}
+            y={10}
+            width={Math.max(scaled(head), 1.5)}
+            height={barH - 20}
+          />
+        ) : null}
+        {pieces}
+        {remainder > 0 ? (
+          <rect
+            className="cutplan-remainder"
+            x={scaled(usedEnd)}
+            y={10}
+            width={Math.max(scaled(remainder), 1)}
+            height={barH - 20}
+          />
+        ) : null}
+        {tail > 0 ? (
+          <rect
+            className="cutplan-trim"
+            x={scaled(stock - tail)}
+            y={10}
+            width={Math.max(scaled(tail), 1.5)}
+            height={barH - 20}
+          />
+        ) : null}
+      </svg>
+      {/* Every piece keeps an identity even when it's too narrow to label in
+        the bar — the legend mirrors the printed pack's leader list and
+        shares the same selection. */}
+      <ol className="cutplan-piece-legend">
+        {bar.cuts.map((cut, index) => {
+          const key = `b${bar.bar_index}-c${index}`;
+          const code = `B${bar.bar_index}-${cut.sequence ?? index + 1}`;
+          const shopCode = pieceCodes[cut.piece_id];
+          const angleL =
+            cut.angle_left != null && num(cut.angle_left) !== 90 ? num(cut.angle_left) : null;
+          const angleR =
+            cut.angle_right != null && num(cut.angle_right) !== 90 ? num(cut.angle_right) : null;
+          return (
+            <li key={key}>
+              <button
+                type="button"
+                className={selectedKey === key ? "is-selected" : ""}
+                onClick={() => onSelect({ kind: "cut", key, code, shopCode, piece: cut })}
+              >
+                {cut.sequence ?? index + 1} · {shopCode ?? pieceLabel(cut, code)} ·{" "}
+                {fmtMm(cut.length_mm)}mm
+                {angleL !== null || angleR !== null ? ` · ${angleL ?? 90}°/${angleR ?? 90}°` : ""}
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
   );
 }
 
@@ -302,11 +361,13 @@ function CutPlanSheetSvg({
   layout,
   selectedMember,
   selectedKey,
+  pieceCodes,
   onSelect,
 }: {
   layout: SheetLayout;
   selectedMember: string | null;
   selectedKey: string | null;
+  pieceCodes: Record<string, string>;
   onSelect: (ref: PieceRef) => void;
 }) {
   const w = num(layout.sheet_width_mm) || 1;
@@ -314,49 +375,72 @@ function CutPlanSheetSvg({
   const vw = 320;
   const vh = Math.max(Math.round((h / w) * vw), 60);
   return (
-    <svg
-      className="cutplan-sheet"
-      viewBox={`0 0 ${vw} ${vh}`}
-      role="group"
-      aria-label={`${t("production.optimizeSheet")} #${layout.sheet_index}`}
-    >
-      <rect className="cutplan-sheet-frame" x={0} y={0} width={vw} height={vh} rx={2} />
-      {layout.placements.map((piece, index) => {
-        const key = `s${layout.sheet_index}-p${index}`;
-        const code = `S${layout.sheet_index}-${piece.sequence ?? index + 1}`;
-        const memberHit = selectedMember !== null && memberKey(piece) === selectedMember;
-        const selected = selectedKey === key;
-        const px = (num(piece.x_mm) / w) * vw;
-        const py = (num(piece.y_mm) / h) * vh;
-        const pw = Math.max((num(piece.width_mm) / w) * vw, 1);
-        const ph = Math.max((num(piece.height_mm) / h) * vh, 1);
-        return (
-          <g
-            key={key}
-            className={`cutplan-nest${memberHit ? " is-member" : ""}${
-              selected ? " is-selected" : ""
-            }`}
-            onClick={() => onSelect({ kind: "nest", key, code, piece })}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                onSelect({ kind: "nest", key, code, piece });
-              }
-            }}
-          >
-            <rect x={px} y={py} width={pw} height={ph} rx={1} />
-            {pw > 30 && ph > 12 ? (
-              <text x={px + pw / 2} y={py + ph / 2} textAnchor="middle" dominantBaseline="middle">
-                {pieceLabel(piece, code)}
-                {piece.rotated ? " ⟳" : ""}
-              </text>
-            ) : null}
-          </g>
-        );
-      })}
-    </svg>
+    <div className="cutplan-sheetwrap">
+      <svg
+        className="cutplan-sheet"
+        viewBox={`0 0 ${vw} ${vh}`}
+        role="group"
+        aria-label={`${t("production.optimizeSheet")} #${layout.sheet_index}`}
+      >
+        <rect className="cutplan-sheet-frame" x={0} y={0} width={vw} height={vh} rx={2} />
+        {layout.placements.map((piece, index) => {
+          const key = `s${layout.sheet_index}-p${index}`;
+          const code = `S${layout.sheet_index}-${piece.sequence ?? index + 1}`;
+          const shopCode = pieceCodes[piece.piece_id];
+          const memberHit = selectedMember !== null && memberKey(piece) === selectedMember;
+          const selected = selectedKey === key;
+          const px = (num(piece.x_mm) / w) * vw;
+          const py = (num(piece.y_mm) / h) * vh;
+          const pw = Math.max((num(piece.width_mm) / w) * vw, 1);
+          const ph = Math.max((num(piece.height_mm) / h) * vh, 1);
+          return (
+            <g
+              key={key}
+              className={`cutplan-nest${memberHit ? " is-member" : ""}${
+                selected ? " is-selected" : ""
+              }`}
+              onClick={() => onSelect({ kind: "nest", key, code, shopCode, piece })}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onSelect({ kind: "nest", key, code, shopCode, piece });
+                }
+              }}
+            >
+              <rect x={px} y={py} width={pw} height={ph} rx={1} />
+              {pw > 30 && ph > 12 ? (
+                <text x={px + pw / 2} y={py + ph / 2} textAnchor="middle" dominantBaseline="middle">
+                  {shopCode ?? pieceLabel(piece, code)}
+                  {piece.rotated ? " ⟳" : ""}
+                </text>
+              ) : null}
+            </g>
+          );
+        })}
+      </svg>
+      <ol className="cutplan-piece-legend">
+        {layout.placements.map((piece, index) => {
+          const key = `s${layout.sheet_index}-p${index}`;
+          const code = `S${layout.sheet_index}-${piece.sequence ?? index + 1}`;
+          const shopCode = pieceCodes[piece.piece_id];
+          return (
+            <li key={key}>
+              <button
+                type="button"
+                className={selectedKey === key ? "is-selected" : ""}
+                onClick={() => onSelect({ kind: "nest", key, code, shopCode, piece })}
+              >
+                {piece.sequence ?? index + 1} · {shopCode ?? pieceLabel(piece, code)} ·{" "}
+                {fmtMm(piece.width_mm)}×{fmtMm(piece.height_mm)}
+                {piece.rotated ? ` ${t("production.optimizeRotated")}` : ""}
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
   );
 }
 
@@ -371,10 +455,21 @@ function pieceLabel(piece: CutPlacement | NestPlacement, code: string): string {
   return piece.workshop_sku ? `${piece.workshop_sku} · ${code}` : code;
 }
 
-export function CutPlanView({ optimization }: { optimization: WorkOrderOptimization }) {
+export function CutPlanView({
+  optimization,
+  labels = {},
+  pieceCodes = {},
+}: {
+  optimization: WorkOrderOptimization;
+  /** Shop codes matching the printed packs (V-xx/H-xx/P-xx) keyed by id. */
+  labels?: Record<string, string>;
+  /** Printed piece codes (M-xx/R-xx/I-xx) keyed by piece_id. */
+  pieceCodes?: Record<string, string>;
+}) {
   const [selected, setSelected] = useState<PieceRef | null>(null);
   const bars = optimization.bars?.workshop_cut_plan ?? [];
   const sheets = optimization.sheets ?? [];
+  const unnested = optimization.unnested ?? [];
   const selectedMember = selected ? memberKey(selected.piece) : null;
 
   const detail = useMemo(() => {
@@ -388,23 +483,26 @@ export function CutPlanView({ optimization }: { optimization: WorkOrderOptimizat
         ? `${cut.angle_left ?? "90"}° / ${cut.angle_right ?? "90"}°`
         : null;
     return {
-      id: pieceLabel(piece, selected.code),
+      id: selected.shopCode ?? pieceLabel(piece, selected.code),
+      planRef: selected.code,
       kind: selected.kind,
       sku: piece.workshop_sku ?? "—",
       material: cut.material ?? "—",
       color: cut.color ?? "—",
       role: cutRoleLabel(cut.role),
-      position: shortId(piece.source_position_id),
-      bay: shortId(piece.bay_id),
-      leaf: shortId(piece.leaf_id),
+      position:
+        (piece.source_position_id && labels[piece.source_position_id]) ??
+        shortId(piece.source_position_id),
+      bay: (piece.bay_id && labels[piece.bay_id]) ?? shortId(piece.bay_id),
+      leaf: (piece.leaf_id && labels[piece.leaf_id]) ?? shortId(piece.leaf_id),
       unit: piece.unit_index ?? 1,
       measure: isCut
-        ? `${cut.length_mm} mm`
-        : `${nest.width_mm}×${nest.height_mm} mm${nest.rotated ? ` (${t("production.optimizeRotated")})` : ""}`,
+        ? `${fmtMm(cut.length_mm)} mm`
+        : `${fmtMm(nest.width_mm)}×${fmtMm(nest.height_mm)} mm${nest.rotated ? ` (${t("production.optimizeRotated")})` : ""}`,
       angles,
       memberCount: 0,
     };
-  }, [selected]);
+  }, [selected, labels]);
 
   if (detail && selected) {
     // Count every placement sharing this member across bars + sheets.
@@ -431,13 +529,15 @@ export function CutPlanView({ optimization }: { optimization: WorkOrderOptimizat
               <strong>
                 {t("production.optimizeBar")} #{bar.bar_index}
               </strong>{" "}
-              {bar.commercial_sku} · {bar.stock_length_mm} mm · {t("production.cutplanYield")}{" "}
-              {bar.yield_pct}% · {t("production.cutplanRemainder")} {bar.remainder_mm} mm
+              {bar.commercial_sku} · {fmtMm(bar.stock_length_mm)} mm ·{" "}
+              {t("production.cutplanYield")} {fmtPct(bar.yield_pct)}% ·{" "}
+              {t("production.cutplanRemainder")} {fmtMm(bar.remainder_mm)} mm
             </figcaption>
             <CutPlanBarSvg
               bar={bar}
               selectedMember={selectedMember}
               selectedKey={selected?.key ?? null}
+              pieceCodes={pieceCodes}
               onSelect={setSelected}
             />
           </figure>
@@ -450,17 +550,47 @@ export function CutPlanView({ optimization }: { optimization: WorkOrderOptimizat
                   <strong>
                     {t("production.optimizeSheet")} #{layout.sheet_index}
                   </strong>{" "}
-                  {layout.purchasing_sku} · {layout.sheet_width_mm}×{layout.sheet_height_mm} mm ·{" "}
-                  {t("production.cutplanYield")} {layout.yield_pct}%
+                  {layout.purchasing_sku} · {fmtMm(layout.sheet_width_mm)}×
+                  {fmtMm(layout.sheet_height_mm)} mm · {t("production.cutplanYield")}{" "}
+                  {fmtPct(layout.yield_pct)}%
                 </figcaption>
                 <CutPlanSheetSvg
                   layout={layout}
                   selectedMember={selectedMember}
                   selectedKey={selected?.key ?? null}
+                  pieceCodes={pieceCodes}
                   onSelect={setSelected}
                 />
               </figure>
             ))}
+          </div>
+        ) : null}
+        {unnested.length ? (
+          <div className="cutplan-unnested">
+            <h4>{t("production.operatorUnnested")}</h4>
+            <table className="production-plan">
+              <thead>
+                <tr>
+                  <th>{t("production.cutplanPiece")}</th>
+                  <th>{t("production.optimizeSize")}</th>
+                  <th>{t("production.operatorUnnestedReason")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {unnested.map((pane, index) => (
+                  <tr key={index}>
+                    <td>
+                      {pane.group ?? "—"}
+                      {pane.quantity > 1 ? ` ×${pane.quantity}` : ""}
+                    </td>
+                    <td>
+                      {fmtMm(pane.width_mm)}×{fmtMm(pane.height_mm)} mm
+                    </td>
+                    <td>{tOptional(`production.unnestedReason.${pane.reason}`) ?? pane.reason}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         ) : null}
       </div>
@@ -469,7 +599,12 @@ export function CutPlanView({ optimization }: { optimization: WorkOrderOptimizat
           <dl>
             <div>
               <dt>{t("production.cutplanPiece")}</dt>
-              <dd>{detail.id}</dd>
+              <dd>
+                {detail.id}
+                {selected?.shopCode ? (
+                  <span className="cutplan-planref"> · {detail.planRef}</span>
+                ) : null}
+              </dd>
             </div>
             <div>
               <dt>{t("production.cutplanRole")}</dt>

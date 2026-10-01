@@ -38,7 +38,10 @@ enabled = true
 [auth]
 enabled = true
 site_url = "http://127.0.0.1:5173"
-additional_redirect_urls = ["http://127.0.0.1:5173/auth/callback"]
+additional_redirect_urls = [
+  "http://127.0.0.1:5173/auth/callback",
+  "http://localhost:5173/auth/callback",
+]
 jwt_expiry = 3600
 enable_signup = true
 

@@ -134,6 +134,7 @@ export function ConfirmProvider({ children }: PropsWithChildren): JSX.Element {
                 ) : null}
                 <input
                   autoFocus
+                  aria-label={request.input.label ?? request.input.placeholder ?? request.title}
                   className="ui-field__input"
                   onChange={(event) => setDraft(event.target.value)}
                   onKeyDown={(event) => {

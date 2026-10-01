@@ -23,6 +23,7 @@ from dekopen_engine import (
     RailType,
     SystemParams,
 )
+from dekopen_engine.manufacturing import HandleRequirementPolicyV1, handle_policy_from_json
 
 
 class SystemNotFound(LookupError):
@@ -86,6 +87,7 @@ def _article_from_row(row: Sequence[object], *, offset: int = 0) -> EffectivePro
         weight_kg_m=_decimal_or_none(row[offset + 5]),
         steel_weight_kg_m=_decimal_or_none(row[offset + 6]),
         reinforcement_sku=(str(row[offset + 7]) if row[offset + 7] is not None else None),
+        commercial_length_mm=_decimal_or_none(row[offset + 10]),
     )
 
 
@@ -135,7 +137,8 @@ class SystemParamsRepository:
                        door_threshold_mm, door_bottom_clearance_mm, rail_type,
                        sliding_glazing_deduction_width_mm,
                        sliding_glazing_deduction_height_mm, door_leaf_side_clearance_mm,
-                       rail_count, rebate_depth_mm, end_milling_overlap_mm
+                       rail_count, rebate_depth_mm, end_milling_overlap_mm,
+                       finishes::text
                 FROM public.profile_systems
                 WHERE id = %s AND is_active = TRUE
                   AND (is_global = TRUE OR org_id = %s)
@@ -177,6 +180,7 @@ class SystemParamsRepository:
             rail_count=None if system[18] is None else int(system[18]),
             rebate_depth_mm=_decimal_or_none(system[19]),
             end_milling_overlap_mm=_decimal_or_none(system[20]),
+            finishes=tuple(json.loads(system[21])) if system[21] else ("WHITE",),
             available_panel_rules=self._load_panel_rules(system_id, active_org_id),
             available_hardware_kits=kits,
         )
@@ -189,9 +193,10 @@ class SystemParamsRepository:
                 """
                 SELECT sku, role::text, face_width_mm, welding_loss_mm,
                        reinforcement_gap_mm, weight_kg_m, steel_weight_kg_m,
-                       reinforcement_sku, material::text, section::text
+                       reinforcement_sku, material::text, section::text,
+                       commercial_length_mm
                 FROM public.profile_articles
-                WHERE system_id = %s AND (org_id IS NULL OR org_id = %s)
+                WHERE system_id = %s AND (org_id = %s OR (org_id IS NULL AND system_id IN (SELECT id FROM public.profile_systems WHERE org_id IS NULL AND is_global)))
                 ORDER BY sku
                 """,
                 [system_id, active_org_id],
@@ -224,9 +229,10 @@ class SystemParamsRepository:
                 """
                 SELECT sku, role::text, face_width_mm, welding_loss_mm,
                        reinforcement_gap_mm, weight_kg_m, steel_weight_kg_m,
-                       reinforcement_sku, material::text, section::text
+                       reinforcement_sku, material::text, section::text,
+                       commercial_length_mm
                 FROM public.profile_articles
-                WHERE system_id = %s AND (org_id IS NULL OR org_id = %s)
+                WHERE system_id = %s AND (org_id = %s OR (org_id IS NULL AND system_id IN (SELECT id FROM public.profile_systems WHERE org_id IS NULL AND is_global)))
                   AND role = 'COUPLER'
                 ORDER BY sku
                 """,
@@ -247,7 +253,7 @@ class SystemParamsRepository:
                 """
                 SELECT sku, name
                 FROM public.profile_articles
-                WHERE system_id = %s AND (org_id IS NULL OR org_id = %s)
+                WHERE system_id = %s AND (org_id = %s OR (org_id IS NULL AND system_id IN (SELECT id FROM public.profile_systems WHERE org_id IS NULL AND is_global)))
                 ORDER BY sku
                 """,
                 [system_id, active_org_id],
@@ -268,14 +274,14 @@ class SystemParamsRepository:
                        article.welding_loss_mm, article.reinforcement_gap_mm,
                        article.weight_kg_m, article.steel_weight_kg_m,
                        article.reinforcement_sku, article.material::text,
-                       article.section::text
+                       article.section::text, article.commercial_length_mm
                 FROM public.glazing_bead_matrix AS matrix
                 JOIN public.profile_articles AS article
                   ON article.id = matrix.bead_article_id
                 WHERE matrix.system_id = %s AND matrix.is_active = TRUE
-                  AND (matrix.org_id IS NULL OR matrix.org_id = %s)
+                  AND (matrix.org_id = %s OR (matrix.org_id IS NULL AND matrix.system_id IN (SELECT id FROM public.profile_systems WHERE org_id IS NULL AND is_global)))
                   AND article.system_id = matrix.system_id
-                  AND (article.org_id IS NULL OR article.org_id = %s)
+                  AND (article.org_id = %s OR (article.org_id IS NULL AND article.system_id IN (SELECT id FROM public.profile_systems WHERE org_id IS NULL AND is_global)))
                 ORDER BY matrix.glass_thickness_mm
                 """,
                 [system_id, active_org_id, active_org_id],
@@ -293,6 +299,36 @@ class SystemParamsRepository:
             for row in rows
         }
 
+    def load_handle_policy(
+        self, system_id: UUID, active_org_id: UUID
+    ) -> HandleRequirementPolicyV1 | None:
+        """Latest declared handle-mounting authority for the system — the org
+        row wins over the global default, then the highest version. The design
+        surface reads it to place handles on the declared datum instead of
+        silently clamping inside the leaf."""
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT authority::text
+                FROM public.handle_requirement_policies
+                WHERE system_id = %s AND (org_id = %s OR org_id IS NULL)
+                ORDER BY org_id NULLS LAST, version DESC
+                LIMIT 1
+                """,
+                [system_id, active_org_id],
+            )
+            row = cursor.fetchone()
+        if row is None:
+            return None
+        if not isinstance(row[0], str):
+            raise UnsupportedCatalogContract("Handle policy must be raw JSON text")
+        try:
+            return handle_policy_from_json(
+                json.loads(row[0], parse_float=Decimal, parse_int=Decimal)
+            )
+        except (ValueError, TypeError) as error:
+            raise UnsupportedCatalogContract("invalid_handle_policy") from error
+
     def _load_hardware_kits(self, system_id: UUID, active_org_id: UUID) -> list[HardwareKitRule]:
         with connection.cursor() as cursor:
             cursor.execute(
@@ -303,7 +339,7 @@ class SystemParamsRepository:
                        stay_arms_qty, contents::text, weight_kg, carriage_capacity_kg
                 FROM public.hardware_kits
                 WHERE system_id = %s AND is_active = TRUE
-                  AND (org_id IS NULL OR org_id = %s)
+                  AND (org_id = %s OR (org_id IS NULL AND system_id IN (SELECT id FROM public.profile_systems WHERE org_id IS NULL AND is_global)))
                 ORDER BY sku
                 """,
                 [system_id, active_org_id],
@@ -336,7 +372,7 @@ class SystemParamsRepository:
                 SELECT sku, name, kind, thickness_mm, weight_kg_m2
                 FROM public.infill_articles
                 WHERE system_id = %s AND is_active = TRUE
-                  AND (org_id IS NULL OR org_id = %s)
+                  AND (org_id = %s OR (org_id IS NULL AND system_id IN (SELECT id FROM public.profile_systems WHERE org_id IS NULL AND is_global)))
                 ORDER BY sku
                 """,
                 [system_id, active_org_id],

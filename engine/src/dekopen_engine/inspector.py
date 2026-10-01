@@ -203,7 +203,7 @@ def inspect(data: InspectorInput, config: InspectorConfig) -> InspectorResult:
         annotation = annotations.get((opening.bay_id, None))
         holes = None if annotation is None else annotation.bottom_drain_holes_mm
         if holes is not None and any(p > opening.width_mm for p in holes):
-            raise ValueError("Drain is outside its opening")
+            raise ValueError(f"Drain is outside its opening (bay {opening.bay_id})")
         if opening.width_mm <= config.R07.width_trigger_mm:
             record("R07", _PASS, opening.bay_id)
         elif holes is None:

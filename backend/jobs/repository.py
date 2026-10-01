@@ -9,6 +9,7 @@ import json
 from uuid import UUID
 
 from django.db import connection, DatabaseError
+from psycopg import sql
 
 from pricing.repository import json_text, rows
 
@@ -39,30 +40,30 @@ def insert_job(
     created_by: UUID | None,
 ) -> tuple[dict[str, object], bool]:
     """Insert a queued job; on idempotency conflict return the live row."""
-    try:
-        record = rows(
-            """
-            INSERT INTO public.job_runs
-                (org_id, type, payload, idempotency_key, max_attempts, run_after, created_by)
-            VALUES (%s, %s, %s::jsonb, %s, %s, %s, %s)
-            RETURNING *
-            """,
-            [
-                str(org_id),
-                job_type,
-                json_text(payload),
-                idempotency_key,
-                max_attempts,
-                run_after,
-                str(created_by) if created_by else None,
-            ],
-        )
+    # ON CONFLICT DO NOTHING never aborts the enclosing transaction (unlike a
+    # 23505 exception, after which any follow-up SELECT raises 25P02) — the
+    # emitter may legitimately share a transaction with the event it records.
+    record = rows(
+        """
+        INSERT INTO public.job_runs
+            (org_id, type, payload, idempotency_key, max_attempts, run_after, created_by)
+        VALUES (%s, %s, %s::jsonb, %s, %s, %s, %s)
+        ON CONFLICT (org_id, type, idempotency_key) WHERE idempotency_key IS NOT NULL
+        DO NOTHING
+        RETURNING *
+        """,
+        [
+            str(org_id),
+            job_type,
+            json_text(payload),
+            idempotency_key,
+            max_attempts,
+            run_after,
+            str(created_by) if created_by else None,
+        ],
+    )
+    if record:
         return _decode(record[0]), True
-    except DatabaseError as error:
-        if getattr(getattr(error, "__cause__", None), "sqlstate", None) != "23505":
-            raise
-    if idempotency_key is None:
-        raise DatabaseError("job_idempotency_conflict_unresolved")
     existing = get_job_by_key(org_id=org_id, job_type=job_type, key=idempotency_key)
     if existing is None:
         raise DatabaseError("job_idempotency_conflict_unresolved")
@@ -71,6 +72,7 @@ def insert_job(
 
 def requeue_terminal(
     *,
+    org_id: UUID,
     job_id: UUID,
     payload: dict[str, object],
     max_attempts: int,
@@ -99,7 +101,7 @@ def requeue_terminal(
             completed_at = NULL,
             created_by = %s,
             updated_at = NOW()
-        WHERE id = %s AND state IN ('FAILED', 'CANCELED')
+        WHERE org_id = %s AND id = %s AND state IN ('FAILED', 'CANCELED')
         RETURNING *
         """,
         [
@@ -107,6 +109,7 @@ def requeue_terminal(
             max_attempts,
             run_after,
             str(created_by) if created_by else None,
+            str(org_id),
             str(job_id),
         ],
     )
@@ -138,6 +141,7 @@ def list_jobs(
     job_type: str | None = None,
     state: str | None = None,
     limit: int = 50,
+    offset: int = 0,
 ) -> list[dict[str, object]]:
     clauses = ["org_id = %s"]
     parameters: list[object] = [str(org_id)]
@@ -147,15 +151,24 @@ def list_jobs(
     if state:
         clauses.append("state = %s")
         parameters.append(state)
-    parameters.append(limit)
+    parameters.extend([limit, offset])
     return [
         _decode(record)
         for record in rows(
             f"""
-            SELECT * FROM public.job_runs
+            SELECT id, type, state, progress, result, error, attempt,
+                   max_attempts, created_at, started_at, completed_at,
+                   /* The AI run's own job id lets the jobs list deep-link to
+                    * the assistant workspace — expose just the id, not the
+                    * service-owned payload. */
+                   CASE WHEN type = 'ai.agent.run'
+                        THEN payload->>'ai_job_id'
+                        ELSE NULL
+                   END AS ai_job_id
+            FROM public.job_runs
             WHERE {" AND ".join(clauses)}
-            ORDER BY created_at DESC
-            LIMIT %s
+            ORDER BY created_at DESC, id DESC
+            LIMIT %s OFFSET %s
             """,
             parameters,
         )
@@ -247,15 +260,45 @@ def release_stale(*, now: datetime | None = None) -> int:
         cursor.execute(
             """
             UPDATE public.job_runs
-            SET state = 'QUEUED',
+            SET state = CASE WHEN attempt >= max_attempts THEN 'FAILED' ELSE 'QUEUED' END,
                 locked_by = NULL,
                 locked_at = NULL,
+                completed_at = CASE WHEN attempt >= max_attempts THEN NOW() ELSE completed_at END,
+                error = CASE WHEN attempt >= max_attempts
+                        THEN '{"code":"job_lease_expired"}'::jsonb ELSE error END,
                 updated_at = NOW()
             WHERE state = 'RUNNING' AND locked_at < %s
+            RETURNING CASE WHEN state = 'FAILED' AND type = 'ai.agent.run'
+                          THEN payload->>'ai_job_id' ELSE NULL END AS ai_job_id
             """,
             [cutoff],
         )
-        return cursor.rowcount
+        released = cursor.rowcount
+        # A terminal ai.agent.run never reaches its handler, so nothing else
+        # settles the ai_jobs row — without this the assistant card hangs in
+        # PLANNING/RUNNING forever. FAILED_RETRYABLE keeps the workspace's
+        # resume path open. ai_jobs grants sit on ai_backend/postgres, not
+        # service_role — RESET ROLE reaches the session owner (the table
+        # owner bypasses RLS and owns the ai_backend membership).
+        stranded = [row[0] for row in cursor.fetchall() if row[0]]
+        if stranded:
+            cursor.execute("SELECT current_setting('role')")
+            previous = str(cursor.fetchone()[0])
+            cursor.execute("RESET ROLE")
+            cursor.execute(
+                """
+                UPDATE public.ai_jobs SET state = 'FAILED_RETRYABLE',
+                    error_code = 'job_lease_expired', updated_at = NOW()
+                WHERE id = ANY(%s::uuid[])
+                  AND state IN ('QUEUED','PLANNING','RUNNING')
+                """,
+                [stranded],
+            )
+            if previous != "none":
+                cursor.execute(
+                    sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(previous))
+                )
+        return released
 
 
 def report_progress(*, job_id: UUID, worker_id: str, progress: float) -> None:

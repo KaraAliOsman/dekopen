@@ -1,17 +1,18 @@
 .projects-page {
-  max-width: 80rem;
+  /* Match .dashboard's workspace width — 96rem left ~190px dead rails on each
+   * side of a 1920 viewport while master-detail panes could use them. */
+  max-width: 120rem;
   margin-inline: auto;
-  padding: 1.5rem;
   color: var(--theme-text-primary);
   font-size: 0.875rem;
 }
 .projects-page h1 {
-  font-size: 1.375rem;
+  font-size: var(--text-display);
   font-weight: 600;
   margin-bottom: 0.75rem;
 }
 .projects-page h2 {
-  font-size: 1.125rem;
+  font-size: var(--text-title);
   font-weight: 600;
 }
 .projects-page a.primary-action {
@@ -89,13 +90,29 @@
 .projects-page dd {
   margin: 0 0 0.75rem;
   white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .project-metadata {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   column-gap: 1.5rem;
   row-gap: 0.25rem;
+}
+/* The right-rail inspector is ~280px: a 3-col grid there shreds values
+ * mid-token («Neto $247.2 99»). Label-left/value-right rows never split a
+ * token and survive long location tags. */
+.position-detail .project-metadata {
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 0.75rem;
+  row-gap: 0.35rem;
+}
+.position-detail .project-metadata > div {
+  display: contents;
+}
+.position-detail .project-metadata dd {
+  margin: 0;
+  overflow-wrap: normal;
+  text-align: right;
 }
 .project-metadata dt {
   color: var(--theme-text-secondary);
@@ -107,6 +124,41 @@
 }
 .project-metadata-form > fieldset > button {
   justify-self: start;
+}
+/* The optional-fields disclosure spans the grid; its inner rows keep the
+ * same two-column rhythm as the required fields above it (review m11). */
+.project-metadata__extra {
+  grid-column: 1 / -1;
+}
+.project-metadata__extra > summary {
+  color: var(--theme-text-muted);
+  cursor: pointer;
+  font-size: var(--text-s);
+  padding: var(--space-1) 0;
+}
+.project-metadata__extra[open] {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 1.25rem;
+}
+.project-metadata__extra[open] > summary {
+  grid-column: 1 / -1;
+}
+@media (max-width: 700px) {
+  .project-metadata__extra[open] {
+    grid-template-columns: 1fr;
+  }
+}
+/* Required marker lives inside the label text (aria-hidden) so it never
+ * orphans onto its own line below the control. */
+.form-required {
+  color: var(--theme-accent);
+}
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }
 @media (max-width: 700px) {
   .project-metadata,
@@ -128,20 +180,24 @@
   flex: 1;
 }
 .projects-header h1 {
-  font-size: 1.25rem;
+  font-size: var(--text-display);
   line-height: 1.5;
 }
 /* Vano header strip — location/quantity/system are the position's own
    fields, edited in the workspace header rather than buried in a rail. */
 .position-head {
-  align-items: end;
   background: var(--theme-surface);
   border: 1px solid var(--theme-border);
   border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+}
+
+/* fieldset ignores display:flex on its children — the row carries the layout. */
+.position-head__row {
+  align-items: end;
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
 }
 
 .position-head__field {
@@ -149,6 +205,20 @@
   flex-direction: column;
   gap: var(--space-1);
   min-width: 7rem;
+}
+
+/* The finish picker sits beside the system field — same field language as
+   position metadata, narrower: it never takes the wide grid cell. */
+.position-head__color {
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  font-size: var(--text-xs);
+  gap: var(--space-1);
+}
+
+.position-head__color > span {
+  color: var(--theme-text-muted);
 }
 
 .position-head__field--wide {
@@ -171,6 +241,7 @@
 .position-head__alert {
   align-self: center;
   color: var(--theme-text-muted);
+  flex-basis: 100%;
   font-size: var(--text-xs);
   margin: 0;
 }
@@ -182,7 +253,81 @@
 .position-workspace {
   display: grid;
   gap: 0.75rem;
+  grid-template-columns: minmax(0, 1fr);
   margin-top: 1rem;
+}
+
+/* The position editor is a design tool, not a form page — it uses the full
+   shell width and height: the route is a bounded app viewport where the
+   canvas dominates; the BOM scrolls inside the body region. */
+.position-editor {
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - 4.875rem);
+  max-height: calc(100dvh - 4.875rem);
+  max-width: none;
+}
+
+.position-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  /* The editor route is a bounded app viewport — the body never scrolls, so a
+     wheel gesture over the canvas pans the drawing instead of trapping the
+     page scroll. Ancillary content (BOM) docks below in its own scroller. */
+  overflow: hidden;
+}
+
+.position-body .position-workspace {
+  flex: 1;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+
+.position-body .assembly-editor {
+  height: 100%;
+}
+@media (max-height: 700px) {
+  /* Short laptop screens: let the editor shrink below the 28rem floor rather
+     than clip its status bar under the non-scrolling body. */
+  .position-body .assembly-editor {
+    min-height: 0;
+  }
+}
+
+/* Unsaved-draft recovery banner — a reload no longer silently discards the
+   in-flight design; the offer sits between the header and the form strip. */
+.draft-banner {
+  align-items: center;
+  background: var(--theme-surface-raised, var(--theme-surface-panel));
+  border: 1px solid var(--theme-accent);
+  border-radius: var(--radius-md);
+  display: flex;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+  padding: 0.45rem 0.75rem;
+}
+
+.draft-banner span {
+  color: var(--theme-text-secondary);
+  flex: 1;
+  font-size: 0.82rem;
+}
+
+.draft-banner button {
+  background: transparent;
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--theme-text-secondary);
+  cursor: pointer;
+  font-size: 0.78rem;
+  padding: 0.22rem 0.6rem;
+}
+
+.draft-banner button:first-of-type {
+  border-color: var(--theme-accent);
+  color: var(--theme-accent-ink, var(--theme-accent));
 }
 
 /* Position metadata folded into the inspector column — compact fields, same
@@ -198,7 +343,7 @@
 
 .position-panel .assembly-field input,
 .position-panel .assembly-select {
-  background: var(--theme-bg-canvas);
+  background: var(--theme-surface-panel);
   border: 1px solid var(--theme-border-subtle);
   color: var(--theme-text-primary);
   font: inherit;
@@ -211,6 +356,15 @@
   align-items: stretch;
   flex-direction: column;
   gap: 0.15rem;
+}
+
+.position-panel .assembly-input-wrap {
+  display: flex;
+  width: 100%;
+}
+
+.position-panel .assembly-input-wrap input {
+  flex: 1;
 }
 
 .position-panel .assembly-field > span {
@@ -316,6 +470,16 @@
   color: var(--theme-warning);
   background: var(--theme-warning-soft);
   white-space: nowrap;
+}
+
+/* Block-band variant: the save-blocked reason sits under the header as a
+ * status line — it must never share a flex row with the action buttons. */
+p.handle-pending {
+  border-radius: var(--radius-sm);
+  display: block;
+  margin: 0.4rem 0 0;
+  padding: 0.3rem 0.6rem;
+  white-space: normal;
 }
 .handle-suggested {
   align-self: center;
@@ -461,6 +625,33 @@
   padding-block: 0.5rem;
   border-bottom: 1px solid var(--theme-border-subtle);
 }
+.quotation-share {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.375rem 0;
+}
+.quotation-links ul {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0;
+  list-style: none;
+}
+.quotation-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.625rem;
+  padding-block: 0.5rem;
+  border-bottom: 1px solid var(--theme-border-subtle);
+}
+.quotation-link__meta {
+  color: var(--theme-text-secondary);
+  font-size: 0.8125rem;
+}
+.position-thumb-host {
+  align-self: start;
+}
 .position-thumb {
   align-self: start;
   background: var(--theme-bg-canvas);
@@ -500,8 +691,16 @@
     width: 100%;
   }
 }
+/* BOM docks at the bottom of the bounded editor viewport: a slim bar when
+   closed, a capped pane with its own scroll when opened — the page column
+   itself never scrolls. */
 .project-bom {
-  margin-top: 0.75rem;
+  flex: none;
+  margin-top: 0.5rem;
+}
+.project-bom[open] {
+  max-height: 42dvh;
+  overflow-y: auto;
 }
 .project-bom summary {
   cursor: pointer;
@@ -532,6 +731,7 @@
   border: 1px solid var(--theme-border-subtle);
   border-radius: 0.375rem;
   background: var(--theme-surface-panel);
+  min-width: 0;
 }
 .starter-library > summary {
   cursor: pointer;
@@ -550,13 +750,33 @@
 .starter-library[open] > summary::before {
   transform: rotate(90deg);
 }
+.starter-gallery-wrap {
+  padding: 0.25rem 0.75rem 0.75rem;
+}
+.starter-search {
+  display: block;
+  margin-bottom: 0.5rem;
+  max-width: 22rem;
+}
+.starter-search input {
+  width: 100%;
+}
+.starter-empty {
+  color: var(--theme-text-secondary, #727d82);
+  font-size: 0.8125rem;
+  margin: 0.5rem 0;
+}
 .starter-gallery {
   display: grid;
-  grid-auto-columns: 7.5rem;
-  grid-auto-flow: column;
+  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
   gap: 0.625rem;
-  overflow-x: auto;
-  padding: 0.25rem 0.75rem 0.75rem;
+  max-width: 100%;
+  min-width: 0;
+  /* Wrap over scroll: a hidden tail row made contour/door starters
+   * undiscoverable; the enclosing <details> already owns the vertical
+   * budget, so showing every starter costs the user nothing. */
+  overflow-x: visible;
+  padding: 0;
 }
 .starter-card {
   display: flex;
@@ -627,46 +847,6 @@
   background: var(--accent);
   transition: width 0.3s ease;
 }
-.payments-form {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 10px;
-  margin-top: 10px;
-}
-.payments-form label {
-  display: grid;
-  gap: 4px;
-  font-size: var(--text-s, 12px);
-  color: var(--ink-muted);
-}
-.payments-form-wide {
-  grid-column: 1 / -1;
-}
-.payments-form-actions {
-  grid-column: 1 / -1;
-  display: flex;
-  gap: 8px;
-}
-.payments-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 10px;
-  font-size: var(--text-s, 13px);
-}
-.payments-table th,
-.payments-table td {
-  text-align: left;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border, #e0deda);
-}
-.payments-table .num {
-  text-align: right;
-  font-family: var(--font-mono, monospace);
-}
-.payments-voided td {
-  opacity: 0.55;
-}
-
 .imports-empty {
   color: var(--theme-text-secondary);
   font-size: 0.9rem;
@@ -705,42 +885,6 @@
 .imports-row-error td {
   background: color-mix(in srgb, var(--theme-warning, #e56a32) 10%, transparent);
 }
-.production-chip.imports-status-uploaded,
-.production-chip.imports-status-extracting {
-  color: var(--theme-info, var(--theme-accent));
-  border-color: currentColor;
-}
-.production-chip.imports-status-review_ready {
-  color: var(--theme-warning, #e56a32);
-  border-color: currentColor;
-}
-.production-chip.imports-status-confirmed {
-  color: var(--theme-accent);
-  border-color: var(--theme-accent);
-}
-.production-chip.imports-status-failed {
-  color: var(--theme-danger, #c0392b);
-  border-color: currentColor;
-}
-.production-chip.imports-confidence-verified_structured {
-  color: var(--theme-accent);
-  border-color: var(--theme-accent);
-}
-.production-chip.imports-confidence-high_candidate {
-  color: var(--theme-accent);
-  border-color: currentColor;
-  border-style: dashed;
-}
-.production-chip.imports-confidence-review_required {
-  color: var(--theme-warning, #e56a32);
-  border-color: currentColor;
-}
-.production-chip.imports-confidence-low {
-  color: var(--theme-danger, #c0392b);
-  border-color: currentColor;
-  border-style: dashed;
-}
-
 .imports-toggle {
   font-weight: 600;
 }
@@ -752,7 +896,23 @@
   align-items: start;
   display: grid;
   gap: 1rem;
-  grid-template-columns: minmax(15rem, 19rem) minmax(0, 1fr) minmax(13rem, 17rem);
+  grid-template-columns: minmax(15rem, 19rem) minmax(0, 1fr) minmax(15rem, 21rem);
+}
+
+/* An open workflow section (quote/payments/imports/compare) is real work —
+ * the emission form needs far more than the idle rail's 15–19rem; steal from
+ * the positions column while it is open (review WM4). Desktop only — under
+ * the 1100px breakpoint the desk stays a single column. */
+@media (min-width: 1101px) {
+  .project-desk[data-facts-open] {
+    grid-template-columns: minmax(26rem, 34vw) minmax(0, 1fr) minmax(13rem, 17rem);
+  }
+
+  /* Emission is a form-heavy workflow — the rail gets the workspace width
+   * while it is open, the positions grid shrinks to a reference column. */
+  .project-desk[data-facts-open="quote"] {
+    grid-template-columns: minmax(38rem, 55vw) minmax(0, 1fr) minmax(11rem, 14rem);
+  }
 }
 
 .project-facts {
@@ -780,8 +940,15 @@
 .project-facts__list {
   display: grid;
   gap: 0.375rem 0.75rem;
-  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  /* 10.5rem keeps names/tags from column-cramming into mid-token wraps; the
+   * hyphenation below turns unavoidable long-word splits into real breaks. */
+  grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
   margin: 0.75rem 0 0;
+}
+
+.project-facts__list dd {
+  hyphens: auto;
+  min-width: 0;
 }
 
 .project-facts__section {
@@ -810,7 +977,7 @@
   cursor: pointer;
   display: grid;
   gap: 0.625rem;
-  grid-template-columns: 4.25rem 2.25rem minmax(7rem, 1fr) 8.5rem 4.5rem auto;
+  grid-template-columns: 5.5rem minmax(6rem, 1fr) 8.5rem 4.5rem auto;
   padding: 0.5rem 0.75rem;
 }
 
@@ -833,29 +1000,67 @@
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-sm, 0.25rem);
   display: block;
-  height: 3.5rem;
+  height: 4.25rem;
   overflow: hidden;
-  width: 4.25rem;
+  width: 5.5rem;
 }
 
-.position-row__thumb svg {
+/* The studio render is sized for cards — inside the row it must fit the
+ * thumb cell instead of cropping the product's edges. */
+.position-row__thumb svg,
+.position-row__thumb .position-thumb,
+.position-row__thumb .position-thumb-host {
   display: block;
   height: 100%;
+  object-fit: contain;
   width: 100%;
 }
 
 .position-row__loc {
+  display: -webkit-box;
   font-weight: 500;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  /* A location name is the position's identity — "Cocina, ventana sobre
+   * mesón" clipped to "Cocina, ventana sobre…" reads as a different vano;
+   * wrap to two lines instead of truncating (review WM7). */
+  white-space: normal;
 }
 
 .position-row__dims {
   color: var(--theme-text-secondary);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.position-row__spec {
+  color: var(--theme-text-muted);
+  font-size: 0.8125rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Mobile: the five-column row can't fit 390 px — stack it into a two-row
+ * grid (thumb + identity, then specs/qty/status) instead of h-scrolling. */
+@media (max-width: 640px) {
+  .position-row {
+    grid-template-columns: 4rem 1fr;
+    row-gap: 0.375rem;
+  }
+
+  .position-row__thumb {
+    grid-row: span 3;
+    height: 5rem;
+    width: 4rem;
+  }
+
+  .position-row__spec,
+  .position-row__dims {
+    white-space: normal;
+  }
 }
 
 .position-row__qty-input {
@@ -875,6 +1080,15 @@
 
 .project-desk__hint {
   color: var(--theme-text-muted);
+}
+
+.position-detail__thumb .position-thumb,
+.position-detail__thumb .position-thumb-studio {
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: 0.375rem;
+  height: 12rem;
+  object-fit: contain;
+  width: 100%;
 }
 
 .position-detail .project-metadata {
@@ -923,4 +1137,368 @@
   display: block;
   font-size: 0.78rem;
   color: var(--theme-warning, #e56a32);
+}
+
+/* §03-C/F — project workspace header + commercial track */
+.project-head {
+  margin-bottom: var(--space-3);
+}
+
+.project-head__row {
+  align-items: start;
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+}
+
+.project-head__row h1 {
+  margin: 0;
+}
+
+.projects-row__code {
+  color: var(--theme-text-muted);
+  font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
+  font-size: 0.75rem;
+  margin-left: 0.5rem;
+  white-space: nowrap;
+}
+
+.projects-row__rev {
+  font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.projects-row__next {
+  color: var(--theme-text-muted);
+  font-size: 0.8125rem;
+  max-width: 14rem;
+}
+
+.projects-list-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+  margin-bottom: 0.75rem;
+}
+
+.projects-list-bar .ui-field {
+  margin-bottom: 0;
+  min-width: 10rem;
+}
+
+.projects-list-bar .projects-search {
+  flex: 1 1 14rem;
+  max-width: 24rem;
+}
+
+.project-activity {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.project-activity li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--theme-border);
+  font-size: 0.8125rem;
+}
+
+.project-activity li:last-child {
+  border-bottom: 0;
+}
+
+.project-activity__label {
+  font-weight: 500;
+}
+
+.project-activity__detail {
+  color: var(--theme-text-muted);
+}
+
+.project-activity time {
+  color: var(--theme-text-muted);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.project-activity__empty {
+  color: var(--theme-text-muted);
+}
+
+.project-head__code {
+  color: var(--theme-text-muted);
+  font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
+  font-size: 0.75rem;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.project-head__meta {
+  align-items: center;
+  color: var(--theme-text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin: 0.375rem 0 0;
+}
+
+.project-head__action {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.5rem;
+}
+
+.commercial-track {
+  display: grid;
+  gap: 0.375rem;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+}
+
+.commercial-step {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: 0.375rem;
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+  padding: 0.5rem 0.625rem;
+}
+
+.commercial-step__marker {
+  align-self: start;
+  border: 2px solid var(--theme-border-strong, var(--theme-text-secondary));
+  border-radius: 50%;
+  height: 0.625rem;
+  margin-bottom: 0.25rem;
+  width: 0.625rem;
+}
+
+.commercial-step__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.commercial-step__detail {
+  color: var(--theme-text-secondary);
+  font-size: 0.6875rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commercial-step[data-state="done"] {
+  border-color: var(--theme-accent);
+}
+
+.commercial-step[data-state="done"] .commercial-step__marker {
+  background: var(--theme-accent);
+  border-color: var(--theme-accent);
+}
+
+.commercial-step[data-state="current"] {
+  border-color: var(--theme-accent);
+}
+
+.commercial-step[data-state="current"] .commercial-step__marker {
+  border-color: var(--theme-accent);
+  box-shadow: 0 0 0 3px var(--theme-accent-soft, rgba(37, 99, 235, 0.15));
+}
+
+.commercial-step[data-state="current"] .commercial-step__label {
+  color: var(--theme-accent);
+}
+
+.commercial-step[data-state="blocked"] {
+  border-color: var(--theme-warning);
+}
+
+.commercial-step[data-state="blocked"] .commercial-step__label {
+  color: var(--theme-warning);
+}
+
+.commercial-step[data-state="pending"] {
+  color: var(--theme-text-secondary);
+}
+
+@media (max-width: 1100px) {
+  .commercial-track {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* §03-E — revision compare */
+.compare-panel {
+  display: grid;
+  gap: 0.625rem;
+  margin-top: 0.375rem;
+}
+
+.compare-controls {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.compare-controls .ui-field {
+  min-width: 10rem;
+}
+
+.compare-summary {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+}
+
+.compare-list {
+  display: grid;
+  gap: 0.375rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.compare-row {
+  align-items: start;
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: 0.375rem;
+  display: grid;
+  gap: 0.625rem;
+  grid-template-columns: 2rem auto minmax(0, 1fr) auto;
+  padding: 0.5rem 0.625rem;
+}
+
+.compare-row[data-change="added"] {
+  border-left: 3px solid var(--theme-accent);
+}
+
+.compare-row[data-change="removed"] {
+  border-left: 3px solid var(--theme-danger);
+  opacity: 0.8;
+}
+
+.compare-row[data-change="changed"] {
+  border-left: 3px solid var(--theme-warning);
+}
+
+.compare-row__index {
+  color: var(--theme-text-secondary);
+  font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
+  font-weight: 600;
+}
+
+.compare-row__thumbs {
+  align-items: center;
+  display: flex;
+  gap: 0.25rem;
+}
+
+.compare-thumb svg {
+  height: 3.5rem;
+  width: auto;
+}
+
+.compare-arrow {
+  color: var(--theme-text-secondary);
+}
+
+.compare-row__main {
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.compare-row__loc {
+  font-weight: 600;
+}
+
+.compare-row__dims,
+.compare-row__detail {
+  color: var(--theme-text-secondary);
+  font-size: 0.75rem;
+}
+
+.compare-row__changes {
+  font-size: 0.75rem;
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+}
+
+.compare-row__changes li {
+  border-top: 1px dashed var(--theme-border-subtle);
+  padding: 0.125rem 0;
+}
+
+.compare-chip[data-status="added"] {
+  background: var(--theme-accent-soft, rgba(37, 99, 235, 0.12));
+  color: var(--theme-accent);
+}
+
+.compare-chip[data-status="removed"] {
+  background: var(--theme-danger-soft);
+  color: var(--theme-danger);
+}
+
+.compare-chip[data-status="changed"] {
+  background: var(--theme-warning-soft, rgba(217, 119, 6, 0.12));
+  color: var(--theme-warning);
+}
+
+.projects-error-actions {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+}
+
+.position-row__net {
+  color: var(--theme-text-secondary);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.emit-checklist {
+  background: var(--theme-warning-soft, rgba(217, 119, 6, 0.1));
+  border: 1px solid var(--theme-warning);
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  margin: 0.75rem 0;
+  padding: 0.625rem 1rem;
+}
+
+.emit-checklist ul {
+  margin: 0.375rem 0 0;
+  padding-left: 1.125rem;
+}
+
+.emit-checklist .link-button {
+  color: var(--theme-text-primary);
+  font-size: inherit;
+}
+
+/* Pre-emit verdict: states what the revision will allow before Emitir runs
+   (quote-only vs production-ready) — no silent downgrades. */
+.emit-outcome {
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  margin: 0.75rem 0 0;
+  padding: 0.5rem 0.875rem;
+}
+
+.emit-outcome--warn {
+  background: var(--theme-warning-soft, rgba(217, 119, 6, 0.1));
+  border: 1px solid var(--theme-warning);
 }

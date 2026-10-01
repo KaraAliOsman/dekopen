@@ -34,9 +34,24 @@ SELECT col_is_unique(
     'public', 'delivery_confirmations', ARRAY['org_id', 'confirmation_code'],
     'confirmation code unique inside an org'
 );
-SELECT col_is_unique(
-    'public', 'delivery_confirmations', 'order_id',
-    'one confirmation per order makes confirm replay-idempotent'
+SELECT ok(
+    NOT EXISTS (
+        SELECT 1
+        FROM pg_index i
+        JOIN pg_class t ON t.oid = i.indrelid
+        JOIN pg_namespace n ON n.oid = t.relnamespace
+        WHERE n.nspname = 'public'
+          AND t.relname = 'delivery_confirmations'
+          AND i.indisunique
+          AND i.indisprimary IS FALSE
+          AND i.indisreplident IS FALSE
+          AND (
+            SELECT array_agg(a.attname ORDER BY k.ord)
+            FROM unnest(i.indkey) WITH ORDINALITY AS k(attnum, ord)
+            JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum
+          ) = ARRAY['order_id']::name[]
+    ),
+    'partial deliveries sign one comprobante per trip — order_id is not unique'
 );
 SELECT col_is_unique(
     'public', 'delivery_confirmations', 'delivery_id',

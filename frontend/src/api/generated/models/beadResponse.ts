@@ -5,8 +5,19 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { DataProvenanceEnum } from "./dataProvenanceEnum";
 
+/**
+ * Read-only provenance/review state — written only by import jobs and
+ * the technical-review endpoint, never by catalog CRUD.
+ */
 export interface BeadResponse {
+  readonly data_provenance: DataProvenanceEnum;
+  /** @nullable */
+  readonly technical_reviewed_at: string | null;
+  /** @nullable */
+  readonly technical_reviewed_by: string | null;
+  readonly review_pending: boolean;
   system_id: string;
   /** @pattern ^-?\d{0,4}(?:\.\d{0,2})?$ */
   glass_thickness_mm: string;

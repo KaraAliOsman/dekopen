@@ -4,6 +4,14 @@ import { afterEach } from "vitest";
 
 afterEach(cleanup);
 
+/* Web storage is process-global in jsdom: a test that persists UI state
+ * (e.g. the assistant dock remembering it is open) must not leak into the
+ * next render. */
+afterEach(() => {
+  window.sessionStorage.clear();
+  window.localStorage.clear();
+});
+
 Object.defineProperty(window, "matchMedia", {
   writable: true,
   value: (query: string) => ({

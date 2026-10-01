@@ -267,6 +267,7 @@ class PurchaseRequirementV1(EngineModel):
     quantity: int = Field(ge=1)
     stock_length_mm: Decimal | None = None
     cutting_profile_id: str | None = None
+    color: str | None = None
     composition: str | None = None
     oriented_width_mm: Decimal | None = None
     oriented_height_mm: Decimal | None = None
@@ -363,6 +364,7 @@ class _RequirementDraft(EngineModel):
     quantity: int
     stock_length_mm: Decimal | None = None
     cutting_profile_id: str | None = None
+    color: str | None = None
     composition: str | None = None
     oriented_width_mm: Decimal | None = None
     oriented_height_mm: Decimal | None = None
@@ -738,6 +740,7 @@ def project_purchase_requirements_v1(
             quantity=purchase.qty_bars,
             stock_length_mm=first.stock_length_mm,
             cutting_profile_id=first.cutting_profile.id,
+            color=first.color,
             source_trace=stock_group.source_piece_ids,
         ))
 

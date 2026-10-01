@@ -18,5 +18,7 @@ export interface ProjectInvoiceAccess {
   dte?: ProjectDte | null;
   created_at: string;
   signed_url: string;
+  /** @nullable */
+  tributario_signed_url: string | null;
   expires_in: number;
 }

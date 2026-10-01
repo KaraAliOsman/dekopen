@@ -133,7 +133,7 @@ def catalog_readiness(system_id, org_id) -> dict[str, Any]:
         ):
             fabrication_missing.append(sash.sku)
         fabrication_missing += [
-            kit.code for kit in params.available_hardware_kits if kit.weight_kg is None
+            kit.sku for kit in params.available_hardware_kits if kit.weight_kg is None
         ]
         if not fabrication_missing:
             try:
@@ -155,27 +155,36 @@ def catalog_readiness(system_id, org_id) -> dict[str, Any]:
         # Production authority must not ride on values nobody ever verified:
         # LEGACY_UNVERIFIED rows and rows whose technical values changed after
         # their last review (review_pending) need a human review first —
-        # review() clears both gates.
+        # review() clears both gates. Two scoping rules (review CAT-09):
+        # * org-owned rows only — global catalog data is platform-managed,
+        #   members can neither write nor review it, so flagging it would be
+        #   a permanent unfixable blocker for every tenant;
+        # * kits bound to THIS system only — the engine loads kits strictly
+        #   by system_id, so an unbound kit is dead weight it can't consume
+        #   and shouldn't gate readiness.
         if rows(
             "SELECT 1 FROM public.profile_systems WHERE id=%s"
-            " AND (is_global = TRUE OR org_id=%s)"
+            " AND org_id=%s"
             " AND (data_provenance='LEGACY_UNVERIFIED' OR review_pending)"
             " UNION ALL"
             " SELECT 1 FROM public.profile_articles WHERE system_id=%s"
-            " AND (org_id IS NULL OR org_id=%s)"
+            " AND org_id=%s"
             " AND (data_provenance='LEGACY_UNVERIFIED' OR review_pending)"
             " UNION ALL"
             " SELECT 1 FROM public.infill_articles WHERE system_id=%s"
-            " AND (org_id IS NULL OR org_id=%s)"
+            " AND org_id=%s"
             " AND (data_provenance='LEGACY_UNVERIFIED' OR review_pending)"
             " UNION ALL"
-            " SELECT 1 FROM public.hardware_kits WHERE"
-            " (system_id=%s OR system_id IS NULL)"
-            " AND (org_id IS NULL OR org_id=%s)"
+            " SELECT 1 FROM public.hardware_kits WHERE system_id=%s"
+            " AND org_id=%s"
+            " AND (data_provenance='LEGACY_UNVERIFIED' OR review_pending)"
+            " UNION ALL"
+            " SELECT 1 FROM public.glazing_bead_matrix WHERE system_id=%s"
+            " AND org_id=%s"
             " AND (data_provenance='LEGACY_UNVERIFIED' OR review_pending)"
             " LIMIT 1",
             [system_id, org_id, system_id, org_id,
-             system_id, org_id, system_id, org_id],
+             system_id, org_id, system_id, org_id, system_id, org_id],
         ):
             mfg_b.append(_blocker(
                 "catalog_review", "revisión técnica humana de datos heredados",
@@ -184,24 +193,58 @@ def catalog_readiness(system_id, org_id) -> dict[str, Any]:
                 "revisar y aprobar los datos técnicos heredados del sistema"))
         purchase_code = None
         try:
-            frame = params.effective_profile_articles[ProfileRole.FRAME]
-            profiles = [frame,
-                        *(rule.bead_article for rule in params.glazing_bead_rules.values())]
+            # The probe mirrors freeze's authority consumption at catalog
+            # level (review CAT-03): every active article sku the system can
+            # emit as a member — not just frame+beads — every reinforcement
+            # those articles reference, every hardware kit bound to the
+            # system, and every active panel sku. Glass/fittings stay
+            # roster-level: positions pick strictly from the mapping tables,
+            # so the catalog-level duty is that every declared sku resolves
+            # unambiguously (load_purchase_authorities raises on duplicates).
+            catalogued = rows(
+                "SELECT sku, reinforcement_sku, role::text FROM public.profile_articles "
+                "WHERE system_id=%s "
+                "AND (org_id IS NULL OR org_id=%s)",
+                [system_id, org_id],
+            )
             steels: set[str] = set()
             if params.material is MaterialType.PVC:
-                # A welded PVC frame always has reinforcement, including
-                # default SKU resolution. Mechanically jointed systems do not.
-                stock, _ = CuttingRepository().reinforcement_stock(
-                    system_id, org_id, frame.sku, frame.reinforcement_sku, "WHITE")
-                steels = {stock.workshop_sku}
+                # A welded PVC member always needs its steel resolved —
+                # including default SKU resolution. Mechanically jointed
+                # systems do not, and neither do unwelded roles (threshold
+                # is appended, beads clip, channels seat frameless panes).
+                # Positions check FOILED at freeze when the face colors
+                # require it; the catalog baseline is WHITE.
+                for article in catalogued:
+                    if article["role"] in ("THRESHOLD", "GLAZING_BEAD", "CHANNEL"):
+                        continue
+                    stock, _ = CuttingRepository().reinforcement_stock(
+                        system_id, org_id, article["sku"],
+                        article["reinforcement_sku"], "WHITE")
+                    steels.add(stock.workshop_sku)
             glass = rows("SELECT technical_sku FROM public.glass_purchase_mappings "
                          "WHERE system_id=%s AND (org_id IS NULL OR org_id=%s)", [system_id, org_id])
             if not glass:
                 raise DocumentaryError("glass_purchase_mapping_required")
             load_purchase_authorities(system_id=system_id, org_id=org_id, color="WHITE",
-                profile_skus={article.sku for article in profiles}, reinforcement_skus=steels,
-                glass_skus={row["technical_sku"] for row in glass}, hardware_skus=set(),
-                panel_skus=set(), fitting_skus=set())
+                profile_skus={article["sku"] for article in catalogued},
+                reinforcement_skus=steels,
+                glass_skus={row["technical_sku"] for row in glass},
+                hardware_skus={kit.sku for kit in params.available_hardware_kits},
+                panel_skus={
+                    row["sku"] for row in rows(
+                        "SELECT sku FROM public.infill_articles WHERE system_id=%s"
+                        " AND is_active AND (org_id IS NULL OR org_id=%s)",
+                        [system_id, org_id],
+                    )
+                },
+                fitting_skus={
+                    row["technical_sku"] for row in rows(
+                        "SELECT technical_sku FROM public.fitting_purchase_mappings"
+                        " WHERE system_id=%s AND (org_id IS NULL OR org_id=%s)",
+                        [system_id, org_id],
+                    )
+                })
         except DocumentaryError as error:
             purchase_code = str(error.code)
         except (MissingStockAuthority, AmbiguousStockAuthority, ValueError):

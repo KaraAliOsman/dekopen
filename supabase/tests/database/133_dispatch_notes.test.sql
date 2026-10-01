@@ -1,7 +1,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
 SET LOCAL search_path = public, private, auth, extensions, pg_temp;
-SELECT plan(10);
+SELECT plan(16);
 
 -- Tenants read but never write.
 SELECT ok(
@@ -26,9 +26,26 @@ SELECT has_column(
     'public', 'dispatch_notes', 'payload_json',
     'sealed payload column exists'
 );
-SELECT col_is_unique(
-    'public', 'dispatch_notes', 'work_order_id',
-    'one guía de despacho per work order'
+SELECT has_column(
+    'public', 'dispatch_notes', 'unit_indexes',
+    'guía seals the manifest units of its trip'
+);
+SELECT has_column(
+    'public', 'dispatch_notes', 'delivery_id',
+    'guía links to the trip that carried it — a FAILED trip frees its units'
+);
+SELECT ok(
+    NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'public.dispatch_notes'::regclass
+          AND contype = 'u'
+          AND conkey = (
+              SELECT ARRAY[attnum] FROM pg_attribute
+              WHERE attrelid = 'public.dispatch_notes'::regclass
+                AND attname = 'work_order_id'
+          )
+    ),
+    'partial deliveries issue one live guía per trip — coverage is service-computed'
 );
 SELECT col_is_unique(
     'public', 'dispatch_notes', ARRAY['org_id', 'note_code'],
@@ -48,9 +65,31 @@ SELECT ok(
     'documentary backend may insert sealed notes'
 );
 SELECT ok(
+    has_table_privilege('documentary_backend', 'public.clients', 'SELECT'),
+    'the sealed guía may read the org-scoped client fallback (RUT/address)'
+);
+SELECT ok(
     (SELECT relrowsecurity FROM pg_class
      WHERE oid = 'public.dispatch_notes'::regclass),
     'row level security is enabled'
+);
+
+-- Void lifecycle: columns exist, only the void fields are writable by the
+-- backend role, and uniqueness survives on live notes.
+SELECT has_column(
+    'public', 'dispatch_notes', 'voided_at',
+    'voided_at column exists'
+);
+SELECT has_column(
+    'public', 'dispatch_notes', 'voided_reason',
+    'voided_reason column exists'
+);
+SELECT ok(
+    has_column_privilege(
+        'documentary_backend', 'public.dispatch_notes', 'voided_at', 'UPDATE')
+    AND NOT has_table_privilege(
+        'documentary_backend', 'public.dispatch_notes', 'DELETE'),
+    'backend role may only write the void columns, never delete a sealed note'
 );
 
 SELECT * FROM finish();

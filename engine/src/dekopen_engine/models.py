@@ -187,6 +187,42 @@ class SectionAxis(EngineModel):
     y_mm: Decimal
 
 
+def _segments_properly_intersect(
+    a1: tuple[Decimal, Decimal],
+    a2: tuple[Decimal, Decimal],
+    b1: tuple[Decimal, Decimal],
+    b2: tuple[Decimal, Decimal],
+) -> bool:
+    """Proper crossing test — segments share no endpoint and cross in their
+    interiors. Touches/collinear overlaps at a shared vertex are the polygon's
+    normal edge adjacency, not a self-intersection."""
+
+    def orient(p: tuple[Decimal, Decimal], q: tuple[Decimal, Decimal], r: tuple[Decimal, Decimal]) -> Decimal:
+        return (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
+
+    d1 = orient(b1, b2, a1)
+    d2 = orient(b1, b2, a2)
+    d3 = orient(a1, a2, b1)
+    d4 = orient(a1, a2, b2)
+    return ((d1 > 0) != (d2 > 0)) and ((d3 > 0) != (d4 > 0))
+
+
+def polygon_self_intersects(points: list[tuple[Decimal, Decimal]]) -> bool:
+    """True when any two non-adjacent edges of the closed polygon properly
+    cross. Adjacent edges share a vertex by construction and are skipped."""
+    count = len(points)
+    for i in range(count):
+        a1, a2 = points[i], points[(i + 1) % count]
+        for j in range(i + 1, count):
+            # Adjacent edges (incl. the last-first wrap pair) share an endpoint.
+            if j == i + 1 or (i == 0 and j == count - 1):
+                continue
+            b1, b2 = points[j], points[(j + 1) % count]
+            if _segments_properly_intersect(a1, a2, b1, b2):
+                return True
+    return False
+
+
 class ProfileSection(EngineModel):
     """Simplified technical cross-section of a catalog profile (mandate §15).
 
@@ -224,6 +260,8 @@ class ProfileSection(EngineModel):
             area += x1 * y2 - x2 * y1
         if area == 0:
             raise ValueError("section polygon encloses no area")
+        if polygon_self_intersects(points):
+            raise ValueError("section polygon self-intersects")
         if self.source == "DXF_REFERENCE" and not (self.drawing_ref or "").strip():
             raise ValueError("DXF_REFERENCE section needs a drawing_ref")
         return self
@@ -244,6 +282,9 @@ class EffectiveProfileArticle(EngineModel):
     weight_kg_m: Decimal | None
     steel_weight_kg_m: Decimal | None
     reinforcement_sku: str | None = None
+    # Bar length the article sells in — None means the catalog never
+    # declared one and no stock-length check can run (UNKNOWN, not infinite).
+    commercial_length_mm: Decimal | None = None
 
 
 class GlazingBeadRule(EngineModel):
@@ -315,6 +356,9 @@ class SystemParams(EngineModel):
     # declares it explicitly — layouts may never exceed this capacity.
     rail_count: int | None = None
     available_hardware_kits: list[HardwareKitRule] = Field(default_factory=list)
+    # Finishes the series actually sells — the estimator picks only declared
+    # ones; every non-WHITE finish consumes the foil clearances.
+    finishes: tuple[str, ...] = ("WHITE",)
     sliding_glazing_deduction_width_mm: Decimal
     sliding_glazing_deduction_height_mm: Decimal
     door_leaf_side_clearance_mm: Decimal
@@ -336,6 +380,11 @@ class ParametricNode(EngineModel):
     panel_article_sku: str | None = None
     hardware_set_sku: str | None = None
     handle_height_mm: Decimal | None = None
+    # Declared hinge side of a DOOR_ENTRY leaf (DIN convention: LEFT =
+    # hinges on the left, handle on the right). Doors carry no side in
+    # their opening_type, so handedness must be declared — manufacturing
+    # refuses to mount a handle on an undeclared door rather than assume.
+    door_handedness: Literal["LEFT", "RIGHT"] | None = None
     # Sliding panel topology (mandate §12). Present on a sliding BAY it
     # fully defines the unit — slots, moving/fixed kind, rail assignment.
     # Absent, the SLIDING_*L presets map to canonical layouts.

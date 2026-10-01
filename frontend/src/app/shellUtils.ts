@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-import type { RoleEnum } from "../api/generated/models";
+import type { MembershipRoleEnum } from "../api/generated/models";
 import type { TranslationKey } from "../i18n/es-CL";
 
 /** Editors register while they hold unsaved work so non-router transitions
@@ -31,11 +31,12 @@ export function consumeNavigationBypass(): boolean {
   return armed;
 }
 
-export const roleLabel: Record<RoleEnum, TranslationKey> = {
+export const roleLabel: Record<MembershipRoleEnum, TranslationKey> = {
   OWNER: "shell.role.owner",
   ESTIMATOR: "shell.role.estimator",
   WORKSHOP_MANAGER: "shell.role.workshopManager",
   INSTALLER: "shell.role.installer",
+  OPERATOR: "shell.role.operator",
 };
 
 /** Dismiss a floating menu on outside click or Escape — shared by the org

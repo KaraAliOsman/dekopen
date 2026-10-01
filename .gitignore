@@ -85,3 +85,4 @@ desktop.ini
 scratch/
 tmp/
 *.tmp
+frontend/tsconfig.tsbuildinfo

@@ -6,11 +6,12 @@ import { roleLabel } from "../app/shellUtils";
 import { StatusBadge } from "../ui";
 
 import { useAuthSession } from "./AuthSessionProvider";
+import { consumeReturnTo } from "./returnTo";
 
 export function SelectOrganizationPage(): JSX.Element {
   const auth = useAuthSession();
   const [pendingId, setPendingId] = useState<string | null>(null);
-  if (auth.status === "ready") return <Navigate to="/dashboard" replace />;
+  if (auth.status === "ready") return <Navigate to={consumeReturnTo()} replace />;
 
   return (
     <main className="auth-screen" data-testid="organization-selector">

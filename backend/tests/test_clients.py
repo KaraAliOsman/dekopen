@@ -143,10 +143,14 @@ def test_create_project_validates_client_scope(monkeypatch):
     monkeypatch.setattr(service, "linkable_client", lambda org, cid: None)
     monkeypatch.setattr(service, "project_row", lambda org, pid: {"id": pid})
     monkeypatch.setattr(service, "project_public", lambda org, row, detail=False: row)
-    monkeypatch.setattr(service, "rows", _runner(captured, **{"INSERT INTO public.projects": [{"id": "x"}]}))
+    monkeypatch.setattr(service, "rows", _runner(captured, **{
+        "INSERT INTO public.projects": [{"id": "x"}],
+        "nextval": [{"seq": 7}],
+    }))
     service.create_project(uuid4(), uuid4(), {"name": "P", "client_id": linked["id"]})
-    assert "client_id" in captured[0][0]
-    assert linked["id"] in captured[0][1]
+    insert = next(sql for sql, _ in captured if "INSERT INTO public.projects" in sql)
+    assert "client_id" in insert
+    assert linked["id"] in next(params for sql, params in captured if sql == insert)
 
 
 def test_create_project_foreign_client_rejected(monkeypatch):
@@ -154,7 +158,7 @@ def test_create_project_foreign_client_rejected(monkeypatch):
         raise APIException()
 
     monkeypatch.setattr(service, "linkable_client", missing_client)
-    monkeypatch.setattr(service, "rows", _runner([]))
+    monkeypatch.setattr(service, "rows", _runner([], **{"nextval": [{"seq": 7}]}))
     with pytest.raises(APIException):
         service.create_project(uuid4(), uuid4(), {"name": "P", "client_id": uuid4()})
 

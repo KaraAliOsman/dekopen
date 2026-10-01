@@ -1,3 +1,4 @@
+import { fmtMm } from "../../format";
 import { t } from "../../i18n/es-CL";
 
 export type GlassPiece = {
@@ -74,7 +75,7 @@ type SizeRow = {
 function sizeRows(group: Group): SizeRow[] {
   const perSize = new Map<string, SizeRow>();
   for (const item of group.pieces) {
-    const dims = `${item.piece.width_mm}×${item.piece.height_mm}`;
+    const dims = `${fmtMm(item.piece.width_mm)}×${fmtMm(item.piece.height_mm)}`;
     const key = `${dims}|${item.edges}`;
     const entry = perSize.get(key) ?? {
       dims,
@@ -147,11 +148,16 @@ export function glassSummaryCsv(groups: Group[], quantity: number): string {
     weightText(totalWeight, quantity, totalUnknown),
     "",
   ]);
-  return rows
-    .map((row) =>
-      row.map((cell) => (/[",\n]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell)).join(","),
-    )
-    .join("\n");
+  // `;` separator + BOM so the sheet opens correctly in Excel on es-CL locales
+  // (`,` parses columns wrong and UTF-8 accents garble without the BOM).
+  return (
+    "\uFEFF" +
+    rows
+      .map((row) =>
+        row.map((cell) => (/[";\n]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell)).join(";"),
+      )
+      .join("\n")
+  );
 }
 
 export function GlassSummary({

@@ -9,4 +9,10 @@
 export interface LineResponse {
   position_index: number;
   line_net: string;
+  /** @nullable */
+  quantity?: number | null;
+  /** @nullable */
+  unit_price?: string | null;
+  /** @nullable */
+  discount_pct?: string | null;
 }

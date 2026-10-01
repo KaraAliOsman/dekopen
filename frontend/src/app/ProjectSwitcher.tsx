@@ -54,11 +54,7 @@ export function ProjectSwitcher(): JSX.Element | null {
         </span>
       </button>
       {open && (
-        <div
-          className="shell-menu shell-menu--right"
-          role="menu"
-          aria-label={t("shell.switchProject")}
-        >
+        <div className="shell-menu shell-menu--right" aria-label={t("shell.switchProject")}>
           <p className="shell-menu__title">{t("shell.recentProjects")}</p>
           {query.isPending ? (
             <p className="shell-menu__meta">{t("projects.loading")}</p>
@@ -78,7 +74,6 @@ export function ProjectSwitcher(): JSX.Element | null {
               {candidates.map((item) => (
                 <li key={item.id}>
                   <Link
-                    role="menuitem"
                     className="shell-menu__item"
                     to={`/projects/${item.id}`}
                     onClick={() => setOpen(false)}

@@ -1,5 +1,4 @@
 .production-page {
-  padding: 1.5rem;
   color: var(--theme-text-primary);
   max-width: 90rem;
   margin: auto;
@@ -15,6 +14,24 @@
 .production-page [role="alert"] {
   color: var(--theme-danger);
 }
+/* Action refusals (422 shortage/gate/role) surface where the operator is
+   looking — a fixed toast — not a banner scrolled off the top of a long
+   order detail. */
+.production-action-error {
+  position: fixed;
+  left: 50%;
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 60;
+  max-width: min(34rem, calc(100vw - 2rem));
+  margin: 0;
+  padding: 0.65rem 1rem;
+  border: 1px solid var(--theme-danger);
+  border-radius: var(--radius-md, 8px);
+  background: var(--theme-surface-panel);
+  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.18));
+  font-weight: 600;
+}
 .production-layout {
   display: grid;
   grid-template-columns: minmax(16rem, 22rem) 1fr;
@@ -23,6 +40,10 @@
 }
 .production-orders,
 .production-detail {
+  /* Grid items default to min-width:auto — a single wide child (the
+     scrollable filter row, a long mono code) would stretch the whole track
+     and overflow the page on narrow screens. */
+  min-width: 0;
   border: 1px solid var(--theme-border-subtle);
   border-radius: 0.5rem;
   padding: 1rem;
@@ -30,9 +51,12 @@
 }
 .production-filters {
   display: flex;
-  flex-wrap: wrap;
+  /* Nine+ chips ragged-wrap onto two lines; one scrollable row stays clean. */
+  flex-wrap: nowrap;
   gap: var(--space-1);
   margin-bottom: var(--space-3);
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
 }
 
 .production-filter {
@@ -41,9 +65,11 @@
   background: var(--theme-surface);
   color: var(--theme-text-muted);
   cursor: pointer;
+  flex: none;
   font: inherit;
   font-size: var(--text-xs);
   padding: var(--space-1) var(--space-2);
+  white-space: nowrap;
 }
 
 .production-filter:hover {
@@ -57,8 +83,9 @@
   font-weight: 600;
 }
 
+/* Clear-filters reads as a control, not a placeholder — same solid chrome as
+ * the preset filters, de-emphasized by color only (review m12). */
 .production-filter-clear {
-  border-style: dashed;
   color: var(--theme-text);
 }
 
@@ -79,6 +106,17 @@
   font-size: var(--text-sm);
 }
 
+/* §11 station controls: the next-step bar is the operator's primary touch
+ * target — large hit area and type readable from the workstation. */
+.production-next .production-step-actions button {
+  min-height: 52px;
+  min-width: 120px;
+  padding: 0.6rem 1.1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+}
+
 .production-orders ul {
   list-style: none;
   margin: 0;
@@ -87,8 +125,12 @@
   gap: 0.5rem;
 }
 .production-order {
-  display: grid;
-  gap: 0.25rem;
+  /* Chips wrap onto their own row instead of squashing or overflowing the
+     card when the order carries several states at once. */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
   width: 100%;
   text-align: left;
   padding: 0.6rem 0.75rem;
@@ -96,6 +138,13 @@
   border-radius: 0.375rem;
   background: var(--theme-bg-canvas);
   color: var(--theme-text-primary);
+}
+.production-order .production-order-progress {
+  flex: 1 1 auto;
+}
+.production-order .production-order-next {
+  flex-basis: 100%;
+  order: 9;
 }
 .production-order.active {
   border-color: var(--theme-accent);
@@ -108,33 +157,17 @@
   font-size: 0.85rem;
   color: var(--theme-text-secondary);
 }
-.production-chip {
-  display: inline-block;
-  padding: 0.15rem 0.5rem;
-  border-radius: var(--radius-pill);
-  font-size: 0.75rem;
-  font-weight: 600;
-  border: 1px solid var(--theme-border-subtle);
-  color: var(--theme-text-secondary);
-}
-.production-chip.status-done,
-.production-chip.status-completed {
-  color: var(--theme-accent);
-  border-color: var(--theme-accent);
-}
-.production-chip.status-in_progress {
-  color: var(--theme-info, var(--theme-accent));
-  border-color: currentColor;
-}
-.production-chip.status-blocked,
-.production-chip.status-hold {
-  color: var(--theme-warning, #e56a32);
-  border-color: currentColor;
-}
 .production-detail-head {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.75rem;
+}
+.production-detail-head .production-chip,
+.production-order .production-chip {
+  /* Chip text wraps inside the chip before it ever overflows it. */
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .production-materials {
   display: flex;
@@ -162,13 +195,17 @@
   margin: 1rem 0;
   padding: 0;
   display: grid;
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
 .production-step {
+  align-items: center;
+  background: var(--theme-bg-canvas);
   border: 1px solid var(--theme-border-subtle);
   border-radius: 0.375rem;
-  padding: 0.75rem;
-  background: var(--theme-bg-canvas);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.55rem 0.75rem;
 }
 .production-step.step-done {
   opacity: 0.75;
@@ -190,14 +227,15 @@
   color: var(--theme-text-secondary);
 }
 .production-step-note {
-  margin: 0.5rem 0 0;
   color: var(--theme-text-secondary);
+  flex-basis: 100%;
   font-size: 0.9rem;
+  margin: 0.2rem 0 0;
 }
 .production-step-actions {
   display: flex;
   gap: 0.5rem;
-  margin-top: 0.6rem;
+  margin-left: auto;
 }
 .production-step-actions button,
 .production-order {
@@ -213,6 +251,14 @@
 .production-step-actions button:disabled {
   cursor: wait;
   opacity: 0.6;
+}
+.production-step-hint {
+  align-items: center;
+  color: var(--theme-text-secondary);
+  display: inline-flex;
+  font-size: var(--text-s, 12px);
+  font-style: italic;
+  padding: 0.4rem 0.2rem;
 }
 .production-remake {
   padding: 0.35rem 0.7rem;
@@ -246,6 +292,11 @@
   cursor: wait;
   opacity: 0.6;
 }
+.production-cnc .production-cutpack {
+  border-color: var(--theme-accent, #0f817a);
+  background: var(--theme-accent-soft);
+  font-weight: 600;
+}
 
 .production-remake:hover:not(:disabled) {
   background: color-mix(in srgb, var(--theme-mark) 12%, transparent);
@@ -277,6 +328,11 @@
   display: flex;
   gap: 0.75rem;
   font-size: 0.85rem;
+  flex-wrap: wrap;
+}
+.production-events li > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .production-events time {
   color: var(--theme-text-secondary);
@@ -297,6 +353,9 @@
   padding: 0.9rem;
   margin-bottom: 1rem;
   background: var(--theme-surface-panel);
+  /* Plan tables are wider than a phone — scroll inside the section, never
+     stretch the page. */
+  overflow-x: auto;
 }
 .production-optimize-head {
   display: flex;
@@ -340,6 +399,46 @@
   font-size: 0.85rem;
   margin: 0.5rem 0 0;
 }
+.production-invalidated {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--theme-danger);
+  border-radius: var(--radius-md);
+  background: var(--theme-danger-soft, #fbe9e7);
+  color: var(--theme-danger);
+  font-weight: 600;
+}
+.production-invalidated code {
+  margin-left: var(--space-2);
+  font-weight: 400;
+}
+.production-blockers {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-left: 3px solid var(--theme-warning, #b7791f);
+  background: var(--theme-warning-soft, #fdf3e0);
+  color: var(--theme-text);
+  font-size: 0.85rem;
+}
+.production-blockers li + li {
+  margin-top: var(--space-1);
+}
+.production-event-note {
+  display: block;
+  color: var(--theme-text-secondary);
+  font-style: normal;
+  font-size: 0.82rem;
+  margin-top: 0.125rem;
+}
+.production-remake-provenance {
+  margin: 0 0 var(--space-3);
+  color: var(--theme-text-secondary);
+  font-size: 0.85rem;
+}
+.production-remake-provenance strong {
+  color: var(--theme-text-primary);
+}
 .production-plan {
   width: 100%;
   border-collapse: collapse;
@@ -376,11 +475,26 @@
 .production-dispatch {
   border: 1px solid var(--accent, #0f817a);
   background: var(--accent, #0f817a);
-  color: #fff;
+  color: var(--theme-surface-panel);
+}
+
+.production-dispatch.production-void {
+  background: transparent;
+  color: var(--theme-danger, #b3261e);
+  border-color: var(--theme-danger, #b3261e);
+}
+
+.production-dispatch.is-voided {
+  background: transparent;
+  color: var(--theme-text-muted, #7d8794);
+  border-color: var(--theme-border-subtle, #c8ced6);
+  text-decoration: line-through;
 }
 
 .production-packing {
   margin-block: var(--space-4, 16px);
+  /* Packing tables can exceed a phone's width — scroll inside the section. */
+  overflow-x: auto;
 }
 
 .production-label-code {
@@ -418,7 +532,12 @@
   color: var(--ink-muted, #6b7280);
 }
 @media print {
-  .app-shell > :not(.workspace),
+  /* The label sheet lives inside .app-body > .workspace — hiding any ancestor
+     of .production-labels prints a blank page, so each level hides only the
+     label path's siblings. */
+  .app-shell > :not(.app-body),
+  .app-body > :not(.workspace),
+  .workspace > :not(.production-page),
   .production-page > :not(.production-layout),
   .production-layout > :not(.production-detail),
   .production-detail > :not(.production-packing),
@@ -426,6 +545,8 @@
     display: none !important;
   }
   .app-shell,
+  .app-body,
+  .workspace,
   .production-layout,
   .production-detail,
   .production-packing {
@@ -437,6 +558,19 @@
     padding: 0;
     border: 0;
     background: none;
+  }
+  .production-labels {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6mm;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .production-label {
+    break-inside: avoid;
+    border: 0.4pt solid var(--theme-border);
+    padding: 4mm;
   }
 }
 .production-delivery {
@@ -475,21 +609,58 @@
   display: flex;
   gap: 8px;
 }
-.production-chip.delivery-scheduled {
-  border-color: var(--accent);
+.production-delivery-trips {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
 }
-.production-chip.delivery-on_route {
-  border-color: var(--warn, #b7791f);
+.production-delivery-trip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper-2, #faf9f7);
 }
-.production-chip.delivery-delivered {
-  border-color: var(--ok, #2f855a);
+.production-delivery-trip-date {
+  font-weight: 600;
 }
-.production-chip.delivery-failed {
-  border-color: var(--danger, #c53030);
+.production-delivery-trip-units {
+  color: var(--ink-muted);
+  font-size: var(--text-s, 12px);
 }
-.production-chip-danger {
-  color: var(--danger, #c53030);
+.production-delivery-pending {
+  margin: 8px 0 0;
+  font-size: var(--text-s, 12px);
+  color: var(--ink-muted);
 }
+.production-delivery-units {
+  grid-column: 1 / -1;
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+}
+.production-delivery-units legend {
+  font-size: var(--text-s, 12px);
+  color: var(--ink-muted);
+  padding: 0 4px;
+}
+.production-delivery-unit-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.production-delivery-units-hint {
+  margin: 6px 0 0;
+  font-size: var(--text-xs, 11px);
+  color: var(--ink-muted);
+}
+
 .signature-pad {
   position: relative;
   margin-top: 4px;
@@ -502,6 +673,8 @@
   height: 160px;
   border: 1px solid var(--line, #d8dde2);
   border-radius: var(--radius-sm);
+  /* The pad is paper, not a theme surface: the captured PNG seals into the
+     printed POD, so it stays white with dark ink in either theme. */
   background: #fff;
   touch-action: none;
   cursor: crosshair;
@@ -549,6 +722,31 @@
   display: block;
   width: 100%;
   height: auto;
+}
+.cutplan-piece-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  font-size: 0.75rem;
+}
+.cutplan-piece-legend button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--theme-text-secondary);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.cutplan-piece-legend button:hover {
+  color: var(--theme-text-primary);
+}
+.cutplan-piece-legend button.is-selected {
+  color: var(--theme-accent);
+  font-weight: 600;
 }
 .cutplan-sheets {
   display: flex;
@@ -599,19 +797,20 @@
   stroke-width: 2.2;
 }
 .cutplan-cut-id {
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 600;
   fill: var(--theme-text-primary);
   font-family: "IBM Plex Mono", monospace;
 }
 .cutplan-cut-len {
-  font-size: 10px;
+  font-size: 13px;
+  font-weight: 600;
   fill: var(--theme-text-secondary);
   font-family: "IBM Plex Mono", monospace;
 }
-.cutplan-miter-mark {
-  font-size: 10px;
+.cutplan-miter-notch {
   fill: var(--theme-mark);
+  opacity: 0.85;
 }
 .cutplan-nest text {
   font-size: 9px;
@@ -669,6 +868,13 @@
 }
 .production-glass {
   margin-top: 0.75rem;
+  overflow-x: auto;
+}
+/* Operator-card tables (pieces/ops/cuts) scroll inside their section on
+   narrow screens instead of pushing the whole card wider than the viewport. */
+.operator-section,
+div:has(> table.production-plan) {
+  overflow-x: auto;
 }
 .production-glass-total td {
   font-weight: 600;
@@ -757,13 +963,45 @@
   gap: 0.25rem;
   font-size: 0.8125rem;
   flex: 1;
+  min-width: 0;
 }
 .production-trace-lookup input {
   font-family: var(--font-mono, ui-monospace, monospace);
+  min-width: 0;
+  width: 100%;
+}
+@media (max-width: 480px) {
+  .production-trace-lookup {
+    flex-wrap: wrap;
+  }
+  .production-trace-lookup label {
+    flex-basis: 100%;
+  }
 }
 .production-trace-empty {
   font-size: 0.8125rem;
   color: var(--text-dim, #5a6270);
+}
+/* Sidebar piece lookup (PM-M6): the control lives outside the order detail,
+   so it takes the sidebar width and matches open the order on click. */
+.production-orders .production-trace-lookup {
+  margin: 0.5rem 0.75rem 0;
+}
+.production-trace-match {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.production-trace-match:hover,
+.production-trace-match:focus-visible {
+  color: var(--ink, #1c2027);
+  outline: none;
+  text-decoration: underline;
 }
 
 /* §12 operator step card */
@@ -806,6 +1044,30 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+/* Persistent primary action: the step's live transitions stay pinned to the
+   bottom of the viewport while the card's materials/ops scroll beneath. */
+.operator-card-actions {
+  position: sticky;
+  bottom: 0;
+  margin: 0.75rem -1rem -1rem;
+  padding: 0.6rem 1rem;
+  border-top: 1px solid var(--line, #d9dce2);
+  border-radius: 0 0 8px 8px;
+  background: var(--surface-raised, #fbfcfe);
+  display: flex;
+  justify-content: flex-end;
+  z-index: 2;
+}
+.operator-card-actions .production-step-actions {
+  margin-left: 0;
+}
+.operator-card-actions .production-step-actions button {
+  min-height: 44px;
+  min-width: 110px;
+  padding: 0.55rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
 }
 .operator-section h4 {
   margin: 0 0 0.375rem;
@@ -889,16 +1151,568 @@
   opacity: 0.5;
   cursor: default;
 }
+.production-station-queue {
+  margin-bottom: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-card, 10px);
+}
+.production-station-queue h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--theme-text-secondary);
+}
+.production-station-queue > ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.production-station-queue li ul {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.production-station-counts {
+  display: block;
+  margin-left: 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--theme-text-secondary);
+}
+.production-station-empty {
+  margin: 0 0 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px dashed var(--theme-border-subtle);
+  border-radius: var(--radius-card, 10px);
+  font-size: 0.82rem;
+  color: var(--theme-text-secondary);
+}
+.production-station-empty button {
+  margin-left: 0.4rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--theme-accent);
+  background: transparent;
+  color: var(--theme-accent);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
 .production-order-next {
   display: block;
   font-size: 0.72rem;
   color: var(--theme-text-secondary);
 }
-.production-chip.is-warn {
-  color: var(--theme-warn, #b45309);
-  border-color: var(--theme-warn, #b45309);
+
+/* QC check ledger + entry form — large controls, high contrast for gloves. */
+.operator-qc-ledger td strong {
+  font-size: 0.78rem;
 }
-.production-chip.is-ready {
+.qc-result-pass {
+  color: var(--theme-success, #1a7f4b);
+}
+.qc-result-fail {
+  color: var(--theme-danger, #b3261e);
+}
+.operator-qc-form {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.8fr) 1.6fr 0.8fr 0.8fr auto auto;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  align-items: stretch;
+}
+.operator-qc-form select,
+.operator-qc-form input {
+  min-height: 44px;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.9rem;
+}
+.operator-qc-form button {
+  min-height: 44px;
+  padding: 0.45rem 1rem;
+  border-radius: var(--radius-sm, 6px);
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.qc-submit-pass {
+  border: 1px solid var(--theme-success, #1a7f4b);
+  background: var(--theme-success, #1a7f4b);
+  color: var(--theme-surface-panel);
+}
+.qc-submit-fail {
+  border: 1px solid var(--theme-danger, #b3261e);
+  background: transparent;
+  color: var(--theme-danger, #b3261e);
+}
+.operator-qc-form button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+@media (max-width: 900px) {
+  .operator-qc-form {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.production-compare {
+  background: transparent;
+  border: 1px solid var(--theme-accent);
   color: var(--theme-accent);
-  border-color: var(--theme-accent);
+}
+.production-optimize-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.5rem 0;
+  font-size: 0.8rem;
+  color: var(--theme-text-secondary);
+}
+.production-optimize-stats strong {
+  color: var(--theme-text);
+  font-size: 0.85rem;
+}
+.production-optimize-inputs {
+  margin: 0.4rem 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--theme-text-secondary);
+  max-width: 70ch;
+}
+.production-compare-table {
+  margin-top: 0.4rem;
+}
+.production-compare-table .production-compare-best {
+  background: color-mix(in srgb, var(--theme-success, #1a7f4b) 10%, transparent);
+}
+.production-compare-note {
+  margin: 0.3rem 0 0.5rem;
+  font-size: 0.75rem;
+  color: var(--theme-text-secondary);
+}
+
+.production-making {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: baseline;
+  font-size: 0.95rem;
+  margin: 0.25rem 0 0.5rem;
+  color: var(--theme-text-secondary);
+}
+.production-making strong {
+  color: var(--theme-text);
+  font-size: 1.05rem;
+}
+.production-making-location {
+  color: var(--theme-accent);
+}
+
+.production-packing-missing {
+  color: var(--theme-danger, #b3261e);
+  font-weight: 600;
+}
+
+/* CNC readiness — per-member machining verdicts and programs. */
+.cnc-panel {
+  margin-top: 0.6rem;
+  border: 1px solid var(--theme-border, #d8d4cd);
+  border-radius: 8px;
+  background: var(--theme-surface, #fff);
+}
+.cnc-panel-toggle {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  background: none;
+  border: none;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--theme-text);
+}
+.cnc-panel-body {
+  padding: 0.4rem 0.75rem 0.75rem;
+  /* The members×machines grid is inherently wide — scroll it inside the
+     panel instead of stretching the whole production page. */
+  overflow-x: auto;
+}
+.cnc-empty {
+  color: var(--theme-text-secondary);
+  font-size: 0.85rem;
+  margin: 0.25rem 0;
+}
+.cnc-error {
+  color: var(--theme-danger, #b3261e);
+  font-size: 0.85rem;
+  margin: 0.25rem 0;
+}
+.cnc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  table-layout: auto;
+  min-width: 0;
+}
+.cnc-table th,
+.cnc-table td {
+  word-break: break-word;
+}
+.cnc-workspace-grid > div {
+  min-width: 0;
+  overflow-x: auto;
+}
+.cnc-member-meta {
+  font-size: 0.75rem;
+  color: var(--theme-text-muted, #6b675f);
+}
+.cnc-hint {
+  font-size: 0.75rem;
+  color: var(--theme-text-muted, #6b675f);
+  margin: 0 0 0.35rem;
+}
+.cnc-required-tools {
+  font-size: 0.8rem;
+  color: var(--theme-text-muted, #6b675f);
+  margin: 0.15rem 0 0.4rem;
+}
+.cnc-table th,
+.cnc-table td {
+  text-align: left;
+  padding: 0.3rem 0.4rem;
+  border-bottom: 1px solid var(--theme-border, #d8d4cd);
+  vertical-align: top;
+}
+.cnc-member-label {
+  background: none;
+  border: none;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  color: var(--theme-accent);
+  display: inline-flex;
+  gap: 0.25rem;
+  align-items: center;
+}
+.cnc-verdict {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.cnc-verdict-pass {
+  background: color-mix(in srgb, var(--theme-success, #1a7f4b) 15%, transparent);
+  color: var(--theme-success, #1a7f4b);
+}
+.cnc-verdict-warn {
+  background: color-mix(in srgb, var(--theme-warning, #b26a00) 15%, transparent);
+  color: var(--theme-warning, #b26a00);
+}
+.cnc-verdict-block {
+  background: color-mix(in srgb, var(--theme-danger, #b3261e) 12%, transparent);
+  color: var(--theme-danger, #b3261e);
+}
+.cnc-verdict-unverified {
+  background: color-mix(in srgb, var(--theme-fg, #444) 10%, transparent);
+  color: var(--theme-fg, #444);
+}
+.cnc-issues {
+  margin: 0 0 0.75rem;
+  padding: 0.55rem 0.9rem;
+  border-left: 3px solid var(--theme-warning, #b26a00);
+  background: color-mix(in srgb, var(--theme-warning, #b26a00) 8%, transparent);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  list-style: none;
+}
+.cnc-issues li + li {
+  margin-top: 0.3rem;
+}
+.cnc-generate {
+  margin-right: 0.4rem;
+  font-size: 0.8rem;
+}
+.cnc-member-ops td {
+  background: var(--theme-bg, #faf9f7);
+}
+.cnc-ops {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+.cnc-ops th,
+.cnc-ops td {
+  padding: 0.2rem 0.4rem;
+  border-bottom: 1px dashed var(--theme-border, #d8d4cd);
+  text-align: left;
+}
+.cnc-programs {
+  margin-top: 0.75rem;
+}
+.cnc-programs h4 {
+  margin: 0 0 0.35rem;
+  font-size: 0.85rem;
+  color: var(--theme-text-secondary);
+}
+.cnc-programs ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.cnc-program {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  align-items: center;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--theme-border, #d8d4cd);
+  font-size: 0.85rem;
+}
+.cnc-program-stale {
+  opacity: 0.65;
+}
+.cnc-program-no {
+  font-family: var(--font-mono, monospace);
+  font-weight: 600;
+}
+.cnc-program-meta {
+  color: var(--theme-text-secondary);
+}
+.cnc-stale {
+  color: var(--theme-danger, #b3261e);
+  font-weight: 600;
+  font-size: 0.78rem;
+}
+.cnc-program-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 0.4rem;
+}
+.cnc-program-file {
+  font-size: 0.78rem;
+  padding: 0.15rem 0.5rem;
+}
+
+/* CNC workspace — machine + tool authority management. */
+.cnc-workspace {
+  margin-top: 0.75rem;
+  border: 1px solid var(--theme-border, #d8d4cd);
+  border-radius: 8px;
+  background: var(--theme-surface, #fff);
+}
+.cnc-workspace-grid {
+  display: grid;
+  gap: 1rem;
+}
+.cnc-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.35rem;
+}
+.cnc-section-head h3 {
+  margin: 0;
+  font-size: 0.9rem;
+}
+.cnc-add {
+  font-size: 0.8rem;
+  padding: 0.2rem 0.6rem;
+}
+.cnc-form {
+  margin-top: 0.5rem;
+  padding: 0.6rem;
+  border: 1px dashed var(--theme-border, #d8d4cd);
+  border-radius: 6px;
+  display: grid;
+  gap: 0.5rem;
+}
+.cnc-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.5rem;
+}
+.cnc-form-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.78rem;
+  color: var(--theme-text-secondary);
+}
+.cnc-form-group {
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+.cnc-form-group legend {
+  font-size: 0.78rem;
+  color: var(--theme-text-secondary);
+  padding: 0;
+}
+.cnc-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.9rem;
+  font-size: 0.8rem;
+}
+.cnc-checks label {
+  display: inline-flex;
+  gap: 0.3rem;
+  align-items: center;
+}
+.cnc-form-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* Member ops diagram — operator visual check before program generation. */
+.cnc-diagram {
+  margin: 0.35rem 0 0.6rem;
+}
+.cnc-diagram svg {
+  width: 100%;
+  max-width: 720px;
+  display: block;
+}
+.cnc-diagram-datum {
+  font-size: 10px;
+  fill: var(--theme-text-secondary);
+  font-weight: 600;
+}
+.cnc-diagram-datum-line {
+  stroke: var(--theme-text-secondary);
+  stroke-dasharray: 3 2;
+  stroke-width: 1;
+}
+.cnc-diagram-bar {
+  fill: var(--theme-surface-alt, #f1efe9);
+  stroke: var(--theme-border, #d8d4cd);
+  stroke-width: 1.5;
+}
+.cnc-diagram-op {
+  cursor: pointer;
+}
+.cnc-diagram-op .cnc-mark {
+  fill: var(--op-mark);
+  stroke: var(--op-mark-edge);
+  stroke-width: 1;
+}
+.cnc-diagram-op .cnc-mark-drill {
+  fill: var(--op-drill);
+  stroke: var(--op-drill-edge);
+}
+.cnc-diagram-op .cnc-mark-drainage {
+  fill: var(--op-water);
+  stroke: var(--op-water-edge);
+}
+.cnc-diagram-op .cnc-mark-ventilation {
+  fill: var(--op-water);
+  stroke: var(--op-water-edge);
+}
+.cnc-diagram-op .cnc-mark-slot {
+  fill: var(--op-cut);
+  stroke: var(--op-cut-edge);
+}
+.cnc-diagram-op .cnc-mark-routing {
+  fill: var(--op-cut);
+  stroke: var(--op-cut-edge);
+}
+.cnc-diagram-op .cnc-mark-milling {
+  fill: var(--op-mill);
+  stroke: var(--op-mill-edge);
+}
+.cnc-diagram-op .cnc-mark-edge {
+  fill: var(--op-edge-work);
+  stroke: var(--op-edge-work-edge);
+}
+.cnc-diagram-op .cnc-mark-custom {
+  fill: var(--op-edge-work);
+  stroke: var(--op-edge-work-edge);
+}
+.cnc-diagram-op .cnc-mark-hardware circle,
+.cnc-diagram-op .cnc-mark-hardware line {
+  fill: none;
+  stroke: var(--op-hardware);
+  stroke-width: 1.6;
+}
+.cnc-diagram-op.is-selected .cnc-mark,
+.cnc-diagram-op.is-selected .cnc-mark-hardware circle,
+.cnc-diagram-op.is-selected .cnc-mark-hardware line {
+  stroke: var(--theme-danger);
+  stroke-width: 2;
+}
+.cnc-diagram-seq {
+  font-size: 9px;
+  fill: var(--theme-text-secondary);
+  pointer-events: none;
+}
+.cnc-diagram-legend {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.78rem;
+  color: var(--theme-text-secondary);
+  margin: 0.15rem 0 0;
+}
+.cnc-diagram-missing {
+  color: var(--op-hardware);
+}
+.cnc-op-row {
+  cursor: pointer;
+}
+.cnc-op-row.is-selected td {
+  background: var(--op-selected-row);
+}
+.operator-member-strips {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0.35rem 0 0.6rem;
+}
+.operator-member-strip {
+  margin: 0;
+}
+.operator-member-strip svg {
+  width: 100%;
+  max-width: 640px;
+  display: block;
+}
+.operator-member-strip figcaption {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--theme-text-secondary);
+}
+.operator-member-datum {
+  font-size: 10px;
+  fill: var(--theme-text-secondary);
+  font-weight: 600;
+}
+.operator-member-datum-line {
+  stroke: var(--theme-text-secondary);
+  stroke-dasharray: 3 2;
+  stroke-width: 1;
+}
+.operator-member-bar {
+  fill: var(--theme-surface-alt, #f1efe9);
+  stroke: var(--theme-border, #d8d4cd);
+  stroke-width: 1.5;
+}
+.operator-member-op {
+  stroke: var(--op-mark);
+  stroke-width: 2;
+}
+.operator-member-seq {
+  font-size: 9px;
+  fill: var(--theme-text-secondary);
 }

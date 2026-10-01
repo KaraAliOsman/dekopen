@@ -5,6 +5,19 @@ import type { ProductJson } from "./productEditing";
 
 export type { DesignOp };
 
+/** Content fingerprint (FNV-1a over the normalized wire payload) the backend
+ * persists on each turn — a restored ops step refuses to apply when the live
+ * product no longer matches the product its ops were validated against. */
+export function productFingerprint(product: unknown): string {
+  const text = JSON.stringify(product) ?? "";
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
 /** The product wire shape the design-ops contract validates against — stable
  * domain ids (modules/couplings refs), not the full ProductJson. AssistantPanel
  * and the agent share this projection so both apply against the same graph. */
@@ -29,6 +42,10 @@ export function designAssistProduct(product: ProductJson): {
       id: module.id,
       width_mm: module.width_mm,
       height_mm: module.height_mm,
+      /* The tree carries intra-module structure — a "divide this module" edit
+       * leaves dims/couplings untouched but must still stale a pending ops
+       * card, so the fingerprint has to see bay splits and openings. */
+      tree: module.tree,
       ...(module.contour ? { contour: module.contour } : {}),
       ...(module.frameless ? { frameless: module.frameless } : {}),
     })),
@@ -79,7 +96,7 @@ export function applyDesignOps(
   // Synthetic refs resolve in apply order: after each structural op, the ids
   // it minted join the state so `added_m1`/`added_c2` in a later op points at
   // the real entity the sequence produced, never a guess.
-  const state: DesignOpState = { addedModules: [], addedCouplings: [] };
+  const state: DesignOpState = { addedModules: [], addedCouplings: [], origin: product };
   return ops.reduce((current, op) => {
     const next = applyDesignOp(current, op, specs, state);
     harvestAdded(state, current, next);
@@ -97,7 +114,7 @@ export function describeDesignOp(
   priorOps: DesignOp[] = [],
   specs: CommandSpec[] = ASSEMBLY_COMMANDS,
 ): string {
-  const state: DesignOpState = { addedModules: [], addedCouplings: [] };
+  const state: DesignOpState = { addedModules: [], addedCouplings: [], origin: product };
   const evolved = priorOps.reduce((current, prior) => {
     const next = applyDesignOp(current, prior, specs, state);
     harvestAdded(state, current, next);

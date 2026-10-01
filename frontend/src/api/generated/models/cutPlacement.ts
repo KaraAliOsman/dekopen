@@ -5,12 +5,12 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { BarAuthoritySourceEnum } from "./barAuthoritySourceEnum";
 import type { CutMaterialEnum } from "./cutMaterialEnum";
-import type { SourceKindEnum } from "./sourceKindEnum";
 
 export interface CutPlacement {
   piece_id: string;
-  source_kind: SourceKindEnum;
+  source_kind: BarAuthoritySourceEnum;
   workshop_sku: string;
   material: CutMaterialEnum;
   color: string;

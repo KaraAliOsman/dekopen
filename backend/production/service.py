@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 from decimal import Decimal
+from time import perf_counter
 import hashlib
 import json
 from uuid import UUID
@@ -28,13 +29,28 @@ from dekopen_engine.operations import (
     operations_from_plan,
     ops_document,
 )
-from documents.repository import DocumentaryError, documentary_backend, one, rows
+from documents.repository import (
+    DocumentaryError,
+    decoded,
+    documentary_backend,
+    one,
+    rows,
+    write,
+)
+from documents.renderers import (
+    _cut_key,
+    _cut_member_map,
+    _infill_code_map,
+    _infill_key,
+    _piece_labels,
+)
 from engine_api.cutting_repository import CuttingRepository
 from inventory import remnants as remnants_service
 from inventory import production_stock
-from production.confirmations import confirmation_summary
+from production.confirmations import _confirmation_public
 from production.dxf import dxf_files
 from production.dispatch_notes import issue_dispatch_note
+from projects import sii_envio
 from projects.service import project_row
 
 
@@ -92,10 +108,37 @@ _STEP_LABELS = {
 # glazing. Reservations stay open until their step completes.
 _STEP_CONSUMED_KINDS = {
     "CUT": {"BAR", "SHEET"},
+    # Dedicated saws consume the same BAR reservations as the generic CUT
+    # step — whichever bar-cutting station completes first settles them,
+    # and the consumed_at stamp keeps the other stations idempotent.
+    "PROFILE_CUT": {"BAR"},
+    "REINFORCEMENT_CUT": {"BAR"},
     "ASSEMBLE": {"HARDWARE_KIT", "FITTING"},
     "HARDWARE": {"HARDWARE_KIT", "FITTING"},
     "GLAZE": {"PANEL"},
 }
+
+# Stations that physically drop bars: the order's remnant settle runs when
+# the first of them completes (consumed/produced writes are once-per-order).
+_BAR_DROP_STATIONS = frozenset(
+    code for code, kinds in _STEP_CONSUMED_KINDS.items() if "BAR" in kinds
+)
+
+# Stations that physically work the sealed plan without consuming stock:
+# they must never START or COMPLETE against a missing/invalidated plan —
+# a machining cell running a dead program produces scrap, not just bad
+# bookkeeping. Stock settlement itself still lives in _STEP_CONSUMED_KINDS.
+_PLAN_REQUIRED_STATIONS = {"MACHINING", "PROFILE_CUT", "REINFORCEMENT_CUT"}
+
+# Steps where execution evidence is per-operation: COMPLETE must declare
+# every member machining op routed to the station (review: a machining
+# step completing with zero ops recorded is a status flip, not work).
+_OPS_EVIDENCE_STATIONS = {"MACHINING", "PROFILE_CUT", "REINFORCEMENT_CUT"}
+
+# The QC step is the check on everyone else's work — the operator who ran
+# the saw must not be the signature that verifies it (producer/verifier
+# separation).
+_QC_STEP_ACTORS = {"OWNER", "WORKSHOP_MANAGER"}
 
 # Glass and panel infills always carry a CUT_TO_SIZE purchase authority —
 # pieces no workshop sheet hosts are supplied finished, not short. Only an
@@ -112,6 +155,7 @@ _EVENTS = {
     "BLOCK": "STEP_BLOCKED",
     "UNBLOCK": "STEP_UNBLOCKED",
     "NOTE": "NOTE",
+    "QC_CHECK": "QC_CHECK",
 }
 
 _TRANSITIONS = {
@@ -120,7 +164,61 @@ _TRANSITIONS = {
     "BLOCK": ("BLOCKED", {"PENDING", "READY", "IN_PROGRESS"}),
     "UNBLOCK": ("READY", {"BLOCKED"}),
     "NOTE": (None, {"PENDING", "READY", "IN_PROGRESS", "DONE", "BLOCKED"}),
+    # §13: recording one measured check on the QC step is not a status
+    # change — the step still completes via COMPLETE/QC_FAILED.
+    "QC_CHECK": (None, {"READY", "IN_PROGRESS", "BLOCKED"}),
 }
+
+
+def _member_ops_for_station(
+    *, org_id: UUID, order: dict[str, object], station: str
+) -> dict[str, str]:
+    """operation_id → human label (``M-07 · HANDLE_PREP``) for the member
+    machining ops the frozen routing assigns to ``station`` — the same
+    sealed derivation the operator card and ops export read. Empty when the
+    order has no derivable plan (the plan gates then refuse first)."""
+    from production import trace as production_trace
+    from production.pack import _OP_LABELS
+
+    payload = _decoded(order.get("payload_json"))
+    optimization = payload.get("optimization")
+    if not isinstance(optimization, dict) or not optimization.get("bars"):
+        return {}
+    if not order.get("project_version_id"):
+        return {}
+    version_row = one(
+        """
+        SELECT snapshot_json::text AS snapshot_json
+        FROM public.project_versions WHERE id = %s AND org_id = %s
+        """,
+        [str(order["project_version_id"]), str(org_id)],
+        "work_order_missing_version",
+    )
+    version_snapshot = _decoded(version_row["snapshot_json"])
+    ops_doc = production_trace._trace_operations(
+        payload=payload,
+        optimization=optimization,
+        version_snapshot=version_snapshot,
+    )
+    try:
+        labels = _piece_labels(version_snapshot)
+    except DocumentaryError:
+        labels = {}
+    member_labels = {
+        **(labels.get("member") or {}),
+        **(labels.get("reinforcement") or {}),
+    }
+    expected: dict[str, str] = {}
+    for op in ops_doc.get("items", []):
+        if op.get("host_kind") != "MEMBER" or op.get("station") != station:
+            continue
+        code = member_labels.get(str(op.get("host"))) or f"pieza {len(expected) + 1}"
+        kind_label = _OP_LABELS.get(str(op.get("kind")), str(op.get("kind")))
+        detail = op.get("detail")
+        if isinstance(detail, dict) and detail.get("feature") == "point_prep":
+            kind_label = "Ref. montaje"
+        expected[str(op["operation_id"])] = f"{code} · {kind_label}"
+    return expected
 
 
 def _ensure_work_centers(
@@ -331,6 +429,7 @@ def _station_has_work(
     end_milling_overlap_mm: object = None,
     has_handles: bool = False,
     handle_station: str = "MACHINING",
+    mapped_emitting: set[str] | None = None,
 ) -> bool:
     """'auto' stations land only when the sealed result carries work."""
     cuts = engine_result.get("profile_cuts") or []
@@ -338,6 +437,13 @@ def _station_has_work(
     # A handle op exists wherever the profile sends HANDLE_PREP — frameless
     # and mixed profiles route it to HARDWARE, never assume the mill.
     if has_handles and code == handle_station:
+        return True
+    # Reconcile the two authority sources (manager review #7): an op kind
+    # the operation_station_map routes to this station and that the sealed
+    # facts will emit claims the station — regardless of what the
+    # materials-based heuristic says. A mapped station must never be
+    # pruned under an op it owns.
+    if code in (mapped_emitting or set()):
         return True
     if code == "CUT":
         return bool(cuts or engine_result.get("reinforcements"))
@@ -360,6 +466,27 @@ def _station_has_work(
     return True
 
 
+def _emitting_kinds(
+    *,
+    end_milling_overlap_mm: object = None,
+    has_handles: bool = False,
+) -> set[str]:
+    """The member op kinds the sealed facts will emit — kept in lockstep
+    with ``operations_from_plan``'s authority checks so routing and ops
+    can't diverge on what work exists."""
+    kinds = {"SAW_CUT"}
+    if has_handles:
+        kinds.add("HANDLE_PREP")
+    try:
+        if end_milling_overlap_mm is not None and Decimal(
+            str(end_milling_overlap_mm)
+        ) > 0:
+            kinds.add("END_MACHINING")
+    except ArithmeticError:
+        pass
+    return kinds
+
+
 def _routing(
     engine_result: dict[str, object],
     *,
@@ -380,10 +507,19 @@ def _routing(
             {"code": "QC", "when": "required"},
             {"code": "PACK", "when": "required"},
         ]
-    handle_station = str(
-        ((profile or {}).get("operation_station_map") or {}).get("HANDLE_PREP")
-        or "MACHINING"
+    operation_map = (profile or {}).get("operation_station_map") or {}
+    handle_station = str(operation_map.get("HANDLE_PREP") or "MACHINING")
+    emitting = _emitting_kinds(
+        end_milling_overlap_mm=end_milling_overlap_mm,
+        has_handles=has_handles,
     )
+    # Stations that own a kind the sealed facts will emit — claimed here so
+    # _station_has_work can't prune the station its op is mapped to.
+    mapped_emitting = {
+        str(station)
+        for kind, station in operation_map.items()
+        if str(kind) in emitting
+    }
     routing: list[str] = []
     for station in stations:
         if not isinstance(station, dict):
@@ -397,6 +533,7 @@ def _routing(
             end_milling_overlap_mm=end_milling_overlap_mm,
             has_handles=has_handles,
             handle_station=handle_station,
+            mapped_emitting=mapped_emitting,
         ):
             routing.append(code)
     return routing
@@ -512,15 +649,21 @@ def _public_step(step: dict[str, object]) -> dict[str, object]:
 
 
 def _order_shortage(payload: dict[str, object] | None) -> int:
-    """§8 shortage signal: post-optimize the reservation ledger is freshest;
-    before that, the release-time prep count still warns the workshop."""
+    """The order's own shortage — only its reservation ledger counts. Before
+    optimization there is no per-order signal; the version-wide prep count
+    surfaces separately as ``version_shortage`` so a sibling position's
+    shortfall is never dressed up as this order's."""
     reservations = ((payload or {}).get("optimization") or {}).get("stock_reservations")
-    if reservations is not None:
-        return sum(
-            1
-            for entry in reservations
-            if str(entry.get("short") or "0") not in ("", "0", "0.00")
-        )
+    if reservations is None:
+        return 0
+    return sum(
+        1
+        for entry in reservations
+        if str(entry.get("short") or "0") not in ("", "0", "0.00")
+    )
+
+
+def _version_shortage(payload: dict[str, object] | None) -> int:
     prep = (payload or {}).get("prep") or {}
     try:
         return int(prep.get("shortages") or 0)
@@ -555,6 +698,11 @@ def _public_order(order: dict[str, object], *, include_payload: bool = False) ->
             and not order.get("has_dispatch_note")
         ),
         "shortage": _order_shortage(payload),
+        "version_shortage": _version_shortage(payload),
+        # Remake provenance travels on the order row so the floor sees WHY
+        # this unit is being rebuilt without opening the source order
+        # ({qc_item, note} — the QC failure that triggered it).
+        "remake_reason": (payload or {}).get("remake_reason"),
         "created_at": order["created_at"],
     }
     if include_payload:
@@ -577,6 +725,21 @@ def release_production(*, org_id: UUID, version_id: UUID, actor_id: UUID) -> dic
         )
         if not version["production_allowed"]:
             raise DocumentaryError("version_not_releasable")
+        # A sealed version stays valid only while it is the newest one —
+        # once a later revision froze, releasing the superseded quote would
+        # build the wrong product (review WM2).
+        # Revision codes are base-26 (REV-Z → REV-AA), so recency sorts by
+        # suffix length then lexicographically, never plain text order.
+        latest = rows(
+            """
+            SELECT revision_code::text AS code FROM public.project_versions
+            WHERE project_id = %s AND org_id = %s
+            ORDER BY length(revision_code) DESC, revision_code DESC LIMIT 1
+            """,
+            [str(version["project_id"]), str(org_id)],
+        )
+        if latest and str(latest[0]["code"]) != str(version["revision_code"]):
+            raise DocumentaryError("version_superseded")
         snapshot = version["snapshot_json"]
         if isinstance(snapshot, str):
             snapshot = json.loads(snapshot)
@@ -604,6 +767,19 @@ def release_production(*, org_id: UUID, version_id: UUID, actor_id: UUID) -> dic
             for pos in snapshot.get("positions") or []
             if pos.get("id")
         }
+        # Declared process authority is a release gate, not advisory: a
+        # position resolved to GENERIC_LEGACY means no bound/material process
+        # profile exists — the routing would be invented. Re-seal on a
+        # catalog with real process authority instead of shipping it.
+        unresolved = sorted(
+            str(pos.get("code") or pos.get("position_index") or pid)
+            for pos in (snapshot.get("positions") or [])
+            for pid in (str(pos.get("id")),)
+            if not isinstance(pos.get("process_facts"), dict)
+            or pos["process_facts"].get("resolved_via") == "generic_fallback"
+        )
+        if unresolved:
+            raise DocumentaryError("production_process_unresolved")
         generic_profile, _ = _load_profile_for(org_id, code="GENERIC_LEGACY")
         polishing_by_position = {
             str(pos.get("id")): pos.get("glass_polishing") or []
@@ -715,7 +891,7 @@ def release_production(*, org_id: UUID, version_id: UUID, actor_id: UUID) -> dic
                             seq,
                             str(center["id"]) if center else None,
                             code,
-                            _STEP_LABELS[code],
+                            _STEP_LABELS.get(code, code),
                         ],
                     )
                 rows(
@@ -731,6 +907,14 @@ def release_production(*, org_id: UUID, version_id: UUID, actor_id: UUID) -> dic
                         json.dumps({"order_code": order_code, "position_id": payload["position_id"]}),
                     ],
                 )
+        # The project lifecycle moves with the work: once work orders exist
+        # the deal is no longer "cotizada" — dashboards, the stepper and the
+        # next-action all derive from project.status.
+        write(
+            "UPDATE public.projects SET status='IN_PRODUCTION',updated_at=clock_timestamp() "
+            "WHERE id=%s AND org_id=%s AND status IN ('QUOTED','APPROVED')",
+            [str(version["project_id"]), str(org_id)],
+        )
         # §8: the moment a version becomes work, the workshop should already
         # see the material shortage signal the purchasing coverage computes —
         # not only after someone clicks optimize. One coverage read stamps
@@ -751,6 +935,19 @@ def release_production(*, org_id: UUID, version_id: UUID, actor_id: UUID) -> dic
                 """,
                 [json.dumps({"prep": prep_stamp}), str(order_id), str(org_id)],
             )
+        # §08: released into a known shortage → a purchase task per order,
+        # queued inside this tx so the task exists iff the release does.
+        if prep_stamp["shortages"] > 0:
+            from automations.service import emit
+
+            for order_id in order_ids:
+                emit(
+                    "automation.purchase_task",
+                    org_id=org_id,
+                    actor_id=actor_id,
+                    idempotency_key=f"auto:buy:{order_id}:forecast",
+                    order_id=str(order_id),
+                )
         orders = rows(
             """
             SELECT o.id, o.order_code, o.order_type::text, o.status::text, o.payload_json,
@@ -762,6 +959,7 @@ def release_production(*, org_id: UUID, version_id: UUID, actor_id: UUID) -> dic
                     ORDER BY s2.sequence LIMIT 1) AS next_step_code,
                    EXISTS(SELECT 1 FROM public.dispatch_notes dn
                           WHERE dn.org_id = o.org_id AND dn.work_order_id = o.id
+                            AND dn.voided_at IS NULL
                          ) AS has_dispatch_note
             FROM public.orders o
             LEFT JOIN public.production_steps s ON s.order_id = o.id
@@ -790,11 +988,13 @@ def list_production_orders(*, org_id: UUID) -> dict[str, object]:
                 ORDER BY s2.sequence LIMIT 1) AS next_step_code,
                EXISTS(SELECT 1 FROM public.dispatch_notes dn
                       WHERE dn.org_id = o.org_id AND dn.work_order_id = o.id
+                        AND dn.voided_at IS NULL
                      ) AS has_dispatch_note
         FROM public.orders o
         LEFT JOIN public.production_steps s ON s.order_id = o.id
         WHERE o.org_id = %s AND o.order_type = 'WORKSHOP_OT'
         GROUP BY o.id ORDER BY o.created_at DESC
+        LIMIT 300
         """,
         [str(org_id)],
     )
@@ -815,10 +1015,21 @@ def production_prep(*, org_id: UUID) -> dict[str, object]:
             FROM public.project_versions v
             JOIN public.projects p ON p.id = v.project_id AND p.org_id = v.org_id
             WHERE v.org_id = %s AND v.production_allowed
+              AND jsonb_array_length(COALESCE(v.snapshot_json->'bom', '[]'::jsonb)) > 0
               AND NOT EXISTS (
                   SELECT 1 FROM public.orders o
                   WHERE o.org_id = v.org_id AND o.project_version_id = v.id
                     AND o.order_type = 'WORKSHOP_OT'
+              )
+              AND NOT EXISTS (
+                  -- Mirrors release_production's supersede gate: only the
+                  -- newest revision per project (base-26 code order, across
+                  -- every version — an unreleasable newer revision still
+                  -- supersedes) can actually be released.
+                  SELECT 1 FROM public.project_versions v2
+                  WHERE v2.org_id = v.org_id AND v2.project_id = v.project_id
+                    AND (length(v2.revision_code), v2.revision_code)
+                      > (length(v.revision_code), v.revision_code)
               )
             ORDER BY v.emitted_at DESC NULLS LAST, v.id
             """,
@@ -856,12 +1067,30 @@ def confirm_installation(
             return get_work_order(org_id=org_id, order_id=order_id)
         if order["status"] != "DISPATCHED":
             raise DocumentaryError("installation_requires_dispatched")
-        delivery = rows(
-            "SELECT status FROM public.deliveries WHERE order_id = %s AND org_id = %s",
+        payload = _decoded(order["payload_json"]) or {}
+        manifest = _manifest_unit_indexes(payload)
+        deliveries = rows(
+            "SELECT status::text AS status, unit_indexes FROM public.deliveries "
+            "WHERE order_id = %s AND org_id = %s",
             [str(order_id), str(org_id)],
         )
-        if delivery and str(delivery[0]["status"]) != "DELIVERED":
+        delivered: set[int] = set()
+        for delivery in deliveries:
+            if str(delivery["status"]) == "DELIVERED":
+                delivered |= _delivery_unit_set(delivery, manifest)
+        if manifest - delivered:
+            # Partial trips leave a saldo pendiente — installation claims the
+            # whole order only once every unit has its signed delivery.
             raise DocumentaryError("installation_requires_delivered")
+        # DELIVERED is only stamped by confirm_delivery, so this should always
+        # hold; verify anyway so a hand-edited row can't produce an installed
+        # order with no sealed comprobante.
+        if not rows(
+            "SELECT id FROM public.delivery_confirmations "
+            "WHERE order_id = %s AND org_id = %s",
+            [str(order_id), str(org_id)],
+        ):
+            raise DocumentaryError("installation_requires_confirmation")
         rows(
             "UPDATE public.orders SET status = 'INSTALLED', updated_at = %s "
             "WHERE id = %s AND org_id = %s RETURNING id",
@@ -886,6 +1115,220 @@ def confirm_installation(
     return get_work_order(org_id=org_id, order_id=order_id)
 
 
+def cancel_work_order(
+    *, org_id: UUID, order_id: UUID, actor_id: UUID, note: str | None
+) -> dict[str, object]:
+    """Cancel a workshop order: release its still-open stock reservations and
+    remnant holds, freeze the routing where it stands and stamp the
+    cancellation on the order row + event trail. Consumed material stays
+    consumed — the ledger keeps proving what was actually cut.
+
+    Only orders whose goods never physically moved may cancel: DISPATCHED or
+    INSTALLED orders are customer-facing facts (the counter-documents live on
+    the dispatch/invoice side), and a live delivery route must be closed
+    first."""
+    note = (note or "").strip()[:500] or None
+    with transaction.atomic(), documentary_backend():
+        order = one(
+            """
+            SELECT id, order_code, status::text, payload_json
+            FROM public.orders
+            WHERE id = %s AND org_id = %s AND order_type = 'WORKSHOP_OT'
+            FOR UPDATE
+            """,
+            [str(order_id), str(org_id)],
+            "work_order_not_found",
+        )
+        status_now = str(order["status"])
+        if status_now == "CANCELLED":
+            return get_work_order(org_id=org_id, order_id=order_id)
+        if status_now in ("DISPATCHED", "INSTALLED"):
+            raise DocumentaryError(
+                "work_order_cancel_unavailable",
+                detail=(
+                    "La orden ya salió del taller: se cierra con la guía de "
+                    "despacho o el comprobante, no se puede anular."
+                ),
+            )
+        live_delivery = rows(
+            """
+            SELECT id FROM public.deliveries
+            WHERE order_id = %s AND org_id = %s
+              AND status IN ('SCHEDULED', 'ON_ROUTE', 'DELIVERED')
+            """,
+            [str(order_id), str(org_id)],
+        )
+        if live_delivery:
+            raise DocumentaryError(
+                "work_order_delivery_open",
+                detail=(
+                    "La orden tiene un reparto agendado o en curso: ciérralo "
+                    "como fallido antes de anular la orden."
+                ),
+            )
+        released = production_stock.release_for_order(
+            org_id=org_id, order_id=order_id, actor_id=actor_id
+        )
+        remnants_service.release_reservations(org_id=org_id, order_id=order_id)
+        pending_steps = one(
+            """
+            SELECT COUNT(*) AS open
+            FROM public.production_steps
+            WHERE order_id = %s AND org_id = %s AND status <> 'DONE'
+            """,
+            [str(order_id), str(org_id)],
+        )
+        now = datetime.now(timezone.utc)
+        rows(
+            """
+            UPDATE public.orders
+            SET status = 'CANCELLED'::order_status, cancelled_by = %s,
+                cancelled_at = %s, updated_at = %s
+            WHERE id = %s AND org_id = %s
+            RETURNING id
+            """,
+            [str(actor_id), now, now, str(order_id), str(org_id)],
+        )
+        rows(
+            """
+            INSERT INTO public.production_step_events(
+                org_id, order_id, event, actor_id, payload)
+            VALUES (%s, %s, 'WO_CANCELLED', %s, %s::jsonb)
+            RETURNING id
+            """,
+            [
+                str(org_id),
+                str(order_id),
+                str(actor_id),
+                json.dumps(
+                    {
+                        "order_code": order["order_code"],
+                        "note": note,
+                        "reservations_released": released,
+                        "steps_open": int(pending_steps["open"]),
+                    }
+                ),
+            ],
+        )
+    return get_work_order(org_id=org_id, order_id=order_id)
+
+
+def recheck_work_order_material(
+    *, org_id: UUID, order_id: UUID, actor_id: UUID
+) -> dict[str, object]:
+    """Re-check live stock against the order's open (unconsumed) shortage
+    rows — the path that unblocks an order once its missing goods actually
+    arrive. Without it a material-consuming step stays gated on the snapshot
+    taken at optimize time even though the kit is now on the shelf.
+
+    Consumed rows are sealed and never re-checked; unplaced plan pieces still
+    need a real re-optimize. Returns the refreshed reservation list so the UI
+    can show what is still missing."""
+    with transaction.atomic(), documentary_backend():
+        order = one(
+            """
+            SELECT id, order_code, status::text, payload_json
+            FROM public.orders
+            WHERE id = %s AND org_id = %s AND order_type = 'WORKSHOP_OT'
+            FOR UPDATE
+            """,
+            [str(order_id), str(org_id)],
+            "work_order_not_found",
+        )
+        if str(order["status"]) == "CANCELLED":
+            raise DocumentaryError("work_order_cancelled")
+        payload_full = _decoded(order["payload_json"])
+        opt = payload_full.get("optimization") or {}
+        if not opt or opt.get("stock_reservations") is None:
+            raise DocumentaryError(
+                "work_order_plan_missing",
+                detail="La orden no tiene un plan de corte: optimízala antes de revisar material.",
+            )
+        if opt.get("invalidated"):
+            raise DocumentaryError(
+                "work_order_plan_stale",
+                detail=(
+                    "El plan de corte perdió material reservado: "
+                    "vuelve a optimizar la orden antes de revisar material."
+                ),
+            )
+        reservations = opt["stock_reservations"]
+        short_before = {
+            str(entry.get("sku"))
+            for entry in reservations
+            if not entry.get("consumed_at")
+            and str(entry.get("short") or "0") not in ("", "0", "0.00")
+            and entry.get("sku")
+        }
+        before = len(short_before)
+        settled = production_stock.recheck_reservations(
+            org_id=org_id,
+            order_id=order_id,
+            actor_id=actor_id,
+            reservations=reservations,
+        )
+        after = sum(
+            1
+            for entry in settled
+            if not entry.get("consumed_at")
+            and str(entry.get("short") or "0") not in ("", "0", "0.00")
+        )
+        payload_full["optimization"] = opt
+        opt["stock_reservations"] = settled
+        rows(
+            """
+            UPDATE public.orders SET payload_json = %s::jsonb, updated_at = %s
+            WHERE id = %s AND org_id = %s
+            RETURNING id
+            """,
+            [json.dumps(payload_full), datetime.now(timezone.utc),
+             str(order_id), str(org_id)],
+        )
+        rows(
+            """
+            INSERT INTO public.production_step_events(
+                org_id, order_id, event, actor_id, payload)
+            VALUES (%s, %s, 'WO_MATERIAL_RECHECK', %s, %s::jsonb)
+            RETURNING id
+            """,
+            [
+                str(org_id),
+                str(order_id),
+                str(actor_id),
+                json.dumps(
+                    {
+                        "order_code": order["order_code"],
+                        "shortages_before": before,
+                        "shortages_after": after,
+                        # "Filled" names only SKUs that were short before the
+                        # recheck — the delta the operator came for, not the
+                        # whole covered list.
+                        "filled": sorted(
+                            str(e["sku"])
+                            for e in settled
+                            if str(e.get("sku")) in short_before
+                            and not e.get("consumed_at")
+                            and str(e.get("short") or "0") in ("", "0", "0.00")
+                            and str(e.get("reserved") or "0") not in ("", "0", "0.00")
+                        ),
+                        "still_short": [
+                            str(e["sku"])
+                            for e in settled
+                            if not e.get("consumed_at")
+                            and str(e.get("short") or "0") not in ("", "0", "0.00")
+                        ],
+                    }
+                ),
+            ],
+        )
+    return {
+        "order_id": str(order_id),
+        "order_code": order["order_code"],
+        "stock_reservations": settled,
+        "shortage": _order_shortage(payload_full),
+    }
+
+
 def get_work_order(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
     order = one(
         """
@@ -898,6 +1341,7 @@ def get_work_order(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
                 ORDER BY s2.sequence LIMIT 1) AS next_step_code,
                EXISTS(SELECT 1 FROM public.dispatch_notes dn
                       WHERE dn.org_id = o.org_id AND dn.work_order_id = o.id
+                        AND dn.voided_at IS NULL
                      ) AS has_dispatch_note
         FROM public.orders o
         LEFT JOIN public.production_steps s ON s.order_id = o.id
@@ -919,47 +1363,116 @@ def get_work_order(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
     )
     events = rows(
         """
-        SELECT id, step_id, event, actor_id, payload, created_at
-        FROM public.production_step_events
-        WHERE order_id = %s AND org_id = %s
-        ORDER BY created_at
+        SELECT ev.id, ev.step_id, ev.event, ev.actor_id, ev.actor_label,
+               ev.payload, ev.created_at, st.code::text AS step_code
+        FROM public.production_step_events ev
+        LEFT JOIN public.production_steps st ON st.id = ev.step_id
+        WHERE ev.order_id = %s AND ev.org_id = %s
+        ORDER BY ev.created_at
         """,
         [str(order_id), str(org_id)],
     )
     dispatch_note = rows(
-        "SELECT id, note_code FROM public.dispatch_notes "
-        "WHERE org_id=%s AND work_order_id=%s",
+        "SELECT id, note_code, voided_at, voided_reason, unit_indexes, created_at "
+        "FROM public.dispatch_notes "
+        "WHERE org_id=%s AND work_order_id=%s "
+        "ORDER BY created_at DESC",
         [str(org_id), str(order_id)],
     )
+    live_note = next((row for row in dispatch_note if row.get("voided_at") is None), None)
     output = _public_order(order, include_payload=True)
     output["dispatch_note_code"] = (
-        dispatch_note[0]["note_code"] if dispatch_note else None
+        live_note["note_code"] if live_note else None
     )
-    if dispatch_note:
+    output["dispatch_note_voided"] = bool(dispatch_note) and live_note is None
+    output["dispatch_notes"] = [
+        {
+            "id": str(row["id"]),
+            "note_code": row["note_code"],
+            "unit_indexes": (
+                sorted(int(i) for i in row["unit_indexes"])
+                if row.get("unit_indexes") is not None
+                else None
+            ),
+            "voided": row.get("voided_at") is not None,
+            "created_at": row["created_at"].isoformat()
+            if hasattr(row["created_at"], "isoformat")
+            else row["created_at"],
+        }
+        for row in dispatch_note
+    ]
+    if live_note:
         dte = rows(
-            "SELECT dte_type, folio, issued_at FROM public.project_dtes "
-            "WHERE org_id=%s AND dispatch_note_id=%s",
-            [str(org_id), str(dispatch_note[0]["id"])],
+            "SELECT d.id, d.dte_type, d.folio, d.issued_at "
+            "FROM public.project_dtes d "
+            "WHERE d.org_id=%s AND d.dispatch_note_id=%s",
+            [str(org_id), str(live_note["id"])],
         )
+        envios = sii_envio.envios_by_dispatch_note(org_id=org_id)
         output["dispatch_note_dte"] = (
             {
                 "dte_type": int(dte[0]["dte_type"]),
                 "folio": int(dte[0]["folio"]),
                 "issued_at": dte[0]["issued_at"],
+                "envio": envios.get(str(live_note["id"])),
             }
             if dte
             else None
         )
     else:
         output["dispatch_note_dte"] = None
+    # §10 "what are we making": the sealed position's physical identity —
+    # typology/dimensions/finish/location — projected out of the frozen
+    # snapshot. Only workshop fields cross; commercial data never leaves
+    # the documentary context.
+    output["making"] = None
+    if order["project_version_id"]:
+        position_id = _decoded(order["payload_json"]).get("position_id")
+        with documentary_backend():
+            snapshot = one(
+                """
+                SELECT snapshot_json::text FROM public.project_versions
+                WHERE id = %s AND org_id = %s
+                """,
+                [str(order["project_version_id"]), str(org_id)],
+                "work_order_not_found",
+            )
+        sealed_snapshot = _decoded(snapshot.get("snapshot_json"))
+        sealed_positions = sealed_snapshot.get("positions") or []
+        # The sealed project's delivery address prefills the delivery form —
+        # workshop data only; the commercial fields stay out of the payload.
+        output["delivery_address"] = (
+            sealed_snapshot.get("project") or {}
+        ).get("delivery_address")
+        sealed = next(
+            (
+                pos
+                for pos in sealed_positions
+                if isinstance(pos, dict) and str(pos.get("id")) == str(position_id)
+            ),
+            None,
+        )
+        if sealed:
+            output["making"] = {
+                key: sealed.get(key)
+                for key in (
+                    "position_index", "code", "typology", "quantity",
+                    "width_mm", "height_mm", "color_interior",
+                    "color_exterior", "location_tag",
+                )
+            }
     output["steps"] = [_public_step(step) for step in steps]
     output["events"] = [
         {
             "id": str(event["id"]),
             "step_id": str(event["step_id"]) if event["step_id"] else None,
+            "step_code": event.get("step_code"),
             "event": event["event"],
             "actor_id": str(event["actor_id"]) if event["actor_id"] else None,
-            "payload": event["payload"],
+            "actor_label": event.get("actor_label"),
+            # JSONB may surface as a raw string through this cursor — decode so
+            # the client reads payload.qc_item / payload.note, not a blob.
+            "payload": _decoded(event["payload"]),
             "created_at": event["created_at"],
         }
         for event in events
@@ -1038,11 +1551,37 @@ def transition_step(
     actor_id: UUID,
     note: str | None,
     qc_result: str | None = None,
+    qc_check: dict[str, object] | None = None,
+    qc_item: str | None = None,
+    actor_role: str | None = None,
+    ops_done: list[str] | None = None,
 ) -> dict[str, object]:
     if action not in _TRANSITIONS:
         raise DocumentaryError("step_action_unknown")
+    if qc_item is not None:
+        qc_item = str(qc_item).strip()[:50] or None
+        if qc_item and qc_result != "FAIL":
+            raise DocumentaryError("qc_item_requires_fail")
     if action == "NOTE" and not (note or "").strip():
         raise DocumentaryError("step_note_required")
+    if action == "BLOCK" and not (note or "").strip():
+        # A blocked step without a reason is a dead end on the floor — the
+        # note IS the instruction for whoever unblocks it.
+        raise DocumentaryError("step_note_required")
+    if action == "QC_CHECK":
+        if not qc_check or not str(qc_check.get("check") or "").strip():
+            raise DocumentaryError("qc_check_required")
+        if qc_check.get("result") not in ("PASS", "FAIL"):
+            raise DocumentaryError("qc_check_result_invalid")
+        qc_check = {
+            "check": str(qc_check["check"]).strip()[:200],
+            "expected": str(qc_check.get("expected") or "").strip()[:100],
+            "actual": str(qc_check.get("actual") or "").strip()[:100],
+            "item_code": str(qc_check.get("item_code") or "").strip()[:50],
+            "result": qc_check["result"],
+        }
+    elif qc_check is not None:
+        raise DocumentaryError("step_transition_invalid")
     with transaction.atomic(), documentary_backend():
         step_ref = one(
             """
@@ -1056,7 +1595,8 @@ def transition_step(
         # this order serialize — the status aggregate then sees prior commits.
         order = one(
             """
-            SELECT id, status::text FROM public.orders
+            SELECT id, status::text, payload_json, project_version_id
+            FROM public.orders
             WHERE id = %s AND org_id = %s AND order_type = 'WORKSHOP_OT'
             FOR UPDATE
             """,
@@ -1075,28 +1615,95 @@ def transition_step(
             [str(step_id), str(org_id)],
             "production_step_not_found",
         )
+        # Producer/verifier separation: the QC *decision* (COMPLETE, pass or
+        # fail) belongs to a supervisor — the operator who ran the station
+        # must not sign off on their own work. Recording a measurement
+        # (QC_CHECK) stays open so it can be logged mid-task. Service callers
+        # may omit actor_role — resolve it from the membership only when the
+        # gate actually applies.
+        if str(step["code"]) == "QC" and action == "COMPLETE":
+            if actor_role is None:
+                membership = one(
+                    """
+                    SELECT role::text AS role FROM public.tenancy_memberships
+                    WHERE org_id = %s AND user_id = %s
+                    """,
+                    [str(org_id), str(actor_id)],
+                    "actor_membership_missing",
+                )
+                actor_role = str(membership["role"])
+            if actor_role not in _QC_STEP_ACTORS:
+                raise DocumentaryError(
+                    "qc_requires_supervisor",
+                    detail=(
+                        "El control de calidad solo lo firma un encargado "
+                        "(propietario o jefe de taller), no el operador que "
+                        "ejecutó el trabajo."
+                    ),
+                )
         if str(order["status"]) == "INSTALLED":
             raise DocumentaryError("work_order_installed")
         if str(order["status"]) == "DISPATCHED":
             raise DocumentaryError("work_order_dispatched")
         if str(order["status"]) == "COMPLETED":
             raise DocumentaryError("work_order_completed")
+        if str(order["status"]) == "CANCELLED":
+            raise DocumentaryError("work_order_cancelled")
+        # Releasing a manager's hold is a supervisory decision — the same
+        # trust level as the QC signature: an operator must not undo the hold
+        # placed on their own queue.
+        if action == "UNBLOCK":
+            unblock_role = actor_role
+            if unblock_role is None:
+                membership = one(
+                    """
+                    SELECT role::text AS role FROM public.tenancy_memberships
+                    WHERE org_id = %s AND user_id = %s
+                    """,
+                    [str(org_id), str(actor_id)],
+                    "actor_membership_missing",
+                )
+                unblock_role = str(membership["role"])
+            if unblock_role not in _QC_STEP_ACTORS:
+                raise DocumentaryError(
+                    "unblock_requires_supervisor",
+                    detail=(
+                        "Quitar un bloqueo lo decide un encargado "
+                        "(propietario o jefe de taller), no el operador."
+                    ),
+                )
         if qc_result is not None and not (
             action == "COMPLETE" and str(step["code"]) == "QC"
         ):
+            raise DocumentaryError("step_transition_invalid")
+        if action == "QC_CHECK" and str(step["code"]) != "QC":
             raise DocumentaryError("step_transition_invalid")
         new_status, allowed = _TRANSITIONS[action]
         if action == "COMPLETE" and qc_result == "FAIL":
             new_status = "BLOCKED"
         if str(step["status"]) not in allowed:
             raise DocumentaryError("step_transition_invalid")
+        # Routing is sequential: a station may only start once every earlier
+        # step finished — otherwise GLAZE could run before CUT and the stepper
+        # was decorative rather than a sequence (review WM1).
+        if action == "START":
+            pending_earlier = one(
+                """
+                SELECT COUNT(*)::int AS remaining FROM public.production_steps
+                WHERE order_id = %s AND org_id = %s AND sequence < %s AND status <> 'DONE'
+                """,
+                [str(step["order_id"]), str(org_id), step["sequence"]],
+                "production_step_not_found",
+            )
+            if int(pending_earlier["remaining"]) > 0:
+                raise DocumentaryError("step_sequence_blocked")
         # A step released while its center was inactive — or copied unassigned
         # into a remake — sits READY/PENDING without a center and must never
         # silently progress. When a center of the required kind has since been
         # activated the step adopts it here and the order's payload blocker
         # clears; otherwise the transition refuses and the blocker stays the
-        # shop's to-do. An IN_PROGRESS step already had a center at START, so
-        # deeper validations (e.g. the cut plan) still surface first.
+        # shop's to-do. Station assignment surfaces before the cut-plan gate:
+        # "no saw bench" is the earlier answer to give.
         if (
             action in ("START", "COMPLETE")
             and str(step["status"]) in ("READY", "PENDING")
@@ -1115,14 +1722,14 @@ def transition_step(
                 )
                 if not center:
                     raise DocumentaryError("work_center_unassigned")
-                rows(
+                write(
                     "UPDATE public.production_steps SET work_center_id = %s WHERE id = %s",
                     [str(center[0]["id"]), str(step_id)],
                 )
                 step["work_center_id"] = center[0]["id"]
                 step["work_center_code"] = center[0]["code"]
                 step["work_center_name"] = center[0]["name"]
-                rows(
+                write(
                     """
                     UPDATE public.orders
                     SET payload_json = jsonb_set(
@@ -1136,15 +1743,102 @@ def transition_step(
                     """,
                     [f"work_center_inactive:{kind}", str(order["id"])],
                 )
+        # Starting a station that physically works the sealed plan without
+        # a usable cut plan is a trap: COMPLETE then refuses (no plan)
+        # while replan refuses (a physical step already in progress) — the
+        # order only escapes via block/unblock. You can't start the saw —
+        # or the machining cell — without a live plan.
+        if action == "START" and (
+            str(step["code"]) in _STEP_CONSUMED_KINDS
+            or str(step["code"]) in _PLAN_REQUIRED_STATIONS
+        ):
+            opt = _decoded(order.get("payload_json")).get("optimization") or {}
+            if not opt or opt.get("invalidated"):
+                raise DocumentaryError(
+                    "work_order_plan_missing",
+                    detail=(
+                        "La orden no tiene un plan de corte vigente: "
+                        "optimízala antes de iniciar este paso."
+                    ),
+                )
+        # Completing a member-op station carries per-operation evidence:
+        # every machining op routed to this station must be declared — the
+        # event records WHICH ops ran, not just that someone pressed done.
+        ops_executed: list[str] | None = None
+        if (
+            action == "COMPLETE"
+            and str(step["code"]) in _OPS_EVIDENCE_STATIONS
+        ):
+            expected = _member_ops_for_station(
+                org_id=org_id, order=order, station=str(step["code"])
+            )
+            if expected:
+                declared = {str(item) for item in (ops_done or [])}
+                unknown = sorted(declared - set(expected))
+                if unknown:
+                    raise DocumentaryError(
+                        "step_ops_unknown",
+                        detail=(
+                            "Se declararon operaciones que no pertenecen a "
+                            "esta estación: " + ", ".join(unknown)
+                        ),
+                    )
+                missing = [
+                    op_id for op_id in sorted(expected) if op_id not in declared
+                ]
+                if missing:
+                    raise DocumentaryError(
+                        "step_ops_incomplete",
+                        detail=(
+                            "Faltan operaciones por declarar en este paso: "
+                            + ", ".join(expected[op_id] for op_id in missing)
+                        ),
+                        extra={"missing_operations": missing},
+                    )
+                ops_executed = sorted(declared)
+        # A plan-only station must still refuse a dead plan at COMPLETE —
+        # stock-settling stations take the same check through
+        # _STEP_CONSUMED_KINDS below.
+        if (
+            new_status == "DONE"
+            and str(step["code"]) in _PLAN_REQUIRED_STATIONS
+        ):
+            opt_done = _decoded(order.get("payload_json")).get("optimization") or {}
+            if not opt_done:
+                raise DocumentaryError(
+                    "work_order_plan_missing",
+                    detail=(
+                        "La orden no tiene un plan de corte: optimízala "
+                        "antes de completar este paso."
+                    ),
+                )
+            if opt_done.get("invalidated"):
+                raise DocumentaryError(
+                    "work_order_plan_stale",
+                    detail=(
+                        "El plan de corte quedó invalidado: vuelve a "
+                        "optimizar la orden antes de completar este paso."
+                    ),
+                )
         event_name = "QC_FAILED" if (
             action == "COMPLETE" and qc_result == "FAIL"
         ) else _EVENTS[action]
         now = datetime.now(timezone.utc)
         if new_status is not None:
+            # UNBLOCK resolves the blocking reason — a stale failure note
+            # must not follow the step into re-work (the event log keeps the
+            # history); an explicit unblock note still wins.
+            clears_block_note = (
+                new_status == "READY" and str(step["status"]) == "BLOCKED"
+            )
             updates = {
                 "status": new_status,
                 "updated_at": now,
-                "note": note.strip() if note is not None else step.get("note"),
+                "note": (
+                    note.strip()
+                    if note is not None
+                    else (None if clears_block_note else step.get("note"))
+                ),
             }
             if new_status == "IN_PROGRESS":
                 updates["started_at"] = step.get("started_at") or now
@@ -1194,13 +1888,20 @@ def transition_step(
                 json.dumps({
                     **({"note": note.strip()} if note else {}),
                     **({"qc_result": qc_result} if qc_result else {}),
+                    **({"qc_check": qc_check} if qc_check else {}),
+                    **({"qc_item": qc_item} if qc_item else {}),
+                    **(
+                        {"ops_executed": ops_executed}
+                        if ops_executed is not None
+                        else {}
+                    ),
                 }),
             ],
         )
-        # §6: completing CUT is where the physical drop goes on the saw —
-        # reserved remnants consume and the plan's usable remainders return
-        # to stock under this order's provenance, once.
-        if new_status == "DONE" and str(step["code"]) == "CUT":
+        # §6: completing a bar-cutting station is where the physical drop
+        # goes on the saw — reserved remnants consume and the plan's usable
+        # remainders return to stock under this order's provenance, once.
+        if new_status == "DONE" and str(step["code"]) in _BAR_DROP_STATIONS:
             payload_row = one(
                 """
                 SELECT payload_json FROM public.orders
@@ -1211,25 +1912,33 @@ def transition_step(
             )
             optimization = (_decoded(payload_row["payload_json"]).get("optimization") or {})
             plan_remnants = optimization.get("remnants") or {}
-            # Every remnant the plan claims must still be RESERVED for this
-            # order — an operator can unreserve a drop manually, and another
-            # order may then have taken it; completing on the stale plan
-            # would settle stock the saw never had.
+            # Every remnant the plan claims must still belong to this order —
+            # an operator can unreserve a drop manually, and another order
+            # may then have taken it; completing on the stale plan would
+            # settle stock the saw never had.
             planned_ids = {
                 str(entry["id"])
                 for entry in (plan_remnants.get("consumed") or [])
                 if entry.get("id")
             }
             if planned_ids:
-                still_reserved = rows(
+                # An order can carry several bar-cutting stations (CUT +
+                # PROFILE_CUT + REINFORCEMENT_CUT): the first to complete
+                # settles the drop, so later stations must accept remnants
+                # already CONSUMED by this order — only a remnant that left
+                # the order's hands (released, scrapped, or consumed by
+                # another order) means the saw never had it.
+                accounted = rows(
                     """
                     SELECT id FROM public.inventory_remnants
-                    WHERE org_id = %s AND reserved_order_id = %s
-                      AND status = 'RESERVED' AND id = ANY(%s::uuid[])
+                    WHERE org_id = %s AND id = ANY(%s::uuid[])
+                      AND ((status = 'RESERVED' AND reserved_order_id = %s)
+                           OR (status = 'CONSUMED' AND consumed_order_id = %s))
                     """,
-                    [str(org_id), str(step["order_id"]), sorted(planned_ids)],
+                    [str(org_id), sorted(planned_ids),
+                     str(step["order_id"]), str(step["order_id"])],
                 )
-                if {str(r["id"]) for r in still_reserved} != planned_ids:
+                if {str(r["id"]) for r in accounted} != planned_ids:
                     raise DocumentaryError("work_order_remnant_released")
             consumed = remnants_service.consume_order_remnants(
                 org_id=org_id, order_id=step["order_id"]
@@ -1424,6 +2133,19 @@ def transition_step(
             """,
             [str(step_id)],
         )
+        # §08: a completed station queues the next-step notice — recomputed
+        # when the job runs so a retried task reports the true successor.
+        if new_status == "DONE":
+            from automations.service import emit
+
+            emit(
+                "automation.step_advance",
+                org_id=org_id,
+                actor_id=actor_id,
+                idempotency_key=f"auto:step:{step_id}:done",
+                order_id=str(step["order_id"]),
+                step_code=str(step["code"]),
+            )
         return {"step": _public_step(fresh), "order_status": order_status}
 
 
@@ -1453,7 +2175,31 @@ def create_remake(
         payload.pop("dxf_export", None)
         payload.pop("operations_export", None)
         payload.pop("packing", None)  # labels carry the source order code
+        # The source order's blockers were resolved there — a remake starts
+        # clean and re-derives its own (a deactivated center lands below).
+        payload.pop("blockers", None)
         payload["remake_of"] = str(source["id"])
+        # Carry the QC failure forward: the remake order names WHICH unit
+        # failed and why, so the floor doesn't re-derive it from the source
+        # order's history (review PM-H3).
+        failure_rows = rows(
+            """
+            SELECT payload FROM public.production_step_events
+            WHERE org_id = %s AND order_id = %s
+              AND payload->>'qc_result' = 'FAIL'
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            [str(org_id), str(source["id"])],
+        )
+        if failure_rows:
+            failure_payload = _decoded(failure_rows[0].get("payload"))
+            reason = {
+                "qc_item": failure_payload.get("qc_item"),
+                "note": failure_payload.get("note"),
+            }
+            if reason["qc_item"] or reason["note"]:
+                payload["remake_reason"] = reason
         prior = one(
             """
             SELECT COUNT(*) AS n FROM public.orders
@@ -1501,6 +2247,36 @@ def create_remake(
             """,
             [str(org_id), str(remake["id"]), str(source["id"]), str(org_id)],
         )
+        # A copied step assignment pointing at a center deactivated since the
+        # source order must not silently route to a dead station: null it so
+        # the START-time adoption picks a live center (or names the missing
+        # kind), and carry the same blocker the release path would write.
+        dropped_centers = rows(
+            """
+            UPDATE public.production_steps s
+            SET work_center_id = NULL
+            FROM public.work_centers w
+            WHERE s.order_id = %s AND s.org_id = %s
+              AND s.work_center_id = w.id AND w.active = FALSE
+            RETURNING s.code
+            """,
+            [str(remake["id"]), str(org_id)],
+        )
+        if dropped_centers:
+            inactive_blockers = [
+                f"work_center_inactive:{_CENTER_KIND_FOR_STATION[str(row['code'])]}"
+                for row in dropped_centers
+                if row.get("code") and str(row["code"]) in _CENTER_KIND_FOR_STATION
+            ]
+            if inactive_blockers:
+                payload["blockers"] = inactive_blockers
+                rows(
+                    """
+                    UPDATE public.orders SET payload_json = %s::jsonb
+                    WHERE id = %s AND org_id = %s RETURNING id
+                    """,
+                    [json.dumps(payload), str(remake["id"]), str(org_id)],
+                )
         rows(
             """
             INSERT INTO public.production_step_events(
@@ -1516,6 +2292,7 @@ def create_remake(
                     "remake_of": str(source["id"]),
                     "source_order_code": source["order_code"],
                     "note": (note or "").strip() or None,
+                    "qc_item": (payload.get("remake_reason") or {}).get("qc_item"),
                 }),
             ],
         )
@@ -1523,7 +2300,9 @@ def create_remake(
 
 
 def list_work_centers(*, org_id: UUID) -> dict[str, object]:
-    _ensure_work_centers(org_id)
+    """Pure read — a GET must not write. Seeding happens at release
+    (_ensure_work_centers) or via the explicit seed endpoint, so an empty
+    list is honest and the readiness blocker stays truthful."""
     return {
         "centers": rows(
             """
@@ -1533,6 +2312,13 @@ def list_work_centers(*, org_id: UUID) -> dict[str, object]:
             [str(org_id)],
         )
     }
+
+
+def seed_default_work_centers(*, org_id: UUID) -> dict[str, object]:
+    """Explicit one-click seed of the standard station set — the write belongs
+    on a POST, not inside a list read."""
+    _ensure_work_centers(org_id)
+    return list_work_centers(org_id=org_id)
 
 
 def _reinforcement_angle_map(
@@ -1581,11 +2367,17 @@ def _csv_cell(value: object) -> str:
     return f'"{escaped}"' if any(c in text for c in '",\n') else text
 
 
-def _cnc_bars_csv(optimization: dict[str, object]) -> str:
+def _cnc_bars_csv(
+    optimization: dict[str, object],
+    *,
+    cut_map: dict[tuple[str, ...], str] | None = None,
+) -> str:
     """DEKOPEN-CNC-BARS-V1: one row per cut placement, ordered by bar then
-    position inside the bar — deterministic output for the saw operator."""
+    position inside the bar — deterministic output for the saw operator.
+    ``piece_label`` carries the printed shop code (M-xx/R-xx) so the saw
+    file reconciles against a labeled stick without a second document."""
     rows_out = [
-        "bar_index,stock_sku,stock_length_mm,sequence_in_bar,piece_id,"
+        "bar_index,stock_sku,stock_length_mm,sequence_in_bar,piece_label,piece_id,"
         "cut_length_mm,angle_left_deg,angle_right_deg,"
         "unit_index,bay_id,leaf_id,source_position_id"
     ]
@@ -1605,6 +2397,7 @@ def _cnc_bars_csv(optimization: dict[str, object]) -> str:
                 bar.get("commercial_sku"),
                 bar.get("stock_length_mm"),
                 cut.get("sequence"),
+                (cut_map or {}).get(_cut_key(cut), ""),
                 cut.get("piece_id"),
                 cut.get("length_mm"),
                 cut.get("angle_left"),
@@ -1651,8 +2444,33 @@ def _cnc_sheets_csv(optimization: dict[str, object]) -> str:
     return "\n".join(rows_out) + "\n"
 
 
+# Settlement stamps (consumed_at on stock_reservations), wall-clock data
+# (optimized_at, actor_id) and measured runtime are bookkeeping, not plan
+# geometry — a file rendered pre-cut must still serve after CUT-DONE marks
+# its stock consumed, and re-running an identical plan must fingerprint
+# identically. Everything else — layouts, reservations, the invalidated
+# flag — stays inside the fingerprint.
+_FINGERPRINT_VOLATILE = frozenset({
+    "consumed_at", "optimized_at", "actor_id", "runtime_ms",
+})
+
+
+def _fingerprint_clean(value: object) -> object:
+    if isinstance(value, dict):
+        return {
+            key: _fingerprint_clean(item)
+            for key, item in value.items()
+            if key not in _FINGERPRINT_VOLATILE
+        }
+    if isinstance(value, list):
+        return [_fingerprint_clean(item) for item in value]
+    return value
+
+
 def _optimization_fingerprint(optimization: dict[str, object]) -> str:
-    canonical = json.dumps(optimization, sort_keys=True, default=str)
+    canonical = json.dumps(
+        _fingerprint_clean(optimization), sort_keys=True, default=str
+    )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -1665,7 +2483,8 @@ def export_cnc_files(
     with transaction.atomic(), documentary_backend():
         order = one(
             """
-            SELECT id, order_code, status::text, payload_json FROM public.orders
+            SELECT id, order_code, status::text, payload_json,
+                   project_version_id FROM public.orders
             WHERE id = %s AND org_id = %s AND order_type = 'WORKSHOP_OT'
             FOR UPDATE
             """,
@@ -1676,16 +2495,45 @@ def export_cnc_files(
             raise DocumentaryError("work_order_installed")
         if str(order["status"]) == "DISPATCHED":
             raise DocumentaryError("work_order_dispatched")
+        if str(order["status"]) == "COMPLETED":
+            raise DocumentaryError("work_order_completed")
+        if str(order["status"]) == "CANCELLED":
+            raise DocumentaryError("work_order_cancelled")
         payload = _decoded(order["payload_json"])
         optimization = payload.get("optimization")
         if not isinstance(optimization, dict) or not optimization.get("bars"):
             raise DocumentaryError("cnc_requires_optimization")
-        files = {"bars.csv": _cnc_bars_csv(optimization)}
+        if optimization.get("invalidated"):
+            raise DocumentaryError("plan_invalidated")
+        # Printed piece codes join the saw rows so a labeled stick finds its
+        # program line without a second file.
+        cnc_cut_map: dict[tuple[str, ...], str] = {}
+        if order.get("project_version_id"):
+            version_row = one(
+                """
+                SELECT snapshot_json::text AS snapshot_json
+                FROM public.project_versions WHERE id = %s AND org_id = %s
+                """,
+                [str(order["project_version_id"]), str(org_id)],
+                "work_order_missing_version",
+            )
+            cnc_snapshot = _decoded(version_row["snapshot_json"])
+            try:
+                cnc_labels = _piece_labels(cnc_snapshot)
+                cnc_cut_map = _cut_member_map(cnc_snapshot, cnc_labels)
+            except DocumentaryError:
+                cnc_cut_map = {}
+        fingerprint = _optimization_fingerprint(optimization)
+        header = (
+            f"# dekopen order={order['order_code']} plan={fingerprint[:12]}"
+            f" emitted={datetime.now(timezone.utc).isoformat()}\n"
+        )
+        files = {"bars.csv": header + _cnc_bars_csv(optimization, cut_map=cnc_cut_map)}
         if optimization.get("sheets"):
-            files["sheets.csv"] = _cnc_sheets_csv(optimization)
+            files["sheets.csv"] = header + _cnc_sheets_csv(optimization)
         export = {
             "schema": "work_order_cnc_export_v2",
-            "optimization_fingerprint": _optimization_fingerprint(optimization),
+            "optimization_fingerprint": fingerprint,
             "exported_at": datetime.now(timezone.utc).isoformat(),
             "actor_id": str(actor_id),
             "files": files,
@@ -1738,17 +2586,34 @@ def cnc_file_content(
     payload = _decoded(order["payload_json"])
     export = payload.get("cnc_export") or {}
     optimization = payload.get("optimization")
+    # The file exists but its plan moved on — say STALE, not 'not found':
+    # a 'no file' answer sends the operator to re-download, a 'stale' answer
+    # sends them to re-optimize.
+    if isinstance(optimization, dict) and optimization.get("invalidated"):
+        raise DocumentaryError(
+            "cnc_file_stale",
+            detail="El plan de corte quedó invalidado: reoptimiza y re-exporta la orden.",
+        )
+    fingerprint = (
+        _optimization_fingerprint(optimization)
+        if isinstance(optimization, dict)
+        else ""
+    )
     if (
         export.get("optimization_fingerprint")
-        and _optimization_fingerprint(optimization if isinstance(optimization, dict) else {})
-        != export["optimization_fingerprint"]
+        and fingerprint != export["optimization_fingerprint"]
     ):
-        return None
+        raise DocumentaryError(
+            "cnc_file_stale",
+            detail="El archivo corresponde a un plan anterior: reoptimiza y re-exporta la orden.",
+        )
     files = export.get("files") or {}
     content = files.get(filename)
     if content is None:
         return None
-    return f"{order['order_code']}-{filename}", content
+    fp = str(export.get("optimization_fingerprint") or "")[:8]
+    prefix = f"{order['order_code']}-{fp}" if fp else str(order["order_code"])
+    return f"{prefix}-{filename}", content
 
 
 def _ops_source_fingerprint(
@@ -1756,7 +2621,8 @@ def _ops_source_fingerprint(
 ) -> str:
     return hashlib.sha256(
         json.dumps(
-            {"optimization": optimization, "manufacturing": manufacturing},
+            {"optimization": _fingerprint_clean(optimization),
+             "manufacturing": manufacturing},
             sort_keys=True, default=str,
         ).encode("utf-8")
     ).hexdigest()
@@ -1777,6 +2643,48 @@ def _operations_fact_units(
     return [
         ManufacturingFactsV1.model_validate_json(json.dumps(unit))
         for unit in _raw_fact_units(version_snapshot, position_id)
+    ]
+
+
+# Workshop annotations that contractually name a machine operation kind:
+# drains and perimeter closing points are machining work, and a declared
+# handle intent is HANDLE_PREP. When the sealed payload declares one but
+# the ops model emits none, the gap must surface — a program that claims
+# coverage it does not have sends the cell hunting for phantom work.
+_DECLARED_INTENT_KINDS: tuple[tuple[str, str], ...] = (
+    ("bottom_drain_holes_mm", "DRAINAGE"),
+    ("closing_points_perimeter_mm", "LOCK_PREP"),
+)
+
+
+def _declared_intent_gaps(
+    version_snapshot: dict[str, object],
+    position_id: str | None,
+    emitted_kinds: set[str],
+) -> list[dict[str, object]]:
+    declared: set[str] = set()
+    for position in version_snapshot.get("positions") or []:
+        if not isinstance(position, dict):
+            continue
+        if position_id and str(position.get("position_id")) != position_id:
+            continue
+        for item in position.get("workshop_annotations") or []:
+            if isinstance(item, dict):
+                for field, kind in _DECLARED_INTENT_KINDS:
+                    if item.get(field):
+                        declared.add(kind)
+        if position.get("handle_intents"):
+            declared.add("HANDLE_PREP")
+    return [
+        {
+            "code": "declared_intent_not_emitted",
+            "kind": kind,
+            "detail": (
+                f"{kind} was declared in the sealed workshop data but no "
+                f"{kind} operations were generated"
+            ),
+        }
+        for kind in sorted(declared - emitted_kinds)
     ]
 
 
@@ -1802,10 +2710,16 @@ def export_operations(
             raise DocumentaryError("work_order_installed")
         if str(order["status"]) == "DISPATCHED":
             raise DocumentaryError("work_order_dispatched")
+        if str(order["status"]) == "COMPLETED":
+            raise DocumentaryError("work_order_completed")
+        if str(order["status"]) == "CANCELLED":
+            raise DocumentaryError("work_order_cancelled")
         payload = _decoded(order["payload_json"])
         optimization = payload.get("optimization")
         if not isinstance(optimization, dict) or not optimization.get("bars"):
             raise DocumentaryError("operations_requires_optimization")
+        if optimization.get("invalidated"):
+            raise DocumentaryError("plan_invalidated")
         version_row = one(
             """
             SELECT snapshot_json FROM public.project_versions
@@ -1823,13 +2737,109 @@ def export_operations(
             CutBar.model_validate_json(json.dumps(bar))
             for bar in (optimization.get("bars") or {}).get("workshop_cut_plan") or []
         ]
-        ops = operations_from_plan(bars=bars, fact_units=fact_units)
+        ops_issues: list[dict[str, object]] = []
+        ops = operations_from_plan(
+            bars=bars, fact_units=fact_units, issues=ops_issues
+        )
+        ops_issues.extend(
+            _declared_intent_gaps(
+                version_snapshot,
+                str(payload.get("position_id") or "") or None,
+                {op.kind.value for op in ops},
+            )
+        )
+        empty_labels: dict[str, dict[object, str]] = {
+            key: {}
+            for key in (
+                "member", "reinforcement", "infill", "handle",
+                "bay", "leaf", "leaf_fact", "position",
+            )
+        }
+        try:
+            labels = _piece_labels(version_snapshot)
+        except DocumentaryError:
+            labels = empty_labels
+        cut_map = _cut_member_map(version_snapshot, labels)
+        piece_labels = {
+            str(mid): code for mid, code in labels["member"].items()
+        }
+        piece_labels.update(
+            {str(rid): code for rid, code in labels["reinforcement"].items()}
+        )
+        for bar in (optimization.get("bars") or {}).get(
+            "workshop_cut_plan"
+        ) or []:
+            for cut in (bar.get("cuts") or []) if isinstance(bar, dict) else []:
+                if isinstance(cut, dict) and cut.get("piece_id"):
+                    piece_labels[str(cut["piece_id"])] = cut_map.get(
+                        _cut_key(cut), ""
+                    )
+        from production.trace import station_map_for
+
+        station_map = station_map_for(payload, list({op.kind.value for op in ops}))
         document = ops_document(
             ops,
             order_code=str(order["order_code"]),
             plan_seed=(optimization.get("bars") or {}).get("plan_seed"),
+            piece_labels=piece_labels,
+            fact_units=fact_units,
+            issues=ops_issues,
         )
-        files = NeutralOpsPostProcessor().render(document)
+        # The routing the frozen authority declares travels inside the
+        # document: a cell loading the file knows which station each op
+        # belongs to without re-deriving it.
+        document["station_map"] = station_map
+        for op_row in document["operations"]:
+            op_row["station"] = station_map.get(str(op_row["kind"]))
+        rendered = NeutralOpsPostProcessor().render(document)
+        files = {}
+        fp = str(_ops_source_fingerprint(
+            optimization,
+            _raw_fact_units(
+                version_snapshot, str(payload.get("position_id") or "") or None
+            ),
+        ))
+        ops_header = (
+            f"# dekopen order={order['order_code']} plan={fp[:12]}"
+            f" emitted={datetime.now(timezone.utc).isoformat()}\n"
+        )
+        for name, content in rendered.items():
+            files[name] = (
+                ops_header + content if name.endswith(".csv") else content
+            )
+        # Export manifest: shipped files with byte-identical hashes, counts,
+        # identity, time and responsible — the reviewer can check what file
+        # goes to which machine without opening each one.
+        fp_manifest = str(_ops_source_fingerprint(
+            optimization,
+            _raw_fact_units(
+                version_snapshot, str(payload.get("position_id") or "") or None
+            ),
+        ))
+        files["manifest.json"] = json.dumps(
+            {
+                "schema": "dekopen_export_manifest_v1",
+                "kind": "ops_export",
+                "order_code": order["order_code"],
+                "machine_id": document["machine"].get("machine_id"),
+                "source_fingerprint": fp_manifest,
+                "files": {
+                    name: {
+                        "sha256": hashlib.sha256(content.encode("utf-8")).hexdigest(),
+                        "bytes": len(content.encode("utf-8")),
+                    }
+                    for name, content in files.items()
+                },
+                "operation_count": document["operation_count"],
+                "counts_by_kind": document["counts_by_kind"],
+                "unemitted_kinds": document["unemitted_kinds"],
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "generated_by": str(actor_id),
+            },
+            indent=2,
+            sort_keys=True,
+            default=str,
+        ) + "\n"
         manufacturing = _raw_fact_units(
             version_snapshot, str(payload.get("position_id") or "") or None
         )
@@ -1842,6 +2852,12 @@ def export_operations(
             "operation_count": document["operation_count"],
             "counts_by_kind": document["counts_by_kind"],
             "unemitted_kinds": document["unemitted_kinds"],
+            "declared_intent_gaps": [
+                issue["kind"]
+                for issue in document["issues"]
+                if isinstance(issue, dict)
+                and issue.get("code") == "declared_intent_not_emitted"
+            ],
             "exported_at": datetime.now(timezone.utc).isoformat(),
             "actor_id": str(actor_id),
             "files": files,
@@ -1912,6 +2928,11 @@ def operations_file_content(
     manufacturing = _raw_fact_units(
         version_snapshot, str(payload.get("position_id") or "") or None
     )
+    if isinstance(optimization, dict) and optimization.get("invalidated"):
+        raise DocumentaryError(
+            "ops_file_stale",
+            detail="El plan de corte quedó invalidado: reoptimiza y re-exporta la orden.",
+        )
     if (
         export.get("source_fingerprint")
         and _ops_source_fingerprint(
@@ -1920,12 +2941,17 @@ def operations_file_content(
         )
         != export["source_fingerprint"]
     ):
-        return None
+        raise DocumentaryError(
+            "ops_file_stale",
+            detail="El archivo corresponde a un plan anterior: reoptimiza y re-exporta la orden.",
+        )
     files = export.get("files") or {}
     content = files.get(filename)
     if content is None:
         return None
-    return f"{order['order_code']}-{filename}", content
+    fp = str(export.get("source_fingerprint") or "")[:8]
+    prefix = f"{order['order_code']}-{fp}" if fp else str(order["order_code"])
+    return f"{prefix}-{filename}", content
 
 
 def export_dxf_files(
@@ -1938,7 +2964,9 @@ def export_dxf_files(
     with transaction.atomic(), documentary_backend():
         order = one(
             """
-            SELECT id, order_code, status::text, payload_json FROM public.orders
+            SELECT id, order_code, status::text, payload_json,
+                   project_version_id
+            FROM public.orders
             WHERE id = %s AND org_id = %s AND order_type = 'WORKSHOP_OT'
             FOR UPDATE
             """,
@@ -1949,13 +2977,59 @@ def export_dxf_files(
             raise DocumentaryError("work_order_installed")
         if str(order["status"]) == "DISPATCHED":
             raise DocumentaryError("work_order_dispatched")
+        if str(order["status"]) == "COMPLETED":
+            raise DocumentaryError("work_order_completed")
+        if str(order["status"]) == "CANCELLED":
+            raise DocumentaryError("work_order_cancelled")
         payload = _decoded(order["payload_json"])
         optimization = payload.get("optimization")
         if not isinstance(optimization, dict) or not (
             optimization.get("bars") or optimization.get("sheets")
         ):
             raise DocumentaryError("dxf_requires_optimization")
-        files = dxf_files(optimization)
+        if optimization.get("invalidated"):
+            raise DocumentaryError("plan_invalidated")
+        # Resolve printed piece codes against the sealed snapshot so machine
+        # labels match the packs (M-xx / R-xx / I-xx) instead of hash prefixes.
+        version = one(
+            "SELECT snapshot_json::text AS snapshot_json "
+            "FROM public.project_versions WHERE id=%s AND org_id=%s",
+            [str(order["project_version_id"]), str(org_id)],
+            "version_not_found",
+        )
+        snapshot = decoded(version["snapshot_json"])
+        if not isinstance(snapshot, dict):
+            snapshot = {}
+        labels = _piece_labels({
+            **snapshot,
+            "manufacturing": snapshot.get("manufacturing")
+            if isinstance(snapshot.get("manufacturing"), list)
+            else [],
+            "positions": snapshot.get("positions")
+            if isinstance(snapshot.get("positions"), list)
+            else [],
+        })
+        cut_map = _cut_member_map(snapshot, labels)
+        infill_map = _infill_code_map(snapshot, labels)
+        codes: dict[str, str] = {}
+        for bar in (optimization.get("bars") or {}).get("workshop_cut_plan") or []:
+            if not isinstance(bar, dict):
+                continue
+            for cut in bar.get("cuts") or []:
+                if isinstance(cut, dict) and cut.get("piece_id"):
+                    code = cut_map.get(_cut_key(cut))
+                    if code:
+                        codes[str(cut["piece_id"])] = code
+        for sheet in optimization.get("sheets") or []:
+            if not isinstance(sheet, dict):
+                continue
+            for placement in sheet.get("placements") or []:
+                if isinstance(placement, dict) and placement.get("piece_id"):
+                    codes[str(placement["piece_id"])] = infill_map.get(
+                        _infill_key(placement),
+                        str(placement["piece_id"]),
+                    )
+        files = dxf_files(optimization, codes=codes)
         if not files:
             raise DocumentaryError("dxf_requires_optimization")
         export = {
@@ -2013,17 +3087,39 @@ def dxf_file_content(
     payload = _decoded(order["payload_json"])
     export = payload.get("dxf_export") or {}
     optimization = payload.get("optimization")
+    if isinstance(optimization, dict) and optimization.get("invalidated"):
+        raise DocumentaryError(
+            "dxf_file_stale",
+            detail="El plan de corte quedó invalidado: reoptimiza y re-exporta la orden.",
+        )
     if (
         export.get("optimization_fingerprint")
         and _optimization_fingerprint(optimization if isinstance(optimization, dict) else {})
         != export["optimization_fingerprint"]
     ):
-        return None
+        raise DocumentaryError(
+            "dxf_file_stale",
+            detail="El archivo corresponde a un plan anterior: reoptimiza y re-exporta la orden.",
+        )
     files = export.get("files") or {}
     content = files.get(filename)
     if content is None:
         return None
-    return f"{order['order_code']}-{filename}", content
+    fp = str(export.get("optimization_fingerprint") or "")[:8]
+    prefix = f"{order['order_code']}-{fp}" if fp else str(order["order_code"])
+    return f"{prefix}-{filename}", content
+
+
+def _label_code(order_code: str, unit: int) -> str:
+    """Printed label identity — ``<order_code>-U<nn>``. An over-length order
+    code is shortened with a stable digest infix so the printed code stays
+    unique instead of silently colliding with a different order's prefix."""
+    suffix = f"-U{unit:02d}"
+    budget = 50 - len(suffix)
+    if len(order_code) <= budget:
+        return f"{order_code}{suffix}"
+    digest = hashlib.sha256(order_code.encode("utf-8")).hexdigest()[:8].upper()
+    return f"{order_code[: budget - 9]}-{digest}{suffix}"
 
 
 def generate_packing_manifest(
@@ -2046,6 +3142,8 @@ def generate_packing_manifest(
             raise DocumentaryError("work_order_installed")
         if str(order["status"]) == "DISPATCHED":
             raise DocumentaryError("work_order_dispatched")
+        if str(order["status"]) == "CANCELLED":
+            raise DocumentaryError("work_order_cancelled")
         payload = _decoded(order["payload_json"])
         materials = payload.get("materials") or {}
         quantity = int(payload.get("quantity") or 1)
@@ -2072,7 +3170,7 @@ def generate_packing_manifest(
         units = [
             {
                 "unit_index": unit,
-                "label_code": f"{str(order['order_code'])[: 50 - len(f'-U{unit:02d}')]}-U{unit:02d}",
+                "label_code": _label_code(str(order["order_code"]), unit),
                 "position_id": payload.get("position_id"),
                 **kind_counts,
             }
@@ -2175,11 +3273,18 @@ def packing_labels(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
 
 
 def dispatch_work_order(
-    *, org_id: UUID, order_id: UUID, actor_id: UUID, note: str | None = None
+    *,
+    org_id: UUID,
+    order_id: UUID,
+    actor_id: UUID,
+    note: str | None = None,
+    unit_indexes: list[int] | None = None,
 ) -> dict[str, object]:
-    """Ship the finished order: requires COMPLETED (all routing done); sets
-    DISPATCHED and records WO_DISPATCHED. Idempotent — re-dispatching an
-    already dispatched order returns its current state."""
+    """Ship (part of) the finished order: requires COMPLETED or already
+    DISPATCHED with units still pending; seals a guía covering exactly the
+    units of this trip and records WO_DISPATCHED. A retried call with an
+    already-covered subset replays the current state; a subset overlapping
+    previous trips partially is refused — one bulto never rides two guías."""
     with transaction.atomic(), documentary_backend():
         order = one(
             """
@@ -2191,24 +3296,77 @@ def dispatch_work_order(
             [str(order_id), str(org_id)],
             "work_order_not_found",
         )
-        if str(order["status"]) == "DISPATCHED":
-            return get_work_order(org_id=org_id, order_id=order_id)
-        if str(order["status"]) != "COMPLETED":
+        if str(order["status"]) not in ("COMPLETED", "DISPATCHED"):
             raise DocumentaryError("dispatch_requires_completed")
-        rows(
-            """
-            UPDATE public.orders SET status = 'DISPATCHED', updated_at = %s
-            WHERE id = %s AND org_id = %s
-            RETURNING id
-            """,
-            [datetime.now(timezone.utc), str(order_id), str(org_id)],
+        payload = _decoded(order["payload_json"]) or {}
+        if not (payload.get("packing") or {}).get("units"):
+            raise DocumentaryError("dispatch_requires_packing_manifest")
+        manifest = _manifest_unit_indexes(payload)
+        covered: set[int] = set()
+        # A guía on a FAILED trip no longer commits its units: the load came
+        # back and a new trip can carry it under a fresh guía. DELIVERED and
+        # in-transit units stay committed.
+        for note_row in rows(
+            "SELECT dn.unit_indexes FROM public.dispatch_notes dn "
+            "LEFT JOIN public.deliveries d ON d.id = dn.delivery_id "
+            "WHERE dn.org_id=%s AND dn.work_order_id=%s AND dn.voided_at IS NULL "
+            "AND (d.id IS NULL OR d.status <> 'FAILED')",
+            [str(org_id), str(order_id)],
+        ):
+            indexes = note_row.get("unit_indexes")
+            covered |= set(manifest) if indexes is None else {int(i) for i in indexes}
+        if unit_indexes is not None:
+            subset = {int(i) for i in unit_indexes}
+            if not subset or not subset <= manifest:
+                raise DocumentaryError("dispatch_units_invalid")
+            if subset <= covered:
+                # Same-subset replay — the guía already exists.
+                return get_work_order(org_id=org_id, order_id=order_id)
+            if subset & covered:
+                raise DocumentaryError("dispatch_units_already_dispatched")
+        else:
+            subset = manifest - covered
+            if not subset:
+                # Nothing pending: a full-order replay returns current state.
+                return get_work_order(org_id=org_id, order_id=order_id)
+        # The guía seals onto the open trip: dispatching units the trip does
+        # not carry would print a manifest the truck never planned to load.
+        open_trip = next(
+            (row for row in rows(
+                "SELECT unit_indexes FROM public.deliveries "
+                "WHERE org_id=%s AND order_id=%s AND status IN ('SCHEDULED','ON_ROUTE')",
+                [str(org_id), str(order_id)],
+            )),
+            None,
         )
+        if open_trip is not None and open_trip.get("unit_indexes") is not None:
+            trip_units = {int(i) for i in open_trip["unit_indexes"]}
+            if not subset <= trip_units:
+                raise DocumentaryError("dispatch_units_not_on_trip")
+        # A guía is the legal shipping document — emitting it with no planned
+        # delivery ships a truck to nowhere. Schedule the delivery first, or
+        # record the hand-off reason in the note (retiro en taller, ...).
+        if not rows(
+            "SELECT id FROM public.deliveries WHERE order_id = %s AND org_id = %s",
+            [str(order_id), str(org_id)],
+        ) and not (note or "").strip():
+            raise DocumentaryError("dispatch_requires_delivery")
+        if str(order["status"]) != "DISPATCHED":
+            rows(
+                """
+                UPDATE public.orders SET status = 'DISPATCHED', updated_at = %s
+                WHERE id = %s AND org_id = %s
+                RETURNING id
+                """,
+                [datetime.now(timezone.utc), str(order_id), str(org_id)],
+            )
         note_row = issue_dispatch_note(
             org_id=org_id,
             order=order,
             project=project_row(org_id, order["project_id"]),
             actor_id=actor_id,
             note=(note or "").strip() or None,
+            unit_indexes=sorted(subset),
         )
         rows(
             """
@@ -2224,6 +3382,95 @@ def dispatch_work_order(
                     "order_code": order["order_code"],
                     "note": (note or "").strip() or None,
                     "dispatch_note": note_row["note_code"],
+                    "unit_indexes": sorted(subset),
+                }),
+            ],
+        )
+        return get_work_order(org_id=org_id, order_id=order_id)
+
+
+def void_dispatch_note(
+    *, org_id: UUID, order_id: UUID, actor_id: UUID, reason: str | None = None
+) -> dict[str, object]:
+    """Void a mis-emitted guía before it becomes fiscal evidence and return
+    the order to COMPLETED so it can be re-dispatched. Only while the order
+    is still DISPATCHED: a scheduled delivery means a truck was booked
+    against this document, and a stamped DTE-52 means the folio can only be
+    annulled at the SII — both refuse the void."""
+    org_id_s, order_id_s = str(org_id), str(order_id)
+    reason_text = (reason or "").strip()
+    if not reason_text:
+        raise DocumentaryError("dispatch_note_void_reason_required")
+    with transaction.atomic(), documentary_backend():
+        order = one(
+            """
+            SELECT id, order_code, status::text, payload_json, project_id
+            FROM public.orders
+            WHERE id = %s AND org_id = %s AND order_type = 'WORKSHOP_OT'
+            FOR UPDATE
+            """,
+            [order_id_s, org_id_s],
+            "work_order_not_found",
+        )
+        if str(order["status"]) != "DISPATCHED":
+            raise DocumentaryError("dispatch_note_void_requires_dispatched")
+        note = one(
+            """
+            SELECT id, note_code FROM public.dispatch_notes
+            WHERE org_id=%s AND work_order_id=%s AND voided_at IS NULL
+            ORDER BY created_at DESC, id DESC LIMIT 1
+            """,
+            [org_id_s, order_id_s],
+            "dispatch_note_not_found",
+        )
+        if rows(
+            "SELECT id FROM public.deliveries WHERE org_id=%s AND order_id=%s",
+            [org_id_s, order_id_s],
+        ):
+            raise DocumentaryError("dispatch_note_void_delivery_exists")
+        if rows(
+            "SELECT id FROM public.project_dtes "
+            "WHERE org_id=%s AND dispatch_note_id=%s",
+            [org_id_s, str(note["id"])],
+        ):
+            raise DocumentaryError("dispatch_note_void_stamped")
+        now = datetime.now(timezone.utc)
+        one(
+            """
+            UPDATE public.dispatch_notes
+            SET voided_at=%s, voided_by=%s, voided_reason=%s
+            WHERE id=%s RETURNING id
+            """,
+            [now, str(actor_id), reason_text[:500], str(note["id"])],
+        )
+        # Rewind to COMPLETED only when no other live guía remains — a
+        # voided partial note still leaves the rest of the order dispatched.
+        if not rows(
+            "SELECT id FROM public.dispatch_notes "
+            "WHERE org_id=%s AND work_order_id=%s AND voided_at IS NULL",
+            [org_id_s, order_id_s],
+        ):
+            rows(
+                """
+                UPDATE public.orders SET status = 'COMPLETED', updated_at = %s
+                WHERE id = %s AND org_id = %s RETURNING id
+                """,
+                [now, order_id_s, org_id_s],
+            )
+        rows(
+            """
+            INSERT INTO public.production_step_events(org_id, order_id, event, actor_id, payload)
+            VALUES (%s, %s, 'WO_DISPATCH_VOIDED', %s, %s::jsonb)
+            RETURNING id
+            """,
+            [
+                org_id_s,
+                order_id_s,
+                str(actor_id),
+                json.dumps({
+                    "order_code": order["order_code"],
+                    "note_code": note["note_code"],
+                    "reason": reason_text[:500],
                 }),
             ],
         )
@@ -2254,8 +3501,9 @@ def create_work_center(
 def _sheet_rules(org_id: UUID) -> dict[str, list[SheetRule]]:
     """Sheet stock declared by the shop: ``inventory_items.attributes`` carrying
     ``sheet_width_mm``/``sheet_height_mm``. Panels match a rule by sku; glass by
-    ``sheet_thickness_mm``. No inferred compatibility — undeclared groups fall
-    through to ``unnested`` in the plan."""
+    its substrate — ``glass_sku`` on both sides when the piece resolved a
+    catalog article, thickness only when neither side declares one. Two glass
+    types sharing net thickness never mix onto the same sheet."""
     items = rows(
         """
         SELECT sku, name, attributes FROM public.inventory_items
@@ -2267,6 +3515,7 @@ def _sheet_rules(org_id: UUID) -> dict[str, list[SheetRule]]:
     )
     by_sku: dict[str, SheetRule] = {}
     by_thickness: dict[str, SheetRule] = {}
+    by_glass: dict[str, SheetRule] = {}
     for item in items:
         attributes = item.get("attributes") or {}
         if isinstance(attributes, str):
@@ -2284,17 +3533,29 @@ def _sheet_rules(org_id: UUID) -> dict[str, list[SheetRule]]:
         except Exception:
             continue
         by_sku.setdefault(rule.workshop_sku, []).append(rule)
-        thickness = attributes.get("sheet_thickness_mm")
-        if thickness is not None:
-            by_thickness.setdefault(str(Decimal(str(thickness))), []).append(rule)
+        # A rule that declares its substrate serves only that substrate — it
+        # stays out of by_thickness so an undeclared piece can't borrow it.
+        glass_sku = attributes.get("glass_sku")
+        if glass_sku is not None:
+            by_glass.setdefault(str(glass_sku), []).append(rule)
+        else:
+            thickness = attributes.get("sheet_thickness_mm")
+            if thickness is not None:
+                by_thickness.setdefault(
+                    str(Decimal(str(thickness))), []
+                ).append(rule)
     # Deterministic authority order: smallest physical sheet first, sku as the
     # tiebreak, so variants never depend on database row order.
-    for group in (by_sku, by_thickness):
+    for group in (by_sku, by_thickness, by_glass):
         for candidates in group.values():
             candidates.sort(
                 key=lambda r: (r.sheet_width_mm * r.sheet_height_mm, r.workshop_sku)
             )
-    return {"by_sku": by_sku, "by_thickness": by_thickness}
+    return {
+        "by_sku": by_sku,
+        "by_thickness": by_thickness,
+        "by_glass": by_glass,
+    }
 
 
 def _pick_sheet_rule(
@@ -2321,6 +3582,482 @@ def _decoded(payload: object) -> dict[str, object]:
     return payload if isinstance(payload, dict) else {}
 
 
+def _compute_optimization(
+    *,
+    org_id: UUID,
+    result: EngineResult,
+    system_id: str,
+    color: str,
+    quantity: int,
+    position_id: str | None,
+    version_snapshot: dict[str, object],
+    strategy: str,
+    cutting_profile_code: str | None = None,
+) -> dict[str, object]:
+    """Pure plan computation — reads stock/remnant pools, writes nothing:
+    no reservations, no events. ``optimize_work_order`` persists the result;
+    ``compare_optimization_strategies`` previews the same computation per
+    strategy so the choice is evidence, not a guess."""
+    started = perf_counter()
+    stocks = CuttingRepository()
+    authorities = stocks.for_result(result, UUID(str(system_id)), org_id, color)
+    profile = stocks.cutting_profile(org_id, cutting_profile_code)
+    # §6: on-hand bar drops matching the plan's stock authorities are cut
+    # before any purchase; the engine consumes smallest-fitting-first.
+    bar_remnants = remnants_service.bar_remnants_for_authorities(
+        org_id=org_id,
+        authority_ids={s.stock_authority_id for s in authorities.stocks},
+    )
+    per_unit = pieces_from_result(
+        result,
+        color=color,
+        source_position_id=position_id,
+        reinforcement_skus=authorities.reinforcement_skus,
+        reinforcement_angles=_reinforcement_angle_map(version_snapshot, position_id),
+    )
+    # pieces_from_result returns one unit's pieces; unit_index is the
+    # physical unit ordinal the workshop reads (u1 = first unit), while
+    # identical copies inside a unit are disambiguated inside piece_id.
+    pieces = [
+        piece.model_copy(update={"unit_index": repetition})
+        for repetition in range(1, quantity + 1)
+        for piece in per_unit
+    ]
+    bars = optimize_cut(
+        pieces, authorities.stocks, profile,
+        remnants=bar_remnants, strategy=strategy,
+    ).model_dump(mode="json")
+    bar_runtime_ms = int((perf_counter() - started) * 1000)
+
+    rules = _sheet_rules(org_id)
+    sheets: list[dict[str, object]] = []
+    sheet_purchases: list[dict[str, object]] = []
+    unnested: list[dict[str, object]] = []
+    sheet_groups: list[tuple[SheetRule, list[NestPiece], str]] = []
+    for group_key, entries, kind in (
+        ("by_thickness", result.glasses, "GLASS"),
+        ("by_sku", result.panels, "PANEL"),
+    ):
+        for index, entry in enumerate(entries, start=1):
+            # Glass substrate identity: the resolved catalog article (or
+            # the composition spec when no article authority exists) is
+            # the grouping key — never net thickness alone.
+            substrate = (
+                (entry.article_sku or entry.glass_spec)
+                if kind == "GLASS"
+                else None
+            )
+            group = (
+                str(substrate)
+                if substrate
+                else (
+                    str(entry.thickness_net_mm)
+                    if kind == "GLASS"
+                    else entry.sku
+                )
+            )
+            if getattr(entry, "shape", None):
+                # Non-rectangular glass cannot be guillotine-nested by a
+                # bounding rect — it goes to the shape-cutting cell with
+                # its true outline, never silently a rectangle.
+                unnested.append({
+                    "kind": kind, "group": group,
+                    "width_mm": str(entry.width_mm),
+                    "height_mm": str(entry.height_mm), "quantity": quantity,
+                    "bay_id": entry.bay_id, "leaf_id": entry.leaf_id,
+                    "reason": "shaped_glass_outline",
+                    "shape": [
+                        {"x_mm": str(p.x_mm), "y_mm": str(p.y_mm)}
+                        for p in entry.shape
+                    ],
+                })
+                continue
+            candidates: list[SheetRule]
+            if kind == "GLASS" and substrate:
+                # Declared substrate → only rules declaring the same
+                # substrate; a same-thickness sheet of another glass type
+                # is not a compatible host.
+                candidates = rules["by_glass"].get(str(substrate)) or []
+            else:
+                candidates = rules[group_key].get(group) or []
+            rule = _pick_sheet_rule(
+                candidates, entry.width_mm, entry.height_mm
+            )
+            label = f"V-{index:02d}" if kind == "GLASS" else f"PAN-{index:02d}"
+            if rule is None:
+                unnested.append({
+                    "kind": kind, "group": group,
+                    "width_mm": str(entry.width_mm),
+                    "height_mm": str(entry.height_mm), "quantity": quantity,
+                    "bay_id": entry.bay_id, "leaf_id": entry.leaf_id,
+                    "reason": "no_declared_sheet",
+                })
+                continue
+            sheet_groups.append((
+                rule,
+                [
+                    NestPiece(
+                        piece_id=(
+                            label if quantity == 1
+                            else f"{label}-{repetition:02d}"
+                        ),
+                        workshop_sku=rule.workshop_sku,
+                        width_mm=entry.width_mm,
+                        height_mm=entry.height_mm,
+                        source_position_id=position_id,
+                        bay_id=entry.bay_id,
+                        leaf_id=entry.leaf_id,
+                        unit_index=repetition,
+                    )
+                    for repetition in range(1, quantity + 1)
+                ],
+                kind,
+            ))
+    # Group by the full selected rule identity (format + trim + purchasing
+    # identity), never just the SKU — pieces picked for different variants
+    # of one SKU keep separate layouts and purchase lines.
+    merged: dict[tuple, tuple[SheetRule, list[NestPiece], str]] = {}
+    for rule, pieces_group, group_kind in sheet_groups:
+        key = (
+            rule.workshop_sku,
+            str(rule.sheet_width_mm),
+            str(rule.sheet_height_mm),
+            str(rule.edge_trim_mm),
+            rule.purchasing_sku,
+        )
+        merged.setdefault(key, (rule, [], group_kind))[1].extend(pieces_group)
+    for rule, group_pieces, group_kind in merged.values():
+        outcome = nest_rects(
+            group_pieces, rule,
+            remnants=remnants_service.sheet_remnants_for_sku(
+                org_id=org_id, workshop_sku=rule.workshop_sku
+            ),
+        )
+        for layout in outcome.layouts:
+            dumped = layout.model_dump(mode="json")
+            # sheet_index restarts per bin — renumber across the whole plan
+            # so layouts keep a stable globally-unique identity.
+            dumped["sheet_index"] = len(sheets) + 1
+            # Remnant identity: the workshop sku this layout nests under
+            # (produced_remnants rejoin the pool under the same key).
+            dumped["workshop_sku"] = rule.workshop_sku
+            sheets.append(dumped)
+        for purchase in outcome.purchase_list:
+            dumped_purchase = purchase.model_dump(mode="json")
+            # The purchase row is bought sheet stock — tag which piece group
+            # it serves so stock needs can route it (glass sheets reserve at
+            # CUT; panel sheets stay on the PANEL authority path).
+            dumped_purchase["group_kind"] = group_kind
+            sheet_purchases.append(dumped_purchase)
+        for piece in outcome.unplaced:
+            unnested.append({
+                "kind": "SHEET", "group": rule.workshop_sku,
+                "width_mm": str(piece.width_mm), "height_mm": str(piece.height_mm),
+                "quantity": 1, "bay_id": piece.bay_id, "leaf_id": piece.leaf_id,
+                "reason": "piece_larger_than_usable_sheet",
+            })
+
+    # §6 remnant lifecycle: the plan claims what it will cut (RESERVED
+    # inside the caller's transaction — never a drop double-booked) and
+    # reports what reusable material it will return to the rack.
+    consumed_bars = [
+        {"id": bar["remnant_id"], "kind": "BAR"}
+        for bar in bars.get("workshop_cut_plan") or []
+        if bar.get("source") == "REMNANT" and bar.get("remnant_id")
+    ]
+    consumed_sheets = [
+        {"id": sheet["remnant_id"], "kind": "SHEET"}
+        for sheet in sheets
+        if sheet.get("source") == "REMNANT" and sheet.get("remnant_id")
+    ]
+    # The plan names each physical drop it claims — the operator matches
+    # the printed remnant id to the rack tag without opening the ledger.
+    consumed_ids = [entry["id"] for entry in consumed_bars + consumed_sheets]
+    if consumed_ids:
+        consumed_locations = {
+            str(r["id"]): r["rack_location"]
+            for r in rows(
+                "SELECT id, rack_location FROM public.inventory_remnants"
+                " WHERE org_id = %s AND id = ANY(%s::uuid[])",
+                [str(org_id), consumed_ids],
+            )
+        }
+        for entry in consumed_bars + consumed_sheets:
+            entry["rack_location"] = consumed_locations.get(entry["id"])
+    produced_bars = [
+        {
+            "stock_authority_id": bar["stock_authority_id"],
+            "remainder_mm": bar["remainder_mm"],
+        }
+        for bar in bars.get("workshop_cut_plan") or []
+        if bar.get("remainder_reusable") and bar.get("stock_authority_id")
+    ]
+    produced_sheets = [
+        {
+            "workshop_sku": sheet["workshop_sku"],
+            "width_mm": remnant["width_mm"],
+            "height_mm": remnant["height_mm"],
+        }
+        for sheet in sheets
+        for remnant in sheet.get("produced_remnants") or []
+    ]
+    return {
+        "bars": bars,
+        "sheets": sheets,
+        "sheet_purchases": sheet_purchases,
+        "unnested": unnested,
+        "consumed_bars": consumed_bars,
+        "consumed_sheets": consumed_sheets,
+        "produced_bars": produced_bars,
+        "produced_sheets": produced_sheets,
+        "bar_runtime_ms": bar_runtime_ms,
+        "runtime_ms": int((perf_counter() - started) * 1000),
+    }
+
+
+def _optimization_stats(plan: dict[str, object]) -> dict[str, object]:
+    """Plan aggregates for the optimize header — derived from the dumped
+    plan, never recomputed physics."""
+    bars = (plan["bars"].get("workshop_cut_plan") or []) if isinstance(
+        plan.get("bars"), dict
+    ) else []
+    cuts_total = 0
+    waste_mm = Decimal("0")
+    new_bars = 0
+    remnant_bars = 0
+    for bar in bars:
+        cuts_total += len(bar.get("cuts") or [])
+        waste_mm += Decimal(str(bar.get("waste_mm") or "0"))
+        if bar.get("source") == "REMNANT":
+            remnant_bars += 1
+        else:
+            new_bars += 1
+    sheet_purchases = plan.get("sheet_purchases") or []
+    bar_purchases = (plan["bars"].get("purchase_list") or []) if isinstance(
+        plan.get("bars"), dict
+    ) else []
+    return {
+        "bars_total": len(bars),
+        "bars_new": new_bars,
+        "bars_remnant": remnant_bars,
+        "cuts_total": cuts_total,
+        "waste_mm": str(waste_mm),
+        "sheets_total": len(plan.get("sheets") or []),
+        "pieces_sheets": sum(
+            len(sheet.get("placements") or [])
+            for sheet in (plan.get("sheets") or [])
+        ),
+        "unnested_count": len(plan.get("unnested") or []),
+        # Engine-authoritative waste split: kerf+trims+scrapped tails are
+        # process loss; a reusable remainder is inventory value, not waste.
+        "process_waste_mm": (
+            (plan["bars"].get("metrics") or {}).get("process_waste_mm")
+            if isinstance(plan.get("bars"), dict)
+            else None
+        ) or str(waste_mm),
+        "reusable_remnant_mm": (
+            (plan["bars"].get("metrics") or {}).get("reusable_remnant_mm")
+            if isinstance(plan.get("bars"), dict)
+            else None
+        ) or "0",
+        # Material that ends up inside a sold piece — the numerator a
+        # utilization percentage must declare.
+        "productive_length_mm": (
+            (plan["bars"].get("metrics") or {}).get("productive_length_mm")
+            if isinstance(plan.get("bars"), dict)
+            else None
+        ) or "0",
+        "purchase_bars": sum(
+            int(line.get("qty_bars") or 0) for line in bar_purchases
+        ),
+        "purchase_sheets": sum(
+            int(line.get("qty_sheets") or 0) for line in sheet_purchases
+        ),
+        "remnants_consumed": len(
+            (plan.get("consumed_bars") or []) + (plan.get("consumed_sheets") or [])
+        ),
+        "remnants_produced": len(
+            (plan.get("produced_bars") or []) + (plan.get("produced_sheets") or [])
+        ),
+        "runtime_ms": plan.get("runtime_ms") or 0,
+    }
+
+
+def _order_optimize_context(
+    *, org_id: UUID, order_id: UUID, color: str
+) -> tuple[dict[str, object], str, dict[str, object], EngineResult, int]:
+    """Shared guards + inputs for optimizing an order — the mutating path and
+    the read-only comparison both validate against the same sealed facts."""
+    order = one(
+        """
+        SELECT id, order_code, status::text, payload_json FROM public.orders
+        WHERE id = %s AND org_id = %s AND order_type = 'WORKSHOP_OT'
+        """,
+        [str(order_id), str(org_id)],
+        "work_order_not_found",
+    )
+    if str(order["status"]) == "INSTALLED":
+        raise DocumentaryError("work_order_installed")
+    if str(order["status"]) == "DISPATCHED":
+        raise DocumentaryError("work_order_dispatched")
+    if str(order["status"]) == "COMPLETED":
+        raise DocumentaryError("work_order_completed")
+    if str(order["status"]) == "CANCELLED":
+        raise DocumentaryError("work_order_cancelled")
+    payload = _decoded(order["payload_json"])
+    position_id = payload.get("position_id")
+    system_id = payload.get("system_id")
+    sealed_color = str(payload.get("color") or "").strip()
+    if sealed_color and not color:
+        color = sealed_color
+    if not color:
+        raise DocumentaryError("optimize_color_required")
+    if sealed_color and color != sealed_color:
+        raise DocumentaryError("optimize_color_mismatch")
+    version_row = one(
+        """
+        SELECT pv.snapshot_json FROM public.project_versions pv
+        JOIN public.orders o ON o.project_version_id = pv.id
+        WHERE o.id = %s AND o.org_id = %s
+        """,
+        [str(order_id), str(org_id)],
+        "work_order_missing_system",
+    )
+    version_snapshot = _decoded(version_row["snapshot_json"])
+    if not system_id:
+        for pos in version_snapshot.get("positions") or []:
+            if str(pos.get("id")) == str(position_id) and pos.get("system_id"):
+                system_id = str(pos["system_id"])
+                break
+        if not system_id:
+            raise DocumentaryError("work_order_missing_system")
+    quantity = int(payload.get("quantity") or 1)
+    materials = payload.get("materials") or {}
+    result = EngineResult.model_validate(
+        {
+            "profile_cuts": materials.get("profile_cuts") or [],
+            "reinforcements": materials.get("reinforcements") or [],
+            "glasses": materials.get("glasses") or [],
+            "panels": materials.get("panels") or [],
+            "fittings": materials.get("fittings") or [],
+            "hardware_items": materials.get("hardware_items") or [],
+            "leaf_weights": materials.get("leaf_weights") or [],
+        },
+        strict=False,
+    )
+    return order, color, version_snapshot, result, quantity
+
+
+def compare_optimization_strategies(
+    *,
+    org_id: UUID,
+    order_id: UUID,
+    color: str,
+) -> dict[str, object]:
+    """§6: preview FAST vs DEEP on the same sealed pieces and live stock —
+    read-only, no reservations, no events. AUTO delegates to the engine's own
+    pick, so the comparison covers the two explicit policies the operator can
+    choose."""
+    color = (color or "").strip()
+    with documentary_backend():
+        order, color, version_snapshot, result, quantity = _order_optimize_context(
+            org_id=org_id, order_id=order_id, color=color
+        )
+        payload = _decoded(order["payload_json"])
+        position_id = payload.get("position_id")
+        system_id = payload.get("system_id") or next(
+            (
+                str(pos["system_id"])
+                for pos in (version_snapshot.get("positions") or [])
+                if str(pos.get("id")) == str(position_id) and pos.get("system_id")
+            ),
+            None,
+        )
+        rows_out = []
+        for strategy in ("fast", "deep"):
+            plan = _compute_optimization(
+                org_id=org_id,
+                result=result,
+                system_id=str(system_id),
+                color=color,
+                quantity=quantity,
+                position_id=str(position_id) if position_id else None,
+                version_snapshot=version_snapshot,
+                strategy=strategy,
+            )
+            rows_out.append(
+                {"strategy": strategy, **_optimization_stats(plan)}
+            )
+        return {
+            "order_id": str(order_id),
+            "order_code": order["order_code"],
+            "color": color,
+            "strategies": rows_out,
+        }
+
+
+def station_queue(*, org_id: UUID) -> dict[str, object]:
+    """Group every live order's open steps by station code: what the saw
+    bench, the machining cell and the QC post each have queued right now.
+
+    A step shown as ``is_next`` is its order's first unfinished station —
+    the work that can actually start, not the whole backlog."""
+    step_rows = rows(
+        """
+        SELECT s.id::text, s.order_id::text, s.sequence, s.code::text AS code,
+               s.label, s.status::text AS status, s.note,
+               o.order_code, w.code AS work_center_code, w.name AS work_center_name
+        FROM public.production_steps s
+        JOIN public.orders o ON o.id = s.order_id AND o.org_id = s.org_id
+        LEFT JOIN public.work_centers w ON w.id = s.work_center_id
+        WHERE s.org_id = %s
+          AND o.status::text IN ('RELEASED', 'IN_PROGRESS', 'HOLD')
+        ORDER BY o.order_code, s.sequence
+        """,
+        [str(org_id)],
+    )
+    stations: dict[str, dict[str, object]] = {}
+    first_open: dict[str, str] = {}
+    for row in step_rows:
+        order_id = str(row["order_id"])
+        if row["status"] != "DONE" and order_id not in first_open:
+            first_open[order_id] = str(row["id"])
+        if row["status"] == "DONE":
+            continue
+        station = stations.setdefault(
+            str(row["code"]),
+            {"code": str(row["code"]), "label": row["label"], "entries": []},
+        )
+        station["entries"].append({
+            "step_id": row["id"],
+            "order_id": order_id,
+            "order_code": row["order_code"],
+            "sequence": row["sequence"],
+            "label": row["label"],
+            "status": row["status"],
+            "note": row["note"],
+            "work_center_code": row["work_center_code"],
+            "work_center_name": row["work_center_name"],
+        })
+    for station in stations.values():
+        for entry in station["entries"]:
+            entry["is_next"] = entry["step_id"] == first_open.get(
+                entry["order_id"]
+            )
+        station["pending"] = sum(
+            1 for e in station["entries"] if e["status"] in ("PENDING", "READY")
+        )
+        station["in_progress"] = sum(
+            1 for e in station["entries"] if e["status"] == "IN_PROGRESS"
+        )
+        station["blocked"] = sum(
+            1 for e in station["entries"] if e["status"] == "BLOCKED"
+        )
+    return {
+        "stations": [station for _, station in sorted(stations.items())]
+    }
+
+
 def optimize_work_order(
     *,
     org_id: UUID,
@@ -2334,8 +4071,6 @@ def optimize_work_order(
     work order. Replaces any previous plan in ``payload_json.optimization`` and
     appends a ``WO_OPTIMIZED`` event. Sealed materials are never mutated."""
     color = (color or "").strip()
-    if not color:
-        raise DocumentaryError("optimize_color_required")
     with transaction.atomic(), documentary_backend():
         order = one(
             """
@@ -2352,25 +4087,50 @@ def optimize_work_order(
             raise DocumentaryError("work_order_dispatched")
         if str(order["status"]) == "COMPLETED":
             raise DocumentaryError("work_order_completed")
+        if str(order["status"]) == "CANCELLED":
+            raise DocumentaryError("work_order_cancelled")
         # A plan writes fresh reservations for every stock kind, but only a
         # consuming step that completes can settle them — replanning after a
         # step already consumed its material would strand the new holds
-        # forever (a DONE step cannot complete again). Refuse instead.
-        consumed_rows = rows(
+        # forever (a DONE step cannot complete again). A step IN_PROGRESS is
+        # worse: the floor is physically cutting plan A while plan B would
+        # silently steal its stock claims. Both refuse.
+        consuming_rows = rows(
             """
-            SELECT code::text AS code FROM public.production_steps
-            WHERE order_id = %s AND org_id = %s AND status = 'DONE'
+            SELECT code::text AS code, status::text AS status
+            FROM public.production_steps
+            WHERE order_id = %s AND org_id = %s AND status IN ('DONE', 'IN_PROGRESS')
             """,
             [str(order_id), str(org_id)],
         )
+        # The replan guard covers every station that physically worked the
+        # plan — not only stock-consuming ones: a DONE PROFILE_CUT means
+        # real bars were already cut even though no reservation settled here.
+        physical_stations = set(_STEP_CONSUMED_KINDS) | _PLAN_REQUIRED_STATIONS
         if any(
-            str(row["code"]) in _STEP_CONSUMED_KINDS for row in consumed_rows
+            str(row["code"]) in physical_stations and row["status"] == "DONE"
+            for row in consuming_rows
         ):
             raise DocumentaryError("work_order_replan_after_consumption")
+        if any(
+            str(row["code"]) in physical_stations
+            for row in consuming_rows
+        ):
+            raise DocumentaryError("work_order_replan_step_in_progress")
         payload = _decoded(order["payload_json"])
         materials = payload.get("materials") or {}
         position_id = payload.get("position_id")
         system_id = payload.get("system_id")
+        sealed_color = str(payload.get("color") or "").strip()
+        # The sealed color is the authority: an omitted request color inherits
+        # it; a contradicting one is refused — optimizing against a different
+        # finish would cut/reserve stock the order never asked for.
+        if sealed_color and not color:
+            color = sealed_color
+        if not color:
+            raise DocumentaryError("optimize_color_required")
+        if sealed_color and color != sealed_color:
+            raise DocumentaryError("optimize_color_mismatch")
         # The frozen version snapshot is the only honest source for both the
         # system mapping and the sealed manufacturing facts (reinforcement cut
         # angles live there, not in the BOM rows).
@@ -2408,174 +4168,25 @@ def optimize_work_order(
             },
             strict=False,
         )
-        stocks = CuttingRepository()
-        authorities = stocks.for_result(result, UUID(str(system_id)), org_id, color)
-        profile = stocks.cutting_profile(org_id, cutting_profile_code)
-        # §6: on-hand bar drops matching the plan's stock authorities are cut
-        # before any purchase; the engine consumes smallest-fitting-first.
-        bar_remnants = remnants_service.bar_remnants_for_authorities(
+        plan = _compute_optimization(
             org_id=org_id,
-            authority_ids={s.stock_authority_id for s in authorities.stocks},
-        )
-        per_unit = pieces_from_result(
-            result,
+            result=result,
+            system_id=str(system_id),
             color=color,
-            source_position_id=str(position_id) if position_id else None,
-            reinforcement_skus=authorities.reinforcement_skus,
-            reinforcement_angles=_reinforcement_angle_map(
-                version_snapshot, str(position_id) if position_id else None
-            ),
+            quantity=quantity,
+            position_id=str(position_id) if position_id else None,
+            version_snapshot=version_snapshot,
+            strategy=strategy,
+            cutting_profile_code=cutting_profile_code,
         )
-        # pieces_from_result already expands each unit's qty via unit_index;
-        # offset by the per-unit count so the identity stays unique per unit.
-        pieces = [
-            piece.model_copy(
-                update={"unit_index": (repetition - 1) * len(per_unit) + piece.unit_index}
-            )
-            for repetition in range(1, quantity + 1)
-            for piece in per_unit
-        ]
-        bars = optimize_cut(
-            pieces, authorities.stocks, profile,
-            remnants=bar_remnants, strategy=strategy,
-        ).model_dump(mode="json")
-
-        rules = _sheet_rules(org_id)
-        sheets: list[dict[str, object]] = []
-        sheet_purchases: list[dict[str, object]] = []
-        unnested: list[dict[str, object]] = []
-        sheet_groups: list[tuple[SheetRule, list[NestPiece], str]] = []
-        for group_key, entries, kind in (
-            ("by_thickness", result.glasses, "GLASS"),
-            ("by_sku", result.panels, "PANEL"),
-        ):
-            for index, entry in enumerate(entries, start=1):
-                group = (
-                    str(entry.thickness_net_mm) if kind == "GLASS" else entry.sku
-                )
-                if getattr(entry, "shape", None):
-                    # Non-rectangular glass cannot be guillotine-nested by a
-                    # bounding rect — it goes to the shape-cutting cell with
-                    # its true outline, never silently a rectangle.
-                    unnested.append({
-                        "kind": kind, "group": group,
-                        "width_mm": str(entry.width_mm),
-                        "height_mm": str(entry.height_mm), "quantity": quantity,
-                        "bay_id": entry.bay_id, "leaf_id": entry.leaf_id,
-                        "shape": [
-                            {"x_mm": str(p.x_mm), "y_mm": str(p.y_mm)}
-                            for p in entry.shape
-                        ],
-                        "reason": "shaped_glass_outline",
-                    })
-                    continue
-                rule = _pick_sheet_rule(
-                    rules[group_key].get(group) or [], entry.width_mm, entry.height_mm
-                )
-                label = f"V-{index:02d}" if kind == "GLASS" else f"PAN-{index:02d}"
-                if rule is None:
-                    unnested.append({
-                        "kind": kind, "group": group,
-                        "width_mm": str(entry.width_mm),
-                        "height_mm": str(entry.height_mm), "quantity": quantity,
-                        "bay_id": entry.bay_id, "leaf_id": entry.leaf_id,
-                        "reason": "no_declared_sheet",
-                    })
-                    continue
-                sheet_groups.append((
-                    rule,
-                    [
-                        NestPiece(
-                            piece_id=(
-                                label if quantity == 1
-                                else f"{label}-{repetition:02d}"
-                            ),
-                            workshop_sku=rule.workshop_sku,
-                            width_mm=entry.width_mm,
-                            height_mm=entry.height_mm,
-                            source_position_id=str(position_id) if position_id else None,
-                            bay_id=entry.bay_id,
-                            leaf_id=entry.leaf_id,
-                            unit_index=repetition,
-                        )
-                        for repetition in range(1, quantity + 1)
-                    ],
-                    kind,
-                ))
-        # Group by the full selected rule identity (format + trim + purchasing
-        # identity), never just the SKU — pieces picked for different variants
-        # of one SKU keep separate layouts and purchase lines.
-        merged: dict[tuple, tuple[SheetRule, list[NestPiece], str]] = {}
-        for rule, pieces_group, group_kind in sheet_groups:
-            key = (
-                rule.workshop_sku,
-                str(rule.sheet_width_mm),
-                str(rule.sheet_height_mm),
-                str(rule.edge_trim_mm),
-                rule.purchasing_sku,
-            )
-            merged.setdefault(key, (rule, [], group_kind))[1].extend(pieces_group)
-        for rule, group_pieces, group_kind in merged.values():
-            outcome = nest_rects(
-                group_pieces, rule,
-                remnants=remnants_service.sheet_remnants_for_sku(
-                    org_id=org_id, workshop_sku=rule.workshop_sku
-                ),
-            )
-            for layout in outcome.layouts:
-                dumped = layout.model_dump(mode="json")
-                # sheet_index restarts per bin — renumber across the whole plan
-                # so layouts keep a stable globally-unique identity.
-                dumped["sheet_index"] = len(sheets) + 1
-                # Remnant identity: the workshop sku this layout nests under
-                # (produced_remnants rejoin the pool under the same key).
-                dumped["workshop_sku"] = rule.workshop_sku
-                sheets.append(dumped)
-            for purchase in outcome.purchase_list:
-                dumped_purchase = purchase.model_dump(mode="json")
-                # The purchase row is bought sheet stock — tag which piece group
-                # it serves so stock needs can route it (glass sheets reserve at
-                # CUT; panel sheets stay on the PANEL authority path).
-                dumped_purchase["group_kind"] = group_kind
-                sheet_purchases.append(dumped_purchase)
-            for piece in outcome.unplaced:
-                unnested.append({
-                    "kind": "SHEET", "group": rule.workshop_sku,
-                    "width_mm": str(piece.width_mm), "height_mm": str(piece.height_mm),
-                    "quantity": 1, "bay_id": piece.bay_id, "leaf_id": piece.leaf_id,
-                    "reason": "piece_larger_than_usable_sheet",
-                })
-
-        # §6 remnant lifecycle: the plan claims what it will cut (RESERVED
-        # inside this same transaction — never a drop double-booked) and
-        # reports what reusable material it will return to the rack.
-        consumed_bars = [
-            {"id": bar["remnant_id"], "kind": "BAR"}
-            for bar in bars.get("workshop_cut_plan") or []
-            if bar.get("source") == "REMNANT" and bar.get("remnant_id")
-        ]
-        consumed_sheets = [
-            {"id": sheet["remnant_id"], "kind": "SHEET"}
-            for sheet in sheets
-            if sheet.get("source") == "REMNANT" and sheet.get("remnant_id")
-        ]
-        produced_bars = [
-            {
-                "stock_authority_id": bar["stock_authority_id"],
-                "remainder_mm": bar["remainder_mm"],
-            }
-            for bar in bars.get("workshop_cut_plan") or []
-            if bar.get("remainder_reusable") and bar.get("stock_authority_id")
-        ]
-        produced_sheets = [
-            {
-                "workshop_sku": sheet["workshop_sku"],
-                "width_mm": remnant["width_mm"],
-                "height_mm": remnant["height_mm"],
-            }
-            for sheet in sheets
-            for remnant in sheet.get("produced_remnants") or []
-        ]
+        bars = plan["bars"]
+        sheets = plan["sheets"]
+        sheet_purchases = plan["sheet_purchases"]
+        unnested = plan["unnested"]
+        consumed_bars = plan["consumed_bars"]
+        consumed_sheets = plan["consumed_sheets"]
+        produced_bars = plan["produced_bars"]
+        produced_sheets = plan["produced_sheets"]
         # Re-optimizing replaces the plan: the old reservation releases before
         # the new one claims, atomically — for remnants and for ledger stock
         # alike. Ledger reservations are capped at what is physically
@@ -2615,6 +4226,14 @@ def optimize_work_order(
             "color": color,
             "units": quantity,
             "strategy": strategy,
+            # Which engine strategy physically produced this plan — the
+            # `auto` comparison's `chosen`, or the requested one outright.
+            "applied_strategy": (
+                str(bars.get("strategy_comparison", {}).get("chosen"))
+                if isinstance(bars.get("strategy_comparison"), dict)
+                and bars["strategy_comparison"].get("chosen")
+                else strategy
+            ),
             "bars": bars,
             "sheets": sheets,
             "sheet_purchases": sheet_purchases,
@@ -2624,6 +4243,9 @@ def optimize_work_order(
                 "produced_bars": produced_bars,
                 "produced_sheets": produced_sheets,
             },
+            # §6 plan summary — aggregates computed from the same dumped plan
+            # the UI renders, never a second source of numbers.
+            "stats": _optimization_stats(plan),
             # §10 ledger reservations this plan holds — what production
             # claimed from stock, what it is short of, and (once the routing
             # consumes them) when each hold settled.
@@ -2670,6 +4292,19 @@ def optimize_work_order(
                 }),
             ],
         )
+        # §08: the plan says which claims stock couldn't fill — queue the
+        # purchase task inside this tx so the plan and the task commit
+        # together (deduped to the order, not per optimize click).
+        if any(row["short"] != "0" for row in stock_reservations):
+            from automations.service import emit
+
+            emit(
+                "automation.purchase_task",
+                org_id=org_id,
+                actor_id=actor_id,
+                idempotency_key=f"auto:buy:{order_id}",
+                order_id=str(order_id),
+            )
         return {
             "order_id": str(order_id),
             "order_code": order["order_code"],
@@ -2678,25 +4313,51 @@ def optimize_work_order(
 
 
 _DELIVERY_WINDOWS = ("AM", "PM", "JORNADA")
+# DELIVERED is not a manual transition: it is only reachable through
+# confirm_delivery, which seals the signed comprobante de entrega and its
+# optional cobro in the same transaction.
 _DELIVERY_NEXT = {
     "ON_ROUTE": {"SCHEDULED"},
-    "DELIVERED": {"ON_ROUTE"},
     "FAILED": {"ON_ROUTE"},
 }
 _DELIVERY_EVENT = {
     "ON_ROUTE": "WO_DELIVERY_ON_ROUTE",
-    "DELIVERED": "WO_DELIVERY_DELIVERED",
     "FAILED": "WO_DELIVERY_FAILED",
 }
+
+
+def _manifest_unit_indexes(payload: dict) -> set[int]:
+    """Units an order ships: manifest indexes once packing exists, else the
+    order-quantity range (a delivery may be scheduled before PACK runs)."""
+    packing = (payload or {}).get("packing") or {}
+    units = {
+        int(unit["unit_index"])
+        for unit in packing.get("units") or []
+        if unit.get("unit_index") is not None
+    }
+    if units:
+        return units
+    quantity = int((payload or {}).get("quantity") or 1)
+    return set(range(1, quantity + 1))
+
+
+def _delivery_unit_set(delivery: dict, manifest: set[int]) -> set[int]:
+    """NULL unit_indexes keeps the pre-partial meaning: the whole order."""
+    indexes = delivery.get("unit_indexes")
+    if indexes is None:
+        return set(manifest)
+    return {int(i) for i in indexes}
 
 
 def _public_delivery(
     delivery: dict[str, object], *, confirmation: dict | None = None
 ) -> dict[str, object]:
+    indexes = delivery.get("unit_indexes")
     return {
         "id": str(delivery["id"]),
         "order_id": str(delivery["order_id"]),
         "order_code": str(delivery["order_code"]),
+        "unit_indexes": sorted(int(i) for i in indexes) if indexes is not None else None,
         "scheduled_date": str(delivery["scheduled_date"]),
         "time_window": str(delivery["time_window"]),
         "address": str(delivery["address"]),
@@ -2713,29 +4374,83 @@ def _public_delivery(
 
 
 def get_delivery(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
-    """Delivery for a valid WORKSHOP_OT — `delivery: null` only when the order
-    genuinely exists but was never scheduled; bad ids raise work_order_not_found."""
+    """Delivery trips for a valid WORKSHOP_OT. ``delivery`` is the open trip
+    (or the most recent resolved one); ``deliveries`` lists every trip and
+    the unit sets show what shipped vs what is still pending — the saldo
+    of a partial dispatch stays visible instead of disappearing."""
     with documentary_backend():
         found = rows(
             """
-            SELECT d.*, o.order_code FROM public.orders o
-            LEFT JOIN public.deliveries d ON d.order_id = o.id
+            SELECT o.id, o.order_code, o.payload_json::text AS payload_json
+            FROM public.orders o
             WHERE o.id = %s AND o.org_id = %s AND o.order_type = 'WORKSHOP_OT'
             """,
             [str(order_id), str(org_id)],
         )
         if not found:
             raise DocumentaryError("work_order_not_found")
-    delivery = found[0]
-    if not delivery.get("id"):
-        return {"delivery": None}
-    return {
-        "delivery": _public_delivery(
+        order = found[0]
+        deliveries = rows(
+            """
+            SELECT * FROM public.deliveries
+            WHERE order_id = %s AND org_id = %s ORDER BY created_at
+            """,
+            [str(order_id), str(org_id)],
+        )
+        confirmations = {
+            str(c["delivery_id"]): c
+            for c in rows(
+                "SELECT * FROM public.delivery_confirmations "
+                "WHERE org_id=%s AND order_id=%s",
+                [str(org_id), str(order_id)],
+            )
+        }
+    manifest = _manifest_unit_indexes(_decoded(order["payload_json"]))
+    for delivery in deliveries:
+        delivery["order_code"] = order["order_code"]
+    delivered: set[int] = set()
+    claimed: set[int] = set()
+    for delivery in deliveries:
+        status = str(delivery["status"])
+        if status == "FAILED":
+            continue
+        units = _delivery_unit_set(delivery, manifest)
+        claimed |= units
+        if status == "DELIVERED":
+            delivered |= units
+    pending = manifest - claimed
+    public = [
+        _public_delivery(
             delivery,
-            confirmation=confirmation_summary(
-                org_id=org_id, order_id=order_id
+            confirmation=(
+                _confirmation_public(confirmations[str(delivery["id"])])
+                if str(delivery["id"]) in confirmations
+                else None
             ),
         )
+        for delivery in deliveries
+    ]
+    open_trip = next(
+        (d for d in deliveries if str(d["status"]) in ("SCHEDULED", "ON_ROUTE")),
+        None,
+    )
+    current = open_trip or (deliveries[-1] if deliveries else None)
+    return {
+        "delivery": (
+            _public_delivery(
+                current,
+                confirmation=(
+                    _confirmation_public(confirmations[str(current["id"])])
+                    if str(current["id"]) in confirmations
+                    else None
+                ),
+            )
+            if current
+            else None
+        ),
+        "deliveries": public,
+        "pending_units": sorted(pending),
+        "delivered_units": sorted(delivered),
     }
 
 
@@ -2751,9 +4466,13 @@ def schedule_delivery(
     contact_phone: str | None = None,
     installer_name: str | None = None,
     notes: str | None = None,
+    unit_indexes: list[int] | None = None,
 ) -> dict[str, object]:
-    """Create or update the order's single delivery — rescheduling is an
-    upsert so retries and edits stay idempotent on the same row."""
+    """Create or update the order's delivery trip. An open trip (SCHEDULED)
+    is upserted so retries and edits stay idempotent on the same row; once
+    it resolves, a new schedule opens the next trip. ``unit_indexes`` scopes
+    the trip to manifest units for partial deliveries — already delivered
+    or on-route units cannot be claimed twice."""
     window = (time_window or "AM").strip().upper()
     if window not in _DELIVERY_WINDOWS:
         raise DocumentaryError("delivery_window_invalid")
@@ -2763,10 +4482,14 @@ def schedule_delivery(
         day = date.fromisoformat(str(scheduled_date))
     except (TypeError, ValueError):
         raise DocumentaryError("delivery_date_invalid")
+    requested = (
+        sorted({int(i) for i in unit_indexes}) if unit_indexes is not None else None
+    )
     with transaction.atomic(), documentary_backend():
         order = one(
             """
-            SELECT id, order_code, status::text FROM public.orders
+            SELECT id, order_code, status::text, payload_json::text AS payload_json
+            FROM public.orders
             WHERE id = %s AND org_id = %s AND order_type = 'WORKSHOP_OT'
             FOR UPDATE
             """,
@@ -2776,11 +4499,35 @@ def schedule_delivery(
         if str(order["status"]) not in ("COMPLETED", "DISPATCHED"):
             raise DocumentaryError("delivery_requires_completed")
         existing = rows(
-            "SELECT * FROM public.deliveries WHERE order_id = %s AND org_id = %s",
+            "SELECT * FROM public.deliveries WHERE order_id = %s AND org_id = %s "
+            "ORDER BY created_at",
             [str(order_id), str(org_id)],
         )
-        if existing and str(existing[0]["status"]) == "DELIVERED":
-            raise DocumentaryError("delivery_already_delivered")
+        manifest = _manifest_unit_indexes(_decoded(order["payload_json"]))
+        if requested is not None:
+            unknown = set(requested) - manifest
+            if unknown or not requested:
+                raise DocumentaryError("delivery_units_invalid")
+        sealed: set[int] = set()
+        open_trip = None
+        for row in existing:
+            status = str(row["status"])
+            if status == "DELIVERED":
+                sealed |= _delivery_unit_set(row, manifest)
+            elif status in ("SCHEDULED", "ON_ROUTE"):
+                open_trip = row
+        if requested is not None and set(requested) & sealed:
+            raise DocumentaryError("delivery_units_already_delivered")
+        if requested is None and sealed:
+            # Whole-order shorthand after a delivered trip means the saldo —
+            # delivered units are sealed facts, never re-scheduled.
+            requested = sorted(manifest - sealed)
+            if not requested:
+                raise DocumentaryError("delivery_nothing_pending")
+        if open_trip is not None and str(open_trip["status"]) == "ON_ROUTE":
+            # A truck already moving can't be silently rewound to scheduled —
+            # fail it first, then schedule the fresh attempt.
+            raise DocumentaryError("delivery_already_on_route")
         normalized = {
             "scheduled_date": day,
             "time_window": window,
@@ -2789,47 +4536,68 @@ def schedule_delivery(
             "contact_phone": (contact_phone or "").strip() or None,
             "installer_name": (installer_name or "").strip() or None,
             "notes": (notes or "").strip() or None,
+            "unit_indexes": requested,
         }
-        if (
-            existing
-            and str(existing[0]["status"]) == "SCHEDULED"
-            and all(existing[0][key] == value for key, value in normalized.items())
-        ):
-            # Identical schedule replay — one row, no duplicate audit event.
-            return get_delivery(org_id=org_id, order_id=order_id)
-        delivery = one(
-            """
-            INSERT INTO public.deliveries(
-                org_id, order_id, scheduled_date, time_window, address,
-                contact_name, contact_phone, installer_name, notes, scheduled_by)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            ON CONFLICT (order_id) DO UPDATE SET
-                scheduled_date = EXCLUDED.scheduled_date,
-                time_window = EXCLUDED.time_window,
-                address = EXCLUDED.address,
-                contact_name = EXCLUDED.contact_name,
-                contact_phone = EXCLUDED.contact_phone,
-                installer_name = EXCLUDED.installer_name,
-                notes = EXCLUDED.notes,
-                scheduled_by = EXCLUDED.scheduled_by,
-                status = 'SCHEDULED',
-                updated_at = %s
-            RETURNING *
-            """,
-            [
-                str(org_id),
-                str(order_id),
-                str(day),
-                window,
-                address.strip(),
-                (contact_name or "").strip() or None,
-                (contact_phone or "").strip() or None,
-                (installer_name or "").strip() or None,
-                (notes or "").strip() or None,
-                str(actor_id),
-                datetime.now(timezone.utc),
-            ],
-        )
+        if open_trip is not None:
+            stored_units = (
+                sorted(int(i) for i in open_trip["unit_indexes"])
+                if open_trip.get("unit_indexes") is not None
+                else None
+            )
+            if all(
+                (open_trip[key] if key != "unit_indexes" else stored_units) == value
+                for key, value in normalized.items()
+            ):
+                # Identical schedule replay — one row, no duplicate audit event.
+                return get_delivery(org_id=org_id, order_id=order_id)
+            delivery = one(
+                """
+                UPDATE public.deliveries SET
+                    scheduled_date=%s, time_window=%s, address=%s,
+                    contact_name=%s, contact_phone=%s, installer_name=%s,
+                    notes=%s, unit_indexes=%s, scheduled_by=%s,
+                    status='SCHEDULED', updated_at=%s
+                WHERE id=%s AND org_id=%s RETURNING *
+                """,
+                [
+                    day,
+                    window,
+                    address.strip(),
+                    (contact_name or "").strip() or None,
+                    (contact_phone or "").strip() or None,
+                    (installer_name or "").strip() or None,
+                    (notes or "").strip() or None,
+                    requested,
+                    str(actor_id),
+                    datetime.now(timezone.utc),
+                    str(open_trip["id"]),
+                    str(org_id),
+                ],
+            )
+        else:
+            delivery = one(
+                """
+                INSERT INTO public.deliveries(
+                    org_id, order_id, scheduled_date, time_window, address,
+                    contact_name, contact_phone, installer_name, notes,
+                    scheduled_by, unit_indexes)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                RETURNING *
+                """,
+                [
+                    str(org_id),
+                    str(order_id),
+                    str(day),
+                    window,
+                    address.strip(),
+                    (contact_name or "").strip() or None,
+                    (contact_phone or "").strip() or None,
+                    (installer_name or "").strip() or None,
+                    (notes or "").strip() or None,
+                    str(actor_id),
+                    requested,
+                ],
+            )
         rows(
             """
             INSERT INTO public.production_step_events(org_id, order_id, event, actor_id, payload)
@@ -2845,6 +4613,7 @@ def schedule_delivery(
                     "scheduled_date": str(day),
                     "time_window": window,
                     "installer_name": delivery["installer_name"],
+                    "unit_indexes": requested,
                 }),
             ],
         )
@@ -2874,7 +4643,9 @@ def transition_delivery(
         delivery = one(
             """
             SELECT * FROM public.deliveries
-            WHERE order_id = %s AND org_id = %s FOR UPDATE
+            WHERE order_id = %s AND org_id = %s
+              AND status IN ('SCHEDULED', 'ON_ROUTE')
+            ORDER BY created_at FOR UPDATE
             """,
             [str(order_id), str(org_id)],
             "delivery_not_found",

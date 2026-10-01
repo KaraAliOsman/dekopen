@@ -4,6 +4,7 @@ from __future__ import annotations
 
 
 from dekopen_engine.snapshot import calculation_response, evaluation_response
+from dekopen_engine.weight import MissingFabricationAuthority
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -146,6 +147,12 @@ class EngineCalculateView(APIView):
                 "unsupported_engine_contract",
                 "Engine contract is not supported in SHOT-06 Core",
             ) from error
+        except MissingFabricationAuthority as error:
+            raise contract_error(
+                status.HTTP_409_CONFLICT,
+                "catalog_authority_missing",
+                "catalogs.errors.authority_missing",
+            ) from error
         except (InvalidEngineRequest, ValueError) as error:
             raise contract_error(
                 status.HTTP_400_BAD_REQUEST,
@@ -265,6 +272,12 @@ class EngineAssemblyCalculateView(APIView):
                 status.HTTP_422_UNPROCESSABLE_ENTITY,
                 "unsupported_engine_contract",
                 "Engine contract is not supported",
+            ) from error
+        except MissingFabricationAuthority as error:
+            raise contract_error(
+                status.HTTP_409_CONFLICT,
+                "catalog_authority_missing",
+                "catalogs.errors.authority_missing",
             ) from error
         except (InvalidEngineRequest, ValueError) as error:
             raise contract_error(

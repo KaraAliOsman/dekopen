@@ -71,11 +71,11 @@ SELECT
       "policy_id": "DEMO_60_REINFORCEMENT_CUT_V1",
       "version": 1,
       "rules": [
-        {"role":"FRAME","profile_angle_left":"45.0","profile_angle_right":"45.0","reinforcement_angle_left":"90.0","reinforcement_angle_right":"90.0","length_authority":"EXISTING_ENGINE","compatible_with_existing_length":true},
-        {"role":"FRAME","profile_angle_left":"45.0","profile_angle_right":"90.0","reinforcement_angle_left":"90.0","reinforcement_angle_right":"90.0","length_authority":"EXISTING_ENGINE","compatible_with_existing_length":true},
-        {"role":"SASH","profile_angle_left":"45.0","profile_angle_right":"45.0","reinforcement_angle_left":"90.0","reinforcement_angle_right":"90.0","length_authority":"EXISTING_ENGINE","compatible_with_existing_length":true},
-        {"role":"MULLION_V","profile_angle_left":"90.0","profile_angle_right":"90.0","reinforcement_angle_left":"90.0","reinforcement_angle_right":"90.0","length_authority":"EXISTING_ENGINE","compatible_with_existing_length":true},
-        {"role":"MULLION_H","profile_angle_left":"90.0","profile_angle_right":"90.0","reinforcement_angle_left":"90.0","reinforcement_angle_right":"90.0","length_authority":"EXISTING_ENGINE","compatible_with_existing_length":true}
+        {"role":"FRAME","profile_angle_left":45.0,"profile_angle_right":45.0,"reinforcement_angle_left":90.0,"reinforcement_angle_right":90.0,"length_authority":"EXISTING_ENGINE","compatible_with_existing_length":true},
+        {"role":"FRAME","profile_angle_left":45.0,"profile_angle_right":90.0,"reinforcement_angle_left":90.0,"reinforcement_angle_right":90.0,"length_authority":"EXISTING_ENGINE","compatible_with_existing_length":true},
+        {"role":"SASH","profile_angle_left":45.0,"profile_angle_right":45.0,"reinforcement_angle_left":90.0,"reinforcement_angle_right":90.0,"length_authority":"EXISTING_ENGINE","compatible_with_existing_length":true},
+        {"role":"MULLION_V","profile_angle_left":90.0,"profile_angle_right":90.0,"reinforcement_angle_left":90.0,"reinforcement_angle_right":90.0,"length_authority":"EXISTING_ENGINE","compatible_with_existing_length":true},
+        {"role":"MULLION_H","profile_angle_left":90.0,"profile_angle_right":90.0,"reinforcement_angle_left":90.0,"reinforcement_angle_right":90.0,"length_authority":"EXISTING_ENGINE","compatible_with_existing_length":true}
       ]
     }'::jsonb
 FROM public.profile_systems AS system

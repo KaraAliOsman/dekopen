@@ -1,6 +1,13 @@
 from rest_framework import serializers
 
 
+class OperationalSummaryCommercialItemSerializer(serializers.Serializer):
+    currency = serializers.CharField()
+    quoted = serializers.CharField()
+    booked = serializers.CharField()
+    collected = serializers.CharField()
+
+
 class OperationalSummarySerializer(serializers.Serializer):
     schema = serializers.CharField()
     work_orders = serializers.DictField()
@@ -12,4 +19,5 @@ class OperationalSummarySerializer(serializers.Serializer):
     deliveries = serializers.DictField()
     documents = serializers.DictField()
     projects = serializers.DictField()
+    commercial = OperationalSummaryCommercialItemSerializer(many=True)
     recent_events = serializers.ListField()

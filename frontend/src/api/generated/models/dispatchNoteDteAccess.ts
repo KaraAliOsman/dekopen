@@ -13,5 +13,7 @@ export interface DispatchNoteDteAccess {
   folio: number;
   issued_at: string;
   signed_url: string;
+  /** @nullable */
+  tributario_signed_url: string | null;
   expires_in: number;
 }

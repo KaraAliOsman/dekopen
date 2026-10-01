@@ -18,6 +18,7 @@ from uuid import UUID
 
 
 from documents.repository import one, rows
+from inventory.service import stock_variant_key
 
 
 def _dec(value: Any) -> Decimal:
@@ -268,6 +269,62 @@ def consume_for_order(
     return reservations
 
 
+def recheck_reservations(
+    *,
+    org_id: UUID,
+    order_id: UUID,
+    actor_id: UUID,
+    reservations: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Top up open shortage rows from live stock — the path that unblocks an
+    order once its missing goods actually arrive.
+
+    Each open row (``short`` > 0, never consumed) is re-checked against the
+    current balance; available stock is reserved up to the shortfall and the
+    row's ``reserved``/``short``/``on_hand`` are updated in place. Consumed
+    rows are sealed history and untouched; unplaced plan pieces are a layout
+    problem this does not pretend to solve. Must run inside the caller's
+    transaction."""
+    for entry in reservations:
+        if entry.get("consumed_at"):
+            continue
+        short = _dec(entry.get("short") or "0")
+        if short <= 0:
+            continue
+        item = _upsert_item(
+            org_id=org_id,
+            sku=str(entry["sku"]),
+            name=str(entry.get("name") or entry["sku"]),
+            category=str(entry.get("kind") or "STOCK"),
+            unit=str(entry.get("unit") or "EA"),
+            variant_key=str(entry.get("variant_key") or ""),
+        )
+        on_hand, reserved = _balances(str(item["id"]))
+        grant = min(short, max(on_hand - reserved, Decimal("0")))
+        if grant > 0:
+            rows(
+                """
+                INSERT INTO public.inventory_movements(
+                    org_id, item_id, movement_type, quantity, order_id,
+                    note, actor_id)
+                VALUES (%s, %s, 'RESERVATION', %s, %s, %s, %s)
+                RETURNING id
+                """,
+                [
+                    str(org_id),
+                    str(item["id"]),
+                    grant,
+                    str(order_id),
+                    f"wo-recheck:{entry['kind']}",
+                    str(actor_id) if actor_id else None,
+                ],
+            )
+            entry["reserved"] = str(_dec(entry["reserved"]) + grant)
+            entry["short"] = str(short - grant)
+        entry["on_hand"] = str(on_hand)
+    return reservations
+
+
 def bar_stock_needs(
     *,
     org_id: UUID,
@@ -474,10 +531,16 @@ def coverage_for_version(org_id: UUID, version_id: UUID) -> dict[str, Any]:
         str(row["requirement_line_id"]): _dec(row["qty"])
         for row in rows(
             """
-            SELECT requirement_line_id::text, SUM(quantity) AS qty
-            FROM public.order_requirement_lines
-            WHERE org_id = %s AND requirement_line_id = ANY(%s::uuid[])
-            GROUP BY requirement_line_id
+            SELECT lines.requirement_line_id::text, SUM(lines.quantity) AS qty
+            FROM public.order_requirement_lines lines
+            JOIN public.orders o ON o.id = lines.order_id
+            WHERE lines.org_id = %s AND lines.requirement_line_id = ANY(%s::uuid[])
+              AND lines.released_at IS NULL
+              -- Every live order is a decision already made: a DRAFT may not
+              -- be sent yet, but it still means "do not buy this again" — and
+              -- a CANCELLED order's lines are released, not counted.
+              AND o.status <> 'CANCELLED'
+            GROUP BY lines.requirement_line_id
             """,
             [str(org_id), line_ids],
         )
@@ -554,22 +617,41 @@ def coverage_for_version(org_id: UUID, version_id: UUID) -> dict[str, Any]:
 
     coverage: list[dict[str, Any]] = []
     shortages = 0
+    # Stock is allocated against lines sequentially — two requirement lines
+    # sharing a SKU must not both draw on the same on-hand units, or the
+    # suggested purchase understates the real need (review PU3).
+    allocated: dict[tuple[str, str], Decimal] = {}
     for line in lines:
         sku = str(line["purchasing_sku"])
         psi = line.get("physical_stock_identity") or ""
+        # Same bucket identity the receiver assigns: psi, else the spec hash —
+        # a cut-glass line must see its own stock row, not collide on "".
+        spec = line.get("specification")
+        variant = stock_variant_key(
+            psi,
+            json.loads(spec) if isinstance(spec, str) else spec,
+            line.get("category"),
+        )
         required = _dec(line["quantity"])
-        stock_row = stock.get((sku, str(psi)))
+        stock_row = stock.get((sku, variant))
         on_hand = _dec(stock_row["on_hand_qty"]) if stock_row else Decimal("0")
         reserved = _dec(stock_row["reserved_qty"]) if stock_row else Decimal("0")
-        available = on_hand - reserved
+        pool = allocated.get((sku, variant))
+        if pool is None:
+            pool = max(on_hand - reserved, Decimal("0"))
+        covered = min(required, max(pool, Decimal("0")))
+        allocated[(sku, variant)] = pool - covered
+        available = pool
         bought = ordered.get(str(line["id"]), Decimal("0"))
         arrived = received.get(str(line["id"]), Decimal("0"))
         open_ordered = max(bought - arrived, Decimal("0"))
-        shortage = max(required - available, Decimal("0"))
+        shortage = max(required - covered, Decimal("0"))
         # Recommended purchase covers what stock cannot, less what is already
         # on its way — ordering more would double-buy.
         recommended = max(shortage - open_ordered, Decimal("0"))
-        if shortage > 0:
+        # The headline counter answers the buyer's question — how many lines
+        # still need purchasing action — not how many lack stock on hand.
+        if recommended > 0:
             shortages += 1
         remnant: dict[str, Any] | None = None
         if str(line["unit"]) == "BAR" and psi:

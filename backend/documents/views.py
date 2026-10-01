@@ -25,9 +25,10 @@ from dekopen_engine.purchasing import PurchaseAuthorityError
 from engine_api.adapter import InvalidEngineRequest, UnsupportedEngineContract
 from engine_api.repository import SystemNotFound, UnsupportedCatalogContract
 
-from documents.artifacts import generate_artifact, signed_artifact_access
+from documents.artifacts import generate_artifact, list_artifacts, signed_artifact_access
 from documents.repository import DocumentaryError, documentary_backend
 from documents.serializers import (
+    ArtifactListResponseSerializer,
     ArtifactRequestSerializer,
     ArtifactResponseSerializer,
     DocumentaryInputsResponseSerializer,
@@ -35,14 +36,106 @@ from documents.serializers import (
     DocumentaryPreparationResponseSerializer,
     FreezeRequestSerializer,
     FreezeResponseSerializer,
+    RevisionCompareQuerySerializer,
+    RevisionCompareResponseSerializer,
     SignedAccessResponseSerializer,
 )
-from documents.service import freeze_revision_a, prepare_documentary_inputs, save_documentary_inputs
+from documents.service import (
+    compare_versions,
+    freeze_revision_a,
+    prepare_documentary_inputs,
+    save_documentary_inputs,
+)
 
 logger = logging.getLogger(__name__)
 ERRORS = {
     code: OpenApiResponse(ErrorResponseSerializer)
     for code in (400, 401, 403, 404, 409, 422, 503)
+}
+
+
+# Contract codes raised without a public_detail get a Spanish action-oriented
+# message here — the generic fallback reads like a crash, not a diagnosis.
+DOCUMENTARY_ERROR_DETAILS = {
+    "version_not_releasable": "La versión no está lista para liberar a producción.",
+    "version_superseded": "La versión fue reemplazada por una revisión más reciente.",
+    "production_process_unresolved": (
+        "No hay autoridad de proceso para esta orden: vincula un perfil de proceso al sistema."
+    ),
+    "step_action_unknown": "La acción solicitada no existe para este paso.",
+    "step_note_required": "Esta acción requiere una nota.",
+    "step_transition_invalid": "El paso no puede ejecutar esa acción en su estado actual.",
+    "step_sequence_blocked": "Hay pasos anteriores sin completar en esta orden.",
+    "work_center_unassigned": "El paso no tiene un centro de trabajo asignado.",
+    "work_center_kind_unknown": "El centro de trabajo tiene un tipo no reconocido.",
+    "work_order_installed": "La orden ya fue marcada como instalada.",
+    "work_order_dispatched": "La orden ya fue despachada; no puede modificarse.",
+    "work_order_completed": "La orden ya está completada.",
+    "step_ops_incomplete": "Faltan operaciones por declarar antes de completar el paso.",
+    "step_ops_unknown": "Las operaciones declaradas no pertenecen a esta estación.",
+    "qc_requires_supervisor": "El control de calidad solo lo firma un encargado.",
+    "cnc_file_stale": "El archivo CNC corresponde a un plan anterior.",
+    "dxf_file_stale": "El archivo DXF corresponde a un plan anterior.",
+    "ops_file_stale": "El archivo de mecanizado corresponde a un plan anterior.",
+    "work_order_remnant_released": "Los retazos de esta orden ya fueron liberados al inventario.",
+    "work_order_replan_after_consumption": (
+        "No se puede reoptimizar: ya hay pasos completados que consumieron material."
+    ),
+    "work_order_replan_step_in_progress": (
+        "No se puede optimizar con un paso en curso: bloquéalo o complétalo primero."
+    ),
+    "work_order_missing_system": "La orden no tiene un sistema de catálogo resoluble.",
+    "remake_requires_hold": "Solo una orden bloqueada o con falla de QC admite una re-fabricación.",
+    "optimize_color_required": "La optimización requiere el color a cortar.",
+    "optimize_color_mismatch": "El color no coincide con el sellado de la orden.",
+    "cnc_incomplete_cut_angles": "Hay piezas sin ángulos de corte completos; revisa el plan.",
+    "cnc_requires_optimization": "La orden no tiene un plan de corte: optimízala primero.",
+    "operations_requires_optimization": "La orden no tiene un plan de corte: optimízala primero.",
+    "dxf_requires_optimization": "La orden no tiene un plan de corte: optimízala primero.",
+    "labels_requires_optimization": "La orden no tiene un plan de corte: optimízala primero.",
+    "plan_invalidated": "El plan de corte quedó invalidado por una replanificación: reoptimiza.",
+    "packing_required": "La orden requiere su packing antes de despachar.",
+    "dispatch_requires_completed": "Solo una orden completada puede despacharse.",
+    "dispatch_requires_packing_manifest": "Falta el packing manifest para despachar la orden.",
+    "installation_requires_dispatched": "La orden debe estar despachada para confirmar instalación.",
+    "installation_requires_delivered": "La orden debe estar entregada para confirmar instalación.",
+    "installation_requires_confirmation": "Se requiere el comprobante de entrega para instalar.",
+    "delivery_window_invalid": "La ventana horaria de entrega es inválida.",
+    "delivery_address_required": "La entrega requiere una dirección.",
+    "delivery_date_invalid": "La fecha de entrega es inválida.",
+    "delivery_requires_completed": "La orden debe estar completada para programar entrega.",
+    "delivery_already_delivered": "La entrega ya fue confirmada como entregada.",
+    "delivery_already_on_route": "La entrega ya está en ruta.",
+    "delivery_transition_invalid": "La entrega no puede ejecutar esa acción en su estado actual.",
+    "delivery_requires_dispatched": "La orden debe estar despachada para esta acción.",
+    "order_already_installed": "La orden ya fue confirmada como instalada.",
+    "work_order_cancelled": "La orden fue anulada; sus pasos quedaron congelados.",
+    "unblock_requires_supervisor": (
+        "Quitar un bloqueo lo decide un encargado (propietario o jefe de taller)."
+    ),
+    "order_state_invalid": (
+        "El pedido no admite esa acción en su estado actual; revisa recepciones y estado."
+    ),
+    "order_type_allocation_incomplete": (
+        "Hay necesidades pendientes sin asignación a un pedido; revisa la selección por tipo."
+    ),
+    "order_type_has_no_requirements": "Ese tipo de compra no tiene necesidades pendientes.",
+    "supplier_eligibility_expired": (
+        "La elegibilidad del proveedor venció; requiere una revisión nueva."
+    ),
+    "supplier_eligibility_fragmented": (
+        "Las necesidades del grupo requieren versiones de elegibilidad distintas; sepáralas."
+    ),
+    "supplier_eligibility_requirement_mismatch": (
+        "La elegibilidad no cubre alguna necesidad del grupo; revisa familias y especificaciones."
+    ),
+    "supplier_order_type_required": "El proveedor no está habilitado para este tipo de compra.",
+    "legacy_version_not_eligible": (
+        "Esta versión fue sellada antes de existir la trazabilidad de compras; no admite pedidos."
+    ),
+    "invalid_purchase_requirement": "La necesidad de compra no es válida para esta versión.",
+    "invalid_supplier": "El proveedor no es válido para este pedido.",
+    "invalid_supplier_eligibility": "La elegibilidad indicada no corresponde al proveedor.",
 }
 
 
@@ -67,6 +160,7 @@ def public_documentary_errors():
             "purchase_requirement_not_found",
             "supplier_eligibility_not_found",
             "purchase_projection_not_found",
+            "version_not_found",
         ):
             status_code = 404
         elif error.code == "document_access_denied":
@@ -79,6 +173,7 @@ def public_documentary_errors():
             status_code,
             error.code,
             error.public_detail
+            or DOCUMENTARY_ERROR_DETAILS.get(error.code)
             or "La evidencia documental no pudo guardarse; revisa el proyecto, sus autoridades y su estado.",
             error_extra=error.extra or None,
         ) from error
@@ -286,6 +381,52 @@ class ArtifactGenerateView(APIView):
                 file_format=data["format"],
             )
         return Response(output, status=201 if created else 200)
+
+
+class RevisionCompareView(APIView):
+    @extend_schema(
+        operation_id="documents_compare_versions",
+        parameters=[ACTIVE_ORGANIZATION_HEADER, RevisionCompareQuerySerializer],
+        request=None,
+        responses={200: RevisionCompareResponseSerializer, **ERRORS},
+        tags=["documents"],
+    )
+    def get(self, request, project_id: UUID):
+        query = validate(RevisionCompareQuerySerializer, request.query_params)
+        with documentary_scope(
+            request, ("OWNER", "ESTIMATOR", "WORKSHOP_MANAGER")
+        ) as (_, _, org_id):
+            return Response(
+                compare_versions(
+                    org_id=org_id,
+                    project_id=project_id,
+                    base_code=str(query["base"]),
+                    head_code=str(query["head"]),
+                )
+            )
+
+
+class ArtifactListView(APIView):
+    @extend_schema(
+        operation_id="documentary_list_artifacts",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={200: ArtifactListResponseSerializer, **ERRORS},
+        tags=["documents"],
+    )
+    def get(self, request, project_id: UUID):
+        with documentary_scope(
+            request, ("OWNER", "ESTIMATOR", "WORKSHOP_MANAGER")
+        ) as (_, tenant, org_id):
+            return Response(
+                {
+                    "artifacts": list_artifacts(
+                        org_id=org_id,
+                        project_id=project_id,
+                        role=tenant.active_organization.role,
+                    )
+                }
+            )
 
 
 class ArtifactAccessView(APIView):

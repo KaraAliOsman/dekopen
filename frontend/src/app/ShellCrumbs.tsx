@@ -1,37 +1,24 @@
-import { useEffect, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 import { Link, useLocation } from "react-router-dom";
 
-import { projectsRetrieve } from "../api/generated/dekopen";
-import { ApiError } from "../api/apiMutator";
 import { useAuthSession } from "../auth/AuthSessionProvider";
 import { t } from "../i18n/es-CL";
-import {
-  projectNameCached,
-  projectNameSubscribe,
-  projectNameWrite,
-} from "../features/projects/projectNames";
+import { useProject } from "../features/projects/useProject";
+import { projectNameCached, projectNameSubscribe } from "../features/projects/projectNames";
 
 export type Crumb = { label: string; to?: string };
 
-/** The project name is a fetch, not a route param — resolved once per
- * (org, id) into features/projects/projectNames. Subscribing to the store
- * means a rename writes through to the already-mounted crumb. */
+/** The project name rides on the shared project query — the page, the rail
+ * lock check and this crumb observe one fetch. `projectNames` remains as a
+ * rename override: a rename writes through to already-mounted crumbs while
+ * the cached server copy is still stale. */
 export function useProjectName(id: string | null): string | null {
   const orgId = useAuthSession().me?.active_organization?.id;
-  const cached = useSyncExternalStore(projectNameSubscribe, () =>
+  const override = useSyncExternalStore(projectNameSubscribe, () =>
     id && orgId ? projectNameCached(orgId, id) : null,
   );
-  useEffect(() => {
-    if (!id || !orgId || cached !== null) return;
-    projectsRetrieve(id, { headers: { "X-Organization-ID": orgId } })
-      .then((response) => {
-        if (response.status !== 200) throw new ApiError(response.status, response.data);
-        const fetched = (response.data as { name?: string }).name ?? null;
-        if (fetched !== null) projectNameWrite(orgId, id, fetched);
-      })
-      .catch(() => {});
-  }, [id, orgId, cached]);
-  return cached;
+  const project = useProject(override === null ? id : null);
+  return override ?? project.data?.name ?? null;
 }
 
 /** Rail → entity → leaf. The first crumb is the rail destination the user
@@ -48,7 +35,14 @@ export function crumbsFor(
   if (section === "dashboard") return [{ label: t("crumb.dashboard") }];
   if (section === "production") return [{ label: t("crumb.production") }];
   if (section === "purchasing") return [{ label: t("crumb.purchasing") }];
-  if (section === "clients") return [{ label: t("crumb.clients") }];
+  if (section === "clients") {
+    const head: Crumb = { label: t("crumb.clients") };
+    if (second !== undefined)
+      return [{ ...head, to: "/clients" }, { label: t("crumb.clientDetail") }];
+    return [head];
+  }
+  if (section === "jobs") return [{ label: t("crumb.jobs") }];
+  if (section === "assistant") return [{ label: t("crumb.assistant") }];
   if (section === "catalogs") {
     const head: Crumb = { label: t("crumb.catalogs") };
     if (second === "systems") return [head, { label: t("crumb.systems") }];

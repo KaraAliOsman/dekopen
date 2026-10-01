@@ -64,6 +64,10 @@ export function useAssemblyCalculation(
       return response.data;
     },
     enabled: inputs.systemId !== null && inputs.product !== null,
+    // A fresh product key resets data to undefined mid-fetch; keeping the
+    // last valid evaluation stops the plan inset, 3D view and BOM from
+    // unmounting on every canvas commit.
+    placeholderData: (previous) => previous,
     retry: false,
     staleTime: Number.POSITIVE_INFINITY,
   });

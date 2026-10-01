@@ -1,4 +1,5 @@
 import type { EngineCalculateResponse } from "../../api/generated/models";
+import { fmtMm } from "../../format";
 
 export type CanvasTechnicalValues = {
   frame: string;
@@ -13,7 +14,7 @@ function uniqueLengths(lengths: string[]): string[] {
 
 function dimensions(lengths: string[]): string {
   if (lengths.length === 0) throw new Error("Engine response is missing a required result");
-  return `${uniqueLengths(lengths).join(" × ")} mm`;
+  return `${uniqueLengths(lengths).map(fmtMm).join(" × ")} mm`;
 }
 
 export function selectCanvasTechnicalValues(
@@ -31,7 +32,7 @@ export function selectCanvasTechnicalValues(
         .filter((piece) => piece.role === "FRAME")
         .map((piece) => piece.length_mm),
     ),
-    glass: `${glass.width_mm} × ${glass.height_mm} mm`,
+    glass: `${fmtMm(glass.width_mm)} × ${fmtMm(glass.height_mm)} mm`,
     glazingBead: dimensions(
       response.profile_cuts
         .filter((cut) => cut.role === "GLAZING_BEAD")

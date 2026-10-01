@@ -15,7 +15,15 @@ export default defineConfig({
     host: "127.0.0.1",
     port: 5173,
     proxy: {
-      "/api": "http://127.0.0.1:8000",
+      "/api": {
+        target: "http://127.0.0.1:8000",
+        // The Django dev server closes idle keep-alive sockets without notice;
+        // reusing one leaves the proxied request hanging forever. Fresh socket
+        // per request + bounded socket timeouts eliminate that stall class.
+        timeout: 30_000,
+        proxyTimeout: 30_000,
+        headers: { connection: "close" },
+      },
     },
   },
   test: {

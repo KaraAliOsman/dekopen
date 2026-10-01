@@ -55,14 +55,33 @@ export function useCommandSurface(): CommandSurface | null {
  * list: titles translated, params collected, `run` bound to the single
  * dispatch path. */
 export function resolveCommands(ctx: CommandContext, specs: CommandSpec[]): ResolvedCommand[] {
-  return specs.map((spec) => ({
-    id: spec.id,
-    title: t(spec.title),
-    keywords: spec.keywords,
-    params: spec.params?.(ctx),
-    describe: spec.describe,
-    run: (args: CommandArgs) => runCommand(ctx, spec, args),
-  }));
+  return specs
+    .filter(
+      // Inapplicable commands are never offered anywhere — palette, context
+      // menu and shortcuts share this list. A mutating command is also
+      // unavailable while the editor is disabled (saving, busy).
+      (spec) =>
+        spec.applicable?.(ctx) !== false &&
+        !(ctx.disabled && (spec.apply !== undefined || spec.mutates === true)),
+    )
+    .map((spec) => {
+      const shortcuts =
+        spec.shortcut === undefined
+          ? undefined
+          : Array.isArray(spec.shortcut)
+            ? [...spec.shortcut]
+            : [spec.shortcut];
+      return {
+        id: spec.id,
+        title: t(spec.title),
+        keywords: spec.keywords,
+        shortcut: shortcuts?.[0],
+        shortcuts,
+        params: spec.params?.(ctx),
+        describe: spec.describe,
+        run: (args: CommandArgs) => runCommand(ctx, spec, args),
+      };
+    });
 }
 
 /** Execute a command through the single shared path: mutation commands commit
@@ -70,10 +89,89 @@ export function resolveCommands(ctx: CommandContext, specs: CommandSpec[]): Reso
  * own effect. Palette, shortcuts, context menus and AI all land here. */
 export function runCommand(ctx: CommandContext, spec: CommandSpec, args: CommandArgs = {}): void {
   if (spec.apply) {
-    ctx.commit(spec.apply(ctx, args));
+    const before = ctx.product;
+    const next = spec.apply(ctx, args);
+    // A no-op apply (stale target, refused condition) commits nothing and
+    // must not overwrite the repeatable-mutation history.
+    if (next === before) return;
+    ctx.commit(next);
+    ctx.recordMutation?.(spec.id, args);
+    spec.postCommit?.(ctx, before, next, args);
   } else {
     spec.run?.(ctx, args);
   }
+}
+
+/** Match a spec shortcut ("mod+shift+z", "v", "delete") against a keyboard
+ * event. mod = Ctrl or Meta so one binding covers every platform. */
+export function shortcutMatches(shortcut: string, event: KeyboardEvent): boolean {
+  const parts = shortcut.toLowerCase().split("+");
+  const key = parts[parts.length - 1]!;
+  const wantMod = parts.includes("mod");
+  const wantShift = parts.includes("shift");
+  const wantAlt = parts.includes("alt");
+  if (wantMod !== (event.ctrlKey || event.metaKey)) return false;
+  if (wantShift !== event.shiftKey) return false;
+  if (wantAlt !== event.altKey) return false;
+  const eventKey = event.key.toLowerCase();
+  if (key === "del") return eventKey === "delete" || eventKey === "backspace";
+  if (key === "esc") return eventKey === "escape";
+  return key === eventKey;
+}
+
+/** Human-readable form of a spec shortcut for hints ("⌘⇧Z" / "Ctrl+Mayús+Z"
+ * depending on platform — keep the ASCII form everywhere for legibility). */
+export function formatShortcut(shortcut: string): string {
+  return shortcut
+    .split("+")
+    .map((part) => {
+      if (part === "mod") return "Ctrl";
+      if (part === "shift") return "Mayús";
+      if (part === "alt") return "Alt";
+      if (part === "del") return "Supr";
+      if (part === "esc") return "Esc";
+      return part.length === 1 ? part.toUpperCase() : part;
+    })
+    .join("+");
+}
+
+/** Global keyboard dispatch: every command carrying a `shortcut` fires when
+ * its binding matches — unless the user is typing in a field. Only
+ * param-less commands qualify (param collection is the palette's job).
+ * `reserved` lists every chord the surface advertises anywhere (menus,
+ * palette): a reserved chord whose command is momentarily inapplicable is
+ * still swallowed, so e.g. Ctrl+D never falls through to the browser's
+ * bookmark dialog while the editor teaches the binding. */
+export function useCommandShortcuts(
+  surface: CommandSurface | null,
+  reserved: readonly string[] = [],
+): void {
+  useEffect(() => {
+    if (!surface) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest("input, textarea, select, [contenteditable='true']")
+      ) {
+        return;
+      }
+      for (const command of surface.commands) {
+        if (command.params?.length) continue;
+        const bindings = command.shortcuts ?? (command.shortcut ? [command.shortcut] : []);
+        if (bindings.some((binding) => shortcutMatches(binding, event))) {
+          event.preventDefault();
+          command.run({});
+          return;
+        }
+      }
+      if (reserved.some((binding) => shortcutMatches(binding, event))) {
+        event.preventDefault();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [surface, reserved]);
 }
 
 /** Apply one backend-validated wire op through the shared command table. The

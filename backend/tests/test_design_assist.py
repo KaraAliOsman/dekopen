@@ -230,12 +230,16 @@ def test_structural_ops_validate_against_the_evolving_assembly(monkeypatch):
         system_id=uuid4(),
         operation_key="assist-9",
     )
+    # Positional addresses name the original 11 modules — `module: 11` and
+    # `module: 12` are out of bounds even though sim pads added refs to 12;
+    # the client resolves numerics against its saved product, never the
+    # mutated list.
     assert [op["op"] for op in out["ops"]] == [
         "set_module_count",
-        "set_opening",
     ]
     assert [item["reason"] for item in out["rejected"]] == [
         "lado_invalido",
+        "apertura_invalida",
         "apertura_invalida",
     ]
 
@@ -262,14 +266,18 @@ def test_remove_unit_shifts_the_validation_surface(monkeypatch):
         system_id=uuid4(),
         operation_key="assist-10",
     )
+    # Positional addresses keep naming the original order after remove_unit:
+    # index 1 → m2 and index 2 → m3 (both still live). The second set_opening
+    # on m3 simply overwrites the earlier one.
     assert [op["op"] for op in out["ops"]] == [
         "remove_unit",
+        "set_opening",
         "set_opening",
         "add_unit",
         "set_opening",
     ]
-    assert out["ops"][3]["module"] == "m3"
-    assert [item["reason"] for item in out["rejected"]] == ["apertura_invalida"]
+    assert out["ops"][4]["module"] == "m3"
+    assert out["rejected"] == []
 
 
 def test_catalog_skus_are_enforced(monkeypatch):
@@ -526,7 +534,7 @@ def test_stable_refs_address_modules_and_survive_structural_ops(monkeypatch):
                 {"op": "set_opening", "module": "mod-c", "opening": "AWNING"},
                 {"op": "add_unit", "side": "right"},
                 {"op": "set_opening", "module": "added_m1", "opening": "FIXED"},
-                {"op": "set_coupling_angle", "coupling": "added_c2", "angle_deg": "-15"},
+                {"op": "set_coupling_angle", "coupling": "added_c1", "angle_deg": "-15"},
             ],
             "notes": "",
         },
@@ -556,7 +564,7 @@ def test_stable_refs_address_modules_and_survive_structural_ops(monkeypatch):
         {"op": "set_opening", "module": "mod-c", "opening": "AWNING"},
         {"op": "add_unit", "side": "right", "ref": "added_m1"},
         {"op": "set_opening", "module": "added_m1", "opening": "FIXED"},
-        {"op": "set_coupling_angle", "coupling": "added_c2", "angle_deg": "-15"},
+        {"op": "set_coupling_angle", "coupling": "added_c1", "angle_deg": "-15"},
     ]
     assert out["rejected"] == []
     summary = captured["input"]["product"]
@@ -582,3 +590,593 @@ def test_unknown_ref_is_rejected_not_floored_to_an_index(monkeypatch):
     )
     assert out["ops"] == []
     assert out["rejected"][0]["reason"] == "apertura_invalida"
+
+
+def _graph_product():
+    """Two-unit assembly with explicit coupling endpoints — the wire surface
+    the canvas client already sends (stable ids, edge topology)."""
+    return {
+        "modules": [
+            {"id": "m1", "width_mm": "900", "height_mm": "1500"},
+            {"id": "m2", "width_mm": "900", "height_mm": "1500"},
+        ],
+        "couplings": [
+            {
+                "id": "c1",
+                "angle_deg": "0",
+                "kind": "INLINE",
+                "modules": ["m1", "m2"],
+                "edges": ["right", "left"],
+            }
+        ],
+    }
+
+
+def test_duplicate_module_lands_on_the_free_edge(monkeypatch):
+    _patch_invoke(
+        monkeypatch,
+        {
+            "ops": [
+                {"op": "duplicate_module", "module": "m2"},
+                {"op": "set_opening", "module": "added_m1", "opening": "TURN_LEFT"},
+            ]
+        },
+    )
+    out = design_assist.assist(
+        org_id=uuid4(),
+        user_id=uuid4(),
+        position=_position(),
+        product=_graph_product(),
+        prompt="duplica la segunda con apertura",
+        system_id=uuid4(),
+        operation_key="assist-d1",
+    )
+    assert out["ops"] == [
+        {"op": "duplicate_module", "module": "m2"},
+        {"op": "set_opening", "module": "added_m1", "opening": "TURN_LEFT"},
+    ]
+    assert out["rejected"] == []
+
+
+def test_duplicate_module_refused_when_both_edges_claimed(monkeypatch):
+    _patch_invoke(
+        monkeypatch,
+        {"ops": [{"op": "duplicate_module", "module": "m1"}]},
+    )
+    product = _graph_product()
+    product["modules"].append({"id": "m0", "width_mm": "700", "height_mm": "1500"})
+    product["couplings"].insert(
+        0,
+        {
+            "id": "c0",
+            "angle_deg": "0",
+            "kind": "INLINE",
+            "modules": ["m0", "m1"],
+            "edges": ["right", "left"],
+        },
+    )
+    out = design_assist.assist(
+        org_id=uuid4(),
+        user_id=uuid4(),
+        position=_position(),
+        product=product,
+        prompt="duplica la del medio",
+        system_id=uuid4(),
+        operation_key="assist-d2",
+    )
+    assert out["ops"] == []
+    assert out["rejected"][0]["reason"] == "sin_borde_libre"
+
+
+def test_insert_module_splits_the_inline_seam(monkeypatch):
+    _patch_invoke(
+        monkeypatch,
+        {
+            "ops": [
+                {"op": "insert_module", "coupling": "c1"},
+                {"op": "set_coupling_angle", "coupling": "added_c1", "angle_deg": "12"},
+            ]
+        },
+    )
+    out = design_assist.assist(
+        org_id=uuid4(),
+        user_id=uuid4(),
+        position=_position(),
+        product=_graph_product(),
+        prompt="inserta una unidad en la unión con ángulo 12",
+        system_id=uuid4(),
+        operation_key="assist-d3",
+    )
+    assert out["ops"] == [
+        {"op": "insert_module", "coupling": "c1"},
+        {"op": "set_coupling_angle", "coupling": "added_c1", "angle_deg": "12"},
+    ]
+    assert out["rejected"] == []
+
+
+def test_insert_module_refuses_non_inline_joints(monkeypatch):
+    _patch_invoke(monkeypatch, {"ops": [{"op": "insert_module", "coupling": "c1"}]})
+    product = _graph_product()
+    product["couplings"][0]["kind"] = "STACKED"
+    product["couplings"][0]["edges"] = ["top", "bottom"]
+    out = design_assist.assist(
+        org_id=uuid4(),
+        user_id=uuid4(),
+        position=_position(),
+        product=product,
+        prompt="inserta en la unión",
+        system_id=uuid4(),
+        operation_key="assist-d4",
+    )
+    assert out["ops"] == []
+    assert out["rejected"][0]["reason"] == "union_invalida"
+
+
+def test_remove_coupling_frees_the_edges(monkeypatch):
+    _patch_invoke(
+        monkeypatch,
+        {
+            "ops": [
+                {"op": "remove_coupling", "coupling": "c1"},
+                {"op": "duplicate_module", "module": "m1"},
+            ]
+        },
+    )
+    out = design_assist.assist(
+        org_id=uuid4(),
+        user_id=uuid4(),
+        position=_position(),
+        product=_graph_product(),
+        prompt="desconecta la unión y duplica la primera",
+        system_id=uuid4(),
+        operation_key="assist-d5",
+    )
+    assert [op["op"] for op in out["ops"]] == ["remove_coupling", "duplicate_module"]
+    assert out["rejected"] == []
+
+
+def test_set_coupling_kind_follows_the_joint_edges(monkeypatch):
+    _patch_invoke(
+        monkeypatch,
+        {
+            "ops": [
+                {"op": "set_coupling_kind", "coupling": "c1", "kind": "STACKED"},
+                {"op": "set_coupling_kind", "coupling": "c1", "kind": "INLINE"},
+            ]
+        },
+    )
+    out = design_assist.assist(
+        org_id=uuid4(),
+        user_id=uuid4(),
+        position=_position(),
+        product=_graph_product(),
+        prompt="cambia el tipo de unión",
+        system_id=uuid4(),
+        operation_key="assist-d6",
+    )
+    # A left/right seam can only stay INLINE — the stacked kind is refused.
+    assert out["ops"] == [{"op": "set_coupling_kind", "coupling": "c1", "kind": "INLINE"}]
+    assert out["rejected"][0]["reason"] == "tipo_invalido"
+
+
+def test_stacked_unit_member_is_addressable_later(monkeypatch):
+    """A stacked member joins the ref set like any module — capacity counts
+    it and later ops address it, exactly as the client applies them."""
+    _patch_invoke(
+        monkeypatch,
+        {
+            "ops": [
+                {"op": "add_stacked_unit", "module": "m1"},
+                {"op": "set_opening", "module": "added_m1", "opening": "FIXED"},
+            ]
+        },
+    )
+    out = design_assist.assist(
+        org_id=uuid4(),
+        user_id=uuid4(),
+        position=_position(),
+        product=_graph_product(),
+        prompt="apila un fijo encima",
+        system_id=uuid4(),
+        operation_key="assist-d7",
+    )
+    assert out["ops"] == [
+        {"op": "add_stacked_unit", "module": "m1"},
+        {"op": "set_opening", "module": "added_m1", "opening": "FIXED"},
+    ]
+    assert out["rejected"] == []
+
+
+def _stacked_product():
+    """Two inline roots plus a transom stacked on the second — the declared
+    order ends in a stacked member, so the chain end is not the list tail."""
+    product = _graph_product()
+    product["modules"].append({"id": "t1", "width_mm": "900", "height_mm": "400"})
+    product["couplings"].append(
+        {
+            "id": "c2",
+            "angle_deg": "0",
+            "kind": "STACKED",
+            "modules": ["m2", "t1"],
+            "edges": ["top", "bottom"],
+        }
+    )
+    return product
+
+
+def test_add_unit_joins_the_chain_end_past_a_stacked_member(monkeypatch):
+    """A trailing stacked member leaves the true chain end free — claiming
+    its edge instead would let a later duplicate validate a seam the client
+    refuses."""
+    _patch_invoke(
+        monkeypatch,
+        {
+            "ops": [
+                {"op": "add_unit", "side": "right"},
+                {"op": "duplicate_module", "module": "m2"},
+            ]
+        },
+    )
+    out = design_assist.assist(
+        org_id=uuid4(),
+        user_id=uuid4(),
+        position=_position(),
+        product=_stacked_product(),
+        prompt="agrega una unidad a la derecha y duplica la segunda",
+        system_id=uuid4(),
+        operation_key="assist-d8",
+    )
+    assert out["ops"] == [{"op": "add_unit", "side": "right", "ref": "added_m1"}]
+    assert out["rejected"][0]["reason"] == "sin_borde_libre"
+
+
+def test_remove_unit_never_invents_a_joint_in_a_stacked_graph(monkeypatch):
+    """Removing m2 incident to an INLINE and a STACKED joint must not
+    relink — the client drops both and invents nothing. Then the chain
+    end is m1 (t1 is stacked), so append-right still joins a real seam."""
+    _patch_invoke(
+        monkeypatch,
+        {
+            "ops": [
+                {"op": "remove_unit", "module": "m2"},
+                {"op": "add_unit", "side": "right"},
+                {"op": "set_opening", "module": "added_m1", "opening": "AWNING"},
+            ]
+        },
+    )
+    out = design_assist.assist(
+        org_id=uuid4(),
+        user_id=uuid4(),
+        position=_position(),
+        product=_stacked_product(),
+        prompt="saca la segunda y agrega otra a la derecha",
+        system_id=uuid4(),
+        operation_key="assist-d9",
+    )
+    assert out["ops"] == [
+        {"op": "remove_unit", "module": "m2"},
+        {"op": "add_unit", "side": "right", "ref": "added_m1"},
+        {"op": "set_opening", "module": "added_m1", "opening": "AWNING"},
+    ]
+    assert out["rejected"] == []
+
+
+def test_stacked_members_count_toward_module_capacity(monkeypatch):
+    """A stacked member is a real module — the ceiling counts it, so
+    add_stacked_unit cannot push the assembly past MAX_MODULE_COUNT."""
+    product = _product(modules=12, couplings=11)
+    _patch_invoke(
+        monkeypatch,
+        {"ops": [{"op": "add_stacked_unit", "module": 11}]},
+    )
+    out = design_assist.assist(
+        org_id=uuid4(),
+        user_id=uuid4(),
+        position=_position(),
+        product=product,
+        prompt="apila un módulo encima",
+        system_id=uuid4(),
+        operation_key="assist-d10",
+    )
+    assert out["ops"] == []
+    assert out["rejected"][0]["reason"] == "modulo_invalido"
+
+
+def test_unstacking_makes_the_member_a_chain_end(monkeypatch):
+    """Once the transom's STACKED coupling is removed it is a plain root —
+    appending right joins it."""
+    _patch_invoke(
+        monkeypatch,
+        {
+            "ops": [
+                {"op": "remove_coupling", "coupling": "c2"},
+                {"op": "add_unit", "side": "right"},
+                {"op": "duplicate_module", "module": "t1"},
+            ]
+        },
+    )
+    out = design_assist.assist(
+        org_id=uuid4(),
+        user_id=uuid4(),
+        position=_position(),
+        product=_stacked_product(),
+        prompt="desconecta el transom, agrega a la derecha y duplica el transom",
+        system_id=uuid4(),
+        operation_key="assist-d9",
+    )
+    # t1 is now the right chain end: add_unit claims t1.right, so the
+    # duplicate lands on t1's free left — all three ops apply.
+    assert [op["op"] for op in out["ops"]] == [
+        "remove_coupling",
+        "add_unit",
+        "duplicate_module",
+    ]
+    assert out["rejected"] == []
+
+
+def test_relinked_seam_keeps_the_earlier_coupling_ref(monkeypatch):
+    """§5 review: removing the middle member of a chain relinks the survivors
+    under the EARLIER joint's id — the id the client reuses — not a minted
+    added_c*. The repaired seam stays addressable, the dropped ref is dead."""
+    _patch_invoke(
+        monkeypatch,
+        {
+            "ops": [
+                {"op": "remove_unit", "module": "m2"},
+                {"op": "set_coupling_angle", "coupling": "c1", "angle_deg": "12"},
+                {"op": "set_coupling_angle", "coupling": "c2", "angle_deg": "12"},
+            ],
+            "notes": "",
+        },
+    )
+    product = {
+        "modules": [
+            {"id": "m1", "width_mm": "900", "height_mm": "1500"},
+            {"id": "m2", "width_mm": "900", "height_mm": "1500"},
+            {"id": "m3", "width_mm": "900", "height_mm": "1500"},
+        ],
+        "couplings": [
+            {"id": "c1", "angle_deg": "0", "kind": "INLINE",
+             "modules": ["m1", "m2"], "edges": ["right", "left"]},
+            {"id": "c2", "angle_deg": "0", "kind": "INLINE",
+             "modules": ["m2", "m3"], "edges": ["right", "left"]},
+        ],
+    }
+    out = design_assist.assist(
+        org_id=uuid4(),
+        user_id=uuid4(),
+        position=_position(),
+        product=product,
+        prompt="ángulo 12 en la unión",
+        system_id=uuid4(),
+        operation_key="assist-relink",
+    )
+    assert out["ops"] == [
+        {"op": "remove_unit", "module": "m2"},
+        {"op": "set_coupling_angle", "coupling": "c1", "angle_deg": "12"},
+    ]
+    assert out["rejected"] == [{"op": "set_coupling_angle", "reason": "angulo_invalido"}]
+
+
+def test_added_module_ops_check_shape_and_frameless(monkeypatch):
+    """§5 review: a member minted inside the sequence (added_m*) has module
+    info registered — insert/stacked ops don't trip 'miembro_no_recto' on it."""
+    _patch_invoke(
+        monkeypatch,
+        {
+            "ops": [
+                {"op": "add_unit", "side": "right"},
+                {"op": "add_stacked_unit", "module": "added_m1"},
+            ],
+            "notes": "",
+        },
+    )
+    out = design_assist.assist(
+        org_id=uuid4(),
+        user_id=uuid4(),
+        position=_position(),
+        product=_product(modules=1, couplings=0),
+        prompt="otra unidad a la derecha",
+        system_id=uuid4(),
+        operation_key="assist-added-info",
+    )
+    assert [op["op"] for op in out["ops"]] == ["add_unit", "add_stacked_unit"]
+    assert out["rejected"] == []
+
+
+def test_module_count_growth_joins_the_chain_end_past_a_stacked_member(
+    monkeypatch,
+):
+    """set_module_count grows through addAdjacentUnit("right") — the free
+    right chain end, never the declaration tail. Joining the trailing
+    stacked member instead would leave m2.right free in the sim and let a
+    later duplicate claim an edge the client already took."""
+    _patch_invoke(
+        monkeypatch,
+        {
+            "ops": [
+                {"op": "set_module_count", "count": 4},
+                {"op": "duplicate_module", "module": "m2"},
+            ]
+        },
+    )
+    out = design_assist.assist(
+        org_id=uuid4(),
+        user_id=uuid4(),
+        position=_position(),
+        product=_stacked_product(),
+        prompt="cuatro módulos y duplica la segunda",
+        system_id=uuid4(),
+        operation_key="assist-d11",
+    )
+    assert out["ops"] == [{"op": "set_module_count", "count": 4}]
+    assert out["rejected"][0]["reason"] == "sin_borde_libre"
+
+
+def _chain3_product():
+    """Three inline units — enough room to insert into one seam, then remove
+    a member and see which incident joint survives (earlier ref wins)."""
+    return {
+        "modules": [
+            {"id": "m1", "width_mm": "900", "height_mm": "1500"},
+            {"id": "m2", "width_mm": "900", "height_mm": "1500"},
+            {"id": "m3", "width_mm": "900", "height_mm": "1500"},
+        ],
+        "couplings": [
+            {
+                "id": "c1",
+                "angle_deg": "0",
+                "kind": "INLINE",
+                "modules": ["m1", "m2"],
+                "edges": ["right", "left"],
+            },
+            {
+                "id": "c2",
+                "angle_deg": "0",
+                "kind": "INLINE",
+                "modules": ["m2", "m3"],
+                "edges": ["right", "left"],
+            },
+        ],
+    }
+
+
+def test_insert_then_remove_keeps_the_same_surviving_joint(monkeypatch):
+    """insert_module splices the minted joint right after the seam (client
+    order), so a later removal preserves the earlier incident ref — the same
+    joint the client's relink keeps."""
+    _patch_invoke(
+        monkeypatch,
+        {
+            "ops": [
+                {"op": "insert_module", "coupling": "c1"},
+                {"op": "remove_unit", "module": "m2"},
+                {"op": "remove_coupling", "coupling": "added_c1"},
+            ]
+        },
+    )
+    out = design_assist.assist(
+        org_id=uuid4(),
+        user_id=uuid4(),
+        position=_position(),
+        product=_chain3_product(),
+        prompt="inserta en la primera unión, quita el medio y luego la unión nueva",
+        system_id=uuid4(),
+        operation_key="assist-e1",
+    )
+    assert out["ops"] == [
+        {"op": "insert_module", "coupling": "c1"},
+        {"op": "remove_unit", "module": "m2"},
+        {"op": "remove_coupling", "coupling": "added_c1"},
+    ]
+    assert out["rejected"] == []
+
+
+def test_add_unit_keeps_numeric_address_on_the_original_module(monkeypatch):
+    """`module: 0` names the ORIGINAL first module — after add_unit splices a
+    new member at index 0, positional addresses still resolve through the
+    original ordering, exactly like the client's saved product. Aliasing the
+    mutable sim list would make this resolve to `added_m1`."""
+    _patch_invoke(
+        monkeypatch,
+        {
+            "ops": [
+                {"op": "add_unit", "side": "left"},
+                {"op": "set_opening", "module": 0, "opening": "AWNING"},
+            ]
+        },
+    )
+    out = design_assist.assist(
+        org_id=uuid4(),
+        user_id=uuid4(),
+        position=_position(),
+        product=_product(modules=3, couplings=2),
+        prompt="agrega a la izquierda y abre el primer módulo",
+        system_id=uuid4(),
+        operation_key="assist-e2",
+    )
+    assert out["ops"] == [
+        {"op": "add_unit", "side": "left", "ref": "added_m1"},
+        {"op": "set_opening", "module": "m1", "opening": "AWNING"},
+    ]
+    assert out["rejected"] == []
+
+
+def test_add_unit_clone_keeps_the_end_modules_shape(monkeypatch):
+    """addAdjacentUnit clones the chain-end member — a contoured end produces
+    a contoured clone, so a stacked op on `added_m1` must be refused exactly
+    as the client refuses it. Recording the clone as RECT would validate an
+    op the UI silently drops."""
+    _patch_invoke(
+        monkeypatch,
+        {
+            "ops": [
+                {"op": "add_unit", "side": "right"},
+                {"op": "add_stacked_unit", "module": "added_m1"},
+            ]
+        },
+    )
+    product = {
+        "modules": [{"id": "m1", "width_mm": "1200", "height_mm": "1500", "contour": {}}],
+        "couplings": [],
+    }
+    out = design_assist.assist(
+        org_id=uuid4(),
+        user_id=uuid4(),
+        position=_position(),
+        product=product,
+        prompt="agrega a la derecha y apila la nueva",
+        system_id=uuid4(),
+        operation_key="assist-e3",
+    )
+    assert [op["op"] for op in out["ops"]] == ["add_unit"]
+    assert out["rejected"][0]["reason"] == "modulo_invalido"
+
+
+def test_insert_module_lands_before_the_seams_right_endpoint(monkeypatch):
+    """insertModuleBetween splices the new member immediately BEFORE the
+    seam's second endpoint — a seam whose declarations aren't neighbors
+    (m1↔m3 with m2 between) places the clone at index 2: [m1,m2,new,m3].
+    Simulating after-the-left ([m1,new,m2,m3]) makes a later count
+    reduction trim a different member than the client keeps."""
+    _patch_invoke(
+        monkeypatch,
+        {
+            "ops": [
+                {"op": "insert_module", "coupling": "c1"},
+                {"op": "set_module_count", "count": 3},
+                {"op": "set_module_count", "count": 2},
+                {"op": "set_opening", "module": "m2", "opening": "AWNING"},
+            ]
+        },
+    )
+    product = {
+        "modules": [
+            {"id": "m1", "width_mm": "1200", "height_mm": "1500"},
+            {"id": "m2", "width_mm": "900", "height_mm": "1500"},
+            {"id": "m3", "width_mm": "900", "height_mm": "1500"},
+        ],
+        "couplings": [
+            {"id": "c1", "angle_deg": "0", "modules": ["m1", "m3"], "edges": ["right", "left"]},
+        ],
+    }
+    out = design_assist.assist(
+        org_id=uuid4(),
+        user_id=uuid4(),
+        position=_position(),
+        product=product,
+        prompt="inserta entre m1 y m3, recuenta a 2, abre m2",
+        system_id=uuid4(),
+        operation_key="assist-e4",
+    )
+    # The client order is [m1,m2,new,m3]; reducing to 3 then 2 leaves
+    # [m1,m2] — m2 is still addressable. Under the after-left placement
+    # the second reduction drops m2 instead and the opening is refused.
+    assert out["rejected"] == []
+    assert [op["op"] for op in out["ops"]] == [
+        "insert_module",
+        "set_module_count",
+        "set_module_count",
+        "set_opening",
+    ]
+    assert out["ops"][3]["module"] == "m2"

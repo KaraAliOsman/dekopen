@@ -694,6 +694,7 @@ def _append_leaf(
     sash: SashGeometry,
     params: SystemParams,
     clearance_mm: Decimal,
+    slot_pitch_mm: Decimal | None = None,
 ) -> None:
     if node.opening_type is None:
         raise ValueError("Physical leaf requires an opening type")
@@ -716,8 +717,14 @@ def _append_leaf(
             leaf_id=leaf_id,
             leaf_slot=leaf_slot,
             opening_type=node.opening_type,
+            door_handedness=(
+                node.door_handedness
+                if node.opening_type is BayOpeningType.DOOR_ENTRY
+                else None
+            ),
             placement_domain=placement_domain,
             reference_rect=_trace_rect(reference_rect),
+            slot_pitch_mm=slot_pitch_mm,
             finished_width_mm=sash.finished_width_mm,
             finished_height_mm=sash.finished_height_mm,
             direct_rect=None if direct_rect is None else _trace_rect(direct_rect),
@@ -912,6 +919,8 @@ def _append_leaf(
             candidates,
             opening=node.opening_type,
             explicit_sku=node.hardware_set_sku,
+            leaf_width_mm=sash.finished_width_mm,
+            leaf_height_mm=sash.finished_height_mm,
         )
     except NoCompatibleHardwareKit:
         if not accumulator.diagnostic:
@@ -1086,6 +1095,7 @@ def _append_sliding(
                 sash=sash,
                 params=params,
                 clearance_mm=clearance_mm,
+                slot_pitch_mm=pitch,
             )
         else:
             slot_rect = _Rect(

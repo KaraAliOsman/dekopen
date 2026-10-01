@@ -15,12 +15,14 @@ from uuid import UUID, uuid4
 from django.db import DatabaseError, transaction
 
 from authentication.errors import contract_error
+from authentication.rls import catalog_backend
 from documents.repository import documentary_backend
 from documents.storage import SupabaseDocumentStorage
+from catalogs import evidence as catalog_evidence
 from ingest.catalog_parser import ROLES, parse_catalog_lines
-from ingest.extract import extract_tagged, kind_for, safe_file_name
+from ingest.extract import extract_tagged, kind_for, safe_file_name, sniffed_kind
 from jobs import service as jobs_service
-from pricing.repository import rows
+from pricing.repository import rows, write
 
 MAX_UPLOAD_BYTES = 15_000_000
 MAX_CANDIDATES = 200
@@ -108,6 +110,12 @@ def create_catalog_import(
             422,
             "catalog_import_file_invalid",
             "El nombre del archivo contiene caracteres no permitidos.",
+        )
+    if not sniffed_kind(kind, content):
+        raise contract_error(
+            422,
+            "catalog_import_file_mismatch",
+            "El contenido del archivo no coincide con su extensión.",
         )
     import_id = uuid4()
     storage_path = f"catalog-imports/{org_id}/{import_id}/{file_name}"
@@ -334,7 +342,7 @@ def mark_catalog_import_failed(*, org_id: UUID, import_id: UUID, code: str) -> N
         with documentary_backend():
             # Only an in-flight import may fail — a stale retry must never
             # overwrite a REVIEW_READY or CONFIRMED outcome.
-            rows(
+            write(
                 "UPDATE public.catalog_imports SET status='FAILED', "
                 "error_code=%s, updated_at=now() WHERE id=%s AND org_id=%s "
                 "AND status IN ('UPLOADED','EXTRACTING')",
@@ -343,7 +351,8 @@ def mark_catalog_import_failed(*, org_id: UUID, import_id: UUID, code: str) -> N
 
 
 def confirm_catalog_import(
-    *, org_id: UUID, import_id: UUID, system_id: UUID, items: list[dict]
+    *, org_id: UUID, actor_id: UUID, import_id: UUID, system_id: UUID,
+    items: list[dict],
 ) -> dict:
     """Human confirm — the only path from candidate to catalog authority.
 
@@ -396,7 +405,11 @@ def confirm_catalog_import(
                 "El sistema destino debe pertenecer a tu organización.",
             )
         material = system[0]["material"]
-        candidate_keys = {candidate.get("key") for candidate in _as_list(row["candidates"])}
+        candidates_by_key = {
+            str(candidate.get("key")): candidate
+            for candidate in _as_list(row["candidates"])
+        }
+        candidate_keys = set(candidates_by_key)
         created = _as_list(row["result"])
         done = {str(entry.get("key")) for entry in created}
         errors: list[dict] = []
@@ -414,16 +427,20 @@ def confirm_catalog_import(
                 errors.append({"key": key, "code": "catalog_role_invalid"})
                 continue
             try:
-                # The tenant's own claims write the article — same RLS path
-                # catalog CRUD uses; the per-item savepoint keeps a rejected
-                # row (singleton role, constraint) from aborting the batch.
-                with transaction.atomic():
+                # The API stamps provenance — members cannot write it, so the
+                # insert runs under catalog_backend inside the same org/user
+                # RLS claims. review_pending=TRUE keeps the import honest: the
+                # confirm matched a parser candidate, but a human has not
+                # reviewed the technical row yet — readiness flags it until
+                # they do (CAT-10: a confirm click is not a review stamp).
+                with transaction.atomic(), catalog_backend():
                     inserted = rows(
                         "INSERT INTO public.profile_articles("
                         "system_id, org_id, sku, name, role, material, face_width_mm,"
                         " commercial_length_mm, welding_loss_mm, reinforcement_sku,"
-                        " weight_kg_m, steel_weight_kg_m, data_provenance)"
-                        " VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'IMPORT')"
+                        " weight_kg_m, steel_weight_kg_m, data_provenance,"
+                        " review_pending)"
+                        " VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'IMPORT',TRUE)"
                         " ON CONFLICT (system_id, sku) DO NOTHING"
                         " RETURNING id",
                         [
@@ -454,7 +471,20 @@ def confirm_catalog_import(
             if not inserted:
                 errors.append({"key": key, "code": "catalog_sku_conflict"})
                 continue
-            created.append({"key": key, "article_id": str(inserted[0]["id"])})
+            article_id = inserted[0]["id"]
+            # Pin the parser's per-field evidence to the created article —
+            # the confirming member is the declarer, the document the import.
+            catalog_evidence.stamp_import_evidence(
+                org_id=org_id,
+                actor_id=actor_id,
+                import_id=import_id,
+                article_id=article_id,
+                candidate={
+                    **(candidates_by_key.get(key) or {}),
+                    "source_document": f"{row['file_name']} (import {import_id})",
+                },
+            )
+            created.append({"key": key, "article_id": str(article_id)})
             done.add(key)
         if errors:
             # Retryable: persist what was created so the next confirm only

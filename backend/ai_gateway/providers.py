@@ -8,9 +8,11 @@ performs network I/O."""
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import ipaddress
 import json
+import logging
 import os
 import re
 import socket
@@ -20,8 +22,24 @@ from urllib.parse import urlparse
 
 import httpx
 
+logger = logging.getLogger(__name__)
+
 
 MAX_BODY_BYTES = 1_048_576
+# Above this size the base64 transport inflates the request more than a
+# signed URL is worth — the image goes to the provider as a fetchable URL.
+_IMAGE_WIRE_MAX_BYTES = 12 * 1024 * 1024
+_IMAGE_MIME = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+}
+
+
+def _image_mime(object_key: str) -> str:
+    _, dot, ext = object_key.lower().rpartition(".")
+    return _IMAGE_MIME.get(f".{ext}" if dot else "", "image/png")
 # A configured base path may only contain plain ASCII segments — no
 # encoded separators, dot segments, backslashes, or whitespace that could
 # redirect the authenticated request on the approved host.
@@ -173,6 +191,7 @@ class HttpProvider:
             # so a retry ambiguous to us can still dedupe provider-side.
             headers["Idempotency-Key"] = operation_key
         path, body = self._wire_request(route, capability, input_payload, provider_options)
+        started = time.monotonic()
         with client.stream(
             "POST",
             f"https://{url_host}{port_suffix}{path}",
@@ -182,7 +201,15 @@ class HttpProvider:
         ) as response:
             response.raise_for_status()
             content = bytearray()
-            for chunk in response.iter_bytes(65536):
+            # iter_raw yields on every socket arrival — iter_bytes would
+            # buffer to chunk size, letting a drip feed stall the deadline
+            # check itself. Any wait still bounded by httpx's read timeout;
+            # this check bounds the whole exchange's wall-clock. Already-
+            # buffered responses (mock transports) yield everything at once.
+            stream = response.iter_bytes(65536) if response.is_stream_consumed else response.iter_raw()
+            for chunk in stream:
+                if time.monotonic() - started > self.timeout:
+                    raise ProviderError("ai_provider_error")
                 content += chunk
                 if len(content) > MAX_BODY_BYTES:
                     raise ProviderError("ai_provider_output_too_large")
@@ -295,6 +322,22 @@ class HttpProvider:
                     )
                 except DocumentaryError as error:
                     raise ProviderError("ai_provider_unavailable") from error
+                if input_payload.get("kind") == "IMAGE":
+                    # True multimodal: the image bytes ride inside the request
+                    # as a data URI so the provider never has to fetch the
+                    # document itself. Larger files keep the signed URL, which
+                    # the wire layer still emits as an image_url part.
+                    try:
+                        raw = SupabaseDocumentStorage().download_bounded(
+                            document_path, _IMAGE_WIRE_MAX_BYTES
+                        )
+                        if raw is not None:
+                            wire_input["_document_image"] = {
+                                "mime": _image_mime(document_path),
+                                "data": base64.b64encode(raw).decode("ascii"),
+                            }
+                    except (DocumentaryError, httpx.HTTPError):
+                        pass
             content = self._request(
                 route=route,
                 capability=capability,
@@ -315,6 +358,25 @@ class HttpProvider:
                 raise TypeError("provider token usage is outside the audit range")
         except ProviderError:
             raise
+        except httpx.HTTPStatusError as error:
+            # The provider answered — the status class is the diagnosis an
+            # operator needs (bad key vs bad model vs spent quota), and the
+            # effective model identifies which pin/override was actually sent.
+            status = error.response.status_code
+            logger.warning(
+                "AI provider %s answered %s (model=%s capability=%s)",
+                self.provider,
+                status,
+                requested_model,
+                capability,
+            )
+            if status in (401, 403):
+                raise ProviderError("ai_provider_auth") from error
+            if status == 429:
+                raise ProviderError("ai_provider_quota") from error
+            if 400 <= status < 500:
+                raise ProviderError("ai_provider_rejected") from error
+            raise ProviderError("ai_provider_error") from error
         except (httpx.HTTPError, TypeError, ValueError) as error:
             raise ProviderError("ai_provider_error") from error
         response_model = parsed.get("model")
@@ -413,6 +475,43 @@ class OpenAICompatibleProvider(HttpProvider):
             if self._base_path.endswith("/chat/completions")
             else f"{self._base_path}/chat/completions"
         )
+        # Wire-time artifacts (signed URL, inline image) are transport
+        # details, not document facts — the text part never sees them.
+        text_payload = {
+            key: value
+            for key, value in input_payload.items()
+            if not key.startswith("_") and key != "document_url"
+        }
+        text_json = json.dumps(text_payload, ensure_ascii=False, default=str)
+        image = input_payload.get("_document_image")
+        image_url = input_payload.get("document_url")
+        user_content: Any
+        if (
+            isinstance(image, dict)
+            and isinstance(image.get("data"), str)
+            and isinstance(image.get("mime"), str)
+        ):
+            user_content = [
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:{image['mime']};base64,{image['data']}",
+                    },
+                },
+                {"type": "text", "text": text_json},
+            ]
+        elif input_payload.get("kind") == "IMAGE" and isinstance(image_url, str):
+            user_content = [
+                {"type": "image_url", "image_url": {"url": image_url}},
+                {"type": "text", "text": text_json},
+            ]
+        else:
+            clean_payload = {
+                key: value
+                for key, value in input_payload.items()
+                if not key.startswith("_")
+            }
+            user_content = json.dumps(clean_payload, ensure_ascii=False, default=str)
         body: dict[str, Any] = {
             "model": self._requested_model(route),
             "messages": [
@@ -420,10 +519,7 @@ class OpenAICompatibleProvider(HttpProvider):
                     "role": "system",
                     "content": str(provider_options.get("system") or _DEFAULT_SYSTEM),
                 },
-                {
-                    "role": "user",
-                    "content": json.dumps(input_payload, ensure_ascii=False, default=str),
-                },
+                {"role": "user", "content": user_content},
             ],
             "temperature": 0,
         }
@@ -434,7 +530,19 @@ class OpenAICompatibleProvider(HttpProvider):
     def _requested_model(self, route: dict) -> str:
         # AI_GATEWAY_{P}_MODEL is an operational override — the audit must
         # seal this effective model, not the route's, or provenance lies.
-        return self._model or str(route["provider_model"])
+        if self._model:
+            pinned = str(route["provider_model"])
+            if self._model != pinned:
+                logger.warning(
+                    "AI_GATEWAY_%s_MODEL overrides the ai_routes pin: "
+                    "env=%s route=%s capability=%s",
+                    self.provider,
+                    self._model,
+                    pinned,
+                    route.get("capability", "?"),
+                )
+            return self._model
+        return str(route["provider_model"])
 
     def _parse_response(self, content: bytes) -> dict[str, Any]:
         """OpenAI envelope: choices[0].message.content + usage."""
@@ -639,6 +747,120 @@ def _context_assist_output(input_payload: dict) -> dict:
     }
 
 
+# Ops `_design_assist_output` can emit that are legal in a batch proposal —
+# mirrors agent.BATCH_OPS minus the structural set_module_count (batch only
+# accepts adjust ops). Providers must not import agent.py, so the subset
+# lives here.
+_MOCK_BATCH_OPS = {
+    "set_opening",
+    "set_total_width",
+    "set_height",
+    "equalize_widths",
+    "set_coupling_angle",
+}
+
+# Surfaces whose projection needs no entity refs — the only ones the mock can
+# query (the agent payload doesn't carry refs, so ref-requiring surfaces would
+# just produce a rejected observation).
+_QUERYABLE_WITHOUT_REFS = {
+    "dashboard",
+    "projects",
+    "catalog",
+    "production",
+    "clients",
+    "purchasing",
+    "settings",
+    "morning_brief",
+    "purchase_plan",
+    "production_plan",
+    "catalog_compiler",
+}
+
+
+def _agent_output(input_payload: dict) -> dict:
+    """Mock agent round: a contract-valid JSON document built only from the
+    server-built context — so dev/CI can exercise the flagship agent loop
+    (grounding, steps, states) without a real provider. On the first round
+    it emits a plan + a claim so the work-visibility channels render; on
+    later rounds (observations present) it closes without new queries."""
+    context = input_payload.get("context") or {}
+    org = context.get("organization") or {}
+    goal = str(input_payload.get("goal") or "")
+    observations = input_payload.get("observations") or []
+    surface_name = str(input_payload.get("surface") or "dashboard")
+    org_name = str(org.get("name") or "la organización")
+    reply = (
+        f"Revisé el contexto de {org_name} para “{goal[:120]}”. "
+        "Respuesta determinista del proveedor MOCK."
+    )
+    evidence = re.findall(
+        r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+        json.dumps(context, default=str),
+    )[:2]
+    document: dict = {
+        "reply": reply,
+        "steps": [],
+        "warnings": [],
+        "plan": [{"label": "Revisar el contexto del producto"}],
+        "claims": (
+            [{"text": f"La organización activa es {org_name}.", "evidence": evidence}]
+            if evidence
+            else []
+        ),
+        "questions": [],
+    }
+    if not observations and surface_name in _QUERYABLE_WITHOUT_REFS:
+        # Round 1 asks for the same surface's data — the server executes it
+        # and returns observations; round 2 settles with the grounded reply.
+        # Ref-requiring surfaces can't be queried without entity ids (the
+        # payload doesn't carry them), so they settle in one round.
+        document["steps"] = [{"kind": "query", "surface": surface_name, "refs": {}}]
+    # The service passes the position's product at input_payload top level
+    # (not inside context) — the mock must read the same place the prompt does.
+    product = context.get("product") or input_payload.get("product")
+    if not observations and surface_name == "position" and product:
+        # A mutation-looking goal on the position surface produces a real
+        # design-ops proposal — the ops card → apply → Guardar path stays
+        # exercisable under mock. The service validates each op through the
+        # same contract a live provider hits.
+        design = _design_assist_output({"prompt": goal, "product": product})
+        if design["ops"]:
+            document["steps"].append(
+                {"kind": "ops", "ops": design["ops"], "label": design["notes"]}
+            )
+    elif not observations and surface_name == "project" and context.get("editable"):
+        # Same exercise for the batch card: "todas las fijas a abatible" on a
+        # project drafts one op set against the positions the context shows.
+        # Batch ops never carry a positional module index — refs differ per
+        # position, so module-bound ops use the "*" wildcard the server
+        # expands against each position's real summary.
+        design = _design_assist_output({"prompt": goal, "product": {}})
+        batch_ops = [
+            {**op, "module": "*"} if "module" in op else op
+            for op in design["ops"]
+            if op.get("op") in _MOCK_BATCH_OPS
+        ]
+        # No product lives in the batch payload — the opening-keyboard loop
+        # iterates modules, so scan the goal for an opening keyword directly.
+        if not batch_ops:
+            for pattern, opening in _OPENING_KEYWORDS:
+                if pattern.search(goal.lower()):
+                    batch_ops.append(
+                        {"op": "set_opening", "module": "*", "opening": opening}
+                    )
+                    break
+        if batch_ops and context.get("positions"):
+            document["steps"].append(
+                {
+                    "kind": "batch_ops",
+                    "targets": {"typology": "ALL"},
+                    "ops": batch_ops,
+                    "label": design["notes"],
+                }
+            )
+    return document
+
+
 class MockProvider:
     """Deterministic provider — a real output a test can assert, never I/O."""
 
@@ -667,6 +889,10 @@ class MockProvider:
         elif capability == "context_assist":
             output = json.dumps(
                 _context_assist_output(input_payload), ensure_ascii=False
+            )
+        elif capability == "agent":
+            output = json.dumps(
+                _agent_output(input_payload), ensure_ascii=False
             )
         else:
             output = (

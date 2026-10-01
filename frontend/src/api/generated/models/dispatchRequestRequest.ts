@@ -9,4 +9,9 @@
 export interface DispatchRequestRequest {
   /** @maxLength 500 */
   note?: string;
+  /**
+   * @nullable
+   * @items.minimum 1
+   */
+  unit_indexes?: number[] | null;
 }

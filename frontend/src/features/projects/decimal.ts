@@ -36,6 +36,29 @@ export function subtractDecimal(a: DecimalValue, b: DecimalValue): DecimalValue 
   };
 }
 
+export function multiplyDecimal(a: DecimalValue, b: DecimalValue): DecimalValue {
+  return { numerator: a.numerator * b.numerator, denominator: a.denominator * b.denominator };
+}
+
+export function divideDecimal(a: DecimalValue, b: DecimalValue): DecimalValue {
+  return { numerator: a.numerator * b.denominator, denominator: a.denominator * b.numerator };
+}
+
+export function divideByInt(a: DecimalValue, n: number): DecimalValue {
+  return { numerator: a.numerator, denominator: a.denominator * BigInt(n) };
+}
+
+/** Half-up round to the nearest integer, exact on rationals — money display
+ * needs the cents the document carries, never a float neighbor. */
+export function roundDecimalToInt(value: DecimalValue): string {
+  const negative = value.numerator < 0n;
+  const magnitude = negative ? -value.numerator : value.numerator;
+  const quotient = magnitude / value.denominator;
+  const remainder = magnitude % value.denominator;
+  const rounded = remainder * 2n >= value.denominator ? quotient + 1n : quotient;
+  return `${negative && rounded !== 0n ? "-" : ""}${rounded}`;
+}
+
 export function midpointDecimal(a: DecimalValue, b: DecimalValue): DecimalValue {
   const sum = addDecimal(a, b);
   return { numerator: sum.numerator, denominator: sum.denominator * 2n };

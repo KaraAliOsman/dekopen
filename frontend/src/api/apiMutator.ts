@@ -52,3 +52,27 @@ export async function apiMutator<T>(url: string, options: RequestInit): Promise<
   }
   return { data: payload, status: response.status, headers: response.headers } as T;
 }
+
+/** Binary download through the same auth context — the generated client
+ * stringifies bodies, so PDF/stream endpoints fetch the Blob directly. */
+export async function apiFetchBlob(url: string): Promise<{
+  blob: Blob;
+  filename: string | null;
+}> {
+  const context = await readAuthContext();
+  const headers = new Headers();
+  if (context.accessToken !== null) {
+    headers.set("Authorization", `Bearer ${context.accessToken}`);
+  }
+  if (context.organizationId !== null) {
+    headers.set("X-Organization-ID", context.organizationId);
+  }
+  const response = await fetch(url, { headers });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new ApiError(response.status, payload);
+  }
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const match = /filename="?([^";\n]+)"?/.exec(disposition);
+  return { blob: await response.blob(), filename: match?.[1] ?? null };
+}

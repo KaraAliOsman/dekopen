@@ -136,7 +136,22 @@ function insetEdges(contour: ContourJson, distanceMm: number): OffsetEdge[] {
   }));
 }
 
-/** Inset boundary as sampled points (lines keep endpoints, arcs chord-sampled). */
+/** Visual chord-error bound for arc sampling (mm). A chord of half-angle
+ * θ deviates r·(1−cos θ) from the arc; keeping that under CHORD_ERR bounds
+ * the flattening at any zoom — instead of a fixed chord length that shows
+ * polygon facets on tight radii and wastes vertices on shallow arcs. */
+const ARC_CHORD_ERR_MM = 0.4;
+
+/** Steps for a radius/sweep pair honouring ARC_CHORD_ERR_MM. */
+export function arcSteps(radius: number, sweep: number): number {
+  if (radius <= 0) return 2;
+  // sagitta of each chord: e = r(1 − cos(θ)), θ = sweep/(2·steps)
+  const per = Math.acos(Math.max(1 - ARC_CHORD_ERR_MM / radius, -1)) * 2;
+  return Math.max(2, Math.ceil(Math.abs(sweep) / per));
+}
+
+/** Inset boundary as sampled points (lines keep endpoints, arcs sampled
+ * with a controlled chord error). */
 export function insetContourPoints(contour: ContourJson, distanceMm: number): ContourPoint[] {
   const edges = insetEdges(contour, distanceMm);
   const points: ContourPoint[] = [];
@@ -150,8 +165,7 @@ export function insetContourPoints(contour: ContourJson, distanceMm: number): Co
     // s>0 = right-of-edge bulge: the arc center sits on the concave side, so
     // travelling the edge sweeps counterclockwise around it (y-up space).
     const sweep = sweepBetween(startAngle, endAngle, edge.s > 0 ? 1 : -1);
-    const arcLen = Math.abs(sweep) * edge.r;
-    const steps = Math.max(2, Math.ceil(arcLen / 5));
+    const steps = arcSteps(edge.r, sweep);
     for (let k = 0; k < steps; k += 1) {
       const angle = startAngle + (sweep * k) / steps;
       points.push({ x: edge.cx + edge.r * Math.cos(angle), y: edge.cy + edge.r * Math.sin(angle) });

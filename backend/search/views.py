@@ -27,6 +27,10 @@ class GlobalSearchView(APIView):
     )
     def get(self, request):
         query = request.query_params.get("q", "")
-        with documentary_scope(request, _READERS) as (_, _, org_id):
-            output = service.search(org_id=org_id, query=query)
+        with documentary_scope(request, _READERS) as (_, tenant, org_id):
+            output = service.search(
+                org_id=org_id,
+                query=query,
+                role=tenant.active_organization.role,
+            )
         return Response(output)

@@ -10,22 +10,22 @@ import json
 from uuid import UUID
 
 from django.db import connection, DatabaseError
+
+from authentication.rls import tx_aborted
 from psycopg import sql
 
 from dekopen_engine.cutting import CutMaterial, CuttingProfile
 from dekopen_engine.inspection_models import StructuralInput, WorkshopAnnotations
 from dekopen_engine.manufacturing import (
+    handle_policy_from_json,
+    placement_policy_from_json,
+    reinforcement_policy_from_json,
     HandleIntentV1,
     HandleRequirementPolicyV1,
-    HandleSlotRuleV1,
     ManufacturingPlacementPolicyV1,
-    PlacementOffsetV1,
     ReinforcementCutPolicyV1,
-    ReinforcementCutRuleV1,
     VerticalReference,
 )
-from dekopen_engine.manufacturing_trace import MemberSide
-from dekopen_engine.models import BayOpeningType, ProfileRole
 from dekopen_engine.purchasing import (
     AccessoryLineV1,
     AccessoryScheduleV1,
@@ -93,6 +93,14 @@ def rows(query: object, parameters: Sequence[object] = ()) -> list[dict[str, obj
         return [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
 
 
+def write(query: object, parameters: Sequence[object] = ()) -> int:
+    """Statement without a row result (UPDATE/DELETE) — returns rowcount.
+    `rows()` is SELECT-only: `cursor.description` is None on writes."""
+    with connection.cursor() as cursor:
+        cursor.execute(query, parameters)
+        return cursor.rowcount
+
+
 def one(
     query: object, parameters: Sequence[object] = (), code: str = "documentary_authority_not_found"
 ) -> dict[str, object]:
@@ -107,31 +115,27 @@ def documentary_backend() -> Iterator[None]:
     """Switch to the documentary role, restoring the caller's role on exit.
 
     Nested contexts are safe: the previous role is captured rather than
-    hard-resetting to ``authenticated`` (an unset role restores to
-    ``authenticated``, matching the request context every caller starts in)."""
+    hard-resetting to ``authenticated``; an unset role restores to ``none``
+    (the session user), which is what request and worker callers start in."""
     with connection.cursor() as cursor:
-        cursor.execute("SELECT current_setting('role')")
-        previous = str(cursor.fetchone()[0])
-        if previous == "none":
-            previous = "authenticated"
+        cursor.execute("SELECT current_setting('role', true)")
+        previous = str(cursor.fetchone()[0] or "none")
         cursor.execute("SET LOCAL ROLE documentary_backend")
     try:
         yield
     except DatabaseError:
         raise
     except BaseException:
-        if not connection.needs_rollback:
+        if not tx_aborted():
             with connection.cursor() as cursor:
-                cursor.execute(
-                    sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(previous))
-                )
+                # set_config accepts 'none' (session user) where SET ROLE
+                # "none" would fail looking for a literal role name.
+                cursor.execute("SELECT set_config('role', %s, true)", [previous])
         raise
     else:
-        if not connection.needs_rollback:
+        if not tx_aborted():
             with connection.cursor() as cursor:
-                cursor.execute(
-                    sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(previous))
-                )
+                cursor.execute("SELECT set_config('role', %s, true)", [previous])
 
 
 def effective_scope(
@@ -155,96 +159,24 @@ def _authority_row(table: str, policy_id: UUID, system_id: UUID, org_id: UUID) -
     return effective[0]
 
 
-def _offset(value: object) -> PlacementOffsetV1:
-    if not isinstance(value, dict):
-        raise DocumentaryError("invalid_placement_policy")
-    return PlacementOffsetV1(x_mm=_decimal(value.get("x_mm")), y_mm=_decimal(value.get("y_mm")))
-
-
 def _placement_policy(value: object) -> ManufacturingPlacementPolicyV1:
-    raw = decoded(value)
-    if not isinstance(raw, dict):
-        raise DocumentaryError("invalid_placement_policy")
     try:
-        leaves = raw["sliding_leaf_offsets"]
-        infills = raw["sliding_infill_offsets"]
-        beads = raw["bead_offsets"]
-        if not isinstance(leaves, dict) or not isinstance(infills, dict) or not isinstance(beads, dict):
-            raise DocumentaryError("invalid_placement_policy")
-        return ManufacturingPlacementPolicyV1(
-            schema_version=int(raw["schema_version"]),
-            policy_id=str(raw["policy_id"]),
-            version=int(raw["version"]),
-            sliding_leaf_offsets={str(key): _offset(item) for key, item in leaves.items()},
-            sliding_infill_offsets={str(key): _offset(item) for key, item in infills.items()},
-            bead_offsets={MemberSide(str(key)): _offset(item) for key, item in beads.items()},
-        )
+        return placement_policy_from_json(decoded(value))
     except (KeyError, TypeError, ValueError) as error:
-        if isinstance(error, DocumentaryError):
-            raise
         raise DocumentaryError("invalid_placement_policy") from error
 
 
 def _handle_policy(value: object) -> HandleRequirementPolicyV1:
-    raw = decoded(value)
-    if not isinstance(raw, dict) or not isinstance(raw.get("slots"), list):
-        raise DocumentaryError("invalid_handle_policy")
     try:
-        slots = []
-        for item in raw["slots"]:
-            if not isinstance(item, dict):
-                raise DocumentaryError("invalid_handle_policy")
-            if item.get("horizontal_reference") != "HOST_MEMBER_AXIS":
-                raise DocumentaryError("invalid_handle_policy")
-            slots.append(HandleSlotRuleV1(
-                opening_type=BayOpeningType(str(item["opening_type"])),
-                leaf_slot=None if item.get("leaf_slot") is None else str(item["leaf_slot"]),
-                handle_domain_slot=str(item["handle_domain_slot"]),
-                host_member_side=MemberSide(str(item["host_member_side"])),
-                horizontal_reference="HOST_MEMBER_AXIS",
-                horizontal_offset_mm=_decimal(item["horizontal_offset_mm"]),
-                permitted_vertical_references=[
-                    VerticalReference(str(reference))
-                    for reference in item["permitted_vertical_references"]
-                ],
-                mounting_min_from_leaf_top_mm=_decimal(item["mounting_min_from_leaf_top_mm"]),
-                mounting_max_from_leaf_top_mm=_decimal(item["mounting_max_from_leaf_top_mm"]),
-            ))
-        return HandleRequirementPolicyV1(
-            schema_version=int(raw["schema_version"]), policy_id=str(raw["policy_id"]),
-            version=int(raw["version"]), slots=slots,
-        )
+        return handle_policy_from_json(decoded(value))
     except (KeyError, TypeError, ValueError) as error:
-        if isinstance(error, DocumentaryError):
-            raise
         raise DocumentaryError("invalid_handle_policy") from error
 
 
 def _reinforcement_policy(value: object) -> ReinforcementCutPolicyV1:
-    raw = decoded(value)
-    if not isinstance(raw, dict) or not isinstance(raw.get("rules"), list):
-        raise DocumentaryError("invalid_reinforcement_policy")
     try:
-        rules = []
-        for item in raw["rules"]:
-            if not isinstance(item, dict) or item.get("length_authority") != "EXISTING_ENGINE":
-                raise DocumentaryError("invalid_reinforcement_policy")
-            rules.append(ReinforcementCutRuleV1(
-                role=ProfileRole(str(item["role"])),
-                profile_angle_left=_decimal(item["profile_angle_left"]),
-                profile_angle_right=_decimal(item["profile_angle_right"]),
-                reinforcement_angle_left=_decimal(item["reinforcement_angle_left"]),
-                reinforcement_angle_right=_decimal(item["reinforcement_angle_right"]),
-                length_authority="EXISTING_ENGINE",
-                compatible_with_existing_length=(item.get("compatible_with_existing_length") is True),
-            ))
-        return ReinforcementCutPolicyV1(
-            schema_version=int(raw["schema_version"]), policy_id=str(raw["policy_id"]),
-            version=int(raw["version"]), rules=rules,
-        )
+        return reinforcement_policy_from_json(decoded(value))
     except (KeyError, TypeError, ValueError) as error:
-        if isinstance(error, DocumentaryError):
-            raise
         raise DocumentaryError("invalid_reinforcement_policy") from error
 
 
@@ -432,134 +364,189 @@ def load_purchase_authorities(
     profile_skus: set[str], reinforcement_skus: set[str], glass_skus: set[str],
     hardware_skus: set[str], panel_skus: set[str], fitting_skus: set[str],
 ) -> PurchaseAuthorities:
+    def _by_sku(result: list[dict[str, object]], key: str) -> dict[str, list[dict]]:
+        grouped: dict[str, list[dict]] = {}
+        for item in result:
+            grouped.setdefault(str(item[key]), []).append(item)
+        return grouped
+
     stocks: list[PhysicalStockBindingV1] = []
-    for sku_value in sorted(profile_skus):
-        values = rows(
-            "SELECT mapping.id AS binding_id,mapping.commercial_sku AS purchasing_sku,"
-            "mapping.manufacturer_name,mapping.physical_stock_identity,mapping.stock_color,"
-            "mapping.cutting_profile_id,mapping.binding_version,mapping.org_id,"
-            "article.system_id,article.sku AS workshop_sku,article.material::text AS material,"
-            "article.commercial_length_mm AS stock_length_mm,profile.code AS cutting_profile_code,"
-            "profile.kerf_mm,profile.head_trim_mm,profile.tail_trim_mm "
-            "FROM public.profile_purchase_mappings mapping "
-            "JOIN public.profile_articles article ON article.id=mapping.profile_article_id "
-            "JOIN public.cutting_profiles profile ON profile.id=mapping.cutting_profile_id "
-            "WHERE article.system_id=%s AND article.sku=%s AND mapping.is_active "
-            "AND (mapping.org_id IS NULL OR mapping.org_id=%s)",
-            [system_id, sku_value, org_id],
+    # One query per SKU family — the per-SKU loops multiplied round-trips by
+    # distinct SKUs in every DOC pack generation.
+    if profile_skus:
+        grouped = _by_sku(
+            rows(
+                "SELECT mapping.id AS binding_id,mapping.commercial_sku AS purchasing_sku,"
+                "mapping.manufacturer_name,mapping.physical_stock_identity,mapping.stock_color,"
+                "mapping.cutting_profile_id,mapping.binding_version,mapping.org_id,"
+                "article.system_id,article.sku AS workshop_sku,article.material::text AS material,"
+                "article.commercial_length_mm AS stock_length_mm,profile.code AS cutting_profile_code,"
+                "profile.kerf_mm,profile.head_trim_mm,profile.tail_trim_mm "
+                "FROM public.profile_purchase_mappings mapping "
+                "JOIN public.profile_articles article ON article.id=mapping.profile_article_id "
+                "JOIN public.cutting_profiles profile ON profile.id=mapping.cutting_profile_id "
+                "WHERE article.system_id=%s AND article.sku = ANY(%s) AND mapping.is_active "
+                "AND (mapping.org_id IS NULL OR mapping.org_id=%s)",
+                [system_id, sorted(profile_skus), org_id],
+            ),
+            "workshop_sku",
         )
-        row = _effective_one(values, org_id, "profile_stock_binding_missing_or_ambiguous")
-        binding = _stock_binding(row, PhysicalSourceKind.PROFILE)
-        if binding.color != color:
-            raise DocumentaryError("physical_stock_color_mismatch")
-        stocks.append(binding)
-    for sku_value in sorted(reinforcement_skus):
-        values = rows(
-            "SELECT reinforcement.id AS binding_id,reinforcement.commercial_sku AS purchasing_sku,"
-            "reinforcement.manufacturer_name,reinforcement.physical_stock_identity,"
-            "reinforcement.stock_color,reinforcement.cutting_profile_id,"
-            "reinforcement.binding_version,reinforcement.org_id,reinforcement.system_id,"
-            "reinforcement.sku AS workshop_sku,'STEEL' AS material,"
-            "reinforcement.stock_length_mm,profile.code AS cutting_profile_code,"
-            "profile.kerf_mm,profile.head_trim_mm,profile.tail_trim_mm "
-            "FROM public.reinforcement_articles reinforcement "
-            "JOIN public.cutting_profiles profile ON profile.id=reinforcement.cutting_profile_id "
-            "WHERE reinforcement.system_id=%s AND reinforcement.sku=%s "
-            "AND reinforcement.is_active AND (reinforcement.org_id IS NULL OR reinforcement.org_id=%s)",
-            [system_id, sku_value, org_id],
+        for sku_value in sorted(profile_skus):
+            row = _effective_one(
+                grouped.get(sku_value, []), org_id,
+                "profile_stock_binding_missing_or_ambiguous",
+            )
+            binding = _stock_binding(row, PhysicalSourceKind.PROFILE)
+            if binding.color != color:
+                raise DocumentaryError("physical_stock_color_mismatch")
+            stocks.append(binding)
+    if reinforcement_skus:
+        grouped = _by_sku(
+            rows(
+                "SELECT reinforcement.id AS binding_id,reinforcement.commercial_sku AS purchasing_sku,"
+                "reinforcement.manufacturer_name,reinforcement.physical_stock_identity,"
+                "reinforcement.stock_color,reinforcement.cutting_profile_id,"
+                "reinforcement.binding_version,reinforcement.org_id,reinforcement.system_id,"
+                "reinforcement.sku AS workshop_sku,'STEEL' AS material,"
+                "reinforcement.stock_length_mm,profile.code AS cutting_profile_code,"
+                "profile.kerf_mm,profile.head_trim_mm,profile.tail_trim_mm "
+                "FROM public.reinforcement_articles reinforcement "
+                "JOIN public.cutting_profiles profile ON profile.id=reinforcement.cutting_profile_id "
+                "WHERE reinforcement.system_id=%s AND reinforcement.sku = ANY(%s) "
+                "AND reinforcement.is_active AND (reinforcement.org_id IS NULL OR reinforcement.org_id=%s)",
+                [system_id, sorted(reinforcement_skus), org_id],
+            ),
+            "workshop_sku",
         )
-        row = _effective_one(values, org_id, "reinforcement_stock_binding_missing_or_ambiguous")
-        binding = _stock_binding(row, PhysicalSourceKind.REINFORCEMENT)
-        if binding.color != color:
-            raise DocumentaryError("physical_stock_color_mismatch")
-        stocks.append(binding)
+        for sku_value in sorted(reinforcement_skus):
+            row = _effective_one(
+                grouped.get(sku_value, []), org_id,
+                "reinforcement_stock_binding_missing_or_ambiguous",
+            )
+            binding = _stock_binding(row, PhysicalSourceKind.REINFORCEMENT)
+            if binding.color != color:
+                raise DocumentaryError("physical_stock_color_mismatch")
+            stocks.append(binding)
 
     glasses = []
-    for sku_value in sorted(glass_skus):
-        row = _effective_one(rows(
-            "SELECT id,version,technical_sku,purchasing_sku,manufacturer_name,"
-            "purchase_unit,provenance::text,org_id FROM public.glass_purchase_mappings "
-            "WHERE system_id=%s AND technical_sku=%s AND (org_id IS NULL OR org_id=%s)",
-            [system_id, sku_value, org_id],
-        ), org_id, "glass_purchase_mapping_missing_or_ambiguous")
-        provenance = decoded(row["provenance"])
-        if not isinstance(provenance, dict) or not all(
-            isinstance(key, str) and isinstance(item, str) for key, item in provenance.items()
-        ):
-            raise DocumentaryError("invalid_glass_purchase_provenance")
-        glasses.append(GlassPurchaseMappingV1(
-            authority_id=str(row["id"]), version=int(row["version"]),
-            system_id=str(system_id), technical_sku=str(row["technical_sku"]),
-            purchasing_sku=str(row["purchasing_sku"]),
-            manufacturer_name=str(row["manufacturer_name"]), purchase_unit="EA",
-            provenance=provenance,
-        ))
+    if glass_skus:
+        grouped = _by_sku(
+            rows(
+                "SELECT id,version,technical_sku,purchasing_sku,manufacturer_name,"
+                "purchase_unit,provenance::text,org_id FROM public.glass_purchase_mappings "
+                "WHERE system_id=%s AND technical_sku = ANY(%s) "
+                "AND (org_id IS NULL OR org_id=%s)",
+                [system_id, sorted(glass_skus), org_id],
+            ),
+            "technical_sku",
+        )
+        for sku_value in sorted(glass_skus):
+            row = _effective_one(
+                grouped.get(sku_value, []), org_id,
+                "glass_purchase_mapping_missing_or_ambiguous",
+            )
+            provenance = decoded(row["provenance"])
+            if not isinstance(provenance, dict) or not all(
+                isinstance(key, str) and isinstance(item, str) for key, item in provenance.items()
+            ):
+                raise DocumentaryError("invalid_glass_purchase_provenance")
+            glasses.append(GlassPurchaseMappingV1(
+                authority_id=str(row["id"]), version=int(row["version"]),
+                system_id=str(system_id), technical_sku=str(row["technical_sku"]),
+                purchasing_sku=str(row["purchasing_sku"]),
+                manufacturer_name=str(row["manufacturer_name"]), purchase_unit="EA",
+                provenance=provenance,
+            ))
 
     hardware = []
-    for sku_value in sorted(hardware_skus):
-        row = _effective_one(rows(
-            "SELECT mapping.id,mapping.version,kit.sku AS technical_kit_sku,"
-            "mapping.purchasing_sku,mapping.manufacturer_name,mapping.purchase_unit,"
-            "mapping.provenance::text,mapping.org_id FROM public.hardware_purchase_mappings mapping "
-            "JOIN public.hardware_kits kit ON kit.id=mapping.hardware_kit_id "
-            "WHERE kit.system_id=%s AND kit.sku=%s AND (mapping.org_id IS NULL OR mapping.org_id=%s)",
-            [system_id, sku_value, org_id],
-        ), org_id, "hardware_purchase_mapping_missing_or_ambiguous")
-        provenance = decoded(row["provenance"])
-        if not isinstance(provenance, dict) or not all(
-            isinstance(key, str) and isinstance(item, str) for key, item in provenance.items()
-        ):
-            raise DocumentaryError("invalid_hardware_purchase_provenance")
-        hardware.append(HardwarePurchaseMappingV1(
-            authority_id=str(row["id"]), version=int(row["version"]),
-            system_id=str(system_id), technical_kit_sku=str(row["technical_kit_sku"]),
-            purchasing_sku=str(row["purchasing_sku"]),
-            manufacturer_name=str(row["manufacturer_name"]), purchase_unit="KIT",
-            provenance=provenance,
-        ))
+    if hardware_skus:
+        grouped = _by_sku(
+            rows(
+                "SELECT mapping.id,mapping.version,kit.sku AS technical_kit_sku,"
+                "mapping.purchasing_sku,mapping.manufacturer_name,mapping.purchase_unit,"
+                "mapping.provenance::text,mapping.org_id FROM public.hardware_purchase_mappings mapping "
+                "JOIN public.hardware_kits kit ON kit.id=mapping.hardware_kit_id "
+                "WHERE kit.system_id=%s AND kit.sku = ANY(%s) AND (mapping.org_id IS NULL OR mapping.org_id=%s)",
+                [system_id, sorted(hardware_skus), org_id],
+            ),
+            "technical_kit_sku",
+        )
+        for sku_value in sorted(hardware_skus):
+            row = _effective_one(
+                grouped.get(sku_value, []), org_id,
+                "hardware_purchase_mapping_missing_or_ambiguous",
+            )
+            provenance = decoded(row["provenance"])
+            if not isinstance(provenance, dict) or not all(
+                isinstance(key, str) and isinstance(item, str) for key, item in provenance.items()
+            ):
+                raise DocumentaryError("invalid_hardware_purchase_provenance")
+            hardware.append(HardwarePurchaseMappingV1(
+                authority_id=str(row["id"]), version=int(row["version"]),
+                system_id=str(system_id), technical_kit_sku=str(row["technical_kit_sku"]),
+                purchasing_sku=str(row["purchasing_sku"]),
+                manufacturer_name=str(row["manufacturer_name"]), purchase_unit="KIT",
+                provenance=provenance,
+            ))
 
     panels = []
-    for sku_value in sorted(panel_skus):
-        row = _effective_one(rows(
-            "SELECT authority.id,authority.version,panel.sku AS technical_sku,"
-            "authority.purchasing_sku,authority.manufacturer_name,authority.supply_form,"
-            "authority.purchase_unit,authority.provenance::text,authority.org_id "
-            "FROM public.panel_purchase_authorities authority "
-            "JOIN public.infill_articles panel ON panel.id=authority.infill_article_id "
-            "WHERE panel.system_id=%s AND panel.sku=%s "
-            "AND (authority.org_id IS NULL OR authority.org_id=%s)",
-            [system_id, sku_value, org_id],
-        ), org_id, "panel_purchase_authority_missing_or_ambiguous")
-        provenance = decoded(row["provenance"])
-        if not isinstance(provenance, dict) or not all(
-            isinstance(key, str) and isinstance(item, str) for key, item in provenance.items()
-        ):
-            raise DocumentaryError("invalid_panel_purchase_provenance")
-        panels.append(PanelPurchaseAuthorityV1(
-            authority_id=str(row["id"]), version=int(row["version"]),
-            system_id=str(system_id), technical_sku=str(row["technical_sku"]),
-            purchasing_sku=str(row["purchasing_sku"]),
-            manufacturer_name=str(row["manufacturer_name"]), supply_form="CUT_TO_SIZE",
-            purchase_unit="EA", provenance=provenance,
-        ))
+    if panel_skus:
+        grouped = _by_sku(
+            rows(
+                "SELECT authority.id,authority.version,panel.sku AS technical_sku,"
+                "authority.purchasing_sku,authority.manufacturer_name,authority.supply_form,"
+                "authority.purchase_unit,authority.provenance::text,authority.org_id "
+                "FROM public.panel_purchase_authorities authority "
+                "JOIN public.infill_articles panel ON panel.id=authority.infill_article_id "
+                "WHERE panel.system_id=%s AND panel.sku = ANY(%s) "
+                "AND (authority.org_id IS NULL OR authority.org_id=%s)",
+                [system_id, sorted(panel_skus), org_id],
+            ),
+            "technical_sku",
+        )
+        for sku_value in sorted(panel_skus):
+            row = _effective_one(
+                grouped.get(sku_value, []), org_id,
+                "panel_purchase_authority_missing_or_ambiguous",
+            )
+            provenance = decoded(row["provenance"])
+            if not isinstance(provenance, dict) or not all(
+                isinstance(key, str) and isinstance(item, str) for key, item in provenance.items()
+            ):
+                raise DocumentaryError("invalid_panel_purchase_provenance")
+            panels.append(PanelPurchaseAuthorityV1(
+                authority_id=str(row["id"]), version=int(row["version"]),
+                system_id=str(system_id), technical_sku=str(row["technical_sku"]),
+                purchasing_sku=str(row["purchasing_sku"]),
+                manufacturer_name=str(row["manufacturer_name"]), supply_form="CUT_TO_SIZE",
+                purchase_unit="EA", provenance=provenance,
+            ))
     fittings = []
-    for sku_value in sorted(fitting_skus):
-        row = _effective_one(rows(
-            "SELECT id,version,technical_sku,purchasing_sku,manufacturer_name,"
-            "purchase_unit,provenance::text,org_id FROM public.fitting_purchase_mappings "
-            "WHERE system_id=%s AND technical_sku=%s AND (org_id IS NULL OR org_id=%s)",
-            [system_id, sku_value, org_id],
-        ), org_id, "fitting_purchase_mapping_missing_or_ambiguous")
-        provenance = decoded(row["provenance"])
-        if not isinstance(provenance, dict) or not all(
-            isinstance(key, str) and isinstance(item, str) for key, item in provenance.items()
-        ):
-            raise DocumentaryError("invalid_fitting_purchase_provenance")
-        fittings.append(FittingPurchaseMappingV1(
-            authority_id=str(row["id"]), version=int(row["version"]),
-            system_id=str(system_id), technical_sku=str(row["technical_sku"]),
-            purchasing_sku=str(row["purchasing_sku"]),
-            manufacturer_name=str(row["manufacturer_name"]), purchase_unit="EA",
-            provenance=provenance,
-        ))
+    if fitting_skus:
+        grouped = _by_sku(
+            rows(
+                "SELECT id,version,technical_sku,purchasing_sku,manufacturer_name,"
+                "purchase_unit,provenance::text,org_id FROM public.fitting_purchase_mappings "
+                "WHERE system_id=%s AND technical_sku = ANY(%s) AND (org_id IS NULL OR org_id=%s)",
+                [system_id, sorted(fitting_skus), org_id],
+            ),
+            "technical_sku",
+        )
+        for sku_value in sorted(fitting_skus):
+            row = _effective_one(
+                grouped.get(sku_value, []), org_id,
+                "fitting_purchase_mapping_missing_or_ambiguous",
+            )
+            provenance = decoded(row["provenance"])
+            if not isinstance(provenance, dict) or not all(
+                isinstance(key, str) and isinstance(item, str) for key, item in provenance.items()
+            ):
+                raise DocumentaryError("invalid_fitting_purchase_provenance")
+            fittings.append(FittingPurchaseMappingV1(
+                authority_id=str(row["id"]), version=int(row["version"]),
+                system_id=str(system_id), technical_sku=str(row["technical_sku"]),
+                purchasing_sku=str(row["purchasing_sku"]),
+                manufacturer_name=str(row["manufacturer_name"]), purchase_unit="EA",
+                provenance=provenance,
+            ))
     return PurchaseAuthorities(stocks, glasses, hardware, panels, fittings)

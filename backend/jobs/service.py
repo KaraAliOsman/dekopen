@@ -10,6 +10,7 @@ from uuid import UUID
 from django.db import connection
 from psycopg import sql
 
+from authentication.rls import tx_aborted
 from jobs import registry, repository
 
 
@@ -28,9 +29,35 @@ def job_backend() -> Iterator[None]:
     try:
         yield
     finally:
-        if not connection.needs_rollback:
+        if not tx_aborted():
             with connection.cursor() as cursor:
                 cursor.execute(sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(previous)))
+
+
+@contextmanager
+def job_owner() -> Iterator[None]:
+    """Read job_runs as the connection owner from INSIDE a member-facing RLS
+    scope. ``documentary_backend`` has no grant on the table and ``service_role``
+    needs matching JWT claims, so neither reaches it here — but the analytics
+    view reads the same count at the ambient role after its scope exits, where
+    the session user (the table owner) bypasses RLS. ``RESET ROLE`` restores
+    exactly that user; the explicit org filter in the caller's query remains
+    the tenant boundary. Same save/restore discipline as ``job_backend``."""
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT current_setting('role')")
+        previous = str(cursor.fetchone()[0])
+        cursor.execute("RESET ROLE")
+    try:
+        yield
+    finally:
+        if not tx_aborted():
+            with connection.cursor() as cursor:
+                if previous == "none":
+                    cursor.execute("RESET ROLE")
+                else:
+                    cursor.execute(
+                        sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(previous))
+                    )
 
 
 class JobServiceError(ValueError):
@@ -57,8 +84,11 @@ def enqueue(
     if not serializer.is_valid():
         raise JobServiceError("job_payload_invalid")
     validated = dict(serializer.validated_data)
-    if spec.authorize is not None and role is not None and not spec.authorize(validated, role):
-        raise JobServiceError("job_permission_denied")
+    if spec.authorize is not None:
+        # An authorize callback is a role contract — skipping it on role=None
+        # would let a future internal enqueue bypass the check silently.
+        if role is None or not spec.authorize(validated, role):
+            raise JobServiceError("job_permission_denied")
     job, created = repository.insert_job(
         org_id=org_id,
         job_type=job_type,
@@ -80,6 +110,7 @@ def enqueue(
         and job_id is not None
     ):
         requeued = repository.requeue_terminal(
+            org_id=org_id,
             job_id=UUID(str(job_id)),
             payload=validated,
             max_attempts=max_attempts,
@@ -102,6 +133,54 @@ def get(*, org_id: UUID, job_id: UUID) -> dict[str, object] | None:
 
 
 def list_recent(
-    *, org_id: UUID, job_type: str | None, state: str | None, limit: int
+    *, org_id: UUID, job_type: str | None, state: str | None, limit: int, offset: int = 0
 ) -> list[dict[str, object]]:
-    return repository.list_jobs(org_id=org_id, job_type=job_type, state=state, limit=limit)
+    return repository.list_jobs(
+        org_id=org_id, job_type=job_type, state=state, limit=limit, offset=offset
+    )
+
+
+def retry(
+    *, org_id: UUID, job_id: UUID, actor_id: UUID, role: str
+) -> dict[str, object]:
+    """Requeue a terminally failed/canceled job with its stored payload —
+    same input the failed run carried, re-authorized as the retrying actor.
+    A job that already left the terminal states (worker or another retry
+    won the race) returns its live row instead of a phantom retry."""
+    job = repository.get_job(org_id=org_id, job_id=job_id)
+    if job is None:
+        raise JobServiceError("job_not_found")
+    if job["state"] not in ("FAILED", "CANCELED"):
+        raise JobServiceError("job_not_terminal")
+    spec = registry.spec_for(str(job["type"]))
+    if spec is None:
+        raise JobServiceError("job_type_unknown")
+    if role not in spec.roles:
+        raise JobServiceError("job_permission_denied")
+    payload = job.get("payload")
+    if not isinstance(payload, dict):
+        payload = {}
+    # The stored payload was validated at enqueue — but specs evolve, so a
+    # historical row can hold a shape today's serializer rejects. Revalidate
+    # against the CURRENT contract before requeueing: an invalid job must
+    # not reach the worker just because it ran under an older spec.
+    serializer = spec.payload_serializer(data=payload)
+    if not serializer.is_valid():
+        raise JobServiceError("job_payload_invalid")
+    validated = dict(serializer.validated_data)
+    if spec.authorize is not None and not spec.authorize(validated, role):
+        raise JobServiceError("job_permission_denied")
+    job_id = UUID(str(job["id"]))
+    attempts = job.get("max_attempts")
+    requeued = repository.requeue_terminal(
+        org_id=org_id,
+        job_id=job_id,
+        payload=validated,
+        max_attempts=int(str(attempts or "0")),
+        run_after=datetime.now(timezone.utc),
+        created_by=actor_id,
+    )
+    if requeued is None:
+        live = repository.get_job(org_id=org_id, job_id=job_id)
+        return live if live is not None else job
+    return requeued

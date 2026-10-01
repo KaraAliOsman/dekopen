@@ -30,7 +30,9 @@ class WorkshopAnnotationSerializer(StrictSerializer):
         allow_null=True, required=False, default=None,
     )
     finish_class = serializers.ChoiceField(
-        choices=["WHITE"], allow_null=True, required=False, default=None
+        # WHITE|FOILED is the machining finish domain; whether FOILED is legal
+        # on a given design is checked downstream against its declared color.
+        choices=["WHITE", "FOILED"], allow_null=True, required=False, default=None
     )
     has_coupler = serializers.BooleanField(allow_null=True, required=False, default=None)
 
@@ -152,7 +154,12 @@ class HandleRequirementSerializer(serializers.Serializer):
     leaf_label = serializers.CharField()
     opening_type = serializers.CharField()
     handle_domain_slot = serializers.CharField()
-    host_member_side = serializers.ChoiceField(choices=["LEFT", "RIGHT"])
+    # Null on door rows whose leaf hasn't declared handedness yet — there
+    # is no host stile to name until the product says which edge hinges.
+    host_member_side = serializers.ChoiceField(
+        choices=["LEFT", "RIGHT"], allow_null=True
+    )
+    requires_handedness = serializers.BooleanField(default=False)
     outer_height_mm = DecimalStringField(max_digits=14, decimal_places=4)
     mounting_min_from_leaf_top_mm = DecimalStringField(
         max_digits=14, decimal_places=4
@@ -216,6 +223,10 @@ class DocumentaryPreparationPositionSerializer(PositionDocumentaryInputSerialize
     workshop_targets = WorkshopTargetsSerializer()
     workshop_suggestions = WorkshopAnnotationSerializer(many=True)
     polishing_suggestions = GlassPolishingSerializer(many=True)
+    # Pre-emit preview: same inspector the freeze runs, so the UI can state
+    # "Sólo cotización" before the estimator clicks Emitir.
+    production_ready = serializers.BooleanField()
+    documentary_ready = serializers.BooleanField()
 
 
 class DocumentaryPreparationResponseSerializer(serializers.Serializer):
@@ -248,7 +259,7 @@ class FreezeResponseSerializer(serializers.Serializer):
 
 class ArtifactRequestSerializer(StrictSerializer):
     document_type = serializers.ChoiceField(
-        choices=["DOC-01", "DOC-02", "DOC-03", "DOC-04", "DOC-05", "DOC-06", "DOC-07"]
+        choices=["DOC-01", "DOC-02", "DOC-03", "DOC-04", "DOC-05", "DOC-06", "DOC-07", "DOC-08"]
     )
     format = serializers.ChoiceField(choices=["PDF", "XLSX"])
     project_version_id = serializers.UUIDField()
@@ -267,7 +278,89 @@ class ArtifactResponseSerializer(serializers.Serializer):
     created_at = serializers.DateTimeField()
 
 
+class ArtifactListItemSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    document_type = serializers.CharField()
+    format = serializers.CharField()
+    artifact_scope = serializers.ChoiceField(choices=["PROJECT_REVISION", "ORDER"])
+    project_version_id = serializers.UUIDField()
+    order_id = serializers.UUIDField(allow_null=True)
+    order_type = serializers.CharField(allow_null=True)
+    revision_code = serializers.CharField()
+    byte_size = serializers.IntegerField()
+    created_at = serializers.DateTimeField()
+
+
+class ArtifactListResponseSerializer(serializers.Serializer):
+    artifacts = ArtifactListItemSerializer(many=True)
+
+
 class SignedAccessResponseSerializer(serializers.Serializer):
     artifact_id = serializers.UUIDField()
     signed_url = serializers.URLField()
     expires_in = serializers.IntegerField(min_value=3600, max_value=3600)
+
+
+class RevisionCompareQuerySerializer(serializers.Serializer):
+    base = serializers.RegexField(r"^REV-[A-Z]+$")
+    head = serializers.RegexField(r"^REV-[A-Z]+$")
+
+
+class RevisionCompareSideSerializer(serializers.Serializer):
+    revision_code = serializers.CharField()
+    emitted_at = serializers.CharField()
+    integrity = serializers.ChoiceField(
+        choices=("VERIFIED", "MISMATCH"), allow_null=True
+    )
+    currency = serializers.CharField()
+    total_price_net = serializers.CharField()
+    total_price_tax = serializers.CharField()
+    total_price_gross = serializers.CharField()
+
+
+class RevisionCompareSummarySerializer(serializers.Serializer):
+    added = serializers.IntegerField()
+    removed = serializers.IntegerField()
+    changed = serializers.IntegerField()
+    unchanged = serializers.IntegerField()
+    price_gross_delta = serializers.CharField(allow_null=True)
+
+
+class RevisionComparePositionSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    position_index = serializers.IntegerField()
+    location_tag = serializers.CharField()
+    typology = serializers.CharField()
+    system_id = serializers.CharField()
+    quantity = serializers.IntegerField()
+    width_mm = serializers.CharField()
+    height_mm = serializers.CharField()
+    color_interior = serializers.CharField()
+    color_exterior = serializers.CharField()
+    price_net = serializers.CharField()
+    discount_pct = serializers.CharField()
+    parametric_tree = serializers.JSONField(allow_null=True)
+
+
+class RevisionCompareFieldSerializer(serializers.Serializer):
+    field = serializers.CharField()
+    before = serializers.CharField()
+    after = serializers.CharField()
+
+
+class RevisionCompareEntrySerializer(serializers.Serializer):
+    position_index = serializers.IntegerField()
+    change = serializers.ChoiceField(choices=("ADDED", "REMOVED", "CHANGED"))
+    location_tag = serializers.CharField()
+    before = RevisionComparePositionSerializer(allow_null=True)
+    after = RevisionComparePositionSerializer(allow_null=True)
+    changes = RevisionCompareFieldSerializer(many=True)
+
+
+class RevisionCompareResponseSerializer(serializers.Serializer):
+    project_id = serializers.CharField()
+    project_code = serializers.CharField()
+    base = RevisionCompareSideSerializer()
+    head = RevisionCompareSideSerializer()
+    summary = RevisionCompareSummarySerializer()
+    positions = RevisionCompareEntrySerializer(many=True)

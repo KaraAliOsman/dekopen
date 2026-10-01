@@ -243,6 +243,14 @@ def resolve_or_insert_payment(
             "payment_requires_deal",
             "Registra cobros solo sobre un proyecto cotizado.",
         )
+    # The deal must be sealed before money moves — a receipt that freezes
+    # live totals can be silently re-priced under the client's feet (F18).
+    if deal["sealed_revision"] is None:
+        raise contract_error(
+            422,
+            "payment_requires_sealed_deal",
+            "Emite una revisión de cotización antes de registrar cobros.",
+        )
     if deal["currency"] == "CLP" and data["amount"] != data[
         "amount"
     ].to_integral_value():
@@ -257,6 +265,21 @@ def resolve_or_insert_payment(
             422,
             "payment_recorded_in_future",
             "La fecha del cobro no puede ser futura.",
+        )
+    # Over-collection guard: a payment must fit inside the outstanding
+    # balance — the ledger flips PAID on collected >= total and would
+    # silently absorb the excess otherwise (F19).
+    collected_rows = rows(
+        "SELECT COALESCE(SUM(amount), 0) AS collected FROM public.project_payments "
+        "WHERE org_id=%s AND project_id=%s AND voided_at IS NULL",
+        [str(org_id), str(project_id)],
+    )
+    balance = deal["total"] - Decimal(str(collected_rows[0]["collected"]))
+    if Decimal(str(data["amount"])) > balance:
+        raise contract_error(
+            422,
+            "payment_exceeds_balance",
+            "El cobro supera el saldo pendiente del proyecto.",
         )
     payment = rows(
         "INSERT INTO public.project_payments"
@@ -325,6 +348,18 @@ def record_payment(*, org_id: UUID, project_id: UUID, actor_id: UUID, data: dict
                 actor_id=actor_id,
                 deal=deal,
             )
+            # §08: a recorded payment queues the commercial-state refresh —
+            # inside this tx so the job exists iff the payment does.
+            from automations.service import emit
+
+            emit(
+                "automation.commercial_refresh",
+                org_id=org_id,
+                actor_id=actor_id,
+                idempotency_key=f"auto:comm:{project_id}:{payment['id']}",
+                project_id=str(project_id),
+                payment_id=str(payment["id"]),
+            )
     return {
         "payment": _payment_public(payment, receipt),
         "receipt": receipt,
@@ -356,4 +391,14 @@ def void_payment(*, org_id: UUID, project_id: UUID, payment_id: UUID, actor_id: 
             )
             if not found:
                 raise contract_error(404, "payment_not_found", "El pago no está disponible.")
+        from automations.service import emit
+
+        emit(
+            "automation.commercial_refresh",
+            org_id=org_id,
+            actor_id=actor_id,
+            idempotency_key=f"auto:comm:{project_id}:{payment_id}:void",
+            project_id=str(project_id),
+            payment_id=str(payment_id),
+        )
     return _summary(org_id, project_id, project)

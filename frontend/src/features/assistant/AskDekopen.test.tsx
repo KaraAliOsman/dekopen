@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { aiAgent, aiAsk } from "../../api/generated/dekopen";
+import { aiAgent, aiAsk, aiJobOutcomeCreate, aiJobRetrieve } from "../../api/generated/dekopen";
 import { AskDekopen } from "./AskDekopen";
 import {
   AssistantSurfaceProvider,
@@ -11,9 +11,20 @@ import {
 } from "./assistantContext";
 import type { DesignOp } from "../commands/types";
 
-vi.mock("../../api/generated/dekopen", () => ({ aiAsk: vi.fn(), aiAgent: vi.fn() }));
+vi.mock("../../api/generated/dekopen", () => ({
+  aiAsk: vi.fn(),
+  aiAgent: vi.fn(),
+  aiJobRetrieve: vi.fn(),
+  aiJobOutcomeCreate: vi.fn(),
+}));
 const askMock = vi.mocked(aiAsk);
 const agentMock = vi.mocked(aiAgent);
+const jobMock = vi.mocked(aiJobRetrieve);
+vi.mocked(aiJobOutcomeCreate).mockResolvedValue({
+  status: 200,
+  headers: new Headers(),
+  data: {},
+} as never);
 
 function successResponse() {
   return {
@@ -115,32 +126,68 @@ describe("AskDekopen", () => {
   });
 });
 
-function agentResponse(over: Record<string, unknown> = {}) {
+/** The agent now answers 202 + a queued job; the dock polls the job detail
+ * until the worker settles the round and renders the stored `result`. */
+function agentJob(over: Record<string, unknown> = {}) {
+  return {
+    status: 202,
+    headers: new Headers(),
+    data: { job_id: "job-1", state: "QUEUED" },
+    ...over,
+  };
+}
+
+function finishedJob(result: Record<string, unknown>) {
   return {
     status: 200,
     headers: new Headers(),
     data: {
-      audit_id: "ag-1",
-      model: "mimo-v2.6-pro",
-      credits_debited: 8,
-      reply: "El proyecto OB-1 tiene 2 vanos.",
-      steps: [{ kind: "navigate", path: "/projects/abc-1", label: "Abrir proyecto" }],
-      queries: [{ surface: "project", status: "ok" }],
+      id: "job-1",
+      surface: "project",
+      refs: {},
+      goal: "g",
+      state: "SUCCEEDED",
+      plan: [],
+      artifacts: [],
       warnings: [],
-      rejected: [],
-      ...over,
+      transcript: [],
+      created_at: "2026-09-26T00:00:00Z",
+      updated_at: "2026-09-26T00:00:01Z",
+      result: {
+        model: "mimo-v2.6-pro",
+        credits_debited: 8,
+        reply: "El proyecto OB-1 tiene 2 vanos.",
+        plan: [],
+        claims: [],
+        references: [],
+        questions: [],
+        artifacts: [],
+        steps: [{ kind: "navigate", path: "/projects/abc-1", label: "Abrir proyecto" }],
+        queries: [{ surface: "project", status: "ok" }],
+        warnings: [],
+        rejected: [],
+        ...result,
+      },
     },
   };
 }
 
+function agentResponse(over: Record<string, unknown> = {}) {
+  jobMock.mockResolvedValue(finishedJob(over) as never);
+  return agentJob();
+}
+
 describe("AskDekopen — Agente mode", () => {
-  beforeEach(() => agentMock.mockReset());
+  beforeEach(() => {
+    agentMock.mockReset();
+    jobMock.mockReset();
+  });
 
   it("runs a goal through the agent endpoint and renders steps + provenance", async () => {
     agentMock.mockResolvedValue(agentResponse() as never);
     renderDock("/projects/abc-1");
     fireEvent.click(screen.getByRole("button", { name: /Abrir el asistente/i }));
-    fireEvent.click(screen.getByRole("tab", { name: "Agente" }));
+    fireEvent.click(screen.getByRole("button", { name: "Agente" }));
     fireEvent.change(screen.getByRole("textbox", { name: /Qué necesitas lograr/i }), {
       target: { value: "Revisa el estado del proyecto" },
     });
@@ -193,7 +240,7 @@ describe("AskDekopen — Agente mode", () => {
       </MemoryRouter>,
     );
     fireEvent.click(screen.getByRole("button", { name: /Abrir el asistente/i }));
-    fireEvent.click(screen.getByRole("tab", { name: "Agente" }));
+    fireEvent.click(screen.getByRole("button", { name: "Agente" }));
     fireEvent.change(screen.getByRole("textbox", { name: /Qué necesitas lograr/i }), {
       target: { value: "Cambia el ancho a 1400" },
     });
@@ -243,7 +290,7 @@ describe("AskDekopen — Agente mode", () => {
       </MemoryRouter>,
     );
     fireEvent.click(screen.getByRole("button", { name: /Abrir el asistente/i }));
-    fireEvent.click(screen.getByRole("tab", { name: "Agente" }));
+    fireEvent.click(screen.getByRole("button", { name: "Agente" }));
     fireEvent.change(screen.getByRole("textbox", { name: /Qué necesitas lograr/i }), {
       target: { value: "Cambia el alto" },
     });

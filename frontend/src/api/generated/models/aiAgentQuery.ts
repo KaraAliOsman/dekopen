@@ -8,5 +8,6 @@
 
 export interface AiAgentQuery {
   surface: string;
+  tool?: string;
   status: string;
 }

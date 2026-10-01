@@ -111,7 +111,7 @@ a:focus-visible {
 }
 
 .auth-card__header h1 {
-  font-size: 1.125rem;
+  font-size: var(--text-title);
   margin: 0;
 }
 
@@ -201,7 +201,7 @@ a:focus-visible {
 }
 
 .onboarding-head h1 {
-  font-size: 1.375rem;
+  font-size: var(--text-display);
   margin: 0;
 }
 
@@ -219,10 +219,25 @@ a:focus-visible {
   padding: 0;
 }
 
+/* Steps read as a sequence, not loose pills — each li carries a chevron
+ * connector into the next step (review m13). */
+.onboarding-step {
+  align-items: center;
+  display: flex;
+}
+
+.onboarding-step:not(:last-child)::after {
+  color: var(--theme-text-muted);
+  content: "›";
+}
+
 .onboarding-step button {
   align-items: center;
-  border: 1px solid transparent;
-  color: var(--theme-text-secondary);
+  /* A visible border + primary text keeps upcoming steps from reading as
+   * disabled controls (hostile m2). */
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: 0.375rem;
+  color: var(--theme-text-primary);
   display: flex;
   gap: 0.375rem;
   padding: 0.25rem 0.5rem;
@@ -424,10 +439,22 @@ a:focus-visible {
   border-radius: 0 var(--radius-md) var(--radius-md) 0;
   color: var(--theme-text-secondary);
   display: flex;
+  font-size: var(--text-body);
   font-weight: 500;
-  min-height: 32px;
+  gap: var(--space-2);
+  min-height: 36px;
   padding: var(--space-1) var(--space-2) var(--space-1) calc(var(--space-2) - 2px);
   text-decoration: none;
+}
+
+.rail-item__icon {
+  color: var(--theme-text-muted);
+  flex: 0 0 auto;
+}
+
+.rail-item:hover .rail-item__icon,
+.rail-item.active .rail-item__icon {
+  color: currentColor;
 }
 
 .rail-item:hover {
@@ -454,9 +481,12 @@ a:focus-visible {
 }
 
 .rail-context__back {
+  align-items: center;
   color: var(--theme-text-muted);
+  display: flex;
   font-size: var(--text-s);
   margin: 0 var(--space-2) var(--space-1);
+  min-height: 24px;
   text-decoration: none;
 }
 
@@ -618,6 +648,19 @@ a:focus-visible {
   color: var(--theme-accent-ink);
 }
 
+/* The job chip sits beside the orb: the orb always opens the dock, this
+   reaches the most-pressing job directly. */
+.topbar-ai-job {
+  border-color: var(--theme-warning);
+  color: var(--theme-warning);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.topbar-ai-job:hover {
+  background: var(--theme-warning-soft);
+}
+
 /* ——— floating shell menus (switchers + notifications) ——— */
 .org-switcher,
 .project-switcher,
@@ -673,7 +716,7 @@ a:focus-visible {
   left: 0;
   list-style: none;
   margin: 0;
-  min-width: 13rem;
+  min-width: 17rem;
   padding: var(--space-1);
   position: absolute;
   top: calc(100% + 6px);
@@ -721,6 +764,21 @@ a:focus-visible {
   color: var(--theme-text-muted);
   font-size: var(--text-xs);
   padding: var(--space-1) var(--space-2);
+}
+
+.shell-menu__all {
+  border-top: 1px solid var(--theme-border-subtle);
+  color: var(--theme-accent-strong);
+  display: block;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  margin-top: var(--space-1);
+  padding: var(--space-2);
+}
+
+.shell-menu__all:hover {
+  background: var(--theme-surface-hover);
+  border-radius: var(--radius-md);
 }
 
 .attention-bell__badge {
@@ -788,7 +846,11 @@ a:focus-visible {
 }
 
 .crumbs__link {
+  align-items: center;
   color: var(--theme-text-secondary);
+  display: inline-flex;
+  /* WCAG 2.5.8 — 24 px click box; visual glyphs stay small. */
+  min-height: 24px;
   text-decoration: none;
 }
 
@@ -805,7 +867,34 @@ a:focus-visible {
 .workspace {
   background: var(--theme-bg-canvas);
   flex: 1;
-  padding: 1rem;
+  /* The single outer gutter for every surface — pages inside do not add
+   * their own, so all routes read at the same distance from the edge. */
+  padding: 1.5rem;
+}
+
+.workspace:focus-visible {
+  outline: none;
+}
+
+.skip-link {
+  background: var(--theme-accent);
+  border-radius: 0 0 0.375rem 0;
+  color: var(--theme-accent-ink);
+  font-size: 0.85rem;
+  font-weight: 600;
+  left: 0;
+  padding: 0.5rem 0.875rem;
+  position: fixed;
+  top: 0;
+  transform: translateY(-110%);
+  transition: transform 0.15s ease;
+  z-index: 100;
+}
+
+.skip-link:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 2px;
+  transform: translateY(0);
 }
 
 .placeholder {
@@ -817,6 +906,24 @@ a:focus-visible {
 }
 
 [role="alert"] {
+  color: var(--theme-danger);
+}
+
+/* Standalone denial/error notices (a bare <p role="alert"> returned instead
+   of page content) must read as a designed state, not a stray red line. */
+p[role="alert"]:only-child {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-left: 3px solid var(--theme-danger);
+  border-radius: var(--radius-md);
+  color: var(--theme-text-primary);
+  margin: 1.5rem 0;
+  max-width: 34rem;
+  padding: 1rem 1.25rem;
+}
+
+p[role="alert"]:only-child::before {
+  content: "⚠ ";
   color: var(--theme-danger);
 }
 
@@ -835,10 +942,76 @@ a:focus-visible {
   background: var(--theme-accent-strong);
 }
 
+/* Task dashboard, not a form column: the attention queue and active work
+   use the wide left lane; operations context rides the right lane. */
 .dashboard {
   display: grid;
   gap: 1.25rem;
-  max-width: 64rem;
+  grid-template-columns: minmax(0, 7fr) minmax(19rem, 5fr);
+  /* 96rem left a dead rail at 1920px; the workspace should use the viewport. */
+  max-width: 120rem;
+}
+
+.dashboard-head,
+.dashboard-empty {
+  grid-column: 1 / -1;
+}
+
+.dashboard-attention,
+.dashboard-continue,
+.dashboard-list {
+  grid-column: 1;
+}
+
+.dashboard-ops {
+  grid-column: 2;
+  grid-row: 2 / span 10;
+  align-self: start;
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+}
+
+.dashboard-ops .eyebrow {
+  margin: 0;
+}
+
+.dashboard-funnel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+/* Jobs reuses the dashboard grid but has no right rail — everything
+   spans the full width instead of leaving a dead column (hostile M5). */
+.dashboard.jobs-page > * {
+  grid-column: 1 / -1;
+}
+
+.dashboard-funnel-empty {
+  color: var(--theme-text-muted);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+@media (max-width: 1100px) {
+  .dashboard {
+    /* minmax(0,1fr): the single column may shrink below the widest
+       child's min-content — otherwise long rows pin the page wider
+       than the viewport. */
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dashboard-ops,
+  .dashboard-attention,
+  .dashboard-continue,
+  .dashboard-list {
+    grid-column: 1;
+    grid-row: auto;
+  }
 }
 
 .dashboard-head {
@@ -872,12 +1045,28 @@ a:focus-visible {
   border-radius: 0.5rem;
   display: grid;
   gap: 0.25rem;
+  min-width: 0;
   padding: 0.875rem 1rem;
 }
 
+.metric-card > * {
+  min-width: 0;
+}
+
+.dashboard-money {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.dashboard-money-currency > .eyebrow {
+  margin-bottom: 0.375rem;
+}
+
 .metric-card strong {
-  font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
-  font-size: 1.375rem;
+  /* Headline digits, not code — IBM Plex Mono slashes its zero, so a "0"
+   * KPI read as an empty-set placeholder (review VM3). */
+  font-size: var(--text-display);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -897,6 +1086,7 @@ a:focus-visible {
   border-radius: 0.5rem;
   color: var(--theme-text-primary);
   display: flex;
+  gap: 0.625rem;
   justify-content: space-between;
   padding: 0.625rem 0.875rem;
   text-decoration: none;
@@ -907,7 +1097,6 @@ a:focus-visible {
 }
 
 .attention-item strong {
-  font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
   font-variant-numeric: tabular-nums;
 }
 
@@ -917,6 +1106,57 @@ a:focus-visible {
 
 .attention-item.is-warn strong {
   color: var(--theme-warning);
+}
+
+.attention-item .attention-label {
+  flex: 1;
+}
+
+.attention-item .attention-cta {
+  color: var(--theme-accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.attention-item a:hover .attention-cta {
+  text-decoration: underline;
+}
+
+.dashboard-activity {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+}
+
+.dashboard-activity li {
+  align-items: baseline;
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.375rem 0;
+}
+
+.dashboard-activity li + li {
+  border-top: 1px solid var(--theme-border-subtle);
+}
+
+.dashboard-activity-event {
+  color: var(--theme-text-primary);
+  min-width: 0;
+}
+
+.dashboard-activity-code {
+  font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.dashboard-activity time {
+  color: var(--theme-text-muted);
+  font-size: 0.75rem;
+  margin-left: auto;
+  white-space: nowrap;
 }
 
 .dashboard-attention-clear {
@@ -973,7 +1213,7 @@ a:focus-visible {
   color: var(--theme-text-primary);
   display: grid;
   gap: 0.75rem;
-  grid-template-columns: 5.5rem minmax(8rem, 1.4fr) minmax(6rem, 1fr) auto;
+  grid-template-columns: minmax(8rem, 1.4fr) auto minmax(6rem, 1fr) auto;
   padding: 0.5rem 1rem;
   text-decoration: none;
 }
@@ -984,9 +1224,10 @@ a:focus-visible {
 }
 
 .dashboard-row-code {
-  color: var(--theme-accent-ink);
+  color: var(--theme-text-muted);
   font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
-  font-weight: 600;
+  font-size: 0.75rem;
+  white-space: nowrap;
 }
 
 .dashboard-row-name {
@@ -1012,7 +1253,10 @@ a:focus-visible {
   color: var(--theme-text-primary);
   display: grid;
   gap: 0.125rem 1rem;
-  grid-template-columns: 1fr auto;
+  /* minmax(0,1fr): the nowrap name/meta columns may shrink to the card,
+     not the text's min-content — without it a long client name forces
+     page-level horizontal scroll. */
+  grid-template-columns: minmax(0, 1fr) auto;
   padding: 0.875rem 1rem;
   text-decoration: none;
 }
@@ -1062,15 +1306,87 @@ a:focus-visible {
   }
 }
 
-.status-chip {
+.status-chip,
+.production-chip,
+.production-chip-danger {
   border-radius: 999px;
+  display: inline-block;
   font-size: 0.6875rem;
   font-weight: 600;
+  line-height: 1.5;
   padding: 0.125rem 0.625rem;
+}
+
+/* Chips that act (e.g. filter the list) reset button chrome and invite the
+   click they promise. */
+button.production-chip {
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+button.production-chip:hover {
+  filter: brightness(0.95);
+}
+
+/* Production chips share the pill language; tones come from the same
+   status palette so a status reads identically on every surface. */
+.production-chip.status-released {
+  background: var(--theme-info-soft);
+  color: var(--theme-accent-deep);
+}
+.production-chip.status-in_progress {
+  background: var(--theme-accent-soft);
+  color: var(--theme-accent-ink);
+}
+.production-chip.status-hold {
+  background: var(--theme-warning-soft);
+  color: var(--theme-warning);
+}
+.production-chip.status-completed {
+  background: var(--theme-success-soft);
+  color: var(--theme-success);
+}
+.production-chip.status-dispatched {
+  background: var(--theme-accent-soft);
+  color: var(--theme-accent-strong);
+}
+.production-chip.status-installed {
+  background: var(--theme-success-soft);
+  color: var(--theme-success);
+}
+.production-chip.is-warn {
+  background: var(--theme-warning-soft);
+  color: var(--theme-warning);
+}
+.production-chip.is-ready {
+  background: var(--theme-success-soft);
+  color: var(--theme-success);
+}
+.production-chip.delivery-scheduled {
+  background: var(--theme-info-soft);
+  color: var(--theme-info);
+}
+.production-chip.delivery-on_route {
+  background: var(--theme-accent-soft);
+  color: var(--theme-accent-ink);
+}
+.production-chip.delivery-delivered {
+  background: var(--theme-success-soft);
+  color: var(--theme-success);
+}
+.production-chip.delivery-failed {
+  background: var(--theme-danger-soft);
+  color: var(--theme-danger);
+}
+.production-chip-danger {
+  background: var(--theme-danger-soft);
+  color: var(--theme-danger);
 }
 
 .status-chip[data-status="draft"] {
   background: var(--theme-surface-card);
+  border: 1px solid var(--theme-border-strong);
   color: var(--theme-text-secondary);
 }
 
@@ -1116,6 +1432,30 @@ a:focus-visible {
   color: var(--theme-success);
 }
 
+/* Customer approval link states (quotation links ledger) */
+.status-chip[data-status="pending"] {
+  background: var(--theme-info-soft);
+  color: var(--theme-info);
+}
+
+.status-chip[data-status="declined"],
+.status-chip[data-status="revoked"] {
+  background: var(--theme-danger-soft);
+  color: var(--theme-danger);
+}
+
+.settings-group {
+  margin-top: 1.25rem;
+}
+
+.settings-group__title {
+  border-bottom: 1px solid var(--theme-border-subtle);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  margin: 0 0 0.75rem;
+  padding-bottom: 0.5rem;
+}
+
 .settings-grid {
   display: grid;
   gap: 0.75rem;
@@ -1129,7 +1469,8 @@ a:focus-visible {
   padding: 0.875rem 1rem;
 }
 
-.settings-card h2 {
+.settings-card h2,
+.settings-card h3 {
   font-size: 0.6875rem;
   margin: 0 0 0.625rem;
 }
@@ -1169,6 +1510,85 @@ a:focus-visible {
 .settings-mono {
   font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
   font-size: 0.75rem;
+}
+
+.settings-branding-preview {
+  align-items: center;
+  border: 1px dashed var(--theme-border-subtle);
+  border-radius: 0.375rem;
+  display: flex;
+  justify-content: center;
+  margin: 0 0 0.75rem;
+  min-height: 4rem;
+  padding: 0.5rem;
+}
+
+.settings-branding-logo {
+  max-height: 3.5rem;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+/* Shared ledger/credential forms — these classes are used by settings,
+   projects and cobranza surfaces, so they must not live in feature CSS
+   that only loads on one route. */
+.payments-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+.payments-form label {
+  display: grid;
+  gap: 4px;
+  font-size: var(--text-s, 12px);
+  color: var(--ink-muted);
+}
+.payments-form-wide {
+  grid-column: 1 / -1;
+}
+.payments-form-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+}
+.payments-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  font-size: var(--text-s, 13px);
+}
+.payments-table th,
+.payments-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border, #e0deda);
+}
+.payments-table .num {
+  text-align: right;
+  font-family: var(--font-mono, monospace);
+}
+.payments-voided td {
+  opacity: 0.55;
+}
+
+/* File pickers: keep the native input visually hidden and let the
+   translated button + filename text carry the interaction. */
+.file-input-hidden {
+  display: none;
+}
+.file-field {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.file-field__name {
+  color: var(--theme-text-secondary);
+  font-size: var(--text-s, 12px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .settings-theme {
@@ -1255,19 +1675,87 @@ a:focus-visible {
     position: fixed;
     top: 0;
     transform: translateX(-105%);
-    transition: transform 0.18s ease;
+    transition:
+      transform 0.18s ease,
+      visibility 0.18s ease;
+    visibility: hidden;
     z-index: 50;
   }
 
   .app-shell.rail-open .app-rail {
     box-shadow: 0 0 2rem rgba(15, 15, 14, 0.35);
     transform: translateX(0);
+    visibility: visible;
+  }
+}
+
+/* Studio compact rail: on the position editor the domain rail contracts to
+ * a 64px icon strip so the canvas owns the viewport. Labels are removed
+ * visually but the links keep aria-label + title, so no affordance is lost;
+ * the desktop drawer behavior below still applies under 1024px. */
+@media (min-width: 1025px) {
+  .app-shell[data-studio] .app-rail {
+    align-items: stretch;
+    padding-inline: 0;
+    width: 4rem;
+  }
+
+  .app-shell[data-studio] .app-rail__brand {
+    padding-inline: 0;
+    text-align: center;
+  }
+
+  /* Compact mark: the wordmark collapses to its square glyph. */
+  .app-shell[data-studio] .app-rail__brand .brand {
+    font-size: 0;
+    justify-content: center;
+  }
+
+  .app-shell[data-studio] .org-switcher,
+  .app-shell[data-studio] .rail-group__title,
+  .app-shell[data-studio] .app-rail__identity,
+  .app-shell[data-studio] .rail-item > span {
+    display: none;
+  }
+
+  .app-shell[data-studio] .rail-item {
+    border-left-width: 2px;
+    border-radius: var(--radius-md);
+    justify-content: center;
+    margin-inline: auto;
+    padding-inline: 0;
+    width: 2.5rem;
+  }
+
+  .app-shell[data-studio] .rail-item__icon {
+    height: 18px;
+    width: 18px;
   }
 }
 
 @media (max-width: 640px) {
   .app-topbar {
     gap: 0.5rem;
+  }
+
+  /* Phone: the header stack puts actions on their own line — no clipped
+     primary action, no page-level horizontal scroll. */
+  .ui-page-header__row {
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .ui-page-header__actions {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .attention-item a {
+    flex-wrap: wrap;
+  }
+
+  .attention-item .attention-cta {
+    margin-left: 0;
   }
 
   .topbar-search span {
@@ -1282,7 +1770,289 @@ a:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  /* Phone: headline KPIs step down a tier so big amounts fit the card —
+     amounts never break mid-figure. */
+  .metric-card strong {
+    font-size: var(--text-title);
+  }
+
+  /* Phone: project rows reflow to two compact lines — name+status, then
+     client+code — instead of four columns squeezed into 390px. */
+  .dashboard-row {
+    gap: 0.125rem 0.5rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding-block: 0.625rem;
+  }
+
+  .dashboard-row-name {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .dashboard-row .status-chip {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  .dashboard-row-client {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .dashboard-row-code {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
+  }
+
+  .dashboard-activity li {
+    flex-wrap: wrap;
+    row-gap: 0.125rem;
+  }
+
   .onboarding {
     padding: var(--space-4) var(--space-2);
   }
+}
+
+/* Jobs workspace — background work as a legible queue. */
+.jobs-filter {
+  min-width: 10rem;
+}
+
+/* The jobs page shares .dashboard's two-lane grid — the queue itself spans
+ * both lanes; a narrow job list would leave most of the page empty. */
+.jobs-list {
+  grid-column: 1 / -1;
+}
+
+.jobs-list {
+  display: grid;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.job-row {
+  align-items: center;
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  padding: 0.625rem 0.875rem;
+}
+
+.job-row-main {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  gap: 0.625rem;
+  min-width: 12rem;
+}
+
+.job-row-meta {
+  color: var(--theme-text-secondary);
+  display: flex;
+  font-size: 0.75rem;
+  gap: 0.875rem;
+}
+
+.job-row-meta time {
+  font-variant-numeric: tabular-nums;
+}
+
+.job-row-error {
+  color: var(--theme-danger);
+  flex-basis: 100%;
+  font-size: 0.8125rem;
+  margin: 0.125rem 0 0;
+}
+
+.job-row-code {
+  color: var(--theme-text-muted, #66707f);
+  font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
+  font-size: 0.6875rem;
+}
+
+/* Clients workspace — master list + detail. */
+.clients-desk {
+  align-items: start;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr);
+}
+
+.clients-list {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+}
+
+.clients-list > ul {
+  display: grid;
+  gap: 0.25rem;
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+}
+
+.clients-row {
+  align-items: start;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  color: var(--theme-text-primary);
+  cursor: pointer;
+  display: grid;
+  gap: 0.125rem;
+  padding: 0.5rem 0.625rem;
+  text-align: left;
+  width: 100%;
+}
+
+.clients-row:hover {
+  border-color: var(--theme-border-subtle);
+}
+
+.clients-row.is-active {
+  background: var(--theme-surface-raised, var(--theme-surface-panel));
+  border-color: var(--theme-accent);
+}
+
+.clients-row-name {
+  font-weight: 600;
+}
+
+.clients-row-meta {
+  color: var(--theme-text-secondary);
+  font-size: 0.75rem;
+}
+
+.clients-empty {
+  align-items: center;
+  color: var(--theme-text-secondary);
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.75rem;
+}
+
+.clients-empty__cta {
+  background: transparent;
+  border: 1px solid var(--theme-accent);
+  border-radius: var(--radius-sm);
+  color: var(--theme-accent-ink);
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 0.18rem 0.6rem;
+}
+
+.clients-detail {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: 0.5rem;
+  padding: 1rem 1.25rem;
+}
+
+.clients-detail-head {
+  align-items: start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.clients-detail-head h2 {
+  margin: 0;
+}
+
+.clients-detail-meta {
+  color: var(--theme-text-secondary);
+  margin: 0.25rem 0 0;
+}
+
+.clients-detail-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.clients-facts {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  margin: 1rem 0;
+}
+
+.clients-facts dt {
+  color: var(--theme-text-secondary);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.clients-facts dd {
+  margin: 0.125rem 0 0;
+  white-space: pre-wrap;
+}
+
+.clients-projects {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+}
+
+.clients-project-row {
+  align-items: center;
+  color: var(--theme-text-primary);
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: auto minmax(8rem, 1fr) auto auto;
+  padding: 0.5rem 0;
+  text-decoration: none;
+}
+
+.clients-project-row + li {
+  border-top: 1px solid var(--theme-border-subtle);
+}
+
+.clients-project-row time {
+  color: var(--theme-text-secondary);
+  font-size: 0.75rem;
+}
+
+@media (max-width: 900px) {
+  .clients-desk {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Global reduced-motion contract: every transition/animation in the app
+   (skeleton shimmer, dialogs, canvas drags, menu reveals) collapses for
+   users who asked the OS to remove it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Checkbox labels sit inline with their box — a bare label {display:grid}
+   stacks the control over its text, which reads as a detached checkbox. */
+label:has(> input[type="checkbox"]),
+label.settings-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+label:has(> input[type="checkbox"]) input[type="checkbox"],
+label.settings-inline input[type="checkbox"] {
+  flex: none;
 }

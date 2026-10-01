@@ -622,20 +622,42 @@ def _purge_unreferenced_envio(*, org_id: UUID, object_key: str) -> None:
         )
 
 
-def _invoice_dte(*, org_id_s: str, project_id_s: str, invoice_id_s: str) -> dict:
-    """The stamped parent DTE of an invoice, scoped to the path's project —
-    a route that names a foreign project or invoice resolves to nothing."""
-    found = rows(
-        "SELECT * FROM public.project_dtes "
-        "WHERE org_id=%s AND project_id=%s AND invoice_id=%s "
-        "AND credit_note_id IS NULL",
-        [org_id_s, project_id_s, invoice_id_s],
-    )
+def _parent_dte(
+    *,
+    org_id_s: str,
+    project_id_s: str,
+    invoice_id_s: str | None = None,
+    credit_note_id_s: str | None = None,
+    dispatch_note_id_s: str | None = None,
+) -> dict:
+    """The stamped DTE of a parent document, scoped to the path's project —
+    a route that names a foreign project or document resolves to nothing."""
+    if invoice_id_s is not None:
+        found = rows(
+            "SELECT * FROM public.project_dtes "
+            "WHERE org_id=%s AND project_id=%s AND invoice_id=%s "
+            "AND credit_note_id IS NULL",
+            [org_id_s, project_id_s, invoice_id_s],
+        )
+    elif credit_note_id_s is not None:
+        found = rows(
+            "SELECT * FROM public.project_dtes "
+            "WHERE org_id=%s AND project_id=%s AND credit_note_id=%s",
+            [org_id_s, project_id_s, credit_note_id_s],
+        )
+    elif dispatch_note_id_s is not None:
+        found = rows(
+            "SELECT * FROM public.project_dtes "
+            "WHERE org_id=%s AND project_id=%s AND dispatch_note_id=%s",
+            [org_id_s, project_id_s, dispatch_note_id_s],
+        )
+    else:  # pragma: no cover - internal contract
+        raise AssertionError("parent document required")
     if not found:
         raise contract_error(
             409,
             "sii_dte_missing",
-            "La factura aún no está timbrada — emita el DTE primero.",
+            "El documento aún no está timbrado — emita el DTE primero.",
         )
     return found[0]
 
@@ -746,25 +768,20 @@ def _seal_pending_envio(
     return row, envelope
 
 
-def send_invoice_envio(
+def _send_dte_envio(
     *,
-    org_id: UUID,
-    project_id: UUID,
-    invoice_id: UUID,
+    org_id_s: str,
+    project_id_s: str,
+    dte: dict,
     actor_id: UUID,
-    resubmit: bool = False,
+    resubmit: bool,
 ) -> dict:
-    """Submit a stamped factura's DTE to the SII. The envío row is committed
+    """Submit a stamped DTE to the SII. The envío row is committed
     PENDING *before* any network call, so an uncertain transport outcome never
     orphans a submission: a retry resumes the same row — re-sending only when
     no TRACKID was ever recorded, otherwise reconciling status. Receipt is not
     acceptance: ACCEPTED/REJECTED only land from a status verdict."""
-    org_id_s, invoice_id_s = str(org_id), str(invoice_id)
-    project_id_s = str(project_id)
     with transaction.atomic(), documentary_backend():
-        dte = _invoice_dte(
-            org_id_s=org_id_s, project_id_s=project_id_s, invoice_id_s=invoice_id_s
-        )
         one(
             "SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",
             [f"sii_envios:{org_id_s}:{dte['id']}"],
@@ -923,6 +940,92 @@ def send_invoice_envio(
     return _envio_public(row)
 
 
+def send_invoice_envio(
+    *,
+    org_id: UUID,
+    project_id: UUID,
+    invoice_id: UUID,
+    actor_id: UUID,
+    resubmit: bool = False,
+) -> dict:
+    """Submit a stamped factura's DTE to the SII."""
+    org_id_s, project_id_s = str(org_id), str(project_id)
+    with transaction.atomic(), documentary_backend():
+        dte = _parent_dte(
+            org_id_s=org_id_s,
+            project_id_s=project_id_s,
+            invoice_id_s=str(invoice_id),
+        )
+    return _send_dte_envio(
+        org_id_s=org_id_s,
+        project_id_s=project_id_s,
+        dte=dte,
+        actor_id=actor_id,
+        resubmit=resubmit,
+    )
+
+
+def send_credit_note_envio(
+    *,
+    org_id: UUID,
+    project_id: UUID,
+    credit_note_id: UUID,
+    actor_id: UUID,
+    resubmit: bool = False,
+) -> dict:
+    """Submit a stamped nota de crédito's DTE-61 to the SII — the annulment
+    only exists for the tax authority once its envelope lands."""
+    org_id_s, project_id_s = str(org_id), str(project_id)
+    with transaction.atomic(), documentary_backend():
+        dte = _parent_dte(
+            org_id_s=org_id_s,
+            project_id_s=project_id_s,
+            credit_note_id_s=str(credit_note_id),
+        )
+    return _send_dte_envio(
+        org_id_s=org_id_s,
+        project_id_s=project_id_s,
+        dte=dte,
+        actor_id=actor_id,
+        resubmit=resubmit,
+    )
+
+
+def send_dispatch_note_envio(
+    *,
+    org_id: UUID,
+    order_id: UUID,
+    actor_id: UUID,
+    resubmit: bool = False,
+) -> dict:
+    """Submit a stamped guía de despacho's DTE-52 to the SII."""
+    org_id_s, order_id_s = str(org_id), str(order_id)
+    with transaction.atomic(), documentary_backend():
+        order = one(
+            "SELECT id, project_id FROM public.orders WHERE id=%s AND org_id=%s",
+            [order_id_s, org_id_s],
+            "work_order_not_found",
+        )
+        note = one(
+            "SELECT id FROM public.dispatch_notes "
+            "WHERE work_order_id=%s AND org_id=%s AND voided_at IS NULL",
+            [order_id_s, org_id_s],
+            "dispatch_note_missing",
+        )
+        dte = _parent_dte(
+            org_id_s=org_id_s,
+            project_id_s=str(order["project_id"]),
+            dispatch_note_id_s=str(note["id"]),
+        )
+    return _send_dte_envio(
+        org_id_s=org_id_s,
+        project_id_s=str(order["project_id"]),
+        dte=dte,
+        actor_id=actor_id,
+        resubmit=resubmit,
+    )
+
+
 def envios_by_invoice(*, org_id: UUID, project_id: UUID) -> dict:
     """invoice_id → light envío badge for the cobranza invoice listing —
     only the parent factura's envío."""
@@ -944,6 +1047,46 @@ def envios_by_invoice(*, org_id: UUID, project_id: UUID) -> dict:
     }
 
 
+def envios_by_credit_note(*, org_id: UUID, project_id: UUID) -> dict:
+    """credit_note_id → light envío badge for the cobranza invoice listing."""
+    return {
+        str(row["credit_note_id"]): {
+            "id": str(row["id"]),
+            "status": row["status"],
+            "track_id": row["track_id"],
+            "attempted": bool(row["attempted"]),
+        }
+        for row in rows(
+            "SELECT e.id, e.status, e.track_id, d.credit_note_id, "
+            "(e.payload_json->'submit_attempted_at' IS NOT NULL) AS attempted "
+            "FROM public.sii_envios e "
+            "JOIN public.project_dtes d ON d.id = e.dte_id "
+            "WHERE e.org_id=%s AND e.project_id=%s AND d.credit_note_id IS NOT NULL",
+            [str(org_id), str(project_id)],
+        )
+    }
+
+
+def envios_by_dispatch_note(*, org_id: UUID) -> dict:
+    """dispatch_note_id → light envío badge for production order detail."""
+    return {
+        str(row["dispatch_note_id"]): {
+            "id": str(row["id"]),
+            "status": row["status"],
+            "track_id": row["track_id"],
+            "attempted": bool(row["attempted"]),
+        }
+        for row in rows(
+            "SELECT e.id, e.status, e.track_id, d.dispatch_note_id, "
+            "(e.payload_json->'submit_attempted_at' IS NOT NULL) AS attempted "
+            "FROM public.sii_envios e "
+            "JOIN public.project_dtes d ON d.id = e.dte_id "
+            "WHERE e.org_id=%s AND d.dispatch_note_id IS NOT NULL",
+            [str(org_id)],
+        )
+    }
+
+
 def invoice_envio_access(*, org_id: UUID, project_id: UUID, invoice_id: UUID) -> dict:
     """Read the envío of an invoice's DTE — public row plus a short-lived
     signed URL to the sealed envelope. The project filter keeps an invoice
@@ -959,6 +1102,57 @@ def invoice_envio_access(*, org_id: UUID, project_id: UUID, invoice_id: UUID) ->
         if not found:
             raise contract_error(
                 404, "sii_envio_missing", "El DTE de la factura no fue enviado."
+            )
+        row = found[0]
+    storage = SupabaseDocumentStorage()
+    out = _envio_public(row)
+    out["signed_url"] = storage.signed_url(
+        str(row["storage_object_key"]), expires_in=SIGNED_URL_TTL_SECONDS
+    )
+    return out
+
+
+def credit_note_envio_access(
+    *, org_id: UUID, project_id: UUID, credit_note_id: UUID
+) -> dict:
+    """Read the envío of a nota de crédito's DTE — same project scoping."""
+    with documentary_backend():
+        found = rows(
+            "SELECT e.* FROM public.sii_envios e "
+            "JOIN public.project_dtes d ON d.id = e.dte_id "
+            "WHERE e.org_id=%s AND e.project_id=%s AND d.credit_note_id=%s",
+            [str(org_id), str(project_id), str(credit_note_id)],
+        )
+        if not found:
+            raise contract_error(
+                404,
+                "sii_envio_missing",
+                "El DTE de la nota de crédito no fue enviado.",
+            )
+        row = found[0]
+    storage = SupabaseDocumentStorage()
+    out = _envio_public(row)
+    out["signed_url"] = storage.signed_url(
+        str(row["storage_object_key"]), expires_in=SIGNED_URL_TTL_SECONDS
+    )
+    return out
+
+
+def dispatch_note_envio_access(*, org_id: UUID, order_id: UUID) -> dict:
+    """Read the envío of a guía's DTE, resolved by work order."""
+    with documentary_backend():
+        found = rows(
+            "SELECT e.* FROM public.sii_envios e "
+            "JOIN public.project_dtes d ON d.id = e.dte_id "
+            "JOIN public.dispatch_notes n ON n.id = d.dispatch_note_id "
+            "WHERE e.org_id=%s AND n.work_order_id=%s",
+            [str(org_id), str(order_id)],
+        )
+        if not found:
+            raise contract_error(
+                404,
+                "sii_envio_missing",
+                "El DTE de la guía no fue enviado.",
             )
         row = found[0]
     storage = SupabaseDocumentStorage()

@@ -18,6 +18,10 @@ export interface SiiCafUploadRequest {
   dir_origen?: string;
   /** @maxLength 20 */
   cmna_origen?: string;
-  /** @nullable */
+  /**
+   * @minimum 100000
+   * @maximum 999999
+   * @nullable
+   */
   acteco?: number | null;
 }
