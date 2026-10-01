@@ -55,3 +55,22 @@ Frontend dev server: `npm --prefix frontend run dev`. Backend: `python backend/m
 Changes land via pull request. CI jobs (Lint & Typecheck, Test Suite, Frontend
 Build, Database Gate) are the merge safety net — fix what they flag, don't weaken
 the checks.
+
+## Persistent project knowledge
+
+DEKOPEN keeps a maintained LLM Wiki under `docs/wiki/` so project decisions,
+research and cross-session synthesis do not disappear into chat history.
+
+For tasks that depend on project history, owner intent, known risks, competitor
+research or prior conclusions:
+
+1. read `docs/wiki/index.md`;
+2. read the relevant linked pages;
+3. for current implementation claims, re-check the target ref/code/tests/running
+   product — the wiki never overrides newer repository evidence;
+4. when work produces durable knowledge, maintain the wiki according to
+   `docs/wiki/SCHEMA.md` and append `docs/wiki/log.md`.
+
+Keep four categories distinct: verified current repo fact, owner/product intent,
+historical context, and external research. Never turn a wiki inference into
+engineering numeric truth or production authority.
