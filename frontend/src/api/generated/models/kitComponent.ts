@@ -5,11 +5,24 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { KitComponentCutRule } from "./kitComponentCutRule";
+import type { KitComponentMachiningItem } from "./kitComponentMachiningItem";
+import type { KitComponentQtyRule } from "./kitComponentQtyRule";
 
 export interface KitComponent {
   sku: string;
   name: string;
-  qty: string;
+  /** @nullable */
+  qty: string | null;
   unit: string;
   category: string;
+  /** @nullable */
+  qty_rule?: KitComponentQtyRule;
+  /** @nullable */
+  cut_rule?: KitComponentCutRule;
+  /** @nullable */
+  weight_kg?: string | null;
+  /** @nullable */
+  cost_clp?: string | null;
+  machining?: KitComponentMachiningItem[];
 }

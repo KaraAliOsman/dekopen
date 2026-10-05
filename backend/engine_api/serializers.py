@@ -123,6 +123,48 @@ class PanelPieceSerializer(serializers.Serializer):
     )
 
 
+class ComponentQtyRuleSerializer(serializers.Serializer):
+    """Declared quantity rule — D04: puntos de cierre = f(span)."""
+
+    kind = serializers.ChoiceField(choices=["PER_WIDTH", "PER_HEIGHT"])
+    per_mm = serializers.DecimalField(
+        max_digits=12, decimal_places=2, coerce_to_string=True
+    )
+    min_qty = serializers.IntegerField()
+    max_qty = serializers.IntegerField(allow_null=True)
+
+
+class ComponentCutRuleSerializer(serializers.Serializer):
+    """Declared cut rule — D04: transmisión = leaf span − X."""
+
+    axis = serializers.ChoiceField(choices=["WIDTH", "HEIGHT"])
+    minus_mm = serializers.DecimalField(
+        max_digits=12, decimal_places=2, coerce_to_string=True
+    )
+
+
+class MachiningDeclarationSerializer(serializers.Serializer):
+    """Declared machining operation — status is the engine's verdict:
+    EMITTED only when the catalog carried coordinates."""
+
+    kind = serializers.ChoiceField(
+        choices=["LOCK_PREP", "HINGE_PREP", "ESPAG_HOUSING", "DRAINAGE", "OTHER"]
+    )
+    side = serializers.CharField(allow_null=True, required=False)
+    u_mm = serializers.DecimalField(
+        max_digits=12, decimal_places=2, coerce_to_string=True,
+        allow_null=True, required=False,
+    )
+    y_mm = serializers.DecimalField(
+        max_digits=12, decimal_places=2, coerce_to_string=True,
+        allow_null=True, required=False,
+    )
+    note = serializers.CharField(allow_null=True, required=False)
+    status = serializers.ChoiceField(
+        choices=["EMITTED", "DECLARED_NOT_EMITTED"], allow_null=True, required=False
+    )
+
+
 class HardwareComponentSerializer(serializers.Serializer):
     sku = serializers.CharField()
     name = serializers.CharField()
@@ -132,6 +174,39 @@ class HardwareComponentSerializer(serializers.Serializer):
         choices=HARDWARE_COMPONENT_CATEGORIES,
         required=False,
         default="OTHER",
+    )
+    qty_rule = ComponentQtyRuleSerializer(
+        allow_null=True, required=False, help_text="Declared rule behind qty"
+    )
+    cut_rule = ComponentCutRuleSerializer(allow_null=True, required=False)
+    weight_kg = serializers.DecimalField(
+        max_digits=12, decimal_places=3, coerce_to_string=True,
+        allow_null=True, required=False,
+    )
+    cost_clp = serializers.DecimalField(
+        max_digits=12, decimal_places=2, coerce_to_string=True,
+        allow_null=True, required=False,
+    )
+    machining = MachiningDeclarationSerializer(many=True, required=False)
+    length_mm = serializers.DecimalField(
+        max_digits=12, decimal_places=2, coerce_to_string=True,
+        allow_null=True, required=False,
+        help_text="Resolved cut length on the emitted BOM line",
+    )
+    option_sku = serializers.CharField(
+        allow_null=True, required=False,
+        help_text="Option that brought this component into the leaf BOM",
+    )
+
+
+class HardwareSelectionPriceSerializer(serializers.Serializer):
+    sku = serializers.CharField()
+    name = serializers.CharField()
+    source = serializers.ChoiceField(
+        choices=["HANDLE_MODEL", "HANDLE_COLOR", "OPTION"]
+    )
+    price_delta_clp = serializers.DecimalField(
+        max_digits=12, decimal_places=2, coerce_to_string=True, allow_null=True
     )
 
 
@@ -143,6 +218,35 @@ class HardwareItemSerializer(serializers.Serializer):
     bay_id = serializers.CharField()
     leaf_id = serializers.CharField(allow_null=True)
     contents = HardwareComponentSerializer(many=True)
+    class_label = serializers.CharField(allow_null=True, required=False)
+    handle_model_sku = serializers.CharField(allow_null=True, required=False)
+    handle_model_name = serializers.CharField(allow_null=True, required=False)
+    handle_color_sku = serializers.CharField(allow_null=True, required=False)
+    handle_color_name = serializers.CharField(allow_null=True, required=False)
+    option_skus = serializers.ListField(
+        child=serializers.CharField(), required=False
+    )
+    option_names = serializers.ListField(
+        child=serializers.CharField(), required=False
+    )
+    handle_height_mm = serializers.DecimalField(
+        max_digits=12, decimal_places=2, coerce_to_string=True,
+        allow_null=True, required=False,
+    )
+    cost_clp = serializers.DecimalField(
+        max_digits=12, decimal_places=2, coerce_to_string=True,
+        allow_null=True, required=False,
+    )
+    weight_kg = serializers.DecimalField(
+        max_digits=12, decimal_places=3, coerce_to_string=True,
+        allow_null=True, required=False,
+    )
+    price_delta_clp = serializers.DecimalField(
+        max_digits=12, decimal_places=2, coerce_to_string=True,
+        allow_null=True, required=False,
+    )
+    price_deltas = HardwareSelectionPriceSerializer(many=True, required=False)
+    machining = MachiningDeclarationSerializer(many=True, required=False)
 
 
 class FittingPieceSerializer(serializers.Serializer):

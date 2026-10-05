@@ -335,11 +335,40 @@ export const DOMAIN_LABELS: Record<string, L> = {
     FINISH: l("Color / acabado", "neutral"),
     GLAZING_RULE: l("Vidrio", "neutral"),
     HARDWARE_KIT: l("Kit de herrajes", "neutral"),
+    HARDWARE_FAMILY: l("Familia de herraje", "neutral"),
+    HANDLE_MODEL: l("Manilla", "neutral"),
+    HANDLE_COLOR: l("Color de manilla", "neutral"),
+    HARDWARE_OPTION: l("Opción de herraje", "neutral"),
     PRICE: l("Precio", "neutral"),
     GLASS_PRODUCT: l("Producto de vidrio", "neutral"),
     GLASS_SURCHARGE: l("Recargo de vidrio", "neutral"),
     GLASS_SAFETY_RULE: l("Seguridad de vidrio", "neutral"),
     GLASS_TYPE_LIMIT: l("Límite de vidrio", "neutral"),
+  },
+  /* ---------- D04 herrajes ---------- */
+  AxisEnum: {
+    WIDTH: l("Ancho", "neutral"),
+    HEIGHT: l("Alto", "neutral"),
+  },
+  ComponentQtyRuleKindEnum: {
+    PER_WIDTH: l("Por ancho de hoja", "neutral"),
+    PER_HEIGHT: l("Por alto de hoja", "neutral"),
+  },
+  MachiningDeclarationKindEnum: {
+    LOCK_PREP: l("Cerradero", "neutral"),
+    HINGE_PREP: l("Alojamiento de bisagras", "neutral"),
+    ESPAG_HOUSING: l("Alojamiento de cremona", "neutral"),
+    DRAINAGE: l("Drenaje", "neutral"),
+    OTHER: l("Otro", "neutral"),
+  },
+  MachiningDeclarationStatusEnum: {
+    EMITTED: l("Emitida", "ok"),
+    DECLARED_NOT_EMITTED: l("Declarada, no emitida", "warn"),
+  },
+  HardwareSelectionPriceSourceEnum: {
+    HANDLE_MODEL: l("Modelo de manilla", "neutral"),
+    HANDLE_COLOR: l("Color de manilla", "neutral"),
+    OPTION: l("Opción", "neutral"),
   },
   CategoryEnum: {
     HANDLE: l("Manilla", "neutral"),

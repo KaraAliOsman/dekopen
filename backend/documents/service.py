@@ -431,7 +431,41 @@ _PIECE_ADDITIVE_KEYS = {
     ),
     "profile_cuts": frozenset({"sagitta_mm"}),
     "reinforcements": frozenset({"sagitta_mm"}),
+    # D04: resolved class label, sellable selections and declared machining
+    # ride the emitted item — snapshots sealed before them must not flag.
+    "hardware_items": frozenset(
+        {
+            "class_label",
+            "handle_model_sku",
+            "handle_model_name",
+            "handle_color_sku",
+            "handle_color_name",
+            "option_skus",
+            "option_names",
+            "handle_height_mm",
+            "cost_clp",
+            "weight_kg",
+            "price_delta_clp",
+            "price_deltas",
+            "machining",
+        }
+    ),
 }
+
+# Contents-level additive keys (D04): the emitted component line carries the
+# resolved expansion plus its declared rules — `category` set the precedent.
+_HARDWARE_CONTENTS_ADDITIVE = frozenset(
+    {
+        "category",
+        "qty_rule",
+        "cut_rule",
+        "weight_kg",
+        "cost_clp",
+        "machining",
+        "length_mm",
+        "option_sku",
+    }
+)
 
 
 def _drop_bom_keys(
@@ -500,8 +534,17 @@ def _calculation_identity_hashes(
     shape/sagitta, glass spec/article) must project the current payload back
     to that era's preimage or positions sealed then can never freeze again."""
     payload = result_payload(result)
-    era9 = _drop_bom_keys(
+    # D04 era: emitted hardware items before the class/selection/expansion
+    # fields existed. Projects the current payload back, then era9 drops
+    # `contents.category` on top as before.
+    era_d04 = _drop_bom_keys(
         payload,
+        frozenset(),
+        {"hardware_items": _PIECE_ADDITIVE_KEYS["hardware_items"]},
+        {"hardware_items": ("contents", _HARDWARE_CONTENTS_ADDITIVE)},
+    )
+    era9 = _drop_bom_keys(
+        era_d04,
         frozenset(),
         {},
         {"hardware_items": ("contents", frozenset({"category"}))},
@@ -525,6 +568,7 @@ def _calculation_identity_hashes(
     )
     return (
         calculation_hash(request, payload),
+        calculation_hash(request, era_d04),
         calculation_hash(request, era9),
         calculation_hash(request, era94),
         calculation_hash(request, era92),
@@ -593,7 +637,9 @@ def _without_additive_bom_fields(bom: object, reference: object = None) -> objec
 
 def _without_component_category(bom: object, ref: object) -> object:
     # `category` on hardware contents is additive (§9): a snapshot sealed
-    # before it existed must not read the declared kind as drift. Contents
+    # before it existed must not read the declared kind as drift — and D04
+    # adds the resolved-expansion keys to the same rule (qty_rule, cut_rule,
+    # unit mass/cost, cut length, option provenance, machining). Contents
     # match their snapshot counterparts by (sku, name, qty, unit); the
     # hardware item itself matches by (bay, leaf, kit_sku, qty).
     if not isinstance(bom, dict):
@@ -614,7 +660,9 @@ def _without_component_category(bom: object, ref: object) -> object:
             if isinstance(item, dict)
         }
 
-    def ref_has_category(item: Mapping[str, object], component: Mapping[str, object]) -> bool:
+    def ref_has_key(
+        key: str, item: Mapping[str, object], component: Mapping[str, object]
+    ) -> bool:
         ref_item = ref_items.get(
             (item.get("bay_id"), item.get("leaf_id"), item.get("kit_sku"), item.get("qty"))
         )
@@ -630,7 +678,7 @@ def _without_component_category(bom: object, ref: object) -> object:
             isinstance(other, dict)
             and (other.get("sku"), other.get("name"), other.get("qty"), other.get("unit"))
             == identity
-            and other.get("category") is not None
+            and other.get(key) is not None
             for other in ref_item["contents"]
         )
 
@@ -643,7 +691,8 @@ def _without_component_category(bom: object, ref: object) -> object:
                     {
                         key: value
                         for key, value in component.items()
-                        if key != "category" or ref_has_category(item, component)
+                        if key not in _HARDWARE_CONTENTS_ADDITIVE
+                        or ref_has_key(key, item, component)
                     }
                     if isinstance(component, dict)
                     else component

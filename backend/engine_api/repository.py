@@ -14,6 +14,11 @@ from django.db import connection
 from dekopen_engine import (
     EffectiveProfileArticle,
     GlazingBeadRule,
+    HandleColorOption,
+    HandleModelOption,
+    HardwareFamily,
+    HardwareOption,
+    HardwareOptionKind,
     ProfileSection,
     HardwareKitRule,
     HardwareComponent,
@@ -256,6 +261,8 @@ class SystemParamsRepository:
             glass_products=self._load_glass_products(system_id, active_org_id),
             glass_safety_rules=self._load_glass_safety_rules(active_org_id),
             glass_type_limits=self._load_glass_type_limits(active_org_id),
+            hardware_families=self._load_hardware_families(system_id, active_org_id),
+            hardware_options=self._load_hardware_options(system_id, active_org_id),
         )
 
     _SCOPE_SQL = (
@@ -500,7 +507,8 @@ class SystemParamsRepository:
                 SELECT sku, name, opening_type, min_leaf_width_mm,
                        max_leaf_width_mm, min_leaf_height_mm, max_leaf_height_mm,
                        max_leaf_weight_kg, rail_type, carriages_qty,
-                       stay_arms_qty, contents::text, weight_kg, carriage_capacity_kg
+                       stay_arms_qty, contents::text, weight_kg, carriage_capacity_kg,
+                       class_label, max_aspect_ratio, min_stay_height_mm
                 FROM public.hardware_kits
                 WHERE system_id = %s AND is_active = TRUE
                   AND (org_id = %s OR (org_id IS NULL AND system_id IN (SELECT id FROM public.profile_systems WHERE org_id IS NULL AND is_global)))
@@ -525,6 +533,9 @@ class SystemParamsRepository:
                 contents=_hardware_contents(row[11]),
                 weight_kg=_decimal(row[12]) if row[12] is not None else None,
                 carriage_capacity_kg=_decimal(row[13]) if row[13] is not None else None,
+                class_label=cast(str, row[14]) if row[14] is not None else None,
+                max_aspect_ratio=_decimal(row[15]) if row[15] is not None else None,
+                min_stay_height_mm=_decimal(row[16]) if row[16] is not None else None,
             )
             for row in rows
         ]
@@ -672,6 +683,128 @@ class SystemParamsRepository:
                 review_pending=bool(row[12]),
             )
         return list(limits.values())
+
+    def _load_hardware_families(
+        self, system_id: UUID, active_org_id: UUID
+    ) -> dict[str, HardwareFamily]:
+        """D04 family catalogue: one row per (system, opening) carries the
+        declared handle-height rule; the model and colour lists live in
+        their own tables keyed by the same opening."""
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                SELECT opening_type, handle_height_rule,
+                       handle_height_min_mm, handle_height_max_mm,
+                       handle_height_default_mm
+                FROM public.hardware_families
+                WHERE {self._SCOPE_SQL}
+                ORDER BY opening_type
+                """,
+                [system_id, active_org_id],
+            )
+            family_rows = cursor.fetchall()
+            cursor.execute(
+                f"""
+                SELECT opening_type, sku, name, kind, price_delta_clp
+                FROM public.hardware_handle_models
+                WHERE {self._SCOPE_SQL}
+                ORDER BY sku
+                """,
+                [system_id, active_org_id],
+            )
+            model_rows = cursor.fetchall()
+            cursor.execute(
+                f"""
+                SELECT opening_type, sku, name, price_delta_clp
+                FROM public.hardware_handle_colors
+                WHERE {self._SCOPE_SQL}
+                ORDER BY sku
+                """,
+                [system_id, active_org_id],
+            )
+            color_rows = cursor.fetchall()
+        models: dict[str, list[HandleModelOption]] = {}
+        for row in model_rows:
+            models.setdefault(str(row[0]), []).append(
+                HandleModelOption(
+                    sku=str(row[1]),
+                    name=str(row[2]),
+                    kind=cast(str, row[3]),
+                    price_delta_clp=(
+                        _decimal(row[4]) if row[4] is not None else None
+                    ),
+                )
+            )
+        colors: dict[str, list[HandleColorOption]] = {}
+        for row in color_rows:
+            colors.setdefault(str(row[0]), []).append(
+                HandleColorOption(
+                    sku=str(row[1]),
+                    name=str(row[2]),
+                    price_delta_clp=(
+                        _decimal(row[3]) if row[3] is not None else None
+                    ),
+                )
+            )
+        families: dict[str, HardwareFamily] = {
+            str(row[0]): HardwareFamily(
+                opening_type=str(row[0]),
+                handle_models=models.get(str(row[0]), []),
+                handle_colors=colors.get(str(row[0]), []),
+                handle_height_rule=cast(str, row[1]) if row[1] is not None else None,
+                handle_height_min_mm=(
+                    _decimal(row[2]) if row[2] is not None else None
+                ),
+                handle_height_max_mm=(
+                    _decimal(row[3]) if row[3] is not None else None
+                ),
+                handle_height_default_mm=(
+                    _decimal(row[4]) if row[4] is not None else None
+                ),
+            )
+            for row in family_rows
+        }
+        # A family row is optional: model/colour rows alone still form the
+        # family (the height rule stays undeclared then).
+        for opening in set(models) | set(colors):
+            families.setdefault(
+                opening, HardwareFamily(
+                    opening_type=opening,
+                    handle_models=models.get(opening, []),
+                    handle_colors=colors.get(opening, []),
+                )
+            )
+        return families
+
+    def _load_hardware_options(
+        self, system_id: UUID, active_org_id: UUID
+    ) -> dict[str, HardwareOption]:
+        """D04 sellable options keyed by sku, scoped to the system's family."""
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                SELECT sku, name, kind, opening_type, price_delta_clp,
+                       components::text
+                FROM public.hardware_options
+                WHERE {self._SCOPE_SQL}
+                  AND is_active = TRUE
+                ORDER BY sku
+                """,
+                [system_id, active_org_id],
+            )
+            rows = cursor.fetchall()
+        options: dict[str, HardwareOption] = {}
+        for row in rows:
+            option = HardwareOption(
+                sku=str(row[0]),
+                name=str(row[1]),
+                kind=HardwareOptionKind(str(row[2])),
+                opening_type=str(row[3]),
+                price_delta_clp=_decimal(row[4]) if row[4] is not None else None,
+                components=_hardware_contents(row[5]),
+            )
+            options[option.sku] = option
+        return options
 
     def _load_panel_rules(self, system_id: UUID, active_org_id: UUID) -> dict[str, PanelRule]:
         with connection.cursor() as cursor:

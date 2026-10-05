@@ -28,7 +28,7 @@
     "system_id": "3067da09-3119-5ad0-a1d5-498cd2dfd753"
   },
   "response": {
-    "calculation_hash": "sha256:9752a06c916bb94ea6f716b66e73ce7d2319c0727bdf7727cf3da5acac8489fd",
+    "calculation_hash": "sha256:1cebcaa2ee6fb8b382d43b6aaebb04c338e7ac6517aad1fd57ab98c838ded317",
     "fittings": [
       {
         "bay_id": null,
@@ -148,12 +148,25 @@
     "hardware_items": [
       {
         "bay_id": "bay_2",
+        "class_label": null,
         "contents": [],
+        "cost_clp": null,
+        "handle_color_name": null,
+        "handle_color_sku": null,
+        "handle_height_mm": null,
+        "handle_model_name": null,
+        "handle_model_sku": null,
         "kit_sku": "KIT-TILT-TURN",
         "leaf_id": null,
+        "machining": [],
         "name": "Kit Vorne OB 100kg",
+        "option_names": [],
+        "option_skus": [],
+        "price_delta_clp": null,
+        "price_deltas": [],
         "qty": 1,
-        "unit": "kit"
+        "unit": "kit",
+        "weight_kg": "2.50"
       }
     ],
     "leaf_weights": [

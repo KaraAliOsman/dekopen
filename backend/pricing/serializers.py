@@ -162,6 +162,9 @@ class PositionBreakdownSerializer(serializers.Serializer):
     waste_pct = serializers.CharField()
     labor_rate_per_m2 = serializers.CharField()
     installation_rate_per_m2 = serializers.CharField()
+    # D04: declared sell delta from hardware selections on this position —
+    # added on the unit price, never inside materials_cost.
+    hardware_option_delta = serializers.CharField(required=False)
     composition = CompositionLineSerializer(many=True)
 
 

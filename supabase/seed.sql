@@ -1298,6 +1298,181 @@ FROM public.profile_systems s
 WHERE s.code = 'DEMO_60' AND s.is_global = TRUE
 ON CONFLICT (system_id, sku) DO NOTHING;
 
+-- ─── D04 — herrajes de verdad (synthetic demo data, no manufacturer authority)
+--
+-- Kits become classes: the label, the declared restrictions (slenderness,
+-- stay minimum height) and contents with qty/cut rules ride the catalog as
+-- data. Families carry the handle-height rule and the sellable models and
+-- colours; options carry their price delta and their component BOM.
+
+UPDATE public.hardware_kits kit
+SET class_label = src.label,
+    max_aspect_ratio = src.ratio,
+    min_stay_height_mm = src.stay_min,
+    contents = src.contents::jsonb
+FROM public.profile_systems s
+CROSS JOIN (VALUES
+    ('DEMO_70', 'KIT-TILT-TURN-70', 'estándar', NULL::numeric, NULL::numeric,
+     '[{"sku":"DEMO-TT-CIERRE-70","name":"Punto de cierre demo 70","qty_rule":{"kind":"PER_HEIGHT","per_mm":500,"min_qty":2,"max_qty":4},"unit":"unit","category":"LOCK","weight_kg":0.08,"cost_clp":3200},
+       {"sku":"DEMO-TT-CREM-70","name":"Transmisión cremona demo 70","qty":1,"unit":"unit","category":"LOCK","cut_rule":{"axis":"HEIGHT","minus_mm":60},"weight_kg":1.20,"cost_clp":8900,"machining":[{"kind":"ESPAG_HOUSING","side":"A"}]},
+       {"sku":"DEMO-BIS-70","name":"Bisagra demo 70","qty":3,"unit":"unit","category":"HINGE","weight_kg":0.35,"cost_clp":4100,"machining":[{"kind":"HINGE_PREP","side":"B"}]},
+       {"sku":"DEMO-MAN-70","name":"Manilla demo 70","qty":1,"unit":"unit","category":"HANDLE","weight_kg":0.20,"cost_clp":6500}]'::text),
+    ('DEMO_70', 'KIT-TURN-70', 'estándar', NULL::numeric, NULL::numeric,
+     '[{"sku":"DEMO-TURN-CREM-70","name":"Cremona practicable demo 70","qty":1,"unit":"unit","category":"LOCK","cut_rule":{"axis":"HEIGHT","minus_mm":60},"weight_kg":1.10,"cost_clp":7600,"machining":[{"kind":"ESPAG_HOUSING","side":"A"}]},
+       {"sku":"DEMO-BIS-70","name":"Bisagra demo 70","qty":3,"unit":"unit","category":"HINGE","weight_kg":0.35,"cost_clp":4100,"machining":[{"kind":"HINGE_PREP","side":"B"}]},
+       {"sku":"DEMO-MAN-70","name":"Manilla demo 70","qty":1,"unit":"unit","category":"HANDLE","weight_kg":0.20,"cost_clp":6500}]'::text),
+    ('DEMO_70', 'KIT-DOOR-70', 'estándar', NULL::numeric, NULL::numeric,
+     '[{"sku":"DEMO-LOCK-70","name":"Cerradura multipunto demo 70","qty":1,"unit":"unit","category":"LOCK","weight_kg":1.60,"cost_clp":24000,"machining":[{"kind":"LOCK_PREP","side":"B"}]},
+       {"sku":"DEMO-BIS-PUERTA-70","name":"Bisagra puerta reforzada demo 70","qty":3,"unit":"unit","category":"HINGE","weight_kg":0.45,"cost_clp":5900,"machining":[{"kind":"HINGE_PREP","side":"B"}]}]'::text),
+    ('DEMO_70', 'KIT-AWNING-70', 'estándar', 3.00::numeric, 500.00::numeric,
+     '[{"sku":"DEMO-STAY-70","name":"Compás a fricción demo 70","qty":2,"unit":"unit","category":"FITTING","weight_kg":0.60,"cost_clp":9800},
+       {"sku":"DEMO-MAN-70","name":"Manilla demo 70","qty":1,"unit":"unit","category":"HANDLE","weight_kg":0.20,"cost_clp":6500}]'::text),
+    ('ALU_CORREDERA_70', 'KIT-A-SLIDING-70', 'estándar', NULL::numeric, NULL::numeric,
+     '[{"sku":"ALU-CAR-70","name":"Carro doble corredera aluminio","qty":2,"unit":"set","category":"ROLLER","weight_kg":0.90,"cost_clp":7800},
+       {"sku":"ALU-CIERRE-70","name":"Cierre corredera aluminio","qty":1,"unit":"set","category":"LOCK","weight_kg":0.30,"cost_clp":4600}]'::text),
+    ('ALU_CORREDERA_70', 'KIT-A-SLIDING-70-MONO', 'estándar', NULL::numeric, NULL::numeric,
+     '[{"sku":"ALU-CAR-70M","name":"Carro monorriel aluminio","qty":1,"unit":"set","category":"ROLLER","weight_kg":0.85,"cost_clp":6900},
+       {"sku":"ALU-CIERRE-70","name":"Cierre corredera aluminio","qty":1,"unit":"set","category":"LOCK","weight_kg":0.30,"cost_clp":4600}]'::text)
+) AS src(sys_code, sku, label, ratio, stay_min, contents)
+WHERE kit.system_id = s.id
+  AND kit.sku = src.sku
+  AND s.code = src.sys_code
+  AND s.is_global = TRUE;
+
+-- Heavier classes inside the same families: OB pesada and corredera pesada.
+INSERT INTO public.hardware_kits (
+    id, system_id, org_id, sku, name, opening_type,
+    min_leaf_width_mm, max_leaf_width_mm, min_leaf_height_mm, max_leaf_height_mm,
+    max_leaf_weight_kg, rail_type, carriages_qty, stay_arms_qty,
+    contents, weight_kg, data_provenance, class_label
+)
+SELECT
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/' || s.code || '/' || k.sku),
+    s.id, NULL, k.sku, k.name, k.opening,
+    k.min_w, k.max_w, k.min_h, k.max_h, k.max_kg,
+    k.rail, k.carriages, k.stays, k.contents::jsonb, k.weight,
+    'SEED_SYNTHETIC', k.label
+FROM public.profile_systems s
+CROSS JOIN (VALUES
+    ('DEMO_70', 'KIT-TILT-TURN-70-PESADA', 'Kit Oscilobatiente Demo 70 — clase pesada',
+     'TILT_TURN', 450.00, 1600.00, 500.00, 2600.00, 160.00, 'dual', 0, 1, 4.30, 'pesada',
+     '[{"sku":"DEMO-TT-CIERRE-70","name":"Punto de cierre demo 70","qty_rule":{"kind":"PER_HEIGHT","per_mm":450,"min_qty":3,"max_qty":6},"unit":"unit","category":"LOCK","weight_kg":0.08,"cost_clp":3200},
+       {"sku":"DEMO-TT-CREM-HD-70","name":"Transmisión reforzada demo 70","qty":1,"unit":"unit","category":"LOCK","cut_rule":{"axis":"HEIGHT","minus_mm":60},"weight_kg":1.60,"cost_clp":13400,"machining":[{"kind":"ESPAG_HOUSING","side":"A"}]},
+       {"sku":"DEMO-BIS-HD-70","name":"Bisagra reforzada demo 70","qty":4,"unit":"unit","category":"HINGE","weight_kg":0.52,"cost_clp":6800,"machining":[{"kind":"HINGE_PREP","side":"B"}]},
+       {"sku":"DEMO-MAN-70","name":"Manilla demo 70","qty":1,"unit":"unit","category":"HANDLE","weight_kg":0.20,"cost_clp":6500}]'::text),
+    ('ALU_CORREDERA_70', 'KIT-A-SLIDING-70-PESADA', 'Kit Corredera Aluminio 70 — clase pesada',
+     'SLIDING', 450.00, 2000.00, 600.00, 2600.00, 150.00, 'dual', 4, 0, 3.80, 'pesada',
+     '[{"sku":"ALU-CAR-70HD","name":"Carro doble reforzado aluminio","qty":4,"unit":"set","category":"ROLLER","weight_kg":0.95,"cost_clp":9400},
+       {"sku":"ALU-CIERRE-70","name":"Cierre corredera aluminio","qty":1,"unit":"set","category":"LOCK","weight_kg":0.30,"cost_clp":4600},
+       {"sku":"ALU-TOP-70","name":"Guía superior reforzada aluminio","qty":1,"unit":"unit","category":"FITTING","cut_rule":{"axis":"WIDTH","minus_mm":40},"weight_kg":0.40,"cost_clp":3200}]'::text)
+) AS k(sys_code, sku, name, opening, min_w, max_w, min_h, max_h, max_kg, rail, carriages, stays, weight, label, contents)
+WHERE s.code = k.sys_code AND s.is_global = TRUE
+ON CONFLICT (system_id, sku) DO UPDATE SET
+    name = EXCLUDED.name, contents = EXCLUDED.contents,
+    class_label = EXCLUDED.class_label,
+    max_leaf_weight_kg = EXCLUDED.max_leaf_weight_kg;
+
+-- Families: declared handle-height rule + sellable models and colours.
+INSERT INTO public.hardware_families (
+    id, system_id, org_id, opening_type,
+    handle_height_rule, handle_height_min_mm, handle_height_max_mm,
+    handle_height_default_mm, data_provenance
+)
+SELECT
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/' || s.code || '/family/' || f.opening),
+    s.id, NULL, f.opening, f.rule, f.min_h, f.max_h, f.def_h, 'SEED_SYNTHETIC'
+FROM public.profile_systems s
+CROSS JOIN (VALUES
+    ('DEMO_70', 'TILT_TURN', 'RANGE', 900.00, 1300.00, 1000.00),
+    ('DEMO_70', 'TURN',      'RANGE', 900.00, 1300.00, 1000.00),
+    ('DEMO_70', 'DOOR',      'FIXED_FROM_BASE', NULL::numeric, NULL::numeric, 1050.00),
+    ('DEMO_70', 'AWNING',    'CENTERED', NULL::numeric, NULL::numeric, NULL::numeric)
+) AS f(sys_code, opening, rule, min_h, max_h, def_h)
+WHERE s.code = f.sys_code AND s.is_global = TRUE
+ON CONFLICT (system_id, org_id, opening_type) DO UPDATE SET
+    handle_height_rule = EXCLUDED.handle_height_rule,
+    handle_height_min_mm = EXCLUDED.handle_height_min_mm,
+    handle_height_max_mm = EXCLUDED.handle_height_max_mm,
+    handle_height_default_mm = EXCLUDED.handle_height_default_mm;
+
+INSERT INTO public.hardware_handle_models (
+    id, system_id, org_id, opening_type, sku, name, kind,
+    price_delta_clp, data_provenance
+)
+SELECT
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/' || s.code || '/handle/' || m.sku || '/' || m.opening),
+    s.id, NULL, m.opening, m.sku, m.name, m.kind, m.price, 'SEED_SYNTHETIC'
+FROM public.profile_systems s
+CROSS JOIN (VALUES
+    ('DEMO_70', 'TILT_TURN', 'MAN-70-EST',   'Manilla estándar Demo 70',        'STANDARD',        0.00),
+    ('DEMO_70', 'TILT_TURN', 'MAN-70-LLAVE', 'Manilla con llave Demo 70',       'LOCKABLE',        7500.00),
+    ('DEMO_70', 'TILT_TURN', 'MAN-70-BOTON', 'Manilla con botón Demo 70',       'BUTTON',          9800.00),
+    ('DEMO_70', 'TURN',      'MAN-70-EST',   'Manilla estándar Demo 70',        'STANDARD',        0.00),
+    ('DEMO_70', 'TURN',      'MAN-70-LLAVE', 'Manilla con llave Demo 70',       'LOCKABLE',        7500.00),
+    ('DEMO_70', 'DOOR',      'MAN-70-ESCUDO','Manilla de puerta con escudo Demo 70', 'DOOR_ESCUTCHEON', 18500.00),
+    ('DEMO_70', 'AWNING',    'MAN-70-PROY',  'Manilla proyectante Demo 70',     'STANDARD',        0.00)
+) AS m(sys_code, opening, sku, name, kind, price)
+WHERE s.code = m.sys_code AND s.is_global = TRUE
+ON CONFLICT (system_id, org_id, opening_type, sku) DO UPDATE SET
+    name = EXCLUDED.name, kind = EXCLUDED.kind,
+    price_delta_clp = EXCLUDED.price_delta_clp;
+
+INSERT INTO public.hardware_handle_colors (
+    id, system_id, org_id, opening_type, sku, name, price_delta_clp, data_provenance
+)
+SELECT
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/' || s.code || '/color/' || c.sku || '/' || c.opening),
+    s.id, NULL, c.opening, c.sku, c.name, c.price, 'SEED_SYNTHETIC'
+FROM public.profile_systems s
+CROSS JOIN (VALUES
+    ('DEMO_70', 'TILT_TURN', 'COL-BLANCO', 'Blanco', 0.00),
+    ('DEMO_70', 'TILT_TURN', 'COL-NEGRO',  'Negro',  1200.00),
+    ('DEMO_70', 'TURN',      'COL-BLANCO', 'Blanco', 0.00),
+    ('DEMO_70', 'TURN',      'COL-NEGRO',  'Negro',  1200.00),
+    ('DEMO_70', 'DOOR',      'COL-BLANCO', 'Blanco', 0.00),
+    ('DEMO_70', 'AWNING',    'COL-BLANCO', 'Blanco', 0.00)
+) AS c(sys_code, opening, sku, name, price)
+WHERE s.code = c.sys_code AND s.is_global = TRUE
+ON CONFLICT (system_id, org_id, opening_type, sku) DO UPDATE SET
+    name = EXCLUDED.name, price_delta_clp = EXCLUDED.price_delta_clp;
+
+-- Sellable options: price delta + the components each adds to the leaf BOM.
+INSERT INTO public.hardware_options (
+    id, system_id, org_id, opening_type, sku, name, kind,
+    price_delta_clp, components, data_provenance
+)
+SELECT
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/' || s.code || '/option/' || o.sku),
+    s.id, NULL, o.opening, o.sku, o.name, o.kind, o.price, o.components::jsonb,
+    'SEED_SYNTHETIC'
+FROM public.profile_systems s
+CROSS JOIN (VALUES
+    ('DEMO_70', 'TILT_TURN', 'OPT-70-MICROVENT', 'Microventilación', 'MICROVENTILATION', 15000.00,
+     '[{"sku":"DEMO-MICROVENT-70","name":"Conjunto microventilación demo 70","qty":1,"unit":"unit","category":"FITTING","weight_kg":0.25,"cost_clp":6200}]'::text),
+    ('DEMO_70', 'TILT_TURN', 'OPT-70-ANTIPAL',   'Puntos antipalanca', 'SECURITY', 9500.00,
+     '[{"sku":"DEMO-ANTIPAL-70","name":"Punto antipalanca demo 70","qty":2,"unit":"unit","category":"LOCK","weight_kg":0.12,"cost_clp":2900}]'::text),
+    ('DEMO_70', 'TILT_TURN', 'OPT-70-LIMITADOR', 'Limitador de apertura', 'OPENING_LIMITER', 11000.00,
+     '[{"sku":"DEMO-LIMIT-70","name":"Brazo limitador demo 70","qty":1,"unit":"unit","category":"FITTING","weight_kg":0.40,"cost_clp":5300}]'::text),
+    ('DEMO_70', 'TILT_TURN', 'OPT-70-BIS-OCULTA','Bisagras ocultas', 'CONCEALED_HINGES', 22000.00,
+     '[{"sku":"DEMO-BIS-OCULTA-70","name":"Bisagra oculta demo 70","qty":3,"unit":"unit","category":"HINGE","weight_kg":0.48,"cost_clp":7400,"machining":[{"kind":"HINGE_PREP","side":"B"}]}]'::text),
+    ('DEMO_70', 'DOOR',      'OPT-70-PUERTA-RC', 'Puntos antipalanca puerta', 'SECURITY', 13500.00,
+     '[{"sku":"DEMO-ANTIPAL-P-70","name":"Punto antipalanca puerta demo 70","qty":2,"unit":"unit","category":"LOCK","weight_kg":0.14,"cost_clp":3400}]'::text)
+) AS o(sys_code, opening, sku, name, kind, price, components)
+WHERE s.code = o.sys_code AND s.is_global = TRUE
+ON CONFLICT (system_id, org_id, opening_type, sku) DO UPDATE SET
+    name = EXCLUDED.name, kind = EXCLUDED.kind,
+    price_delta_clp = EXCLUDED.price_delta_clp,
+    components = EXCLUDED.components;
+
+-- DEMO_CORREDERA_60 classes are seeded inside its D01 migration — the labels
+-- land here so the class vocabulary is consistent across demo catalogs.
+UPDATE public.hardware_kits kit
+SET class_label = 'estándar'
+FROM public.profile_systems s
+WHERE kit.system_id = s.id
+  AND s.code = 'DEMO_CORREDERA_60'
+  AND kit.class_label IS NULL;
+
 -- Declared cut rules: PVC welds at 45°, aluminium is sawn mechanical.
 INSERT INTO public.profile_cut_rules (
     id, system_id, org_id, role, cut_angle_deg, welded_ends,

@@ -37,6 +37,7 @@ PRICING_ERROR_DETAILS = {
     'cost_list_not_found': 'no existe la lista de costos indicada',
     'fx_snapshot_immutable': 'la cotización de moneda ya está cerrada',
     'glass_bay_not_found': 'no se encontró su paño de vidrio; revisa el diseño',
+    'hardware_option_price_missing': 'una selección de herraje vendible no declara precio en el catálogo; declara su delta o quita la selección',
     'incompatible_cost_unit': 'la unidad de costo de un material no es compatible con su uso; revisa la lista de costos',
     'invalid_admin_fields': 'revisa los campos de configuración',
     'invalid_column_mapping': 'revisa el mapeo de columnas del archivo',
@@ -162,6 +163,7 @@ def position_cost(repo, position, rules):
     color = 'WHITE' if position['color_interior']=='WHITE' and position['color_exterior']=='WHITE' else 'FOILED'
     materials = []
     composition = []
+    selection_delta = D('0')
     for cut in result.profile_cuts:
         stock = profile_stocks[cut.sku]
         cost = linear_cost(repo,stock.commercial_sku,cut.length_mm*cut.qty,stock.stock_length_mm)
@@ -244,6 +246,14 @@ def position_cost(repo, position, rules):
         composition.append({'kind':'HARDWARE','sku':kit.kit_sku,
                             'quantity':str(kit.qty),'unit':'KIT',
                             'cost':str(cost.quantize(D('0.0001')))})
+        # D04 sell-side deltas: the catalog declares each selection's price
+        # (handle model/colour, option) as a per-kit addend — it lands on the
+        # unit price, never on materials cost. A selected source without a
+        # declared delta refuses to quote rather than price at zero.
+        for entry in kit.price_deltas:
+            if entry.price_delta_clp is None:
+                raise PricingError('hardware_option_price_missing')
+            selection_delta += entry.price_delta_clp * kit.qty
     # Frameless supports/fittings are counted pieces: a declared SKU must
     # resolve a unit price or the quote fails — never silently priced at zero.
     for fitting in result.fittings:
@@ -257,6 +267,7 @@ def position_cost(repo, position, rules):
                         rules['installation_rate_per_m2'])
     formation = {'composition':composition,
                  'materials_cost':str(sum(materials,D('0')).quantize(D('0.0001'))),
+                 'hardware_option_delta':str(selection_delta.quantize(D('0.0001'))),
                  'waste_pct':str(rules['waste_factor_pct']),
                  'labor_rate_per_m2':str(rules['labor_rate_per_m2']),
                  'installation_rate_per_m2':str(rules['installation_rate_per_m2']),
@@ -303,6 +314,7 @@ def preview(org_id, actor, request):
     if mode == PricingMode.TARGET_GROSS_MARGIN_PROJECT and discount:
         raise PricingError('target_margin_already_defines_final_price')
     cost_lines, priced_lines, technical = [], [], []
+    selection_extra = D('0')
     with localcontext() as context:
         context.prec = 80
         for position in positions:
@@ -310,6 +322,9 @@ def preview(org_id, actor, request):
                 cost, area, result, formation = position_cost(repo,position,calculation_rules)
                 index = position['position_index']
                 cost_lines.append((index,cost*position['quantity']))
+                # D04 deltas are sell additions; under a project target margin
+                # they ride as undiscounted additions like project extras.
+                selection_extra += D(formation['hardware_option_delta']) * position['quantity']
                 technical.append({'position_id':position['id'],
                                   'position_index':index,
                                   'unit_cost':str(cost.quantize(D('0.0001'))),
@@ -336,6 +351,9 @@ def preview(org_id, actor, request):
                 exact_price = unit_price(mode,cost=cost,margin=rules['default_margin_pct'],area=area,
                                          width=position['width_mm'],height=position['height_mm'],
                                          foil=position['color_interior']!='WHITE' or position['color_exterior']!='WHITE',**extra)
+                # D04: declared hardware selections add to the unit price as
+                # sell deltas — discounted with the line like any other sell.
+                exact_price += D(formation['hardware_option_delta'])
                 priced_lines.append(CommercialLine(index,position['quantity'],cost,exact_price,discount))
             except PricingError as error:
                 # The estimator fixing this has to know WHICH vano fails —
@@ -344,6 +362,9 @@ def preview(org_id, actor, request):
                     error.code,'la operación comercial requiere revisar sus permisos, datos o configuración')
                 raise contract_error(422,error.code,f'{_position_label(position)}: {detail}.') from error
         extra_amounts = [D(str(item['amount'])) for item in request.get('extras') or []]
+        if mode == PricingMode.TARGET_GROSS_MARGIN_PROJECT and selection_extra:
+            # Other modes already carry the delta inside each unit price.
+            extra_amounts.append(selection_extra)
         output = (target_project(cost_lines,request['target_margin'],request['currency'],rules['tax_rate_pct'],extra_amounts)
                   if mode == PricingMode.TARGET_GROSS_MARGIN_PROJECT
                   else finish_lines(priced_lines,request['currency'],rules['tax_rate_pct'],extra_amounts))

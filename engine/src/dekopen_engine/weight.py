@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 
 from dekopen_engine.models import (
-    HardwareKitRule, LeafWeight, ProfileCut, ProfileRole,
+    HardwareComponent, HardwareKitRule, LeafWeight, ProfileCut, ProfileRole,
     ReinforcementPiece, SystemParams,
 )
 
@@ -130,16 +130,73 @@ def base_leaf_weight(
                            weight_unknown_reasons=tuple(reasons))
 
 
+def _components_mass_kg(
+    components: Sequence[HardwareComponent],
+    *,
+    leaf_width_mm: Decimal | None,
+    leaf_height_mm: Decimal | None,
+) -> Decimal | None:
+    """Σ declared component mass — None when a component never declared a
+    unit mass, or a rule-bound quantity cannot resolve without leaf dims.
+    An empty list has no declared data either: None, not zero."""
+    if not components:
+        return None
+    total = Decimal("0")
+    for component in components:
+        if component.weight_kg is None:
+            return None
+        if component.qty_rule is not None:
+            if leaf_width_mm is None or leaf_height_mm is None:
+                return None
+            qty = component.resolved_qty(
+                leaf_width_mm=leaf_width_mm, leaf_height_mm=leaf_height_mm
+            )
+        else:
+            declared_qty = component.qty
+            assert declared_qty is not None
+            qty = declared_qty
+        total += component.weight_kg * qty
+    return total
+
+
 def with_hardware_weight(
     base: ExactLeafWeight, kit: HardwareKitRule, params: SystemParams,
+    *,
+    leaf_width_mm: Decimal | None = None,
+    leaf_height_mm: Decimal | None = None,
+    extra_components: Sequence[HardwareComponent] = (),
 ) -> ExactLeafWeight:
-    if kit.weight_kg is None:
-        return ExactLeafWeight(
-            base.pvc_weight_kg, base.steel_weight_kg, base.infill_weight_kg,
-            None,
-            base.weight_unknown_reasons + (f"missing_hardware_mass:{kit.sku}",),
+    """Hardware mass on the leaf (D04): the kit's declared total when the
+    catalog gives one, else the sum of its components' declared masses —
+    plus the mass of the components the selected options add. Any
+    undeclared piece keeps the axis UNKNOWN, never zero."""
+    reasons = list(base.weight_unknown_reasons)
+    kit_mass = kit.weight_kg
+    if kit_mass is None:
+        kit_mass = _components_mass_kg(
+            kit.contents,
+            leaf_width_mm=leaf_width_mm,
+            leaf_height_mm=leaf_height_mm,
         )
+        if kit_mass is None:
+            reasons.append(f"missing_hardware_mass:{kit.sku}")
+    extra_mass = (
+        _components_mass_kg(
+            extra_components,
+            leaf_width_mm=leaf_width_mm,
+            leaf_height_mm=leaf_height_mm,
+        )
+        if extra_components
+        else Decimal("0")
+    )
+    if extra_components and extra_mass is None:
+        reasons.append("missing_option_mass")
+    hardware = (
+        None
+        if kit_mass is None or (extra_components and extra_mass is None)
+        else kit_mass + (extra_mass or Decimal("0"))
+    )
     return ExactLeafWeight(
         base.pvc_weight_kg, base.steel_weight_kg, base.infill_weight_kg,
-        kit.weight_kg, base.weight_unknown_reasons,
+        hardware, tuple(reasons),
     )

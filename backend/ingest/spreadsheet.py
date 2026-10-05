@@ -38,6 +38,10 @@ ENTITY_LIMIT = "TYPOLOGY_LIMIT"
 ENTITY_FINISH = "FINISH"
 ENTITY_GLAZING = "GLAZING_RULE"
 ENTITY_HARDWARE = "HARDWARE_KIT"
+ENTITY_HARDWARE_FAMILY = "HARDWARE_FAMILY"
+ENTITY_HANDLE_MODEL = "HANDLE_MODEL"
+ENTITY_HANDLE_COLOR = "HANDLE_COLOR"
+ENTITY_HARDWARE_OPTION = "HARDWARE_OPTION"
 ENTITY_PRICE = "PRICE"
 ENTITY_GLASS_PRODUCT = "GLASS_PRODUCT"
 ENTITY_GLASS_SURCHARGE = "GLASS_SURCHARGE"
@@ -53,6 +57,10 @@ ENTITIES = (
     ENTITY_FINISH,
     ENTITY_GLAZING,
     ENTITY_HARDWARE,
+    ENTITY_HARDWARE_FAMILY,
+    ENTITY_HANDLE_MODEL,
+    ENTITY_HANDLE_COLOR,
+    ENTITY_HARDWARE_OPTION,
     ENTITY_PRICE,
     ENTITY_GLASS_PRODUCT,
     ENTITY_GLASS_SURCHARGE,
@@ -128,6 +136,17 @@ _LAMINA_KINDS = (
     "MIRROR",
     "SATIN",
     "PRINTED",
+)
+# Kit classes/options are scoped to the normalized opening family (same
+# grain as hardware_kits.opening_type / chk_kits_opening_type).
+_OPENING_FAMILIES = ("TURN", "TILT_TURN", "SLIDING", "DOOR", "AWNING")
+_HANDLE_HEIGHT_RULES = ("CENTERED", "FIXED_FROM_BASE", "RANGE")
+_HANDLE_KINDS = ("STANDARD", "LOCKABLE", "BUTTON", "DOOR_ESCUTCHEON")
+_OPTION_KINDS = (
+    "SECURITY",
+    "OPENING_LIMITER",
+    "MICROVENTILATION",
+    "CONCEALED_HINGES",
 )
 
 # Column kind → how the cell is read. `enum` values are normalized
@@ -231,6 +250,51 @@ _SHEETS: dict[str, dict[str, Any]] = {
             ("brazos", "stay_arms_qty", "int", False, None),
             ("peso_kit_kg", "weight_kg", "decimal", False, None),
             ("contenido_json", "contents", "json", False, None),
+            # D04: the class the kit plays inside its family plus the
+            # declared restrictions beyond the size envelope.
+            ("clase", "class_label", "text", False, None),
+            ("relacion_ancho_alto_max", "max_aspect_ratio", "decimal", False, None),
+            ("alto_minimo_compas_mm", "min_stay_height_mm", "decimal", False, None),
+        ],
+    },
+    "Familias de herraje": {
+        "entity": ENTITY_HARDWARE_FAMILY,
+        "columns": [
+            ("apertura", "opening_type", "enum", True, _OPENING_FAMILIES),
+            ("regla_altura_manilla", "handle_height_rule", "enum", False, _HANDLE_HEIGHT_RULES),
+            ("altura_manilla_min_mm", "handle_height_min_mm", "decimal", False, None),
+            ("altura_manilla_max_mm", "handle_height_max_mm", "decimal", False, None),
+            ("altura_manilla_defecto_mm", "handle_height_default_mm", "decimal", False, None),
+        ],
+    },
+    "Manillas": {
+        "entity": ENTITY_HANDLE_MODEL,
+        "columns": [
+            ("apertura", "opening_type", "enum", True, _OPENING_FAMILIES),
+            ("sku", "sku", "text", True, None),
+            ("nombre", "name", "text", True, None),
+            ("tipo_manilla", "kind", "enum", True, _HANDLE_KINDS),
+            ("delta_precio_clp", "price_delta_clp", "decimal", False, None),
+        ],
+    },
+    "Colores de manilla": {
+        "entity": ENTITY_HANDLE_COLOR,
+        "columns": [
+            ("apertura", "opening_type", "enum", True, _OPENING_FAMILIES),
+            ("sku", "sku", "text", True, None),
+            ("nombre", "name", "text", True, None),
+            ("delta_precio_clp", "price_delta_clp", "decimal", False, None),
+        ],
+    },
+    "Opciones de herraje": {
+        "entity": ENTITY_HARDWARE_OPTION,
+        "columns": [
+            ("apertura", "opening_type", "enum", True, _OPENING_FAMILIES),
+            ("sku", "sku", "text", True, None),
+            ("nombre", "name", "text", True, None),
+            ("tipo_opcion", "kind", "enum", True, _OPTION_KINDS),
+            ("delta_precio_clp", "price_delta_clp", "decimal", False, None),
+            ("contenido_json", "components", "json", False, None),
         ],
     },
     "Precios": {
@@ -328,6 +392,17 @@ _EXAMPLES: dict[str, list[list[str]]] = {
             "KIT-TT-60", "Kit oscilobatiente 60", "TILT_TURN_RIGHT",
             "450", "1600", "500", "2400", "130", "dual", "0", "1", "3.40",
             '[{"sku":"MAN-60","name":"Manilla","qty":1,"unit":"unit","category":"HANDLE"}]',
+            "estándar", "", "",
+        ]
+    ],
+    "Familias de herraje": [["TILT_TURN", "RANGE", "900", "1300", "1000"]],
+    "Manillas": [["TILT_TURN", "MAN-60-EST", "Manilla estándar", "STANDARD", "0"]],
+    "Colores de manilla": [["TILT_TURN", "COL-BLANCO", "Blanco", "0"]],
+    "Opciones de herraje": [
+        [
+            "TILT_TURN", "OPT-MICROVENT", "Microventilación",
+            "MICROVENTILATION", "15000",
+            '[{"sku":"MICROVENT","name":"Conjunto microventilación","qty":1,"unit":"unit","category":"FITTING"}]',
         ]
     ],
     "Precios": [["COMPRA-MARCO-60", "PROFILE", "BAR", "12500", "CLP"]],
@@ -372,11 +447,21 @@ _LEEME_LINES = [
     f"  tipo_lamina: {', '.join(_LAMINA_KINDS)}",
     f"  seguridad_requerida: {', '.join(_REQUIRED_SAFETY)}",
     f"  severidad: {', '.join(_SEVERITIES)}",
+    f"  apertura (herrajes): {', '.join(_OPENING_FAMILIES)}",
+    f"  regla_altura_manilla: {', '.join(_HANDLE_HEIGHT_RULES)}",
+    f"  tipo_manilla: {', '.join(_HANDLE_KINDS)}",
+    f"  tipo_opcion: {', '.join(_OPTION_KINDS)}",
+    "",
+    "En «Herrajes», «contenido_json» admite por componente además de",
+    "qty: qty_rule ({kind: PER_WIDTH|PER_HEIGHT, per_mm, min_qty, max_qty})",
+    "para cantidades por rango, cut_rule ({axis: WIDTH|HEIGHT, minus_mm})",
+    "para largos de corte, weight_kg, cost_clp y machining (declaraciones",
+    "de mecanizado: cerradero, alojamiento de cremona, bisagras).",
 ]
 
 
 def build_template() -> bytes:
-    """The official XLSX template — LEEME + the nine declared sheets."""
+    """The official XLSX template — LEEME + the declared sheets."""
     from openpyxl import Workbook
     from openpyxl.styles import Font
 

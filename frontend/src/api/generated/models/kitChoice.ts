@@ -19,4 +19,10 @@ export interface KitChoice {
   /** @nullable */
   weight_kg: string | null;
   contents: KitComponent[];
+  /** @nullable */
+  class_label: string | null;
+  /** @nullable */
+  max_aspect_ratio: string | null;
+  /** @nullable */
+  min_stay_height_mm: string | null;
 }

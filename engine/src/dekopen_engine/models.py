@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import ROUND_CEILING, Decimal
 from enum import Enum
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from dekopen_engine.engine_base import EngineModel as EngineModel  # noqa: F401
 from dekopen_engine.glass_composition import (
@@ -341,16 +341,254 @@ HardwareComponentCategory = Literal[
 ]
 
 
+class ComponentQtyRule(EngineModel):
+    """Quantity rule for a kit component, as catalog data (D04).
+
+    The component count follows the leaf span instead of a fixed number —
+    e.g. locking points = f(leaf height). `ceil(axis_mm / per_mm)`, clamped
+    into [min_qty, max_qty]. The resolved quantity is what BOM/picking see.
+    """
+
+    kind: Literal["PER_WIDTH", "PER_HEIGHT"]
+    per_mm: Decimal = Field(gt=Decimal("0"))
+    min_qty: int = Field(default=1, ge=1)
+    max_qty: int | None = Field(default=None, ge=1)
+
+    @field_validator("min_qty", "max_qty", mode="before")
+    @classmethod
+    def _int_bound(cls, value: object) -> object:
+        # NUMERIC catalog columns surface as Decimal; integral bounds stay ints.
+        if isinstance(value, Decimal) and value == int(value):
+            return int(value)
+        return value
+
+    @model_validator(mode="after")
+    def _bounds_coherent(self) -> "ComponentQtyRule":
+        if self.max_qty is not None and self.max_qty < self.min_qty:
+            raise ValueError("max_qty must be >= min_qty")
+        return self
+
+
+class ComponentCutRule(EngineModel):
+    """Cut rule for a cuttable component (e.g. transmisión = alto de hoja − X).
+
+    The resolved `length_mm` is the leaf span along `axis` minus the
+    declared deduction. A cut that resolves to a non-positive length is a
+    catalog error and raises — never a zero-length pick line.
+    """
+
+    axis: Literal["WIDTH", "HEIGHT"]
+    minus_mm: Decimal = Field(default=Decimal("0"), ge=Decimal("0"))
+
+
+HARDWARE_MACHINING_KINDS = (
+    "LOCK_PREP", "HINGE_PREP", "ESPAG_HOUSING", "DRAINAGE", "OTHER",
+)
+
+HardwareMachiningKind = Literal[
+    "LOCK_PREP", "HINGE_PREP", "ESPAG_HOUSING", "DRAINAGE", "OTHER",
+]
+
+
+class MachiningDeclaration(EngineModel):
+    """Machining operation the catalog declares for a component (D04, feeds
+    P14): lock pocket, espag housing, hinge mortise…
+
+    `u_mm`/`y_mm` are the declared position along the leaf edge — when the
+    catalog never declared coordinates the engine emits the operation as
+    `DECLARED_NOT_EMITTED`; coordinates are never invented downstream.
+    """
+
+    kind: HardwareMachiningKind
+    side: str | None = None
+    u_mm: Decimal | None = None
+    y_mm: Decimal | None = None
+    note: str | None = None
+    # Emission verdict — the engine writes it on the emitted line (a catalog
+    # declaration never carries one).
+    status: Literal["EMITTED", "DECLARED_NOT_EMITTED"] | None = None
+
+
 class HardwareComponent(EngineModel):
     sku: str
     name: str
-    qty: Decimal = Field(gt=Decimal("0"))
+    # Declared quantity. Optional because a rule-driven component carries no
+    # fixed count — `qty_rule` must then be declared. On emitted lines this
+    # is always the resolved quantity.
+    qty: Decimal | None = Field(default=None, gt=Decimal("0"))
     unit: str
     # Declared component kind — the catalog states what each kit line IS so
     # production can distinguish handles, hinges, locks, rollers, seals,
     # drainage and consumables instead of guessing from a name. Contents
     # sealed before the field existed decode as OTHER (mandate §9).
     category: HardwareComponentCategory = "OTHER"
+    # D04: component quantity/cut rules and physical data, all declared.
+    qty_rule: ComponentQtyRule | None = None
+    cut_rule: ComponentCutRule | None = None
+    weight_kg: Decimal | None = Field(default=None, ge=Decimal("0"))
+    cost_clp: Decimal | None = Field(default=None, ge=Decimal("0"))
+    machining: list[MachiningDeclaration] = Field(default_factory=list)
+    # Emitted-only: the resolved cut length for a cuttable component and the
+    # sellable option that brought this component into the leaf's BOM.
+    length_mm: Decimal | None = Field(default=None, gt=Decimal("0"))
+    option_sku: str | None = None
+
+    @model_validator(mode="after")
+    def _qty_or_rule_declared(self) -> "HardwareComponent":
+        if self.qty is None and self.qty_rule is None:
+            raise ValueError("component needs a declared qty or a qty_rule")
+        return self
+
+    def resolved_qty(self, *, leaf_width_mm: Decimal, leaf_height_mm: Decimal) -> Decimal:
+        """Declared quantity for this leaf — the fixed count, or the qty
+        rule applied to the leaf span (ceil division, clamped)."""
+        if self.qty_rule is None:
+            # Model guarantees qty when no rule is declared.
+            assert self.qty is not None
+            return self.qty
+        axis = (
+            leaf_width_mm
+            if self.qty_rule.kind == "PER_WIDTH"
+            else leaf_height_mm
+        )
+        qty = int((axis / self.qty_rule.per_mm).to_integral_value(rounding=ROUND_CEILING))
+        qty = max(qty, self.qty_rule.min_qty)
+        if self.qty_rule.max_qty is not None:
+            qty = min(qty, self.qty_rule.max_qty)
+        return Decimal(qty)
+
+    def resolved_length_mm(
+        self, *, leaf_width_mm: Decimal, leaf_height_mm: Decimal
+    ) -> Decimal | None:
+        """Declared cut length for a cuttable component; None when the
+        component is not cut from a leaf span. A non-positive result is a
+        catalog defect and raises."""
+        if self.cut_rule is None:
+            return None
+        axis = leaf_width_mm if self.cut_rule.axis == "WIDTH" else leaf_height_mm
+        length = axis - self.cut_rule.minus_mm
+        if length <= Decimal("0"):
+            raise ValueError(
+                f"cut rule on {self.sku} resolves a non-positive length "
+                f"({axis} - {self.cut_rule.minus_mm} mm)"
+            )
+        return length
+
+    def expanded(
+        self,
+        *,
+        leaf_width_mm: Decimal,
+        leaf_height_mm: Decimal,
+        option_sku: str | None = None,
+    ) -> "HardwareComponent":
+        """The emitted line: resolved quantity and cut length, with the
+        option provenance when an option brought the component in."""
+        return self.model_copy(
+            update={
+                "qty": self.resolved_qty(
+                    leaf_width_mm=leaf_width_mm, leaf_height_mm=leaf_height_mm
+                ),
+                "length_mm": self.resolved_length_mm(
+                    leaf_width_mm=leaf_width_mm, leaf_height_mm=leaf_height_mm
+                ),
+                "option_sku": option_sku,
+            }
+        )
+
+
+class HandleModelOption(EngineModel):
+    """A handle model the family sells (D04): estándar, con llave, con
+    botón o de puerta con escudo — with its declared price delta."""
+
+    sku: str
+    name: str
+    kind: Literal["STANDARD", "LOCKABLE", "BUTTON", "DOOR_ESCUTCHEON"]
+    price_delta_clp: Decimal | None = Field(default=None, ge=Decimal("0"))
+
+
+class HandleColorOption(EngineModel):
+    """A handle finish the family sells (D05 feeds more later)."""
+
+    sku: str
+    name: str
+    price_delta_clp: Decimal | None = Field(default=None, ge=Decimal("0"))
+
+
+class HardwareFamily(EngineModel):
+    """Hardware family for system × opening (D04).
+
+    The classes are the `hardware_kits` rows on this opening; the family
+    carries the shared selection catalogue — handle models and colours the
+    leaf may pick, validated against this list — plus the declared
+    handle-height rule and its editable range.
+    """
+
+    opening_type: str
+    handle_models: list[HandleModelOption] = Field(default_factory=list)
+    handle_colors: list[HandleColorOption] = Field(default_factory=list)
+    # Declared handle-height rule (D04): CENTERED resolves mid-leaf,
+    # FIXED_FROM_BASE uses `handle_height_default_mm` measured from the
+    # leaf base, RANGE leaves the declared default editable inside
+    # [min_mm, max_mm]. None = the catalog declared no rule — the leaf's
+    # declared height stands unvalidated by this axis.
+    handle_height_rule: Literal["CENTERED", "FIXED_FROM_BASE", "RANGE"] | None = None
+    handle_height_min_mm: Decimal | None = Field(default=None, gt=Decimal("0"))
+    handle_height_max_mm: Decimal | None = Field(default=None, gt=Decimal("0"))
+    handle_height_default_mm: Decimal | None = Field(default=None, gt=Decimal("0"))
+
+    @model_validator(mode="after")
+    def _handle_height_data_coherent(self) -> "HardwareFamily":
+        if self.handle_height_rule == "FIXED_FROM_BASE" and (
+            self.handle_height_default_mm is None
+        ):
+            raise ValueError(
+                "FIXED_FROM_BASE needs a declared handle_height_default_mm"
+            )
+        if (self.handle_height_min_mm is None) != (self.handle_height_max_mm is None):
+            raise ValueError("handle height range needs both bounds or neither")
+        if (
+            self.handle_height_min_mm is not None
+            and self.handle_height_max_mm is not None
+            and self.handle_height_min_mm > self.handle_height_max_mm
+        ):
+            raise ValueError("handle_height_min_mm must be <= handle_height_max_mm")
+        return self
+
+
+class HardwareOptionKind(str, Enum):
+    """Sellable hardware option kinds (D04)."""
+
+    SECURITY = "SECURITY"  # puntos antipalanca / clase RC when declared
+    OPENING_LIMITER = "OPENING_LIMITER"
+    MICROVENTILATION = "MICROVENTILATION"
+    CONCEALED_HINGES = "CONCEALED_HINGES"
+
+
+class HardwareOption(EngineModel):
+    """A sellable hardware option per position — only sellable when the
+    family's catalog declares it. Carries its declared price delta and the
+    BOM lines it adds to the leaf."""
+
+    sku: str
+    name: str
+    kind: HardwareOptionKind
+    # Normalized opening family (TURN/TILT_TURN/SLIDING/DOOR/AWNING) —
+    # same grain the kit classes are scoped at.
+    opening_type: str
+    price_delta_clp: Decimal | None = Field(default=None, ge=Decimal("0"))
+    components: list[HardwareComponent] = Field(default_factory=list)
+    data_provenance: str | None = None
+
+
+class HardwareSelectionPrice(EngineModel):
+    """One sellable selection's declared price delta (D04) — handle model,
+    colour, or option. `price_delta_clp=None` means the catalog left the
+    price undeclared: the selection stands, pricing must refuse to guess."""
+
+    sku: str
+    name: str
+    source: Literal["HANDLE_MODEL", "HANDLE_COLOR", "OPTION"]
+    price_delta_clp: Decimal | None = Field(default=None, ge=Decimal("0"))
 
 
 class HardwareItem(EngineModel):
@@ -360,7 +598,45 @@ class HardwareItem(EngineModel):
     unit: Literal["kit"] = "kit"
     bay_id: str
     leaf_id: str | None = None
+    # Resolved BOM: quantities and cut lengths already expanded against the
+    # leaf — picking reads this verbatim (D04).
     contents: list[HardwareComponent] = Field(default_factory=list)
+    # Resolved class + the leaf's sellable selections (D04) — display names
+    # travel with the item so sealed documents never re-query the catalog.
+    class_label: str | None = None
+    handle_model_sku: str | None = None
+    handle_model_name: str | None = None
+    handle_color_sku: str | None = None
+    handle_color_name: str | None = None
+    option_skus: list[str] = Field(default_factory=list)
+    option_names: list[str] = Field(default_factory=list)
+    # Resolved handle height (leaf-declared or family-rule default); None =
+    # undeclared — the design surface shows Sin dato, never a guessed mm.
+    handle_height_mm: Decimal | None = None
+    # Resolved sums; None = the catalog left the axis unknown (Sin dato).
+    cost_clp: Decimal | None = None
+    weight_kg: Decimal | None = None
+    # Sum of the leaf's sellable deltas; None when a selected source left
+    # its price undeclared. `price_deltas` keeps the per-source detail.
+    price_delta_clp: Decimal | None = None
+    price_deltas: list[HardwareSelectionPrice] = Field(default_factory=list)
+    # Declared machining for P14 — entries without coordinates stay
+    # DECLARED_NOT_EMITTED.
+    machining: list[MachiningDeclaration] = Field(default_factory=list)
+
+
+class HardwarePickingLine(EngineModel):
+    """One picking line — a component and its resolved cut length across a
+    work order's leaves (D04). `sources` names which kit/option skus
+    contributed, so the floor can trace a line back to its classes."""
+
+    sku: str
+    name: str
+    qty: Decimal = Field(gt=Decimal("0"))
+    unit: str
+    category: HardwareComponentCategory = "OTHER"
+    length_mm: Decimal | None = None
+    sources: list[str] = Field(default_factory=list)
 
 
 class HardwareKitRule(EngineModel):
@@ -378,6 +654,14 @@ class HardwareKitRule(EngineModel):
     contents: list[HardwareComponent] = Field(default_factory=list)
     weight_kg: Decimal | None = None
     carriage_capacity_kg: Decimal | None = None
+    # D04 class identity and extra restrictions — None = undeclared, no
+    # invented bound.
+    class_label: str | None = None
+    # Max leaf height/width ratio the class admits (slenderness).
+    max_aspect_ratio: Decimal | None = Field(default=None, gt=Decimal("0"))
+    # Min leaf height for a stay (compás) — only meaningful on kits that
+    # carry stay arms.
+    min_stay_height_mm: Decimal | None = Field(default=None, gt=Decimal("0"))
 
 
 class SectionPoint(EngineModel):
@@ -680,6 +964,11 @@ class SystemParams(EngineModel):
     glass_products: dict[str, GlassProduct] = Field(default_factory=dict)
     glass_safety_rules: list[GlassSafetyRule] = Field(default_factory=list)
     glass_type_limits: list[GlassTypeLimit] = Field(default_factory=list)
+    # D04 hardware families keyed by normalized opening (TURN/TILT_TURN/…):
+    # handle models/colours + vendible options the leaf may select. Empty
+    # maps mean the catalog declared none — a leaf selecting one is refused.
+    hardware_families: dict[str, HardwareFamily] = Field(default_factory=dict)
+    hardware_options: dict[str, HardwareOption] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _family_data_coherence(self) -> "SystemParams":
@@ -725,6 +1014,11 @@ class ParametricNode(EngineModel):
     panel_article_sku: str | None = None
     hardware_set_sku: str | None = None
     handle_height_mm: Decimal | None = None
+    # D04 sellable leaf selections — the family catalog decides what exists;
+    # the engine validates every declared sku against it.
+    handle_model_sku: str | None = None
+    handle_color_sku: str | None = None
+    hardware_option_skus: list[str] = Field(default_factory=list)
     # Declared hinge side of a DOOR_ENTRY leaf (DIN convention: LEFT =
     # hinges on the left, handle on the right). Doors carry no side in
     # their opening_type, so handedness must be declared — manufacturing

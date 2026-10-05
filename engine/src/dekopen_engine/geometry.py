@@ -28,8 +28,11 @@ from dekopen_engine.models import (
     GlassSurchargeSelection,
 )
 from dekopen_engine.hardware import (
+    HardwareSelectionError,
     NoCompatibleHardwareKit,
+    build_hardware_item,
     evaluate_hardware_candidates,
+    normalize_opening_type,
     resolve_hardware_evaluations,
 )
 from dekopen_engine.manufacturing_trace import (
@@ -62,6 +65,7 @@ from dekopen_engine.models import (
     FittingPiece,
     GlassPiece,
     GlazingBeadRule,
+    HardwareComponent,
     HardwareItem,
     LeafWeight,
     PanelPiece,
@@ -1306,6 +1310,20 @@ def _append_leaf(
         infill_unknown_reason=infill_reason,
     )
     assert node.opening_type is not None
+    # D04: the leaf's declared sellable options ride the weight axis — a
+    # microventilación or an antipalanca point adds real mass, so kit
+    # compatibility is evaluated with them in place.
+    family_key = normalize_opening_type(node.opening_type)
+    option_components: list[HardwareComponent] = []
+    for option_sku in dict.fromkeys(node.hardware_option_skus or []):
+        option = params.hardware_options.get(option_sku)
+        if option is None or option.opening_type != family_key:
+            raise HardwareSelectionError(
+                "hardware_selection_unknown",
+                f"Opción de herraje {option_sku} no declarada para la familia {family_key}",
+                {"field": "hardware_option_skus", "sku": option_sku, "opening": family_key},
+            )
+        option_components.extend(option.components)
     candidates = evaluate_hardware_candidates(
         opening=node.opening_type,
         width_mm=sash.finished_width_mm,
@@ -1313,6 +1331,7 @@ def _append_leaf(
         base_weight=base,
         params=params,
         explicit_sku=node.hardware_set_sku,
+        option_components=option_components,
     )
     try:
         kit, exact_weight = resolve_hardware_evaluations(
@@ -1369,12 +1388,19 @@ def _append_leaf(
     if kit is None or exact_weight is None:
         return
     accumulator.hardware_items.append(
-        HardwareItem(
-            kit_sku=kit.sku,
-            name=kit.name,
+        build_hardware_item(
+            kit=kit,
+            exact_weight=exact_weight,
+            opening=node.opening_type,
             bay_id=node.id,
             leaf_id=leaf_id,
-            contents=[component.model_copy() for component in kit.contents],
+            leaf_width_mm=sash.finished_width_mm,
+            leaf_height_mm=sash.finished_height_mm,
+            params=params,
+            handle_model_sku=node.handle_model_sku,
+            handle_color_sku=node.handle_color_sku,
+            handle_height_mm=node.handle_height_mm,
+            option_skus=node.hardware_option_skus,
         )
     )
     accumulator.leaf_weights.append(exact_weight.public_result(node.id, leaf_id))

@@ -17,5 +17,6 @@ export interface PositionBreakdown {
   waste_pct: string;
   labor_rate_per_m2: string;
   installation_rate_per_m2: string;
+  hardware_option_delta?: string;
   composition: CompositionLine[];
 }

@@ -344,6 +344,8 @@ beforeEach(() => {
         { sku: "GLASS-B", spec: null },
       ],
       handle_policy: null,
+      hardware_families: [],
+      hardware_options: [],
       hardware_kits: [
         {
           sku: "KIT-B",
@@ -355,6 +357,9 @@ beforeEach(() => {
           max_leaf_height_mm: "2400",
           max_leaf_weight_kg: "120",
           weight_kg: null,
+          class_label: null,
+          max_aspect_ratio: null,
+          min_stay_height_mm: null,
           contents: [],
         },
       ],
@@ -507,6 +512,8 @@ it("fills glass defaults when the catalog has a single glazing thickness", async
       profiles: [],
       glazing_thicknesses: ["4.00"],
       handle_policy: null,
+      hardware_families: [],
+      hardware_options: [],
       hardware_kits: [],
       glass_skus: ["GLASS-A"],
       glass_products: [],

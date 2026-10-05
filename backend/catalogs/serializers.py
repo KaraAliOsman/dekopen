@@ -289,13 +289,35 @@ class BeadWriteSerializer(StrictSerializer):
 
 
 class CatalogHardwareComponentSerializer(StrictSerializer):
+    """D04 declared-component document: qty is optional — a component may
+    declare a qty_rule instead; the DB validator enforces the contract."""
+
     sku = serializers.CharField()
     name = serializers.CharField()
-    qty = QuantityField()
+    qty = QuantityField(allow_null=True, required=False)
     unit = serializers.CharField()
     category = serializers.ChoiceField(
         choices=list(HARDWARE_COMPONENT_CATEGORIES), default="OTHER"
     )
+    qty_rule = serializers.DictField(allow_null=True, required=False)
+    cut_rule = serializers.DictField(allow_null=True, required=False)
+    weight_kg = decimal_field(
+        8, 3, allow_null=True, required=False, min_value=Decimal("0.001")
+    )
+    cost_clp = decimal_field(
+        12, 2, allow_null=True, required=False, min_value=Decimal("0.00")
+    )
+    machining = serializers.ListField(
+        child=serializers.DictField(), allow_null=True, required=False
+    )
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        declared = set(instance) if isinstance(instance, dict) else set()
+        for key in ("qty", "qty_rule", "cut_rule", "weight_kg", "cost_clp", "machining"):
+            if key not in declared:
+                data.pop(key, None)
+        return data
 
 
 class KitWriteSerializer(StrictSerializer):

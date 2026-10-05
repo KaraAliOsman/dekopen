@@ -63,6 +63,9 @@ _NODE_FIELDS = {
     "panel_article_sku",
     "hardware_set_sku",
     "handle_height_mm",
+    "handle_model_sku",
+    "handle_color_sku",
+    "hardware_option_skus",
     "door_handedness",
     "sliding_layout",
 }
@@ -116,11 +119,23 @@ def parse_parametric_node(payload: object) -> ParametricNode:
         "glass_article_sku",
         "panel_article_sku",
         "hardware_set_sku",
+        "handle_model_sku",
+        "handle_color_sku",
     ):
         if field_name in raw and raw[field_name] is not None:
             if not isinstance(raw[field_name], str):
                 raise InvalidEngineRequest(f"{field_name} must be a string")
             values[field_name] = raw[field_name]
+
+    if "hardware_option_skus" in raw and raw["hardware_option_skus"] is not None:
+        option_skus = raw["hardware_option_skus"]
+        if not isinstance(option_skus, list) or not all(
+            isinstance(sku, str) for sku in option_skus
+        ):
+            raise InvalidEngineRequest(
+                "hardware_option_skus must be an array of strings"
+            )
+        values["hardware_option_skus"] = list(option_skus)
 
     if "sliding_layout" in raw and raw["sliding_layout"] is not None:
         values["sliding_layout"] = _parse_sliding_layout(raw["sliding_layout"])

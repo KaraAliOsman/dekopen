@@ -267,6 +267,40 @@ def _spec_value(value: object) -> str:
     return _value(value)
 
 
+def _hardware_sellable_line(position_ref: object) -> str:
+    """Sellable hardware for the client document (D04): handle model +
+    colour and chosen options — never the class, kit BOM or internals.
+    Only emitted when the sealed BOM carries a declared selection."""
+    if not isinstance(position_ref, dict):
+        return ""
+    snapshot = position_ref.get("bom_snapshot")
+    if isinstance(snapshot, str):
+        try:
+            snapshot = json.loads(snapshot)
+        except ValueError:
+            snapshot = None
+    if not isinstance(snapshot, dict):
+        return ""
+    parts: list[str] = []
+    options: list[str] = []
+    seen_options: set[str] = set()
+    for item in snapshot.get("hardware_items") or []:
+        if not isinstance(item, dict):
+            continue
+        model = item.get("handle_model_name")
+        if model:
+            color = item.get("handle_color_name")
+            parts.append(
+                f"Manilla {model}" + (f" · {color}" if color else "")
+            )
+        for name in item.get("option_names") or []:
+            if name and name not in seen_options:
+                seen_options.add(name)
+                options.append(name)
+    parts.extend(options)
+    return "; ".join(dict.fromkeys(parts))
+
+
 def _pct(value: object) -> str:
     """Yield percentages print at one decimal — 93.5%, not 93.4667%."""
     if value is None:
@@ -1428,6 +1462,11 @@ def _doc01(snapshot: dict[str, object]) -> str:
         if finish and finish != "—":
             spec_items.append(
                 f'<li><span class="plabel">Acabado</span> {escape(finish)}</li>'
+            )
+        hardware_line = _hardware_sellable_line(ref)
+        if hardware_line:
+            spec_items.append(
+                f'<li><span class="plabel">Herrajes</span> {escape(hardware_line)}</li>'
             )
         schedule = ref.get("accessory_schedule")
         schedule_items = (

@@ -14,6 +14,9 @@ function kit(partial: Partial<KitChoice> & { sku: string }): KitChoice {
     max_leaf_height_mm: "2400",
     max_leaf_weight_kg: "120",
     weight_kg: null,
+    class_label: null,
+    max_aspect_ratio: null,
+    min_stay_height_mm: null,
     contents: [],
     ...partial,
   };

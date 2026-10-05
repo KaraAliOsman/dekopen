@@ -11,7 +11,7 @@ so the floor has a paperless trail."""
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from time import perf_counter
 import hashlib
 import json
@@ -589,6 +589,14 @@ def _work_order_payload(
                 "fittings", "hardware_items",
             )
         },
+        # D04: hardware work view — the OT's picking list (component, qty,
+        # cut length) and the declared machining operations, aggregated off
+        # the sealed expansion. Never invented: lines only exist when the
+        # catalog's expansion emitted them.
+        "hardware_picking": _hardware_picking(
+            engine, quantity=int(position.get("quantity") or 1)
+        ),
+        "hardware_machining": _hardware_machining(engine),
         "glass_polishing": list(polishing or []),
         "routing": _routing(
             engine,
@@ -598,6 +606,78 @@ def _work_order_payload(
         ),
         "process_authority": _process_authority(profile, resolved_via),
     }
+
+
+def _decimal_of(value: object) -> Decimal:
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return Decimal("0")
+
+
+def _hardware_picking(
+    engine: dict[str, object], *, quantity: int
+) -> list[dict[str, object]]:
+    """Picking lines for the work order: each emitted component (its leaf
+    count already resolved by the engine) times leaf count times position
+    quantity, grouped by (sku, cut length) so the same part never splits
+    across lines. `option_sku` keeps provenance for option-driven parts."""
+    grouped: dict[tuple[object, ...], dict[str, object]] = {}
+    for item in engine.get("hardware_items") or []:
+        if not isinstance(item, dict):
+            continue
+        item_qty = _decimal_of(item.get("qty") or 1)
+        for component in item.get("contents") or []:
+            if not isinstance(component, dict):
+                continue
+            key = (
+                component.get("sku"),
+                component.get("length_mm"),
+                component.get("option_sku"),
+            )
+            units = _decimal_of(component.get("qty") or 0) * item_qty * quantity
+            line = grouped.get(key)
+            if line is None:
+                grouped[key] = {
+                    "sku": component.get("sku"),
+                    "name": component.get("name"),
+                    "qty": units,
+                    "unit": component.get("unit"),
+                    "category": component.get("category"),
+                    "length_mm": component.get("length_mm"),
+                    "option_sku": component.get("option_sku"),
+                }
+            else:
+                line["qty"] = line["qty"] + units
+    return [
+        {**line, "qty": str(line["qty"])}
+        for line in sorted(
+            grouped.values(),
+            key=lambda line: (str(line["sku"]), str(line["length_mm"])),
+        )
+    ]
+
+
+def _hardware_machining(engine: dict[str, object]) -> list[dict[str, object]]:
+    """Declared machining operations per leaf — EMITTED only when the
+    catalog carried coordinates; otherwise DECLARED_NOT_EMITTED (P14 data,
+    never invented geometry)."""
+    operations: list[dict[str, object]] = []
+    for item in engine.get("hardware_items") or []:
+        if not isinstance(item, dict):
+            continue
+        for declaration in item.get("machining") or []:
+            if not isinstance(declaration, dict):
+                continue
+            operations.append(
+                {
+                    "bay_id": item.get("bay_id"),
+                    "leaf_id": item.get("leaf_id"),
+                    "kit_sku": item.get("kit_sku"),
+                    **declaration,
+                }
+            )
+    return operations
 
 
 _FROZEN_PROFILE_FIELDS = (

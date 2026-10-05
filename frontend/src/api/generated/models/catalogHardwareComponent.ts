@@ -5,12 +5,36 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { CatalogHardwareComponentCutRule } from "./catalogHardwareComponentCutRule";
+import type { CatalogHardwareComponentMachiningItem } from "./catalogHardwareComponentMachiningItem";
+import type { CatalogHardwareComponentQtyRule } from "./catalogHardwareComponentQtyRule";
 import type { CategoryEnum } from "./categoryEnum";
 
+/**
+ * D04 declared-component document: qty is optional — a component may
+ * declare a qty_rule instead; the DB validator enforces the contract.
+ */
 export interface CatalogHardwareComponent {
   sku: string;
   name: string;
-  qty: string;
+  /** @nullable */
+  qty?: string | null;
   unit: string;
   category?: CategoryEnum;
+  /** @nullable */
+  qty_rule?: CatalogHardwareComponentQtyRule;
+  /** @nullable */
+  cut_rule?: CatalogHardwareComponentCutRule;
+  /**
+   * @nullable
+   * @pattern ^-?\d{0,5}(?:\.\d{0,3})?$
+   */
+  weight_kg?: string | null;
+  /**
+   * @nullable
+   * @pattern ^-?\d{0,10}(?:\.\d{0,2})?$
+   */
+  cost_clp?: string | null;
+  /** @nullable */
+  machining?: CatalogHardwareComponentMachiningItem[] | null;
 }

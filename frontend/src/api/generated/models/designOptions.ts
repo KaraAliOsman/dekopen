@@ -10,6 +10,8 @@ import type { GlassProductChoice } from "./glassProductChoice";
 import type { GlassSpecChoice } from "./glassSpecChoice";
 import type { GlazingBeadChoice } from "./glazingBeadChoice";
 import type { HandlePolicy } from "./handlePolicy";
+import type { HardwareFamily } from "./hardwareFamily";
+import type { HardwareOption } from "./hardwareOption";
 import type { KitChoice } from "./kitChoice";
 import type { PanelChoice } from "./panelChoice";
 import type { ProfileChoice } from "./profileChoice";
@@ -18,6 +20,8 @@ export interface DesignOptions {
   profiles: ProfileChoice[];
   glazing_thicknesses: string[];
   hardware_kits: KitChoice[];
+  hardware_families: HardwareFamily[];
+  hardware_options: HardwareOption[];
   handle_policy: HandlePolicy | null;
   glass_skus: string[];
   glass_products: GlassProductChoice[];
