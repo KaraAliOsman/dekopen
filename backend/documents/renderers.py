@@ -217,6 +217,12 @@ svg:not(.miter) { max-width: 100%; height: auto; display: block; } svg text { fo
 .invest-panel .inv-total-row { font-size: 13pt; font-weight: 600; border-bottom: none; padding-top: 2.5mm; }
 .invest-note { flex: 1; font-size: 8.5pt; color: #465158; line-height: 1.7; }
 .invest-note p { margin: 0 0 1.5mm; }
+.service-lines { margin: 0 0 5mm; }
+.service-lines h3 { margin: 0 0 1.5mm; font-size: 10pt; }
+.service-lines ul { margin: 0; padding: 0; list-style: none; font-size: 8.5pt; color: #252D31; }
+.service-lines li { padding: 1mm 0; border-bottom: 0.5pt solid #CDD5D6; }
+.service-lines p { margin: 0; font-size: 8.5pt; color: #465158; line-height: 1.7; }
+.service-lines .service-note { margin-top: 1.2mm; font-size: 7.5pt; color: #727D82; }
 .terms { border-left: 2pt solid #CDD5D6; padding-left: 5mm; }
 .terms p { margin: 1.2mm 0; }
 .terms .tlabel { color: #727D82; font-size: 6.5pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5pt; }
@@ -1332,6 +1338,58 @@ def _pricing_extras(snapshot: dict[str, object]) -> list[dict[str, object]]:
     return [item for item in items if isinstance(item, dict)]
 
 
+def _position_extra_lines(
+    snapshot: dict[str, object],
+) -> dict[str, list[dict[str, object]]]:
+    """D06: sealed engine sublíneas per position — read from the frozen BOM
+    (cantidad × precio = total), never re-derived at render time."""
+    bom = snapshot.get("bom")
+    result: dict[str, list[dict[str, object]]] = {}
+    if not isinstance(bom, list):
+        return result
+    for entry in bom:
+        if not isinstance(entry, dict):
+            continue
+        engine_result = entry.get("engine_result")
+        lines = (
+            engine_result.get("extra_lines")
+            if isinstance(engine_result, dict)
+            else None
+        )
+        if isinstance(lines, list) and lines:
+            result[str(entry.get("position_id"))] = [
+                item for item in lines if isinstance(item, dict)
+            ]
+    return result
+
+
+def _service_lines(snapshot: dict[str, object]) -> list[dict[str, object]]:
+    """D06: project services frozen inside the sealed pricing result."""
+    pricing = snapshot.get("pricing")
+    result = pricing.get("result") if isinstance(pricing, dict) else None
+    lines = result.get("service_lines") if isinstance(result, dict) else None
+    if not isinstance(lines, list):
+        return []
+    return [item for item in lines if isinstance(item, dict)]
+
+
+def _qty_price_total(line: dict[str, object]) -> str:
+    """'1,56 m × $ 11.000 = $ 17.160' — sealed math printed verbatim;
+    'Sin dato' when the article never declared money."""
+    qty = _num(line.get("quantity"))
+    unit = _value(line.get("unit"))
+    price = line.get("unit_price")
+    total = line.get("total_price")
+    currency = line.get("unit_price_currency") or "CLP"
+    qty_text = format(qty.normalize(), "f")
+    if price is None or total is None:
+        return f"{qty_text} {unit} · Sin dato"
+    return (
+        f"{qty_text} {unit} × "
+        f"{_money(price, currency)} = {_money(total, currency)}"
+    )
+
+
 def _doc01(snapshot: dict[str, object]) -> str:
     """Commercial proposal (DOC-01): a sales document, not a table dump.
 
@@ -1346,6 +1404,11 @@ def _doc01(snapshot: dict[str, object]) -> str:
     org_raw = snapshot.get("organization")
     organization = org_raw if isinstance(org_raw, dict) else None
     org = organization if organization is not None else {}
+    # Sealed org policy (D06): DETAILED prints each sublínea and service;
+    # GROUPED folds them into the position sum. Snapshots sealed before the
+    # column existed omit it and render detailed — the behavior they had.
+    detailed_extras = _value(org.get("extras_display")) != "GROUPED"
+    extra_lines_by_position = _position_extra_lines(snapshot)
 
     # Identical openings collapse into one group; the sealed tree signature
     # keeps mirrored/handedness pairs apart so the rendered figure never
@@ -1682,6 +1745,15 @@ def _doc01(snapshot: dict[str, object]) -> str:
             spec_items.append(
                 f'<li><span class="plabel">Incluye</span> {escape(", ".join(names))}</li>'
             )
+        if detailed_extras:
+            # Sublíneas (Musterangebot style): the position total already
+            # carries them — printed descriptively, never re-added.
+            for line in extra_lines_by_position.get(str(ref.get("id")), []):
+                spec_items.append(
+                    '<li class="pex"><span class="plabel">Extra</span> '
+                    f'{escape(_value(line.get("name")))} — '
+                    f"{escape(_qty_price_total(line))}</li>"
+                )
         price_block = ""
         if bucket["priced"]:
             # discount_pct is a fraction (0.10 = 10%) — render percent.
@@ -1712,6 +1784,33 @@ def _doc01(snapshot: dict[str, object]) -> str:
             f"{price_block}</figure>"
         )
     body += "</div>"
+
+    services = _service_lines(snapshot)
+    if services:
+        # D06: project services are components of the sealed net — rendered
+        # as their own block so they paginate normally (a note squeezed into
+        # the unbreakable investment column can overflow past the page).
+        if detailed_extras:
+            items = "".join(
+                "<li>"
+                f"{escape(_value(item.get('name')))} — "
+                f"{escape(_qty_price_total(item))}"
+                "</li>"
+                for item in services
+            )
+            body += (
+                '<div class="service-lines"><h3>Servicios del proyecto</h3>'
+                f'<ul>{items}</ul>'
+                "<p class=\"service-note\">Incluidos en el neto de esta propuesta — "
+                "no se suman dos veces.</p></div>"
+            )
+        else:
+            body += (
+                '<div class="service-lines"><h3>Servicios del proyecto</h3>'
+                "<p>"
+                + escape(" · ".join(_value(item.get("name")) for item in services))
+                + " — incluidos en el neto.</p></div>"
+            )
 
     # ── Investment ─────────────────────────────────────────────────────
     granted_discounts = sorted(

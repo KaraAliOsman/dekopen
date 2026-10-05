@@ -40,6 +40,7 @@ import { PositionThumb } from "./PositionThumb";
 import { ProjectBom } from "./ProjectPositionEditor";
 import { ProjectQuotationPanel } from "./ProjectQuotationPanel";
 import { ProjectImportsPanel } from "./ProjectImportsPanel";
+import { ProjectServicesPanel } from "./ProjectServicesPanel";
 import { ProjectPaymentsPanel } from "./ProjectPaymentsPanel";
 import { Button, DeniedState, EmptyState, PageHeader, useConfirm } from "../../ui";
 
@@ -377,7 +378,7 @@ function ProjectMetadataForm({
 /* blockers, commercial state track and revision comparison.           */
 /* ------------------------------------------------------------------ */
 
-type FactsSection = "quote" | "payments" | "imports" | "compare";
+type FactsSection = "quote" | "services" | "payments" | "imports" | "compare";
 
 interface SnapshotPosition {
   position_index: number;
@@ -1223,6 +1224,9 @@ function ProjectWorkspace({
   const positionRowRefs = useRef(new Map<string, HTMLDivElement>());
   const [factsCollapsed, setFactsCollapsed] = useState(false);
   const [openSection, setOpenSection] = useState<FactsSection | null>(null);
+  // Services fetches mount on first open — a collapsed section shouldn't
+  // cost a round-trip (same contract as ProjectActivitySection).
+  const [servicesOpened, setServicesOpened] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -1737,6 +1741,27 @@ function ProjectWorkspace({
                     onChanged={() => query.refetch()}
                     onDirtyChange={setQuotationDirty}
                   />
+                </details>
+                <details
+                  className="project-facts__section"
+                  onToggle={(event) => {
+                    if (event.currentTarget.open) {
+                      setOpenSection("services");
+                      setServicesOpened(true);
+                    } else if (openSection === "services") {
+                      setOpenSection(null);
+                    }
+                  }}
+                  open={openSection === "services"}
+                >
+                  <summary>{t("projects.services")}</summary>
+                  {servicesOpened && (
+                    <ProjectServicesPanel
+                      projectId={project.id}
+                      orgId={orgId}
+                      canWrite={editable}
+                    />
+                  )}
                 </details>
                 <details
                   className="project-facts__section"

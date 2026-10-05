@@ -41,8 +41,12 @@ from catalogs.serializers import (
     BeadListSerializer,
     BeadResponseSerializer,
     CatalogFilterSerializer,
+    ExtraArticleListSerializer,
+    ExtraArticleResponseSerializer,
     KitListSerializer,
     KitResponseSerializer,
+    ServiceArticleListSerializer,
+    ServiceArticleResponseSerializer,
     SystemListSerializer,
     SystemResponseSerializer,
     ProcessProfileOptionListSerializer,
@@ -373,6 +377,24 @@ KitCollectionView, KitDetailView = _endpoint_classes(
     KitListSerializer,
 )
 KitReviewView = _review_view("Kit", service.KITS, KitResponseSerializer)
+ExtraArticleCollectionView, ExtraArticleDetailView = _endpoint_classes(
+    "ExtraArticle",
+    service.EXTRA_ARTICLES,
+    ExtraArticleResponseSerializer,
+    ExtraArticleListSerializer,
+)
+ExtraArticleReviewView = _review_view(
+    "ExtraArticle", service.EXTRA_ARTICLES, ExtraArticleResponseSerializer
+)
+ServiceArticleCollectionView, ServiceArticleDetailView = _endpoint_classes(
+    "ServiceArticle",
+    service.SERVICE_ARTICLES,
+    ServiceArticleResponseSerializer,
+    ServiceArticleListSerializer,
+)
+ServiceArticleReviewView = _review_view(
+    "ServiceArticle", service.SERVICE_ARTICLES, ServiceArticleResponseSerializer
+)
 
 
 class SystemWorkspaceView(APIView):

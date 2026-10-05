@@ -1,4 +1,4 @@
-"""Canonical SHOT-06 scope: 35 mapped, 30 consumed, 2 metadata, 3 reserved."""
+"""Canonical SHOT-06 scope: 36 mapped, 31 consumed, 2 metadata, 3 reserved."""
 
 import ast
 from collections.abc import Callable
@@ -8,7 +8,7 @@ import inspect
 import pytest
 
 from dekopen_engine import ParametricNode, SystemParams, calculate_geometry
-from dekopen_engine import geometry, hardware, openings
+from dekopen_engine import geometry, hardware, openings, product
 from engine.tests.test_shot06_core import core_node
 
 # Sliding-geometry fields are consumed through the grouped `params.sliding`
@@ -49,6 +49,9 @@ CORE_CONSUMERS: dict[str, Callable[..., object]] = {
         "hardware_families": hardware.build_hardware_item,
     "hardware_options": hardware.build_hardware_item,
     "opening_capabilities": openings.admitted_capabilities,
+    # D06: catalog-provided accessory articles the position evaluator
+    # prices/cuts against (extras.py); read inside evaluate_product.
+    "extra_articles": product.evaluate_product,
 }
 METADATA = {"system_code", "depth_mm"}
 RESERVED = {"sliding_lateral_clearance_mm", "corner_bracket_loss_mm", "hook_depth_mm"}
@@ -75,7 +78,7 @@ def _param_reads(consumer: Callable[..., object]) -> set[str]:
 
 def test_every_system_parameter_has_an_explicit_scope() -> None:
     assert (
-        len(CORE_CONSUMERS) == 30
+        len(CORE_CONSUMERS) == 31
         and len(METADATA) == 2
         and len(RESERVED) == 3
         and len(API_BOUNDARY) == 3

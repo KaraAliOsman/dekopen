@@ -36,6 +36,7 @@ from dekopen_engine import (
 from dekopen_engine.contour import Contour
 from dekopen_engine.glass_composition import composition_from_dict
 from dekopen_engine.models import GlassOptions, PlanPoint
+from dekopen_engine.models import ExtraSelection
 from dekopen_engine.product import (
     ConnectionKind,
     EdgeSide,
@@ -530,7 +531,8 @@ def calculate_from_api(
         raise InvalidEngineRequest(str(error)) from error
 
 
-_PRODUCT_FIELDS = {"version", "assembly"}
+_PRODUCT_FIELDS = {"version", "assembly", "extras"}
+_EXTRA_FIELDS = {"sku", "sides", "qty", "vuelo_left_mm", "vuelo_right_mm"}
 _ASSEMBLY_FIELDS = {"modules", "couplings"}
 _MODULE_FIELDS = {
     "id", "width_mm", "height_mm", "tree", "contour", "frameless",
@@ -543,6 +545,63 @@ _COUPLING_FIELDS = {
     "modules",
     "edges",
 }
+
+
+def _parse_extras(payload: object) -> list[ExtraSelection]:
+    """D06 extras declared on the position — shape-checked at the edge; the
+    engine decides which sku it can actually measure and sell."""
+    if payload is None:
+        return []
+    if not isinstance(payload, list):
+        raise InvalidEngineRequest("product.extras must be an array")
+    selections: list[ExtraSelection] = []
+    for index, item in enumerate(payload):
+        label = f"product.extras[{index}]"
+        raw = _require_dict(item, label)
+        unexpected = set(raw) - _EXTRA_FIELDS
+        if unexpected:
+            raise InvalidEngineRequest(
+                f"{label} contains unsupported fields: {sorted(unexpected)}"
+            )
+        sku = _require_str(raw.get("sku"), f"{label}.sku")
+        sides_raw = raw.get("sides", [])
+        if not isinstance(sides_raw, list) or any(
+            side not in EdgeSide._value2member_map_ for side in sides_raw
+        ):
+            raise InvalidEngineRequest(
+                f"{label}.sides must be an array of sides "
+                "(left/right/top/bottom)"
+            )
+        qty_raw = raw.get("qty")
+        qty = (
+            None
+            if qty_raw is None
+            else _positive_qty(qty_raw, f"{label}.qty")
+        )
+        vuelo_left = (
+            None
+            if raw.get("vuelo_left_mm") is None
+            else _decimal_string(
+                raw.get("vuelo_left_mm"), f"{label}.vuelo_left_mm"
+            )
+        )
+        vuelo_right = (
+            None
+            if raw.get("vuelo_right_mm") is None
+            else _decimal_string(
+                raw.get("vuelo_right_mm"), f"{label}.vuelo_right_mm"
+            )
+        )
+        selections.append(
+            ExtraSelection(
+                sku=sku,
+                sides=tuple(EdgeSide(side) for side in sides_raw),
+                qty=qty,
+                vuelo_left_mm=vuelo_left,
+                vuelo_right_mm=vuelo_right,
+            )
+        )
+    return selections
 
 
 def _require_dict(payload: object, field_name: str) -> dict[str, object]:
@@ -705,6 +764,7 @@ def parse_product_model(payload: object) -> ProductModel:
         return ProductModel(
             version=cast(Literal["product-v2"], "product-v2"),
             assembly=CoupledAssembly(modules=modules, couplings=couplings),
+            extras=_parse_extras(raw.get("extras")),
         )
     except ValueError as error:
         raise InvalidEngineRequest("Invalid product model") from error

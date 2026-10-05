@@ -37,6 +37,11 @@ class ProfileCutSerializer(serializers.Serializer):
     sagitta_mm = serializers.DecimalField(
         max_digits=12, decimal_places=2, coerce_to_string=True, allow_null=True
     )
+    # D06: EXTRA marks accessory cuts (vierteaguas, ensanche, tapajunta);
+    # absent on sealed pre-D06 payloads.
+    origin = serializers.ChoiceField(
+        choices=["PRODUCT", "EXTRA"], required=False, allow_null=True
+    )
 
 
 class ReinforcementSerializer(serializers.Serializer):
@@ -261,6 +266,47 @@ class FittingPieceSerializer(serializers.Serializer):
     qty = serializers.IntegerField()
     bay_id = serializers.CharField(allow_null=True)
     leaf_id = serializers.CharField(allow_null=True)
+    # D06: EXTRA marks fittings a counted accessory emitted (mosquitero,
+    # aireador); absent on sealed pre-D06 payloads.
+    origin = serializers.ChoiceField(
+        choices=["PRODUCT", "EXTRA"], required=False, allow_null=True
+    )
+
+
+class ExtraLineSerializer(serializers.Serializer):
+    """D06: one engine-derived sellable subline — cantidad × precio = total."""
+
+    sku = serializers.CharField()
+    name = serializers.CharField()
+    kind = serializers.ChoiceField(
+        choices=[
+            "SILL", "FRAME_EXTENSION", "COVER_TRIM", "MOSQUITO_SCREEN",
+            "VENTILATOR",
+        ]
+    )
+    quantity = serializers.CharField()
+    unit = serializers.CharField()
+    unit_price = serializers.CharField(allow_null=True)
+    unit_price_currency = serializers.CharField()
+    total_price = serializers.CharField(allow_null=True)
+    unit_cost = serializers.CharField(allow_null=True)
+    unit_cost_currency = serializers.CharField(allow_null=True)
+    total_cost = serializers.CharField(allow_null=True)
+    detail = serializers.CharField(allow_null=True)
+
+
+class ExtraSuggestionSerializer(serializers.Serializer):
+    """D06: a catalogued companion the position qualifies for."""
+
+    sku = serializers.CharField()
+    name = serializers.CharField()
+    kind = serializers.ChoiceField(
+        choices=[
+            "SILL", "FRAME_EXTENSION", "COVER_TRIM", "MOSQUITO_SCREEN",
+            "VENTILATOR",
+        ]
+    )
+    reason = serializers.CharField()
 
 
 class LeafWeightSerializer(serializers.Serializer):
@@ -323,6 +369,7 @@ class EngineResultPayloadSerializer(serializers.Serializer):
     finish_label = serializers.CharField(allow_null=True, required=False)
     finish_class = serializers.CharField(allow_null=True, required=False)
     color_surcharges = ColorSurchargeApplicationSerializer(many=True, required=False)
+    extra_lines = ExtraLineSerializer(many=True, required=False)
 
 
 class EngineCalculateResponseSerializer(EngineResultPayloadSerializer):
@@ -395,6 +442,7 @@ class EngineAssemblyCalculateResponseSerializer(serializers.Serializer):
     plan = PlanGeometrySerializer(allow_null=True)
     modules = ModuleEvaluationSerializer(many=True)
     bom = EngineResultPayloadSerializer(allow_null=True)
+    extra_suggestions = ExtraSuggestionSerializer(many=True, required=False)
     calculation_hash = serializers.RegexField(regex=r"^sha256:[0-9a-f]{64}$")
 
 

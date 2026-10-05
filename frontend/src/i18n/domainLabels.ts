@@ -372,6 +372,46 @@ export const DOMAIN_LABELS: Record<string, L> = {
     GLASS_SURCHARGE: l("Recargo de vidrio", "neutral"),
     GLASS_SAFETY_RULE: l("Seguridad de vidrio", "neutral"),
     GLASS_TYPE_LIMIT: l("Límite de vidrio", "neutral"),
+    // D06
+    EXTRA_ARTICLE: l("Accesorio / extra", "neutral"),
+    SERVICE_ARTICLE: l("Servicio", "neutral"),
+  },
+  /* ---------- D06 accesorios y servicios ---------- */
+  ExtraKindEnum: {
+    SILL: l("Vierteaguas", "neutral"),
+    FRAME_EXTENSION: l("Ensanche", "neutral"),
+    COVER_TRIM: l("Tapajuntas", "neutral"),
+    MOSQUITO_SCREEN: l("Mosquitero", "neutral"),
+    VENTILATOR: l("Aireador", "neutral"),
+  },
+  ServiceKindEnum: {
+    INSTALLATION: l("Instalación", "neutral"),
+    SEALING: l("Sellado", "neutral"),
+    REMOVAL: l("Retiro", "neutral"),
+    SCAFFOLDING: l("Andamio", "neutral"),
+    FREIGHT: l("Flete", "neutral"),
+  },
+  ExtrasDisplayEnum: {
+    DETAILED: l("Detallado", "neutral"),
+    GROUPED: l("Agrupado", "neutral"),
+  },
+  PieceOriginEnum: {
+    PRODUCT: l("Producto", "neutral"),
+    EXTRA: l("Extra", "neutral"),
+  },
+  PricingUnitEnum: {
+    M: l("Metro", "neutral"),
+    EA: l("Unidad", "neutral"),
+  },
+  QtyRuleEnum: {
+    PER_LINEAR_METER: l("Por metro lineal", "neutral"),
+    PER_M2: l("Por m²", "neutral"),
+    PER_POSITION_UNIT: l("Por posición", "neutral"),
+    FIXED: l("Fijo", "neutral"),
+  },
+  UnitKindsEnum: {
+    WINDOW: l("Ventana", "neutral"),
+    DOOR: l("Puerta", "neutral"),
   },
   /* ---------- D04 herrajes ---------- */
   AxisEnum: {

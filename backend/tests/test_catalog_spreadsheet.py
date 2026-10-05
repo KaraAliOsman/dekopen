@@ -41,6 +41,8 @@ def test_template_builds_the_declared_sheets_plus_readme():
         "Precios",
         "Productos vidrio",
         "Recargos vidrio",
+        "Extras",
+        "Servicios",
         "Seguridad vidrio",
         "Límites vidrio",
     ]
@@ -68,6 +70,8 @@ def test_template_is_recognized_and_parses_clean():
         "PRICE",
         "GLASS_PRODUCT",
         "GLASS_SURCHARGE",
+        "EXTRA_ARTICLE",
+        "SERVICE_ARTICLE",
         "GLASS_SAFETY_RULE",
         "GLASS_TYPE_LIMIT",
     }

@@ -62,6 +62,36 @@ urlpatterns = [
         views.KitReviewView.as_view(),
         name="catalog-kit-review",
     ),
+    path(
+        "extra-articles/",
+        views.ExtraArticleCollectionView.as_view(),
+        name="catalog-extra-article-list",
+    ),
+    path(
+        "extra-articles/<uuid:row_id>/",
+        views.ExtraArticleDetailView.as_view(),
+        name="catalog-extra-article-detail",
+    ),
+    path(
+        "extra-articles/<uuid:row_id>/review/",
+        views.ExtraArticleReviewView.as_view(),
+        name="catalog-extra-article-review",
+    ),
+    path(
+        "service-articles/",
+        views.ServiceArticleCollectionView.as_view(),
+        name="catalog-service-article-list",
+    ),
+    path(
+        "service-articles/<uuid:row_id>/",
+        views.ServiceArticleDetailView.as_view(),
+        name="catalog-service-article-detail",
+    ),
+    path(
+        "service-articles/<uuid:row_id>/review/",
+        views.ServiceArticleReviewView.as_view(),
+        name="catalog-service-article-review",
+    ),
     path("evidence/", views.EvidenceCollectionView.as_view(), name="catalog-evidence-list"),
     path(
         "evidence/<uuid:row_id>/review/",

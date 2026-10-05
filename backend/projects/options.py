@@ -215,6 +215,24 @@ class PanelChoiceSerializer(serializers.Serializer):
     thickness_mm = serializers.CharField()
 
 
+class ExtraArticleOptionSerializer(serializers.Serializer):
+    """D06: one catalog extra the position inspector can attach — the same
+    catalog row the engine re-measures; the UI never fabricates a number."""
+
+    sku = serializers.CharField()
+    name = serializers.CharField()
+    kind = serializers.CharField()
+    pricing_unit = serializers.CharField()
+    unit_price = serializers.CharField(allow_null=True)
+    unit_price_currency = serializers.CharField(allow_null=True)
+    vuelo_default_mm = serializers.CharField(allow_null=True)
+    families = serializers.ListField(child=serializers.CharField())
+    unit_kinds = serializers.ListField(child=serializers.CharField())
+    suggestion_reason = serializers.CharField(allow_null=True)
+    cut_profile_sku = serializers.CharField(allow_null=True)
+    cut_material = serializers.CharField(allow_null=True)
+
+
 class OpeningOptionSerializer(serializers.Serializer):
     """One admitted opening choice: the key the engine emits, the Spanish
     display name and the unit kind the option types the module as."""
@@ -277,6 +295,11 @@ class DesignOptionsSerializer(serializers.Serializer):
     glazing_beads = GlazingBeadChoiceSerializer(many=True)
     panel_skus = serializers.ListField(child=serializers.CharField())
     panel_choices = PanelChoiceSerializer(many=True)
+    # D06: accessory/extra articles the system admits — the inspector's
+    # "Extras de la posición" picker is built from this catalog scope.
+    extra_articles = serializers.ListField(
+        child=ExtraArticleOptionSerializer(), required=False
+    )
     rebate_depth_mm = serializers.CharField()
     sash_overlap_mm = serializers.CharField()
     depth_mm = serializers.CharField()
@@ -586,6 +609,38 @@ class DesignOptionsView(APIView):
                         for item in sorted(
                             params.available_panel_rules.values(),
                             key=lambda panel: panel.sku,
+                        )
+                    ],
+                    "extra_articles": [
+                        {
+                            "sku": item.sku,
+                            "name": item.name,
+                            "kind": item.kind.value,
+                            "pricing_unit": item.pricing_unit.value,
+                            "unit_price": (
+                                None
+                                if item.unit_price is None
+                                else str(item.unit_price)
+                            ),
+                            "unit_price_currency": item.unit_price_currency,
+                            "vuelo_default_mm": (
+                                None
+                                if item.vuelo_default_mm is None
+                                else str(item.vuelo_default_mm)
+                            ),
+                            "families": list(item.families),
+                            "unit_kinds": list(item.unit_kinds),
+                            "suggestion_reason": item.suggestion_reason,
+                            "cut_profile_sku": item.cut_profile_sku,
+                            "cut_material": (
+                                None
+                                if item.cut_material is None
+                                else item.cut_material.value
+                            ),
+                        }
+                        for item in sorted(
+                            (getattr(params, "extra_articles", None) or {}).values(),
+                            key=lambda article: article.sku,
                         )
                     ],
                     "rebate_depth_mm": str(params.rebate_depth_mm),

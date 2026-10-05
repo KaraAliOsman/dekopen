@@ -57,6 +57,18 @@ Hard invariants documented by the repo include:
 - workshop-language validation;
 - Oknosoft/WindowBuilder as a domain reference.
 
+## D06 state (pendiente de merge en `integracion/v1`)
+
+On branch `devin/D06-accesorios-extras`, pending review/merge:
+
+- `ExtraArticle` (catalogo global u org) y `ServiceArticle` (org) son datos: kinds SILL/FRAME_EXTENSION/COVER_TRIM/SKIRT (corte, `pricing_unit=METER`) y MOSQUITO_SCREEN/VENTILATOR (contados, `EACH`); `families`/`unit_kinds` predicados de aplicabilidad, `suggestion_reason` marca el articulo como acompanante sugerido con causa (migracion `20261231000000_d06_extras.sql`: `extra_articles`, `service_articles`, `extra_templates`, `service_templates`, `project_services`, `organizations.extras_display`).
+- El motor (`engine/.../extras.py`) mide desde la geometria: vierteaguas = corrido inferior exterior continuo + `vuelo` por extremo (1500+30+30 → 1 corte de 1560 mm), ensanche/tapajunta = largos de los lados exteriores declarados, contados = hojas operables (override `qty`); servicios = unidades / m2 / ml de perimetro / cargo unico. Nada se digita: cantidad x precio = total por sublinea (`bom.extra_lines`) y por servicio (`service_lines` en pricing), y el plan de corte/BOM de OT recibe las piezas `origin=EXTRA` (perfil `cut_profile_sku` del articulo) y los `fittings` contados.
+- Sugerencias: el articulo con `suggestion_reason` se ofrece (aceptar/descartar) en todo vano aplicable donde mediria algo; plantillas org (`extra_templates` por sistema, `service_templates` por proyecto) se fusionan al crear vanos/proyectos sin pisar selecciones existentes.
+- UI: inspector "Extras de la posición" (en el rail "Vista general" sin seleccion) con vuelos/lados/cantidad + sublineas del motor + sugerencias; "Servicios del proyecto" (details en la pagina del proyecto) con cantidades derivadas; tarjeta "Accesorios y servicios" en Ajustes (`extras_display` DETAILED/GROUPED + plantillas).
+- DOC-01: sublineas EXTRA bajo cada posicion ("Vierteaguas exterior — 1.66 M × $11.000 = $18.260") y bloque propio `.service-lines` "Servicios del proyecto — incluidos en el neto" (paginable, fuera de la columna irrompible que recortaba texto en silencio); `extras_display` de la org gobierna detalle vs solo nombres.
+- Congelado: los `bom.fittings` de extras contados pasan por el gate `fitting_purchase_mapping_missing_or_ambiguous` igual que herrajes (semilla global en `seed.sql`); el neto sellado incluye sublineas + servicios y los precios historicos quedan congelados en el snapshot.
+- Verificado: `make lint|typecheck|test|build` y `make test-db` verdes (`PY=.venv/bin/python`); golden 1500+30+30→1560 mm e instalacion por ml de perimetro; suma sublineas == total de posicion; plantillas aplicadas en vano nuevo; 30 capturas en `docs/redesign/captures/d06-accesorios-extras/` (antes 4, despues 24 + 2 DOC-01) + ux-audit sin hallazgos nuevos (enum MOSQUITO_SCREEN corregido en BOM con `catalog.extraKind`).
+
 ## D03 state
 
 Merged into `integracion/v1` as squash `db136a7207487e4e843b17f36f03a4c78a54b79b` (dekopen PR #9):

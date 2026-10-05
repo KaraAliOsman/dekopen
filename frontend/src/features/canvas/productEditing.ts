@@ -110,12 +110,26 @@ export type ProductModuleJson = {
   frameless?: FramelessSpecJson;
 };
 
+/** D06: mirrors dekopen_engine.models.ExtraSelection — a chosen accessory. */
+export type ExtraSelectionJson = {
+  sku: string;
+  /** Sides the extra applies to (ensanche / tapajunta); empty = default. */
+  sides?: string[];
+  /** Unit count override for counted extras (mosquitero, aireador). */
+  qty?: number;
+  /** SILL-only fin depth per side. */
+  vuelo_left_mm?: string;
+  vuelo_right_mm?: string;
+};
+
 export type ProductJson = {
   version: "product-v2";
   assembly: {
     modules: ProductModuleJson[];
     couplings: CouplingJson[];
   };
+  /** D06: accessory selections evaluated into sublines/cuts by the engine. */
+  extras?: ExtraSelectionJson[];
 };
 
 export function isProductModel(value: unknown): value is ProductJson {

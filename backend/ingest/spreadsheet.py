@@ -47,6 +47,8 @@ ENTITY_GLASS_PRODUCT = "GLASS_PRODUCT"
 ENTITY_GLASS_SURCHARGE = "GLASS_SURCHARGE"
 ENTITY_GLASS_SAFETY = "GLASS_SAFETY_RULE"
 ENTITY_GLASS_LIMIT = "GLASS_TYPE_LIMIT"
+ENTITY_EXTRA = "EXTRA_ARTICLE"
+ENTITY_SERVICE = "SERVICE_ARTICLE"
 
 ENTITIES = (
     ENTITY_PROFILE,
@@ -66,6 +68,8 @@ ENTITIES = (
     ENTITY_GLASS_SURCHARGE,
     ENTITY_GLASS_SAFETY,
     ENTITY_GLASS_LIMIT,
+    ENTITY_EXTRA,
+    ENTITY_SERVICE,
 )
 
 CONFIDENCE_VERIFIED_STRUCTURED = "VERIFIED_STRUCTURED"
@@ -147,6 +151,30 @@ _OPTION_KINDS = (
     "OPENING_LIMITER",
     "MICROVENTILATION",
     "CONCEALED_HINGES",
+)
+# Engine enum mirrors (D06): ExtraKind / ExtraPricingUnit / ServiceKind /
+# ServiceQtyRule — same contract the catalog serializer validates.
+_EXTRA_KINDS = (
+    "SILL",
+    "FRAME_EXTENSION",
+    "COVER_TRIM",
+    "MOSQUITO_SCREEN",
+    "VENTILATOR",
+)
+_EXTRA_UNITS = ("M", "EA")
+_EXTRA_UNIT_KINDS = ("WINDOW", "DOOR")
+_SERVICE_KINDS = (
+    "INSTALLATION",
+    "SEALING",
+    "REMOVAL",
+    "SCAFFOLDING",
+    "FREIGHT",
+)
+_SERVICE_QTY_RULES = (
+    "PER_LINEAR_METER",
+    "PER_M2",
+    "PER_POSITION_UNIT",
+    "FIXED",
 )
 
 # Column kind → how the cell is read. `enum` values are normalized
@@ -339,6 +367,45 @@ _SHEETS: dict[str, dict[str, Any]] = {
             ("etiqueta", "label", "text", False, None),
         ],
     },
+    "Extras": {
+        # D06: position accessories — geometry-linked (vierteaguas,
+        # ensanche, tapajunta) and counted (mosquitero, aireador). The
+        # engine measures quantities; the sheet declares price/cost,
+        # applicability predicates and the suggestion reason.
+        "entity": ENTITY_EXTRA,
+        "columns": [
+            ("sku", "sku", "text", True, None),
+            ("nombre", "name", "text", True, None),
+            ("tipo", "kind", "enum", True, _EXTRA_KINDS),
+            ("unidad", "pricing_unit", "enum", True, _EXTRA_UNITS),
+            ("precio", "unit_price", "decimal", False, None),
+            ("moneda", "unit_price_currency", "text", False, None),
+            ("costo", "unit_cost", "decimal", False, None),
+            ("moneda_costo", "unit_cost_currency", "text", False, None),
+            ("perfil_corte", "cut_profile_sku", "text", False, None),
+            ("material_corte", "cut_material", "enum", False, _MATERIALS),
+            ("vuelo_mm", "vuelo_default_mm", "decimal", False, None),
+            ("familias", "families", "csv_list", False, None),
+            ("tipos_unidad", "unit_kinds", "csv_list", False, None),
+            ("motivo", "suggestion_reason", "text", False, None),
+        ],
+    },
+    "Servicios": {
+        # D06: project services (instalación, sellado, retiro, andamio,
+        # flete) — org data, not bound to the importing system. The qty
+        # rule fixes how pricing measures the charge off the positions.
+        "entity": ENTITY_SERVICE,
+        "columns": [
+            ("codigo", "code", "text", True, None),
+            ("nombre", "name", "text", True, None),
+            ("tipo", "kind", "enum", True, _SERVICE_KINDS),
+            ("regla", "qty_rule", "enum", True, _SERVICE_QTY_RULES),
+            ("precio", "unit_price", "decimal", False, None),
+            ("moneda", "unit_price_currency", "text", False, None),
+            ("costo", "unit_cost", "decimal", False, None),
+            ("moneda_costo", "unit_cost_currency", "text", False, None),
+        ],
+    },
     "Seguridad vidrio": {
         # D02 NCh-135-family rules as org-editable data — the official
         # wording never ships; fuente carries the cited reference.
@@ -412,6 +479,15 @@ _EXAMPLES: dict[str, list[list[str]]] = {
     ]],
     "Recargos vidrio": [[
         "VID-LOWE-24", "PALILLAJE", "CROSS", "1500", "CLP", "Palillaje interior",
+    ]],
+    "Extras": [[
+        "EXT-VIERT-60", "Vierteaguas aluminio", "SILL", "M",
+        "11000", "CLP", "5500", "CLP", "VIERT-ALU-60", "ALUMINIUM",
+        "30", "", "", "Ventana con alféizar expuesto",
+    ]],
+    "Servicios": [[
+        "INST-ML", "Instalación por metro lineal", "INSTALLATION",
+        "PER_LINEAR_METER", "4500", "CLP", "2800", "CLP",
     ]],
     "Seguridad vidrio": [[
         "GLASS-SAFETY-DOOR", "Paño vidriado en puerta",

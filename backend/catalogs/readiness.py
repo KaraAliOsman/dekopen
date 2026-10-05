@@ -216,7 +216,17 @@ def catalog_readiness(system_id, org_id) -> dict[str, Any]:
                 # Positions check FOILED at freeze when the face colors
                 # require it; the catalog baseline is WHITE.
                 for article in catalogued:
-                    if article["role"] in ("THRESHOLD", "GLAZING_BEAD", "CHANNEL"):
+                    if article["role"] in (
+                        "THRESHOLD",
+                        "GLAZING_BEAD",
+                        "CHANNEL",
+                        # D06 finishing extrusions are bolt-on accessories,
+                        # never welded — no steel resolution applies.
+                        "SILL",
+                        "FRAME_EXTENSION",
+                        "COVER_TRIM",
+                        "SKIRT",
+                    ):
                         continue
                     stock, _ = CuttingRepository().reinforcement_stock(
                         system_id, org_id, article["sku"],

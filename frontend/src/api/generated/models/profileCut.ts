@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { MaterialEnum } from "./materialEnum";
+import type { ProfileCutOrigin } from "./profileCutOrigin";
 
 export interface ProfileCut {
   sku: string;
@@ -27,4 +28,5 @@ export interface ProfileCut {
    * @pattern ^-?\d{0,10}(?:\.\d{0,2})?$
    */
   sagitta_mm: string | null;
+  origin?: (typeof ProfileCutOrigin)[keyof typeof ProfileCutOrigin] | null;
 }

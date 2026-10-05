@@ -368,6 +368,18 @@ def create_project(org_id, actor_id, data):
         "VALUES(" + ",".join(["%s"] * (5 + len(METADATA))) + ") RETURNING id",
         [identity, org_id, code, actor_id, *values.values(), client_id],
     )
+    # D06: the org's service templates seed the new project's selections —
+    # a preselection the estimator edits, never a hidden charge.
+    rows(
+        "INSERT INTO public.project_service_selections"
+        " (project_id, org_id, service_article_id)"
+        " SELECT %s, %s, t.service_article_id"
+        " FROM public.org_service_templates t"
+        " JOIN public.service_articles a ON a.id = t.service_article_id"
+        " WHERE t.org_id = %s AND a.is_active"
+        " ON CONFLICT DO NOTHING RETURNING id",
+        [identity, org_id, org_id],
+    )
     return project_public(org_id, project_row(org_id, identity), detail=True)
 
 
