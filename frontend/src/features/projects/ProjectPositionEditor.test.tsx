@@ -140,6 +140,15 @@ function position(
     typology: "FIXED",
     price_net: "0",
     discount_pct: "0",
+    measurement: {
+      state: "CLIENT_DECLARED",
+      confirmed_at: null,
+      confirmed_by: null,
+      vano: null,
+      mounting_rule: null,
+      fabrication_lock: null,
+      resolution: null,
+    },
     updated_at: "2026-09-18T15:00:00.123456Z",
     design: {
       system_id: "system-a",

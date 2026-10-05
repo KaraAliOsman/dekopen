@@ -1606,6 +1606,19 @@ def _doc01(snapshot: dict[str, object]) -> str:
             spec_items.append(
                 f'<li><span class="plabel">Sistema</span> {escape(system_name + demo)}</li>'
             )
+        # D07: al cliente le corresponde el vano medido y la del producto
+        # (la dimensión del encabezado de la tarjeta ya es la de fabricación).
+        measurement = ref.get("measurement") or {}
+        resolution = measurement.get("resolution") or {}
+        if resolution.get("used_width_mm") and resolution.get("used_height_mm"):
+            mounting = (measurement.get("mounting_rule") or {}).get("label") or ""
+            spec_items.append(
+                f'<li><span class="plabel">Vano</span> '
+                f'{escape(_dim(resolution["used_width_mm"]))} × '
+                f'{escape(_dim(resolution["used_height_mm"]))} mm'
+                + (f" · {escape(_value(mounting))}" if mounting else "")
+                + "</li>"
+            )
         openings = _opening_labels(ref.get("parametric_tree") or {})
         if openings:
             spec_items.append(

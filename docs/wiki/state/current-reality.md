@@ -169,3 +169,13 @@ Before changing a capability:
 6. then update this page if a durable current-state fact materially changed.
 
 A fuller capability-by-capability reality map should be added only after a fresh systematic repository + running-product audit.
+
+
+## [2026-10-05] D07 | del vano de obra a la medida de fabricación
+
+- `mounting_rules` (migración `20270105000000`): autoridad versionada inmutable por sistema×organización — los 5 tipos de montaje (`EN_VANO`, `PREMARCO`, `SOBRE_VANO`, `TRASLAPADO`, `RENOVACION`) con holgura/solape firmada por lado, ensanches y accesorios de fijación; semillas `SEED_SYNTHETIC` + `review_pending` para todo sistema sembrado.
+- `project_positions` gana el registro del vano (`rough_opening_input`: 1–3 puntos por eje, tipo de muro, escuadra/desplome), `mounting_rule_id` (trigger rechaza reglas de otro sistema/tenant), `fabrication_lock` y `measurement_state` (`CLIENT_DECLARED`→`SITE_RECTIFIED`→`CONFIRMED`, sello exigido por CHECK).
+- Motor `engine/rough_opening.py`: `fabrication = vano_menor + ajuste` con desglose por lado; spread > `tenancy_organizations.vano_spread_tolerance_mm` (Ajustes > Reglas de taller, default 10 mm) avisa y queda registrado; `MANUAL_LOCK` gana y divergencia = warning.
+- Gate de producción: `release_production` rechaza `measurement_not_confirmed` con posiciones medidas sin confirmar; la rectificación en sucesor entra al diff documental con su Δ.
+- UI: chip "Vano × Fabricación · montaje" en el editor, inspector "Vano y montaje" con preview en vivo, cota doble en el lienzo (vano punteado + holgura por lado) y tolerancia org en Ajustes.
+- Verificado: `make lint|typecheck|test|build` y `make test-db` verdes (`PY=.venv/bin/python`); 14 goldens del motor; pgTAP 177 con trigger+check reales; tests de integración confirm/unconfirm/gate/revisión.

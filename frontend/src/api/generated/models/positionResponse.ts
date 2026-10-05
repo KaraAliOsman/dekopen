@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { EngineCalculateResponse } from "./engineCalculateResponse";
+import type { MeasurementResponse } from "./measurementResponse";
 import type { PositionDesign } from "./positionDesign";
 
 export interface PositionResponse {
@@ -20,5 +21,6 @@ export interface PositionResponse {
   discount_pct: string;
   design: PositionDesign;
   bom: EngineCalculateResponse;
+  measurement: MeasurementResponse;
   updated_at: string;
 }

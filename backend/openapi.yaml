@@ -3552,6 +3552,73 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/catalogs/mounting-rules/:
+    get:
+      operationId: mounting_rules_list
+      description: |-
+        D07 mounting rules for a system: read-only authority, org overrides
+        the global row of the same code.
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: query
+        name: system_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - catalogs
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MountingRuleListResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/catalogs/process-profiles/:
     get:
       operationId: catalog_process_profile_list
@@ -7174,6 +7241,85 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/positions/{position_id}/measurement-confirm/:
+    post:
+      operationId: positions_measurement_confirm
+      description: |-
+        Explicit human confirmation of the fabrication measure — the
+        production gate evidence.
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: position_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - projects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MeasurementConfirmRequest'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PositionResponse'
           description: ''
         '400':
           content:
@@ -13993,6 +14139,84 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/projects/{project_id}/positions/measurement-resolve/:
+    post:
+      operationId: positions_measurement_resolve
+      description: Live vano→fabricación preview for the editor — engine resolves,
+        nothing persists.
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: project_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - projects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MeasurementResolveRequest'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeasurementResolveResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/projects/{project_id}/quote-link/:
     get:
       operationId: project_quote_links_list
@@ -18042,6 +18266,20 @@ components:
       - machines
       - orders
       - tools
+    CodeEnum:
+      enum:
+      - EN_VANO
+      - PREMARCO
+      - SOBRE_VANO
+      - TRASLAPADO
+      - RENOVACION
+      type: string
+      description: |-
+        * `EN_VANO` - EN_VANO
+        * `PREMARCO` - PREMARCO
+        * `SOBRE_VANO` - SOBRE_VANO
+        * `TRASLAPADO` - TRASLAPADO
+        * `RENOVACION` - RENOVACION
     ColorEnum:
       enum:
       - WHITE
@@ -20130,6 +20368,34 @@ components:
       required:
       - amount
       - label
+    FabricationLockRequest:
+      type: object
+      description: Fijación manual de la medida de fabricación — queda registrada.
+      properties:
+        width_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        height_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        reason:
+          type: string
+          maxLength: 500
+      required:
+      - height_mm
+      - width_mm
+    FabricationSourceEnum:
+      enum:
+      - DERIVED
+      - MANUAL_LOCK
+      - DECLARED
+      type: string
+      description: |-
+        * `DERIVED` - DERIVED
+        * `MANUAL_LOCK` - MANUAL_LOCK
+        * `DECLARED` - DECLARED
     FittingPiece:
       type: object
       description: Counted frameless fitting — patch/clamp/hinge/lock/connector/seal/support.
@@ -22057,6 +22323,172 @@ components:
       - order_id
       - shortage
       - stock_reservations
+    MeasurementBreakdown:
+      type: object
+      properties:
+        side:
+          type: string
+        label:
+          type: string
+        mm:
+          type: string
+      required:
+      - label
+      - mm
+      - side
+    MeasurementConfirmRequest:
+      type: object
+      properties:
+        confirmed:
+          type: boolean
+      required:
+      - confirmed
+    MeasurementResolution:
+      type: object
+      properties:
+        vano_width_mm:
+          type: string
+          nullable: true
+        vano_height_mm:
+          type: string
+          nullable: true
+        width_spread_mm:
+          type: string
+        height_spread_mm:
+          type: string
+        fabrication_width_mm:
+          type: string
+        fabrication_height_mm:
+          type: string
+        fabrication_source:
+          $ref: '#/components/schemas/FabricationSourceEnum'
+        used_width_mm:
+          type: string
+        used_height_mm:
+          type: string
+        coherent:
+          type: boolean
+        breakdown:
+          type: array
+          items:
+            $ref: '#/components/schemas/MeasurementBreakdown'
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/MeasurementWarning'
+      required:
+      - breakdown
+      - coherent
+      - fabrication_height_mm
+      - fabrication_source
+      - fabrication_width_mm
+      - height_spread_mm
+      - used_height_mm
+      - used_width_mm
+      - vano_height_mm
+      - vano_width_mm
+      - warnings
+      - width_spread_mm
+    MeasurementResolveRequest:
+      type: object
+      description: 'Preview del desglose vano → fabricación: mismo motor que el guardado.'
+      properties:
+        system_id:
+          type: string
+          format: uuid
+        vano:
+          allOf:
+          - $ref: '#/components/schemas/VanoRecordRequest'
+          nullable: true
+        mounting_rule_id:
+          type: string
+          format: uuid
+          nullable: true
+        fabrication_lock:
+          allOf:
+          - $ref: '#/components/schemas/FabricationLockRequest'
+          nullable: true
+        width_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        height_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+      required:
+      - height_mm
+      - system_id
+      - width_mm
+    MeasurementResolveResponse:
+      type: object
+      properties:
+        resolution:
+          $ref: '#/components/schemas/MeasurementResolution'
+        mounting_rule:
+          allOf:
+          - $ref: '#/components/schemas/MountingRuleResponse'
+          nullable: true
+      required:
+      - mounting_rule
+      - resolution
+    MeasurementResponse:
+      type: object
+      properties:
+        state:
+          $ref: '#/components/schemas/MeasurementResponseStateEnum'
+        confirmed_at:
+          type: string
+          format: date-time
+          nullable: true
+        confirmed_by:
+          type: string
+          format: uuid
+          nullable: true
+        vano:
+          allOf:
+          - $ref: '#/components/schemas/VanoRecord'
+          nullable: true
+        mounting_rule:
+          allOf:
+          - $ref: '#/components/schemas/MountingRuleResponse'
+          nullable: true
+        fabrication_lock:
+          type: object
+          additionalProperties: {}
+          nullable: true
+        resolution:
+          allOf:
+          - $ref: '#/components/schemas/MeasurementResolution'
+          nullable: true
+      required:
+      - confirmed_at
+      - confirmed_by
+      - fabrication_lock
+      - mounting_rule
+      - resolution
+      - state
+      - vano
+    MeasurementResponseStateEnum:
+      enum:
+      - CLIENT_DECLARED
+      - SITE_RECTIFIED
+      - CONFIRMED
+      type: string
+      description: |-
+        * `CLIENT_DECLARED` - CLIENT_DECLARED
+        * `SITE_RECTIFIED` - SITE_RECTIFIED
+        * `CONFIRMED` - CONFIRMED
+    MeasurementWarning:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - message
     Membership:
       type: object
       properties:
@@ -22129,6 +22561,51 @@ components:
       - module_id
       - result
       - sliding
+    MountingRuleListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MountingRuleResponse'
+      required:
+      - items
+    MountingRuleResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        system_id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+          nullable: true
+        code:
+          $ref: '#/components/schemas/CodeEnum'
+        version:
+          type: integer
+        label:
+          type: string
+        authority:
+          type: object
+          additionalProperties: {}
+        data_provenance:
+          $ref: '#/components/schemas/DataProvenanceEnum'
+        review_pending:
+          type: boolean
+      required:
+      - authority
+      - code
+      - data_provenance
+      - id
+      - label
+      - org_id
+      - review_pending
+      - system_id
+      - version
     NewSystemRequest:
       type: object
       properties:
@@ -22743,6 +23220,11 @@ components:
         brand_logo_sha256:
           type: string
           nullable: true
+        vano_spread_tolerance_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          nullable: true
       required:
       - brand_address
       - brand_email
@@ -22753,6 +23235,7 @@ components:
       - giro
       - name
       - tax_id
+      - vano_spread_tolerance_mm
     OrgBrandingWriteRequest:
       type: object
       properties:
@@ -22776,6 +23259,11 @@ components:
           type: string
           nullable: true
           maxLength: 255
+        vano_spread_tolerance_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          nullable: true
     OrientationEnum:
       enum:
       - EXTERIOR_DOWN
@@ -24161,6 +24649,21 @@ components:
       - reinforcement_cut_policy_id
       - structural_inputs
       - workshop_annotations
+    PositionMeasurementRequest:
+      type: object
+      properties:
+        vano:
+          allOf:
+          - $ref: '#/components/schemas/VanoRecordRequest'
+          nullable: true
+        mounting_rule_id:
+          type: string
+          format: uuid
+          nullable: true
+        fabrication_lock:
+          allOf:
+          - $ref: '#/components/schemas/FabricationLockRequest'
+          nullable: true
     PositionResponse:
       type: object
       properties:
@@ -24187,6 +24690,8 @@ components:
           $ref: '#/components/schemas/PositionDesign'
         bom:
           $ref: '#/components/schemas/EngineCalculateResponse'
+        measurement:
+          $ref: '#/components/schemas/MeasurementResponse'
         updated_at:
           type: string
           format: date-time
@@ -24196,6 +24701,7 @@ components:
       - discount_pct
       - id
       - location_tag
+      - measurement
       - position_index
       - price_net
       - project_id
@@ -24214,6 +24720,10 @@ components:
           minimum: 1
         design:
           $ref: '#/components/schemas/PositionDesignRequest'
+        measurement:
+          allOf:
+          - $ref: '#/components/schemas/PositionMeasurementRequest'
+          nullable: true
         expected_updated_at:
           type: string
           format: date-time
@@ -24234,6 +24744,10 @@ components:
           minimum: 1
         design:
           $ref: '#/components/schemas/PositionDesignRequest'
+        measurement:
+          allOf:
+          - $ref: '#/components/schemas/PositionMeasurementRequest'
+          nullable: true
       required:
       - design
       - location_tag
@@ -27538,6 +28052,92 @@ components:
       required:
       - email
       - id
+    VanoRecord:
+      type: object
+      description: |-
+        Registro del vano de obra: 1–3 medidas por eje (manda la menor),
+        tipo de muro y escuadra/desplome si se midió.
+      properties:
+        width_points_mm:
+          type: array
+          items:
+            type: string
+            format: decimal
+            pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          maxItems: 3
+          minItems: 1
+        height_points_mm:
+          type: array
+          items:
+            type: string
+            format: decimal
+            pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          maxItems: 3
+          minItems: 1
+        wall_type:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/WallTypeEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        square_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,2})?$
+          nullable: true
+        plumb_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,2})?$
+          nullable: true
+        notes:
+          type: string
+          maxLength: 500
+      required:
+      - height_points_mm
+      - width_points_mm
+    VanoRecordRequest:
+      type: object
+      description: |-
+        Registro del vano de obra: 1–3 medidas por eje (manda la menor),
+        tipo de muro y escuadra/desplome si se midió.
+      properties:
+        width_points_mm:
+          type: array
+          items:
+            type: string
+            format: decimal
+            pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          maxItems: 3
+          minItems: 1
+        height_points_mm:
+          type: array
+          items:
+            type: string
+            format: decimal
+            pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          maxItems: 3
+          minItems: 1
+        wall_type:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/WallTypeEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        square_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,2})?$
+          nullable: true
+        plumb_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,2})?$
+          nullable: true
+        notes:
+          type: string
+          maxLength: 500
+      required:
+      - height_points_mm
+      - width_points_mm
     VerticalReferenceEnum:
       enum:
       - OUTER_TOP
@@ -27550,6 +28150,18 @@ components:
         * `OUTER_BOTTOM` - OUTER_BOTTOM
         * `LEAF_TOP` - LEAF_TOP
         * `LEAF_BOTTOM` - LEAF_BOTTOM
+    WallTypeEnum:
+      enum:
+      - MASONRY
+      - CONCRETE
+      - PARTITION
+      - WOOD
+      type: string
+      description: |-
+        * `MASONRY` - MASONRY
+        * `CONCRETE` - CONCRETE
+        * `PARTITION` - PARTITION
+        * `WOOD` - WOOD
     Wallet:
       type: object
       properties:

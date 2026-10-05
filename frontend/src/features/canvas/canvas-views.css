@@ -1271,3 +1271,38 @@
 .assembly-kit-table small {
   color: var(--theme-text-muted);
 }
+
+/* ---------- D07 · Cota doble — vano + fabricación ---------- */
+
+.vano-overlay {
+  pointer-events: none;
+}
+
+.vano-outline {
+  fill: none;
+  stroke: var(--theme-text-muted);
+  stroke-width: 2;
+  stroke-dasharray: 26 14;
+  vector-effect: non-scaling-stroke;
+}
+
+.vano-dim {
+  fill: var(--theme-text-secondary);
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 30px;
+  font-weight: 500;
+}
+
+.vano-dim--mount {
+  fill: var(--theme-text-muted);
+  font-size: 22px;
+  font-weight: 400;
+}
+
+.vano-gap {
+  fill: var(--theme-text-muted);
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 22px;
+}

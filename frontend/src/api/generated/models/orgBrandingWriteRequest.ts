@@ -32,4 +32,9 @@ export interface OrgBrandingWriteRequest {
    * @nullable
    */
   brand_email?: string | null;
+  /**
+   * @nullable
+   * @pattern ^-?\d{0,4}(?:\.\d{0,2})?$
+   */
+  vano_spread_tolerance_mm?: string | null;
 }

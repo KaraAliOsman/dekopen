@@ -24,6 +24,7 @@ from projects import (
     design_alternatives,
     design_assist,
     invoices,
+    measurement,
     org_branding,
     payment_links,
     payments,
@@ -71,6 +72,9 @@ from projects.serializers import (
     DesignAlternativesResponseSerializer,
     DesignAssistRequestSerializer,
     DesignAssistResponseSerializer,
+    MeasurementConfirmSerializer,
+    MeasurementResolveResponseSerializer,
+    MeasurementResolveSerializer,
     PositionResponseSerializer,
     PositionUpdateSerializer,
     PositionWriteSerializer,
@@ -253,6 +257,60 @@ class PositionView(APIView):
         with scope(request, WRITE_ROLES) as (_, _, org):
             service.delete_position(org, position_id, data["expected_updated_at"])
         return Response(status=204)
+
+
+class PositionMeasurementResolveView(APIView):
+    """Live vano→fabricación preview for the editor — engine resolves, nothing persists."""
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="positions_measurement_resolve",
+        request=MeasurementResolveSerializer,
+        responses={200: MeasurementResolveResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def post(self, request, project_id):
+        data = validate(MeasurementResolveSerializer, request.data)
+        with scope(request, WRITE_ROLES) as (_, _, org):
+            return response(
+                measurement.resolve_measurement_preview(
+                    org,
+                    system_id=data["system_id"],
+                    vano_payload=data.get("vano"),
+                    mounting_rule_id=data.get("mounting_rule_id"),
+                    lock_payload=data.get("fabrication_lock"),
+                    position_width_mm=data["width_mm"],
+                    position_height_mm=data["height_mm"],
+                )
+            )
+
+
+class PositionMeasurementConfirmView(APIView):
+    """Explicit human confirmation of the fabrication measure — the
+    production gate evidence."""
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="positions_measurement_confirm",
+        request=MeasurementConfirmSerializer,
+        responses={200: PositionResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def post(self, request, position_id):
+        data = validate(MeasurementConfirmSerializer, request.data)
+        with scope(request, WRITE_ROLES) as (token, _, org):
+            existing = service.position_row(org, position_id)
+            return response(
+                service.position_public(
+                    measurement.confirm_measurement(
+                        org,
+                        existing["project_id"],
+                        position_id,
+                        token.user_id,
+                        confirmed=data["confirmed"],
+                    )
+                )
+            )
 
 
 class PositionDesignAssistView(APIView):

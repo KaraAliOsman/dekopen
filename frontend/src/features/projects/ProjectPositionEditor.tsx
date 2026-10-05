@@ -4,7 +4,10 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query";
 import {
   engineSystems,
+  mountingRulesList,
   positionsCreate,
+  positionsMeasurementConfirm,
+  positionsMeasurementResolve,
   positionsRetrieve,
   positionsUpdate,
   projectDesignOptions,
@@ -13,6 +16,7 @@ import {
 import type {
   EngineAssemblyCalculateResponse,
   EngineCalculateResponse,
+  MeasurementResolveResponse,
   PositionDesignRequest,
   PositionResponse,
 } from "../../api/generated/models";
@@ -21,6 +25,7 @@ import { ApiError } from "../../api/apiMutator";
 import { UnsavedChangesGuard } from "../../app/UnsavedChangesGuard";
 import { useShellLeaf } from "../../app/shellLeaf";
 import { t, tDynamic, tOptional } from "../../i18n/es-CL";
+import { domainLabel } from "../../i18n/domainLabels";
 import { DeniedState } from "../../ui";
 import { type CanvasDesignInputs, useCanvasStore } from "../canvas/canvasStore";
 import { useProject } from "./useProject";
@@ -42,6 +47,15 @@ import {
   writePositionDraft,
 } from "./positionDraft";
 import { StarterGallery } from "../canvas/StarterGallery";
+import { VanoSection } from "./VanoSection";
+import {
+  EMPTY_VANO,
+  vanoDimFromResolution,
+  vanoDraftFromSaved,
+  vanoDraftPayload,
+  vanoIdentity,
+  type VanoDraft,
+} from "./vano";
 import {
   elevationEnvelopeMm,
   isProductModel,
@@ -325,7 +339,15 @@ function PositionWorkspace({
     design: string;
     location: string;
     quantity: string;
+    measurement: string;
   } | null>(null);
+  // D07 — registro del vano (obrador), preview resuelto por el motor y
+  // confirmación explícita que gobierna la liberación de producción.
+  const [vanoDraft, setVanoDraft] = useState<VanoDraft>(EMPTY_VANO);
+  const [vanoPreview, setVanoPreview] = useState<MeasurementResolveResponse | null>(null);
+  const [vanoPreviewBusy, setVanoPreviewBusy] = useState(false);
+  const [vanoPreviewError, setVanoPreviewError] = useState(false);
+  const [confirmBusy, setConfirmBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const mutationLock = useRef(false);
   const [message, setMessage] = useState("");
@@ -386,6 +408,17 @@ function PositionWorkspace({
     enabled: !!systemId,
     retry: false,
   });
+  // D07 — reglas de montaje efectivas de la serie elegida (org > global).
+  const mountingRules = useQuery({
+    queryKey: ["mounting-rules", orgId, systemId],
+    queryFn: async () => {
+      const response = await mountingRulesList({ system_id: systemId }, requestOptions);
+      if (response.status !== 200) throw new Error("load");
+      return response.data.items;
+    },
+    enabled: !!systemId,
+    retry: false,
+  });
   // Finishes the series declares. A stored finish it stopped offering still
   // displays — the picker lists it once — but can't save: the engine's color
   // contract is the authority, not this list's length.
@@ -401,13 +434,15 @@ function PositionWorkspace({
       baselineDesign: string,
       baselineLocation: string,
       baselineQuantity: string,
+      baselineMeasurement: string,
     ) => {
       const draft = readPositionDraft(draftKey);
       if (!draft) return;
       if (
         designIdentity(draft.inputs) !== baselineDesign ||
         draft.location !== baselineLocation ||
-        draft.quantity !== baselineQuantity
+        draft.quantity !== baselineQuantity ||
+        (draft.vano ? vanoIdentity(draft.vano) : "null") !== baselineMeasurement
       )
         setPendingDraft(draft);
       else clearPositionDraft(draftKey);
@@ -419,12 +454,14 @@ function PositionWorkspace({
       if (preferredSystem) blank.systemId = preferredSystem;
       useCanvasStore.getState().loadDesign(blank);
       const baselineDesign = designIdentity(blank);
+      setVanoDraft(EMPTY_VANO);
       setBaseline({
         design: baselineDesign,
         location: "",
         quantity: "1",
+        measurement: vanoIdentity(EMPTY_VANO),
       });
-      offerDraftIfDivergent(baselineDesign, "", "1");
+      offerDraftIfDivergent(baselineDesign, "", "1", vanoIdentity(EMPTY_VANO));
       setLoaded(true);
     } else
       void positionsRetrieve(positionId || copyId, { headers: { "X-Organization-ID": orgId } })
@@ -458,6 +495,11 @@ function PositionWorkspace({
           useCanvasStore.getState().loadDesign(loadedInputs);
           setCopiedFrom(copyId ? `P${item.position_index}` : null);
           setSaved(copyId ? null : item);
+          // El duplicado no hereda el registro del vano: la medida en obra
+          // es de ese vano concreto, no de su diseño.
+          const loadedVano =
+            !copyId && item.measurement ? vanoDraftFromSaved(item.measurement) : EMPTY_VANO;
+          setVanoDraft(loadedVano);
           setBaseline(
             copyId
               ? null
@@ -465,12 +507,14 @@ function PositionWorkspace({
                   design: designIdentity(loadedInputs),
                   location: item.location_tag ?? "",
                   quantity: String(item.quantity),
+                  measurement: vanoIdentity(loadedVano),
                 },
           );
           offerDraftIfDivergent(
             designIdentity(loadedInputs),
             item.location_tag ?? "",
             String(item.quantity),
+            vanoIdentity(loadedVano),
           );
           setLocation(item.location_tag ?? "");
           setQuantity(String(item.quantity));
@@ -542,13 +586,15 @@ function PositionWorkspace({
   // designIdentity deep-serializes the product — memoize on the inputs
   // reference so location/quantity keystrokes skip the canonicalization.
   const identity = useMemo(() => designIdentity(inputs), [inputs]);
+  const vanoDraftIdentity = useMemo(() => vanoIdentity(vanoDraft), [vanoDraft]);
 
   const isDirty =
     baseline === null
       ? true
       : identity !== baseline.design ||
         location !== baseline.location ||
-        quantity !== baseline.quantity;
+        quantity !== baseline.quantity ||
+        vanoDraftIdentity !== baseline.measurement;
 
   // Debounced draft write — clears once the design matches the saved state
   // again (including right after a successful save).
@@ -559,11 +605,74 @@ function PositionWorkspace({
       return;
     }
     const timer = setTimeout(
-      () => writePositionDraft(draftKey, { inputs, location, quantity, savedAt: Date.now() }),
+      () =>
+        writePositionDraft(draftKey, {
+          inputs,
+          location,
+          quantity,
+          vano: vanoDraft,
+          savedAt: Date.now(),
+        }),
       600,
     );
     return () => clearTimeout(timer);
-  }, [loaded, isDirty, identity, location, quantity, draftKey, inputs]);
+  }, [loaded, isDirty, identity, location, quantity, draftKey, inputs, vanoDraft]);
+
+  // D07 — preview vano→fabricación resuelto por el motor, con debounce: lo
+  // que el lienzo muestra es exactamente lo que el guardado validará.
+  const designWidthMm = inputs.nominalWidthMm;
+  const designHeightMm = inputs.nominalHeightMm;
+  useEffect(() => {
+    const payload = vanoDraftPayload(vanoDraft);
+    if (
+      payload === null ||
+      payload === "invalid" ||
+      !payload.vano ||
+      !payload.mounting_rule_id ||
+      !systemId ||
+      !designWidthMm ||
+      !designHeightMm
+    ) {
+      setVanoPreview(null);
+      setVanoPreviewError(false);
+      setVanoPreviewBusy(false);
+      return;
+    }
+    setVanoPreviewBusy(true);
+    let stale = false;
+    const timer = setTimeout(() => {
+      positionsMeasurementResolve(
+        projectId,
+        {
+          system_id: systemId,
+          vano: payload.vano!,
+          mounting_rule_id: payload.mounting_rule_id!,
+          fabrication_lock: payload.fabrication_lock ?? null,
+          width_mm: designWidthMm,
+          height_mm: designHeightMm,
+        },
+        requestOptions,
+      )
+        .then((res) => {
+          if (stale) return;
+          setVanoPreview(res.status === 200 ? res.data : null);
+          setVanoPreviewError(res.status !== 200);
+        })
+        .catch(() => {
+          if (stale) return;
+          setVanoPreview(null);
+          setVanoPreviewError(true);
+        })
+        .finally(() => {
+          if (!stale) setVanoPreviewBusy(false);
+        });
+    }, 350);
+    return () => {
+      stale = true;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vanoDraft, systemId, designWidthMm, designHeightMm, projectId]);
 
   const assemblyUnsaveable =
     assemblyEval?.status === "INVALID" ||
@@ -573,6 +682,11 @@ function PositionWorkspace({
   const colorUndeclared =
     options.data !== undefined && inputs.color !== null && !declaredColors.includes(inputs.color);
   const quantityInvalid = !/^[1-9]\d*$/.test(quantity) || Number(quantity) > 2147483647;
+  // D07 — un registro del vano a medias no se puede guardar: el borrador
+  // incompleto bloquea con la misma regla que el backend (un eje sin el
+  // otro, montaje sin vano, fijación sin medida).
+  const vanoPayload = vanoDraftPayload(vanoDraft);
+  const vanoInvalid = vanoPayload === "invalid";
   // Local, cheap check: a bay with neither glass nor panel fill can never
   // evaluate — name it so the disabled Guardar isn't a silent dead end.
   const fillUnassigned = (inputs.product?.assembly.modules ?? []).some((module) =>
@@ -584,15 +698,38 @@ function PositionWorkspace({
     ? t("projects.qtyInvalid")
     : colorUndeclared
       ? t("projects.colorNotDeclared")
-      : fillUnassigned
-        ? t("projects.glazingMissing")
-        : assemblyUnsaveable && assemblyEval !== null && assemblyEval.issues.length > 0
-          ? issueText(
-              assemblyEval.issues[0]!,
-              inputs.product?.assembly.modules ?? [],
-              inputs.product?.assembly.couplings ?? [],
-            )
-          : null;
+      : vanoInvalid
+        ? t("projects.vanoInvalid")
+        : fillUnassigned
+          ? t("projects.glazingMissing")
+          : assemblyUnsaveable && assemblyEval !== null && assemblyEval.issues.length > 0
+            ? issueText(
+                assemblyEval.issues[0]!,
+                inputs.product?.assembly.modules ?? [],
+                inputs.product?.assembly.couplings ?? [],
+              )
+            : null;
+
+  // D07 — la confirmación es un acto humano separado del guardado: golpea su
+  // propio endpoint y refresca la posición persistida (incl. updated_at).
+  async function confirmMeasurement(confirmed: boolean): Promise<void> {
+    if (!saved || confirmBusy || busy) return;
+    setConfirmBusy(true);
+    try {
+      const response = await positionsMeasurementConfirm(saved.id, { confirmed }, requestOptions);
+      if (response.status === 200) {
+        const value = response.data as PositionResponse;
+        setSaved(value);
+        setMessage(confirmed ? t("projects.vanoConfirmed") : t("projects.vanoReopened"));
+      } else {
+        setMessage(t("projects.saveError"));
+      }
+    } catch {
+      setMessage(t("projects.saveError"));
+    } finally {
+      setConfirmBusy(false);
+    }
+  }
 
   async function save(): Promise<void> {
     if (
@@ -606,7 +743,8 @@ function PositionWorkspace({
       inputs.product === null ||
       !systemId ||
       !/^[1-9]\d*$/.test(quantity) ||
-      Number(quantity) > 2147483647
+      Number(quantity) > 2147483647 ||
+      vanoInvalid
     )
       return;
     mutationLock.current = true;
@@ -616,10 +754,13 @@ function PositionWorkspace({
     // A lone unit persists in the classic documentary shape; real assemblies
     // save as product-v2. The in-canvas model is always compositional.
     const design = designPayload(inputs, declaredColors) as PositionDesignRequest;
+    // El registro del vano viaja con la posición: el backend lo vuelve a
+    // validar contra el motor y marca el estado de la medida.
     const body = {
       location_tag: location,
       quantity: Number(quantity),
       design,
+      ...(vanoPayload !== null ? { measurement: vanoPayload } : {}),
     };
     try {
       const response = saved
@@ -635,7 +776,12 @@ function PositionWorkspace({
       const value = response.data as PositionResponse;
       setSaved(value);
       setResult(value.bom);
-      setBaseline({ design: designIdentity(inputs), location, quantity });
+      setBaseline({
+        design: designIdentity(inputs),
+        location,
+        quantity,
+        measurement: vanoDraftIdentity,
+      });
       setMessage(t("projects.saved"));
       // The unsaved-changes blocker still sees dirty=true until the baseline
       // commits, so the post-create navigation must wait for the next render.
@@ -668,6 +814,24 @@ function PositionWorkspace({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // D07 — la cota doble del lienzo y el chip leen la misma resolución: la
+  // preview en vivo cuando el borrador cambió, la guardada cuando no.
+  const liveResolution = vanoPreview?.resolution ?? saved?.measurement?.resolution ?? null;
+  const liveMountingLabel = useMemo(() => {
+    const rule = vanoPreview?.mounting_rule ?? saved?.measurement?.mounting_rule ?? null;
+    return rule ? domainLabel("CodeEnum", rule.code).label : "";
+  }, [vanoPreview, saved]);
+  const vanoDim = vanoDimFromResolution(liveResolution, liveMountingLabel);
+  const vanoChip =
+    vanoDim === null || liveResolution === null
+      ? null
+      : t("projects.vanoChip")
+          .replace("{w}", fmtMm(liveResolution.used_width_mm))
+          .replace("{h}", fmtMm(liveResolution.used_height_mm))
+          .replace("{fw}", fmtMm(liveResolution.fabrication_width_mm))
+          .replace("{fh}", fmtMm(liveResolution.fabrication_height_mm))
+          .replace("{mounting}", liveMountingLabel || t("projects.vanoMountingNone"));
+
   if (!loaded) return <p role={message ? "alert" : "status"}>{message || t("projects.loading")}</p>;
   const dirty = isDirty;
   const restoreDraft = (draft: PositionDraft) => {
@@ -675,6 +839,7 @@ function PositionWorkspace({
     store.loadDesign(draft.inputs);
     setLocation(draft.location);
     setQuantity(draft.quantity);
+    setVanoDraft(draft.vano ?? EMPTY_VANO);
     setLibraryOpen(false);
     setViewEpoch((epoch) => epoch + 1);
     setPendingDraft(null);
@@ -740,6 +905,20 @@ function PositionWorkspace({
           <dd>{systemName}</dd>
         </div>
       </dl>
+      <VanoSection
+        draft={vanoDraft}
+        onDraftChange={setVanoDraft}
+        rules={mountingRules.data}
+        rulesPending={mountingRules.isPending}
+        preview={vanoPreview}
+        previewPending={vanoPreviewBusy}
+        previewError={vanoPreviewError}
+        saved={saved?.measurement ?? null}
+        onConfirm={(confirmed) => void confirmMeasurement(confirmed)}
+        confirmBusy={confirmBusy}
+        positionPersisted={saved !== null && !copyId}
+        disabled={busy}
+      />
     </section>
   );
   return (
@@ -777,7 +956,8 @@ function PositionWorkspace({
             !options.data ||
             assemblyUnsaveable ||
             quantityInvalid ||
-            colorUndeclared
+            colorUndeclared ||
+            vanoInvalid
           }
           title={
             saveBlockReason !== null
@@ -884,6 +1064,9 @@ function PositionWorkspace({
               {t("projects.systemLimits")}: {limitsLine}
             </p>
           )}
+          {vanoChip !== null && (
+            <span className="ui-badge ui-chip ui-badge--info vano-chip">{vanoChip}</span>
+          )}
           {(systems.isError || options.isError) && (
             <p className="position-head__alert" role="alert">
               {t("projects.catalogError")}
@@ -945,6 +1128,7 @@ function PositionWorkspace({
             positionId={saved?.id ?? null}
             positionPanel={positionPanel}
             contentEpoch={viewEpoch}
+            vano={vanoDim}
           />
         </div>
       </div>

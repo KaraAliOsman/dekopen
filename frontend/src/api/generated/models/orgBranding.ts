@@ -27,4 +27,9 @@ export interface OrgBranding {
   brand_logo_key: string | null;
   /** @nullable */
   brand_logo_sha256: string | null;
+  /**
+   * @nullable
+   * @pattern ^-?\d{0,4}(?:\.\d{0,2})?$
+   */
+  vano_spread_tolerance_mm: string | null;
 }

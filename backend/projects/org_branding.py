@@ -46,12 +46,17 @@ def _branding(row: dict) -> dict:
         "brand_email": row.get("brand_email"),
         "brand_logo_key": row.get("brand_logo_key"),
         "brand_logo_sha256": row.get("brand_logo_sha256"),
+        "vano_spread_tolerance_mm": (
+            None
+            if row.get("vano_spread_tolerance_mm") is None
+            else str(row["vano_spread_tolerance_mm"])
+        ),
     }
 
 
 _FIELDS = (
     "name, tax_id, commercial_name, giro, brand_address, brand_phone,"
-    " brand_email, brand_logo_key, brand_logo_sha256"
+    " brand_email, brand_logo_key, brand_logo_sha256, vano_spread_tolerance_mm"
 )
 
 
@@ -81,20 +86,43 @@ def save_branding(*, org_id: UUID, data: dict) -> dict:
     return row
 
 
+_BRAND_FIELDS = {
+    "commercial_name": 255,
+    "giro": 255,
+    "brand_address": 255,
+    "brand_phone": 64,
+    "brand_email": 255,
+}
+
+
 def _save_branding(*, org_id: UUID, data: dict) -> dict:
+    # A key absent from the validated payload keeps the stored value — a
+    # key sent null clears it. Distinction matters: the workshop-rules card
+    # writes only the tolerance and must not wipe the brand fields.
+    assignments: list[str] = []
+    params: list[object] = []
+    for field, limit in _BRAND_FIELDS.items():
+        if field not in data:
+            continue
+        assignments.append(f"{field}=%s")
+        raw = data.get(field)
+        params.append(_blank(raw)[:limit] if raw else None)
+    if "vano_spread_tolerance_mm" in data:
+        assignments.append("vano_spread_tolerance_mm=%s")
+        params.append(data.get("vano_spread_tolerance_mm"))
+    if not assignments:
+        row = one(
+            f"SELECT {_FIELDS} FROM public.tenancy_organizations WHERE id=%s",
+            [str(org_id)],
+            "organization_not_found",
+        )
+        return _branding(row)
+    assignments.append("updated_at=now()")
     row = one(
         "UPDATE public.tenancy_organizations SET "
-        "commercial_name=%s, giro=%s, brand_address=%s, brand_phone=%s,"
-        " brand_email=%s, updated_at=now() "
-        "WHERE id=%s RETURNING " + _FIELDS,
-        [
-            _blank(data.get("commercial_name"))[:255] if data.get("commercial_name") else None,
-            _blank(data.get("giro"))[:255] if data.get("giro") else None,
-            _blank(data.get("brand_address"))[:255] if data.get("brand_address") else None,
-            _blank(data.get("brand_phone"))[:64] if data.get("brand_phone") else None,
-            _blank(data.get("brand_email"))[:255] if data.get("brand_email") else None,
-            str(org_id),
-        ],
+        + ", ".join(assignments)
+        + " WHERE id=%s RETURNING " + _FIELDS,
+        [*params, str(org_id)],
         "organization_not_found",
     )
     return _branding(row)

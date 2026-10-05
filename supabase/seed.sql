@@ -2320,3 +2320,72 @@ WHERE s.code IN ('DEMO_60','DEMO_70','ALU_65','GLASS_45')
 ON CONFLICT DO NOTHING;
 
 COMMIT;
+
+-- D07 — mounting rules seed: one version-1 rule per mounting type for every
+-- profile system the seed defines (migration seeds whatever existed at
+-- migration time; this pass covers the systems seed.sql itself creates).
+BEGIN;
+
+INSERT INTO public.mounting_rules (
+    system_id, org_id, code, version, label, authority,
+    data_provenance, review_pending
+)
+SELECT s.id, NULL, v.code, 1, v.label, v.authority::jsonb,
+       'SEED_SYNTHETIC', TRUE
+FROM public.profile_systems AS s
+CROSS JOIN (
+    VALUES (
+        'EN_VANO',
+        'En vano con holgura perimetral',
+        '{"sides":{"top":{"mm":"-10.00","label":"Holgura superior"},'
+            '"right":{"mm":"-10.00","label":"Holgura derecha"},'
+            '"bottom":{"mm":"-10.00","label":"Holgura inferior"},'
+            '"left":{"mm":"-10.00","label":"Holgura izquierda"}},'
+            '"frame_extensions":[],'
+            '"fixings":[{"label":"Anclaje perimetral","qty_per_unit":"8","note":"Cada 600 mm aprox., según muro"}],'
+            '"wall_notes":{"PARTITION":"Tabique liviano: verifica anclaje con el instalador."}}'
+    ), (
+        'PREMARCO',
+        'Con premarco',
+        '{"sides":{"top":{"mm":"-40.00","label":"Holgura y premarco superior"},'
+            '"right":{"mm":"-40.00","label":"Holgura y premarco derecho"},'
+            '"bottom":{"mm":"-40.00","label":"Holgura y premarco inferior"},'
+            '"left":{"mm":"-40.00","label":"Holgura y premarco izquierdo"}},'
+            '"frame_extensions":[{"side":"all","label":"Premarco perimetral","mm":"30.00"}],'
+            '"fixings":[{"label":"Anclaje de premarco","qty_per_unit":"8","note":"Al muro, según tipo"}],'
+            '"wall_notes":{"PARTITION":"Tabique liviano: el premarco se ancla a la estructura, no al tabique."}}'
+    ), (
+        'SOBRE_VANO',
+        'Sobre vano',
+        '{"sides":{"top":{"mm":"20.00","label":"Solape superior"},'
+            '"right":{"mm":"20.00","label":"Solape derecho"},'
+            '"bottom":{"mm":"0.00","label":"Ajuste inferior"},'
+            '"left":{"mm":"20.00","label":"Solape izquierdo"}},'
+            '"frame_extensions":[],'
+            '"fixings":[{"label":"Fijación sobre vano","qty_per_unit":"6","note":"Al paño, no al vano"}],'
+            '"wall_notes":{}}'
+    ), (
+        'TRASLAPADO',
+        'Traslapado',
+        '{"sides":{"top":{"mm":"20.00","label":"Solape superior"},'
+            '"right":{"mm":"20.00","label":"Solape derecho"},'
+            '"bottom":{"mm":"20.00","label":"Solape inferior"},'
+            '"left":{"mm":"20.00","label":"Solape izquierdo"}},'
+            '"frame_extensions":[],'
+            '"fixings":[{"label":"Fijación por solape","qty_per_unit":"8","note":"Al paño perimetral"}],'
+            '"wall_notes":{}}'
+    ), (
+        'RENOVACION',
+        'Renovación sobre marco existente',
+        '{"sides":{"top":{"mm":"-5.00","label":"Holgura superior"},'
+            '"right":{"mm":"-5.00","label":"Holgura derecha"},'
+            '"bottom":{"mm":"-5.00","label":"Holgura inferior"},'
+            '"left":{"mm":"-5.00","label":"Holgura izquierda"}},'
+            '"frame_extensions":[],'
+            '"fixings":[{"label":"Fijación al marco existente","qty_per_unit":"8","note":"Atornillado al marco"}],'
+            '"wall_notes":{}}'
+    )
+) AS v(code, label, authority)
+ON CONFLICT DO NOTHING;
+
+COMMIT;

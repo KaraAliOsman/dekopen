@@ -29,7 +29,8 @@ from authentication.tenancy import (
     resolve_tenant_context,
 )
 from authentication.views import verified_request_token
-from catalogs import evidence, service
+from catalogs import evidence, mounting, service
+from projects.serializers import MountingRuleListResponseSerializer
 from catalogs.serializers import (
     EvidenceInputSerializer,
     EvidenceListSerializer,
@@ -126,6 +127,37 @@ WRITE_HEADERS = [*HEADERS, OpenApiParameter(
     "If-Match", OpenApiTypes.STR, OpenApiParameter.HEADER, required=True,
     description="Quoted revision from the most recently read catalog entity.",
 )]
+
+
+class MountingRuleCollectionView(APIView):
+    """D07 mounting rules for a system: read-only authority, org overrides
+    the global row of the same code."""
+    parser_classes = [CatalogJSONParser]
+
+    @extend_schema(
+        operation_id="mounting_rules_list",
+        parameters=[
+            ACTIVE_ORGANIZATION_HEADER,
+            OpenApiParameter(
+                "system_id", OpenApiTypes.UUID, OpenApiParameter.QUERY, required=True
+            ),
+        ],
+        responses={200: MountingRuleListResponseSerializer, **ERRORS},
+        tags=["catalogs"],
+    )
+    def get(self, request):
+        system_id = request.query_params.get("system_id")
+        if not system_id:
+            raise contract_error(
+                400, "catalog_validation_error", "catalogs.errors.validation"
+            )
+        with catalog_scope(request, roles=READ_ROLES) as org_id:
+            return Response({
+                "items": [
+                    mounting.mounting_rule_public(row)
+                    for row in mounting.mounting_rules_for_system(org_id, system_id)
+                ]
+            })
 
 
 class CatalogCollectionView(APIView):
