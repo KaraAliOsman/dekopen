@@ -51,7 +51,7 @@ export function LoginPage(): JSX.Element {
           <h1 id="login-title">{t("auth.loginTitle")}</h1>
           <p className="auth-hint">{t("auth.loginDescription")}</p>
         </header>
-        <form className="auth-form" onSubmit={(event) => void submit(event)}>
+        <form noValidate className="auth-form" onSubmit={(event) => void submit(event)}>
           <label htmlFor="email">{t("auth.email")}</label>
           <input
             id="email"

@@ -42,3 +42,11 @@ Append-only chronology. Keep newest entries at the bottom.
 - Non-blocking hook: `make test-ai-evals` + CI job `AI Evals (MOCK, non-blocking)` uploading `ci-mock.json` (gitignored).
 - Harness does not fix the IA — IA2/IA3 correct against this same vara.
 
+
+## [2026-10-05] P01 | sistema de diseño v2 — Constitución como código
+
+- Implemented `docs/design/CONSTITUCION.md` as enforceable code: token architecture with light/dark/canvas/density roles, IBM Plex self-hosted fonts, primitive kit in `frontend/src/ui/` (incl. signature components: SheetSurface, DimLoader, TraceButton, OpeningGlyph), domain formatters, exhaustive `domainLabels` vs orval enums, and global Spanish form validation with RUT módulo-11.
+- Split the three monolithic stylesheets into contiguous-section partials preserving cascade order; documented the ~30% reduction as deferred — duplicated chip/status rules still compose across the legacy split.
+- Added §10 static guards in `scripts/check_guards.py` with committed ratchet baseline, and live slop detectors in `ux:capture` (multi-primary per region, radius/shadow/gradient/blur, WCAG contrast, emoji/exclamations, English, workshop touch targets, bare interactives) with unit tests.
+- Built DEV-only `/dev/ui` muestrario (both themes × 3 densities) and `/dev/ui/mal` reproducing the board-06 forbidden-pattern contrast; fixed chips showing raw enum text and the prohibited «Algo salió mal» title found during the editorial pass.
+- Replaced prohibited voice strings in `es-CL.ts`; committed PR template at `.github/pull_request_template.md`; before/after captures under `docs/redesign/captures/p01-antes|p01-despues/`.

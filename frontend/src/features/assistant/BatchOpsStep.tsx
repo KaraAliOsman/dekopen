@@ -12,7 +12,7 @@ import type { PositionDesignRequest } from "../../api/generated/models/positionD
 import type { DesignBatchPreviewItemRequestDesign } from "../../api/generated/models/designBatchPreviewItemRequestDesign";
 import type { PositionResponse } from "../../api/generated/models/positionResponse";
 import { t } from "../../i18n/es-CL";
-import { formatMoney } from "../money";
+import { formatMoney } from "../../format";
 import { addDecimal, formatDecimal, parseDecimal, subtractDecimal } from "../projects/decimal";
 import type { DesignOp } from "../commands/types";
 import { applyDesignOps, describeDesignOp } from "../canvas/designOps";

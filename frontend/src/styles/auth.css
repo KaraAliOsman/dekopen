@@ -1,0 +1,157 @@
+.auth-screen {
+  align-items: center;
+  background: var(--theme-bg-canvas);
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 2rem;
+}
+
+.auth-card {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-2);
+  display: grid;
+  gap: 1rem;
+  max-width: 28rem;
+  padding: 2rem;
+  width: 100%;
+}
+
+.auth-card form {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.auth-card input {
+  background: var(--theme-bg-canvas);
+  border: 1px solid var(--theme-border-subtle);
+  padding: 0.75rem;
+}
+
+.auth-card__brand {
+  align-items: baseline;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.auth-card__brand .brand-os {
+  color: var(--theme-text-muted);
+  font-size: var(--type-micro);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+}
+
+.auth-card__header {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.auth-card__header h1 {
+  font-size: var(--text-title);
+  margin: 0;
+}
+
+.auth-hint {
+  color: var(--theme-text-secondary);
+  margin: 0;
+}
+
+.auth-form {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.auth-notice {
+  border-radius: var(--r-1);
+  font-size: 0.75rem;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+}
+
+.auth-notice--ok {
+  background: var(--theme-success-soft);
+  color: var(--ok-ink);
+}
+
+.auth-notice--error {
+  background: var(--theme-danger-soft);
+  color: var(--danger-ink);
+}
+
+.auth-qr {
+  align-self: center;
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-2);
+  max-width: 10rem;
+}
+
+.org-option {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  text-align: left;
+  width: 100%;
+}
+
+.org-option:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.org-option__glyph {
+  align-items: center;
+  background: var(--theme-accent-soft);
+  border-radius: var(--r-1);
+  color: var(--info-ink);
+  display: inline-flex;
+  font-weight: 600;
+  height: 2rem;
+  justify-content: center;
+  width: 2rem;
+}
+
+.org-option__meta {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.org-option__sub {
+  color: var(--theme-text-muted);
+  font-size: var(--type-micro);
+}
+
+/* ——— Onboarding ——— */
+.onboarding {
+  display: grid;
+  gap: var(--space-16);
+  margin: 0 auto;
+  max-width: 46rem;
+  padding: var(--space-32) var(--space-16);
+}
+
+.onboarding-head {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.onboarding-head h1 {
+  font-size: var(--text-display);
+  margin: 0;
+}
+
+.onboarding-sub {
+  color: var(--theme-text-secondary);
+  margin: 0;
+}
+
+.onboarding-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}

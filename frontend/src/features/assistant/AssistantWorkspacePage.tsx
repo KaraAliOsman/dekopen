@@ -983,6 +983,7 @@ export function AssistantWorkspacePage(): JSX.Element {
           </p>
         ) : null}
         <form
+          noValidate
           className="aiws-composer"
           onSubmit={(event) => {
             event.preventDefault();

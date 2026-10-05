@@ -1,0 +1,86 @@
+/* Partición §10 — las reglas viven en este archivo; ui.css solo ordena
+   la cascada entre parciales. */
+/* ---------- field ---------- */
+
+.ui-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.ui-field__label {
+  color: var(--theme-text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+
+.ui-field__input {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--theme-text-primary);
+  font: inherit;
+  height: var(--control-height);
+  padding: 0 var(--space-8);
+}
+
+/* ---------- focus ---------- */
+
+:where(.ui-button, .ui-icon-button, .ui-context-nav__link, .ui-inline-edit):focus-visible {
+  outline: 2px solid var(--theme-focus-ring);
+  outline-offset: 1px;
+}
+
+/* El anillo de foco vive en el contrato global :focus-visible (controls.css)
+   — box-shadow var(--focus-ring-shadow), lo verifica canvas.spec.ts. */
+.ui-field__input:focus {
+  border-color: var(--focus-ring);
+}
+
+/* ---------- disabled ---------- */
+
+:where(.ui-button, .ui-icon-button):disabled {
+  background: var(--theme-disabled-bg);
+  border-color: var(--theme-disabled-border);
+  color: var(--theme-disabled-ink);
+  cursor: not-allowed;
+}
+
+/* Import status/confidence chips — outline variants used only by Catalogs
+   (imports). Production/status chips live in dashboard.css: same pill shape,
+   ink-on-soft pairing; do not redefine them here. */
+.production-chip.imports-status-uploaded,
+.production-chip.imports-status-extracting {
+  color: var(--info-ink);
+  border-color: currentColor;
+}
+.production-chip.imports-status-review_ready {
+  color: var(--warn-ink);
+  border-color: currentColor;
+}
+.production-chip.imports-status-confirmed {
+  color: var(--theme-accent);
+  border-color: var(--theme-accent);
+}
+.production-chip.imports-status-failed {
+  color: var(--danger-ink);
+  border-color: currentColor;
+}
+.production-chip.imports-confidence-verified_structured {
+  color: var(--theme-accent);
+  border-color: var(--theme-accent);
+}
+.production-chip.imports-confidence-high_candidate {
+  color: var(--theme-accent);
+  border-color: currentColor;
+  border-style: dashed;
+}
+.production-chip.imports-confidence-review_required {
+  color: var(--warn-ink);
+  border-color: currentColor;
+}
+.production-chip.imports-confidence-low {
+  color: var(--danger-ink);
+  border-color: currentColor;
+  border-style: dashed;
+}

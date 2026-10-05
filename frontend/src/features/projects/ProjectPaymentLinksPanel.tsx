@@ -13,7 +13,7 @@ import type {
   PaymentLinkStatusEnum,
 } from "../../api/generated/models";
 import { t, type TranslationKey } from "../../i18n/es-CL";
-import { formatMoney } from "../money";
+import { formatMoney } from "../../format";
 
 const KIND_LABEL: Record<string, TranslationKey> = {
   ANTICIPO: "projects.paymentKindAnticipo",
@@ -207,7 +207,7 @@ export function ProjectPaymentLinksPanel({
         </p>
       )}
       {showForm && (
-        <form className="payments-form" onSubmit={create}>
+        <form noValidate className="payments-form" onSubmit={create}>
           <label>
             {t("projects.paymentKind")}
             <select
@@ -224,7 +224,7 @@ export function ProjectPaymentLinksPanel({
             <input
               required
               inputMode="numeric"
-              pattern="[0-9]+"
+              data-pattern="[0-9]+"
               value={amount}
               onChange={(event) => setAmount(event.target.value)}
               placeholder="250000"

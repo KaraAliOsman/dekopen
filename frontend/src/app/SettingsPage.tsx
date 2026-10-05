@@ -26,7 +26,7 @@ import type {
 } from "../api/generated/models";
 import { PageHeader } from "../ui";
 import { useAuthSession } from "../auth/AuthSessionProvider";
-import { formatDate } from "../features/money";
+import { formatDate } from "../format";
 import { t, type TranslationKey } from "../i18n/es-CL";
 import { MOD_K_HINT, MOD_KEY_HINT } from "../platform";
 import { useTheme } from "../theme/ThemeProvider";
@@ -149,7 +149,7 @@ function FlowIntegrationCard({ orgId }: { orgId: string }): JSX.Element {
         )}
       </p>
       {message && <p className={message.error ? "form-error" : "settings-hint"}>{message.text}</p>}
-      <form className="payments-form" onSubmit={save}>
+      <form noValidate className="payments-form" onSubmit={save}>
         <label>
           {t("settings.flowEnv")}
           <select value={apiUrl} onChange={(event) => setApiUrl(event.target.value as ApiUrlEnum)}>
@@ -285,7 +285,7 @@ function SiiCafCard({ orgId }: { orgId: string }): JSX.Element {
           </tbody>
         </table>
       )}
-      <form className="payments-form" onSubmit={upload}>
+      <form noValidate className="payments-form" onSubmit={upload}>
         <label>
           {t("settings.siiCafFile")}
           <FilePick
@@ -406,7 +406,7 @@ function SiiCertificateCard({ orgId }: { orgId: string }): JSX.Element {
           </div>
         </dl>
       )}
-      <form className="payments-form" onSubmit={upload}>
+      <form noValidate className="payments-form" onSubmit={upload}>
         <label>
           {t("settings.siiCertFile")}
           <FilePick inputRef={pickRef} accept=".pfx,.p12" file={pickFile} onFile={setPickFile} />
@@ -557,7 +557,7 @@ function OrgBrandingCard({ orgId }: { orgId: string }): JSX.Element {
           <p className="settings-hint">{t("settings.brandingLogoEmpty")}</p>
         )}
       </div>
-      <form className="payments-form" onSubmit={save}>
+      <form noValidate className="payments-form" onSubmit={save}>
         <label>
           {t("settings.brandingName")}
           <input
@@ -609,7 +609,7 @@ function OrgBrandingCard({ orgId }: { orgId: string }): JSX.Element {
           </button>
         </div>
       </form>
-      <form className="payments-form" onSubmit={upload}>
+      <form noValidate className="payments-form" onSubmit={upload}>
         <label>
           {t("settings.brandingLogo")}
           <FilePick

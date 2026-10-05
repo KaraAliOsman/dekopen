@@ -1,0 +1,546 @@
+.skip-link {
+  background: var(--interactive-fill);
+  border-radius: 0 0 var(--r-1) 0;
+  color: var(--on-interactive-fill);
+  font-size: 0.85rem;
+  font-weight: 600;
+  left: 0;
+  padding: 0.5rem 0.875rem;
+  position: fixed;
+  top: 0;
+  transform: translateY(-110%);
+  transition: transform 0.15s ease;
+  z-index: 100;
+}
+
+.skip-link:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 2px;
+  transform: translateY(0);
+}
+
+.placeholder {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-2);
+  max-width: 48rem;
+  padding: 2rem;
+}
+
+[role="alert"] {
+  color: var(--danger-ink);
+}
+
+/* Standalone denial/error notices (a bare <p role="alert"> returned instead
+   of page content) must read as a designed state, not a stray red line. */
+p[role="alert"]:only-child {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-left: 3px solid var(--theme-danger);
+  border-radius: var(--radius-md);
+  color: var(--theme-text-primary);
+  margin: 1.5rem 0;
+  max-width: 34rem;
+  padding: 1rem 1.25rem;
+}
+
+p[role="alert"]:only-child::before {
+  content: "⚠ ";
+  color: var(--danger-ink);
+}
+
+.primary-action {
+  background: var(--theme-accent);
+  border-radius: var(--r-1);
+  color: var(--theme-surface-panel);
+  display: inline-block;
+  font-weight: 600;
+  margin-top: 1rem;
+  padding: 0.625rem 0.875rem;
+  text-decoration: none;
+}
+
+.primary-action:hover {
+  background: var(--theme-accent-strong);
+}
+
+/* Task dashboard, not a form column: the attention queue and active work
+   use the wide left lane; operations context rides the right lane. */
+.dashboard {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: minmax(0, 7fr) minmax(19rem, 5fr);
+  /* 96rem left a dead rail at 1920px; the workspace should use the viewport. */
+  max-width: 120rem;
+}
+
+.dashboard-empty {
+  grid-column: 1 / -1;
+}
+
+.dashboard-attention,
+.dashboard-continue,
+.dashboard-list {
+  grid-column: 1;
+}
+
+.dashboard-ops {
+  grid-column: 2;
+  grid-row: 2 / span 10;
+  align-self: start;
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-2);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+}
+
+.dashboard-ops .eyebrow {
+  margin: 0;
+}
+
+.dashboard-funnel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+/* Jobs reuses the dashboard grid but has no right rail — everything
+   spans the full width instead of leaving a dead column (hostile M5). */
+.dashboard.jobs-page > * {
+  grid-column: 1 / -1;
+}
+
+.dashboard-funnel-empty {
+  color: var(--theme-text-muted);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+@media (max-width: 1100px) {
+  .dashboard {
+    /* minmax(0,1fr): the single column may shrink below the widest
+       child's min-content — otherwise long rows pin the page wider
+       than the viewport. */
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dashboard-ops,
+  .dashboard-attention,
+  .dashboard-continue,
+  .dashboard-list {
+    grid-column: 1;
+    grid-row: auto;
+  }
+}
+.dashboard-cards {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+}
+
+.metric-card {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-2);
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+  padding: 0.875rem 1rem;
+}
+
+.metric-card > * {
+  min-width: 0;
+}
+
+.dashboard-money {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.dashboard-money-currency > .eyebrow {
+  margin-bottom: 0.375rem;
+}
+
+.metric-card strong {
+  /* Headline digits, not code — IBM Plex Mono slashes its zero, so a "0"
+   * KPI read as an empty-set placeholder (review VM3). */
+  font-size: var(--text-display);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-attention ul {
+  display: grid;
+  gap: 0.375rem;
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+}
+
+.attention-item a {
+  align-items: center;
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-2);
+  color: var(--theme-text-primary);
+  display: flex;
+  gap: 0.625rem;
+  justify-content: space-between;
+  padding: 0.625rem 0.875rem;
+  text-decoration: none;
+}
+
+.attention-item a:hover {
+  border-color: var(--theme-border-strong);
+}
+
+.attention-item strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.attention-item.is-warn a {
+  border-color: var(--warn-ink);
+}
+
+.attention-item.is-warn strong {
+  color: var(--warn-ink);
+}
+
+.attention-item .attention-label {
+  flex: 1;
+}
+
+.attention-item .attention-cta {
+  color: var(--theme-accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.attention-item a:hover .attention-cta {
+  text-decoration: underline;
+}
+
+.dashboard-activity {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+}
+
+.dashboard-activity li {
+  align-items: baseline;
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.375rem 0;
+}
+
+.dashboard-activity li + li {
+  border-top: 1px solid var(--theme-border-subtle);
+}
+
+.dashboard-activity-event {
+  color: var(--theme-text-primary);
+  min-width: 0;
+}
+
+.dashboard-activity-code {
+  font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.dashboard-activity time {
+  color: var(--theme-text-muted);
+  font-size: 0.75rem;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.dashboard-attention-clear {
+  color: var(--theme-text-secondary);
+  margin: 0.375rem 0 0;
+}
+
+.dashboard-empty {
+  background: var(--theme-surface-panel);
+  border: 1px dashed var(--theme-border-strong);
+  border-radius: var(--r-2);
+  padding: 2rem;
+  text-align: center;
+}
+
+.dashboard-empty p {
+  color: var(--theme-text-secondary);
+  margin: 0;
+}
+
+.dashboard-list {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-2);
+}
+
+.dashboard-list-head {
+  align-items: center;
+  border-bottom: 1px solid var(--theme-border-subtle);
+  display: flex;
+  justify-content: space-between;
+  padding: 0.625rem 1rem;
+}
+
+.dashboard-list-head h2 {
+  font-size: var(--type-micro);
+  margin: 0;
+}
+
+.dashboard-list-head a {
+  color: var(--theme-accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.dashboard-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dashboard-row {
+  align-items: center;
+  color: var(--theme-text-primary);
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(8rem, 1.4fr) auto minmax(6rem, 1fr) auto;
+  padding: 0.5rem 1rem;
+  text-decoration: none;
+}
+
+.dashboard-row + .dashboard-row,
+.dashboard-list li + li .dashboard-row {
+  border-top: 1px solid var(--theme-border-subtle);
+}
+
+.dashboard-row-code {
+  color: var(--theme-text-muted);
+  font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.dashboard-row-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-row-client {
+  color: var(--theme-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-continue {
+  align-items: baseline;
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-left: 3px solid var(--theme-accent);
+  border-radius: var(--r-2);
+  color: var(--theme-text-primary);
+  display: grid;
+  gap: 0.125rem 1rem;
+  /* minmax(0,1fr): the nowrap name/meta columns may shrink to the card,
+     not the text's min-content — without it a long client name forces
+     page-level horizontal scroll. */
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 0.875rem 1rem;
+  text-decoration: none;
+}
+
+.dashboard-continue:hover {
+  border-color: var(--theme-accent);
+  border-left-color: var(--theme-accent);
+}
+
+.dashboard-continue .eyebrow {
+  grid-column: 1 / -1;
+}
+
+.dashboard-continue-name {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  grid-column: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-continue-meta {
+  color: var(--theme-text-secondary);
+  grid-column: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-continue-cta {
+  align-self: center;
+  color: var(--theme-accent);
+  font-weight: 600;
+  grid-column: 2;
+  grid-row: 2 / 4;
+}
+
+@media (max-width: 640px) {
+  .dashboard-continue {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-continue-cta {
+    grid-column: 1;
+    grid-row: auto;
+  }
+}
+
+.status-chip,
+.production-chip,
+.production-chip-danger {
+  border-radius: var(--r-pill);
+  display: inline-block;
+  font-size: var(--type-micro);
+  font-weight: 600;
+  line-height: 1.5;
+  padding: 0.125rem 0.625rem;
+}
+
+/* Chips that act (e.g. filter the list) reset button chrome and invite the
+   click they promise. */
+button.production-chip {
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+button.production-chip:hover {
+  filter: brightness(0.95);
+}
+
+/* Production chips share the pill language; tones come from the same
+   status palette so a status reads identically on every surface. */
+.production-chip.status-released {
+  background: var(--theme-info-soft);
+  color: var(--info-ink);
+}
+.production-chip.status-in_progress {
+  background: var(--theme-accent-soft);
+  color: var(--info-ink);
+}
+.production-chip.status-hold {
+  background: var(--theme-warning-soft);
+  color: var(--warn-ink);
+}
+.production-chip.status-completed {
+  background: var(--theme-success-soft);
+  color: var(--ok-ink);
+}
+.production-chip.status-dispatched {
+  background: var(--theme-accent-soft);
+  color: var(--info-ink);
+}
+.production-chip.status-installed {
+  background: var(--theme-success-soft);
+  color: var(--ok-ink);
+}
+.production-chip.is-warn {
+  background: var(--theme-warning-soft);
+  color: var(--warn-ink);
+}
+.production-chip.is-ready {
+  background: var(--theme-success-soft);
+  color: var(--ok-ink);
+}
+.production-chip.delivery-scheduled {
+  background: var(--theme-info-soft);
+  color: var(--info-ink);
+}
+.production-chip.delivery-on_route {
+  background: var(--theme-accent-soft);
+  color: var(--info-ink);
+}
+.production-chip.delivery-delivered {
+  background: var(--theme-success-soft);
+  color: var(--ok-ink);
+}
+.production-chip.delivery-failed {
+  background: var(--theme-danger-soft);
+  color: var(--danger-ink);
+}
+.production-chip-danger {
+  background: var(--theme-danger-soft);
+  color: var(--danger-ink);
+}
+
+.status-chip[data-status="draft"] {
+  background: var(--theme-surface-card);
+  border: 1px solid var(--theme-border-strong);
+  color: var(--theme-text-secondary);
+}
+
+.status-chip[data-status="quoted"] {
+  background: var(--theme-accent-soft);
+  color: var(--info-ink);
+}
+
+.status-chip[data-status="approved"],
+.status-chip[data-status="in_production"] {
+  background: var(--theme-success-soft);
+  color: var(--ok-ink);
+}
+
+.status-chip[data-status="completed"] {
+  background: var(--theme-accent-soft);
+  color: var(--info-ink);
+}
+
+.status-chip[data-status="cancelled"] {
+  background: var(--theme-danger-soft);
+  color: var(--danger-ink);
+}
+
+/* Derived vano progression (position-statusKey tones) */
+.status-chip[data-status="evaluated"] {
+  background: var(--theme-info-soft);
+  color: var(--info-ink);
+}
+
+.status-chip[data-status="priced"] {
+  background: var(--theme-accent-soft);
+  color: var(--info-ink);
+}
+
+.status-chip[data-status="frozen"] {
+  background: var(--theme-warning-soft);
+  color: var(--warn-ink);
+}
+
+.status-chip[data-status="production"] {
+  background: var(--theme-success-soft);
+  color: var(--ok-ink);
+}
+
+/* Customer approval link states (quotation links ledger) */
+.status-chip[data-status="pending"] {
+  background: var(--theme-info-soft);
+  color: var(--info-ink);
+}
+
+.status-chip[data-status="declined"],
+.status-chip[data-status="revoked"] {
+  background: var(--theme-danger-soft);
+  color: var(--danger-ink);
+}

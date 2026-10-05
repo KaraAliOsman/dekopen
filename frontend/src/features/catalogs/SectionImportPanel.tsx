@@ -230,7 +230,7 @@ export function SectionImportPanel({
                   type="text"
                   required
                   inputMode="decimal"
-                  pattern="[0-9]+([.,][0-9]+)?"
+                  data-pattern="[0-9]+([.,][0-9]+)?"
                   value={scale}
                   onChange={(event) => setScale(event.target.value)}
                 />

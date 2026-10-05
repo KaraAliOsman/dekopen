@@ -1,0 +1,6 @@
+/* Partición §10 — las reglas viven en este archivo; ui.css solo ordena
+   la cascada entre parciales. */
+/* ---------- estados bloqueados ---------- */
+.ui-empty--blocked .ui-empty__glyph {
+  color: var(--warn);
+}

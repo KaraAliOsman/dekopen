@@ -54,7 +54,7 @@ import { useAuthSession } from "../../auth/AuthSessionProvider";
 import { formatDateTime } from "../../format";
 import { DeniedState, PageHeader, usePrompt } from "../../ui";
 import { fmtMm, fmtPct } from "../../format";
-import { formatDate } from "../money";
+import { formatDate } from "../../format";
 import { t, tDynamic, tOptional } from "../../i18n/es-CL";
 import { useAssistantSurface } from "../assistant/assistantContext";
 import { PLAN_REQUIRED_CODES, STEP_STOCK_KINDS, cutRoleLabel, stationCodeLabel } from "./labels";
@@ -1226,6 +1226,7 @@ export function ProductionPage(): JSX.Element {
               (PM-M6). Top of the sidebar: scanning a stick is the most
               frequent floor gesture, above filters and boards. */}
           <form
+            noValidate
             className="production-trace-lookup"
             onSubmit={(event) => {
               event.preventDefault();
@@ -2843,6 +2844,7 @@ export function ProductionPage(): JSX.Element {
                     ) : null}
                     {confirmOpen && canField && delivery ? (
                       <form
+                        noValidate
                         className="production-delivery-form production-confirm-form"
                         onSubmit={(event) => {
                           event.preventDefault();
@@ -2987,6 +2989,7 @@ export function ProductionPage(): JSX.Element {
                     ) : null}
                     {deliveryForm !== null && canWrite ? (
                       <form
+                        noValidate
                         className="production-delivery-form"
                         onSubmit={(event) => {
                           event.preventDefault();

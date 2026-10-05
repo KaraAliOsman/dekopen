@@ -1,0 +1,425 @@
+/* src/dev — herramientas de desarrollo (muestrario + Bien/Mal).
+ * Fuera del alcance de los guards §10: la página /dev/ui/mal viola la
+ * Constitución a propósito para mostrar el contraste. */
+
+.dev-ui {
+  min-height: 100vh;
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font-size: var(--density-font, 0.8125rem);
+}
+
+.dev-scope-bar {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  display: flex;
+  align-items: center;
+  gap: var(--space-16);
+  padding: var(--space-8) var(--space-16);
+  background: var(--surface-panel);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.dev-scope-bar strong {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.dev-scope-bar > :last-child {
+  margin-left: auto;
+}
+
+.dev-toc {
+  display: flex;
+  gap: var(--space-12);
+  flex-wrap: wrap;
+  padding: var(--space-12) var(--space-16);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.75rem;
+}
+
+.dev-toc a {
+  color: var(--interactive);
+  text-decoration: none;
+}
+
+.dev-head {
+  padding: var(--space-24) var(--space-16) var(--space-8);
+  max-width: 60rem;
+}
+
+.dev-head h1 {
+  font-size: var(--type-display, 1.5rem);
+  margin: 0 0 var(--space-4);
+}
+
+.dev-head p {
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.dev-main {
+  display: grid;
+  grid-template-columns: minmax(0, 320px) 1fr;
+  gap: var(--space-16);
+  align-items: start;
+  padding: var(--space-16);
+}
+@media (max-width: 1100px) {
+  .dev-main {
+    grid-template-columns: 1fr;
+  }
+}
+/* Los hijos de la rejilla no pueden imponer un ancho mínimo al carril 1fr. */
+.dev-main > *,
+.dev-panel > * {
+  min-width: 0;
+}
+
+.dev-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  min-width: 0;
+}
+
+.dev-panel .ui-panel__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.dev-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  flex-wrap: wrap;
+}
+
+.dev-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-12) var(--space-16);
+}
+
+.dev-grid--states {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.dev-loader-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  justify-content: center;
+}
+
+.dev-note {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.dev-trace-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+/* ---- Firma ---- */
+
+.dev-sheet {
+  padding: var(--space-24);
+  max-width: 22rem;
+}
+
+.dev-sheet__kicker {
+  font-size: var(--type-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0 0 var(--space-4);
+}
+
+.dev-sheet__title {
+  margin: 0 0 var(--space-12);
+  font-size: 1.125rem;
+}
+
+.dev-glyph-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: var(--space-8);
+}
+
+.dev-glyph {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-8);
+  border: 1px solid var(--border-subtle);
+}
+
+.dev-glyph figcaption {
+  font-family: var(--font-mono);
+  font-size: var(--type-micro);
+  color: var(--text-muted);
+}
+
+.dev-foot {
+  padding: var(--space-24) var(--space-16);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+@media (max-width: 900px) {
+  .dev-main {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ================================================================
+ * /dev/ui/mal — contraste con el patrón prohibido (board-06).
+ * ================================================================ */
+
+.dev-contrast {
+  min-height: 100vh;
+  background: var(--bg-app);
+  color: var(--text-primary);
+  padding: var(--space-24);
+}
+
+.dev-contrast__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: var(--space-16);
+  margin-bottom: var(--space-16);
+}
+
+.dev-contrast__kicker {
+  font-family: var(--font-mono);
+  font-size: var(--type-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.dev-contrast__head h1 {
+  margin: 0 0 var(--space-4);
+}
+
+.dev-contrast__cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-24);
+}
+
+@media (max-width: 1100px) {
+  .dev-contrast__cols {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dev-contrast__col h2 {
+  font-size: 1rem;
+  margin: 0 0 var(--space-4);
+}
+
+.dev-contrast__col--mal h2 {
+  color: var(--danger-ink);
+}
+
+.dev-contrast__notes {
+  margin: 0 0 var(--space-16);
+  padding-left: var(--space-16);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* ---- La columna «Mal»: todo lo que el §9.3 prohíbe ---- */
+
+.mal__card {
+  border-radius: 18px;
+  padding: 1.5rem;
+  color: #fff;
+  background: linear-gradient(135deg, #7c3aed 0%, #6366f1 45%, #38bdf8 100%);
+  box-shadow: 0 20px 50px rgba(124, 58, 237, 0.45);
+  backdrop-filter: blur(12px);
+  font-family: "Poppins", system-ui, sans-serif;
+}
+
+.mal__title {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.mal__sub {
+  margin: 0.25rem 0 1rem;
+  opacity: 0.85;
+}
+
+.mal__stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.mal__stat {
+  border-radius: 14px;
+  padding: 0.9rem;
+  background: rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.mal__stat-value {
+  display: block;
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.mal__stat-label {
+  font-size: 0.72rem;
+  opacity: 0.85;
+}
+
+.mal__actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.mal__btn {
+  border: none;
+  border-radius: var(--r-pill);
+  padding: 0.7rem 1.4rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 400ms cubic-bezier(0.2, 2, 0.4, 1);
+}
+
+.mal__btn:hover {
+  transform: translateY(-3px) scale(1.04);
+}
+
+.mal__btn--cta {
+  background: linear-gradient(135deg, #fbbf24, #f472b6);
+  color: #1f1033;
+  box-shadow: 0 8px 20px rgba(244, 114, 182, 0.5);
+}
+
+.mal__err {
+  border-radius: 10px;
+  padding: 0.6rem 0.9rem;
+  background: rgba(239, 68, 68, 0.25);
+  border: 1px solid rgba(252, 165, 165, 0.6);
+}
+
+.mal__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.mal__item {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 0.6rem;
+  align-items: center;
+  border-radius: 12px;
+  padding: 0.7rem 0.9rem;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.mal__item-name {
+  font-weight: 600;
+}
+
+.mal__item-meta {
+  font-size: 0.7rem;
+  opacity: 0.75;
+  font-family: monospace;
+}
+
+.mal__item-price {
+  font-weight: 700;
+}
+
+.mal__chip {
+  border: none;
+  border-radius: var(--r-pill);
+  padding: 0.25rem 0.8rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.mal__chip--green {
+  background: #22c55e;
+  color: #052e12;
+}
+
+/* ---- La columna «Bien»: el mismo contenido con el sistema ---- */
+
+.bien__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: var(--space-12);
+  padding-bottom: var(--space-12);
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-12);
+}
+
+.bien__kicker {
+  font-family: var(--font-mono);
+  font-size: var(--type-micro);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.bien__title {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.bien__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.bien__foot {
+  margin-top: var(--space-12);
+  border-top: 1px solid var(--border-subtle);
+  padding-top: var(--space-12);
+}
+
+.bien__totals {
+  display: flex;
+  gap: var(--space-24);
+  margin: 0;
+}
+
+.bien__totals dt {
+  font-size: var(--type-micro);
+  color: var(--text-muted);
+  margin-bottom: var(--space-4);
+}
+
+.bien__totals dd {
+  margin: 0;
+  font-family: var(--font-mono);
+}

@@ -330,6 +330,7 @@ export function AskDekopen({
               </div>
               {message ? <p className="ask-dock__error">{message}</p> : null}
               <form
+                noValidate
                 className="ask-dock__form"
                 onSubmit={(event) => {
                   event.preventDefault();

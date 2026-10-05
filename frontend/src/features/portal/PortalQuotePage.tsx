@@ -20,7 +20,7 @@ import {
 } from "../projects/decimal";
 import { reSkinMembers, type MemberGeometry } from "../canvas/members";
 import "./portal.css";
-import { formatDate, formatMoney } from "../money";
+import { formatDate, formatMoney } from "../../format";
 
 const money = formatMoney;
 
@@ -623,6 +623,7 @@ export function PortalQuotePage(): JSX.Element {
           </p>
         ) : (
           <form
+            noValidate
             className="portal-decision"
             onSubmit={(event: FormEvent<HTMLFormElement>) => {
               event.preventDefault();

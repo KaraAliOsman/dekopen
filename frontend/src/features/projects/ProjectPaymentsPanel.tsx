@@ -29,7 +29,7 @@ import type {
 } from "../../api/generated/models";
 import { t, type TranslationKey } from "../../i18n/es-CL";
 import { actionErrorDetail } from "../errors";
-import { formatDate, formatMoney, parseMoneyInput } from "../money";
+import { formatDate, formatMoney, parseMoneyInput } from "../../format";
 import { formatRevision } from "../../format";
 import { ProjectPaymentLinksPanel } from "./ProjectPaymentLinksPanel";
 import { useConfirm, usePrompt } from "../../ui";
@@ -590,7 +590,7 @@ export function ProjectPaymentsPanel({
         </div>
       )}
       {showForm && (
-        <form className="payments-form" onSubmit={record}>
+        <form noValidate className="payments-form" onSubmit={record}>
           <label>
             {t("projects.paymentKind")}
             <select
@@ -607,7 +607,7 @@ export function ProjectPaymentsPanel({
             <input
               required
               inputMode="decimal"
-              pattern="[0-9]{1,3}(\.[0-9]{3})+|[0-9]+"
+              data-pattern="[0-9]{1,3}(\.[0-9]{3})+|[0-9]+"
               title={t("projects.paymentAmountHint")}
               value={amount}
               onChange={(event) => setAmount(event.target.value)}

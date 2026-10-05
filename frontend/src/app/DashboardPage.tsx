@@ -6,7 +6,7 @@ import { analyticsOperationalSummary, projectsList } from "../api/generated/deko
 import type { OperationalSummary, ProjectResponse } from "../api/generated/models";
 import { useAuthSession } from "../auth/AuthSessionProvider";
 import { formatDateTime } from "../format";
-import { formatMoney } from "../features/money";
+import { formatMoney } from "../format";
 import { t, type TranslationKey } from "../i18n/es-CL";
 import { PageHeader } from "../ui";
 import { attentionEntries, attentionLabel } from "./attention";

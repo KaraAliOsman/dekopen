@@ -32,13 +32,13 @@
   outline: none;
   background: transparent;
   font: inherit;
-  font-size: 15px;
+  font-size: var(--type-title-m);
   color: var(--theme-text-primary);
 }
 
 .command-palette-input kbd {
   font-family: "IBM Plex Mono", ui-monospace, monospace;
-  font-size: 11px;
+  font-size: var(--type-micro);
   color: var(--theme-text-muted);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-sm);
@@ -64,7 +64,7 @@
   border: none;
   background: transparent;
   font: inherit;
-  font-size: 14px;
+  font-size: var(--type-title-m);
   padding: 8px 10px;
   border-radius: var(--radius-sm);
   color: var(--theme-text-primary);
@@ -74,28 +74,28 @@
 .command-palette-item.active,
 .command-palette-item:hover {
   background: var(--theme-accent-soft);
-  color: var(--theme-accent-ink);
+  color: var(--info-ink);
 }
 
 .command-palette-item small {
-  font-size: 12px;
+  font-size: var(--type-dense);
   color: var(--theme-text-muted);
 }
 
 .command-palette-hint {
   padding: 10px;
-  font-size: 13px;
+  font-size: var(--type-body);
   color: var(--theme-text-muted);
 }
 
 .command-palette-describe {
   margin: 0;
   padding: 8px 14px 12px;
-  font-size: 12px;
+  font-size: var(--type-dense);
   color: var(--theme-text-muted);
   border-top: 1px solid var(--theme-border-subtle);
 }
 
 .command-palette-invalid {
-  color: var(--theme-danger);
+  color: var(--danger-ink);
 }

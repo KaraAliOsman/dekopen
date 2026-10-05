@@ -31,7 +31,7 @@ import type {
 } from "../../api/generated/models";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
 import { t, tOptional, type TranslationKey } from "../../i18n/es-CL";
-import { formatDate, formatMoney } from "../money";
+import { formatDate, formatMoney } from "../../format";
 import { fmtMm, formatDateTime, formatRevision, isValidEmail, isValidRut } from "../../format";
 import { projectNameWrite } from "./projectNames";
 import { useProjectView } from "./useProject";

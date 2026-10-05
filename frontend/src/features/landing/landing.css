@@ -72,7 +72,7 @@
 .landing-hero__shot img,
 .landing-section__shot img {
   border: 1px solid var(--theme-border-subtle);
-  border-radius: 0.5rem;
+  border-radius: var(--r-2);
   box-shadow: 0 18px 48px -20px rgb(15 24 30 / 0.28);
   display: block;
   height: auto;

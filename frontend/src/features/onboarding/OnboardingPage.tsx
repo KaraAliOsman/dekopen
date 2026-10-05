@@ -471,7 +471,7 @@ export function OnboardingPage(): JSX.Element {
                 <StatusBadge tone="success" label={t("onboarding.clientSaved")} /> {clientName}
               </p>
             ) : canWrite ? (
-              <form className="auth-form" onSubmit={(event) => void createClient(event)}>
+              <form noValidate className="auth-form" onSubmit={(event) => void createClient(event)}>
                 <label htmlFor="onb-client-name">{t("clients.name")}</label>
                 <input
                   id="onb-client-name"
@@ -543,7 +543,11 @@ export function OnboardingPage(): JSX.Element {
                 <StatusBadge tone="success" label={t("onboarding.projectSaved")} /> {projectName}
               </p>
             ) : canWrite ? (
-              <form className="auth-form" onSubmit={(event) => void createProject(event)}>
+              <form
+                noValidate
+                className="auth-form"
+                onSubmit={(event) => void createProject(event)}
+              >
                 <label htmlFor="onb-project-name">{t("projects.name")}</label>
                 <input
                   id="onb-project-name"

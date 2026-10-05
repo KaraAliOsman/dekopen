@@ -1359,7 +1359,7 @@ export function ProjectQuotationPanel({
         <p>{t("quotation.priceFirst")}</p>
       )}
       {preparation && (
-        <form className="quotation-form" onSubmit={(event) => void emit(event)}>
+        <form noValidate className="quotation-form" onSubmit={(event) => void emit(event)}>
           <label htmlFor="quotation-payment-terms">{t("quotation.paymentTerms")}</label>
           <textarea
             id="quotation-payment-terms"

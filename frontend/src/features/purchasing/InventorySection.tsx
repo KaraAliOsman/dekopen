@@ -311,7 +311,7 @@ export function InventorySection({
             ))}
           </ul>
           {adjustTarget ? (
-            <form className="inventory-remnant-form" onSubmit={recordMovement}>
+            <form noValidate className="inventory-remnant-form" onSubmit={recordMovement}>
               <p className="purchasing-hint">
                 {adjustTarget.sku} · {adjustTarget.name}
               </p>
@@ -400,7 +400,7 @@ export function InventorySection({
         </label>
       </div>
       {showCreate ? (
-        <form className="inventory-remnant-form" onSubmit={createRemnant}>
+        <form noValidate className="inventory-remnant-form" onSubmit={createRemnant}>
           <label>
             {t("inventory.remnantKind")}
             <select

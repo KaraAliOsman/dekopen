@@ -57,7 +57,7 @@
 .catalog-detail {
   min-width: 0;
   border: 1px solid var(--theme-border-subtle);
-  border-radius: 0.5rem;
+  border-radius: var(--r-2);
   background: var(--theme-surface-panel);
   padding: 0.875rem;
 }
@@ -121,7 +121,7 @@
   color: var(--theme-text-primary);
   background: var(--theme-surface-panel);
   border: 1px solid var(--theme-border-subtle);
-  border-radius: 0.3rem;
+  border-radius: var(--r-1);
   min-height: 2.25rem;
 }
 
@@ -219,7 +219,7 @@
   margin: 0;
   padding: 0.75rem;
   border: 1px solid var(--theme-border-subtle);
-  border-radius: 0.3rem;
+  border-radius: var(--r-1);
 }
 
 .catalog-group legend {
@@ -251,7 +251,7 @@
 
 .catalog .catalog-danger,
 .catalog [role="alert"] {
-  color: var(--theme-danger);
+  color: var(--danger-ink);
 }
 
 .catalog-sr-only {
@@ -318,12 +318,12 @@
 .ws-chip {
   font-size: 0.75rem;
   padding: 0.15rem 0.55rem;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   background: var(--theme-surface-2, rgba(0, 0, 0, 0.06));
 }
 .ws-chip--off {
   border: 1px solid var(--theme-warning, #b26a00);
-  color: var(--theme-warning, #b26a00);
+  color: var(--warn-ink);
   background: transparent;
 }
 .ws-centers {
@@ -342,7 +342,7 @@
 .ws-center-form input {
   background: var(--theme-surface);
   border: 1px solid var(--theme-border);
-  border-radius: var(--theme-radius-sm, 8px);
+  border-radius: var(--theme-radius-sm, var(--r-2));
   padding: 0.42rem 0.6rem;
   font: inherit;
   min-width: 8rem;
@@ -355,27 +355,27 @@
 .ws-center-form select {
   background: var(--theme-surface);
   border: 1px solid var(--theme-border);
-  border-radius: var(--theme-radius-sm, 8px);
+  border-radius: var(--theme-radius-sm, var(--r-2));
   padding: 0.42rem 0.5rem;
   font: inherit;
 }
 .ws-center-form [role="alert"] {
-  color: var(--theme-danger, #b3261e);
+  color: var(--danger-ink);
   font-size: 0.82rem;
 }
 .ws-badge {
-  font-size: 0.72rem;
+  font-size: var(--type-dense);
   padding: 0.15rem 0.55rem;
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   border: 1px solid var(--theme-border);
 }
 .ws-badge--ok {
-  border-color: var(--theme-ok, #2e7d32);
-  color: var(--theme-ok, #2e7d32);
+  border-color: var(--ok-ink);
+  color: var(--ok-ink);
 }
 .ws-badge--warn {
-  border-color: var(--theme-warn, #b26a00);
-  color: var(--theme-warn, #b26a00);
+  border-color: var(--warn-ink);
+  color: var(--warn-ink);
 }
 .ws-identity-facts {
   display: flex;
@@ -389,7 +389,7 @@
   gap: 0.15rem;
 }
 .ws-identity-facts dt {
-  font-size: 0.72rem;
+  font-size: var(--type-dense);
   color: var(--theme-text-dim);
 }
 .ws-identity-facts dd {
@@ -410,10 +410,10 @@
   padding: 0.6rem 0.75rem;
 }
 .ws-ladder-level.is-ok {
-  border-color: var(--theme-ok, #2e7d32);
+  border-color: var(--ok-ink);
 }
 .ws-ladder-level.is-blocked {
-  border-color: var(--theme-warn, #b26a00);
+  border-color: var(--warn-ink);
 }
 .ws-ladder-level header {
   display: flex;
@@ -424,10 +424,10 @@
   font-size: 0.8rem;
 }
 .ws-ladder-level.is-ok .ws-ladder-state {
-  color: var(--theme-ok, #2e7d32);
+  color: var(--ok-ink);
 }
 .ws-ladder-level.is-blocked .ws-ladder-state {
-  color: var(--theme-warn, #b26a00);
+  color: var(--warn-ink);
 }
 .ws-ladder-level em {
   margin-left: auto;
@@ -458,8 +458,8 @@
 .ws-blocker-level {
   background: var(--theme-warn-bg, #fdf3e3);
   border-radius: var(--theme-radius-pill, 999px);
-  color: var(--theme-warn, #b26a00);
-  font-size: 0.68rem;
+  color: var(--warn-ink);
+  font-size: var(--type-micro);
   font-weight: 600;
   padding: 0.1rem 0.45rem;
   text-transform: uppercase;
@@ -585,7 +585,7 @@
   height: 88px;
 }
 .ws-article-section small {
-  font-size: 0.68rem;
+  font-size: var(--type-micro);
   color: var(--theme-text-dim);
   text-align: center;
 }
@@ -612,7 +612,7 @@
 }
 .ws-article-body dt {
   color: var(--theme-text-dim);
-  font-size: 0.68rem;
+  font-size: var(--type-micro);
 }
 .ws-article-body dd {
   margin: 0;
@@ -635,7 +635,7 @@
   border-bottom: 1px solid var(--theme-border);
 }
 .ws-table thead th {
-  font-size: 0.72rem;
+  font-size: var(--type-dense);
   color: var(--theme-text-dim);
   font-weight: 500;
 }
@@ -709,7 +709,7 @@
 /* §06-G section drawing import */
 .section-import {
   border: 1px solid var(--theme-border);
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-md, var(--r-2));
   padding: 0.75rem;
   margin: 0.5rem 0;
   display: flex;
@@ -719,7 +719,7 @@
 .section-import-warnings {
   margin: 0;
   padding-left: 1.2rem;
-  color: var(--theme-warn, #9a6700);
+  color: var(--warn-ink);
   font-size: 0.85rem;
 }
 .section-import-candidates {
@@ -738,7 +738,7 @@
   width: 96px;
   padding: 0.4rem;
   border: 1px solid var(--theme-border);
-  border-radius: 6px;
+  border-radius: var(--r-2);
   background: transparent;
   color: var(--theme-text);
   cursor: pointer;

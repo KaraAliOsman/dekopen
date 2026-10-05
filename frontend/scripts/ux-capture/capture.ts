@@ -6,6 +6,7 @@ import {
   scanConsoleEntries,
   scanHttpEntries,
   scanLayout,
+  scanStyles,
   scanVisibleText,
   type BoxProbe,
   type Finding,
@@ -46,6 +47,26 @@ const DOM_PROBE_JS = `() => {
     if (trimmed) texts.push(trimmed);
   }
   const boxes = [];
+  const densityOf = (el) => {
+    const host = el.closest("[data-density]");
+    return (
+      (host && host.getAttribute("data-density")) ||
+      document.documentElement.getAttribute("data-density") ||
+      ""
+    );
+  };
+  const bgOf = (el) => {
+    let node = el;
+    while (node && node !== document.documentElement) {
+      const bg = getComputedStyle(node).backgroundColor;
+      const flat = bg.replaceAll(" ", "");
+      // sin barras: este archivo se evalúa como template string en el browser
+      const transparent = /[,/]0([.]0+)?[)]$/.test(flat);
+      if (bg && !transparent && bg !== "transparent") return bg;
+      node = node.parentElement;
+    }
+    return getComputedStyle(document.body).backgroundColor;
+  };
   for (const el of document.querySelectorAll("body *")) {
     const r = el.getBoundingClientRect();
     if (r.width === 0 || r.height === 0) continue;
@@ -53,18 +74,63 @@ const DOM_PROBE_JS = `() => {
     if (style.display === "none" || style.visibility === "hidden") continue;
     const tag = el.tagName.toLowerCase();
     const interactive =
-      ["button", "a", "input", "select", "textarea"].includes(tag) ||
-      el.getAttribute("role") === "button" ||
-      el.getAttribute("role") === "link" ||
+      ["button", "a", "input", "select", "textarea", "summary"].includes(tag) ||
+      (tag === "label" &&
+        (el.querySelector("input, select, textarea") !== null ||
+          el.getAttribute("for") !== null)) ||
+      ["button", "link", "menuitem", "tab", "option", "checkbox", "radio", "switch", "combobox"].includes(
+        el.getAttribute("role") || "",
+      ) ||
       el.getAttribute("tabindex") !== null;
-    const label =
-      tag + (el.id ? "#" + el.id : "") + " · " + (el.textContent || "").trim().slice(0, 40);
+    const cls = (el.getAttribute("class") || "").toString();
+    const regionHost = el.closest("[data-region]");
+    const ownText = Array.from(el.childNodes)
+      .filter((n) => n.nodeType === Node.TEXT_NODE)
+      .map((n) => (n.nodeValue || "").trim())
+      .filter(Boolean)
+      .join(" ");
+    const radii = [
+      style.borderTopLeftRadius,
+      style.borderTopRightRadius,
+      style.borderBottomLeftRadius,
+      style.borderBottomRightRadius,
+    ].map((v) => parseFloat(v) || 0);
     boxes.push({
-      label,
+      label:
+        tag + (el.id ? "#" + el.id : "") + " · " + (el.textContent || "").trim().slice(0, 40),
       fontPx: parseFloat(style.fontSize) || 0,
       widthPx: r.width,
       heightPx: r.height,
       interactive,
+      radiusPx: Math.max(...radii),
+      shadow: style.boxShadow,
+      gradient: (style.backgroundImage || "").includes("gradient("),
+      blur:
+        (style.backdropFilter && style.backdropFilter !== "none") ||
+        (style.filter || "").includes("blur("),
+      color: ownText ? style.color : "",
+      bgColor: ownText ? bgOf(el) : "",
+      weight: parseFloat(style.fontWeight) || 400,
+      text: ownText.slice(0, 60),
+      // cursor:pointer se hereda: solo cuenta si ningún ancestro es
+      // interactivo (un <path> dentro de un <button> no es «bare»).
+      cursorPointer:
+        style.cursor === "pointer" &&
+        !interactive &&
+        el.parentElement?.closest(
+          "button, a, input, select, textarea, summary, [role], [tabindex], label",
+        ) === null,
+      primary: /primary/.test(cls) || el.getAttribute("data-variant") === "primary",
+      region: regionHost ? regionHost.getAttribute("data-region") : "",
+      workshop: densityOf(el) === "workshop",
+      // WCAG exime los controles inactivos — y su contenido heredado: un
+      // <span> dentro de un <button disabled> tampoco tiene que cumplir AA.
+      disabled:
+        el.matches(":disabled") ||
+        el.getAttribute("aria-disabled") === "true" ||
+        el.closest(
+          ":disabled, [aria-disabled='true'], [disabled], fieldset:disabled",
+        ) !== null,
     });
   }
   return {
@@ -126,6 +192,7 @@ async function captureOne(
     ...scanLayout(probe.scrollWidth, probe.clientWidth, probe.boxes, {
       touchAudit: meta.touchAudit,
     }),
+    ...scanStyles(probe.boxes),
     ...scanConsoleEntries(consoleEntries),
     ...scanHttpEntries(httpEntries),
   ];

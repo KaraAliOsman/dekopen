@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { t } from "../i18n/es-CL";
+import { Icon } from "./icons";
 
 /** Click-to-edit for single-line text. Enter commits, Esc cancels. */
 export function InlineEdit({
@@ -42,7 +43,7 @@ export function InlineEdit({
       >
         {value || <span className="ui-inline-edit__placeholder">{placeholder}</span>}
         <span aria-hidden className="ui-inline-edit__hint">
-          ✎
+          <Icon name="edit" size={11} />
         </span>
       </button>
     );
