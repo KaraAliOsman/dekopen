@@ -195,28 +195,30 @@ export function resolveComponent(
   let qty = num(component.qty);
   const rule = component.qty_rule as {
     axis?: string;
-    per_mm?: number;
-    min_qty?: number;
-    max_qty?: number;
+    per_mm?: number | string;
+    min_qty?: number | string;
+    max_qty?: number | string;
   } | null;
   if (rule) {
     const span = rule.axis === "WIDTH" ? ctx.leafWidthMm : ctx.leafHeightMm;
-    if (span !== null && rule.per_mm && rule.per_mm > 0) {
-      qty = Math.max(
-        rule.min_qty ?? 1,
-        Math.min(Math.ceil(span / rule.per_mm), rule.max_qty ?? Number.POSITIVE_INFINITY),
-      );
+    const perMm = num(rule.per_mm != null ? String(rule.per_mm) : null);
+    const minQty = num(rule.min_qty != null ? String(rule.min_qty) : null) ?? 1;
+    const maxQty =
+      num(rule.max_qty != null ? String(rule.max_qty) : null) ?? Number.POSITIVE_INFINITY;
+    if (span !== null && perMm !== null && perMm > 0) {
+      qty = Math.max(minQty, Math.min(Math.ceil(span / perMm), maxQty));
     }
   }
   let lengthMm: number | null = null;
   const cut = component.cut_rule as {
     axis?: string;
-    minus_mm?: number;
+    minus_mm?: number | string;
   } | null;
   if (cut) {
     const span = cut.axis === "WIDTH" ? ctx.leafWidthMm : ctx.leafHeightMm;
-    if (span !== null && typeof cut.minus_mm === "number") {
-      lengthMm = Math.round((span - cut.minus_mm) * 10) / 10;
+    const minusMm = num(cut.minus_mm != null ? String(cut.minus_mm) : null);
+    if (span !== null && minusMm !== null) {
+      lengthMm = Math.round((span - minusMm) * 10) / 10;
     }
   }
   return {
