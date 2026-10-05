@@ -82,6 +82,7 @@ Thumbs.db
 desktop.ini
 
 # Temporary Scratch Files
+.run/
 scratch/
 tmp/
 *.tmp
