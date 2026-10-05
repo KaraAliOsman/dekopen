@@ -95,3 +95,6 @@ frontend/tsconfig.tsbuildinfo
 frontend/scripts/ux-capture/.auth/
 # full capture runs — only curated baseline files are committed
 docs/redesign/captures/**/.auth/
+
+# CI eval artifact (regenerado en cada corrida, nunca se commitea)
+docs/ai/evals/ci-mock.json

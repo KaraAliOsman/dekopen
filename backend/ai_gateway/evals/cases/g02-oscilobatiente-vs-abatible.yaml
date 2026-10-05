@@ -1,0 +1,12 @@
+id: G02
+view: general
+via: ask
+surface: dashboard
+fixture: dashboard
+prompt: "¿qué diferencia hay entre oscilobatiente y abatible?"
+expected: "Explicación correcta, sin números inventados."
+expect:
+  any:
+    - behavior:
+        text_mentions_all: ["oscilobatiente", "abatible"]
+        reply_nonempty: true

@@ -1,0 +1,1005 @@
+{
+  "provider": "MIMO",
+  "cases": [
+    {
+      "id": "E01",
+      "view": "editor",
+      "via": "design_assist",
+      "surface": "position",
+      "prompt": "divide la ventana en dos hojas iguales",
+      "expected": "2 bahías separadas por un montante con eje en 750 mm. Aperturas: las que tenían (FIXED) o una aclaración.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 0,
+        "tokens_completion": 0,
+        "provider_errors": [
+          "ai_provider_quota"
+        ],
+        "elapsed_ms": 1020
+      },
+      "outcome": {},
+      "error": {
+        "code": "ai_provider_quota",
+        "kind": "provider"
+      },
+      "sandbox": {},
+      "verdict": {
+        "pass": false,
+        "failure": "proveedor_error",
+        "failure_detail": "ai_provider_quota",
+        "checks": [
+          {
+            "check": "route.ok",
+            "ok": false,
+            "detail": "la ruta falló: ai_provider_quota"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E02",
+      "view": "editor",
+      "via": "design_assist",
+      "surface": "position",
+      "prompt": "la izquierda fija y la derecha oscilobatiente con la manilla a la derecha",
+      "expected": "2 bahías: izquierda FIXED, derecha TILT_TURN_LEFT.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 0,
+        "tokens_completion": 0,
+        "provider_errors": [
+          "ai_provider_quota"
+        ],
+        "elapsed_ms": 680
+      },
+      "outcome": {},
+      "error": {
+        "code": "ai_provider_quota",
+        "kind": "provider"
+      },
+      "sandbox": {},
+      "verdict": {
+        "pass": false,
+        "failure": "proveedor_error",
+        "failure_detail": "ai_provider_quota",
+        "checks": [
+          {
+            "check": "route.ok",
+            "ok": false,
+            "detail": "la ruta falló: ai_provider_quota"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E03",
+      "view": "editor",
+      "via": "design_assist",
+      "surface": "position",
+      "prompt": "hazla de 1,8 metros de ancho por 1350 de alto",
+      "expected": "1800 × 1350.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 0,
+        "tokens_completion": 0,
+        "provider_errors": [
+          "ai_provider_quota"
+        ],
+        "elapsed_ms": 635
+      },
+      "outcome": {},
+      "error": {
+        "code": "ai_provider_quota",
+        "kind": "provider"
+      },
+      "sandbox": {},
+      "verdict": {
+        "pass": false,
+        "failure": "proveedor_error",
+        "failure_detail": "ai_provider_quota",
+        "checks": [
+          {
+            "check": "route.ok",
+            "ok": false,
+            "detail": "la ruta falló: ai_provider_quota"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E04",
+      "view": "editor",
+      "via": "design_assist",
+      "surface": "position",
+      "prompt": "agrega un travesaño a 400 mm desde arriba para una banderola fija",
+      "expected": "Travesaño horizontal; bahía superior de 400 mm de alto, FIXED.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 0,
+        "tokens_completion": 0,
+        "provider_errors": [
+          "ai_provider_quota"
+        ],
+        "elapsed_ms": 633
+      },
+      "outcome": {},
+      "error": {
+        "code": "ai_provider_quota",
+        "kind": "provider"
+      },
+      "sandbox": {},
+      "verdict": {
+        "pass": false,
+        "failure": "proveedor_error",
+        "failure_detail": "ai_provider_quota",
+        "checks": [
+          {
+            "check": "route.ok",
+            "ok": false,
+            "detail": "la ruta falló: ai_provider_quota"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E05",
+      "view": "editor",
+      "via": "design_assist",
+      "surface": "position",
+      "prompt": "cambia el vidrio a termopanel 4-12-4",
+      "expected": "Vidrio = el SKU del catálogo con composición 4-12-4, o la lista de opciones disponibles si no existe (nunca un SKU inventado).",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 0,
+        "tokens_completion": 0,
+        "provider_errors": [
+          "ai_provider_quota"
+        ],
+        "elapsed_ms": 647
+      },
+      "outcome": {},
+      "error": {
+        "code": "ai_provider_quota",
+        "kind": "provider"
+      },
+      "sandbox": {},
+      "verdict": {
+        "pass": false,
+        "failure": "proveedor_error",
+        "failure_detail": "ai_provider_quota",
+        "checks": [
+          {
+            "check": "route.ok",
+            "ok": false,
+            "detail": "la ruta falló: ai_provider_quota"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E06",
+      "view": "editor",
+      "via": "design_assist",
+      "surface": "position",
+      "prompt": "pon vidrio laminado 4+4",
+      "expected": "Sin operación; responde que no está disponible y lista las alternativas reales.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 0,
+        "tokens_completion": 0,
+        "provider_errors": [
+          "ai_provider_quota"
+        ],
+        "elapsed_ms": 657
+      },
+      "outcome": {},
+      "error": {
+        "code": "ai_provider_quota",
+        "kind": "provider"
+      },
+      "sandbox": {},
+      "verdict": {
+        "pass": false,
+        "failure": "proveedor_error",
+        "failure_detail": "ai_provider_quota",
+        "checks": [
+          {
+            "check": "route.ok",
+            "ok": false,
+            "detail": "la ruta falló: ai_provider_quota"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E07",
+      "view": "editor",
+      "via": "design_assist",
+      "surface": "position",
+      "prompt": "conviértela en corredera de dos hojas",
+      "expected": "Sin operación; explica la incompatibilidad y propone un sistema compatible si existe.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 0,
+        "tokens_completion": 0,
+        "provider_errors": [
+          "ai_provider_quota"
+        ],
+        "elapsed_ms": 695
+      },
+      "outcome": {},
+      "error": {
+        "code": "ai_provider_quota",
+        "kind": "provider"
+      },
+      "sandbox": {},
+      "verdict": {
+        "pass": false,
+        "failure": "proveedor_error",
+        "failure_detail": "ai_provider_quota",
+        "checks": [
+          {
+            "check": "route.ok",
+            "ok": false,
+            "detail": "la ruta falló: ai_provider_quota"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E08",
+      "view": "editor",
+      "via": "design_assist",
+      "surface": "position",
+      "prompt": "manilla a 1050 del piso",
+      "expected": "Pide aclaración (altura de instalación o elevación objetivo). Sin operación si falta la medida.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 0,
+        "tokens_completion": 0,
+        "provider_errors": [
+          "ai_provider_quota"
+        ],
+        "elapsed_ms": 638
+      },
+      "outcome": {},
+      "error": {
+        "code": "ai_provider_quota",
+        "kind": "provider"
+      },
+      "sandbox": {},
+      "verdict": {
+        "pass": false,
+        "failure": "proveedor_error",
+        "failure_detail": "ai_provider_quota",
+        "checks": [
+          {
+            "check": "route.ok",
+            "ok": false,
+            "detail": "la ruta falló: ai_provider_quota"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E09",
+      "view": "editor",
+      "via": "agent",
+      "surface": "position",
+      "prompt": "¿cuánto pesa la hoja derecha?",
+      "expected": "Cifra igual a la del motor, o 'sin dato' con la causa.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 0,
+        "tokens_completion": 0,
+        "provider_errors": [
+          "ai_provider_quota"
+        ],
+        "elapsed_ms": 665
+      },
+      "outcome": {},
+      "error": {
+        "code": "ai_provider_quota",
+        "kind": "provider"
+      },
+      "sandbox": {},
+      "verdict": {
+        "pass": false,
+        "failure": "proveedor_error",
+        "failure_detail": "ai_provider_quota",
+        "checks": [
+          {
+            "check": "route.ok",
+            "ok": false,
+            "detail": "la ruta falló: ai_provider_quota"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E10",
+      "view": "editor",
+      "via": "agent",
+      "surface": "position",
+      "prompt": "¿por qué no puedo guardar?",
+      "expected": "Lista exactamente los bloqueos que devuelve la validación del motor.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 0,
+        "tokens_completion": 0,
+        "provider_errors": [
+          "ai_provider_quota"
+        ],
+        "elapsed_ms": 644
+      },
+      "outcome": {},
+      "error": {
+        "code": "ai_provider_quota",
+        "kind": "provider"
+      },
+      "sandbox": {},
+      "verdict": {
+        "pass": false,
+        "failure": "proveedor_error",
+        "failure_detail": "ai_provider_quota",
+        "checks": [
+          {
+            "check": "route.ok",
+            "ok": false,
+            "detail": "la ruta falló: ai_provider_quota"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E11",
+      "view": "editor",
+      "via": "design_assist",
+      "surface": "position",
+      "prompt": "aser la bentana 20 cm mas ancha",
+      "expected": "Ancho + 200 mm (1700 mm total).",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 0,
+        "tokens_completion": 0,
+        "provider_errors": [
+          "ai_provider_quota"
+        ],
+        "elapsed_ms": 637
+      },
+      "outcome": {},
+      "error": {
+        "code": "ai_provider_quota",
+        "kind": "provider"
+      },
+      "sandbox": {},
+      "verdict": {
+        "pass": false,
+        "failure": "proveedor_error",
+        "failure_detail": "ai_provider_quota",
+        "checks": [
+          {
+            "check": "route.ok",
+            "ok": false,
+            "detail": "la ruta falló: ai_provider_quota"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E12",
+      "view": "editor",
+      "via": "design_assist",
+      "surface": "position",
+      "prompt": "pon la manilla al otro lado",
+      "expected": "TILT_TURN_RIGHT.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 0,
+        "tokens_completion": 0,
+        "provider_errors": [
+          "ai_provider_quota"
+        ],
+        "elapsed_ms": 617
+      },
+      "outcome": {},
+      "error": {
+        "code": "ai_provider_quota",
+        "kind": "provider"
+      },
+      "sandbox": {},
+      "verdict": {
+        "pass": false,
+        "failure": "proveedor_error",
+        "failure_detail": "ai_provider_quota",
+        "checks": [
+          {
+            "check": "route.ok",
+            "ok": false,
+            "detail": "la ruta falló: ai_provider_quota"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E13",
+      "view": "editor",
+      "via": "design_assist",
+      "surface": "position",
+      "prompt": "tres hojas: fija al centro y abatibles a los lados",
+      "expected": "3 bahías: TURN_LEFT · FIXED · TURN_RIGHT (bisagras en las jambas exteriores y manillas hacia el centro), anchos iguales salvo instrucción.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 0,
+        "tokens_completion": 0,
+        "provider_errors": [
+          "ai_provider_quota"
+        ],
+        "elapsed_ms": 631
+      },
+      "outcome": {},
+      "error": {
+        "code": "ai_provider_quota",
+        "kind": "provider"
+      },
+      "sandbox": {},
+      "verdict": {
+        "pass": false,
+        "failure": "proveedor_error",
+        "failure_detail": "ai_provider_quota",
+        "checks": [
+          {
+            "check": "route.ok",
+            "ok": false,
+            "detail": "la ruta falló: ai_provider_quota"
+          }
+        ]
+      }
+    },
+    {
+      "id": "F01",
+      "view": "produccion",
+      "via": "agent",
+      "surface": "production",
+      "prompt": "¿qué OT están bloqueadas y por qué?",
+      "expected": "Lista exacta del backend (OT-0009 con material faltante / estación pendiente).",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 0,
+        "tokens_completion": 0,
+        "provider_errors": [
+          "ai_provider_quota"
+        ],
+        "elapsed_ms": 632
+      },
+      "outcome": {},
+      "error": {
+        "code": "ai_provider_quota",
+        "kind": "provider"
+      },
+      "sandbox": {},
+      "verdict": {
+        "pass": false,
+        "failure": "proveedor_error",
+        "failure_detail": "ai_provider_quota",
+        "checks": [
+          {
+            "check": "route.ok",
+            "ok": false,
+            "detail": "la ruta falló: ai_provider_quota"
+          }
+        ]
+      }
+    },
+    {
+      "id": "F02",
+      "view": "produccion",
+      "via": "agent",
+      "surface": "work_order",
+      "prompt": "¿cuántas barras de marco usa la OT-0009?",
+      "expected": "Número igual al del plan de corte, o 'sin dato' con la causa (la proyección no expone barras).",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 0,
+        "tokens_completion": 0,
+        "provider_errors": [
+          "ai_provider_quota"
+        ],
+        "elapsed_ms": 684
+      },
+      "outcome": {},
+      "error": {
+        "code": "ai_provider_quota",
+        "kind": "provider"
+      },
+      "sandbox": {},
+      "verdict": {
+        "pass": false,
+        "failure": "proveedor_error",
+        "failure_detail": "ai_provider_quota",
+        "checks": [
+          {
+            "check": "route.ok",
+            "ok": false,
+            "detail": "la ruta falló: ai_provider_quota"
+          }
+        ]
+      }
+    },
+    {
+      "id": "F03",
+      "view": "compras",
+      "via": "agent",
+      "surface": "purchase_plan",
+      "prompt": "prepara la compra de lo que falta",
+      "expected": "Artefacto de plan de compra con líneas y proveedor de la lista real; nada enviado.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 0,
+        "tokens_completion": 0,
+        "provider_errors": [
+          "ai_provider_quota"
+        ],
+        "elapsed_ms": 624
+      },
+      "outcome": {},
+      "error": {
+        "code": "ai_provider_quota",
+        "kind": "provider"
+      },
+      "sandbox": {},
+      "verdict": {
+        "pass": false,
+        "failure": "proveedor_error",
+        "failure_detail": "ai_provider_quota",
+        "checks": [
+          {
+            "check": "route.ok",
+            "ok": false,
+            "detail": "la ruta falló: ai_provider_quota"
+          }
+        ]
+      }
+    },
+    {
+      "id": "G01",
+      "view": "general",
+      "via": "agent",
+      "surface": "dashboard",
+      "prompt": "dame un precio aproximado de una ventana de 2 × 2 sin crearla",
+      "expected": "No inventa; ofrece crear un borrador y calcularlo con el motor.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 0,
+        "tokens_completion": 0,
+        "provider_errors": [
+          "ai_provider_quota"
+        ],
+        "elapsed_ms": 673
+      },
+      "outcome": {},
+      "error": {
+        "code": "ai_provider_quota",
+        "kind": "provider"
+      },
+      "sandbox": {},
+      "verdict": {
+        "pass": false,
+        "failure": "proveedor_error",
+        "failure_detail": "ai_provider_quota",
+        "checks": [
+          {
+            "check": "route.ok",
+            "ok": false,
+            "detail": "la ruta falló: ai_provider_quota"
+          }
+        ]
+      }
+    },
+    {
+      "id": "G02",
+      "view": "general",
+      "via": "ask",
+      "surface": "dashboard",
+      "prompt": "¿qué diferencia hay entre oscilobatiente y abatible?",
+      "expected": "Explicación correcta, sin números inventados.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 0,
+        "tokens_completion": 0,
+        "provider_errors": [
+          "ai_provider_quota"
+        ],
+        "elapsed_ms": 646
+      },
+      "outcome": {},
+      "error": {
+        "code": "ai_provider_quota",
+        "kind": "provider"
+      },
+      "sandbox": {},
+      "verdict": {
+        "pass": false,
+        "failure": "proveedor_error",
+        "failure_detail": "ai_provider_quota",
+        "checks": [
+          {
+            "check": "route.ok",
+            "ok": false,
+            "detail": "la ruta falló: ai_provider_quota"
+          }
+        ]
+      }
+    },
+    {
+      "id": "J01",
+      "view": "proyecto",
+      "via": "agent",
+      "surface": "project",
+      "prompt": "cambia el vidrio de todas las ventanas del segundo piso a VIDRIO-BASE",
+      "expected": "Lote solo sobre las posiciones cuya ubicación indica 2º piso ('Estar segundo piso'). Si la ubicación no lo permite, aclaración.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 0,
+        "tokens_completion": 0,
+        "provider_errors": [
+          "ai_provider_quota"
+        ],
+        "elapsed_ms": 621
+      },
+      "outcome": {},
+      "error": {
+        "code": "ai_provider_quota",
+        "kind": "provider"
+      },
+      "sandbox": {},
+      "verdict": {
+        "pass": false,
+        "failure": "proveedor_error",
+        "failure_detail": "ai_provider_quota",
+        "checks": [
+          {
+            "check": "route.ok",
+            "ok": false,
+            "detail": "la ruta falló: ai_provider_quota"
+          }
+        ]
+      }
+    },
+    {
+      "id": "J02",
+      "view": "proyecto",
+      "via": "agent",
+      "surface": "project",
+      "prompt": "crea una corredera de 2 hojas de 1600 × 1100 para la cocina",
+      "expected": "Posición nueva con esa tipología, medidas y ubicación (o la incompatibilidad explicada).",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 0,
+        "tokens_completion": 0,
+        "provider_errors": [
+          "ai_provider_quota"
+        ],
+        "elapsed_ms": 647
+      },
+      "outcome": {},
+      "error": {
+        "code": "ai_provider_quota",
+        "kind": "provider"
+      },
+      "sandbox": {},
+      "verdict": {
+        "pass": false,
+        "failure": "proveedor_error",
+        "failure_detail": "ai_provider_quota",
+        "checks": [
+          {
+            "check": "route.ok",
+            "ok": false,
+            "detail": "la ruta falló: ai_provider_quota"
+          }
+        ]
+      }
+    },
+    {
+      "id": "J03",
+      "view": "proyecto",
+      "via": "agent",
+      "surface": "project",
+      "prompt": "duplica la posición 3 cuatro veces para los dormitorios",
+      "expected": "4 posiciones nuevas iguales a la 3, o la cantidad +4, según el modelo, documentado.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 0,
+        "tokens_completion": 0,
+        "provider_errors": [
+          "ai_provider_quota"
+        ],
+        "elapsed_ms": 640
+      },
+      "outcome": {},
+      "error": {
+        "code": "ai_provider_quota",
+        "kind": "provider"
+      },
+      "sandbox": {},
+      "verdict": {
+        "pass": false,
+        "failure": "proveedor_error",
+        "failure_detail": "ai_provider_quota",
+        "checks": [
+          {
+            "check": "route.ok",
+            "ok": false,
+            "detail": "la ruta falló: ai_provider_quota"
+          }
+        ]
+      }
+    },
+    {
+      "id": "J04",
+      "view": "proyecto",
+      "via": "ask",
+      "surface": "project",
+      "prompt": "¿cuál es la posición más cara y por qué?",
+      "expected": "Identifica la posición correcta según el motor; cifras grounded.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 0,
+        "tokens_completion": 0,
+        "provider_errors": [
+          "ai_provider_quota"
+        ],
+        "elapsed_ms": 717
+      },
+      "outcome": {},
+      "error": {
+        "code": "ai_provider_quota",
+        "kind": "provider"
+      },
+      "sandbox": {},
+      "verdict": {
+        "pass": false,
+        "failure": "proveedor_error",
+        "failure_detail": "ai_provider_quota",
+        "checks": [
+          {
+            "check": "route.ok",
+            "ok": false,
+            "detail": "la ruta falló: ai_provider_quota"
+          }
+        ]
+      }
+    },
+    {
+      "id": "J05",
+      "view": "proyecto",
+      "via": "agent",
+      "surface": "project",
+      "prompt": "baja el precio un 5 %",
+      "expected": "Propuesta que requiere aprobación si cae bajo la banda; no se aplica sola.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 0,
+        "tokens_completion": 0,
+        "provider_errors": [
+          "ai_provider_quota"
+        ],
+        "elapsed_ms": 633
+      },
+      "outcome": {},
+      "error": {
+        "code": "ai_provider_quota",
+        "kind": "provider"
+      },
+      "sandbox": {},
+      "verdict": {
+        "pass": false,
+        "failure": "proveedor_error",
+        "failure_detail": "ai_provider_quota",
+        "checks": [
+          {
+            "check": "route.ok",
+            "ok": false,
+            "detail": "la ruta falló: ai_provider_quota"
+          }
+        ]
+      }
+    },
+    {
+      "id": "J06",
+      "view": "proyecto",
+      "via": "agent",
+      "surface": "project",
+      "prompt": "emite la cotización",
+      "expected": "Tarjeta de preparación con un deep link; nada emitido.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 0,
+        "tokens_completion": 0,
+        "provider_errors": [
+          "ai_provider_quota"
+        ],
+        "elapsed_ms": 676
+      },
+      "outcome": {},
+      "error": {
+        "code": "ai_provider_quota",
+        "kind": "provider"
+      },
+      "sandbox": {},
+      "verdict": {
+        "pass": false,
+        "failure": "proveedor_error",
+        "failure_detail": "ai_provider_quota",
+        "checks": [
+          {
+            "check": "route.ok",
+            "ok": false,
+            "detail": "la ruta falló: ai_provider_quota"
+          }
+        ]
+      }
+    },
+    {
+      "id": "J07",
+      "view": "proyecto",
+      "via": "agent",
+      "surface": "project",
+      "prompt": "¿qué falta para emitir?",
+      "expected": "Exactamente los faltantes del backend.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 0,
+        "tokens_completion": 0,
+        "provider_errors": [
+          "ai_provider_quota"
+        ],
+        "elapsed_ms": 667
+      },
+      "outcome": {},
+      "error": {
+        "code": "ai_provider_quota",
+        "kind": "provider"
+      },
+      "sandbox": {},
+      "verdict": {
+        "pass": false,
+        "failure": "proveedor_error",
+        "failure_detail": "ai_provider_quota",
+        "checks": [
+          {
+            "check": "route.ok",
+            "ok": false,
+            "detail": "la ruta falló: ai_provider_quota"
+          }
+        ]
+      }
+    },
+    {
+      "id": "J08",
+      "view": "proyecto",
+      "via": "agent",
+      "surface": "project",
+      "prompt": "compara la REV-A con la REV-B",
+      "expected": "Artefacto de comparación con las diferencias reales.",
+      "metrics": {
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 0,
+        "tokens_completion": 0,
+        "provider_errors": [
+          "ai_provider_quota"
+        ],
+        "elapsed_ms": 676
+      },
+      "outcome": {},
+      "error": {
+        "code": "ai_provider_quota",
+        "kind": "provider"
+      },
+      "sandbox": {},
+      "verdict": {
+        "pass": false,
+        "failure": "proveedor_error",
+        "failure_detail": "ai_provider_quota",
+        "checks": [
+          {
+            "check": "route.ok",
+            "ok": false,
+            "detail": "la ruta falló: ai_provider_quota"
+          }
+        ]
+      }
+    }
+  ],
+  "total": 26,
+  "passed": 0,
+  "meta": {
+    "harness": "ai_gateway.evals",
+    "tag": "baseline",
+    "provider": "MIMO",
+    "model": null
+  },
+  "summary": {
+    "total": 26,
+    "passed": 0,
+    "rate": 0.0,
+    "by_view": {
+      "editor": {
+        "total": 13,
+        "passed": 0
+      },
+      "produccion": {
+        "total": 2,
+        "passed": 0
+      },
+      "compras": {
+        "total": 1,
+        "passed": 0
+      },
+      "general": {
+        "total": 2,
+        "passed": 0
+      },
+      "proyecto": {
+        "total": 8,
+        "passed": 0
+      }
+    },
+    "by_failure": {
+      "proveedor_error": 26
+    }
+  }
+}

@@ -1,0 +1,23 @@
+id: E05
+view: editor
+via: design_assist
+surface: position
+fixture: editor
+product_variant: vacia
+prompt: "cambia el vidrio a termopanel 4-12-4"
+expected: "Vidrio = el SKU del catálogo con composición 4-12-4, o la lista de opciones disponibles si no existe (nunca un SKU inventado)."
+expect:
+  expects_no_change: false
+  any:
+    # Catálogo sin composición 4-12-4: lo correcto es NO aplicar nada y
+    # explicar que no existe listando opciones reales — «está disponible»
+    # sin alternativas es un falso positivo que este grupo no admite.
+    - product:
+        unchanged: true
+      behavior:
+        no_ops_accepted: true
+        text_matches_any:
+          - "no\\s+(lo\\s+)?(existe|est[aá]\\s+disponible|hay|tengo)|cat[aá]logo|opciones|alternativas?|VIDRIO-BASE|4\\s*Float|incoloro"
+    - behavior:
+        asks_clarification: true
+        no_ops_accepted: true

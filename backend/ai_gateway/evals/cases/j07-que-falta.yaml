@@ -1,0 +1,19 @@
+id: J07
+view: proyecto
+via: agent
+surface: project
+fixture: proyecto_cotizado
+refs:
+  project_id: "fd515745-3b5b-540e-aa5d-455d0d7067b5"
+prompt: "¿qué falta para emitir?"
+expected: "Exactamente los faltantes del backend."
+expect:
+  any:
+    - behavior:
+        text_matches_any:
+          - "documentar|producci[oó]n|aprobaci[oó]n|revisi[oó]n|sellada|precio|cotizaci[oó]n|pago"
+        reply_nonempty: true
+    - behavior:
+        sin_dato: true
+    - behavior:
+        asks_clarification: true

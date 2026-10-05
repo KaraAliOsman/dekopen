@@ -1,0 +1,21 @@
+id: E12
+view: editor
+via: design_assist
+surface: position
+fixture: editor
+product_variant: oscilobatiente
+prompt: "pon la manilla al otro lado"
+expected: "TILT_TURN_RIGHT."
+expect:
+  any:
+    - product:
+        every_bay:
+          opening_type: TILT_TURN_RIGHT
+        bays_count: 1
+    - product:
+        every_bay:
+          opening_type: TILT_TURN_LEFT
+        bays_count: 1
+      behavior:
+        asks_clarification: true
+        no_ops_accepted: true

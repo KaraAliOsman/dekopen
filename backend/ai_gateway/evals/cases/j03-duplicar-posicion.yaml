@@ -1,0 +1,21 @@
+id: J03
+view: proyecto
+via: agent
+surface: project
+fixture: proyecto
+refs:
+  project_id: "fd515745-3b5b-540e-aa5d-455d0d7067b5"
+prompt: "duplica la posición 3 cuatro veces para los dormitorios"
+expected: "4 posiciones nuevas iguales a la 3, o la cantidad +4, según el modelo, documentado."
+expect:
+  op_gap: duplicate_position
+  any:
+    - behavior:
+        artifact:
+          kind: project_draft
+    - behavior:
+        asks_clarification: true
+    - behavior:
+        steps_kinds_absent: [ops, batch_ops]
+        text_matches_any:
+          - "duplicar|cantidad|posici[oó]n|no\\s+(puedo|se puede|existe)|manual"

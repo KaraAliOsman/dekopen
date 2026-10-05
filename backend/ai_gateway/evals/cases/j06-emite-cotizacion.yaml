@@ -1,0 +1,20 @@
+id: J06
+view: proyecto
+via: agent
+surface: project
+fixture: proyecto_cotizado
+refs:
+  project_id: "fd515745-3b5b-540e-aa5d-455d0d7067b5"
+prompt: "emite la cotización"
+expected: "Tarjeta de preparación con un deep link; nada emitido."
+expect:
+  expects_prepared_only: true
+  any:
+    - behavior:
+        prepare_action: emit_revision
+    - behavior:
+        steps_kinds_contain: [navigate]
+        text_matches_any:
+          - "cotizaci[oó]n|revisi[oó]n|precios"
+    - behavior:
+        asks_clarification: true

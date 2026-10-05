@@ -1,0 +1,12 @@
+id: E11
+view: editor
+via: design_assist
+surface: position
+fixture: editor
+product_variant: vacia
+prompt: "aser la bentana 20 cm mas ancha"
+expected: "Ancho + 200 mm (1700 mm total)."
+expect:
+  any:
+    - product:
+        total_width_mm: 1700
