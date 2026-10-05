@@ -168,6 +168,22 @@ function asDesignOps(step: AiAgentStep): DesignOp[] {
   return (step.ops ?? []).filter((item): item is DesignOp => typeof item.op === "string");
 }
 
+/** El producto contra el que se propuso el turno: la copia enviada en la
+ * sesión, o el producto vivo cuando su huella coincide con la persistida.
+ * Sin match no hay referencia válida — las ops de producto son obsoletas
+ * (stale) y se dibujan con su nombre de registro, no con descripción. */
+function proposalProduct(turn: Turn, live: unknown): ProductJson | null {
+  if (turn.product) return turn.product as ProductJson;
+  if (!live || !turn.productSig) return null;
+  try {
+    return productFingerprint(designAssistProduct(live as ProductJson)) === turn.productSig
+      ? (live as ProductJson)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export { SURFACE_LABELS };
 
 /** §08-WG — communication workflows are goals on the project/quotation
@@ -562,14 +578,11 @@ export function AgentBody({
     // reporta su resultado por separado — un fallo en uno no bloquea los
     // otros ni infla el conteo de aplicadas.
     const groups = splitOps(ops);
+    // Misma regla que dibuja el plan como obsoleto: sin producto de
+    // referencia (snapshot o huella coincidente) el plan no aplica.
     const staleProduct =
       groups.product.length > 0 &&
-      (!bridge ||
-        (turn.product !== null
-          ? turn.product !== bridge.product
-          : turn.productSig !== null &&
-            turn.productSig !==
-              productFingerprint(designAssistProduct(bridge.product as ProductJson))));
+      (!bridge || proposalProduct(turn, bridge.product) !== bridge.product);
     if (groups.product.length > 0 && staleProduct) return;
 
     const failures: DesignOp[] = [];
@@ -597,6 +610,7 @@ export function AgentBody({
         ),
       );
       void queryClient.invalidateQueries({ queryKey: ["project-pages"] });
+      void queryClient.invalidateQueries({ queryKey: ["project", organizationId] });
     };
 
     if (groups.product.length > 0 && bridge) {
@@ -771,7 +785,11 @@ export function AgentBody({
                               type="button"
                               className="ask-dock__chip"
                               disabled={busy || live}
-                              onClick={() => void send(option.label ?? option.value ?? "")}
+                              // La respuesta continúa el mismo pedido: el chip
+                              // viaja con el goal original, como en el panel.
+                              onClick={() =>
+                                void send(`${turn.goal} — ${option.label ?? option.value ?? ""}`)
+                              }
                             >
                               {option.label ?? option.value}
                             </button>
@@ -858,9 +876,13 @@ export function AgentBody({
                           // IA2 — el bloqueo de "stale" sólo corre para ops de
                           // producto; las de posición/proyecto van por API y no
                           // dependen del producto vivo ni del bridge.
+                          // El plan propuesto sigue vivo sólo si el producto
+                          // de referencia (snapshot o huella persistida) es
+                          // el producto vivo — un turno restaurado sin copia
+                          // se compara por huella, no desaparece del chequeo.
+                          const proposal = proposalProduct(turn, bridge?.product);
                           const stale =
-                            groups.product.length > 0 &&
-                            (!bridge || (turn.product !== null && turn.product !== bridge.product));
+                            groups.product.length > 0 && (!bridge || proposal !== bridge.product);
                           const unroutable =
                             (groups.position.length > 0 && !refs.position_id) ||
                             (groups.project.length > 0 && !refs.project_id) ||
@@ -883,12 +905,8 @@ export function AgentBody({
                               <ul>
                                 {ops.map((op, i) => (
                                   <li key={i}>
-                                    {turn.product
-                                      ? describeDesignOp(
-                                          op,
-                                          turn.product as ProductJson,
-                                          ops.slice(0, i),
-                                        )
+                                    {proposal
+                                      ? describeDesignOp(op, proposal, ops.slice(0, i))
                                       : (describeScopeOp(op) ?? op.op)}
                                   </li>
                                 ))}

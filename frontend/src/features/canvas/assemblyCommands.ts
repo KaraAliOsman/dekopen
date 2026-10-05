@@ -205,7 +205,11 @@ function couplingAt(product: ProductJson, address: unknown, state?: DesignOpStat
 }
 
 function text(value: unknown): string | null {
-  return typeof value === "string" && value.length ? value : null;
+  if (typeof value === "string" && value.length) return value;
+  // El wire manda los mm/ángulos como números — rechazarlos deja las cards
+  // con el nombre crudo de la op en vez de la descripción del registro.
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return null;
 }
 
 /** Entero positivo del wire — number o string numérico; null si no calza. */

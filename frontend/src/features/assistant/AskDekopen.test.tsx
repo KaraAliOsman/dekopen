@@ -4,7 +4,13 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { aiAgent, aiAsk, aiJobOutcomeCreate, aiJobRetrieve } from "../../api/generated/dekopen";
+import {
+  aiAgent,
+  aiAsk,
+  aiJobMessageCreate,
+  aiJobOutcomeCreate,
+  aiJobRetrieve,
+} from "../../api/generated/dekopen";
 import { AskDekopen } from "./AskDekopen";
 import {
   AssistantSurfaceProvider,
@@ -12,16 +18,19 @@ import {
   useRegisterDesignOpsBridge,
 } from "./assistantContext";
 import type { DesignOp } from "../commands/types";
+import { designAssistProduct, productFingerprint } from "../canvas/designOps";
 
 vi.mock("../../api/generated/dekopen", () => ({
   aiAsk: vi.fn(),
   aiAgent: vi.fn(),
   aiJobRetrieve: vi.fn(),
+  aiJobMessageCreate: vi.fn(),
   aiJobOutcomeCreate: vi.fn(),
 }));
 const askMock = vi.mocked(aiAsk);
 const agentMock = vi.mocked(aiAgent);
 const jobMock = vi.mocked(aiJobRetrieve);
+const jobMessageMock = vi.mocked(aiJobMessageCreate);
 vi.mocked(aiJobOutcomeCreate).mockResolvedValue({
   status: 200,
   headers: new Headers(),
@@ -160,7 +169,7 @@ function finishedJob(result: Record<string, unknown>) {
       plan: [],
       artifacts: [],
       warnings: [],
-      transcript: [],
+      transcript: [] as Record<string, unknown>[],
       created_at: "2026-09-26T00:00:00Z",
       updated_at: "2026-09-26T00:00:01Z",
       result: {
@@ -191,6 +200,12 @@ describe("AskDekopen — Agente mode", () => {
   beforeEach(() => {
     agentMock.mockReset();
     jobMock.mockReset();
+    jobMessageMock.mockReset();
+    jobMessageMock.mockResolvedValue({
+      status: 202,
+      headers: new Headers(),
+      data: { job_id: "job-1", state: "QUEUED" },
+    } as never);
   });
 
   it("runs a goal through the agent endpoint and renders steps + provenance", async () => {
@@ -325,5 +340,127 @@ describe("AskDekopen — Agente mode", () => {
       </Providers>,
     );
     await waitFor(() => expect(applyButton).toHaveProperty("disabled", true));
+  });
+
+  it("keeps a restored plan applicable while its fingerprint matches the live product", async () => {
+    const product = {
+      version: "product-v2",
+      assembly: { modules: [{ id: "m1", width_mm: "1200", height_mm: "1500" }], couplings: [] },
+    };
+    const applied: DesignOp[][] = [];
+    function Bridge() {
+      useRegisterDesignOpsBridge(product, (ops) => applied.push(ops));
+      return null;
+    }
+    // A restored turn carries only the persisted sig — no product snapshot.
+    const sig = productFingerprint(designAssistProduct(product as never));
+    agentMock.mockResolvedValue(agentJob() as never);
+    const restoredJob = finishedJob({});
+    restoredJob.data.transcript = [
+      { role: "user", text: "Cambia el alto", product_sig: sig },
+      {
+        role: "agent",
+        reply: "Listo",
+        steps: [{ kind: "ops", ops: [{ op: "set_height", height_mm: 1500 }] }],
+      },
+    ];
+    jobMock.mockResolvedValue(restoredJob as never);
+    render(
+      <Providers>
+        <MemoryRouter initialEntries={["/projects/p1/positions/pos-9/edit"]}>
+          <AssistantSurfaceProvider>
+            <Bridge />
+            <Routes>
+              <Route path="*" element={<AskDekopen organizationId="org-1" />} />
+            </Routes>
+          </AssistantSurfaceProvider>
+        </MemoryRouter>
+      </Providers>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Abrir el asistente/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Agente" }));
+    fireEvent.change(screen.getByRole("textbox", { name: /Qué necesitas lograr/i }), {
+      target: { value: "Cambia el alto" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Ejecutar/i }));
+    // The sig resolves to the live product — described labels, not raw op names.
+    expect(await screen.findByText("alto 1500 mm")).toBeTruthy();
+    const applyButton = await screen.findByRole("button", { name: /Aplicar 1 operaciones/i });
+    await waitFor(() => expect(applyButton).toHaveProperty("disabled", false));
+    fireEvent.click(applyButton);
+    expect(applied).toEqual([[{ op: "set_height", height_mm: 1500 }]]);
+  });
+
+  it("refuses a restored plan once the live product no longer matches its sig", async () => {
+    const product = {
+      version: "product-v2",
+      assembly: { modules: [{ id: "m1", width_mm: "1200", height_mm: "1500" }], couplings: [] },
+    };
+    function Bridge() {
+      useRegisterDesignOpsBridge(product, () => undefined);
+      return null;
+    }
+    agentMock.mockResolvedValue(agentJob() as never);
+    const staleJob = finishedJob({});
+    staleJob.data.transcript = [
+      { role: "user", text: "Cambia el alto", product_sig: "deadbeef" },
+      {
+        role: "agent",
+        reply: "Listo",
+        steps: [{ kind: "ops", ops: [{ op: "set_height", height_mm: 1500 }] }],
+      },
+    ];
+    jobMock.mockResolvedValue(staleJob as never);
+    render(
+      <Providers>
+        <MemoryRouter initialEntries={["/projects/p1/positions/pos-9/edit"]}>
+          <AssistantSurfaceProvider>
+            <Bridge />
+            <Routes>
+              <Route path="*" element={<AskDekopen organizationId="org-1" />} />
+            </Routes>
+          </AssistantSurfaceProvider>
+        </MemoryRouter>
+      </Providers>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Abrir el asistente/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Agente" }));
+    fireEvent.change(screen.getByRole("textbox", { name: /Qué necesitas lograr/i }), {
+      target: { value: "Cambia el alto" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Ejecutar/i }));
+    const applyButton = await screen.findByRole("button", { name: /Aplicar 1 operaciones/i });
+    await waitFor(() => expect(applyButton).toHaveProperty("disabled", true));
+  });
+
+  it("merges a clarify chip answer with the goal it clarifies", async () => {
+    agentMock.mockResolvedValue(agentJob() as never);
+    const clarifyJob = finishedJob({});
+    clarifyJob.data.transcript = [
+      { role: "user", text: "pon la manilla" },
+      {
+        role: "agent",
+        reply: "",
+        clarify: {
+          question: "¿A qué altura va?",
+          options: [{ value: "1050", label: "1050 mm" }],
+        },
+      },
+    ];
+    jobMock.mockResolvedValue(clarifyJob as never);
+    renderDock("/projects/abc-1");
+    fireEvent.click(screen.getByRole("button", { name: /Abrir el asistente/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Agente" }));
+    fireEvent.change(screen.getByRole("textbox", { name: /Qué necesitas lograr/i }), {
+      target: { value: "pon la manilla" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Ejecutar/i }));
+    const chip = await screen.findByRole("button", { name: "1050 mm" });
+    fireEvent.click(chip);
+    // El chip continúa el mismo job con el goal original + la opción.
+    await waitFor(() => expect(jobMessageMock).toHaveBeenCalledTimes(1));
+    expect(jobMessageMock.mock.calls[0]?.[1]).toMatchObject({
+      message: "pon la manilla — 1050 mm",
+    });
   });
 });
