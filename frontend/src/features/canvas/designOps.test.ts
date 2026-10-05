@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { applyDesignOp, applyDesignOps, describeDesignOp } from "./designOps";
 import { makeBowProduct, totalModuleWidth } from "./productEditing";
+import { resolveMembers } from "./members";
 
 function bow(modules = 3) {
   return makeBowProduct({ moduleCount: modules, widthMm: 2100, heightMm: 1400, angleDeg: 15 });
@@ -66,6 +67,79 @@ describe("applyDesignOps", () => {
     expect(new Set(moduleIds).size).toBe(moduleIds.length);
     expect(new Set(couplingIds).size).toBe(couplingIds.length);
     expect(next.assembly.modules).toHaveLength(3);
+  });
+
+  it("parts expansion matches the backend's sequential per-cut ops (IA2 parity)", () => {
+    // Paridad UI/IA: el wire `split_bay {parts:3}` expande dentro del reducer
+    // a los mismos cortes que el validador acepta por separado — la raíz con
+    // centerline absoluta (520) y el anidado con offset local (442.50), cada
+    // uno direccionado por la ref sintética added_b1 como en el backend.
+    const product = makeBowProduct({
+      moduleCount: 1,
+      widthMm: 1500,
+      heightMm: 1200,
+      angleDeg: 15,
+    });
+    const members = {
+      ...resolveMembers(undefined),
+      mullionV: { sku: "MULL-60", material: "PVC", faceWidthMm: 70 },
+      mullionH: { sku: "MULL-60", material: "PVC", faceWidthMm: 70 },
+    };
+    const expanded = applyDesignOps(
+      product,
+      [{ op: "split_bay", axis: "V", module: "m1", parts: 3, mullion_sku: "MULL-60" }],
+      undefined,
+      members,
+    );
+    const sequential = applyDesignOps(
+      product,
+      [
+        {
+          op: "split_bay",
+          axis: "V",
+          module: "m1",
+          bay: "m1",
+          offset_mm: "520.00",
+          mullion_sku: "MULL-60",
+        },
+        {
+          op: "split_bay",
+          axis: "V",
+          module: "m1",
+          bay: "added_b1",
+          offset_mm: "442.50",
+          mullion_sku: "MULL-60",
+        },
+      ],
+      undefined,
+      members,
+    );
+    // Misma topología y mismos offsets — los ids pueden diferir (acuñación
+    // local), la geometría guardada no.
+    const offsets = (root: unknown): string[] =>
+      root && typeof root === "object" && "type" in root
+        ? [
+            ...((root as { type: string }).type.startsWith("SPLIT")
+              ? [String((root as { split_offset_mm?: string }).split_offset_mm)]
+              : []),
+            ...(((root as { children?: unknown[] }).children ?? []).flatMap(offsets) as string[]),
+          ]
+        : [];
+    const treeA = expanded.assembly.modules[0]!.tree;
+    const treeB = sequential.assembly.modules[0]!.tree;
+    expect(offsets(treeA)).toEqual(offsets(treeB));
+    expect(offsets(treeA)).toEqual(["520.00", "442.50"]);
+    const countBays = (node: unknown): number =>
+      node && typeof node === "object" && "type" in node
+        ? (node as { type: string }).type === "BAY"
+          ? 1
+          : ((node as { children?: unknown[] }).children ?? []).reduce(
+              (acc: number, child) => acc + countBays(child),
+              0,
+            )
+        : 0;
+    expect(countBays(treeA)).toBe(3);
+    expect(countBays(treeB)).toBe(3);
   });
 });
 

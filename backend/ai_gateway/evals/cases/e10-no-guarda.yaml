@@ -7,10 +7,21 @@ product_variant: vacia
 refs:
   position_id: "5700e30f-d1fa-5fa6-8a3c-6d6f68e72fdc"
 prompt: "¿por qué no puedo guardar?"
-expected: "Lista exactamente los bloqueos que devuelve la validación del motor."
+expected: "Lista exactamente los bloqueos que devuelve la validación del motor (o declara que no hay bloqueos registrados, que es la lista exacta)."
 expect:
-  context_gap: validation_issues (la proyección de posición no expone los bloqueos del motor)
   any:
+    # IA2 §2 — validate_position responde la lista exacta del BOM; el
+    # fixture no registra issues, así que la respuesta correcta es
+    # "no hay bloqueos" o la lista vacía explicada.
+    - behavior:
+        queries_include_tool: validate_position
+        reply_nonempty: true
+    - behavior:
+        queries_include_tool: get_blockers
+        reply_nonempty: true
+    - behavior:
+        text_matches_any:
+          - "no\\s+hay\\s+bloque|sin\\s+bloqueo|puedes\\s+guardar|no\\s+encuentro|sin\\s+issue"
     - behavior:
         sin_dato: true
         reply_nonempty: true

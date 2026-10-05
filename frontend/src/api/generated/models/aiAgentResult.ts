@@ -9,6 +9,7 @@ import type { AiAgentQuery } from "./aiAgentQuery";
 import type { AiAgentRejected } from "./aiAgentRejected";
 import type { AiAgentResultArtifactsItem } from "./aiAgentResultArtifactsItem";
 import type { AiAgentResultClaimsItem } from "./aiAgentResultClaimsItem";
+import type { AiAgentResultClarify } from "./aiAgentResultClarify";
 import type { AiAgentResultPlanItem } from "./aiAgentResultPlanItem";
 import type { AiAgentStep } from "./aiAgentStep";
 
@@ -29,4 +30,6 @@ export interface AiAgentResult {
   queries: AiAgentQuery[];
   warnings: string[];
   rejected: AiAgentRejected[];
+  /** @nullable */
+  clarify?: AiAgentResultClarify;
 }

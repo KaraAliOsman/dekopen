@@ -5,8 +5,10 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { DesignAssistResponseClarify } from "./designAssistResponseClarify";
 import type { DesignAssistResponseOpsItem } from "./designAssistResponseOpsItem";
 import type { DesignAssistResponseRejectedItem } from "./designAssistResponseRejectedItem";
+import type { DesignAssistResponseSimulation } from "./designAssistResponseSimulation";
 
 export interface DesignAssistResponse {
   audit_id: string;
@@ -16,4 +18,8 @@ export interface DesignAssistResponse {
   rejected: DesignAssistResponseRejectedItem[];
   /** @nullable */
   notes: string | null;
+  /** @nullable */
+  clarify?: DesignAssistResponseClarify;
+  /** @nullable */
+  simulation?: DesignAssistResponseSimulation;
 }

@@ -53,6 +53,7 @@ def _walk(node: Any, bays: list, splits: list) -> None:
             _walk(child, bays, splits)
         return
     if node_type == "BAY":
+        layout = node.get("sliding_layout")
         bays.append(
             {
                 "opening_type": node.get("opening_type"),
@@ -61,6 +62,15 @@ def _walk(node: Any, bays: list, splits: list) -> None:
                 "glass_thickness_mm": _mm(node.get("glass_thickness_mm")),
                 "panel_article_sku": node.get("panel_article_sku"),
                 "door_handedness": node.get("door_handedness"),
+                # IA2 — campos que las nuevas ops escriben: altura de
+                # manilla y preset corredera (set_travel/set_sliding_layout).
+                "handle_height_mm": _mm(node.get("handle_height_mm")),
+                "sliding_preset": layout.get("preset")
+                if isinstance(layout, dict)
+                else None,
+                "sliding_primary_index": layout.get("primary_index")
+                if isinstance(layout, dict)
+                else None,
             }
         )
         return

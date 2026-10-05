@@ -8,7 +8,7 @@ import type {
   DesignOpState,
 } from "../commands/types";
 import type { IntentNode, OpeningChoice } from "./intentEditing";
-import { baySpec, findNode, parentSplitOf } from "./intentEditing";
+import { baySpec, findNode, parentSplitOf, SPEC_KEY_TO_OPTION, walkIntent } from "./intentEditing";
 import { OPENING_OPTIONS } from "./openings";
 import { runCommand } from "../commands/registry";
 import { unlinkCoupling, usedEdges } from "./assemblyGraph";
@@ -20,17 +20,24 @@ import {
   copyBaySpec,
   duplicateModule,
   equalizeCouplingAngles,
+  equalizeModuleBays,
   equalizeModuleWidths,
+  flipModuleBay,
   insertModuleBetween,
   moduleGlassThicknessMm,
   moduleNeighbors,
   modulePanelSku,
+  moveModuleDivision,
   removeModuleBay,
   removeModuleDivision,
   removeUnit,
+  resizeModuleBay,
   scaleModuleWidths,
   setAllCouplingAngles,
   setAllModuleHeights,
+  setBayOpening,
+  setBaySlidingPreset,
+  setBayTravel,
   setCouplerSku,
   setCouplingAngle,
   setCouplingKind,
@@ -41,7 +48,9 @@ import {
   setModulePanel,
   setModuleTree,
   setModuleWidth,
+  splitModuleBay,
   swapModules,
+  updateModuleBay,
   type ProductJson,
   type ProductModuleJson,
 } from "./productEditing";
@@ -199,6 +208,13 @@ function text(value: unknown): string | null {
   return typeof value === "string" && value.length ? value : null;
 }
 
+/** Entero positivo del wire — number o string numérico; null si no calza. */
+function intAt(value: unknown): number | null {
+  const parsed =
+    typeof value === "number" ? value : Number(typeof value === "string" ? value : NaN);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 /** Human position label for a wire address — '2' for the second module,
  * 'nueva 1' for a unit an earlier op in the sequence just created. */
 function targetLabel(address: unknown, entities: { id: string }[]): string {
@@ -241,6 +257,79 @@ function decodeCoupling(
         ...extra,
       }
     : null;
+}
+
+/** IA2 — paños/divisiones de un módulo en orden de documento (el índice
+ * posicional del wire apunta a ESTA lista, igual que en el backend). */
+function moduleNodes(product: ProductJson, moduleId: string, kind: "BAY" | "SPLIT"): IntentNode[] {
+  const module = product.assembly.modules.find((item) => item.id === moduleId);
+  if (!module) return [];
+  return walkIntent(module.tree).filter((node) =>
+    kind === "BAY" ? node.type === "BAY" : node.type === "SPLIT_V" || node.type === "SPLIT_H",
+  );
+}
+
+/** Wire `bay`/`divider` → node id inside the resolved module: real id, the
+ * "modId/nodeId" composite the canvas selects by, `added_b{n}`/`added_d{n}`
+ * minted earlier in the sequence, or a bare/index positional against the
+ * module's nodes in the sequence's ORIGIN product (bays never reorder). */
+function nodeAt(
+  product: ProductJson,
+  moduleId: string,
+  address: unknown,
+  state: DesignOpState | undefined,
+  kind: "BAY" | "SPLIT",
+): string | null {
+  const live = moduleNodes(product, moduleId, kind);
+  const liveId = (id: string | undefined): string | null =>
+    id && live.some((node) => node.id === id) ? id : null;
+  const added = kind === "BAY" ? state?.addedBays : state?.addedDividers;
+  const positional = (): string | null => {
+    if (typeof address === "number") {
+      const origin = state?.origin;
+      const basis =
+        origin && origin.assembly.modules.some((m) => m.id === moduleId)
+          ? moduleNodes(origin, moduleId, kind)
+          : live;
+      return liveId(basis[address]?.id);
+    }
+    return null;
+  };
+  if (typeof address !== "string") return positional();
+  if (liveId(address)) return address;
+  const slash = address.indexOf("/");
+  if (slash !== -1 && liveId(address.slice(slash + 1))) return address.slice(slash + 1);
+  const synthetic =
+    kind === "BAY" ? /^added_b(\d+)$/.exec(address) : /^added_d(\d+)$/.exec(address);
+  if (synthetic) return liveId(added?.[Number(synthetic[1]) - 1]);
+  const index = kind === "BAY" ? /^b(\d+)$/.exec(address) : /^d(\d+)$/.exec(address);
+  if (index) {
+    const origin = state?.origin;
+    const basis =
+      origin && origin.assembly.modules.some((m) => m.id === moduleId)
+        ? moduleNodes(origin, moduleId, kind)
+        : live;
+    return liveId(basis[Number(index[1]) - 1]?.id);
+  }
+  return null;
+}
+
+function decodeBay(
+  op: DesignOp,
+  product: ProductJson,
+  state?: DesignOpState,
+  extra: CommandArgs = {},
+): CommandArgs | null {
+  const moduleId = moduleAt(product, op.module, state);
+  if (!moduleId) return null;
+  const bayId = nodeAt(product, moduleId, op.bay, state, "BAY");
+  if (!bayId) return null;
+  return {
+    module: moduleId,
+    bay: bayId,
+    target: targetLabel(op.module, product.assembly.modules),
+    ...extra,
+  };
 }
 
 const OPENING_LABELS: Partial<Record<string, string>> = {
@@ -435,17 +524,36 @@ export const ASSEMBLY_COMMANDS: CommandSpec[] = [
     ],
     apply: (ctx, args) => {
       const id = args.module ?? selectedModule(ctx)?.id;
-      return id && args.opening
-        ? setModuleOpening(ctx.product, id, args.opening as OpeningChoice | string)
-        : ctx.product;
+      if (!id || !args.opening) return ctx.product;
+      if (args.bay) {
+        return setBayOpening(ctx.product, id, args.bay, args.opening);
+      }
+      if (args.everyBay) {
+        // IA2 — paridad con el validador: una op module-wide aplica la
+        // misma changeOpening sobre CADA hoja (la regla D03 por hoja).
+        return moduleNodes(ctx.product, id, "BAY").reduce(
+          (next, bay) => setBayOpening(next, id, bay.id, args.opening!),
+          ctx.product,
+        );
+      }
+      return setModuleOpening(ctx.product, id, args.opening as OpeningChoice | string);
     },
-    describe: (args) =>
-      `${moduleLabel(args)}: ${OPENING_LABELS[args.opening ?? ""] ?? args.opening ?? "?"}`,
+    describe: (args) => {
+      // Una key D03 se muestra como su opción humana, no como el token wire.
+      const resolved = SPEC_KEY_TO_OPTION[args.opening ?? ""] ?? args.opening;
+      return `${moduleLabel(args)}: ${OPENING_LABELS[resolved ?? ""] ?? resolved ?? "?"}`;
+    },
     ai: {
       op: "set_opening",
       decode: (op, product, state) => {
         const opening = text(op.opening);
-        return opening ? decodeModule(op, product, state, { opening }) : null;
+        if (!opening) return null;
+        // IA2 — "bay" en el wire cambia UNA hoja (setBayOpening); sin él
+        // la op toca todas las hojas del módulo (todas: "1").
+        if (op.bay !== undefined) {
+          return decodeBay(op, product, state, { opening });
+        }
+        return decodeModule(op, product, state, { opening, everyBay: "1" });
       },
     },
   },
@@ -464,14 +572,31 @@ export const ASSEMBLY_COMMANDS: CommandSpec[] = [
     ],
     apply: (ctx, args) => {
       const id = args.module ?? selectedModule(ctx)?.id;
-      return id ? setModuleGlass(ctx.product, id, args.glass ?? null) : ctx.product;
+      if (!id) return ctx.product;
+      // IA2 bay-scoped: una hoja toma el SKU sin tocar el spec de las demás
+      // (paridad con el validador: set_glass bay solo escribe el artículo).
+      if (args.bay) {
+        return updateModuleBay(ctx.product, id, args.bay, {
+          glass_article_sku: args.glass ?? null,
+        });
+      }
+      if (args.everyBay) {
+        return moduleNodes(ctx.product, id, "BAY").reduce(
+          (next, bay) =>
+            updateModuleBay(next, id, bay.id, { glass_article_sku: args.glass ?? null }),
+          ctx.product,
+        );
+      }
+      return setModuleGlass(ctx.product, id, args.glass ?? null);
     },
     describe: (args) => `${moduleLabel(args)}: vidrio ${args.glass ?? "?"}`,
     ai: {
       op: "set_glass",
       decode: (op, product, state) => {
-        const sku = text(op.sku);
-        return sku ? decodeModule(op, product, state, { glass: sku }) : null;
+        const sku = text(op.sku) ?? text(op.recipe);
+        if (!sku) return null;
+        if (op.bay !== undefined) return decodeBay(op, product, state, { glass: sku });
+        return decodeModule(op, product, state, { glass: sku, everyBay: "1" });
       },
     },
   },
@@ -493,13 +618,33 @@ export const ASSEMBLY_COMMANDS: CommandSpec[] = [
     ],
     apply: (ctx, args) => {
       const id = args.module ?? selectedModule(ctx)?.id;
-      return id ? setModuleGlassThickness(ctx.product, id, args.thickness ?? null) : ctx.product;
+      if (!id) return ctx.product;
+      if (args.bay) {
+        return updateModuleBay(ctx.product, id, args.bay, {
+          glass_thickness_mm: args.thickness ?? null,
+        });
+      }
+      if (args.everyBay) {
+        return moduleNodes(ctx.product, id, "BAY").reduce(
+          (next, bay) =>
+            updateModuleBay(next, id, bay.id, { glass_thickness_mm: args.thickness ?? null }),
+          ctx.product,
+        );
+      }
+      return setModuleGlassThickness(ctx.product, id, args.thickness ?? null);
     },
     describe: (args) => `${moduleLabel(args)}: vidrio ${args.thickness ?? "?"} mm`,
     ai: {
       op: "set_glass_thickness",
-      decode: (op, product, state) =>
-        decodeModule(op, product, state, { thickness: text(op.mm) ?? "" }),
+      decode: (op, product, state) => {
+        if (op.bay !== undefined) {
+          return decodeBay(op, product, state, { thickness: text(op.mm) ?? "" });
+        }
+        return decodeModule(op, product, state, {
+          thickness: text(op.mm) ?? "",
+          everyBay: "1",
+        });
+      },
     },
   },
   {
@@ -520,13 +665,29 @@ export const ASSEMBLY_COMMANDS: CommandSpec[] = [
     ],
     apply: (ctx, args) => {
       const id = args.module ?? selectedModule(ctx)?.id;
-      return id ? setModulePanel(ctx.product, id, args.panel || null) : ctx.product;
+      if (!id) return ctx.product;
+      if (args.bay) {
+        return updateModuleBay(ctx.product, id, args.bay, {
+          panel_article_sku: args.panel || null,
+        });
+      }
+      if (args.everyBay) {
+        return moduleNodes(ctx.product, id, "BAY").reduce(
+          (next, bay) =>
+            updateModuleBay(next, id, bay.id, { panel_article_sku: args.panel || null }),
+          ctx.product,
+        );
+      }
+      return setModulePanel(ctx.product, id, args.panel || null);
     },
     describe: (args) => `${moduleLabel(args)}: panel ${args.panel || "ninguno"}`,
     ai: {
       op: "set_panel",
-      decode: (op, product, state) =>
-        decodeModule(op, product, state, { panel: op.sku === null ? "" : (text(op.sku) ?? "") }),
+      decode: (op, product, state) => {
+        const sku = op.sku === null ? "" : (text(op.sku) ?? "");
+        if (op.bay !== undefined) return decodeBay(op, product, state, { panel: sku });
+        return decodeModule(op, product, state, { panel: sku, everyBay: "1" });
+      },
     },
   },
   {
@@ -876,6 +1037,10 @@ export const ASSEMBLY_COMMANDS: CommandSpec[] = [
       ctx.select(sibling ? `${target.module.id}/${sibling}` : target.module.id);
     },
     describe: () => "quitar vano",
+    ai: {
+      op: "remove_bay",
+      decode: (op, product, state) => decodeBay(op, product, state),
+    },
   },
   {
     id: "split.remove",
@@ -900,6 +1065,23 @@ export const ASSEMBLY_COMMANDS: CommandSpec[] = [
       ctx.select(kept ? `${target.module.id}/${kept}` : target.module.id);
     },
     describe: () => "quitar división",
+    ai: {
+      op: "remove_divider",
+      decode: (op, product, state) => {
+        const moduleId = moduleAt(product, op.module, state);
+        if (!moduleId) return null;
+        const division = nodeAt(product, moduleId, op.divider, state, "SPLIT");
+        if (!division) return null;
+        const keep =
+          op.keep_bay !== undefined ? nodeAt(product, moduleId, op.keep_bay, state, "BAY") : null;
+        return {
+          module: moduleId,
+          division,
+          ...(keep ? { keep } : {}),
+          target: targetLabel(op.module, product.assembly.modules),
+        };
+      },
+    },
   },
   {
     id: "edit.remove",
@@ -965,6 +1147,306 @@ export const ASSEMBLY_COMMANDS: CommandSpec[] = [
     run: (ctx) => {
       const spec = ASSEMBLY_COMMANDS.find((item) => item.id === ctx.lastMutation?.specId);
       if (spec && ctx.lastMutation) runCommand(ctx, spec, ctx.lastMutation.args);
+    },
+  },
+  {
+    id: "bay.split-vertical",
+    title: "cmd.splitBayVertical",
+    keywords: ["dividir", "montante", "mullion", "paño", "vano", "vertical"],
+    mutates: true,
+    applicable: (ctx) => ctx.catalog.mullionSkus.SPLIT_V !== undefined,
+    apply: (ctx, args) => {
+      const target = moduleTarget(ctx, args);
+      const sku = args.mullion ?? ctx.catalog.mullionSkus.SPLIT_V;
+      if (!target || !sku || !ctx.members) return ctx.product;
+      return splitModuleBay(
+        ctx.product,
+        target.id,
+        {
+          type: "SPLIT_V",
+          mullionSku: sku,
+          offsetMm: args.offset || undefined,
+          bayId: args.bay || undefined,
+          parts: args.parts ? (intAt(args.parts) ?? undefined) : undefined,
+        },
+        ctx.members,
+      );
+    },
+    describe: (args) =>
+      args.parts && (intAt(args.parts) ?? 0) >= 2
+        ? `${moduleLabel(args)}: ${args.parts} hojas iguales`
+        : `${moduleLabel(args)}: montante${args.bay ? " · " + args.bay : ""}`,
+    ai: {
+      op: "split_bay",
+      decode: (op, product, state) => {
+        if (text(op.axis) !== "V") return null;
+        const moduleId = moduleAt(product, op.module, state);
+        if (!moduleId) return null;
+        const bay = op.bay !== undefined ? nodeAt(product, moduleId, op.bay, state, "BAY") : null;
+        if (op.bay !== undefined && !bay) return null;
+        const parts = intAt(op.parts);
+        return {
+          module: moduleId,
+          ...(bay ? { bay } : {}),
+          ...(parts !== null && parts >= 2 ? { parts: String(parts) } : {}),
+          ...(text(op.offset_mm) ? { offset: text(op.offset_mm)! } : {}),
+          ...(text(op.mullion_sku) ? { mullion: text(op.mullion_sku)! } : {}),
+          target: targetLabel(op.module, product.assembly.modules),
+        };
+      },
+    },
+  },
+  {
+    id: "bay.split-horizontal",
+    title: "cmd.splitBayHorizontal",
+    keywords: ["dividir", "travesaño", "transom", "paño", "vano", "horizontal"],
+    mutates: true,
+    applicable: (ctx) => ctx.catalog.mullionSkus.SPLIT_H !== undefined,
+    apply: (ctx, args) => {
+      const target = moduleTarget(ctx, args);
+      const sku = args.mullion ?? ctx.catalog.mullionSkus.SPLIT_H;
+      if (!target || !sku || !ctx.members) return ctx.product;
+      return splitModuleBay(
+        ctx.product,
+        target.id,
+        {
+          type: "SPLIT_H",
+          mullionSku: sku,
+          offsetMm: args.offset || undefined,
+          bayId: args.bay || undefined,
+          parts: args.parts ? (intAt(args.parts) ?? undefined) : undefined,
+        },
+        ctx.members,
+      );
+    },
+    describe: (args) =>
+      args.parts && (intAt(args.parts) ?? 0) >= 2
+        ? `${moduleLabel(args)}: ${args.parts} hojas iguales`
+        : `${moduleLabel(args)}: travesaño${args.bay ? " · " + args.bay : ""}`,
+    ai: {
+      op: "split_bay",
+      decode: (op, product, state) => {
+        if (text(op.axis) !== "H") return null;
+        const moduleId = moduleAt(product, op.module, state);
+        if (!moduleId) return null;
+        const bay = op.bay !== undefined ? nodeAt(product, moduleId, op.bay, state, "BAY") : null;
+        if (op.bay !== undefined && !bay) return null;
+        const parts = intAt(op.parts);
+        return {
+          module: moduleId,
+          ...(bay ? { bay } : {}),
+          ...(parts !== null && parts >= 2 ? { parts: String(parts) } : {}),
+          ...(text(op.offset_mm) ? { offset: text(op.offset_mm)! } : {}),
+          ...(text(op.mullion_sku) ? { mullion: text(op.mullion_sku)! } : {}),
+          target: targetLabel(op.module, product.assembly.modules),
+        };
+      },
+    },
+  },
+  {
+    id: "divider.move",
+    title: "cmd.moveDivider",
+    keywords: ["mover", "desplazar", "montante", "travesaño", "división", "division"],
+    mutates: true,
+    apply: (ctx, args) => {
+      const target = splitTarget(ctx, args);
+      return target && args.offset
+        ? moveModuleDivision(ctx.product, target.module.id, target.node.id, args.offset)
+        : ctx.product;
+    },
+    describe: (args) => `mover división a ${args.offset ?? "?"} mm`,
+    ai: {
+      op: "move_divider",
+      decode: (op, product, state) => {
+        const moduleId = moduleAt(product, op.module, state);
+        if (!moduleId) return null;
+        const division = nodeAt(product, moduleId, op.divider, state, "SPLIT");
+        const offset = text(op.offset_mm);
+        if (!division || !offset) return null;
+        return {
+          module: moduleId,
+          division,
+          offset,
+          target: targetLabel(op.module, product.assembly.modules),
+        };
+      },
+    },
+  },
+  {
+    id: "module.equalize-bays",
+    title: "cmd.equalizeBays",
+    keywords: ["igualar", "equidistante", "repartir", "vanos", "módulo"],
+    mutates: true,
+    apply: (ctx, args) => {
+      const target = moduleTarget(ctx, args);
+      return target && ctx.members
+        ? equalizeModuleBays(ctx.product, target.id, ctx.members)
+        : ctx.product;
+    },
+    describe: (args) => `${moduleLabel(args)}: igualar vanos`,
+    ai: {
+      op: "equalize_bays",
+      decode: (op, product, state) => decodeModule(op, product, state),
+    },
+  },
+  {
+    id: "bay.set-size",
+    title: "cmd.setBaySize",
+    keywords: ["paño", "vano", "ancho", "alto", "medida", "redimensionar"],
+    mutates: true,
+    apply: (ctx, args) => {
+      const target = bayTarget(ctx, args);
+      if (!target || !args.mm || !ctx.members) return ctx.product;
+      const mm = parseLocaleNumber(args.mm);
+      if (mm === null) return ctx.product;
+      const result = resizeModuleBay(
+        ctx.product,
+        target.module.id,
+        target.node.id,
+        mm,
+        args.axis === "H" ? "H" : "V",
+        ctx.members,
+      );
+      return typeof result === "string" ? ctx.product : result;
+    },
+    describe: (args) => `${moduleLabel(args)}: paño de ${args.mm ?? "?"} mm`,
+    ai: {
+      op: "set_bay_size",
+      decode: (op, product, state) => {
+        const mm = text(op.mm);
+        if (!mm) return null;
+        const decoded = decodeBay(op, product, state);
+        if (!decoded) return null;
+        decoded.mm = mm;
+        if (text(op.axis) === "H") decoded.axis = "H";
+        return decoded;
+      },
+    },
+  },
+  {
+    id: "bay.flip-handing",
+    title: "cmd.flipHanding",
+    keywords: ["invertir", "espejo", "mano", "apertura", "derecha", "izquierda", "corredera"],
+    mutates: true,
+    apply: (ctx, args) => {
+      const target = moduleTarget(ctx, args);
+      if (!target) return ctx.product;
+      if (args.bay) {
+        return flipModuleBay(ctx.product, target.id, args.bay);
+      }
+      // Sin hoja: espejo sobre TODAS las hojas (paridad con el validador).
+      return moduleNodes(ctx.product, target.id, "BAY").reduce(
+        (next, bay) => flipModuleBay(next, target.id, bay.id),
+        ctx.product,
+      );
+    },
+    describe: (args) => `${moduleLabel(args)}: invertir apertura`,
+    ai: {
+      op: "flip_handing",
+      decode: (op, product, state) => {
+        if (op.bay !== undefined) return decodeBay(op, product, state);
+        return decodeModule(op, product, state);
+      },
+    },
+  },
+  {
+    id: "bay.set-handle-height",
+    title: "cmd.setHandleHeight",
+    keywords: ["manilla", "manija", "altura", "cremona"],
+    mutates: true,
+    apply: (ctx, args) => {
+      const target = moduleTarget(ctx, args);
+      if (!target || !args.mm) return ctx.product;
+      const patch = { handle_height_mm: args.mm };
+      if (args.bay) {
+        return updateModuleBay(ctx.product, target.id, args.bay, patch);
+      }
+      return moduleNodes(ctx.product, target.id, "BAY").reduce(
+        (next, bay) => updateModuleBay(next, target.id, bay.id, patch),
+        ctx.product,
+      );
+    },
+    describe: (args) => `${moduleLabel(args)}: manilla a ${args.mm ?? "?"} mm`,
+    ai: {
+      op: "set_handle_height",
+      decode: (op, product, state) => {
+        const mm = text(op.mm);
+        if (!mm) return null;
+        const decoded =
+          op.bay !== undefined ? decodeBay(op, product, state) : decodeModule(op, product, state);
+        if (!decoded) return null;
+        decoded.mm = mm;
+        return decoded;
+      },
+    },
+  },
+  {
+    id: "module.set-sliding-layout",
+    title: "cmd.setSlidingLayout",
+    keywords: ["corredera", "hojas", "esquema", "2l", "3l", "4l"],
+    mutates: true,
+    apply: (ctx, args) => {
+      const target = moduleTarget(ctx, args);
+      if (!target) return ctx.product;
+      const primary =
+        args.primaryIndex !== undefined && args.primaryIndex !== ""
+          ? Number(args.primaryIndex)
+          : undefined;
+      const apply = (product: ProductJson, bayId: string) =>
+        setBaySlidingPreset(product, target.id, bayId, {
+          preset: args.preset || undefined,
+          primaryIndex: Number.isInteger(primary) ? primary : undefined,
+        });
+      if (args.bay) return apply(ctx.product, args.bay);
+      return moduleNodes(ctx.product, target.id, "BAY").reduce(
+        (next, bay) => apply(next, bay.id),
+        ctx.product,
+      );
+    },
+    describe: (args) => `${moduleLabel(args)}: corredera ${args.preset ?? ""}`.trim(),
+    ai: {
+      op: "set_sliding_layout",
+      decode: (op, product, state) => {
+        const preset = text(op.preset);
+        const primary = op.primary_index;
+        const extra: CommandArgs = {};
+        if (preset) extra.preset = preset;
+        if (primary !== undefined && primary !== null) extra.primaryIndex = String(primary);
+        const decoded =
+          op.bay !== undefined
+            ? decodeBay(op, product, state, extra)
+            : decodeModule(op, product, state, extra);
+        return decoded;
+      },
+    },
+  },
+  {
+    id: "bay.set-travel",
+    title: "cmd.setTravel",
+    keywords: ["corredera", "recorrido", "hoja", "dirección", "direccion", "movimiento"],
+    mutates: true,
+    apply: (ctx, args) => {
+      const target = bayTarget(ctx, args);
+      const slot = args.slot !== undefined ? Number(args.slot) : NaN;
+      return target && Number.isInteger(slot) && args.kind
+        ? setBayTravel(
+            ctx.product,
+            target.module.id,
+            target.node.id,
+            slot,
+            args.kind === "MOVING" ? "MOVING" : "FIXED",
+          )
+        : ctx.product;
+    },
+    describe: (args) => `${moduleLabel(args)}: hoja ${args.slot ?? "?"} → ${args.kind ?? "?"}`,
+    ai: {
+      op: "set_travel",
+      decode: (op, product, state) => {
+        const kind = text(op.kind);
+        const slot = op.slot;
+        if (!kind || slot === undefined || slot === null) return null;
+        return decodeBay(op, product, state, { kind, slot: String(slot) });
+      },
     },
   },
   {

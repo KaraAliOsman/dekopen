@@ -10,6 +10,7 @@ from ai_gateway.views import (
     AiJobRetryView,
     AiJobView,
     AiMetricsView,
+    AiOpsContractView,
 )
 
 urlpatterns = [
@@ -34,4 +35,5 @@ urlpatterns = [
         name="ai-job-outcome",
     ),
     path("metrics/", AiMetricsView.as_view(), name="ai-metrics"),
+    path("ops-contract/", AiOpsContractView.as_view(), name="ai-ops-contract"),
 ]

@@ -42,6 +42,7 @@ import yaml  # noqa: E402
 
 from ai_gateway.evals import taxonomy  # noqa: E402
 from ai_gateway.evals.expect import evaluate  # noqa: E402
+from ai_gateway.evals import fixtures  # noqa: E402
 from ai_gateway.evals.fixtures import given as given_for  # noqa: E402
 from ai_gateway.evals.fixtures import module as fixture_module  # noqa: E402
 from ai_gateway.evals.fixtures import product as fixture_product  # noqa: E402
@@ -68,8 +69,30 @@ def apply_sandbox(case: dict, run: dict, given: dict, sandbox: OpsSandbox) -> No
     (o la razón de no aplicar) — un `sandbox_error` invalida el caso, no lo
     deja pasar por omisión."""
     outcome = run.get("outcome") or {}
-    ops = list(outcome.get("ops_accepted") or [])
+    # IA2 — solo las ops de producto pasan por el reducer del canvas; las de
+    # scope "position"/"project" se ejecutan contra la API (positions.ts),
+    # no contra el árbol paramétrico.
+    ops = [
+        op
+        for op in (outcome.get("ops_accepted") or [])
+        if isinstance(op, dict) and op.get("scope") in (None, "product")
+    ]
     product_json = given.get("product")
+
+    def _members_for(system_id: Any) -> dict[str, Any]:
+        """La geometría de roles que el reducer del canvas exige para
+        ejecutar ops estructurales (resolveMembers en el sandbox JS)."""
+        catalog = (given.get("catalogs") or {}).get(str(system_id)) or {}
+        members = dict(catalog.get("members") or {})
+        mullions = catalog.get("mullions") or {}
+        for axis in ("V", "H"):
+            sku = (mullions.get(f"SPLIT_{axis}") or {}).get("sku")
+            if sku:
+                members[f"mullion_{axis.lower()}_sku"] = sku
+        return members
+
+    position_row = given.get("position") or {}
+    default_members = _members_for(position_row.get("system_id") or fixtures.DEMO_60_ID)
     run["sandbox"] = {
         "applied": 0,
         "product_after": product_json,
@@ -78,7 +101,7 @@ def apply_sandbox(case: dict, run: dict, given: dict, sandbox: OpsSandbox) -> No
     errors: list[str] = []
     if ops and isinstance(product_json, dict):
         try:
-            after = sandbox.apply(product_json, ops)
+            after = sandbox.apply(product_json, ops, default_members)
             run["sandbox"].update(
                 {
                     "applied": len(ops),
@@ -106,7 +129,11 @@ def apply_sandbox(case: dict, run: dict, given: dict, sandbox: OpsSandbox) -> No
         batch_results: dict[str, dict] = {}
         for item in batch_items:
             pid = str(item["position_id"])
-            item_ops = [op for op in item.get("ops") or [] if isinstance(op, dict)]
+            item_ops = [
+                op
+                for op in item.get("ops") or []
+                if isinstance(op, dict) and op.get("scope") in (None, "product")
+            ]
             row = rows.get(pid)
             if row is None:
                 batch_results[pid] = {"error": "posición fuera del fixture"}
@@ -118,7 +145,7 @@ def apply_sandbox(case: dict, run: dict, given: dict, sandbox: OpsSandbox) -> No
                 [fixture_module(row["parametric_tree"], row["width_mm"], row["height_mm"])]
             )
             try:
-                after = sandbox.apply(product_row, item_ops)
+                after = sandbox.apply(product_row, item_ops, _members_for(row.get("system_id")))
                 batch_results[pid] = {
                     "product_after": after,
                     "changed": after != product_row,

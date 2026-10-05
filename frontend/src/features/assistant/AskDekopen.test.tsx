@@ -1,5 +1,7 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { aiAgent, aiAsk, aiJobOutcomeCreate, aiJobRetrieve } from "../../api/generated/dekopen";
@@ -41,15 +43,21 @@ function successResponse() {
   };
 }
 
+function Providers({ children }: { children: ReactNode }) {
+  return <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>;
+}
+
 function renderDock(initialPath = "/dashboard") {
   return render(
-    <MemoryRouter initialEntries={[initialPath]}>
-      <AssistantSurfaceProvider>
-        <Routes>
-          <Route path="*" element={<AskDekopen organizationId="org-1" />} />
-        </Routes>
-      </AssistantSurfaceProvider>
-    </MemoryRouter>,
+    <Providers>
+      <MemoryRouter initialEntries={[initialPath]}>
+        <AssistantSurfaceProvider>
+          <Routes>
+            <Route path="*" element={<AskDekopen organizationId="org-1" />} />
+          </Routes>
+        </AssistantSurfaceProvider>
+      </MemoryRouter>
+    </Providers>,
   );
 }
 
@@ -94,13 +102,15 @@ describe("AskDekopen", () => {
     let resolve!: (value: ReturnType<typeof successResponse>) => void;
     askMock.mockReturnValue(new Promise((r) => (resolve = r)) as never);
     const view = render(
-      <MemoryRouter initialEntries={["/dashboard"]}>
-        <AssistantSurfaceProvider>
-          <Routes>
-            <Route path="*" element={<AskDekopen organizationId="org-1" />} />
-          </Routes>
-        </AssistantSurfaceProvider>
-      </MemoryRouter>,
+      <Providers>
+        <MemoryRouter initialEntries={["/dashboard"]}>
+          <AssistantSurfaceProvider>
+            <Routes>
+              <Route path="*" element={<AskDekopen organizationId="org-1" />} />
+            </Routes>
+          </AssistantSurfaceProvider>
+        </MemoryRouter>
+      </Providers>,
     );
     fireEvent.click(screen.getByRole("button", { name: /Abrir el asistente/i }));
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "hola" } });
@@ -230,14 +240,16 @@ describe("AskDekopen — Agente mode", () => {
       }) as never,
     );
     render(
-      <MemoryRouter initialEntries={["/projects/p1/positions/pos-9/edit"]}>
-        <AssistantSurfaceProvider>
-          <Bridge />
-          <Routes>
-            <Route path="*" element={<AskDekopen organizationId="org-1" />} />
-          </Routes>
-        </AssistantSurfaceProvider>
-      </MemoryRouter>,
+      <Providers>
+        <MemoryRouter initialEntries={["/projects/p1/positions/pos-9/edit"]}>
+          <AssistantSurfaceProvider>
+            <Bridge />
+            <Routes>
+              <Route path="*" element={<AskDekopen organizationId="org-1" />} />
+            </Routes>
+          </AssistantSurfaceProvider>
+        </MemoryRouter>
+      </Providers>,
     );
     fireEvent.click(screen.getByRole("button", { name: /Abrir el asistente/i }));
     fireEvent.click(screen.getByRole("button", { name: "Agente" }));
@@ -280,14 +292,16 @@ describe("AskDekopen — Agente mode", () => {
       }) as never,
     );
     const view = render(
-      <MemoryRouter initialEntries={["/projects/p1/positions/pos-9/edit"]}>
-        <AssistantSurfaceProvider>
-          <Bridge />
-          <Routes>
-            <Route path="*" element={<AskDekopen organizationId="org-1" />} />
-          </Routes>
-        </AssistantSurfaceProvider>
-      </MemoryRouter>,
+      <Providers>
+        <MemoryRouter initialEntries={["/projects/p1/positions/pos-9/edit"]}>
+          <AssistantSurfaceProvider>
+            <Bridge />
+            <Routes>
+              <Route path="*" element={<AskDekopen organizationId="org-1" />} />
+            </Routes>
+          </AssistantSurfaceProvider>
+        </MemoryRouter>
+      </Providers>,
     );
     fireEvent.click(screen.getByRole("button", { name: /Abrir el asistente/i }));
     fireEvent.click(screen.getByRole("button", { name: "Agente" }));
@@ -299,14 +313,16 @@ describe("AskDekopen — Agente mode", () => {
     // A commit swapped the live product — the button must refuse.
     current = productB;
     view.rerender(
-      <MemoryRouter initialEntries={["/projects/p1/positions/pos-9/edit"]}>
-        <AssistantSurfaceProvider>
-          <Bridge />
-          <Routes>
-            <Route path="*" element={<AskDekopen organizationId="org-1" />} />
-          </Routes>
-        </AssistantSurfaceProvider>
-      </MemoryRouter>,
+      <Providers>
+        <MemoryRouter initialEntries={["/projects/p1/positions/pos-9/edit"]}>
+          <AssistantSurfaceProvider>
+            <Bridge />
+            <Routes>
+              <Route path="*" element={<AskDekopen organizationId="org-1" />} />
+            </Routes>
+          </AssistantSurfaceProvider>
+        </MemoryRouter>
+      </Providers>,
     );
     await waitFor(() => expect(applyButton).toHaveProperty("disabled", true));
   });

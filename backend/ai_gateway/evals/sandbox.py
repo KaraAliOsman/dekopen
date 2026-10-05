@@ -65,16 +65,27 @@ class OpsSandbox:
         self._bundle = out
         return out
 
-    def apply(self, product: dict, ops: list[dict[str, Any]]) -> dict:
+    def apply(
+        self,
+        product: dict,
+        ops: list[dict[str, Any]],
+        members: dict[str, Any] | None = None,
+    ) -> dict:
         """Devuelve el ProductJson resultante de aplicar `ops` sobre una
         copia de `product`. Lanza SandboxUnavailable si el entorno no puede
-        ejecutar el reducer."""
+        ejecutar el reducer. `members` es la geometría de roles del sistema
+        ({frame_mm, sash_mm, mullion_*}) que el canvas resuelve con
+        resolveMembers — sin ella las ops estructurales no-opan igual que en
+        la UI sin catálogo."""
         bundle = self._ensure_bundle()
         with tempfile.TemporaryDirectory(prefix="eval-ops-") as tmp:
             in_path = Path(tmp) / "in.json"
             out_path = Path(tmp) / "out.json"
             in_path.write_text(
-                json.dumps({"product": product, "ops": ops}, default=str),
+                json.dumps(
+                    {"product": product, "ops": ops, "members": members or {}},
+                    default=str,
+                ),
                 encoding="utf-8",
             )
             result = subprocess.run(

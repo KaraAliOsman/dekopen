@@ -24,6 +24,7 @@ import type {
   AiJobOutcomeResponse,
   AiMetrics,
   AiMetricsParams,
+  AiOpsContract,
   AllocationRequestRequest,
   AllocationResponse,
   ApplyRequest,
@@ -1162,6 +1163,82 @@ export const aiMetrics = async (
   options?: Parameters<typeof apiMutator>[1],
 ): Promise<aiMetricsResponse> => {
   return apiMutator<aiMetricsResponse>(getAiMetricsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export type aiOpsContractResponse200 = {
+  data: AiOpsContract;
+  status: 200;
+};
+
+export type aiOpsContractResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type aiOpsContractResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type aiOpsContractResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type aiOpsContractResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type aiOpsContractResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type aiOpsContractResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type aiOpsContractResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type aiOpsContractResponseSuccess = aiOpsContractResponse200 & {
+  headers: Headers;
+};
+export type aiOpsContractResponseError = (
+  | aiOpsContractResponse400
+  | aiOpsContractResponse401
+  | aiOpsContractResponse403
+  | aiOpsContractResponse404
+  | aiOpsContractResponse409
+  | aiOpsContractResponse422
+  | aiOpsContractResponse503
+) & {
+  headers: Headers;
+};
+
+export type aiOpsContractResponse = aiOpsContractResponseSuccess | aiOpsContractResponseError;
+
+export const getAiOpsContractUrl = () => {
+  return `/api/v1/ai/ops-contract/`;
+};
+
+/**
+ * IA2 §1 — el registro tipado de ops expuesto como documento de
+ * contrato: el mismo texto que el prompt, el validador y el TS
+ * generado. Cualquier cliente puede descubrir las ops en runtime en
+ * vez de adivinarlas.
+ */
+export const aiOpsContract = async (
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<aiOpsContractResponse> => {
+  return apiMutator<aiOpsContractResponse>(getAiOpsContractUrl(), {
     ...options,
     method: "GET",
   });

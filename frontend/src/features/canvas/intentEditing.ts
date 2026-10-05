@@ -27,6 +27,9 @@ export type SlidingPanel = {
 export type SlidingLayout = {
   tracks: number;
   panels: SlidingPanel[];
+  /** IA2 — sentido de recorrido declarado: qué panel abre primero
+   * (la hoja que viaja por delante). */
+  primary_index?: number | null;
 };
 
 /** Presets mirrored from the engine (`geometry._SLIDING_PRESETS`) — every
@@ -378,7 +381,7 @@ export function requestTree(tree: IntentNode): IntentNode {
   return { ...root, children: [omitDimensions(topIntent(tree))] };
 }
 
-function replaceNode(tree: IntentNode, id: string, replacement: IntentNode): IntentNode {
+export function replaceNode(tree: IntentNode, id: string, replacement: IntentNode): IntentNode {
   if (tree.id === id) return replacement;
   if (!tree.children?.length) return tree;
   const children = tree.children.map((child) => replaceNode(child, id, replacement));
@@ -581,6 +584,53 @@ function mirrorLeaves(leaves: LeafSpecPayload[]): LeafSpecPayload[] {
   return leaves
     .map((leaf) => ({ slot: slotOf(leaf.slot), opening: mirrorOpeningSpec(leaf.opening) }))
     .sort((a, b) => a.slot.localeCompare(b.slot));
+}
+
+/** IA2 flip_handing — espejo explícito de UNA hoja: abatible/oscilo
+ * invierte su lado, corredera invierte su recorrido (primer ↔ último
+ * panel), puerta invierte su handedness y las hojas de un par intercambian
+ * posición. Devuelve null cuando no hay nada que espejar (fija,
+ * proyectante) — la UI muestra el rechazo en vez de un no-op silencioso. */
+export function flipBay(node: IntentNode): IntentNode | null {
+  const flipped: IntentNode = structuredClone(node);
+  let changed = false;
+  const openingType = flipped.opening_type;
+  if (typeof openingType === "string" && MIRRORED_OPENING[openingType]) {
+    flipped.opening_type = MIRRORED_OPENING[openingType];
+    changed = true;
+  } else if (isSlidingOpening(openingType)) {
+    const layout = flipped.sliding_layout;
+    const panels = layout?.panels ?? SLIDING_PRESETS[openingType ?? ""]?.panels;
+    const count = panels?.length ?? 0;
+    if (count > 0) {
+      const primary = Number(layout?.primary_index ?? 0);
+      flipped.sliding_layout = {
+        tracks: layout?.tracks ?? 2,
+        panels: panels ? panels.map((panel) => ({ ...panel })) : [],
+        primary_index: count - 1 - primary,
+      };
+      changed = true;
+    }
+  }
+  if (flipped.opening) {
+    const mirrored = mirrorOpeningSpec(flipped.opening);
+    if (mirrored.hinge_side !== flipped.opening.hinge_side) {
+      flipped.opening = mirrored;
+      changed = true;
+    }
+  }
+  if (Array.isArray(flipped.leaves) && flipped.leaves.length) {
+    flipped.leaves = mirrorLeaves(flipped.leaves);
+    changed = true;
+  }
+  if (flipped.door_handedness === "LEFT") {
+    flipped.door_handedness = "RIGHT";
+    changed = true;
+  } else if (flipped.door_handedness === "RIGHT") {
+    flipped.door_handedness = "LEFT";
+    changed = true;
+  }
+  return changed ? flipped : null;
 }
 
 export function splitBay(

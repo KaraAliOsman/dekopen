@@ -13,11 +13,21 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+from ai_gateway import job_metrics as metrics
 from ai_gateway import jobs, service as gateway
+from ai_gateway.limits import (
+    MAX_QUERIES,
+    MAX_REGROUNDS,
+    MAX_ROUNDS,
+    MAX_STEPS,
+    TOTAL_TIMEOUT_SECONDS,
+)
+from ai_gateway.tools import TOOL_IMPLS, TOOL_NAMES
 from ai_gateway.assist import (
     _ALLOWED_PATHS,
     _OPAQUE_TOKEN_RE,
@@ -39,6 +49,7 @@ from ai_gateway.context import (
 )
 from authentication.errors import contract_error
 from projects import design_assist, service as projects_service
+from projects.ops_registry import batchable_ops, ops_contract, ops_prompt_block
 
 CAPABILITY = "agent"
 
@@ -77,6 +88,10 @@ PREPARE_TOOLS = {
     "upload_document": "upload_document",
     "review_catalog": "create_catalog_candidates",
     "upload_certificate": "upload_certificate",
+    "prepare_emit": "emit_revision",
+    "prepare_release": "release_work_order",
+    "prepare_purchase": "prepare_purchase",
+    "prepare_payment_link": "register_payment",
 }
 
 ARTIFACT_TOOLS = {
@@ -94,13 +109,8 @@ ARTIFACT_TOOLS = {
 
 MAX_GOAL = 2000
 MAX_REPLY = 4000
-MAX_STEPS = 8
-MAX_QUERIES = 3
-MAX_ROUNDS = 3  # invokes: goal → up to two observe-and-replan turns
-# A reply that fails numeric grounding gets one corrective provider round
-# before the job fails — conversational enumerations are fixable, invented
-# figures are not.
-MAX_REGROUNDS = 1
+# §IA2-6 — los topes de ejecución viven en ai_gateway.limits (pasos,
+# consultas, rondas y el presupuesto total del job).
 MAX_LABEL = 80
 MAX_WARNINGS = 8
 MAX_WARNING = 240
@@ -111,22 +121,11 @@ MAX_WARNING = 240
 # diff the client shows comes from the design-batch preview endpoint).
 MAX_BATCH_POSITIONS = 15
 MAX_BATCH_ITEMS = 15
-# Ops that may repeat across positions. Structural edits (add/remove units
-# and couplings) never batch — a per-position operation repeated blindly
-# across different geometries is a hallucination vector, not a shortcut.
-BATCH_OPS = {
-    "equalize_angles",
-    "equalize_widths",
-    "set_coupling_angle",
-    "set_coupling_kind",
-    "set_glass",
-    "set_glass_thickness",
-    "set_height",
-    "set_module_width",
-    "set_opening",
-    "set_panel",
-    "set_total_width",
-}
+# Ops that may repeat across positions — the registry's batchable set.
+# Structural edits (add/remove units, couplings, divisions, bays) never
+# batch: a per-position operation repeated blindly across different
+# geometries is a hallucination vector, not a shortcut.
+BATCH_OPS = batchable_ops()
 # Ref fields that accept "*" — expanded per position into every real ref of
 # that kind so 'todas las hojas'/'todas las uniones' mean exactly that.
 BATCH_WILDCARD_FIELDS = {"module", "coupling"}
@@ -143,6 +142,12 @@ PREPARE_ROUTES: dict[str, tuple[str, tuple[str, ...]]] = {
     "optimize_work_order": ("/production", ()),
     "review_catalog": ("/catalogs/systems", ()),
     "upload_certificate": ("/settings/general", ()),
+    # IA2 §1 — prepare_* solo abren la superficie real donde la persona
+    # confirma: el agente jamás emite, libera ni paga.
+    "prepare_emit": ("/projects/{project_id}/pricing", ("project_id",)),
+    "prepare_release": ("/production", ()),
+    "prepare_purchase": ("/purchasing", ()),
+    "prepare_payment_link": ("/projects/{project_id}", ("project_id",)),
 }
 
 AGENT_SYSTEM = """Eres DEKOPEN Agente — el agente completo de una aplicación profesional de ventanas y puertas (español chileno).
@@ -166,21 +171,20 @@ Respondes SOLO un JSON:
   "claims": [{"text": "afirmación verificable", "evidence": ["ids que el contexto u observaciones mostraron"]}]
 }
 
-"plan", "questions" y "claims" son opcionales pero el trabajo debe verse: si la meta pide varias acciones, emite "plan"; si falta un dato crítico que solo la persona tiene, pregunta en "questions" en vez de adivinar; toda afirmación con números o estados importantes va en "claims" con su evidencia (un claim sin evidencia citable se descarta).
+"plan", "questions", "claims" y "clarify" son opcionales pero el trabajo debe verse: si la meta pide varias acciones, emite "plan"; si falta un dato crítico que solo la persona tiene, emite "clarify":{"question":"...","options":[{"value":"...","label":"..."}]} con opciones REALES del contexto (el usuario responde con un clic y el trabajo continúa) — questions queda para preguntas sin opciones; toda afirmación con números o estados importantes va en "claims" con su evidencia (un claim sin evidencia citable se descarta).
 
 Tipos de paso:
 - {"kind":"query","surface":"projects|project|position|quotation|catalog|production|work_order|clients|purchasing|dashboard|settings|morning_brief|purchase_plan|production_plan|quotation_complete|project_from_documents|catalog_compiler|customer_comms","refs":{...}} — pide los datos de otra superficie; el servidor la ejecuta y el resultado vuelve a ti en la siguiente ronda. Úsalo SIEMPRE que la meta toque datos que el contexto no tiene. refs lleva los ids requeridos (project_id, position_id, work_order_id; system_id para profundizar en un sistema de catálogo) y solo puedes consultar ids que el contexto u observaciones anteriores te mostraron. Máximo 3 por ronda.
 - {"kind":"navigate","path":"/ruta","label":"..."} — navegación dentro de la app. Todo UUID en el path debe venir del contexto o de una observación.
-- {"kind":"ops","ops":[...],"label":"..."} — SOLO cuando el usuario está en una posición de diseño (surface="position" y el pedido trae "product"). Cada op usa EXACTAMENTE los campos del contrato — nunca "refs", "value" ni otros nombres:
-  set_module_count {count} | add_unit {side:"left"|"right"} | remove_unit {module} | duplicate_module {module} | add_stacked_unit {module} | insert_module {coupling} | remove_coupling {coupling} | set_coupling_kind {coupling, kind:"INLINE|STACKED|TEE|CORNER"} | set_module_width {module, width_mm} | set_total_width {width_mm} | set_height {height_mm} | equalize_widths {} | equalize_angles {} | set_coupling_angle {coupling, angle_deg} | set_opening {module, opening:"<key>"} | set_glass {module, sku} | set_glass_thickness {module, mm} | set_panel {module, sku|null}
-  set_opening solo acepta un "key" de context.system.opening_options (la apertura que el sistema declara) — nada fuera de esa lista; un valor heredado tipo TURN_LEFT sigue siendo válido cuando existe como opción.
-  "module"/"coupling" toman el "ref" (id) de product.modules[]/product.couplings[]; para una unidad creada por add_unit en la misma secuencia usa "added_m1"... ("added_c1"... para uniones nuevas). Las medidas solo pueden citar números de la meta.
-- {"kind":"prepare","action":"emit_revision|release_work_order|optimize_work_order|register_payment|upload_document|review_catalog|upload_certificate","path":"/ruta","label":"..."} — prepara una acción consecuente; la persona la confirma en la superficie real. Nunca la ejecutes tú. El "path" DEBE seguir la plantilla de actions.prepare_routes[action] rellenando {id} con el UUID real de la entidad (uno que el contexto o las observaciones ya mostraron).
+- {"kind":"ops","ops":[...],"label":"..."} — SOLO cuando el usuario está en una posición de diseño (surface="position" y el pedido trae "product"). Cada op usa EXACTAMENTE los campos del contrato de actions.ops_signatures — nunca "refs", "value" ni otros nombres. El contrato completo (producto, posición y proyecto) viaja en actions.ops_contract: split_bay, move_divider, remove_divider, equalize_bays, set_bay_size, set_sliding_layout, set_travel, flip_handing, set_handle_height y las ops de posición (set_system, set_finish, set_location, set_quantity) además de las de siempre.
+  set_opening solo acepta un "key" de context.system.opening_options — nada fuera de esa lista. "module"/"coupling" toman el "ref" (id) de product.modules[]/product.couplings[]; "bay"/"divider" toman el id del nodo del árbol (o el índice de la hoja/división en el módulo); para una unidad o vano creado en la misma secuencia usa "added_m1"/"added_c1"/"added_b1"/"added_d1". Las medidas solo pueden citar números de la meta, del contexto o derivados de ellos (la mitad, el doble, la diferencia) — un número derivado correcto se calcula, no se rechaza ni se pide de vuelta.
+- {"kind":"tool","name":"<herramienta>","args":{...}} — invoca una herramienta del motor y su salida vuelve como observación la ronda siguiente. Cualquier número que vayas a citar y que NO esté en el contexto (peso de una hoja, costo de una posición, bloqueo del motor) sale de una herramienta — NUNCA de tu memoria. Herramientas: calculate_position {position_id} (BOM persistido: pesos por hoja, cortes, vidrios), validate_position {position_id} (issues del motor), price_position {position_id} (costo unitario+línea), price_project {project_id} (costo por posición ordenado), explain_price_delta {project_id} (Δ vs última aplicación), list_catalog_options {system_id?,kind?} (aperturas/vidrios/acabados/series reales), get_blockers {position_id|project_id} (qué falta para emitir o guardar), simulate_ops {position_id,ops:[...]} (prueba la propuesta antes de presentarla — devuelve aceptadas, rechazadas y la simulación).
+- {"kind":"prepare","action":"emit_revision|release_work_order|optimize_work_order|register_payment|upload_document|review_catalog|upload_certificate|prepare_emit|prepare_release|prepare_purchase|prepare_payment_link","path":"/ruta","label":"..."} — prepara una acción consecuente; la persona la confirma en la superficie real. Nunca la ejecutes tú. El "path" DEBE seguir la plantilla de actions.prepare_routes[action] rellenando {id} con el UUID real de la entidad (uno que el contexto o las observaciones ya mostraron).
 - {"kind":"batch_ops","targets":{...},"ops":[...],"label":"..."} — SOLO en surface="project" con context.editable=true: propone el MISMO set de ops sobre muchas posiciones del proyecto a la vez ("todas las fijas a abatible", "copia el vidrio", "ancho total 1500"). targets: {"typology":"ALL"|tipología exacta del listado de posiciones, "position_ids":[uuid,...] (opcional — solo ids que context.positions u observaciones mostraron)}. ops: mismo contrato que "ops", pero solo ops de ajuste (set_opening, set_glass, set_glass_thickness, set_panel, set_module_width, set_total_width, set_height, equalize_widths, equalize_angles, set_coupling_kind, set_coupling_angle) — nunca agregar/quitar módulos ni uniones. "module" acepta el ref real de esa posición o "*" para TODOS los módulos de cada posición; "coupling" igual. Consulta surface="position" antes para conocer los refs reales; si no tienes refs y la op es por-módulo usa "*". Medidas solo citan números de la meta.
 - {"kind":"artifact","artifact":{"kind":"quote_draft|message|purchase_plan|production_plan|project_draft|catalog_review|comparison|document_preview","title":"...","payload":{...},"references":["ids del contexto"]}} — produce un borrador inspeccionable y reutilizable (no muta nada). Úsalo cuando la meta pida un documento, plan, comparación o resumen que la persona reutilizará fuera del chat — un artefacto perdido en la conversación no sirve. payload solo lleva datos del contexto/observaciones/meta; references lleva los ids que respaldan el contenido.
 
 Reglas duras:
-- Solo citas números (medidas, precios, cantidades, SKUs, ids) que estén literalmente en el contexto, las observaciones o la meta del usuario. Nada inventado.
+- Solo citas números (medidas, precios, cantidades, SKUs, ids) que estén literalmente en el contexto, las observaciones, la salida de una herramienta o la meta del usuario — o derivados de ellos (mitades, dobles, diferencias). Nada inventado.
 - Nunca inventes fechas, plazos, estados, montos ni datos de contacto — si el contexto no los muestra, dilo y señala qué falta.
 - "query" es cómo miras: si la meta requiere datos que no ves, consulta antes de responder. Si tras dos rondas sigues sin el dato, dilo claramente.
 - Los pasos se ejecutan en orden: tus "query" ya vienen resueltas; los "navigate"/"ops"/"prepare" la persona los confirma. Máximo 8 pasos en total.
@@ -508,6 +512,51 @@ def _queries(
     return observations, refs_union
 
 
+def _tools(
+    *,
+    org_id: UUID,
+    document: Any,
+    observed: frozenset[str],
+) -> list[dict]:
+    """IA2 §2 — ejecuta los pasos {"kind":"tool"} del documento: cada uno
+    corre una herramienta del motor (precio, BOM, bloqueos, catálogo,
+    simulación) y su salida vuelve como observación la ronda siguiente —
+    el número citado viene de la herramienta, nunca inventado. Los refs
+    siguen la misma regla que las queries: solo ids ya observados."""
+    steps = document.get("steps") if isinstance(document, dict) else None
+    observations: list[dict] = []
+    for item in steps if isinstance(steps, list) else []:
+        if len(observations) >= MAX_QUERIES:
+            break
+        if not isinstance(item, dict) or item.get("kind") != "tool":
+            continue
+        name = item.get("name")
+        args = item.get("args") or {}
+        if not isinstance(name, str) or name not in TOOL_IMPLS or not isinstance(args, dict):
+            observations.append({"tool": name, "error": "ai_tool_invalid"})
+            continue
+        # Los refs que el paso cita deben ser ids ya mostrados — igual que
+        # una query: una herramienta no puede mirar una entidad que el
+        # contexto nunca le dio a conocer al modelo.
+        ref_values = [
+            str(value)
+            for key, value in args.items()
+            if key.endswith("_id") and isinstance(value, str) and _PATH_UUID.match(value)
+        ]
+        if any(value not in observed for value in ref_values):
+            observations.append({"tool": name, "args": args, "error": "ai_context_ref_unobserved"})
+            continue
+        try:
+            output = TOOL_IMPLS[name](org_id, args, observed)
+        except Exception as error:  # noqa: BLE001 — una herramienta caída es observación, no aborta el turno
+            observations.append(
+                {"tool": name, "args": args, "error": f"ai_tool_failed:{type(error).__name__}"}
+            )
+            continue
+        observations.append({"tool": name, "args": args, "output": output})
+    return observations
+
+
 def _prepare_path_valid(action: str, path: str) -> bool:
     """A prepare link must equal its action's route template — every
     {placeholder} filled by a real UUID — so "Ir a la cotización" can never
@@ -760,7 +809,11 @@ def _batch_ops_step(
     for position in positions[:MAX_BATCH_ITEMS]:
         at = f"position_{position['position_index']}"
         product = _jsonb(position.get("parametric_tree"))
-        summary = design_assist._summary(product)
+        summary = design_assist._summary(
+            product,
+            width_mm=position.get("width_mm"),
+            height_mm=position.get("height_mm"),
+        )
         if summary is None:
             # Classic (non-assembly) positions can't be batch-edited — the
             # ops contract speaks assembly refs.
@@ -782,7 +835,14 @@ def _batch_ops_step(
         if werror is not None:
             rejected.append({"op": "batch_ops", "reason": f"{at}:{werror}"})
             continue
-        accepted, dropped = design_assist._validate_ops(expanded, summary, catalog, declared)
+        # Citables: goal ∪ números del contexto de CADA posición (las
+        # medidas propias de la fila son válidas para sus ops).
+        citable = design_assist._citable_values(
+            declared, design_assist._context_numbers(summary, catalog)
+        )
+        accepted, dropped, _sim_state = design_assist._validate_ops(
+            expanded, summary, catalog, citable, declared_strict=declared
+        )
         for entry in dropped:
             rejected.append({**entry, "reason": f"{at}:{entry['reason']}"})
         if accepted:
@@ -823,6 +883,7 @@ def _act(
     operation_key: str,
     history_trusted: bool = False,
     job_id: UUID | None = None,
+    metrics_row: Any = None,
     progress: Any = None,
 ) -> dict:
     def _report(value: float) -> None:
@@ -842,12 +903,23 @@ def _act(
     audit_id = ""
     model = ""
     document: Any = {}
+    started = time.monotonic()
     for round_index in range(MAX_ROUNDS):
         # Cooperative cancel, checked between provider rounds: a cancel that
         # landed mid-run (direct CANCELED write or signal row) stops the
         # loop before the next round burns another provider call.
         if job_id is not None and jobs.cancel_requested(job_id=job_id):
             raise JobCanceledError()
+        # §IA2-6 — presupuesto total del job: expirar honestamente gana a
+        # iterar sin converger y colgar la sesión.
+        if time.monotonic() - started > TOTAL_TIMEOUT_SECONDS:
+            metrics.record(metrics_row, rounds=round_index)
+            metrics.finish(metrics_row, "timeout")
+            raise contract_error(
+                504,
+                "ai_agent_timeout",
+                "El agente agotó su tiempo disponible; intenta una meta más acotada.",
+            )
         _report(20 + round_index * 20)
         envelope = gateway.invoke(
             org_id=org_id,
@@ -874,7 +946,14 @@ def _act(
                     "prepare_routes": {
                         action: route for action, (route, _params) in PREPARE_ROUTES.items()
                     },
+                    # IA2 §1/§2 — el contrato tipado de ops y las
+                    # herramientas del motor que el paso "tool" puede
+                    # invocar; la firma corta viaja también al prompt
+                    # (mismo texto, dos canales).
                     "ops_available": surface == "position" and product is not None,
+                    "ops_contract": ops_contract(),
+                    "ops_signatures": ops_prompt_block(),
+                    "tools": list(TOOL_NAMES),
                 },
                 "product": product,
                 "product_fields": (
@@ -903,19 +982,32 @@ def _act(
                 "El agente devolvió una respuesta inválida.",
             )
         _report(30 + round_index * 20)
-        observations, new_observed = _queries(
+        tool_observations = _tools(
+            org_id=org_id,
+            document=document,
+            observed=observed_refs,
+        )
+        metrics.record(metrics_row, tool_calls=len(tool_observations))
+        query_observations, new_observed = _queries(
             org_id=org_id,
             document=document,
             seen=seen_queries,
             observed=observed_refs,
         )
+        metrics.record(metrics_row, queries=len(query_observations))
         observed_refs = observed_refs | new_observed
-        all_observations.extend(observations)
+        all_observations.extend(tool_observations)
+        all_observations.extend(query_observations)
         contexts.extend(
             observation["context"]
-            for observation in observations
+            for observation in query_observations
             if isinstance(observation.get("context"), dict)
         )
+        # La ronda siguiente ve TODAS las observaciones — herramienta y
+        # query — para que los números del motor puedan citarse sin
+        # volver a pedirlos (IA2 §2: el número sale de la salida de la
+        # herramienta del turno, nunca de memoria).
+        observations = tool_observations + query_observations
         # Any observation — success or error — informs the next round; an
         # entity that doesn't exist for this caller is a finding the model
         # should report, not a reason to stop mid-thought.
@@ -1039,9 +1131,13 @@ def _act(
     summary = catalog = None
     declared = design_assist._declared_values(goal)
     if surface == "position" and product is not None and "position_id" in refs:
-        summary = design_assist._summary(product)
+        position = projects_service.position_row(org_id, refs["position_id"])
+        summary = design_assist._summary(
+            product,
+            width_mm=(position or {}).get("width_mm"),
+            height_mm=(position or {}).get("height_mm"),
+        )
         if summary is not None:
-            position = projects_service.position_row(org_id, refs["position_id"])
             try:
                 catalog = design_assist._catalog(
                     UUID(str(position["system_id"])), org_id
@@ -1059,25 +1155,49 @@ def _act(
         if not isinstance(item, dict):
             continue
         kind = item.get("kind")
-        if kind == "query":
+        if kind in ("query", "tool"):
             continue  # executed above — `queries` reports them as provenance
         if kind == "ops":
             if summary is None or catalog is None:
-                # The surface can't validate ops (no live product, no bound
-                # system) — an ops step that vanishes without a note reads
-                # as a clean answer with work silently missing. Surface the
-                # refusal as a rejection instead.
-                rejected.append(
+                # Sin producto vivo solo pasan las ops de proyecto (crear,
+                # duplicar, quitar, actualizar posiciones): las de producto
+                # y posición se rechazan — pero un paso que desaparece sin
+                # nota lee como respuesta limpia con trabajo faltante.
+                ops, dropped = design_assist._validate_project_ops(
+                    item.get("ops"), declared=declared
+                )
+                rejected.extend(dropped)
+                if not ops:
+                    rejected.append(
+                        {
+                            "op": "ops",
+                            "reason": (
+                                "product_absent"
+                                if summary is None
+                                else "catalog_unavailable"
+                            ),
+                        }
+                    )
+                    continue
+                steps.append(
                     {
-                        "op": "ops",
-                        "reason": (
-                            "product_absent" if summary is None else "catalog_unavailable"
-                        ),
+                        "kind": "ops",
+                        "tool": "preview_commands",
+                        "ops": ops,
+                        "label": str(item.get("label") or "").strip()[:MAX_LABEL]
+                        or "Cambios de posiciones",
                     }
                 )
                 continue
-            ops, dropped = design_assist._validate_ops(
-                item.get("ops"), summary, catalog, declared
+            citable = design_assist._citable_values(
+                declared, design_assist._context_numbers(summary, catalog)
+            )
+            ops, dropped, simulation = design_assist._validate_ops(
+                item.get("ops"),
+                summary,
+                catalog,
+                citable,
+                declared_strict=declared,
             )
             rejected.extend(dropped)
             if ops:
@@ -1086,6 +1206,9 @@ def _act(
                         "kind": "ops",
                         "tool": "preview_commands",
                         "ops": ops,
+                        # IA2 §4 — la propuesta viaja con su simulación
+                        # estructural: la UI la muestra antes de "Aplicar".
+                        "simulation": simulation,
                         "label": str(item.get("label") or "").strip()[:MAX_LABEL]
                         or "Cambios de diseño",
                     }
@@ -1110,6 +1233,14 @@ def _act(
             steps.append(out)
 
     context_refs_all = context_refs
+    metrics.record(
+        metrics_row,
+        steps_proposed=len(steps),
+        steps_accepted=len(steps),
+        steps_rejected=len(rejected),
+        credits_debited=debited,
+        clarify_count=1 if design_assist._clarify(document) else 0,
+    )
 
     raw_artifacts = [
         item.get("artifact")
@@ -1199,10 +1330,23 @@ def _act(
                     "status": "ok" if "context" in observation else "error",
                 }
                 for observation in all_observations
+                if "surface" in observation
+            ],
+            *[
+                {
+                    "surface": "tool",
+                    "tool": observation["tool"],
+                    "status": "ok" if "output" in observation else "error",
+                }
+                for observation in all_observations
+                if "tool" in observation
             ],
         ],
         "warnings": warnings,
         "rejected": rejected,
+        # IA2 §3 — la pregunta tipada con opciones reales (chips en la
+        # UI): el mismo canal que el asistente de diseño expone.
+        "clarify": design_assist._clarify(document),
         # Human names for the ids claims/reference may cite — the transcript
         # stores ids; the workspace renders the entity behind each one.
         "evidence_labels": _evidence_labels(context, all_observations),
@@ -1246,6 +1390,9 @@ def act(
         # again.
         turn["replay"] = True
     transcript.append(turn)
+    metrics_row = metrics.begin(
+        UUID(job["id"]) if job.get("id") else None, surface
+    )
     result = _act(
         org_id=org_id,
         user_id=user_id,
@@ -1257,6 +1404,7 @@ def act(
         operation_key=operation_key,
         history_trusted=history_trusted,
         job_id=UUID(job["id"]) if job.get("id") else None,
+        metrics_row=metrics_row,
         progress=progress,
     )
 
@@ -1279,7 +1427,7 @@ def act(
     )
     state = (
         "WAITING_FOR_USER"
-        if result["questions"]
+        if result["questions"] or result.get("clarify")
         else "WAITING_FOR_APPROVAL" if pending_approvals else "SUCCEEDED"
     )
     transcript.append(
@@ -1295,9 +1443,11 @@ def act(
             "steps": result["steps"],
             "warnings": result["warnings"],
             "rejected": result["rejected"],
+            "clarify": result.get("clarify"),
             "evidence_labels": result["evidence_labels"],
         }
     )
+    metrics.finish(metrics_row, state.lower())  # same row _act counted into
     # The job's artifact shelf accumulates across rounds — a question-only
     # follow-up must not wipe drafts an earlier turn produced. Each turn's
     # own artifacts stay attributed in the transcript entry.

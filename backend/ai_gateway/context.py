@@ -479,6 +479,22 @@ def _project(org_id: UUID, refs: dict) -> dict:
             "documentary_complete": bool(versions[0]["documentary_complete"]),
             "production_allowed": bool(versions[0]["production_allowed"]),
         }
+    # IA2 — add_position/update_position citan system_id reales: el catálogo
+    # compacto viaja en el contexto para que el modelo nunca invente uno.
+    systems = rows(
+        "SELECT id, code, system_family FROM public.profile_systems "
+        "WHERE (org_id=%s OR (org_id IS NULL AND is_global)) AND is_active "
+        "ORDER BY code LIMIT %s",
+        [org_id, MAX_LIST],
+    )
+    context["systems"] = [
+        {
+            "id": str(s["id"]),
+            "code": _cut(s["code"]),
+            "family": _cut(s["system_family"]),
+        }
+        for s in systems
+    ]
     # Positions are writable only while the current revision is unsealed —
     # batch design ops are only offerable when this reads true.
     context["editable"] = project["status"] == "DRAFT" and not (
@@ -576,11 +592,14 @@ def _system_opening_options(org_id: UUID, position: dict) -> list[dict]:
     )
     # Compact projection for the prompt: the option key the op echoes back
     # plus its Spanish name and unit kind — spec payloads stay in the API.
+    # `legacy` viaja también: el glosario enseña TILT_TURN_LEFT y el
+    # validador acepta ambas formas del catálogo (key D03 o alias legacy).
     return [
         {
             "key": option["key"],
             "name": option["name"],
             "unit_kind": option["unit_kind"],
+            "legacy": option.get("legacy"),
         }
         for option in spec_options_from_capabilities(capabilities)
     ]
@@ -589,7 +608,7 @@ def _system_opening_options(org_id: UUID, position: dict) -> list[dict]:
 def _position(org_id: UUID, refs: dict) -> dict:
     result = rows(
         "SELECT p.id, p.project_id, p.position_index, p.location_tag, p.typology, "
-        "p.width_mm, p.height_mm, p.parametric_tree, "
+        "p.width_mm, p.height_mm, p.parametric_tree, p.bom_snapshot, "
         "s.id AS system_uuid, s.code AS system_code, s.name AS system_name, "
         "s.material, s.system_family, "
         "pr.code AS project_code, pr.name AS project_name "
@@ -658,6 +677,39 @@ def _position(org_id: UUID, refs: dict) -> dict:
             c.get("id") == selection_id for c in couplings if isinstance(c, dict)
         ):
             selected = {"id": _cut(selection_id, 80), "kind": "coupling"}
+    # IA2 — la salida del motor persistida con la posición: pesos por
+    # hoja e issues que la IA cita tal cual (e09 peso, e10 bloqueos) en
+    # vez de recalcularlos o inventarlos.
+    bom = _jsonb(position.get("bom_snapshot"))
+    leaf_weights = (
+        [
+            {
+                "bay_id": _cut(item.get("bay_id"), 60),
+                "leaf_id": _cut(item.get("leaf_id"), 60),
+                "total_weight_kg": _cut(item.get("total_weight_kg")),
+                "weight_unknown_reasons": item.get("weight_unknown_reasons") or [],
+            }
+            for item in bom.get("leaf_weights", [])[:MAX_LIST]
+            if isinstance(item, dict)
+        ]
+        if isinstance(bom, dict)
+        else []
+    )
+    issues = (
+        [
+            {
+                "code": _cut(issue.get("code"), 80)
+                if isinstance(issue, dict)
+                else _cut(issue, 80),
+                "detail": _cut(issue.get("detail"), 200)
+                if isinstance(issue, dict)
+                else None,
+            }
+            for issue in bom.get("issues", [])[:MAX_LIST]
+        ]
+        if isinstance(bom, dict)
+        else []
+    )
     return {
         "id": str(position["id"]),
         "project": {
@@ -678,6 +730,8 @@ def _position(org_id: UUID, refs: dict) -> dict:
         "height_mm": _cut(position["height_mm"]),
         "modules": projected_modules,
         "couplings": len(couplings) if isinstance(couplings, list) else None,
+        "leaf_weights": leaf_weights or None,
+        "issues": issues or None,
         "selected": selected,
     }
 

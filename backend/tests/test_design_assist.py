@@ -99,7 +99,10 @@ def test_assist_audits_the_submitted_product(monkeypatch):
     )
     assert captured["input"]["product"]["modules"][0]["width_mm"] == "1200"
     assert captured["input"]["product"]["modules"][1]["index"] == 1
-    assert "set_module_count" in captured["input"]["ops_contract"]
+    assert any(
+        signature.startswith("set_module_count")
+        for signature in captured["input"]["ops_contract"]["product"]
+    )
 
 
 def test_out_of_bounds_module_is_rejected(monkeypatch):
@@ -367,6 +370,12 @@ def test_mock_provider_emits_ops_for_spanish_intent():
         input_payload={
             "prompt": "3 módulos corredera, ancho total de 2400, iguales",
             "product": _product(modules=3, couplings=2),
+            "catalog": {
+                "systems": [
+                    {"id": "sys-cas", "code": "DEMO_60", "system_family": "CASEMENT"},
+                    {"id": "sys-sli", "code": "DEMO_CORREDERA", "system_family": "SLIDING"},
+                ]
+            },
         },
     )
     document = json.loads(out["output"])
@@ -374,7 +383,9 @@ def test_mock_provider_emits_ops_for_spanish_intent():
     assert "set_module_count" in ops
     assert "set_total_width" in ops
     assert "equalize_widths" in ops
-    assert ops.count("set_opening") == 3
+    # Corredera = set_system con el sistema real de la familia SLIDING —
+    # nunca un set_opening SLIDING_2L inventado (causa raíz IA1 #3).
+    assert {"op": "set_system", "system_id": "sys-sli"} in document["ops"]
 
 
 def test_mock_provider_bows_angles_and_empty_notes():
@@ -396,16 +407,17 @@ def test_mock_provider_bows_angles_and_empty_notes():
 def test_undeclared_dimensions_are_rejected_not_invented(monkeypatch):
     """Trust boundary: the model may only cite numbers the user wrote. A
     prompt like 'más ancha' declares no width — a model-invented 2400 must be
-    rejected, never applied."""
+    rejected, never applied. IA2: los números citables del contexto y sus
+    derivaciones aritméticas sí pasan — sólo se rechaza lo inventado."""
     _patch_invoke(
         monkeypatch,
         {
             "ops": [
-                {"op": "set_total_width", "width_mm": 2400},
-                {"op": "set_height", "height_mm": 1500},
-                {"op": "set_module_count", "count": 5},
-                {"op": "set_coupling_angle", "coupling": 0, "angle_deg": 30},
-                {"op": "set_glass_thickness", "module": 0, "mm": "4"},
+                {"op": "set_total_width", "width_mm": 9999},
+                {"op": "set_height", "height_mm": 7777},
+                {"op": "set_module_count", "count": 13},
+                {"op": "set_coupling_angle", "coupling": 0, "angle_deg": 37},
+                {"op": "set_glass_thickness", "module": 0, "mm": "17"},
                 {"op": "equalize_widths"},
             ]
         },
@@ -427,6 +439,35 @@ def test_undeclared_dimensions_are_rejected_not_invented(monkeypatch):
         "angulo_no_declarado",
         "espesor_no_declarado",
     ]
+
+
+def test_derived_context_numbers_are_citable(monkeypatch):
+    """IA2: un número derivado del estado del producto NO se rechaza —
+    'rechazar un número derivado correcto es un bug'. El conjunto de 3
+    módulos × 1200 mm hace citable 3600 (suma) sin declararlo el usuario."""
+    _patch_invoke(
+        monkeypatch,
+        {
+            "ops": [
+                {"op": "set_total_width", "width_mm": 3600},
+                {"op": "set_module_width", "module": 1, "width_mm": 1200},
+            ]
+        },
+    )
+    out = design_assist.assist(
+        org_id=uuid4(),
+        user_id=uuid4(),
+        position=_position(),
+        product=_product(modules=3, couplings=2),
+        prompt="hazla de 3,6 metros",
+        system_id=uuid4(),
+        operation_key="assist-g1b",
+    )
+    assert [op["op"] for op in out["ops"]] == [
+        "set_total_width",
+        "set_module_width",
+    ]
+    assert out["rejected"] == []
 
 
 def test_declared_units_ground_numeric_ops(monkeypatch):

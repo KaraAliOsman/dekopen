@@ -7,7 +7,6 @@ product_variant: vacia
 prompt: "divide la ventana en dos hojas iguales"
 expected: "2 bahías separadas por un montante con eje en 750 mm. Aperturas: las que tenían (FIXED) o una aclaración."
 expect:
-  op_gap: split_bay
   any:
     - product:
         splits:

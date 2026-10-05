@@ -7,10 +7,17 @@ product_variant: dividida
 refs:
   position_id: "5700e30f-d1fa-5fa6-8a3c-6d6f68e72fdc"
 prompt: "¿cuánto pesa la hoja derecha?"
-expected: "Cifra igual a la del motor, o 'sin dato' con la causa."
+expected: "18,750 kg — la cifra del BOM persistido, citada vía calculate_position; o 'sin dato' con la causa."
 expect:
-  context_gap: peso_hoja (la proyección de posición no expone el peso por hoja del motor)
   any:
+    # IA2 §2 — la herramienta entrega el número y el modelo lo cita.
+    - behavior:
+        queries_include_tool: calculate_position
+        text_matches_any:
+          - "18[.,]7(50|5)"
+    - behavior:
+        text_matches_any:
+          - "18[.,]7(50|5)"
     - behavior:
         sin_dato: true
         reply_nonempty: true

@@ -819,6 +819,75 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/ai/ops-contract/:
+    get:
+      operationId: ai_ops_contract
+      description: |-
+        IA2 §1 — el registro tipado de ops expuesto como documento de
+        contrato: el mismo texto que el prompt, el validador y el TS
+        generado. Cualquier cliente puede descubrir las ops en runtime en
+        vez de adivinarlas.
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - ai
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiOpsContract'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/analytics/summary/:
     get:
       operationId: analytics_operational_summary
@@ -16257,6 +16326,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AiAgentRejected'
+        clarify:
+          type: object
+          additionalProperties: {}
+          nullable: true
       required:
       - artifacts
       - claims
@@ -16293,6 +16366,9 @@ components:
           items:
             type: object
             additionalProperties: {}
+        simulation:
+          type: object
+          additionalProperties: {}
       required:
       - kind
       - label
@@ -16643,6 +16719,24 @@ components:
       - jobs
       - time_saved
       - window_days
+    AiOpsContract:
+      type: object
+      description: |-
+        IA2 — el documento de contrato del registro tipado de ops (el
+        JSON-schema por op se expone como subdocumento en cada entrada).
+      properties:
+        version:
+          type: integer
+        scopes:
+          type: array
+          items: {}
+        ops:
+          type: array
+          items: {}
+      required:
+      - ops
+      - scopes
+      - version
     AllocationRequestRequest:
       type: object
       properties:
@@ -19193,6 +19287,14 @@ components:
             additionalProperties: {}
         notes:
           type: string
+          nullable: true
+        clarify:
+          type: object
+          additionalProperties: {}
+          nullable: true
+        simulation:
+          type: object
+          additionalProperties: {}
           nullable: true
       required:
       - audit_id

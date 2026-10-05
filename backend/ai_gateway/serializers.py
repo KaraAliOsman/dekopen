@@ -128,6 +128,9 @@ class AiAgentStepSerializer(serializers.Serializer):
     ops = serializers.ListField(child=serializers.DictField(), required=False)
     # §08-WC batch edits: validated ops grouped per position.
     items = serializers.ListField(child=serializers.DictField(), required=False)
+    # IA2 §4 — proyección estructural post-ops que la UI muestra antes de
+    # "Aplicar" (módulos con hojas/divisiones simuladas, uniones).
+    simulation = serializers.DictField(required=False)
 
 
 class AiAgentQuerySerializer(serializers.Serializer):
@@ -186,6 +189,8 @@ class AiAgentResultSerializer(serializers.Serializer):
     queries = AiAgentQuerySerializer(many=True)
     warnings = serializers.ListField(child=serializers.CharField())
     rejected = AiAgentRejectedSerializer(many=True)
+    # IA2 §3 — aclaración tipada {question, options[]} para chips en la UI.
+    clarify = serializers.DictField(required=False, allow_null=True)
 
 
 class AiJobMessageSerializer(serializers.Serializer):
@@ -241,6 +246,15 @@ class AiJobOutcomeSerializer(serializers.Serializer):
 class AiJobOutcomeResponseSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     recorded = serializers.BooleanField()
+
+
+class AiOpsContractSerializer(serializers.Serializer):
+    """IA2 — el documento de contrato del registro tipado de ops (el
+    JSON-schema por op se expone como subdocumento en cada entrada)."""
+
+    version = serializers.IntegerField()
+    scopes = serializers.ListField()
+    ops = serializers.ListField()
 
 
 class AiMetricsSerializer(serializers.Serializer):

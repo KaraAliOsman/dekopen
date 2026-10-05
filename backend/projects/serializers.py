@@ -596,6 +596,10 @@ class DesignAssistResponseSerializer(serializers.Serializer):
     ops = serializers.ListField(child=serializers.DictField())
     rejected = serializers.ListField(child=serializers.DictField())
     notes = serializers.CharField(allow_null=True)
+    # IA2 §3 — pregunta tipada con opciones reales (chips en la UI).
+    clarify = serializers.DictField(allow_null=True, required=False)
+    # IA2 §4 — proyección estructural post-ops para la vista previa.
+    simulation = serializers.DictField(allow_null=True, required=False)
 
 
 class OrgBrandingSerializer(serializers.Serializer):

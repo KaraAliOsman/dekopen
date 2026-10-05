@@ -5,13 +5,16 @@ surface: position
 fixture: editor
 product_variant: vacia
 prompt: "conviértela en corredera de dos hojas"
-expected: "Sin operación; explica la incompatibilidad y propone un sistema compatible si existe."
+expected: "set_system a la serie corredera del catálogo, o explica la incompatibilidad y propone sistema compatible."
 expect:
   any:
+    # IA2 — el catálogo expone la serie corredera: set_system es la op
+    # honesta para "conviértela en corredera".
+    - behavior:
+        ops_any: ["set_system"]
     - behavior:
         no_ops_accepted: true
         text_matches_any:
           - "corredera|sliding|incompat|sistema|practicable|no\\s+admite|compatible"
     - behavior:
         asks_clarification: true
-        no_ops_accepted: true

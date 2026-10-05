@@ -548,7 +548,10 @@ def design_batch_preview(org_id, _actor, request):
                               'error_code':error.code,
                               'error':pricing_public_detail(error.code)})
                 continue
-            quantity = position['quantity']
+            # IA2 — a proposed quantity change is part of the design the
+            # client prices (batch ops may carry set_quantity); the stored
+            # quantity stays the fallback.
+            quantity = design.get('quantity') or position['quantity']
             items.append({
                 'position_id':position_id,
                 'index':position['position_index'],
