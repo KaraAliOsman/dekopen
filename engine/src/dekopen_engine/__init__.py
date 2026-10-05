@@ -156,6 +156,20 @@ from dekopen_engine.openings import (
     spec_for_legacy,
     spec_is_admitted,
 )
+from dekopen_engine.rough_opening import (
+    MOUNTING_TYPES,
+    WALL_TYPES,
+    BreakdownItem,
+    FabricationLock,
+    MountingRule,
+    VanoError,
+    VanoInput,
+    VanoResolution,
+    VanoWarning,
+    mounting_rule_from_json,
+    resolve_fabrication,
+    vano_from_json,
+)
 
 PACKAGE_NAME = "dekopen-engine"
 __version__ = "0.1.0"
@@ -286,6 +300,18 @@ __all__ = [
     "resolve_composition",
     "safety_satisfied",
     "welding_loss_per_end",
+    "MOUNTING_TYPES",
+    "WALL_TYPES",
+    "BreakdownItem",
+    "FabricationLock",
+    "MountingRule",
+    "VanoError",
+    "VanoInput",
+    "VanoResolution",
+    "VanoWarning",
+    "mounting_rule_from_json",
+    "resolve_fabrication",
+    "vano_from_json",
     "equalize_coupling_angles",
     "equalize_module_widths",
     "evaluate_product",

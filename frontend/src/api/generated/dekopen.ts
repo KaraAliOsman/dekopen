@@ -145,6 +145,11 @@ import type {
   KitResponse,
   KitWriteRequest,
   MaterialRecheck,
+  MeasurementConfirmRequest,
+  MeasurementResolveRequest,
+  MeasurementResolveResponse,
+  MountingRuleListResponse,
+  MountingRulesListParams,
   OperationalSummary,
   OpsExport,
   OrderIndexResponse,
@@ -4229,6 +4234,88 @@ export const catalogKitReview = async (
   });
 };
 
+export type mountingRulesListResponse200 = {
+  data: MountingRuleListResponse;
+  status: 200;
+};
+
+export type mountingRulesListResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type mountingRulesListResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type mountingRulesListResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type mountingRulesListResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type mountingRulesListResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type mountingRulesListResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type mountingRulesListResponseSuccess = mountingRulesListResponse200 & {
+  headers: Headers;
+};
+export type mountingRulesListResponseError = (
+  | mountingRulesListResponse400
+  | mountingRulesListResponse401
+  | mountingRulesListResponse403
+  | mountingRulesListResponse404
+  | mountingRulesListResponse409
+  | mountingRulesListResponse503
+) & {
+  headers: Headers;
+};
+
+export type mountingRulesListResponse =
+  mountingRulesListResponseSuccess | mountingRulesListResponseError;
+
+export const getMountingRulesListUrl = (params: MountingRulesListParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v1/catalogs/mounting-rules/?${stringifiedParams}`
+    : `/api/v1/catalogs/mounting-rules/`;
+};
+
+/**
+ * D07 mounting rules for a system: read-only authority, org overrides
+ * the global row of the same code.
+ */
+export const mountingRulesList = async (
+  params: MountingRulesListParams,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<mountingRulesListResponse> => {
+  return apiMutator<mountingRulesListResponse>(getMountingRulesListUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
 export type catalogProcessProfileListResponse200 = {
   data: ProcessProfileOptionList;
   status: 200;
@@ -8151,6 +8238,96 @@ export const positionsDesignAssist = async (
     headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
     body: JSON.stringify(designAssistRequestRequest),
   });
+};
+
+export type positionsMeasurementConfirmResponse200 = {
+  data: PositionResponse;
+  status: 200;
+};
+
+export type positionsMeasurementConfirmResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type positionsMeasurementConfirmResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type positionsMeasurementConfirmResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type positionsMeasurementConfirmResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type positionsMeasurementConfirmResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type positionsMeasurementConfirmResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type positionsMeasurementConfirmResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type positionsMeasurementConfirmResponseSuccess = positionsMeasurementConfirmResponse200 & {
+  headers: Headers;
+};
+export type positionsMeasurementConfirmResponseError = (
+  | positionsMeasurementConfirmResponse400
+  | positionsMeasurementConfirmResponse401
+  | positionsMeasurementConfirmResponse403
+  | positionsMeasurementConfirmResponse404
+  | positionsMeasurementConfirmResponse409
+  | positionsMeasurementConfirmResponse422
+  | positionsMeasurementConfirmResponse503
+) & {
+  headers: Headers;
+};
+
+export type positionsMeasurementConfirmResponse =
+  positionsMeasurementConfirmResponseSuccess | positionsMeasurementConfirmResponseError;
+
+export const getPositionsMeasurementConfirmUrl = (positionId: string) => {
+  return `/api/v1/positions/${positionId}/measurement-confirm/`;
+};
+
+/**
+ * Explicit human confirmation of the fabrication measure — the
+ * production gate evidence.
+ */
+export const positionsMeasurementConfirm = async (
+  positionId: string,
+  measurementConfirmRequest: MeasurementConfirmRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<positionsMeasurementConfirmResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<positionsMeasurementConfirmResponse>(
+    getPositionsMeasurementConfirmUrl(positionId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+      body: JSON.stringify(measurementConfirmRequest),
+    },
+  );
 };
 
 export type pricingAdminListResponse200 = {
@@ -15356,6 +15533,95 @@ export const positionsCreate = async (
     headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
     body: JSON.stringify(positionWriteRequest),
   });
+};
+
+export type positionsMeasurementResolveResponse200 = {
+  data: MeasurementResolveResponse;
+  status: 200;
+};
+
+export type positionsMeasurementResolveResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type positionsMeasurementResolveResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type positionsMeasurementResolveResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type positionsMeasurementResolveResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type positionsMeasurementResolveResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type positionsMeasurementResolveResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type positionsMeasurementResolveResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type positionsMeasurementResolveResponseSuccess = positionsMeasurementResolveResponse200 & {
+  headers: Headers;
+};
+export type positionsMeasurementResolveResponseError = (
+  | positionsMeasurementResolveResponse400
+  | positionsMeasurementResolveResponse401
+  | positionsMeasurementResolveResponse403
+  | positionsMeasurementResolveResponse404
+  | positionsMeasurementResolveResponse409
+  | positionsMeasurementResolveResponse422
+  | positionsMeasurementResolveResponse503
+) & {
+  headers: Headers;
+};
+
+export type positionsMeasurementResolveResponse =
+  positionsMeasurementResolveResponseSuccess | positionsMeasurementResolveResponseError;
+
+export const getPositionsMeasurementResolveUrl = (projectId: string) => {
+  return `/api/v1/projects/${projectId}/positions/measurement-resolve/`;
+};
+
+/**
+ * Live vano→fabricación preview for the editor — engine resolves, nothing persists.
+ */
+export const positionsMeasurementResolve = async (
+  projectId: string,
+  measurementResolveRequest: MeasurementResolveRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<positionsMeasurementResolveResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<positionsMeasurementResolveResponse>(
+    getPositionsMeasurementResolveUrl(projectId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+      body: JSON.stringify(measurementResolveRequest),
+    },
+  );
 };
 
 export type projectQuoteLinksListResponse200 = {

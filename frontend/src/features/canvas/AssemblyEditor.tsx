@@ -53,6 +53,7 @@ import {
   frontModuleBox,
   OpeningGlyph,
   ProductFrontContent,
+  type VanoDim,
 } from "./ProductFrontSvg";
 
 import { useAssemblyCalculation } from "./useAssemblyCalculation";
@@ -2243,6 +2244,7 @@ export function AssemblyEditor({
   positionPanel,
   contentEpoch = 0,
   optionsReady = options !== undefined,
+  vano = null,
 }: {
   organizationId: string;
   couplerSkus: string[];
@@ -2261,6 +2263,9 @@ export function AssemblyEditor({
    * generation must not start on an empty catalog signature. Defaults to
    * the options value's presence for callers without a loading state. */
   optionsReady?: boolean;
+  /** D07 — el vano de obra con holgura por lado; el lienzo dibuja la cota
+   * doble (vano + fabricación) cuando el registro existe. */
+  vano?: VanoDim | null;
 }): JSX.Element | null {
   const inputs = useCanvasStore((state) => state.inputs);
   const commitInputs = useCanvasStore((state) => state.commitInputs);
@@ -2378,7 +2383,7 @@ export function AssemblyEditor({
   // One layout pass per product commit — bounds/selection boxes derive from
   // the memo instead of recomputing the elevation four times per render.
   const front = useMemo(() => (product ? frontLayout(product) : null), [product]);
-  const frontBox = useMemo(() => (front ? frontBounds(front) : null), [front]);
+  const frontBox = useMemo(() => (front ? frontBounds(front, vano) : null), [front, vano]);
   const selectionBox = useMemo(
     () => (front ? frontModuleBox(front, selection) : null),
     [front, selection],
@@ -2744,6 +2749,7 @@ export function AssemblyEditor({
               commit(moveModuleDivision(product, moduleId, divisionId, offsetMm))
             }
             onResizeSeam={(index, deltaMm) => commit(resizeModuleSeam(product, index, deltaMm))}
+            vano={vano}
           />
         </CanvasViewport>
         {couplings.length > 0 && evaluation?.plan && planBox && planOpen && (

@@ -52,14 +52,131 @@ class PositionDesignSerializer(EngineCalculateRequestSerializer, StrictSerialize
     color = serializers.CharField(max_length=50)
 
 
+class VanoRecordSerializer(StrictSerializer):
+    """Registro del vano de obra: 1–3 medidas por eje (manda la menor),
+    tipo de muro y escuadra/desplome si se midió."""
+    width_points_mm = serializers.ListField(
+        child=DecimalStringField(max_digits=10, decimal_places=2, min_value=Decimal("1")),
+        min_length=1, max_length=3,
+    )
+    height_points_mm = serializers.ListField(
+        child=DecimalStringField(max_digits=10, decimal_places=2, min_value=Decimal("1")),
+        min_length=1, max_length=3,
+    )
+    wall_type = serializers.ChoiceField(
+        choices=("MASONRY", "CONCRETE", "PARTITION", "WOOD"),
+        required=False, allow_null=True,
+    )
+    square_mm = DecimalStringField(
+        max_digits=8, decimal_places=2, required=False, allow_null=True
+    )
+    plumb_mm = DecimalStringField(
+        max_digits=8, decimal_places=2, required=False, allow_null=True
+    )
+    notes = serializers.CharField(max_length=500, required=False, allow_blank=True)
+
+
+class FabricationLockSerializer(StrictSerializer):
+    """Fijación manual de la medida de fabricación — queda registrada."""
+    width_mm = DecimalStringField(max_digits=10, decimal_places=2, min_value=Decimal("1"))
+    height_mm = DecimalStringField(max_digits=10, decimal_places=2, min_value=Decimal("1"))
+    reason = serializers.CharField(max_length=500, required=False, allow_blank=True)
+
+
+class PositionMeasurementSerializer(StrictSerializer):
+    vano = VanoRecordSerializer(required=False, allow_null=True)
+    mounting_rule_id = serializers.UUIDField(required=False, allow_null=True)
+    fabrication_lock = FabricationLockSerializer(required=False, allow_null=True)
+
+
 class PositionWriteSerializer(StrictSerializer):
     location_tag = serializers.CharField(max_length=100, allow_blank=True)
     quantity = serializers.IntegerField(min_value=1, max_value=2147483647)
     design = PositionDesignSerializer()
+    measurement = PositionMeasurementSerializer(required=False, allow_null=True)
 
 
 class PositionUpdateSerializer(PositionWriteSerializer):
     expected_updated_at = serializers.DateTimeField()
+
+
+class MeasurementBreakdownSerializer(serializers.Serializer):
+    side = serializers.CharField()
+    label = serializers.CharField()
+    mm = serializers.CharField()
+
+
+class MeasurementWarningSerializer(serializers.Serializer):
+    code = serializers.CharField()
+    message = serializers.CharField()
+
+
+class MeasurementResolutionSerializer(serializers.Serializer):
+    vano_width_mm = serializers.CharField(allow_null=True)
+    vano_height_mm = serializers.CharField(allow_null=True)
+    width_spread_mm = serializers.CharField()
+    height_spread_mm = serializers.CharField()
+    fabrication_width_mm = serializers.CharField()
+    fabrication_height_mm = serializers.CharField()
+    fabrication_source = serializers.ChoiceField(
+        choices=("DERIVED", "MANUAL_LOCK", "DECLARED")
+    )
+    used_width_mm = serializers.CharField()
+    used_height_mm = serializers.CharField()
+    coherent = serializers.BooleanField()
+    breakdown = MeasurementBreakdownSerializer(many=True)
+    warnings = MeasurementWarningSerializer(many=True)
+
+
+class MountingRuleResponseSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    system_id = serializers.UUIDField()
+    org_id = serializers.UUIDField(allow_null=True)
+    code = serializers.ChoiceField(
+        choices=("EN_VANO", "PREMARCO", "SOBRE_VANO", "TRASLAPADO", "RENOVACION")
+    )
+    version = serializers.IntegerField()
+    label = serializers.CharField()
+    authority = serializers.DictField()
+    data_provenance = serializers.ChoiceField(
+        choices=("SEED_SYNTHETIC", "MANUAL", "IMPORT", "LEGACY_UNVERIFIED")
+    )
+    review_pending = serializers.BooleanField()
+
+
+class MountingRuleListResponseSerializer(serializers.Serializer):
+    items = MountingRuleResponseSerializer(many=True)
+
+
+class MeasurementResponseSerializer(serializers.Serializer):
+    state = serializers.ChoiceField(
+        choices=("CLIENT_DECLARED", "SITE_RECTIFIED", "CONFIRMED")
+    )
+    confirmed_at = serializers.DateTimeField(allow_null=True)
+    confirmed_by = serializers.UUIDField(allow_null=True)
+    vano = VanoRecordSerializer(allow_null=True)
+    mounting_rule = MountingRuleResponseSerializer(allow_null=True)
+    fabrication_lock = serializers.DictField(allow_null=True)
+    resolution = MeasurementResolutionSerializer(allow_null=True)
+
+
+class MeasurementResolveSerializer(StrictSerializer):
+    """Preview del desglose vano → fabricación: mismo motor que el guardado."""
+    system_id = serializers.UUIDField()
+    vano = VanoRecordSerializer(required=False, allow_null=True)
+    mounting_rule_id = serializers.UUIDField(required=False, allow_null=True)
+    fabrication_lock = FabricationLockSerializer(required=False, allow_null=True)
+    width_mm = DecimalStringField(max_digits=10, decimal_places=2, min_value=Decimal("1"))
+    height_mm = DecimalStringField(max_digits=10, decimal_places=2, min_value=Decimal("1"))
+
+
+class MeasurementResolveResponseSerializer(serializers.Serializer):
+    resolution = MeasurementResolutionSerializer()
+    mounting_rule = MountingRuleResponseSerializer(allow_null=True)
+
+
+class MeasurementConfirmSerializer(StrictSerializer):
+    confirmed = serializers.BooleanField()
 
 
 class PositionResponseSerializer(serializers.Serializer):
@@ -73,6 +190,7 @@ class PositionResponseSerializer(serializers.Serializer):
     discount_pct = serializers.CharField()
     design = PositionDesignSerializer()
     bom = EngineCalculateResponseSerializer()
+    measurement = MeasurementResponseSerializer()
     updated_at = serializers.DateTimeField()
 
 
@@ -492,6 +610,9 @@ class OrgBrandingSerializer(serializers.Serializer):
     brand_email = serializers.CharField(allow_null=True, allow_blank=True)
     brand_logo_key = serializers.CharField(allow_null=True, allow_blank=True)
     brand_logo_sha256 = serializers.CharField(allow_null=True, allow_blank=True)
+    vano_spread_tolerance_mm = serializers.DecimalField(
+        max_digits=6, decimal_places=2, coerce_to_string=True, allow_null=True
+    )
 
 
 class OrgBrandingWriteSerializer(StrictSerializer):
@@ -509,4 +630,12 @@ class OrgBrandingWriteSerializer(StrictSerializer):
     )
     brand_email = serializers.CharField(
         allow_null=True, allow_blank=True, required=False, max_length=255
+    )
+    vano_spread_tolerance_mm = DecimalStringField(
+        max_digits=6,
+        decimal_places=2,
+        min_value=Decimal("0"),
+        max_value=Decimal("100"),
+        required=False,
+        allow_null=True,
     )

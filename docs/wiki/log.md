@@ -96,3 +96,15 @@ Append-only chronology. Keep newest entries at the bottom.
 - Simbología DIN por vista según `_contrato.md` §9 en `documents/renderers.py` (`_spec_leaf_glyphs`), `ProductFrontSvg` y `OpeningGlyph`: continuo = hacia el observador, discontinuo = se aleja; puerta = arco desde la esquina de bisagras + umbral bajo hojas operables; fijo sin glifo.
 - Nombres es-CL "<movimiento> hacia <dirección> — bisagras a la <lado>" + propios ("Francesa 2 hojas — activa derecha", "Solo abatimiento (banderola)"), generados por el motor y espejados en `domainLabels`.
 - Verificado: `make lint|typecheck|test|build` y `make test-db` verdes (`PY=.venv/bin/python`); goldens idénticos al migrar + goldens nuevos por tipología; test de capacidades nombrando sistemas; 18 capturas técnicas 1440×900 en `docs/redesign/captures/d03-aperturas-tipologias/`.
+
+
+## [2026-10-05] D07 | del vano de obra a la medida de fabricación
+
+- Encargo D07 (ola D2): del vano de obra a la medida de fabricación, ejecutado en branch `devin/D07-vano-fabricacion` sobre `integracion/v1`.
+- `mounting_rules` como autoridad versionada inmutable (org NULL=global): 5 tipos de montaje con ajustes firmados por lado + ensanches + fijaciones; seeds `SEED_SYNTHETIC`+`review_pending`. Sembrado doble: migración (sistemas existentes) + `seed.sql` (sistemas del seed) — pgTAP corre antes del fixture.
+- Posición con registro del vano (1–3 puntos/eje, muro, escuadra), regla validada por trigger (`mounting_rule_scope_mismatch`), fijación manual y estado de medida con sello CHECK; endpoint `measurement-confirm` para confirmar/reabrir.
+- Motor `resolve_fabrication`: menor de los puntos, aviso de descuadre sobre tolerancia org (`vano_spread_tolerance_mm`, default 10 mm), desglose "Vano − holgura = fabricación", fuente DERIVED/MANUAL_LOCK/DECLARED.
+- Producción no se libera con medidas sin confirmar (`measurement_not_confirmed`); `measurement_state` entra al diff documental del sucesor para la revisión con Δ.
+- UI: sección "Vano y montaje" en el inspector con preview debounced, chip compuesto en el encabezado de posición, cota doble vano+fabricación en el lienzo con letreros "Holgura"/"Solape" por lado, Ajustes gana "Reglas de taller".
+- Verificado: `make lint|typecheck|test|build` y `make test-db` verdes; 14 goldens engine + pgTAP 177 (16 ok) + integración confirm/gate/revisión; capturas en `docs/redesign/captures/d07-vano-fabricacion/` (pendiente de carga al PR).
+- Decisiones nuevas registradas en `docs/decisions/valores-por-defecto.md` sección D07.

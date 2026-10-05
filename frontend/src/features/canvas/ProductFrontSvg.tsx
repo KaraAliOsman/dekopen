@@ -1318,6 +1318,26 @@ const SIDE_GUTTER = 130;
 const BOTTOM_GUTTER = 120;
 const LEFT_GUTTER = 195;
 
+/** D07 · Cota doble — el vano de obra alrededor de la medida de
+ * fabricación, con la holgura (o el solape) entre ambas rectas. El lienzo
+ * sigue dibujando el producto igual; el vano entra como envolvente punteada
+ * con su propia cadena de cotas por fuera de la del producto. */
+export interface VanoDim {
+  /** Medida usada del vano (la menor de los puntos medidos). */
+  widthMm: number;
+  heightMm: number;
+  /** mm por lado entre el borde del vano y el del producto: positivo el
+   * vano envuelve (holgura de montaje), negativo el producto solapa el
+   * vano (montaje sobre vano / traslapado). */
+  gap: { top: number; right: number; bottom: number; left: number };
+  /** Etiqueta del tipo de montaje que produjo las holguras. */
+  mountingLabel: string;
+}
+const VANO_TOP_AT = -115;
+const VANO_LEFT_AT = -260;
+const VANO_TOP_EXTRA = 150;
+const VANO_LEFT_EXTRA = 150;
+
 /** Architectural dimension run: extension lines from the measured edge out
  * to the dim line (overshooting it slightly), diagonal ticks at each mark,
  * mono labels placed by the caller between them. */
@@ -1592,13 +1612,17 @@ function asLayout(value: ProductJson | FrontLayout): FrontLayout {
 }
 
 /** The drawable extent of the front elevation including gutters and chains. */
-export function frontBounds(source: ProductJson | FrontLayout) {
+export function frontBounds(source: ProductJson | FrontLayout, vano?: VanoDim | null) {
   const { totalW, height, lift, dip, leftOver, rightOver } = asLayout(source);
+  // La cadena del vano corre por fuera de la del producto: el sheet crece
+  // solo cuando hay registro del vano que mostrar.
+  const extraTop = vano ? VANO_TOP_EXTRA : 0;
+  const extraLeft = vano ? VANO_LEFT_EXTRA : 0;
   return {
-    x: -LEFT_GUTTER - leftOver,
-    y: -TOP_GUTTER,
-    w: totalW + LEFT_GUTTER + SIDE_GUTTER + leftOver + rightOver,
-    h: height + TOP_GUTTER + BOTTOM_GUTTER + lift + dip,
+    x: -LEFT_GUTTER - leftOver - extraLeft,
+    y: -TOP_GUTTER - extraTop,
+    w: totalW + LEFT_GUTTER + SIDE_GUTTER + leftOver + rightOver + extraLeft,
+    h: height + TOP_GUTTER + BOTTOM_GUTTER + lift + dip + extraTop,
   };
 }
 
@@ -1692,6 +1716,7 @@ export function ProductFrontContent({
   onCommitDivide,
   onMoveDivision,
   onResizeSeam,
+  vano = null,
 }: {
   product: ProductJson;
   members: MemberGeometry;
@@ -1732,6 +1757,10 @@ export function ProductFrontContent({
   onCommitDivide?(moduleId: string, bayId: string | null, offsetMm?: string): void;
   onMoveDivision?(moduleId: string, divisionId: string, offsetMm: string): void;
   onResizeSeam?(seamIndex: number, deltaMm: number): void;
+  /** D07 — el vano de obra con sus holguras por lado; cuando viene, se
+   * dibuja la cota doble (vano + fabricación) por fuera de la del
+   * producto. */
+  vano?: VanoDim | null;
 }): JSX.Element {
   const { couplings } = product.assembly;
   const frameT = members.frame.faceWidthMm;
@@ -1984,6 +2013,80 @@ export function ProductFrontContent({
       />
       {/* the drawing band lifts for arc overshoot: sill stays shared. */}
       <g transform={`translate(0 ${lift})`}>
+        {/* D07 — cota doble: el vano de obra envuelve la fabricación con la
+            holgura por lado; la propia cadena corre por fuera de la del
+            producto. gap<0 (sobre vano / traslapado) el producto solapa el
+            vano y la envolvente queda por dentro. */}
+        {vano !== null && (
+          <g className="vano-overlay" aria-hidden="true">
+            <rect
+              className="vano-outline"
+              x={-vano.gap.left}
+              y={-vano.gap.top}
+              width={vano.gap.left + totalW + vano.gap.right}
+              height={vano.gap.top + height + vano.gap.bottom}
+            />
+            <DimRun
+              marks={[-vano.gap.left, totalW + vano.gap.right]}
+              edge={-vano.gap.top}
+              at={VANO_TOP_AT}
+              vertical={false}
+            />
+            <text className="vano-dim" x={totalW / 2} y={VANO_TOP_AT - 30} textAnchor="middle">
+              {`${t("assembly.vano")} ${fmtMm(vano.widthMm)}`}
+            </text>
+            {vano.mountingLabel !== "" && (
+              <text
+                className="vano-dim vano-dim--mount"
+                x={totalW / 2}
+                y={VANO_TOP_AT - 72}
+                textAnchor="middle"
+              >
+                {vano.mountingLabel}
+              </text>
+            )}
+            <DimRun
+              marks={[-vano.gap.top, height + vano.gap.bottom]}
+              edge={-vano.gap.left}
+              at={VANO_LEFT_AT}
+              vertical={true}
+            />
+            <g transform={`rotate(-90 ${VANO_LEFT_AT} ${midY})`}>
+              <text className="vano-dim" x={VANO_LEFT_AT} y={midY} textAnchor="middle">
+                {`${t("assembly.vano")} ${fmtMm(vano.heightMm)}`}
+              </text>
+            </g>
+            {vano.gap.top !== 0 && (
+              <text
+                className="vano-gap"
+                x={totalW / 2}
+                y={-vano.gap.top / 2 + 10}
+                textAnchor="middle"
+              >
+                {`${vano.gap.top > 0 ? t("assembly.vanoClearance") : t("assembly.vanoOverlap")} ${fmtMm(Math.abs(vano.gap.top))}`}
+              </text>
+            )}
+            {vano.gap.left !== 0 && (
+              <g transform={`rotate(-90 ${-vano.gap.left / 2} ${midY})`}>
+                <text className="vano-gap" x={-vano.gap.left / 2} y={midY} textAnchor="middle">
+                  {`${vano.gap.left > 0 ? t("assembly.vanoClearance") : t("assembly.vanoOverlap")} ${fmtMm(Math.abs(vano.gap.left))}`}
+                </text>
+              </g>
+            )}
+            {vano.gap.right !== 0 && (
+              <g transform={`rotate(90 ${totalW + vano.gap.right / 2} ${midY})`}>
+                <text
+                  className="vano-gap"
+                  x={totalW + vano.gap.right / 2}
+                  y={midY}
+                  textAnchor="middle"
+                >
+                  {`${vano.gap.right > 0 ? t("assembly.vanoClearance") : t("assembly.vanoOverlap")} ${fmtMm(Math.abs(vano.gap.right))}`}
+                </text>
+              </g>
+            )}
+          </g>
+        )}
         {/* height chain */}
         <DimRun marks={[0, height]} edge={0} at={-160} vertical={true} />
         <g transform={`rotate(-90 ${-160} ${midY})`}>
@@ -2291,7 +2394,7 @@ export function ProductFrontContent({
  * (CanvasViewport) renders `ProductFrontContent` inside its own transform
  * instead; this wrapper stays for any consumer that just wants an SVG. */
 export function ProductFrontSvg(props: Parameters<typeof ProductFrontContent>[0]): JSX.Element {
-  const bounds = frontBounds(props.product);
+  const bounds = frontBounds(props.product, props.vano ?? null);
   return (
     <svg
       className="product-front-svg"

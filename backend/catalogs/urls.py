@@ -68,4 +68,9 @@ urlpatterns = [
         views.EvidenceReviewView.as_view(),
         name="catalog-evidence-review",
     ),
+    path(
+        "mounting-rules/",
+        views.MountingRuleCollectionView.as_view(),
+        name="catalog-mounting-rules",
+    ),
 ]

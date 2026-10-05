@@ -634,6 +634,69 @@ function OrgBrandingCard({ orgId }: { orgId: string }): JSX.Element {
   );
 }
 
+/** D07 — reglas de taller: la tolerancia de descuadre que el motor aplica
+ * al comparar los puntos del vano (manda la menor; sobre ella avisa). */
+function WorkshopRulesCard({ orgId }: { orgId: string }): JSX.Element {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
+  const [tolerance, setTolerance] = useState("");
+  const requestOptions = { headers: { "X-Organization-ID": orgId } };
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const response = await organizationBrandingGet(requestOptions);
+        if (response.status === 200)
+          setTolerance(response.data.vano_spread_tolerance_mm ?? "10.00");
+      } catch {
+        /* la tarjeta principal ya reporta el fallo de carga */
+      }
+    })();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function save(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    setBusy(true);
+    setMessage(null);
+    try {
+      const response = await organizationBrandingSave(
+        { vano_spread_tolerance_mm: tolerance.trim() || null },
+        requestOptions,
+      );
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      setMessage({ text: t("settings.brandingSaved"), error: false });
+    } catch {
+      setMessage({ text: t("settings.brandingSaveError"), error: true });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="settings-card">
+      <h3 className="eyebrow">{t("settings.workshop")}</h3>
+      <p className="settings-hint">{t("settings.workshopHint")}</p>
+      {message && <p className={message.error ? "form-error" : "settings-hint"}>{message.text}</p>}
+      <form noValidate className="payments-form" onSubmit={save}>
+        <label>
+          {t("settings.vanoTolerance")}
+          <input
+            inputMode="decimal"
+            maxLength={8}
+            value={tolerance}
+            onChange={(event) => setTolerance(event.target.value)}
+          />
+        </label>
+        <div className="payments-form-actions">
+          <button type="submit" className="primary-action" disabled={busy}>
+            {t("settings.brandingSave")}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export function SettingsPage(): JSX.Element {
   const auth = useAuthSession();
   const { theme, toggleTheme } = useTheme();
@@ -756,6 +819,7 @@ export function SettingsPage(): JSX.Element {
           </h2>
           <div className="settings-grid">
             <OrgBrandingCard orgId={org.id} />
+            <WorkshopRulesCard orgId={org.id} />
           </div>
         </section>
       )}

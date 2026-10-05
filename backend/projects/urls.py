@@ -29,6 +29,8 @@ from projects.views import (
     ProjectsView,
     PositionDesignAlternativesView,
     PositionDesignAssistView,
+    PositionMeasurementConfirmView,
+    PositionMeasurementResolveView,
     PositionView,
     SiiCafsView,
     SiiCertificateView,
@@ -98,7 +100,15 @@ urlpatterns = [
         "projects/<uuid:project_id>/payment-links/<uuid:link_id>/recover/",
         ProjectPaymentLinkRecoverView.as_view(),
     ),
+    path(
+        "projects/<uuid:project_id>/positions/measurement-resolve/",
+        PositionMeasurementResolveView.as_view(),
+    ),
     path("positions/<uuid:position_id>/", PositionView.as_view()),
+    path(
+        "positions/<uuid:position_id>/measurement-confirm/",
+        PositionMeasurementConfirmView.as_view(),
+    ),
     path(
         "positions/<uuid:position_id>/design-assist/",
         PositionDesignAssistView.as_view(),

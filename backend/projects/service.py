@@ -24,6 +24,10 @@ from engine_api.repository import SystemParamsRepository, SystemNotFound, Unsupp
 from pricing.repository import audit_reason, commercial_backend, json_text, one, rows
 from pricing.service import decoded
 from projects.clients import linkable_client
+from projects.measurement import (
+    measurement_fields_for_save,
+    resolve_position_measurement,
+)
 from projects.serializers import PositionWriteSerializer
 from projects.typology import derive_typology
 
@@ -55,6 +59,7 @@ PROJECT_COLUMNS = (
 POSITION_COLUMNS = (
     "id",
     "project_id",
+    "org_id",
     "position_index",
     "location_tag",
     "quantity",
@@ -70,6 +75,12 @@ POSITION_COLUMNS = (
     # excludes it from every member read; sale price stays readable.
     "price_net",
     "discount_pct",
+    "rough_opening_input",
+    "mounting_rule_id",
+    "fabrication_lock",
+    "measurement_state",
+    "measurement_confirmed_at",
+    "measurement_confirmed_by",
     "updated_at",
 )
 
@@ -125,6 +136,22 @@ def editable(org_id, project_id):
     return project
 
 
+def editable_measurement_target(org_id, project_id):
+    """D07 measurement confirmation runs on an open draft revision — same
+    DRAFT + unsealed gate as `editable`, but the applied-pricing check is
+    absent: confirming a measure never changes the priced content, so a
+    priced draft can still be confirmed before emission."""
+    project = project_row(org_id, project_id, lock=True)
+    sealed = rows(
+        "SELECT id FROM public.project_versions WHERE org_id=%s AND project_id=%s "
+        "AND revision_code=%s",
+        [org_id, project_id, project["current_revision"]],
+    )
+    if project["status"] != "DRAFT" or sealed:
+        raise contract_error(409, "revision_required", "Esta revisión está cerrada para edición.")
+    return project
+
+
 def unchanged(row, expected):
     if row["updated_at"] != expected:
         raise contract_error(
@@ -171,6 +198,7 @@ def position_public(row):
                 "updated_at",
             )
         },
+        "measurement": resolve_position_measurement(row.get("org_id"), row),
         # The pricing authority writes these on apply — the workspace shows
         # each vano's live net alongside its total, no re-derivation. The
         # cost side stays inside pricing operations (member-denied column).
@@ -508,6 +536,9 @@ def save_position(org_id, project_id, data, *, position_id=None):
                        [design["system_id"], org_id])
     bom = calculate_design(org_id, design)
     glass_composition, glass_pending = _glass_resolution(bom)
+    measurement = measurement_fields_for_save(
+        org_id, data=data, current=current, system_id=design["system_id"]
+    )
     values = [
         data["location_tag"],
         data["quantity"],
@@ -521,6 +552,18 @@ def save_position(org_id, project_id, data, *, position_id=None):
         json_text(bom),
         json_text(glass_composition),
         glass_pending,
+        (
+            None if measurement["rough_opening_input"] is None
+            else json_text(measurement["rough_opening_input"])
+        ),
+        measurement["mounting_rule_id"],
+        (
+            None if measurement["fabrication_lock"] is None
+            else json_text(measurement["fabrication_lock"])
+        ),
+        measurement["measurement_state"],
+        measurement["measurement_confirmed_at"],
+        measurement["measurement_confirmed_by"],
     ]
     if current:
         rows(
@@ -528,6 +571,8 @@ def save_position(org_id, project_id, data, *, position_id=None):
             "system_id=%s,width_mm=%s,height_mm=%s,color_interior=%s,color_exterior=%s,"
             "parametric_tree=%s::jsonb,bom_snapshot=%s::jsonb,"
             "glass_composition=%s::jsonb,glass_review_pending=%s,"
+            "rough_opening_input=%s::jsonb,mounting_rule_id=%s,fabrication_lock=%s::jsonb,"
+            "measurement_state=%s,measurement_confirmed_at=%s,measurement_confirmed_by=%s,"
             "updated_at=clock_timestamp() "
             "WHERE id=%s AND org_id=%s RETURNING id",
             [*values, position_id, org_id],
@@ -543,8 +588,13 @@ def save_position(org_id, project_id, data, *, position_id=None):
             "INSERT INTO public.project_positions(location_tag,quantity,typology,system_id,"
             "width_mm,height_mm,color_interior,color_exterior,parametric_tree,bom_snapshot,"
             "glass_composition,glass_review_pending,"
+            "rough_opening_input,mounting_rule_id,fabrication_lock,"
+            "measurement_state,measurement_confirmed_at,measurement_confirmed_by,"
             "id,project_id,org_id,position_index) "
-            "VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s::jsonb,%s,%s,%s,%s,%s) RETURNING id",
+            "VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s::jsonb,%s,"
+            "%s::jsonb,%s,%s::jsonb,"
+            "%s,%s,%s,"
+            "%s,%s,%s,%s) RETURNING id",
             [*values, position_id, project_id, org_id, index],
         )
     rows(

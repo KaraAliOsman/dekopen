@@ -66,6 +66,7 @@ from engine_api.inspection_repository import InspectorAuthorities, InspectorRepo
 from engine_api.repository import SystemParamsRepository
 from pricing.repository import commercial_backend
 from production.service import process_facts_snapshot
+from projects.measurement import resolve_position_measurement
 
 from documents.repository import (
     DocumentaryError,
@@ -1010,6 +1011,17 @@ def _seed_polishing_defaults(
     return [*existing, *seeded]
 
 
+def _measurement_evidence(org_id: UUID, position: dict[str, object]) -> dict[str, object]:
+    """D07 sealed measurement block: vano record + applied rule + engine
+    resolution as the estimator saw them at seal time. Everything here is
+    JSON-safe for the snapshot (datetimes to ISO strings)."""
+    evidence = resolve_position_measurement(org_id, position)
+    confirmed_at = evidence.get("confirmed_at")
+    if isinstance(confirmed_at, datetime):
+        evidence["confirmed_at"] = confirmed_at.isoformat()
+    return evidence
+
+
 def _position_rows(project_id: UUID, org_id: UUID) -> list[dict[str, object]]:
     return rows(
         "SELECT position.*,input.id AS documentary_input_id,"
@@ -1351,6 +1363,16 @@ def freeze_revision_a(
                     detail="Una regla del inspector bloquea el congelamiento documental.",
                     extra={"inspector_failures": failures},
                 )
+            if position["measurement_state"] != "CONFIRMED" and (
+                position["rough_opening_input"] is not None
+                or position["mounting_rule_id"] is not None
+                or position["fabrication_lock"] is not None
+            ):
+                # D07: la OT no se libera con medidas sin confirmar — la
+                # revisión sella como cotización; producción exige una
+                # revisión con cada posición medida confirmada. Una
+                # posición sin registro de vano no arrastra el gate.
+                position_production_allowed = False
             production_allowed = production_allowed and position_production_allowed
             documentary_complete = documentary_complete and position_complete
 
@@ -1508,6 +1530,25 @@ def freeze_revision_a(
                 if position.get("system_limits") else [],
                 "price_net": D(str(position["price_net"])),
                 "discount_pct": str(position["discount_pct"]),
+                "rough_opening_input": position["rough_opening_input"],
+                "mounting_rule_id": (
+                    None if position["mounting_rule_id"] is None
+                    else str(position["mounting_rule_id"])
+                ),
+                "fabrication_lock": position["fabrication_lock"],
+                "measurement_state": str(position["measurement_state"]),
+                "measurement_confirmed_at": (
+                    None if position["measurement_confirmed_at"] is None
+                    else position["measurement_confirmed_at"].isoformat()
+                ),
+                "measurement_confirmed_by": (
+                    None if position["measurement_confirmed_by"] is None
+                    else str(position["measurement_confirmed_by"])
+                ),
+                # D07 sealed measurement evidence: the vano record, the rule
+                # applied and the engine resolution — the exact desglose the
+                # estimator saw at seal time.
+                "measurement": _measurement_evidence(org_id, position),
                 "parametric_tree": tree,
                 "workshop_annotations": [item.model_dump(mode="python") for item in annotations],
                 "structural_inputs": [item.model_dump(mode="python") for item in structural],
@@ -2233,12 +2274,15 @@ _COMPARE_FIELDS = (
     "color_exterior",
     "price_net",
     "discount_pct",
+    "measurement_state",
 )
 
 
 # Frozen-position fields that carry workshop/documentary authority beyond
 # the engineering hash — annotations, intents, policies, structural inputs.
-# A revision that only changed these must still report a change.
+# A revision that only changed these must still report a change. D07: the
+# vano record, the applied mounting rule and the fabrication pin live in
+# the signature — a site rectification surfaces as a manufacturing change.
 _DOCUMENTARY_SLICE = (
     "workshop_annotations",
     "structural_inputs",
@@ -2248,6 +2292,10 @@ _DOCUMENTARY_SLICE = (
     "manufacturing_policies",
     "legacy_handle_migration_confirmed",
     "process_facts",
+    "rough_opening_input",
+    "mounting_rule_id",
+    "fabrication_lock",
+    "measurement_state",
 )
 
 
@@ -2282,6 +2330,12 @@ def _compare_position(row: dict[str, object]) -> dict[str, object]:
         "color_exterior": str(row.get("color_exterior") or ""),
         "price_net": str(row.get("price_net") or ""),
         "discount_pct": str(row.get("discount_pct") or ""),
+        "measurement_state": str(row.get("measurement_state") or ""),
+        "rough_opening_input": row.get("rough_opening_input"),
+        "mounting_rule_id": (
+            None if row.get("mounting_rule_id") in (None, "")
+            else str(row.get("mounting_rule_id"))
+        ),
         "parametric_tree": row.get("parametric_tree"),
         "calculation_hash": str(row.get("calculation_hash") or ""),
         "documentary_signature": documentary_canonical_json_v1(

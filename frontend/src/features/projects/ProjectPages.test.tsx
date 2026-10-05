@@ -83,6 +83,15 @@ function makePosition(): PositionResponse {
     price_net: "0",
     discount_pct: "0",
     typology: "FIXED",
+    measurement: {
+      state: "CLIENT_DECLARED",
+      confirmed_at: null,
+      confirmed_by: null,
+      vano: null,
+      mounting_rule: null,
+      fabrication_lock: null,
+      resolution: null,
+    },
     updated_at: "2026-09-18T12:01:02.123456Z",
     design: {
       system_id: "system-a",

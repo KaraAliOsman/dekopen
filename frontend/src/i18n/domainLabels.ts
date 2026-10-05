@@ -89,6 +89,31 @@ export const DOMAIN_LABELS: Record<string, L> = {
     mono: l("Riel simple", "neutral"),
   },
 
+  /* ---------- Vano y montaje (D07) ---------- */
+  MeasurementResponseStateEnum: {
+    CLIENT_DECLARED: l("Medidas del cliente", "warn", "quote"),
+    SITE_RECTIFIED: l("Rectificada en obra", "warn", "warn"),
+    CONFIRMED: l("Confirmada para producción", "ok", "check"),
+  },
+  FabricationSourceEnum: {
+    DERIVED: l("Derivada del vano", "info"),
+    MANUAL_LOCK: l("Fijada a mano", "warn", "warn"),
+    DECLARED: l("Declarada", "neutral"),
+  },
+  CodeEnum: {
+    EN_VANO: l("En vano con holgura perimetral", "neutral"),
+    PREMARCO: l("Con premarco", "neutral"),
+    SOBRE_VANO: l("Sobre vano", "neutral"),
+    TRASLAPADO: l("Traslapado", "neutral"),
+    RENOVACION: l("Renovación sobre marco existente", "neutral"),
+  },
+  WallTypeEnum: {
+    MASONRY: l("Albañilería", "neutral"),
+    CONCRETE: l("Hormigón", "neutral"),
+    PARTITION: l("Tabique", "neutral"),
+    WOOD: l("Madera", "neutral"),
+  },
+
   /* ---------- Producción ---------- */
   ProductionStepStatusEnum: {
     PENDING: l("Pendiente", "neutral"),

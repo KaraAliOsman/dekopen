@@ -835,6 +835,27 @@ def release_production(*, org_id: UUID, version_id: UUID, actor_id: UUID) -> dic
         for position in bom:
             position["system_id"] = position_systems.get(str(position.get("position_id") or ""))
         centers, inactive_kinds = _ensure_work_centers(org_id)
+        # D07: la producción no se libera con medidas sin confirmar. Snapshots
+        # sealed before the measurement concept existed carry no measurement
+        # block — they keep their legacy sealed authority; a version sealed
+        # with medidas is releasable only when every position confirmed.
+        unconfirmed = sorted(
+            str(pos.get("position_index") or pos.get("id"))
+            for pos in (snapshot.get("positions") or [])
+            if isinstance(pos.get("measurement"), dict)
+            and (
+                pos["measurement"].get("vano") is not None
+                or pos["measurement"].get("mounting_rule") is not None
+                or pos["measurement"].get("fabrication_lock") is not None
+            )
+            and pos["measurement"].get("state") != "CONFIRMED"
+        )
+        if unconfirmed:
+            raise DocumentaryError(
+                "measurement_not_confirmed",
+                detail="La producción no se libera con medidas sin confirmar.",
+                extra={"positions": unconfirmed},
+            )
         # The sealed polishing choices live on the snapshot positions — the
         # work order embeds them so the workshop reads edge processing without
         # joining the documentary snapshot.
