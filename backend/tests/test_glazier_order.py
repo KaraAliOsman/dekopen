@@ -175,7 +175,7 @@ def _fake_rows(query, params=()):
                 "system_id": _SYS,
                 "technical_sku": "DVH-4-16-4",
                 "purchasing_sku": "VID-DVH-24",
-                "manufacturer": "Vidriería Sur",
+                "manufacturer_name": "Vidriería Sur",
                 "glass_spec": None,
             }
         ]

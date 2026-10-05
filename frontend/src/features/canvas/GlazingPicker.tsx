@@ -622,19 +622,19 @@ export function GlazingPicker({
 
   function applyComposition(next: GlassCompositionSpec): void {
     const total = compositionTotalMm(next);
+    // A hand-composed stack that matches a catalog product's sealed
+    // composition adopts that product (and its surcharge scope); anything
+    // else stays a custom stack with no article attached.
+    const matchedProduct =
+      products.find(
+        (product) => product.composition && compositionsEqual(next, product.composition),
+      ) ?? null;
     onPick({
       glass_composition: next,
       glass_spec: errors.length === 0 ? compositionNotation(next) : (value.glass_spec ?? null),
       glass_thickness_mm: quantize(String(Math.round(total * 100) / 100), 2),
-      // A hand-composed stack is no longer the catalog product's sealed
-      // composition — the article stays only when the stack still matches.
-      glass_article_sku:
-        selectedProduct?.composition && compositionsEqual(next, selectedProduct.composition)
-          ? selectedProduct.sku
-          : null,
-      glass_options: selectedProduct
-        ? retargetSurcharges(value.glass_options, null)
-        : value.glass_options,
+      glass_article_sku: matchedProduct?.sku ?? null,
+      glass_options: retargetSurcharges(value.glass_options, matchedProduct),
     });
   }
 

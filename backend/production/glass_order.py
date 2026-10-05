@@ -181,7 +181,7 @@ def _glass_facts(
         if pos.get("system_id")
     })
     purchase_rows = rows(
-        "SELECT system_id::text, technical_sku, purchasing_sku, manufacturer,"
+        "SELECT system_id::text, technical_sku, purchasing_sku, manufacturer_name,"
         " glass_spec FROM public.glass_purchase_mappings "
         "WHERE (org_id=%s OR org_id IS NULL)",
         [str(org_id)],
@@ -269,7 +269,7 @@ def _glass_facts(
                     (mapping or {}).get("purchasing_sku") or technical_sku
                 ),
                 "technical_sku": technical_sku,
-                "manufacturer": str((mapping or {}).get("manufacturer") or "—"),
+                "manufacturer": str((mapping or {}).get("manufacturer_name") or "—"),
                 "product_name": str((product or {}).get("commercial_name") or "—"),
                 "notation": notation,
                 "safety_class": str((product or {}).get("safety_class") or ""),
@@ -438,12 +438,14 @@ def _order_html(context: dict[str, object]) -> str:
             f"{escape(str(piece['position_label']))}</div>"
             "</div></div>"
         )
+    emitted_raw = version.get("emitted_at")
+    emitted = emitted_raw.isoformat() if hasattr(emitted_raw, "isoformat") else emitted_raw
     title_block = (
         '<div class="titleblock">'
         f'<div class="tb-cell tb-wide">Pedido al vidriero · '
         f"{escape(order_codes)}</div>"
         f'<div class="tb-cell">Rev. {escape(revision)} · '
-        f"{_cldate(version.get('emitted_at'))}</div>"
+        f"{_cldate(emitted)}</div>"
         "</div>"
     )
     pending = [p for p in pieces if p["review_pending"]]
