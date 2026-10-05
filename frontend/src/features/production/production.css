@@ -504,7 +504,9 @@
 
 .production-label-code {
   font-family: "IBM Plex Mono", monospace;
-  font-size: 0.85em;
+  /* 0.85em sobre el 0.8rem de .production-plan caía a ~10.9 px — bajo el piso.
+     Token fijo: 11 px es el mínimo legible de la Constitución. */
+  font-size: var(--type-micro);
 }
 
 .production-labels {
@@ -890,7 +892,8 @@ div:has(> table.production-plan) {
   color: var(--theme-accent-ink, #1d4e33);
   background: var(--theme-accent-soft, #e4f0e8);
   border: 1px solid var(--theme-accent, #2f6f4f);
-  font-size: 0.78em;
+  /* 0.78em medía ~10 px — bajo el piso legible de la Constitución. */
+  font-size: var(--type-micro);
   font-weight: 600;
   border-radius: var(--r-pill);
   padding: 0.05em 0.55em;
