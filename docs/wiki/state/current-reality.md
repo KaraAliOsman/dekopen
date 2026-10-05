@@ -3,7 +3,7 @@ type: state
 status: active
 updated: 2026-10-05
 volatility: high
-verified_ref: 388e79bdc0ff111a9c2e76a445260bd9f18b92c3
+verified_ref: db136a7207487e4e843b17f36f03a4c78a54b79b
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
@@ -11,6 +11,7 @@ sources:
   - D01 systems/profiles PR https://github.com/KaraAliOsman/dekopen/pull/6
   - D02 glass PR https://github.com/KaraAliOsman/dekopen/pull/10
   - D04 hardware PR https://github.com/KaraAliOsman/dekopen/pull/8
+  - D03 openings/typologies PR https://github.com/KaraAliOsman/dekopen/pull/9
   - integracion/v1 merge 747c528b67d234d697624929ccbcc7098261ed54
   - open PR metadata observed 2026-09-27/28
   - AGENTS.md
@@ -53,9 +54,9 @@ Hard invariants documented by the repo include:
 - workshop-language validation;
 - Oknosoft/WindowBuilder as a domain reference.
 
-## D03 state (pendiente de merge en `integracion/v1`)
+## D03 state
 
-On branch `devin/D03-aperturas-tipologias`, pending review/merge:
+Merged into `integracion/v1` as squash `db136a7207487e4e843b17f36f03a4c78a54b79b` (dekopen PR #9):
 
 - `Opening{movement, hinge_side, direction, leaf_role, fixed_in_sash}` + `BayLeaf{slot, opening}` + `OpeningSpec{unit_kind, leaves}` is the real opening model (`engine/.../models.py`, `openings.py`); the legacy `opening_type` enum stays accepted for one version and maps totally to/from specs (`spec_for_legacy`/`legacy_openings_for_spec`) — migrated goldens are byte-identical.
 - Movements declared: FIXED, TURN, TILT, TILT_TURN, TOP_HUNG, BOTTOM_HUNG, SLIDE, LIFT_SLIDE, PARALLEL_SLIDE, FOLD, PIVOT_V, PIVOT_H, VERTICAL_SLIDE — the last six are declared-only (D08 implements them); sliding still routes through the legacy `sliding_layout` path.

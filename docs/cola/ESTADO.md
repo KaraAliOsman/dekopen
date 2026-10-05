@@ -5,7 +5,7 @@
 | IA1 | 0b | mergeado | https://github.com/KaraAliOsman/dekopen/pull/3 | f7b33d2e4e4855ce39e989c25b697fcf86ec5268 | CI 6/6 verde. Arnés evals 26 casos + taxonomía + línea base MOCK/MIMO + 5 causas raíz. |
 | D01 | 0b | mergeado | https://github.com/KaraAliOsman/dekopen/pull/6 | bc7ed09ed2df41df838f19ffdd3346326e646c4f | CI 6/6 verde; squash mergeado. Familias de sistema + rechazo del motor + roles completos + límites con fuente + ingesta dual con revisión humana + split DEMO_60. |
 | D02 | D1 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/10 | b623a067fe3db3872138c036e24c39a631ed947c | CI 6/6 verde; squash mergeado. GlassComposition + derivados motor + NCh 135 como datos + recargos + pedido al vidriero PDF/CSV+QR + selector Básico/Avanzado. |
-| D03 | D1 | pendiente |  |  |  |
+| D03 | D1 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/9 | db136a7207487e4e843b17f36f03a4c78a54b79b | CI 6/6 verde; squash mergeado. Modelo Opening + BayLeaf + capacidades por sistema + simbología DIN por vista + herrajes/manilla por hoja. |
 | D04 | D1 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/8 | 388e79bdc0ff111a9c2e76a445260bd9f18b92c3 | CI 6/6 verde; squash mergeado. Kits como clases por envolvente + qty/cut rules como datos + manillas validadas + opciones vendibles + picking/mecanizado en OT. |
 | D05 | D2 | pendiente |  |  |  |
 | D06 | D2 | pendiente |  |  |  |
