@@ -3,13 +3,14 @@ type: state
 status: active
 updated: 2026-10-05
 volatility: high
-verified_ref: b623a067fe3db3872138c036e24c39a631ed947c
+verified_ref: 388e79bdc0ff111a9c2e76a445260bd9f18b92c3
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
   - P01 design-system PR https://github.com/KaraAliOsman/dekopen/pull/4
   - D01 systems/profiles PR https://github.com/KaraAliOsman/dekopen/pull/6
   - D02 glass PR https://github.com/KaraAliOsman/dekopen/pull/10
+  - D04 hardware PR https://github.com/KaraAliOsman/dekopen/pull/8
   - integracion/v1 merge 747c528b67d234d697624929ccbcc7098261ed54
   - open PR metadata observed 2026-09-27/28
   - AGENTS.md
@@ -74,7 +75,7 @@ Merged into `integracion/v1` as squash `b623a067fe3db3872138c036e24c39a631ed947c
 
 ## D04 state
 
-Lands as PR __D04_PR__ (head `__D04_HEAD__`) on `integracion/v1`:
+Merged into `integracion/v1` as squash `388e79bdc0ff111a9c2e76a445260bd9f18b92c3` (dekopen PR #8):
 
 - Hardware kits are now **classes** per (system × opening): `hardware_kits.class_label` plus declared restrictions `max_aspect_ratio` and `min_stay_height_mm`; `contents` components carry `qty_rule` (PER_WIDTH/PER_HEIGHT with min/max), `cut_rule` (axis −mm), `weight_kg`, `cost_clp` and a declared `machining[]` list — all catalog data, importable with the D01 template.
 - New catalog tables: `hardware_families` (opening-scoped handle-height rule CENTERED/FIXED_FROM_BASE/RANGE + sellable `handle_model_options`/`handle_color_options`) and `hardware_options` (sellable per-position options with `price_delta_clp` and component BOM).
