@@ -3,10 +3,11 @@ type: state
 status: active
 updated: 2026-10-05
 volatility: high
-verified_ref: 8360f68
+verified_ref: a096f85b2e56e21eda024c1ec92a456ed9d30b03
 sources:
   - repository main
-  - P00 foundation branch
+  - P00 foundation PR #114
+  - integracion/v1 merge a096f85b2e56e21eda024c1ec92a456ed9d30b03
   - open PR metadata observed 2026-09-27/28
   - AGENTS.md
   - docs/PRODUCT.md
@@ -19,7 +20,7 @@ sources:
 
 ## Verified repository baseline
 
-At the verification ref, the repository identifies DEKOPEN as:
+At the verification ref (`a096f85b2e56e21eda024c1ec92a456ed9d30b03` on `integracion/v1`), the repository identifies DEKOPEN as:
 
 - a pure deterministic engine under `engine/`;
 - Django modular monolith under `backend/`;
@@ -50,7 +51,7 @@ Hard invariants documented by the repo include:
 
 ## P00 foundation state
 
-P00 adds the v1 integration foundation:
+P00 is merged in PR #114 and adds the v1 integration foundation:
 
 - `integracion/v1` exists as the queue integration branch.
 - `docs/design/CONSTITUCION.md` is the mandatory design constitution copied from the queue.
@@ -60,7 +61,7 @@ P00 adds the v1 integration foundation:
 - The production route table hides `/projects/demo/positions/g1/edit` behind the same dev-only mechanism as `/benchmark`.
 - `scripts/dev_fixture.py` now seeds more realistic DEMO fixture identity, clients and project volume while preserving `DEMO_60` as synthetic reference data.
 
-Verification caveat: local Windows policy blocked `rpds` during generated-API drift checking, and the committed baseline capture is a smoke baseline for `/login`; later queue items must run the full route matrix once portal tokens and all fixture states are available.
+Verification caveat: PR #114 passed the required GitHub checks (Lint & Typecheck, Test Suite, Frontend Build, Database Gate). Its local notes still state that Windows policy blocked `rpds` during generated-API drift checking, and the committed baseline capture is a smoke baseline for `/login`; later queue items must run the full route matrix once portal tokens and all fixture states are available.
 
 ## Recent branch/PR caution
 

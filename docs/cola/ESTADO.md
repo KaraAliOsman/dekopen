@@ -1,6 +1,6 @@
 | ID | Ola | Estado | PR | SHA | Notas |
 |---|---|---|---|---|---|
-| P00 | 0 | en curso |  |  | Fundacion del programa en ejecucion. |
+| P00 | 0 | mergeado | https://github.com/KaraAliOsman/framedex/pull/114 | a096f85b2e56e21eda024c1ec92a456ed9d30b03 | CI 4/4 verde; PR mergeado en integracion/v1. |
 | P01 | 0b | pendiente |  |  |  |
 | IA1 | 0b | pendiente |  |  |  |
 | D01 | 0b | pendiente |  |  |  |
