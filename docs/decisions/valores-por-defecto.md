@@ -16,6 +16,10 @@ Fuente inicial: `docs/design/CONSTITUCION.md`, seccion 11. Los encargos siguient
 | Marca de la app            | Direccion B del estudio de identidad (`DEKOPEN` con la O como seccion de perfil)                                | P25                               | por defecto | P25                       |
 | Moneda                     | CLP; USD y UF opcionales                                                                                        | Ajustes > Moneda                  | por defecto | P07                       |
 | Catalogo                   | Demo con precios aleatorios de semilla fija, marcado DEMO en todas partes                                       | Catalogo > Importar               | por defecto | D01/P16                   |
+| Familia de sistema         | CASEMENT / SLIDING / LIFT_SLIDE / DOOR / FACADE_FIXED; la tipologia habilitada depende de la familia y el motor rechaza combinaciones incompatibles | Catalogo > Sistemas               | implementado | D01                       |
+| Limites dimensionales      | Por sistema x tipologia con fuente declarada (SEED_SYNTHETIC / MANUAL / IMPORT / LEGACY_UNVERIFIED); sin fila = sin limite verificado | Catalogo > Sistemas               | implementado | D01                       |
+| Refuerzo                   | Acero declarado como dato (ix_cm4, tornillos por metro); los tornillos entran a la BOM como fittings (TORNILLO-4X16) | Catalogo > Sistemas > Refuerzos   | implementado | D01                       |
+| Ingesta de catalogo        | Dos vias (plantilla XLSX/CSV y candidatos IA) que convergen en la misma revision humana; nada se publica sin confirmar | Catalogo > Importar               | implementado | D01                       |
 
 ## Decisiones de implementacion — P01 (sistema de diseno v2)
 

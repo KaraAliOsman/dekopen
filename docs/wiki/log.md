@@ -50,3 +50,13 @@ Append-only chronology. Keep newest entries at the bottom.
 - Added §10 static guards in `scripts/check_guards.py` with committed ratchet baseline, and live slop detectors in `ux:capture` (multi-primary per region, radius/shadow/gradient/blur, WCAG contrast, emoji/exclamations, English, workshop touch targets, bare interactives) with unit tests.
 - Built DEV-only `/dev/ui` muestrario (both themes × 3 densities) and `/dev/ui/mal` reproducing the board-06 forbidden-pattern contrast; fixed chips showing raw enum text and the prohibited «Algo salió mal» title found during the editorial pass.
 - Replaced prohibited voice strings in `es-CL.ts`; committed PR template at `.github/pull_request_template.md`; before/after captures under `docs/redesign/captures/p01-antes|p01-despues/`.
+
+
+## [2026-10-05] D01 | sistemas y perfiles de verdad
+
+- `system_family` (CASEMENT / SLIDING / LIFT_SLIDE / DOOR / FACADE_FIXED) separa familias de fabricación; `allowed_openings` deriva las tipologías habilitadas y el motor rechaza con `IncompatibleTypologyError` una tipología que no pertenece a la familia (corredera en abatir, p.ej.).
+- Roles de perfil completos (SLIDING_SASH, INTERLOCK, RAIL, DOOR_SASH, FRAME_EXTENSION, SILL, COVER_TRIM, SKIRT) con reglas de corte y refuerzo como datos; `screws_per_meter` del acero genera fittings `REINFORCEMENT_SCREW` (TORNILLO-4X16) agregados en la BOM y costeados por `fitting_purchase_mappings`.
+- `system_typology_limits` por sistema × tipología con fuente (`data_provenance`: SEED_SYNTHETIC / MANUAL / IMPORT / LEGACY_UNVERIFIED; IMPORT marca revisión pendiente); fila ausente = sin verificación, nunca rechazo implícito.
+- Ingesta dual: plantilla XLSX/CSV manual (`backend/ingest/spreadsheet.py`, errores por fila en español) y candidatos IA convergen en la misma revisión humana; baja confianza → UNKNOWN y nada se publica sin confirmar.
+- Catálogo DEMO enriquecido y marcado `is_demo`: DEMO_70 (PVC abatir), ALU_CORREDERA_70 (aluminio corredera) y DEMO_CORREDERA_60 (PVC corredera separada de DEMO_60 por la migración `20261229000002`, con matriz de juntas 24 mm JQ-CORR-10); los tres llevan `chamber_clearance_mm` y las 14 `inspector_rule_configs` que exige el freeze documental.
+- Verificado: `make lint`, `typecheck`, `test` y `build` verdes; `make test-db` (pgTAP 940, integración RLS, e2e) verde tras contar los nuevos catálogos (59 artículos, 18 juntas, 84 configs inspector).

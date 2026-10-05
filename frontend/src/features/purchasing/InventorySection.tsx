@@ -5,6 +5,7 @@ import { fmtMm } from "../../format";
 import { t } from "../../i18n/es-CL";
 import { formatDateTime } from "../../format";
 import { useConfirm } from "../../ui";
+import { traceNoteLabel } from "../production/labels";
 
 type RequestFn = <T>(path: string, method?: string, body?: unknown) => Promise<T>;
 
@@ -643,7 +644,9 @@ export function InventorySection({
                   <td>{m.quantity}</td>
                   <td>{m.rack_location ?? "—"}</td>
                   <td>{m.actor_label ?? "—"}</td>
-                  <td>{m.note ?? m.lot_code ?? "—"}</td>
+                  <td title={m.note ?? undefined}>
+                    {m.note ? traceNoteLabel(m.note) : (m.lot_code ?? "—")}
+                  </td>
                 </tr>
               ))}
             </tbody>

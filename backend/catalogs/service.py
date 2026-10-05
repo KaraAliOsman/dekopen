@@ -47,7 +47,7 @@ _PROVENANCE_COLUMNS = (
 SYSTEMS = Resource(
     "profile_systems",
     SystemWriteSerializer,
-    ("is_global", "is_demo", *_PROVENANCE_COLUMNS),
+    ("is_global", "is_demo", "system_family", *_PROVENANCE_COLUMNS),
 )
 ARTICLES = Resource(
     "profile_articles",
@@ -339,10 +339,18 @@ def _stamp_section(values, current, actor_id):
 SINGLETON_ROLES = {
     "FRAME",
     "SASH",
+    "SLIDING_SASH",
+    "DOOR_SASH",
     "MULLION_V",
     "MULLION_H",
     "INVERSOR",
     "ADDITIONAL",
+    "INTERLOCK",
+    "RAIL",
+    "FRAME_EXTENSION",
+    "SILL",
+    "COVER_TRIM",
+    "SKIRT",
     "THRESHOLD",
 }
 

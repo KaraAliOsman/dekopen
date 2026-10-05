@@ -218,7 +218,11 @@ function CatalogWorkspace({ orgId, role }: { orgId: string; role: string }): JSX
     setWorkspaceKey((value) => value + 1);
   }
 
-  if (loading) return <p role="status">{ct("loading")}</p>;
+  // Solo la carga inicial blanquea la página: un refresh posterior (p.ej.
+  // tras publicar filas de una importación) mantiene los datos anteriores
+  // montados — si no, cada revalidación desmonta el panel de revisión
+  // abierto y destruye errores por fila y estados Publicado.
+  if (loading && !data) return <p role="status">{ct("loading")}</p>;
   if (error || !data) {
     return (
       <section className="catalog">

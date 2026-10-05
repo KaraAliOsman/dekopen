@@ -221,11 +221,25 @@ class EngineAssemblyCalculateResponseSerializer(serializers.Serializer):
     calculation_hash = serializers.RegexField(regex=r"^sha256:[0-9a-f]{64}$")
 
 
+class TypologyLimitSerializer(serializers.Serializer):
+    opening_type = serializers.CharField()
+    min_leaf_width_mm = serializers.CharField(allow_null=True, required=False)
+    max_leaf_width_mm = serializers.CharField(allow_null=True, required=False)
+    min_leaf_height_mm = serializers.CharField(allow_null=True, required=False)
+    max_leaf_height_mm = serializers.CharField(allow_null=True, required=False)
+    max_leaf_weight_kg = serializers.CharField(allow_null=True, required=False)
+    max_aspect_ratio = serializers.CharField(allow_null=True, required=False)
+    source = serializers.CharField()
+
+
 class ProfileSystemSummarySerializer(serializers.Serializer):
     id = serializers.UUIDField()
     code = serializers.CharField()
     name = serializers.CharField()
     is_demo = serializers.BooleanField()
+    system_family = serializers.CharField()
+    allowed_openings = serializers.ListField(child=serializers.CharField())
+    typology_limits = TypologyLimitSerializer(many=True, required=False)
     quote_ready = serializers.BooleanField()
     readiness_reasons = serializers.ListField(child=serializers.CharField())
 

@@ -368,6 +368,12 @@ class ProvenanceFieldsMixin(serializers.Serializer):
 
 
 class SystemResponseSerializer(ProvenanceFieldsMixin, SystemWriteSerializer):
+    # Familia tipológica — se declara al crear el sistema (importación/seed);
+    # mutarla cambiaría las aperturas permitidas, así que es solo-lectura aquí.
+    system_family = serializers.ChoiceField(
+        choices=["CASEMENT", "SLIDING", "LIFT_SLIDE", "DOOR", "FACADE_FIXED"],
+        read_only=True,
+    )
     readiness = CatalogReadinessSerializer(read_only=True)
     revision = serializers.CharField(read_only=True)
     read_only = serializers.BooleanField()

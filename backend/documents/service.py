@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from math import ceil
@@ -970,7 +971,20 @@ def _position_rows(project_id: UUID, org_id: UUID) -> list[dict[str, object]]:
         "input.structural_inputs::text,input.glass_polishing::text,"
         "input.handle_intents::text,input.accessory_schedule::text,"
         "input.legacy_handle_migration_confirmed,input.calculation_hash AS documentary_calculation_hash,"
-        "system.name AS system_name "
+        "system.name AS system_name, system.is_demo AS system_is_demo, "
+        "(SELECT json_agg(json_build_object("
+        " 'opening_type', lim.opening_type,"
+        " 'min_leaf_width_mm', lim.min_leaf_width_mm,"
+        " 'max_leaf_width_mm', lim.max_leaf_width_mm,"
+        " 'min_leaf_height_mm', lim.min_leaf_height_mm,"
+        " 'max_leaf_height_mm', lim.max_leaf_height_mm,"
+        " 'max_leaf_weight_kg', lim.max_leaf_weight_kg,"
+        " 'max_aspect_ratio', lim.max_aspect_ratio,"
+        " 'data_provenance', lim.data_provenance)) "
+        "FROM public.system_typology_limits lim "
+        "WHERE lim.system_id=position.system_id "
+        "AND (lim.org_id IS NULL OR lim.org_id=position.org_id))::text "
+        "AS system_limits "
         "FROM public.project_positions position "
         "JOIN public.position_documentary_inputs input "
         "ON input.position_id=position.id AND input.project_id=position.project_id "
@@ -1440,6 +1454,11 @@ def freeze_revision_a(
                 "color_exterior": str(position["color_exterior"]),
                 "location_tag": location_tag,
                 "system_name": str(position["system_name"]),
+                "system_is_demo": bool(position.get("system_is_demo")),
+                "system_limits": json.loads(
+                    position["system_limits"], parse_float=Decimal
+                )
+                if position.get("system_limits") else [],
                 "price_net": D(str(position["price_net"])),
                 "discount_pct": str(position["discount_pct"]),
                 "parametric_tree": tree,

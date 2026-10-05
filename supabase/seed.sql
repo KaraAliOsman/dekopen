@@ -593,6 +593,20 @@ FROM public.profile_systems system
 WHERE system.code='DEMO_60' AND system.is_global=TRUE
 ON CONFLICT (id) DO NOTHING;
 
+-- Fitting purchase authority for the declared fastening SKUs — the same
+-- fixture convention as the hardware mappings.
+INSERT INTO public.fitting_purchase_mappings
+ (id, system_id, org_id, technical_sku, purchasing_sku, manufacturer_name,
+  purchase_unit, version, provenance)
+SELECT uuid_generate_v5(uuid_ns_url(),
+        'https://dekopen.local/catalog/' || s.code || '/fitting/TORNILLO-4X16/V1'),
+ s.id, NULL, 'TORNILLO-4X16', 'COMPRA-TORNILLO-4X16', 'Referencia DEKOPEN',
+ 'EA', 1, '{"source":"Referencia DEKOPEN","mode":"KIT_ONLY"}'::jsonb
+FROM public.profile_systems s
+WHERE s.code IN ('DEMO_60','DEMO_70','DEMO_CORREDERA_60')
+  AND s.is_global = TRUE
+ON CONFLICT (system_id, org_id, technical_sku, version) DO NOTHING;
+
 INSERT INTO public.hardware_purchase_mappings
  (id,hardware_kit_id,org_id,purchasing_sku,manufacturer_name,purchase_unit,version,provenance)
 SELECT uuid_generate_v5(uuid_ns_url(),'https://dekopen.local/shot09/hardware/'||kit.id||'/V1'),
@@ -1108,3 +1122,522 @@ END;
 $post09$;
 
 COMMIT;
+-- ---------------------------------------------------------------------------
+-- D01: the DEMO catalogue grows real fabrication families.
+--   DEMO_60 stays a casement+door PVC series; DEMO_CORREDERA_60 carries the
+--   sliding family; DEMO_70 is the deeper casement sibling and
+--   ALU_CORREDERA_70 the aluminium slider. Everything here is SEED_SYNTHETIC
+--   demonstration data — plausible values, a fixed deterministic seed, never
+--   manufacturer-certified. Guarded on the D01 column so older-schema
+--   replays (the shot-07 upgrade drill) skip the block untouched.
+-- ---------------------------------------------------------------------------
+DO $d01$
+BEGIN
+IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'profile_systems'
+      AND column_name = 'system_family'
+) THEN
+    RETURN;
+END IF;
+
+-- The corredera sibling itself lives in migration
+-- 20261229000002_d01_demo_corredera_60, which also owns DEMO_60's D01 rows
+-- when the seeded system already exists (existing databases). On a fresh
+-- reset the migration runs before this seed, so the block below repeats
+-- the DEMO_60 rows idempotently — ON CONFLICT keeps both paths safe.
+
+-- DEMO_70 — PVC casement, deeper chamber, heavier door leaf.
+INSERT INTO public.profile_systems (
+    id, org_id, code, name, depth_mm, material, chamber_count,
+    sash_overlap_mm, glass_clearance_white_mm, central_overlap_mm,
+    sliding_end_add_mm, pulley_height_mm,
+    sliding_glazing_deduction_width_mm, sliding_glazing_deduction_height_mm,
+    door_leaf_side_clearance_mm, rebate_depth_mm, end_milling_overlap_mm,
+    chamber_clearance_mm,
+    system_family, is_global, is_demo, finishes, data_provenance
+)
+VALUES (
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/DEMO_70'),
+    NULL, 'DEMO_70',
+    'Sistema Demo 70mm PVC — referencia sintética',
+    70.00, 'PVC', 4, 8.00, 5.00, 40.00, 6.00, 12.00,
+    20.00, 20.00, 7.00, 22.00, 0.00, 12.00,
+    'CASEMENT', TRUE, TRUE, '["WHITE", "FOILED"]'::jsonb, 'SEED_SYNTHETIC'
+)
+ON CONFLICT (id) DO NOTHING;
+
+-- ALU_CORREDERA_70 — mechanically jointed aluminium slider.
+INSERT INTO public.profile_systems (
+    id, org_id, code, name, depth_mm, material, chamber_count,
+    sash_overlap_mm, glass_clearance_white_mm, central_overlap_mm,
+    sliding_end_add_mm, pulley_height_mm,
+    sliding_glazing_deduction_width_mm, sliding_glazing_deduction_height_mm,
+    door_leaf_side_clearance_mm, rebate_depth_mm, end_milling_overlap_mm,
+    corner_bracket_loss_mm, chamber_clearance_mm,
+    system_family, is_global, is_demo, finishes, data_provenance
+)
+VALUES (
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/ALU_CORREDERA_70'),
+    NULL, 'ALU_CORREDERA_70',
+    'Corredera Demo Aluminio 70mm — referencia sintética',
+    70.00, 'ALUMINIUM', 1, 6.00, 4.00, 42.00, 5.00, 10.00,
+    15.00, 15.00, 0.00, 18.00, 0.00, 2.00, 8.00,
+    'SLIDING', TRUE, TRUE, '["NATURAL", "PINTADO"]'::jsonb, 'SEED_SYNTHETIC'
+)
+ON CONFLICT (id) DO NOTHING;
+
+-- DEMO_70 articles (PVC casement set + dedicated door sash + threshold).
+INSERT INTO public.profile_articles (
+    id, system_id, org_id, sku, name, role, material,
+    face_width_mm, commercial_length_mm, welding_loss_mm,
+    reinforcement_gap_mm, weight_kg_m, steel_weight_kg_m, data_provenance
+)
+SELECT
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/DEMO_70/' || a.sku),
+    s.id, NULL, a.sku, a.name, role::public.profile_role, 'PVC',
+    face, 6000.00, weld, gap, weight, 1.7000, 'SEED_SYNTHETIC'
+FROM public.profile_systems s
+CROSS JOIN (VALUES
+    ('MARCO-70',      'Marco Demo 70',            'FRAME',        65.00, 6.00, 15.00, 2.2000),
+    ('HOJA-70',       'Hoja Demo 70',             'SASH',         85.00, 6.00, 15.00, 2.6000),
+    ('HOJA-PUERTA-70','Hoja Puerta Demo 70',      'DOOR_SASH',    95.00, 6.00, 15.00, 2.8000),
+    ('POSTE-70-V',    'Poste Vertical Demo 70',   'MULLION_V',    85.00, 0.00, 5.00,  2.4000),
+    ('POSTE-70-H',    'Travesaño Demo 70',        'MULLION_H',    85.00, 0.00, 5.00,  2.4000),
+    ('JQ-70-24',      'Junquillo Demo 70 24mm',   'GLAZING_BEAD', 24.00, 0.00, 15.00, 0.3000),
+    ('JQ-70-14',      'Junquillo Demo 70 14mm',   'GLAZING_BEAD', 14.00, 0.00, 15.00, 0.2500),
+    ('UMBRAL-70-ALU', 'Umbral Aluminio Demo 70',  'THRESHOLD',    32.00, 0.00, 0.00,  0.9000)
+) AS a(sku, name, role, face, weld, gap, weight)
+WHERE s.code = 'DEMO_70' AND s.is_global = TRUE
+ON CONFLICT (system_id, sku) DO NOTHING;
+
+-- ALU_CORREDERA_70 articles (sawn, mechanically jointed — no welding).
+INSERT INTO public.profile_articles (
+    id, system_id, org_id, sku, name, role, material,
+    face_width_mm, commercial_length_mm, welding_loss_mm,
+    reinforcement_gap_mm, weight_kg_m, steel_weight_kg_m, data_provenance
+)
+SELECT
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/ALU_CORREDERA_70/' || a.sku),
+    s.id, NULL, a.sku, a.name, role::public.profile_role, 'ALUMINIUM',
+    face, 6500.00, 0.00, 0.00, weight, 0.0000, 'SEED_SYNTHETIC'
+FROM public.profile_systems s
+CROSS JOIN (VALUES
+    ('MARCO-AC',      'Marco Corredera Aluminio 70',      'FRAME',        45.00, 1.2500),
+    ('RIEL-AC',       'Riel Corredera Aluminio 70',       'RAIL',         50.00, 1.4500),
+    ('HOJA-AC',       'Hoja Corredera Aluminio 70',       'SLIDING_SASH', 35.00, 1.1000),
+    ('ENCUENTRO-AC',  'Encuentro Corredera Aluminio 70',  'INTERLOCK',    30.00, 0.9500),
+    ('POSTE-AC-V',    'Poste Vertical Aluminio 70',       'MULLION_V',    55.00, 1.3000),
+    ('POSTE-AC-H',    'Travesaño Aluminio 70',            'MULLION_H',    55.00, 1.3000),
+    ('JQ-AC-10',      'Junquillo Aluminio Corredera 10',  'GLAZING_BEAD', 10.00, 0.2000)
+) AS a(sku, name, role, face, weight)
+WHERE s.code = 'ALU_CORREDERA_70' AND s.is_global = TRUE
+ON CONFLICT (system_id, sku) DO NOTHING;
+
+-- Glazing beads for the new families.
+INSERT INTO public.glazing_bead_matrix (
+    id, system_id, org_id, glass_thickness_mm, bead_article_id,
+    bead_width_mm, gasket_interior_mm, gasket_exterior_mm, cut_add_mm
+)
+SELECT
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/' || s.code || '/bead/' || t),
+    s.id, NULL, t,
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/' || s.code || '/' || bead_sku),
+    bead_w, 3.00, 3.00, cut_add
+FROM public.profile_systems s
+CROSS JOIN (VALUES
+    ('DEMO_70',        24.00::numeric, 'JQ-70-24'::text, 24.00::numeric, 9.00::numeric),
+    ('DEMO_70',        20.00::numeric, 'JQ-70-14'::text, 14.00::numeric, 9.00::numeric),
+    ('ALU_CORREDERA_70', 20.00::numeric, 'JQ-AC-10'::text, 10.00::numeric, 7.00::numeric)
+) AS b(sys_code, t, bead_sku, bead_w, cut_add)
+WHERE s.code = b.sys_code AND s.is_global = TRUE
+ON CONFLICT (system_id, glass_thickness_mm) DO NOTHING;
+
+-- Hardware kits: casement + door for DEMO_70, dual/mono rails for the ALU slider.
+INSERT INTO public.hardware_kits (
+    id, org_id, system_id, sku, name, opening_type,
+    min_leaf_width_mm, max_leaf_width_mm,
+    min_leaf_height_mm, max_leaf_height_mm,
+    max_leaf_weight_kg, rail_type, carriages_qty, stay_arms_qty,
+    contents, weight_kg, data_provenance
+)
+SELECT
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/' || s.code || '/' || k.sku),
+    NULL, s.id, k.sku, k.name, k.opening,
+    k.min_w, k.max_w, k.min_h, k.max_h, k.max_kg,
+    k.rail, k.carriages, k.stays, k.contents::jsonb, k.weight, 'SEED_SYNTHETIC'
+FROM public.profile_systems s
+CROSS JOIN (VALUES
+    ('DEMO_70', 'KIT-TURN-70',       'Kit Practicable Demo 70',           'TURN',      400.00, 1300.00, 500.00, 2400.00, 90.00,  'dual', 0, 0,
+     2.80, '[{"sku":"DEMO-BIS-70","name":"Bisagra demo 70","qty":3,"unit":"unit","category":"HINGE"},{"sku":"DEMO-MAN-70","name":"Manilla demo 70","qty":1,"unit":"unit","category":"HANDLE"}]'),
+    ('DEMO_70', 'KIT-TILT-TURN-70',  'Kit Oscilobatiente Demo 70',        'TILT_TURN', 450.00, 1600.00, 500.00, 2400.00, 130.00, 'dual', 0, 1,
+     3.40, '[{"sku":"DEMO-TT-70","name":"Mecanismo oscilobatiente demo 70","qty":1,"unit":"set","category":"LOCK"},{"sku":"DEMO-MAN-70","name":"Manilla demo 70","qty":1,"unit":"unit","category":"HANDLE"}]'),
+    ('DEMO_70', 'KIT-DOOR-70',       'Kit Puerta Multipunto Demo 70',     'DOOR',      700.00, 1200.00, 1800.00, 2400.00, 130.00, 'dual', 0, 0,
+     4.10, '[{"sku":"DEMO-LOCK-70","name":"Cerradura multipunto demo 70","qty":1,"unit":"unit","category":"LOCK"},{"sku":"DEMO-BIS-70","name":"Bisagra puerta reforzada demo 70","qty":3,"unit":"unit","category":"HINGE"}]'),
+    ('DEMO_70', 'KIT-AWNING-70',     'Kit Proyectante Demo 70',           'AWNING',    400.00, 1400.00, 400.00, 1200.00, 50.00,  'dual', 0, 2,
+     2.10, '[{"sku":"DEMO-STAY-70","name":"Compás a fricción demo 70","qty":2,"unit":"unit","category":"FITTING"},{"sku":"DEMO-MAN-70","name":"Manilla demo 70","qty":1,"unit":"unit","category":"HANDLE"}]'),
+    ('ALU_CORREDERA_70', 'KIT-A-SLIDING-70',      'Kit Corredera Aluminio 70',      'SLIDING', 450.00, 1800.00, 600.00, 2400.00, 100.00, 'dual', 2, 0,
+     2.60, '[{"sku":"ALU-CAR-70","name":"Carro doble corredera aluminio","qty":2,"unit":"set","category":"ROLLER"},{"sku":"ALU-CIERRE-70","name":"Cierre corredera aluminio","qty":1,"unit":"set","category":"LOCK"}]'),
+    ('ALU_CORREDERA_70', 'KIT-A-SLIDING-70-MONO', 'Kit Corredera Aluminio 70 Mono', 'SLIDING', 450.00, 1800.00, 600.00, 2400.00, 100.00, 'mono', 1, 0,
+     2.20, '[{"sku":"ALU-CAR-70M","name":"Carro monorriel aluminio","qty":1,"unit":"set","category":"ROLLER"},{"sku":"ALU-CIERRE-70","name":"Cierre corredera aluminio","qty":1,"unit":"set","category":"LOCK"}]')
+) AS k(sys_code, sku, name, opening, min_w, max_w, min_h, max_h, max_kg, rail, carriages, stays, weight, contents)
+WHERE s.code = k.sys_code AND s.is_global = TRUE
+ON CONFLICT (system_id, sku) DO NOTHING;
+
+-- DEMO_60's dedicated door sash (its door leaves ride DOOR_SASH, not SASH).
+INSERT INTO public.profile_articles (
+    id, system_id, org_id, sku, name, role, material,
+    face_width_mm, commercial_length_mm, welding_loss_mm,
+    reinforcement_gap_mm, weight_kg_m, steel_weight_kg_m, data_provenance
+)
+SELECT
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/DEMO_60/HOJA-PUERTA'),
+    s.id, NULL, 'HOJA-PUERTA', 'Hoja Puerta Demo 60', 'DOOR_SASH', 'PVC',
+    90.00, 6000.00, 6.00, 15.00, 2.4000, 1.7000, 'SEED_SYNTHETIC'
+FROM public.profile_systems s
+WHERE s.code = 'DEMO_60' AND s.is_global = TRUE
+ON CONFLICT (system_id, sku) DO NOTHING;
+
+-- Declared cut rules: PVC welds at 45°, aluminium is sawn mechanical.
+INSERT INTO public.profile_cut_rules (
+    id, system_id, org_id, role, cut_angle_deg, welded_ends,
+    interlock_deduction_mm, rounding_mm, data_provenance
+)
+SELECT
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/' || s.code || '/cutrule/' || role),
+    s.id, NULL, role::public.profile_role, angle, welded, deduction, rounding, 'SEED_SYNTHETIC'
+FROM public.profile_systems s
+CROSS JOIN (VALUES
+    ('DEMO_60',        'FRAME',        45.00, 2,    0.00,  0.01),
+    ('DEMO_60',        'SASH',         45.00, 2,    0.00,  0.01),
+    ('DEMO_60',        'DOOR_SASH',    45.00, 2,    0.00,  0.01),
+    ('DEMO_60',        'MULLION_V',    90.00, 0,    0.00,  0.01),
+    ('DEMO_60',        'MULLION_H',    90.00, 0,    0.00,  0.01),
+    ('DEMO_60',        'GLAZING_BEAD', 45.00, NULL, 0.00,  0.01),
+    ('DEMO_60',        'THRESHOLD',    90.00, NULL, 0.00,  0.01),
+    ('DEMO_70',        'FRAME',        45.00, 2,    0.00,  0.01),
+    ('DEMO_70',        'SASH',         45.00, 2,    0.00,  0.01),
+    ('DEMO_70',        'DOOR_SASH',    45.00, 2,    0.00,  0.01),
+    ('DEMO_70',        'MULLION_V',    90.00, 0,    0.00,  0.01),
+    ('DEMO_70',        'MULLION_H',    90.00, 0,    0.00,  0.01),
+    ('DEMO_70',        'GLAZING_BEAD', 45.00, NULL, 0.00,  0.01),
+    ('DEMO_70',        'THRESHOLD',    90.00, NULL, 0.00,  0.01),
+    ('ALU_CORREDERA_70','FRAME',        45.00, NULL, 0.00,  0.01),
+    ('ALU_CORREDERA_70','RAIL',         45.00, NULL, 0.00,  0.01),
+    ('ALU_CORREDERA_70','SLIDING_SASH', 45.00, NULL, 0.00,  0.01),
+    ('ALU_CORREDERA_70','INTERLOCK',    45.00, NULL, 12.00, 0.01),
+    ('ALU_CORREDERA_70','MULLION_V',    90.00, NULL, 0.00,  0.01),
+    ('ALU_CORREDERA_70','MULLION_H',    90.00, NULL, 0.00,  0.01),
+    ('ALU_CORREDERA_70','GLAZING_BEAD', 45.00, NULL, 0.00,  0.01),
+    ('ALU_65',          'FRAME',        45.00, NULL, 0.00,  0.01),
+    ('ALU_65',          'SASH',         45.00, NULL, 0.00,  0.01),
+    ('ALU_65',          'DOOR_SASH',    45.00, NULL, 0.00,  0.01),
+    ('ALU_65',          'MULLION_V',    90.00, NULL, 0.00,  0.01),
+    ('ALU_65',          'MULLION_H',    90.00, NULL, 0.00,  0.01),
+    ('ALU_65',          'GLAZING_BEAD', 45.00, NULL, 0.00,  0.01),
+    ('ALU_65',          'THRESHOLD',    90.00, NULL, 0.00,  0.01)
+) AS r(sys_code, role, angle, welded, deduction, rounding)
+WHERE s.code = r.sys_code AND s.is_global = TRUE
+ON CONFLICT DO NOTHING;
+
+-- Reinforcement rules: PVC families declare steel policy; aluminium systems
+-- declare none (mechanical joints are never steel-reinforced — absence is a
+-- declaration, not a gap).
+INSERT INTO public.profile_reinforcement_rules (
+    id, system_id, org_id, role, finish_class, min_length_mm,
+    mandatory, screws_per_m, screw_sku, data_provenance
+)
+SELECT
+    uuid_generate_v5(uuid_ns_url(),
+        'https://dekopen.local/catalog/' || s.code || '/reinforce/' || role || '/' || finish || '/' || min_len),
+    s.id, NULL, role::public.profile_role, finish, min_len,
+    TRUE, 4.00, 'TORNILLO-4X16', 'SEED_SYNTHETIC'
+FROM public.profile_systems s
+CROSS JOIN (VALUES
+    ('FRAME'), ('SASH'), ('DOOR_SASH'), ('MULLION_V'), ('MULLION_H')
+) AS roles(role)
+CROSS JOIN (VALUES
+    ('WHITE'::text, 1000.00::numeric),
+    ('NON_WHITE'::text, 0.00::numeric)
+) AS classes(finish, min_len)
+WHERE s.code IN ('DEMO_60', 'DEMO_70') AND s.is_global = TRUE
+ON CONFLICT DO NOTHING;
+
+-- Leaf dimensional limits.
+INSERT INTO public.system_typology_limits (
+    id, system_id, org_id, opening_type,
+    min_leaf_width_mm, max_leaf_width_mm,
+    min_leaf_height_mm, max_leaf_height_mm,
+    max_leaf_weight_kg, max_aspect_ratio, data_provenance
+)
+SELECT
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/' || s.code || '/limits/' || opening),
+    s.id, NULL, opening, min_w::numeric, max_w::numeric, min_h::numeric,
+    max_h::numeric, max_kg::numeric, aspect::numeric, 'SEED_SYNTHETIC'
+FROM public.profile_systems s
+CROSS JOIN (VALUES
+    ('DEMO_60',        'TURN_LEFT',       350.00, 1400.00, 400.00, 2500.00, 100.00, 2.80),
+    ('DEMO_60',        'TILT_TURN_RIGHT', 450.00, 1600.00, 450.00, 2500.00, 130.00, NULL),
+    ('DEMO_60',        'AWNING',          400.00, 1800.00, 350.00, 1200.00, 45.00,  NULL),
+    ('DEMO_60',        'DOOR_ENTRY',      600.00, 1100.00, 1700.00, 2500.00, 120.00, NULL),
+    ('DEMO_70',        'TURN_LEFT',       350.00, 1500.00, 400.00, 2500.00, 110.00, 2.80),
+    ('DEMO_70',        'TILT_TURN_RIGHT', 450.00, 1600.00, 450.00, 2500.00, 130.00, NULL),
+    ('DEMO_70',        'AWNING',          400.00, 1800.00, 350.00, 1200.00, 50.00,  NULL),
+    ('DEMO_70',        'DOOR_ENTRY',      600.00, 1150.00, 1700.00, 2500.00, 130.00, NULL),
+    ('ALU_CORREDERA_70','SLIDING_2L',      450.00, 1800.00, 600.00, 2400.00, 100.00, NULL),
+    ('ALU_CORREDERA_70','SLIDING_3L',      450.00, 1800.00, 600.00, 2400.00, 100.00, NULL),
+    ('ALU_CORREDERA_70','SLIDING_4L',      450.00, 1800.00, 600.00, 2400.00, 100.00, NULL),
+    ('ALU_CORREDERA_70','SLIDING',         450.00, 1800.00, 600.00, 2400.00, 100.00, NULL),
+    ('ALU_65',          'TURN_LEFT',       350.00, 1000.00, 400.00, 2200.00, 60.00,  NULL),
+    ('ALU_65',          'TILT_TURN_RIGHT', 450.00, 1200.00, 450.00, 2200.00, 90.00,  NULL),
+    ('ALU_65',          'DOOR_ENTRY',      600.00, 1100.00, 1700.00, 2500.00, 100.00, NULL)
+) AS l(sys_code, opening, min_w, max_w, min_h, max_h, max_kg, aspect)
+WHERE s.code = l.sys_code AND s.is_global = TRUE
+ON CONFLICT DO NOTHING;
+
+-- Purchase coverage: pricing flows through the fixture cost list, which
+-- maps every purchase SKU. Seed the mappings for the new demo articles.
+INSERT INTO public.profile_purchase_mappings
+ (id, profile_article_id, org_id, commercial_sku, manufacturer_name, supplier_name,
+  purchase_unit, physical_stock_identity, stock_color, cutting_profile_id, binding_version)
+SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot07/purchase/' || article.id::text),
+ article.id, NULL, 'COMPRA-' || article.sku, 'Referencia DEKOPEN', 'Proveedor de referencia', 'BAR',
+ uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/physical/profile/' || article.id::text),
+ 'WHITE',
+ uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot07/cutting/DEMO'),
+ 1
+FROM public.profile_articles article
+JOIN public.profile_systems s ON s.id = article.system_id
+WHERE s.code IN ('DEMO_60','DEMO_70','DEMO_CORREDERA_60','ALU_CORREDERA_70')
+  AND s.is_global = TRUE AND article.org_id IS NULL
+  AND EXISTS (SELECT 1 FROM information_schema.columns
+              WHERE table_schema='public' AND table_name='profile_purchase_mappings'
+                AND column_name='physical_stock_identity')
+ON CONFLICT (id) DO NOTHING;
+
+-- Steel reinforcement stock for every welded PVC member — DEMO_60's
+-- original articles already carry theirs from the shot-07 block; NOT
+-- EXISTS adds only the newcomers (HOJA-PUERTA and the new systems).
+INSERT INTO public.reinforcement_articles
+ (id, system_id, org_id, parent_profile_article_id, sku, commercial_sku, name,
+  manufacturer_name, supplier_name, stock_length_mm, purchase_unit, is_default,
+  physical_stock_identity, stock_color, cutting_profile_id, binding_version)
+SELECT uuid_generate_v5(uuid_ns_url(),
+        'https://dekopen.local/shot07/steel/' || article.id::text),
+ s.id, NULL, article.id, 'ACERO-' || article.sku, 'COMPRA-ACERO-' || article.sku,
+ 'Acero ' || article.name, 'Referencia DEKOPEN', 'Proveedor de referencia',
+ 6000.00, 'BAR', TRUE,
+ uuid_generate_v5(uuid_ns_url(),
+        'https://dekopen.local/shot09/physical/steel/' || article.id::text),
+ 'WHITE',
+ uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot07/cutting/DEMO'),
+ 1
+FROM public.profile_articles article
+JOIN public.profile_systems s ON s.id = article.system_id
+WHERE s.code IN ('DEMO_60','DEMO_70','DEMO_CORREDERA_60')
+  AND s.is_global = TRUE AND article.org_id IS NULL
+  AND article.role NOT IN ('GLAZING_BEAD','THRESHOLD')
+  AND NOT EXISTS (SELECT 1 FROM public.reinforcement_articles r
+                  WHERE r.parent_profile_article_id = article.id
+                    AND r.org_id IS NULL)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.hardware_purchase_mappings
+ (id, hardware_kit_id, org_id, purchasing_sku, manufacturer_name, purchase_unit, version, provenance)
+SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/hardware/' || kit.id::text || '/V1'),
+ kit.id, NULL, 'COMPRA-' || kit.sku, 'Referencia DEKOPEN', 'KIT', 1,
+ '{"source":"Referencia DEKOPEN","mode":"KIT_ONLY"}'::jsonb
+FROM public.hardware_kits kit
+JOIN public.profile_systems s ON s.id = kit.system_id
+WHERE s.code IN ('DEMO_70','DEMO_CORREDERA_60','ALU_CORREDERA_70')
+  AND s.is_global = TRUE AND kit.org_id IS NULL
+  AND EXISTS (SELECT 1 FROM information_schema.tables
+              WHERE table_schema='public' AND table_name='hardware_purchase_mappings')
+ON CONFLICT (id) DO NOTHING;
+
+-- Glass purchase authorities for the new demo systems: one technical SKU per
+-- supported glazing, matching each system's bead matrix. They feed both the
+-- estimator's glass options and the documentary freeze.
+INSERT INTO public.glass_purchase_mappings
+ (id, system_id, org_id, technical_sku, purchasing_sku, manufacturer_name,
+  purchase_unit, version, provenance, glass_spec)
+SELECT uuid_generate_v5(uuid_ns_url(),
+        'https://dekopen.local/shot09/glass/' || s.code || '/' || m.technical_sku || '/V1'),
+ s.id, NULL, m.technical_sku, m.purchasing_sku, 'Referencia DEKOPEN', 'EA', 1,
+ '{"source":"Referencia DEKOPEN","certified":"false"}'::jsonb, m.glass_spec
+FROM public.profile_systems s
+JOIN (VALUES
+    ('DEMO_70',           'VIDRIO-BASE', 'VIDRIO-TERMINADO',  '4-16-4 Float Incoloro'),
+    ('DEMO_70',           'DVH-20',      'COMPRA-DVH-20',     '4-12-4 Float Incoloro'),
+    ('DEMO_CORREDERA_60', 'VIDRIO-BASE', 'VIDRIO-TERMINADO',  '4-16-4 Float Incoloro'),
+    ('DEMO_CORREDERA_60', 'DVH-20',      'COMPRA-DVH-20',     '4-12-4 Float Incoloro'),
+    ('DEMO_CORREDERA_60', 'MONO-4',      'COMPRA-MONO-4',     '4 Float Incoloro'),
+    ('ALU_CORREDERA_70',  'VIDRIO-BASE', 'VIDRIO-TERMINADO',  '4-12-4 Float Incoloro')
+) AS m(sys_code, technical_sku, purchasing_sku, glass_spec) ON m.sys_code = s.code
+WHERE s.is_global = TRUE
+ON CONFLICT (id) DO NOTHING;
+
+-- Fastening purchase authority for DEMO_70 (PVC, reinforced — the engine
+-- emits TORNILLO-4X16 fittings per reinforced member).
+INSERT INTO public.fitting_purchase_mappings
+ (id, system_id, org_id, technical_sku, purchasing_sku, manufacturer_name,
+  purchase_unit, version, provenance)
+SELECT uuid_generate_v5(uuid_ns_url(),
+        'https://dekopen.local/catalog/' || s.code || '/fitting/TORNILLO-4X16/V1'),
+ s.id, NULL, 'TORNILLO-4X16', 'COMPRA-TORNILLO-4X16', 'Referencia DEKOPEN',
+ 'EA', 1, '{"source":"Referencia DEKOPEN","mode":"KIT_ONLY"}'::jsonb
+FROM public.profile_systems s
+WHERE s.code = 'DEMO_70' AND s.is_global = TRUE
+ON CONFLICT (system_id, org_id, technical_sku, version) DO NOTHING;
+
+-- Manufacturing authorities for the new demo systems (placement, handles,
+-- reinforcement-cut) — copies of the demo V2 conventions scoped to each code.
+INSERT INTO public.manufacturing_placement_policies (id, system_id, org_id, version, authority)
+SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/placement/' || s.code || '/V2'),
+ s.id, NULL, p.version, jsonb_set(p.authority, '{policy_id}', to_jsonb(s.code || '_PLACEMENT_V2'))
+FROM public.manufacturing_placement_policies p
+JOIN public.profile_systems src ON src.id = p.system_id AND src.code = 'DEMO_60'
+CROSS JOIN public.profile_systems s
+WHERE s.code IN ('DEMO_70','ALU_CORREDERA_70','DEMO_CORREDERA_60') AND s.is_global = TRUE
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.handle_requirement_policies (id, system_id, org_id, version, authority)
+SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/handles/' || s.code || '/V2'),
+ s.id, NULL, p.version,
+ jsonb_set(
+   jsonb_set(p.authority, '{policy_id}', to_jsonb(s.code || '_HANDLES_V2')),
+   '{slots}', CASE WHEN s.code IN ('ALU_CORREDERA_70','DEMO_CORREDERA_60') THEN (
+        SELECT jsonb_agg(slot) FROM jsonb_array_elements(p.authority -> 'slots') AS slot
+        WHERE slot ->> 'opening_type' LIKE 'SLIDING%')
+      ELSE p.authority -> 'slots' END)
+FROM public.handle_requirement_policies p
+JOIN public.profile_systems src ON src.id = p.system_id AND src.code = 'DEMO_60'
+CROSS JOIN public.profile_systems s
+WHERE s.code IN ('DEMO_70','ALU_CORREDERA_70','DEMO_CORREDERA_60') AND s.is_global = TRUE
+ON CONFLICT (id) DO NOTHING;
+
+-- Aluminium declares no steel reinforcement: the verbatim V1 copy stands
+-- as the placeholder authority (its rules are never consulted — no member
+-- of the family is marked for steel).
+INSERT INTO public.reinforcement_cut_policies (id, system_id, org_id, version, authority)
+SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/reinforcement-cuts/' || s.code || '/V1'),
+ s.id, NULL, p.version, jsonb_set(p.authority, '{policy_id}', to_jsonb(s.code || '_REINFORCEMENT_CUT_V1'))
+FROM public.reinforcement_cut_policies p
+JOIN public.profile_systems src ON src.id = p.system_id AND src.code = 'DEMO_60'
+CROSS JOIN public.profile_systems s
+WHERE s.code IN ('ALU_CORREDERA_70') AND s.is_global = TRUE
+ON CONFLICT (id) DO NOTHING;
+
+-- PVC systems generate their cut authorities from their own declared
+-- reinforcement roles — a verbatim copy would leave sliding roles
+-- (SLIDING_SASH, INTERLOCK, RAIL) and the new DOOR_SASH without a rule,
+-- and the documentary freeze refuses members whose (role, angle_left,
+-- angle_right) has no authority. Welded members declare every 45°/90°
+-- combination the family can emit; sawn mullions and thresholds only
+-- meet square cuts.
+INSERT INTO public.reinforcement_cut_policies (id, system_id, org_id, version, authority)
+SELECT
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/reinforcement-cuts/' || s.code || '/V1'),
+    s.id, NULL, 1,
+    jsonb_build_object(
+        'schema_version', 1,
+        'policy_id', s.code || '_REINFORCEMENT_CUT_V1',
+        'version', 1,
+        'rules', gen.rules
+    )
+FROM public.profile_systems s
+CROSS JOIN LATERAL (
+    SELECT jsonb_agg(jsonb_build_object(
+        'role', rr.role,
+        'profile_angle_left', c.angle_left,
+        'profile_angle_right', c.angle_right,
+        'reinforcement_angle_left', 90.0,
+        'reinforcement_angle_right', 90.0,
+        'length_authority', 'EXISTING_ENGINE',
+        'compatible_with_existing_length', true
+    ) ORDER BY rr.role, c.angle_left, c.angle_right) AS rules
+    FROM (SELECT DISTINCT role::text AS role
+          FROM public.profile_reinforcement_rules
+          WHERE system_id = s.id) rr
+    CROSS JOIN LATERAL (
+        SELECT 90.00 AS angle_left, 90.00 AS angle_right
+        WHERE rr.role IN ('MULLION_V','MULLION_H','THRESHOLD')
+        UNION ALL
+        SELECT v.al, v.ar FROM (VALUES
+            (45.00,45.00),(45.00,90.00),(90.00,45.00),(90.00,90.00)
+        ) AS v(al,ar)
+        WHERE rr.role NOT IN ('MULLION_V','MULLION_H','THRESHOLD')
+    ) c
+) gen
+WHERE s.code IN ('DEMO_70','DEMO_CORREDERA_60') AND s.is_global = TRUE
+ON CONFLICT (id) DO NOTHING;
+
+-- DEMO_60 ships V2 with the D01 roles included: its V1 predates
+-- DOOR_SASH and authorities are immutable once issued.
+INSERT INTO public.reinforcement_cut_policies (id, system_id, org_id, version, authority)
+SELECT
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/reinforcement-cuts/DEMO_60/V2'),
+    s.id, NULL, 2,
+    jsonb_build_object(
+        'schema_version', 1,
+        'policy_id', 'DEMO_60_REINFORCEMENT_CUT_V2',
+        'version', 2,
+        'rules', gen.rules
+    )
+FROM public.profile_systems s
+CROSS JOIN LATERAL (
+    SELECT jsonb_agg(jsonb_build_object(
+        'role', rr.role,
+        'profile_angle_left', c.angle_left,
+        'profile_angle_right', c.angle_right,
+        'reinforcement_angle_left', 90.0,
+        'reinforcement_angle_right', 90.0,
+        'length_authority', 'EXISTING_ENGINE',
+        'compatible_with_existing_length', true
+    ) ORDER BY rr.role, c.angle_left, c.angle_right) AS rules
+    FROM (SELECT DISTINCT role::text AS role
+          FROM public.profile_reinforcement_rules
+          WHERE system_id = s.id) rr
+    CROSS JOIN LATERAL (
+        SELECT 90.00 AS angle_left, 90.00 AS angle_right
+        WHERE rr.role IN ('MULLION_V','MULLION_H','THRESHOLD')
+        UNION ALL
+        SELECT v.al, v.ar FROM (VALUES
+            (45.00,45.00),(45.00,90.00),(90.00,45.00),(90.00,90.00)
+        ) AS v(al,ar)
+        WHERE rr.role NOT IN ('MULLION_V','MULLION_H','THRESHOLD')
+    ) c
+) gen
+WHERE s.code = 'DEMO_60' AND s.is_global = TRUE
+ON CONFLICT (id) DO NOTHING;
+
+-- Inspector authority for the new reference families: the documentary
+-- freeze refuses systems without the fourteen rule configs (the chamber
+-- clearance lives on the profile_systems insert).
+INSERT INTO public.inspector_rule_configs (id, system_id, org_id, rule_id, params)
+SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot07/config/' || s.id::text || '/' || cfg.rule_id),
+ s.id, NULL, cfg.rule_id, cfg.params
+FROM public.profile_systems s CROSS JOIN (VALUES
+    ('R01', '{}'::JSONB),
+    ('R02', '{"min_ratio":"0.4000","max_ratio":"2.5000","suggested_ratio":"1.5000"}'::JSONB),
+    ('R03', '{"min_width_mm":"350.00","max_width_mm":"1600.00","max_height_mm":"2400.00"}'::JSONB),
+    ('R04', '{"monolithic_4_max_area_m2":"1.8000","dvh_4_any_4_max_area_m2":"2.6000"}'::JSONB),
+    ('R05', '{"span_trigger_mm":"1800.00"}'::JSONB),
+    ('R06', '{}'::JSONB),
+    ('R07', '{"width_trigger_mm":"800.00","required_bottom_drains":3}'::JSONB),
+    ('R08', '{"max_spacing_mm":"800.00"}'::JSONB),
+    ('R09', '{"white_limit_mm":"4000.00","foiled_limit_mm":"3000.00"}'::JSONB),
+    ('R10', '{"tolerance_mm":"1.50"}'::JSONB),
+    ('R11', '{"expected_mm":"12.00","tolerance_mm":"1.50","suggested_sash_overlap_mm":"8.00"}'::JSONB),
+    ('R12', '{"width_trigger_mm":"4500.00","minimum_ix_cm4":"45.0000"}'::JSONB),
+    ('R13', '{"height_trigger_mm":"1200.00","required_stay_arms":2}'::JSONB),
+    ('R14', '{"weight_trigger_kg":"150.00","required_carriages":4,"minimum_capacity_kg":"80.00"}'::JSONB)
+) cfg(rule_id, params)
+WHERE s.code IN ('DEMO_70','ALU_CORREDERA_70','DEMO_CORREDERA_60') AND s.is_global = TRUE
+ON CONFLICT (system_id, org_id, rule_id) DO NOTHING;
+
+END;
+$d01$;
+
+COMMIT;
+

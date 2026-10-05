@@ -228,7 +228,8 @@ def seed_commercial_project(org, owner, system=None):
     with as_user(owner):
         parent = admin_write('cost-lists',org,{'supplier_name':'Gate','currency':'CLP','valid_from':date(2026,9,1)},'Gate setup')
         for sku,unit,cost in [('COMPRA-MARCO','BAR','100'),('COMPRA-JQ-10','BAR','100'),
-                              ('COMPRA-ACERO-MARCO','BAR','100'),('VIDRIO-BASE','M2','100')]:
+                              ('COMPRA-ACERO-MARCO','BAR','100'),('TORNILLO-4X16','EA','1'),
+                              ('VIDRIO-BASE','M2','100')]:
             admin_write('cost-items',org,{'cost_list_id':parent['id'],'sku':sku,'item_type':'FIXTURE',
                         'unit':unit,'unit_cost':Decimal(cost)},'Gate input')
         admin_write('rules',org,{'pricing_mode':'COST_PLUS_MARGIN','default_margin_pct':Decimal('0.35'),
@@ -272,9 +273,10 @@ def test_five_modes_resolve_real_bom_and_apply_atomically(commercial_rows,mode):
             assert output['project_tax']==Decimal('380')
         else:
             # Independent G1 oracle: (4024+3676+3880)/6000*100 + .8281*100
-            # = 275.81 materials; *1.08 + 15+12 = 324.8748; /.65 -> CLP500.
-            assert output['project_net']==Decimal('500')
-            assert output['project_tax']==Decimal('95')
+            # = 275.81 materials; + 20 declared TORNILLO-4X16 @1 -> 295.81;
+            # *1.08 + 15+12 = 346.4748; /.65 -> CLP533.
+            assert output['project_net']==Decimal('533')
+            assert output['project_tax']==Decimal('101')
         applied=apply_operation(org,users['OWNER'],'OWNER',output['id'],'Apply approved gate',False)
         assert applied['state']=='APPLIED'
         persisted=one('SELECT total_price_net FROM public.projects WHERE id=%s',[project])
@@ -474,7 +476,7 @@ def test_authorized_apply_audit_before_and_full_rollback(commercial_rows):
                                'Apply owner fix gate',False)['state']=='APPLIED'
     with connection.cursor() as cursor:
         cursor.execute('RESET ROLE')
-    assert one('SELECT total_price_net FROM public.projects WHERE id=%s',[project])['total_price_net']==Decimal('500')
+    assert one('SELECT total_price_net FROM public.projects WHERE id=%s',[project])['total_price_net']==Decimal('533')
     assert one('SELECT count(*) AS n FROM public.price_audit_logs WHERE org_id=%s',[org])['n']==count+3
 
 
@@ -528,7 +530,8 @@ def required_cost_list(org, valid_from, cost):
     parent = admin_write('cost-lists',org,{'supplier_name':'Snapshot fixture','currency':'CLP',
                          'valid_from':valid_from},'Snapshot list')
     for sku,unit in [('COMPRA-MARCO','BAR'),('COMPRA-JQ-10','BAR'),
-                     ('COMPRA-ACERO-MARCO','BAR'),('VIDRIO-BASE','M2')]:
+                     ('COMPRA-ACERO-MARCO','BAR'),('TORNILLO-4X16','EA'),
+                     ('VIDRIO-BASE','M2')]:
         admin_write('cost-items',org,{'cost_list_id':parent['id'],'sku':sku,
                     'item_type':'FIXTURE','unit':unit,'unit_cost':Decimal(cost)},'Snapshot cost')
     return parent['id']
@@ -618,11 +621,11 @@ def test_pricing_http_valid_preview_remains_successful(committed_commercial_rows
     assert body['revision_code']=='REV-A'
     assert body['discount_pct']=='0.0000'
     assert body['currency']=='CLP'
-    assert body['project_net']=='500'
-    assert body['project_tax']=='95'
-    assert body['project_gross']=='595'
-    assert body['lines']==[{'position_index':1,'quantity':1,'unit_price':'499.8074',
-                            'discount_pct':'0.0000','line_net':'500'}]
+    assert body['project_net']=='533'
+    assert body['project_tax']=='101'
+    assert body['project_gross']=='634'
+    assert body['lines']==[{'position_index':1,'quantity':1,'unit_price':'533.0382',
+                            'discount_pct':'0.0000','line_net':'533'}]
 
 
 def privileged_role():
@@ -829,7 +832,7 @@ def test_preview_uses_one_snapshot_for_rules_costs_and_repeated_skus(
     snapshot = pricing_service.decoded(first['input_snapshot'])
     first_costs = [item['cost'] for item in snapshot['authorities'] if 'cost' in item]
     assert len(first_costs)>4
-    assert {Decimal(str(item['unit_cost'])) for item in first_costs}=={Decimal('100')}
+    assert {Decimal(str(item['unit_cost'])) for item in first_costs}=={Decimal('100'),Decimal('1')}
     assert Decimal(str(snapshot['rules']['labor_rate_per_m2']))==Decimal('15')
     second = owner_client(users['OWNER']).post('/api/v1/pricing/preview/',price_payload(project),format='json')
     assert second.status_code==200

@@ -24,7 +24,7 @@ from authentication.rls import authenticated_rls_context
 from authentication.tenancy import MembershipRepository, resolve_tenant_context
 from authentication.types import VerifiedSupabaseToken
 from backend.tests.test_engine_api import g1_request, g4_request
-from dekopen_engine import ProfileRole
+from dekopen_engine import IncompatibleTypologyError, ProfileRole
 from engine_api.repository import SystemNotFound, SystemParamsRepository
 
 pytestmark = pytest.mark.rls_integration
@@ -372,6 +372,29 @@ def test_engine_system_discovery_is_rls_visible_and_deterministic(
         "code": "DEMO_60",
         "name": "Sistema Demo 60mm PVC — referencia sintética",
         "is_demo": True,
+        "system_family": "CASEMENT",
+        "allowed_openings": [
+            "AWNING", "DOOR_DOUBLE", "DOOR_ENTRY", "FIXED",
+            "TILT_TURN_LEFT", "TILT_TURN_RIGHT", "TURN_LEFT", "TURN_RIGHT",
+        ],
+        "typology_limits": [
+            {"opening_type": "AWNING", "min_leaf_width_mm": "400.00",
+             "max_leaf_width_mm": "1800.00", "min_leaf_height_mm": "350.00",
+             "max_leaf_height_mm": "1200.00", "max_leaf_weight_kg": "45.00",
+             "max_aspect_ratio": None, "source": "SEED_SYNTHETIC"},
+            {"opening_type": "DOOR_ENTRY", "min_leaf_width_mm": "600.00",
+             "max_leaf_width_mm": "1100.00", "min_leaf_height_mm": "1700.00",
+             "max_leaf_height_mm": "2500.00", "max_leaf_weight_kg": "120.00",
+             "max_aspect_ratio": None, "source": "SEED_SYNTHETIC"},
+            {"opening_type": "TILT_TURN_RIGHT", "min_leaf_width_mm": "450.00",
+             "max_leaf_width_mm": "1600.00", "min_leaf_height_mm": "450.00",
+             "max_leaf_height_mm": "2500.00", "max_leaf_weight_kg": "130.00",
+             "max_aspect_ratio": None, "source": "SEED_SYNTHETIC"},
+            {"opening_type": "TURN_LEFT", "min_leaf_width_mm": "350.00",
+             "max_leaf_width_mm": "1400.00", "min_leaf_height_mm": "400.00",
+             "max_leaf_height_mm": "2500.00", "max_leaf_weight_kg": "100.00",
+             "max_aspect_ratio": "2.800", "source": "SEED_SYNTHETIC"},
+        ],
         "quote_ready": True,
         "readiness_reasons": [],
     }
@@ -380,7 +403,8 @@ def test_engine_system_discovery_is_rls_visible_and_deterministic(
         str(real_rows.systems[tenant]),
     }
     assert all(set(system) == {
-        "id", "code", "name", "is_demo", "quote_ready", "readiness_reasons",
+        "id", "code", "name", "is_demo", "system_family", "allowed_openings",
+        "typology_limits", "quote_ready", "readiness_reasons",
     } for system in systems)
     own = next(system for system in systems if system["id"] == str(real_rows.systems[tenant]))
     assert own["quote_ready"] is False
@@ -432,7 +456,7 @@ def test_shot06_all_28_catalog_fields_reach_typed_engine(real_rows: RLSFixtures)
     expected_fields = expected.model_dump()
     actual_fields["available_hardware_kits"] = sorted(actual_fields["available_hardware_kits"], key=lambda k: k["sku"])
     expected_fields["available_hardware_kits"] = sorted(expected_fields["available_hardware_kits"], key=lambda k: k["sku"])
-    assert len(SystemParams.model_fields) == len(actual_fields) == 26
+    assert len(SystemParams.model_fields) == len(actual_fields) == 30
     # The demo seed declares the same synthetic per-article masses the engine
     # fixture carries — mass authority must reach the typed model
     # field-for-field rather than arriving through a fallback.
@@ -450,11 +474,29 @@ def test_shot06_all_28_catalog_fields_reach_typed_engine(real_rows: RLSFixtures)
     # fixture; the typed field is still present and populated in both paths.
     assert actual_fields.pop("available_hardware_kits")
     assert expected_fields.pop("available_hardware_kits")
+    # Rule ordering is a repository presentation detail; compare contents.
+    def rule_key(rule: dict[str, object]) -> tuple[str, str, str]:
+        return (str(rule["role"]), str(rule["finish_class"]), str(rule["min_length_mm"]))
+    actual_fields["reinforcement_rules"] = sorted(actual_fields["reinforcement_rules"], key=rule_key)
+    expected_fields["reinforcement_rules"] = sorted(expected_fields["reinforcement_rules"], key=rule_key)
     assert actual_fields == expected_fields
-    for case in ("G5", "G6", "G7"):
+    for case in ("G6", "G7"):
         result = calculate_geometry(core_node(case), loaded)
         assert all(weight.total_weight_kg > Decimal("0") for weight in result.leaf_weights)
         assert result.hardware_items
+    # G5 is sliding: it now exercises the DEMO_CORREDERA_60 sibling —
+    # CASEMENT systems reject it by design.
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT id FROM public.profile_systems WHERE code='DEMO_CORREDERA_60'")
+        corredera_id = cursor.fetchone()[0]
+    with authenticated_rls_context(real_rows.tokens["A"].claims):
+        corredera = SystemParamsRepository().load_visible(
+            corredera_id, real_rows.organizations["A"])
+    result = calculate_geometry(core_node("G5"), corredera)
+    assert all(weight.total_weight_kg > Decimal("0") for weight in result.leaf_weights)
+    assert result.hardware_items
+    with pytest.raises(IncompatibleTypologyError):
+        calculate_geometry(core_node("G5"), loaded)
     assert_no_context()
 
 

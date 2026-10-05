@@ -1161,7 +1161,7 @@ class TestSlidingTopologyEvaluation:
         )
 
     def test_sliding_facts_describe_the_resolved_topology(
-        self, demo_60_params: SystemParams
+        self, demo_corredera_60_params: SystemParams
     ) -> None:
         product = ProductModel(
             version="product-v2",
@@ -1189,7 +1189,7 @@ class TestSlidingTopologyEvaluation:
                 couplings=[],
             ),
         )
-        evaluation = evaluate_product(product, demo_60_params)
+        evaluation = evaluate_product(product, demo_corredera_60_params)
         module = evaluation.modules[0]
         assert module.sliding[0].bay_id == "s"
         assert module.sliding[0].tracks == 2
@@ -1205,7 +1205,7 @@ class TestSlidingTopologyEvaluation:
         assert leaf_ids == {"s:L2", "s:L3", "s:fijo"}
 
     def test_sliding_layout_errors_surface_as_issues(
-        self, demo_60_params: SystemParams
+        self, demo_corredera_60_params: SystemParams
     ) -> None:
         product = ProductModel(
             version="product-v2",
@@ -1213,7 +1213,7 @@ class TestSlidingTopologyEvaluation:
                 modules=[self._sliding_module(None)], couplings=[]
             ),
         )
-        evaluation = evaluate_product(product, demo_60_params)
+        evaluation = evaluate_product(product, demo_corredera_60_params)
         module = evaluation.modules[0]
         assert module.result is None
         assert [i.code for i in module.issues] == [

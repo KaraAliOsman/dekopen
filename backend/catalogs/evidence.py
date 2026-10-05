@@ -192,11 +192,13 @@ def stamp_import_evidence(*, org_id: UUID, actor_id: UUID, import_id: UUID,
         return
     with catalog_backend():
         for params in inserts:
+            # RETURNING id keeps this inside rows() (SELECT-only helper):
+            # without it cursor.description is None and the INSERT crashes.
             rows(
                 "INSERT INTO public.catalog_parameter_evidence ("
                 "org_id, authority_table, row_id, field_name, value_text,"
                 " unit, scope, applicability, source_document, declared_by)"
                 " VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
-                " ON CONFLICT DO NOTHING",
+                " ON CONFLICT DO NOTHING RETURNING id",
                 params,
             )

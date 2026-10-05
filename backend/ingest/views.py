@@ -7,20 +7,22 @@ import logging
 from uuid import UUID
 
 from django.db import DatabaseError
-from drf_spectacular.utils import extend_schema
+from django.http import HttpResponse
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from pydantic import ValidationError as PydanticValidationError
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from authentication.errors import contract_error
-from authentication.serializers import ACTIVE_ORGANIZATION_HEADER
+from authentication.serializers import ACTIVE_ORGANIZATION_HEADER, ErrorResponseSerializer
 from dekopen_engine.inspection_models import InspectorConfigurationError
 from documents.repository import DocumentaryError
 from documents.views import ERRORS, documentary_scope, validate
 from engine_api.repository import SystemNotFound
 
 from ingest import catalog_service, service
+from ingest.spreadsheet import build_template
 from ingest.catalog_service import CatalogImportError
 from ingest.service import ImportError_
 from ingest.serializers import (
@@ -222,6 +224,37 @@ class CatalogImportsView(APIView):
             _translate_catalog(error)
 
 
+class CatalogImportTemplateView(APIView):
+    """Official XLSX template — the manual ingestion path's contract."""
+
+    @extend_schema(
+        operation_id="catalog_import_template",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        responses={
+            200: OpenApiResponse(description="Plantilla XLSX"),
+            400: OpenApiResponse(ErrorResponseSerializer),
+            401: OpenApiResponse(ErrorResponseSerializer),
+            403: OpenApiResponse(ErrorResponseSerializer),
+            409: OpenApiResponse(ErrorResponseSerializer),
+        },
+        tags=["catalogs"],
+    )
+    def get(self, request):
+        with documentary_scope(request, _READERS):
+            content = build_template()
+        response = HttpResponse(
+            content,
+            content_type=(
+                "application/vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
+            ),
+        )
+        response["Content-Disposition"] = (
+            'attachment; filename="plantilla-catalogo-dekopen.xlsx"'
+        )
+        return response
+
+
 class CatalogImportDetailView(APIView):
     @extend_schema(
         operation_id="catalog_import_get",
@@ -258,8 +291,10 @@ class CatalogImportConfirmView(APIView):
                         org_id=org_id,
                         actor_id=token.user_id,
                         import_id=import_id,
-                        system_id=data["system_id"],
+                        system_id=data.get("system_id"),
                         items=data["items"],
+                        new_system=data.get("new_system"),
+                        cost_list_id=data.get("cost_list_id"),
                     )
                 )
         except (CatalogImportError, DocumentaryError, DatabaseError) as error:

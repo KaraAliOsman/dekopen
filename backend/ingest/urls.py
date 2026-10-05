@@ -2,6 +2,7 @@ from django.urls import path
 
 from ingest.views import (
     CatalogImportConfirmView,
+    CatalogImportTemplateView,
     CatalogImportDetailView,
     CatalogImportsView,
     ProjectImportConfirmView,
@@ -29,6 +30,11 @@ urlpatterns = [
         "catalog-imports/",
         CatalogImportsView.as_view(),
         name="catalog-imports",
+    ),
+    path(
+        "catalog-imports/template/",
+        CatalogImportTemplateView.as_view(),
+        name="catalog-import-template",
     ),
     path(
         "catalog-imports/<uuid:import_id>/",

@@ -70,71 +70,82 @@ def test_g3_hardware_resolved_shot06_preserves_standalone_geometry(
     demo_60_params: SystemParams, g3_node: ParametricNode,
 ) -> None:
     result = calculate_geometry(g3_node, demo_60_params)
+    # The 902 mm horizontal stays bare under the declared white-member rule
+    # (steel only from 1000 mm): only the 1302 mm vertical carries a liner.
     assert_role(result, ProfileRole.SASH, [("902", 2), ("1302", 2)],
-                [("866", 2), ("1266", 2)])
+                [("1266", 2)])
     assert (result.glasses[0].width_mm, result.glasses[0].height_mm) == (D("776"), D("1176"))
     assert [(item.kit_sku, item.name, item.qty, item.unit) for item in result.hardware_items] == [
         ("KIT-TILT-TURN", "Kit Vorne OB 100kg", 1, "kit"),
     ]
     exact = exact_weight_for_leaf(result, demo_60_params, g3_node.id)
     assert (exact.pvc_weight_kg, exact.steel_weight_kg, exact.infill_weight_kg) == (
-        D("5.2896"), D("7.2488"), D("18.251520"),
+        D("5.2896"), D("4.3044"), D("18.251520"),
     )
-    assert exact.total_weight_kg == D("33.289920")
-    assert result.leaf_weights[0].total_weight_kg == D("33.29")
+    assert exact.total_weight_kg == D("30.345520")
+    assert result.leaf_weights[0].total_weight_kg == D("30.35")
     kit = next(k for k in demo_60_params.available_hardware_kits if k.sku == "KIT-TILT-TURN")
     assert kit.max_leaf_weight_kg == D("100.00")
     assert exact.total_weight_kg <= kit.max_leaf_weight_kg
     assert result.leaf_weights[0].weight_unknown_reasons == []
 
 
-def test_g5_complete_bom_exact(demo_60_params: SystemParams) -> None:
-    result = calculate_geometry(core_node("G5"), demo_60_params)
-    assert_role(result, ProfileRole.FRAME, [("2006", 2), ("2106", 2)],
-                [("1970", 2), ("2070", 2)])
-    assert_role(result, ProfileRole.SASH, [("966", 2), ("1956", 2)] * 2,
-                [("930", 2), ("1920", 2)] * 2)
-    assert_role(result, ProfileRole.GLAZING_BEAD, [("829", 2), ("1819", 2)] * 2, [])
+def test_g5_complete_bom_exact(demo_corredera_60_params: SystemParams) -> None:
+    result = calculate_geometry(core_node("G5"), demo_corredera_60_params)
+    # Sliding frame: the bottom member is the declared RAIL article; every
+    # meeting edge of a moving leaf is cut from the INTERLOCK profile with
+    # its declared deduction (1972 - 18 = 1954).
+    assert_role(result, ProfileRole.FRAME, [("2006", 1), ("2106", 2)],
+                [("1970", 1), ("2070", 2)])
+    assert_role(result, ProfileRole.RAIL, [("2006", 1)], [("1970", 1)])
+    assert_role(result, ProfileRole.SLIDING_SASH, [("978.50", 2), ("1972", 1)] * 2,
+                [("1936", 1)] * 2)
+    assert_role(result, ProfileRole.INTERLOCK, [("1954", 1)] * 2,
+                [("1918", 1)] * 2)
+    assert_role(result, ProfileRole.GLAZING_BEAD, [("906.50", 2), ("1896", 2)] * 2, [])
     assert [(p.width_mm, p.height_mm, p.leaf_id) for p in result.glasses] == [
-        (D("820"), D("1810"), "G5:L1"), (D("820"), D("1810"), "G5:L2"),
+        (D("897.50"), D("1887"), "G5:L1"), (D("897.50"), D("1887"), "G5:L2"),
     ]
     assert [(p.kit_sku, p.leaf_id, p.qty) for p in result.hardware_items] == [
-        ("KIT-SLIDING", "G5:L1", 1), ("KIT-SLIDING", "G5:L2", 1),
+        ("KIT-SLIDING-CORR", "G5:L1", 1), ("KIT-SLIDING-CORR", "G5:L2", 1),
     ]
     for leaf_id in ("G5:L1", "G5:L2"):
-        exact = exact_weight_for_leaf(result, demo_60_params, "G5", leaf_id)
-        assert exact.total_weight_kg == D("48.8868")
+        exact = exact_weight_for_leaf(result, demo_corredera_60_params, "G5", leaf_id)
+        assert exact.total_weight_kg == D("49.98305")
         assert (exact.pvc_weight_kg, exact.steel_weight_kg, exact.infill_weight_kg) == (
-            D("7.0128"), D("9.6900"), D("29.6840"),
+            D("7.0596"), D("6.5518"), D("33.87165"),
         )
-        assert len([p for p in result.profile_cuts if p.leaf_id == leaf_id]) == 4
-    assert [w.total_weight_kg for w in result.leaf_weights] == [D("48.89"), D("48.89")]
+        # sash horizontals + sash stile + encuentro stile + two bead pieces
+        assert len([p for p in result.profile_cuts if p.leaf_id == leaf_id]) == 5
+    assert [w.total_weight_kg for w in result.leaf_weights] == [D("49.98"), D("49.98")]
     assert result.panels == []
 
 
 def test_g6_complete_bom_exact(demo_60_params: SystemParams) -> None:
     result = calculate_geometry(core_node("G6"), demo_60_params)
     assert_role(result, ProfileRole.FRAME, [("1206", 2), ("806", 2)],
-                [("1170", 2), ("770", 2)])
+                [("1170", 2)])
     assert_role(result, ProfileRole.SASH, [("1102", 2), ("702", 2)],
-                [("1066", 2), ("666", 2)])
+                [("1066", 2)])
     assert_role(result, ProfileRole.GLAZING_BEAD, [("985", 2), ("585", 2)], [])
     assert (result.glasses[0].width_mm, result.glasses[0].height_mm) == (D("976"), D("576"))
     assert result.hardware_items[0].kit_sku == "KIT-AWNING-16"
     assert [(c.sku, c.qty) for c in result.hardware_items[0].contents] == [("DEMO-STAY-16", D("2"))]
-    assert exact_weight_for_leaf(result, demo_60_params, "G6").total_weight_kg == D("23.96192")
-    assert result.leaf_weights[0].total_weight_kg == D("23.96")
+    assert exact_weight_for_leaf(result, demo_60_params, "G6").total_weight_kg == D("21.69752")
+    assert result.leaf_weights[0].total_weight_kg == D("21.70")
     assert result.panels == []
 
 
 def test_g7_complete_bom_exact(demo_60_params: SystemParams) -> None:
     result = calculate_geometry(core_node("G7"), demo_60_params)
     assert_role(result, ProfileRole.FRAME, [("956", 1), ("2153", 2)],
-                [("920", 1), ("2120", 2)])
+                [("2120", 2)])
     assert_role(result, ProfileRole.THRESHOLD, [("830", 1)], [])
-    assert_role(result, ProfileRole.SASH, [("822", 2), ("2054", 2)],
-                [("786", 2), ("2018", 2)])
-    assert_role(result, ProfileRole.GLAZING_BEAD, [("705", 2), ("1937", 2)], [])
+    # The entry-door leaf is cut from the declared DOOR_SASH article (90 mm
+    # face): the heavier sash shrinks the panel pocket accordingly.
+    assert_role(result, ProfileRole.DOOR_SASH, [("822", 2), ("2054", 2)],
+                [("2018", 2)])
+    assert_role(result, ProfileRole.GLAZING_BEAD, [("675", 2), ("1907", 2)], [])
     frames = [p for p in result.profile_cuts if p.role is ProfileRole.FRAME]
     assert [(p.angle_left, p.angle_right) for p in frames] == [
         (D("45.0"), D("45.0")), (D("45.0"), D("90.0")),
@@ -145,26 +156,28 @@ def test_g7_complete_bom_exact(demo_60_params: SystemParams) -> None:
     )
     panel = result.panels[0]
     assert (panel.width_mm, panel.height_mm, panel.area_m2, panel.weight_kg) == (
-        D("696"), D("1928"), D("1.3419"), D("13.42"),
+        D("666"), D("1898"), D("1.2641"), D("12.64"),
     )
     assert all(p.sku == "JQ-10" and p.bay_id == "G7" and p.leaf_id == panel.leaf_id
                for p in result.profile_cuts if p.role is ProfileRole.GLAZING_BEAD)
     assert result.glasses == []
     assert result.hardware_items[0].kit_sku == "KIT-DOOR-MULTIPOINT"
     assert result.hardware_items[0].contents[0].sku == "DEMO-LOCK-MULTIPOINT"
-    assert exact_weight_for_leaf(result, demo_60_params, "G7").total_weight_kg == D("32.35488")
-    assert result.leaf_weights[0].total_weight_kg == D("32.35")
+    assert exact_weight_for_leaf(result, demo_60_params, "G7").total_weight_kg == D("35.80668")
+    assert result.leaf_weights[0].total_weight_kg == D("35.81")
 
 
 @pytest.mark.parametrize("field,case,axis,expected", [
-    ("sliding_glazing_deduction_width_mm", "G5", "width_mm", "817.00"),
-    ("sliding_glazing_deduction_height_mm", "G5", "height_mm", "1807.00"),
-    ("door_leaf_side_clearance_mm", "G7", "width_mm", "690.00"),
+    ("sliding_glazing_deduction_width_mm", "G5", "width_mm", "894.50"),
+    ("sliding_glazing_deduction_height_mm", "G5", "height_mm", "1884.00"),
+    ("door_leaf_side_clearance_mm", "G7", "width_mm", "660.00"),
 ])
 def test_new_authorities_are_used_independently(
-    demo_60_params: SystemParams, field: str, case: str, axis: str, expected: str,
+    demo_60_params: SystemParams, demo_corredera_60_params: SystemParams,
+    field: str, case: str, axis: str, expected: str,
 ) -> None:
-    params = demo_60_params.model_copy(update={field: getattr(demo_60_params, field) + D("3.00")})
+    base = demo_corredera_60_params if case == "G5" else demo_60_params
+    params = base.model_copy(update={field: getattr(base, field) + D("3.00")})
     result = calculate_geometry(core_node(case), params)
     piece = result.panels[0] if case == "G7" else result.glasses[0]
     assert getattr(piece, axis) == D(expected)

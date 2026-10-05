@@ -37,6 +37,20 @@ class ProfileRole(str, Enum):
     THRESHOLD = "THRESHOLD"
     # Continuous edge channel seating a frameless glass pane (mandate §14).
     CHANNEL = "CHANNEL"
+    # Sliding leaf stiles/rails — a dedicated sash article when the sliding
+    # series does not reuse the casement sash profile.
+    SLIDING_SASH = "SLIDING_SASH"
+    # Meeting-stile (encuentro) profile on sliding leaves.
+    INTERLOCK = "INTERLOCK"
+    # Bottom rail/guide the sliding frame separates from its FRAME member.
+    RAIL = "RAIL"
+    # Entry-door leaf profile — heavier than a window sash.
+    DOOR_SASH = "DOOR_SASH"
+    # Ancillary members catalogued as cut lengths (finishing catalogue — D06).
+    FRAME_EXTENSION = "FRAME_EXTENSION"
+    SILL = "SILL"
+    COVER_TRIM = "COVER_TRIM"
+    SKIRT = "SKIRT"
 
 
 class NodeType(str, Enum):
@@ -66,6 +80,62 @@ class BayOpeningType(str, Enum):
 class SlidingPanelKind(str, Enum):
     MOVING = "MOVING"  # rides a rail — a sliding sash leaf
     FIXED = "FIXED"  # glazed in-frame — an "O" panel
+
+
+class SystemFamily(str, Enum):
+    """Fabrication family a profile system belongs to (D01).
+
+    The family decides which opening typologies the system can honestly
+    fabricate — the engine rejects an incompatible typology instead of
+    silently cutting a sliding leaf out of a casement series.
+    """
+
+    CASEMENT = "CASEMENT"  # ventana/puerta practicable y oscilobatiente
+    SLIDING = "SLIDING"  # corredera
+    LIFT_SLIDE = "LIFT_SLIDE"  # corredera elevable
+    DOOR = "DOOR"  # puerta de entrada
+    FACADE_FIXED = "FACADE_FIXED"  # fijo fachada
+
+
+_SLIDING_OPENINGS = frozenset(
+    {
+        BayOpeningType.SLIDING_2L,
+        BayOpeningType.SLIDING_3L,
+        BayOpeningType.SLIDING_4L,
+        BayOpeningType.SLIDING,
+    }
+)
+
+# Typologies each fabrication family can honestly cut (D01). Every family
+# keeps FIXED — a fixed lite in the family's frame is always fabricable;
+# operable leaves belong only to the family that physically drives them.
+FAMILY_OPENINGS: dict[SystemFamily, frozenset[BayOpeningType]] = {
+    SystemFamily.CASEMENT: frozenset(
+        {
+            BayOpeningType.FIXED,
+            BayOpeningType.TURN_LEFT,
+            BayOpeningType.TURN_RIGHT,
+            BayOpeningType.TILT_TURN_LEFT,
+            BayOpeningType.TILT_TURN_RIGHT,
+            BayOpeningType.AWNING,
+            # Casement series sell hinged door leaves (balcony/entry) — the
+            # leaf profile is the dedicated DOOR_SASH when the catalog
+            # carries one, else the standard sash.
+            BayOpeningType.DOOR_ENTRY,
+            BayOpeningType.DOOR_DOUBLE,
+        }
+    ),
+    SystemFamily.SLIDING: frozenset({BayOpeningType.FIXED}) | _SLIDING_OPENINGS,
+    SystemFamily.LIFT_SLIDE: frozenset({BayOpeningType.FIXED}) | _SLIDING_OPENINGS,
+    SystemFamily.DOOR: frozenset(
+        {BayOpeningType.FIXED, BayOpeningType.DOOR_ENTRY, BayOpeningType.DOOR_DOUBLE}
+    ),
+    SystemFamily.FACADE_FIXED: frozenset({BayOpeningType.FIXED}),
+}
+
+
+def openings_for_family(family: SystemFamily) -> frozenset[BayOpeningType]:
+    return FAMILY_OPENINGS[family]
 
 
 class SlidingPanel(EngineModel):
@@ -296,6 +366,93 @@ class GlazingBeadRule(EngineModel):
     cut_add_mm: Decimal
 
 
+class SlidingParams(EngineModel):
+    """Grouped view of a system's sliding parameters (D01).
+
+    Engine math keeps the flat SystemParams fields for compatibility; this
+    grouped shape is what the sliding family presents to catalog tooling
+    and API consumers, and what a sliding system must fully declare.
+    """
+
+    rail_type: RailType = RailType.DUAL
+    rail_count: int | None = None
+    pulley_height_mm: Decimal = Decimal("12.00")
+    central_overlap_mm: Decimal = Decimal("35.00")
+    sliding_lateral_clearance_mm: Decimal = Decimal("0.00")
+    sliding_end_add_mm: Decimal = Decimal("6.00")
+    sliding_glazing_deduction_width_mm: Decimal | None = None
+    sliding_glazing_deduction_height_mm: Decimal | None = None
+
+
+class ProfileCutRule(EngineModel):
+    """Declared cut convention for one profile role (D01).
+
+    Geometry owns the physical cut sequence; the rule carries the catalog's
+    declared convention so ingestion, readiness and the workspace can check
+    and display it. The engine consumes `rounding_mm` (cut quantum) and
+    `interlock_deduction_mm` (meeting-stile length deduction); the declared
+    angle/welded-ends pair is verified by catalog tooling against the
+    convention the engine actually cuts.
+    """
+
+    role: ProfileRole
+    cut_angle_deg: Decimal = Decimal("45.0")
+    welded_ends: int | None = None
+    interlock_deduction_mm: Decimal = Decimal("0")
+    rounding_mm: Decimal = Field(default=Decimal("0.01"), ge=Decimal("0.01"))
+    # Compatible reinforcement article the catalog declares for the role.
+    reinforcement_sku: str | None = None
+
+
+class ReinforcementRule(EngineModel):
+    """Steel reinforcement requirement as catalog data (D01).
+
+    A rule fires when its role, finish class and member cut length match:
+    `finish_class` picks the finish domain — WHITE covers unfoiled white
+    members, NON_WHITE covers foiled/dark members (mandatory by regulation),
+    ALL covers both. No matching declared rule means the member runs
+    unreinforced — the catalog stated so. `mandatory=False` marks an
+    informative recommendation; the deterministic BOM only emits required
+    steel.
+    """
+
+    role: ProfileRole
+    finish_class: Literal["ALL", "WHITE", "NON_WHITE"] = "ALL"
+    min_length_mm: Decimal = Field(default=Decimal("0"), ge=Decimal("0"))
+    mandatory: bool = True
+    # Overrides the article's own reinforcement_sku when the role needs a
+    # specific steel (e.g. heavier section for long members).
+    reinforcement_sku: str | None = None
+    # Extra length deduction on top of welding loss + gap (topes, acople).
+    cut_deduction_mm: Decimal = Field(default=Decimal("0"), ge=Decimal("0"))
+    # Fastening declared in BOM: screws per metre of reinforced member.
+    screws_per_m: Decimal | None = Field(default=None, ge=Decimal("0"))
+    screw_sku: str | None = None
+
+    @model_validator(mode="after")
+    def _screw_sku_declared_when_counted(self) -> "ReinforcementRule":
+        if self.screws_per_m is not None and not (self.screw_sku or "").strip():
+            raise ValueError("screw_sku is required when screws_per_m is declared")
+        return self
+
+
+class TypologyLimit(EngineModel):
+    """Leaf dimensional envelope for one typology on a system (D01).
+
+    Nulls mean the catalog declared no bound on that axis — UNKNOWN stays
+    honest; the engine only enforces declared bounds.
+    """
+
+    opening_type: str
+    min_leaf_width_mm: Decimal | None = None
+    max_leaf_width_mm: Decimal | None = None
+    min_leaf_height_mm: Decimal | None = None
+    max_leaf_height_mm: Decimal | None = None
+    max_leaf_weight_kg: Decimal | None = None
+    # Max finished leaf height/width ratio (slenderness).
+    max_aspect_ratio: Decimal | None = None
+
+
 class PanelRule(EngineModel):
     sku: str
     name: str
@@ -333,6 +490,10 @@ class SystemParams(EngineModel):
     system_code: str
     depth_mm: Decimal
     material: MaterialType = MaterialType.PVC
+    # Fabrication family — gates which opening typologies the system may
+    # cut (FAMILY_OPENINGS). Declared in the catalog; the engine rejects an
+    # incompatible typology instead of emitting a fake cut.
+    system_family: SystemFamily = SystemFamily.CASEMENT
     effective_profile_articles: dict[ProfileRole, EffectiveProfileArticle]
     glazing_bead_rules: dict[Decimal, GlazingBeadRule]
     # Fabrication data the catalog must declare — the engine has no invented
@@ -359,10 +520,49 @@ class SystemParams(EngineModel):
     # Finishes the series actually sells — the estimator picks only declared
     # ones; every non-WHITE finish consumes the foil clearances.
     finishes: tuple[str, ...] = ("WHITE",)
-    sliding_glazing_deduction_width_mm: Decimal
-    sliding_glazing_deduction_height_mm: Decimal
-    door_leaf_side_clearance_mm: Decimal
+    # Sliding/door fabrication data — required only on families that can
+    # emit the opening; a facade or pure-casement series may leave them
+    # undeclared (None) and the consumer raises when exercised.
+    sliding_glazing_deduction_width_mm: Decimal | None = None
+    sliding_glazing_deduction_height_mm: Decimal | None = None
+    door_leaf_side_clearance_mm: Decimal | None = None
     available_panel_rules: dict[str, PanelRule] = Field(default_factory=dict)
+    # Declared catalog rules (D01): cut conventions per role, reinforcement
+    # requirements per role+finish, and leaf dimensional limits per
+    # typology. Empty maps mean the catalog never declared them — the
+    # engine keeps its canonical behaviour and reports the gap, it never
+    # invents the data.
+    cut_rules: dict[ProfileRole, ProfileCutRule] = Field(default_factory=dict)
+    reinforcement_rules: list[ReinforcementRule] = Field(default_factory=list)
+    typology_limits: dict[str, TypologyLimit] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _family_data_coherence(self) -> "SystemParams":
+        """Sliding glazing deductions must exist on sliding-capable families;
+        they are meaningless on the rest."""
+        if self.system_family in (SystemFamily.SLIDING, SystemFamily.LIFT_SLIDE) and (
+            self.sliding_glazing_deduction_width_mm is None
+            or self.sliding_glazing_deduction_height_mm is None
+        ):
+            raise ValueError(
+                "sliding_glazing_deduction_* is required for sliding families"
+            )
+        return self
+
+    @property
+    def sliding(self) -> SlidingParams:
+        """Grouped sliding parameter view (D01) — computed fresh so
+        model_copy overrides on the flat fields stay visible."""
+        return SlidingParams(
+            rail_type=self.rail_type,
+            rail_count=self.rail_count,
+            pulley_height_mm=self.pulley_height_mm,
+            central_overlap_mm=self.central_overlap_mm,
+            sliding_lateral_clearance_mm=self.sliding_lateral_clearance_mm,
+            sliding_end_add_mm=self.sliding_end_add_mm,
+            sliding_glazing_deduction_width_mm=self.sliding_glazing_deduction_width_mm,
+            sliding_glazing_deduction_height_mm=self.sliding_glazing_deduction_height_mm,
+        )
 
 
 class ParametricNode(EngineModel):

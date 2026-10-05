@@ -28,8 +28,23 @@
     "system_id": "3067da09-3119-5ad0-a1d5-498cd2dfd753"
   },
   "response": {
-    "calculation_hash": "sha256:3c1b79dbbfdc4d20445412669763a31734ae04d9fd0ce700b24f1e91b86e1ee3",
-    "fittings": [],
+    "calculation_hash": "sha256:20d958181e11b6c24f9262fca78e510556f8a068118dd3913621ce7e05ba74ad",
+    "fittings": [
+      {
+        "bay_id": null,
+        "kind": "REINFORCEMENT_SCREW",
+        "leaf_id": null,
+        "qty": 32,
+        "sku": "TORNILLO-4X16"
+      },
+      {
+        "bay_id": "bay_2",
+        "kind": "REINFORCEMENT_SCREW",
+        "leaf_id": null,
+        "qty": 12,
+        "sku": "TORNILLO-4X16"
+      }
+    ],
     "glasses": [
       {
         "area_m2": "0.8908",
@@ -76,8 +91,8 @@
         "infill_weight_kg": "12.84",
         "leaf_id": null,
         "pvc_weight_kg": "4.74",
-        "steel_weight_kg": "6.47",
-        "total_weight_kg": "26.55",
+        "steel_weight_kg": "4.30",
+        "total_weight_kg": "24.38",
         "weight_unknown_reasons": []
       }
     ],
@@ -221,16 +236,6 @@
         "qty": 1,
         "reinforcement_sku": null,
         "role": "MULLION_V",
-        "sagitta_mm": null
-      },
-      {
-        "bay_id": "bay_2",
-        "leaf_id": null,
-        "length_mm": "636.00",
-        "parent_profile_sku": "HOJA",
-        "qty": 2,
-        "reinforcement_sku": null,
-        "role": "SASH",
         "sagitta_mm": null
       },
       {

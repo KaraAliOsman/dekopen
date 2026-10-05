@@ -16,11 +16,26 @@ from django.db import DatabaseError, transaction
 
 from authentication.errors import contract_error
 from authentication.rls import catalog_backend
+from dekopen_engine.hardware import normalize_opening_type
+from dekopen_engine.models import BayOpeningType
 from documents.repository import documentary_backend
 from documents.storage import SupabaseDocumentStorage
 from catalogs import evidence as catalog_evidence
-from ingest.catalog_parser import ROLES, parse_catalog_lines
+from ingest.catalog_parser import ROLES, parse_ai_candidates, parse_catalog_lines
 from ingest.extract import extract_tagged, kind_for, safe_file_name, sniffed_kind
+from ingest.spreadsheet import (
+    ENTITY_CUT_RULE,
+    ENTITY_FINISH,
+    ENTITY_GLAZING,
+    ENTITY_HARDWARE,
+    ENTITY_LIMIT,
+    ENTITY_PRICE,
+    ENTITY_PROFILE,
+    ENTITY_REINFORCEMENT,
+    ENTITIES,
+    looks_like_template,
+    parse_catalog_spreadsheet,
+)
 from jobs import service as jobs_service
 from pricing.repository import rows, write
 
@@ -171,7 +186,13 @@ def _reconcile(org_id: UUID, candidates: list[dict]) -> None:
     """Annotate candidates against the org's existing articles: same-SKU rows
     surface as `existing` (current vs proposed) and differ-on-authority rows
     get `conflict` + a review warning — before anything can write."""
-    skus = sorted({str(c.get("sku")) for c in candidates if c.get("sku")})
+    skus = sorted(
+        {
+            str(c.get("sku"))
+            for c in candidates
+            if c.get("sku") and c.get("entity") in (None, ENTITY_PROFILE)
+        }
+    )
     if not skus:
         return
     existing = rows(
@@ -185,6 +206,8 @@ def _reconcile(org_id: UUID, candidates: list[dict]) -> None:
     for article in existing:
         by_sku.setdefault(article["sku"], []).append(article)
     for candidate in candidates:
+        if candidate.get("entity") not in (None, ENTITY_PROFILE):
+            continue
         matches = by_sku.get(candidate.get("sku"), [])
         if not matches:
             continue
@@ -219,7 +242,11 @@ def _reconcile(org_id: UUID, candidates: list[dict]) -> None:
 
 def _series_gaps(candidates: list[dict]) -> str | None:
     """Roles a workable profile series still lacks in this document."""
-    roles = {str(candidate.get("role")) for candidate in candidates}
+    roles = {
+        str(candidate.get("role"))
+        for candidate in candidates
+        if candidate.get("entity") in (None, ENTITY_PROFILE)
+    }
     missing = [role for role in _CORE_ROLES if role not in roles]
     return ",".join(missing) if missing and candidates else None
 
@@ -259,12 +286,19 @@ def extract_catalog_import(*, org_id: UUID, import_id: UUID, actor_id: UUID) -> 
     content = SupabaseDocumentStorage().download(row["storage_path"])
     warnings: list[str] = []
     audit_id = None
-    try:
-        tagged = extract_tagged(row["kind"], content)
-    except Exception:
-        tagged = None
-        warnings.append("catalog.source_parse_failed")
-    candidates = parse_catalog_lines(tagged or [])
+    candidates: list[dict] = []
+    if row["kind"] in ("XLSX", "CSV") and looks_like_template(row["kind"], content):
+        # The manual template is a structured source: per-sheet declared
+        # columns, per-row Spanish errors — never routed through prose guesses.
+        candidates, sheet_errors = parse_catalog_spreadsheet(row["kind"], content)
+        warnings.extend(sheet_errors)
+    else:
+        try:
+            tagged = extract_tagged(row["kind"], content)
+        except Exception:
+            tagged = None
+            warnings.append("catalog.source_parse_failed")
+        candidates = parse_catalog_lines(tagged or [])
     if not candidates:
         from ai_gateway.service import ProviderError, invoke
 
@@ -286,7 +320,7 @@ def extract_catalog_import(*, org_id: UUID, import_id: UUID, actor_id: UUID) -> 
                 },
             )
             audit_id = vision["audit_id"]
-            vision_candidates = parse_catalog_lines(str(vision["output"]).splitlines())
+            vision_candidates = parse_ai_candidates(str(vision["output"]))
             if vision_candidates:
                 candidates = vision_candidates
             else:
@@ -350,9 +384,197 @@ def mark_catalog_import_failed(*, org_id: UUID, import_id: UUID, code: str) -> N
             )
 
 
+def _insert_entity_row(
+    *, org_id: UUID, system_id: UUID, entity: str, fields: dict
+) -> tuple[str, object] | None:
+    """Write one non-PROFILE confirmed item to its authority table.
+
+    Returns (id, result) on insert, None when a uniqueness conflict skipped
+    the write — every table here uses NULLS NOT DISTINCT uniques, which an
+    ON CONFLICT arbiter cannot name, so conflicts resolve as DO NOTHING +
+    empty RETURNING."""
+    payload = {key: (_decimal_text(value)) for key, value in fields.items()}
+    if entity == ENTITY_CUT_RULE:
+        found = rows(
+            "INSERT INTO public.profile_cut_rules("
+            "system_id, org_id, role, cut_angle_deg, welded_ends,"
+            " interlock_deduction_mm, rounding_mm, reinforcement_sku,"
+            " data_provenance, review_pending)"
+            " VALUES(%s,%s,%s,%s,%s,%s,%s,%s,'IMPORT',TRUE) ON CONFLICT DO NOTHING"
+            " RETURNING id",
+            [
+                str(system_id), str(org_id), fields["role"],
+                payload.get("cut_angle_deg") or "45.00",
+                # welded_ends es INTEGER (0-2): un bool rompe en Postgres
+                # ("column is of type integer but expression is of type boolean").
+                fields.get("welded_ends") if not isinstance(fields.get("welded_ends"), bool)
+                else int(fields["welded_ends"]),
+                payload.get("interlock_deduction_mm") or "0.00",
+                payload.get("rounding_mm") or "0.01",
+                fields.get("reinforcement_sku") or None,
+            ],
+        )
+        return ("id", found[0]["id"]) if found else None
+    if entity == ENTITY_REINFORCEMENT:
+        found = rows(
+            "INSERT INTO public.profile_reinforcement_rules("
+            "system_id, org_id, role, finish_class, min_length_mm, mandatory,"
+            " reinforcement_sku, cut_deduction_mm, screws_per_m, screw_sku,"
+            " data_provenance, review_pending)"
+            " VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'IMPORT',TRUE)"
+            " ON CONFLICT DO NOTHING RETURNING id",
+            [
+                str(system_id), str(org_id), fields["role"],
+                fields.get("finish_class") or "ALL",
+                payload.get("min_length_mm") or "0.00",
+                bool(fields.get("mandatory", True)),
+                fields.get("reinforcement_sku") or None,
+                payload.get("cut_deduction_mm") or "0.00",
+                payload.get("screws_per_m"),
+                fields.get("screw_sku") or None,
+            ],
+        )
+        return ("id", found[0]["id"]) if found else None
+    if entity == ENTITY_LIMIT:
+        found = rows(
+            "INSERT INTO public.system_typology_limits("
+            "system_id, org_id, opening_type, min_leaf_width_mm,"
+            " max_leaf_width_mm, min_leaf_height_mm, max_leaf_height_mm,"
+            " max_leaf_weight_kg, max_aspect_ratio, data_provenance,"
+            " review_pending)"
+            " VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,'IMPORT',TRUE)"
+            " ON CONFLICT DO NOTHING RETURNING id",
+            [
+                str(system_id), str(org_id), fields["opening_type"],
+                payload.get("min_leaf_width_mm"),
+                payload.get("max_leaf_width_mm"),
+                payload.get("min_leaf_height_mm"),
+                payload.get("max_leaf_height_mm"),
+                payload.get("max_leaf_weight_kg"),
+                payload.get("max_aspect_ratio"),
+            ],
+        )
+        return ("id", found[0]["id"]) if found else None
+    if entity == ENTITY_GLAZING:
+        bead = rows(
+            "SELECT id FROM public.profile_articles"
+            " WHERE system_id=%s AND sku=%s"
+            " AND (org_id=%s OR org_id IS NULL) AND role='GLAZING_BEAD'",
+            [str(system_id), str(fields["bead_sku"]).upper(), str(org_id)],
+        )
+        if not bead:
+            raise CatalogImportError("catalog_bead_unknown")
+        found = rows(
+            "INSERT INTO public.glazing_bead_matrix("
+            "system_id, org_id, glass_thickness_mm, bead_article_id,"
+            " bead_width_mm, gasket_interior_mm, gasket_exterior_mm)"
+            " VALUES(%s,%s,%s,%s,%s,%s,%s)"
+            " ON CONFLICT (system_id, glass_thickness_mm) DO NOTHING RETURNING id",
+            [
+                str(system_id), str(org_id), payload["glass_thickness_mm"],
+                str(bead[0]["id"]), payload["bead_width_mm"],
+                payload.get("gasket_interior_mm") or "3.00",
+                payload.get("gasket_exterior_mm") or "3.00",
+            ],
+        )
+        return ("id", found[0]["id"]) if found else None
+    if entity == ENTITY_HARDWARE:
+        contents = fields.get("contents")
+        if not isinstance(contents, list):
+            contents = []
+        # La hoja lleva la tipología detallada (TILT_TURN_RIGHT); el kit la
+        # guarda como familia de herraje (TILT_TURN) — misma normalización
+        # del motor, constraint chk_kits_opening_type incluido.
+        try:
+            opening_family = normalize_opening_type(
+                BayOpeningType(str(fields["opening_type"]))
+            )
+        except (ValueError, KeyError):
+            raise CatalogImportError("catalog_opening_type_unknown")
+        found = rows(
+            "INSERT INTO public.hardware_kits("
+            "system_id, org_id, sku, name, opening_type, min_leaf_width_mm,"
+            " max_leaf_width_mm, min_leaf_height_mm, max_leaf_height_mm,"
+            " max_leaf_weight_kg, rail_type, carriages_qty, stay_arms_qty,"
+            " contents, data_provenance, review_pending)"
+            " VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,"
+            " 'IMPORT', TRUE) ON CONFLICT (system_id, sku) DO NOTHING RETURNING id",
+            [
+                str(system_id), str(org_id),
+                str(fields["sku"]).strip().upper(),
+                str(fields.get("name") or fields["sku"]),
+                opening_family,
+                payload["min_leaf_width_mm"], payload["max_leaf_width_mm"],
+                payload["min_leaf_height_mm"], payload["max_leaf_height_mm"],
+                payload["max_leaf_weight_kg"],
+                str(fields.get("rail_type") or "dual"),
+                int(fields.get("carriages_qty") or 0),
+                int(fields.get("stay_arms_qty") or 0),
+                json.dumps(contents, default=str),
+            ],
+        )
+        return ("id", found[0]["id"]) if found else None
+    return None
+
+
+def _decimal_text(value: object) -> str | None:
+    if value is None or value == "":
+        return None
+    return str(value)
+
+
+def _create_system(
+    *, org_id: UUID, fields: dict
+) -> UUID:
+    """A confirmed Sistemas row becomes an org-owned profile_systems row —
+    the only way an import may declare a new series."""
+    found = rows(
+        "INSERT INTO public.profile_systems("
+        "code, name, org_id, depth_mm, material, is_global, is_active,"
+        " system_family, finishes, sliding_glazing_deduction_width_mm,"
+        " sliding_glazing_deduction_height_mm, door_leaf_side_clearance_mm,"
+        " data_provenance, review_pending)"
+        " VALUES(%s,%s,%s,%s,%s,FALSE,TRUE,%s,%s::jsonb,%s,%s,%s,'IMPORT',TRUE)"
+        " ON CONFLICT DO NOTHING RETURNING id",
+        [
+            str(fields["code"]).strip().upper(),
+            str(fields["name"]).strip() or str(fields["code"]).strip().upper(),
+            str(org_id),
+            str(fields["depth_mm"]),
+            str(fields["material"]),
+            str(fields["system_family"]),
+            json.dumps(fields.get("finishes") or ["WHITE"]),
+            _decimal_text(fields.get("sliding_glazing_deduction_width_mm")) or "0",
+            _decimal_text(fields.get("sliding_glazing_deduction_height_mm")) or "0",
+            _decimal_text(fields.get("door_leaf_side_clearance_mm")) or "0",
+        ],
+    )
+    if not found:
+        existing = rows(
+            "SELECT id FROM public.profile_systems"
+            " WHERE org_id=%s AND code=%s",
+            [str(org_id), str(fields["code"]).strip().upper()],
+        )
+        if existing:
+            raise contract_error(
+                409, "catalog_system_exists",
+                "Ya existe un sistema con ese código en tu organización.",
+            )
+        raise contract_error(
+            422, "catalog_system_failed",
+            "No se pudo crear el sistema. Revisa los datos de la hoja Sistemas.",
+        )
+    return UUID(str(found[0]["id"]))
+
+
+def existing_id(found: list[dict]) -> UUID:
+    return UUID(str(found[0]["id"]))
+
+
 def confirm_catalog_import(
-    *, org_id: UUID, actor_id: UUID, import_id: UUID, system_id: UUID,
-    items: list[dict],
+    *, org_id: UUID, actor_id: UUID, import_id: UUID, system_id: UUID | None,
+    items: list[dict], new_system: dict | None = None,
+    cost_list_id: UUID | None = None,
 ) -> dict:
     """Human confirm — the only path from candidate to catalog authority.
 
@@ -384,18 +606,36 @@ def confirm_catalog_import(
         # A retried confirm continues the same target: earlier keys already
         # became articles in the stored system, so switching systems now would
         # split one import across two catalogs.
-        if row["system_id"] and str(row["system_id"]) != str(system_id):
+        if row["system_id"] and system_id and str(row["system_id"]) != str(system_id):
             raise contract_error(
                 409,
                 "catalog_system_changed",
                 "La importación ya tiene artículos en otro sistema; "
                 "confirma sobre el mismo sistema.",
             )
+        if new_system is not None:
+            if row["system_id"]:
+                raise contract_error(
+                    409, "catalog_system_changed",
+                    "La importación ya está ligada a un sistema existente.",
+                )
+            # The Sistemas sheet becomes an org-owned system in the same
+            # transaction; every other entity lands on it. catalog_backend:
+            # profile_systems is a catalog table (RLS grants live on the
+            # catalog role — without it the INSERT fails SQLSTATE 42501).
+            with catalog_backend():
+                system_id = _create_system(org_id=org_id, fields=new_system)
+        if system_id is None:
+            raise contract_error(
+                422, "catalog_system_required",
+                "Indica el sistema destino o declara uno nuevo en la hoja Sistemas.",
+            )
         # Articles on a global/shared system would be visible to every tenant
         # (the select policy opens global systems to all members) — the target
         # must be a system the organization owns.
         system = rows(
-            "SELECT id, material FROM public.profile_systems WHERE id=%s AND org_id=%s",
+            "SELECT id, material, finishes FROM public.profile_systems"
+            " WHERE id=%s AND org_id=%s",
             [str(system_id), str(org_id)],
         )
         if not system:
@@ -405,6 +645,7 @@ def confirm_catalog_import(
                 "El sistema destino debe pertenecer a tu organización.",
             )
         material = system[0]["material"]
+        finish_codes = list(_as_list(system[0].get("finishes")) or [])
         candidates_by_key = {
             str(candidate.get("key")): candidate
             for candidate in _as_list(row["candidates"])
@@ -420,9 +661,95 @@ def confirm_catalog_import(
             if key not in candidate_keys:
                 errors.append({"key": key, "code": "catalog_item_unknown"})
                 continue
-            sku = str(item["sku"]).strip().upper()
-            role = str(item["role"]).upper()
+            candidate = candidates_by_key[key]
+            if candidate.get("row_errors"):
+                # A row that failed parsing can never be confirmed — fix the
+                # file and re-upload; the review keeps the error visible.
+                errors.append({"key": key, "code": "catalog_row_invalid"})
+                continue
+            entity = str(item.get("entity") or candidate.get("entity") or ENTITY_PROFILE)
+            if entity == ENTITY_PRICE:
+                if cost_list_id is None:
+                    errors.append({"key": key, "code": "catalog_price_list_required"})
+                    continue
+                # Las columnas de la hoja Precios viajan dentro de `fields` —
+                # el item top-level solo lleva key/entity/sku/name.
+                price_fields = dict(item.get("fields") or candidate.get("fields") or {})
+                try:
+                    with transaction.atomic(), catalog_backend():
+                        inserted = rows(
+                            "INSERT INTO public.cost_list_items("
+                            "cost_list_id, org_id, sku, item_type, unit, unit_cost)"
+                            " VALUES(%s,%s,%s,%s,%s,%s)"
+                            " ON CONFLICT (cost_list_id, sku) DO NOTHING RETURNING id",
+                            [
+                                str(cost_list_id), str(org_id),
+                                str(
+                                    price_fields.get("purchase_sku") or item["sku"]
+                                ).strip().upper(),
+                                str(price_fields.get("item_type") or "PROFILE"),
+                                str(price_fields.get("unit") or "BAR"),
+                                str(price_fields["unit_cost"]),
+                            ],
+                        )
+                except (DatabaseError, KeyError):
+                    errors.append({"key": key, "code": "catalog_insert_failed"})
+                    continue
+                if not inserted:
+                    errors.append({"key": key, "code": "catalog_sku_conflict"})
+                    continue
+                created.append({"key": key, "item_id": str(inserted[0]["id"])})
+                done.add(key)
+                continue
+            if entity == ENTITY_FINISH:
+                finish_fields = dict(
+                    item.get("fields") or candidate.get("fields") or {}
+                )
+                code = str(
+                    finish_fields.get("finish_code") or item.get("sku") or ""
+                ).strip().upper()
+                if not code:
+                    errors.append({"key": key, "code": "catalog_item_unknown"})
+                    continue
+                finish_codes.append(code)
+                created.append({"key": key, "finish_code": code})
+                done.add(key)
+                continue
+            if entity == "SYSTEM":
+                # The Sistemas row was realized via new_system before the
+                # loop — the item just records the outcome.
+                created.append({"key": key, "entity": entity, "id": str(system_id)})
+                done.add(key)
+                continue
+            if entity != ENTITY_PROFILE:
+                if entity not in ENTITIES:
+                    errors.append({"key": key, "code": "catalog_entity_unknown"})
+                    continue
+                fields = dict(item.get("fields") or candidate.get("fields") or {})
+                try:
+                    with transaction.atomic(), catalog_backend():
+                        inserted = _insert_entity_row(
+                            org_id=org_id, system_id=system_id,
+                            entity=entity, fields=fields,
+                        )
+                except CatalogImportError as error:
+                    errors.append({"key": key, "code": error.code})
+                    continue
+                except (DatabaseError, KeyError, ValueError):
+                    errors.append({"key": key, "code": "catalog_insert_failed"})
+                    continue
+                if inserted is None:
+                    errors.append({"key": key, "code": "catalog_sku_conflict"})
+                    continue
+                created.append({"key": key, "entity": entity, "id": str(inserted[1])})
+                done.add(key)
+                continue
+            sku = str(item.get("sku") or "").strip().upper()
+            role = str(item.get("role") or "").upper()
             name = str(item.get("name") or "").strip() or sku
+            if not sku or item.get("face_width_mm") is None:
+                errors.append({"key": key, "code": "catalog_field_required"})
+                continue
             if role not in ROLES:
                 errors.append({"key": key, "code": "catalog_role_invalid"})
                 continue
@@ -486,6 +813,18 @@ def confirm_catalog_import(
             )
             created.append({"key": key, "article_id": str(article_id)})
             done.add(key)
+        # FINISH items landed as accumulated codes — merge them into the
+        # system's declared finishes in the same transaction.
+        pending_finishes = sorted(set(finish_codes))
+        if any(str(item.get("entity") or "") == ENTITY_FINISH for item in items):
+            with catalog_backend():
+                # RETURNING id: rows() is SELECT-only — a bare UPDATE crashes
+                # on cursor.description=None.
+                rows(
+                    "UPDATE public.profile_systems SET finishes=%s::jsonb"
+                    " WHERE id=%s AND org_id=%s RETURNING id",
+                    [json.dumps(pending_finishes), str(system_id), str(org_id)],
+                )
         if errors:
             # Retryable: persist what was created so the next confirm only
             # attempts the still-unresolved keys.

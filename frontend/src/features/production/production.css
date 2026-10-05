@@ -504,7 +504,9 @@
 
 .production-label-code {
   font-family: "IBM Plex Mono", monospace;
-  font-size: 0.85em;
+  /* 0.85em sobre el 0.8rem de .production-plan caía a ~10.9 px — bajo el piso.
+     Token fijo: 11 px es el mínimo legible de la Constitución. */
+  font-size: var(--type-micro);
 }
 
 .production-labels {
@@ -890,7 +892,8 @@ div:has(> table.production-plan) {
   color: var(--theme-accent-ink, #1d4e33);
   background: var(--theme-accent-soft, #e4f0e8);
   border: 1px solid var(--theme-accent, #2f6f4f);
-  font-size: 0.78em;
+  /* 0.78em medía ~10 px — bajo el piso legible de la Constitución. */
+  font-size: var(--type-micro);
   font-weight: 600;
   border-radius: var(--r-pill);
   padding: 0.05em 0.55em;
@@ -906,6 +909,11 @@ div:has(> table.production-plan) {
   margin: 0.4rem 0 0;
 }
 
+.production-stock-reserve {
+  /* Reserve/purchase tables can exceed a phone's width — scroll inside the
+     section like the packing and glass blocks. */
+  overflow-x: auto;
+}
 .production-stock-reserve h4 {
   margin: 0 0 0.5em;
   font-size: 0.95em;
@@ -928,6 +936,12 @@ div:has(> table.production-plan) {
   margin: 0 0 0.75rem;
   font-variant-numeric: tabular-nums;
   color: var(--text-dim, #5a6270);
+}
+.production-trace-body,
+.production-trace-stock {
+  /* Long ledger notes (wo-reserve:*, remnant ids) overflow on phones —
+     scroll inside the trace block instead of widening the page. */
+  overflow-x: auto;
 }
 .production-trace-plan table,
 .production-trace-stock table {

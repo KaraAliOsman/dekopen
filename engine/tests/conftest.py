@@ -5,7 +5,11 @@ from decimal import Decimal
 import pytest
 
 from dekopen_engine import BayOpeningType, NodeType, ParametricNode, SystemParams
-from engine.tests.catalog import demo_60_params as build_demo_60_params
+from engine.tests.catalog import (
+    alu_65_params as build_alu_65_params,
+    demo_60_params as build_demo_60_params,
+    demo_corredera_60_params as build_demo_corredera_60_params,
+)
 
 
 def d(value: str) -> Decimal:
@@ -15,6 +19,16 @@ def d(value: str) -> Decimal:
 @pytest.fixture(scope="session")
 def demo_60_params() -> SystemParams:
     return build_demo_60_params()
+
+
+@pytest.fixture(scope="session")
+def demo_corredera_60_params() -> SystemParams:
+    return build_demo_corredera_60_params()
+
+
+@pytest.fixture(scope="session")
+def alu_65_params() -> SystemParams:
+    return build_alu_65_params()
 
 
 def bay_node(

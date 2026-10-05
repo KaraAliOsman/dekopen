@@ -73,9 +73,11 @@ def test_g2_turn_is_exactly_zero_mm(
     sash_lengths = _profile_lengths(result, ProfileRole.SASH)
     _assert_exact_mm(sash_lengths[0], "702.00")
     _assert_exact_mm(sash_lengths[1], "1102.00")
+    # The declared white-member rule reinforces only members ≥ 1000 mm: the
+    # 702 mm horizontal stays bare.
     sash_steel = _reinforcement_lengths(result, ProfileRole.SASH)
-    _assert_exact_mm(sash_steel[0], "666.00")
-    _assert_exact_mm(sash_steel[1], "1066.00")
+    assert len(sash_steel) == 1
+    _assert_exact_mm(sash_steel[0], "1066.00")
     glass = result.glasses[0]
     _assert_exact_mm(glass.width_mm, "576.00")
     _assert_exact_mm(glass.height_mm, "976.00")

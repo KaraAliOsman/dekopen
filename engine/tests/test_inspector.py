@@ -204,7 +204,7 @@ def test_r14_pure_without_g10(config: InspectorConfig, mass: str, qty: int,
 def test_diagnostic_facts_do_not_relax_strict_calculation(demo_60_params: SystemParams,
                                                         config: InspectorConfig) -> None:
     kit = next(k for k in demo_60_params.available_hardware_kits if k.sku == "KIT-AWNING-16")
-    for changes, rule in [({"max_leaf_weight_kg": D("23.96")}, "R01"),
+    for changes, rule in [({"max_leaf_weight_kg": D("21.69")}, "R01"),
                            ({"max_leaf_width_mm": D("1")}, "R03")]:
         params = demo_60_params.model_copy(update={"available_hardware_kits": [kit.model_copy(update=changes)]})
         with pytest.raises(NoCompatibleHardwareKit):

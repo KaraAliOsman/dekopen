@@ -62,7 +62,7 @@ def test_r06_preflight_does_not_make_invalid_calculate_successful(monkeypatch: p
     assert any(f["rule_id"] == "R06" and f["severity"] == "RED" for f in response.data["findings"])
 
 
-@pytest.mark.parametrize("updates,rule", [({"max_leaf_weight_kg": D("23.96")}, "R01"),
+@pytest.mark.parametrize("updates,rule", [({"max_leaf_weight_kg": D("20.00")}, "R01"),
                                          ({"max_leaf_width_mm": D("1")}, "R03")])
 def test_hardware_diagnostic_http_preserves_strict_error(monkeypatch: pytest.MonkeyPatch,
     config: InspectorConfig, updates: dict[str, object], rule: str) -> None:

@@ -122,6 +122,7 @@ def test_openapi_contains_only_authorized_shot_11_paths_and_bearer_security() ->
         "/api/v1/catalog-imports/",
         "/api/v1/catalog-imports/{import_id}/",
         "/api/v1/catalog-imports/{import_id}/confirm/",
+        "/api/v1/catalog-imports/template/",
         "/api/v1/production/orders/",
         "/api/v1/production/prep/",
         "/api/v1/production/orders/{order_id}/",
