@@ -215,7 +215,7 @@ def seed_unpriced_project(org, owner, system=None):
     system = system or one("SELECT id FROM public.profile_systems WHERE code='DEMO_60'")['id']
     project = one('INSERT INTO public.projects(org_id,code,name,client_name,created_by) '
                   'VALUES(%s,%s,%s,%s,%s) RETURNING id',[org,str(uuid4()),'Commercial gate','Fixture',owner])['id']
-    tree = {'id':'root','type':'BAY','opening_type':'FIXED','glass_spec':'4-12-4 Float Incoloro',
+    tree = {'id':'root','type':'BAY','opening_type':'FIXED','glass_spec':'4-16-4 Float Incoloro',
             'glass_thickness_mm':'24.00','glass_article_sku':'VIDRIO-BASE'}
     one('INSERT INTO public.project_positions(org_id,project_id,position_index,quantity,typology,system_id,'
         'width_mm,height_mm,parametric_tree,bom_snapshot) VALUES(%s,%s,1,1,%s,%s,1000,1000,%s::jsonb,%s::jsonb) RETURNING id',
@@ -292,9 +292,9 @@ def test_composite_pricing_requires_exact_typology_configuration(commercial_rows
     tree={
         'id':'S1','type':'SPLIT_V','split_offset_mm':'500.00','mullion_profile_sku':'POSTE-V',
         'children':[
-            {'id':'B1','type':'BAY','opening_type':'FIXED','glass_spec':'4-12-4 Float Incoloro',
+            {'id':'B1','type':'BAY','opening_type':'FIXED','glass_spec':'4-16-4 Float Incoloro',
              'glass_thickness_mm':'24.00','glass_article_sku':'VIDRIO-BASE'},
-            {'id':'B2','type':'BAY','opening_type':'FIXED','glass_spec':'4-12-4 Float Incoloro',
+            {'id':'B2','type':'BAY','opening_type':'FIXED','glass_spec':'4-16-4 Float Incoloro',
              'glass_thickness_mm':'24.00','glass_article_sku':'VIDRIO-BASE'},
         ],
     }
@@ -348,7 +348,7 @@ def test_legacy_draft_rejects_submitted_typology_mismatch(commercial_rows):
         'positions':[{'position_index':1,'quantity':1,'typology':'TURN','system_id':str(system),
             'nominal_width_mm':'1000.00','nominal_height_mm':'1000.00','color':'WHITE',
             'parametric_tree':{'id':'B1','type':'BAY','opening_type':'FIXED',
-                'glass_spec':'4-12-4 Float Incoloro','glass_thickness_mm':'24.00',
+                'glass_spec':'4-16-4 Float Incoloro','glass_thickness_mm':'24.00',
                 'glass_article_sku':'VIDRIO-BASE'}}]},format='json')
     assert response.status_code==400
     assert response.json()['error']['code']=='typology_mismatch'

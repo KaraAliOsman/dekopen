@@ -60,3 +60,14 @@ Append-only chronology. Keep newest entries at the bottom.
 - Ingesta dual: plantilla XLSX/CSV manual (`backend/ingest/spreadsheet.py`, errores por fila en español) y candidatos IA convergen en la misma revisión humana; baja confianza → UNKNOWN y nada se publica sin confirmar.
 - Catálogo DEMO enriquecido y marcado `is_demo`: DEMO_70 (PVC abatir), ALU_CORREDERA_70 (aluminio corredera) y DEMO_CORREDERA_60 (PVC corredera separada de DEMO_60 por la migración `20261229000002`, con matriz de juntas 24 mm JQ-CORR-10); los tres llevan `chamber_clearance_mm` y las 14 `inspector_rule_configs` que exige el freeze documental.
 - Verificado: `make lint`, `typecheck`, `test` y `build` verdes; `make test-db` (pgTAP 940, integración RLS, e2e) verde tras contar los nuevos catálogos (59 artículos, 18 juntas, 84 configs inspector).
+
+## [2026-10-05] D02 | vidrios de verdad
+
+- `GlassComposition` estructurada (capas exterior→interior: láminas, intercapas PVB `+`, cámaras con gas) con notación ida-vuelta; `glass_products` persiste el stack JSONB y `project_positions.glass_composition` + `glass_review_pending` registran lo resuelto/UNKNOWN.
+- Autoridad de espesor: la composición que resuelve `resolve_composition` gobierna siempre el paquete (`thickness_source="COMPOSITION"`); un `glass_thickness_mm` declarado que discrepa queda como `thickness_declared_mm` con aviso `GLASS-THICKNESS-MISMATCH` — deriva visible, nunca reescritura silenciosa.
+- Derivados en motor: espesor total/neto, peso (2,50 kg/m²·mm lámina + 1,07 PVB), junquillo vía `glazing_bead_matrix`, corte luz − deducciones, área mínima facturable por producto y recargos (templado, canto pulido, perforación, palillaje) en `glass_price_lines`.
+- Reglas NCh 135/2 como datos org (`glass_safety_rules`, `glass_type_limits`): WARNING avisa, MANDATORY bloquea; semilla `SEED_SYNTHETIC`+`review_pending`, texto oficial por ingesta D01 (hojas "Seguridad vidrio"/"Límites vidrio").
+- Pedido al vidriero `orders/{id}/glass-order/?output=pdf|csv`: mm enteros, etiquetas `P{pos}-U{u}-I{i}`, QR, fusión `?orders=` de OT misma versión, piezas pendientes separadas.
+- Selector de vidrio en canvas: modo básico (tarjetas compatibles) y avanzado (compositor de capas con validación en vivo y corte a escala); aviso NCh 135 en el vano exacto con alternativa de un click.
+- Corregido en caliente: `?format=` es parámetro reservado de DRF (usar `?output=`); pgTAP `plan()` debe igualar aserciones; `NULL::numeric` para columnas VALUES vacías; el fixture legacy `4-12-4`+24mm quedó cubierto por la regla de autoridad de espesor.
+- Comparación documental unificada: `documentary_canonical.numeric_collapsed` + `same_documentary_value` (los snapshots canónicos cuantizan `"16.00"` y los `model_dump` crudos guardan `"16"`); `documents` y `projects` delegan — sin esto, `start_successor` rechazaba con `revision_source_drift` 409 por la misma magnitud en doble formato.

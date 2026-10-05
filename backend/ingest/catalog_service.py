@@ -22,11 +22,19 @@ from documents.repository import documentary_backend
 from documents.storage import SupabaseDocumentStorage
 from catalogs import evidence as catalog_evidence
 from ingest.catalog_parser import ROLES, parse_ai_candidates, parse_catalog_lines
+from dekopen_engine.glass_composition import (
+    composition_to_dict,
+    parse_glass_notation,
+)
 from ingest.extract import extract_tagged, kind_for, safe_file_name, sniffed_kind
 from ingest.spreadsheet import (
     ENTITY_CUT_RULE,
     ENTITY_FINISH,
     ENTITY_GLAZING,
+    ENTITY_GLASS_LIMIT,
+    ENTITY_GLASS_PRODUCT,
+    ENTITY_GLASS_SAFETY,
+    ENTITY_GLASS_SURCHARGE,
     ENTITY_HARDWARE,
     ENTITY_LIMIT,
     ENTITY_PRICE,
@@ -511,6 +519,127 @@ def _insert_entity_row(
                 int(fields.get("carriages_qty") or 0),
                 int(fields.get("stay_arms_qty") or 0),
                 json.dumps(contents, default=str),
+            ],
+        )
+        return ("id", found[0]["id"]) if found else None
+    if entity == ENTITY_GLASS_PRODUCT:
+        # The sheet declares the notation; the engine derives the structured
+        # stack + thickness/weight — supplier-declared numbers are optional
+        # columns, never trusted over the computed stack.
+        composition = parse_glass_notation(str(fields.get("notation") or ""))
+        composition_payload: dict | None = None
+        if composition is not None:
+            composition_payload = composition_to_dict(composition)
+        found = rows(
+            "INSERT INTO public.glass_products("
+            "system_id, org_id, sku, commercial_name, notation, composition,"
+            " total_thickness_mm, safety_class, ug_w_m2k, g_value,"
+            " light_transmission_pct, weight_kg_m2, min_billable_area_m2,"
+            " price_tier, supplier_name, data_provenance, review_pending)"
+            " VALUES(%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s,%s,%s,%s,%s,"
+            " 'IMPORT',TRUE) ON CONFLICT DO NOTHING RETURNING id",
+            [
+                str(system_id), str(org_id),
+                str(fields["sku"]).strip().upper(),
+                str(fields.get("name") or fields["sku"]),
+                str(fields["notation"]),
+                json.dumps(composition_payload, default=str)
+                if composition_payload is not None else None,
+                str(composition.total_thickness_mm())
+                if composition is not None else None,
+                fields.get("safety_class") or None,
+                payload.get("ug_w_m2k"),
+                payload.get("g_value"),
+                payload.get("light_transmission_pct"),
+                payload.get("weight_kg_m2")
+                or (str(composition.weight_kg_m2())
+                    if composition is not None else None),
+                payload.get("min_billable_area_m2"),
+                payload.get("price_tier"),
+                str(fields.get("supplier") or "") or None,
+            ],
+        )
+        return ("id", found[0]["id"]) if found else None
+    if entity == ENTITY_GLASS_SAFETY:
+        found = rows(
+            "INSERT INTO public.glass_safety_rules("
+            "org_id, code, title, message, applies_openings, sill_below_mm,"
+            " min_area_m2, requires_door, requires_adjacent_door,"
+            " required_safety, severity, source_ref, data_provenance,"
+            " review_pending)"
+            " VALUES(%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s,%s,%s,'IMPORT',TRUE)"
+            " ON CONFLICT DO NOTHING RETURNING id",
+            [
+                str(org_id),
+                str(fields["code"]).strip().upper(),
+                str(fields["title"]),
+                str(fields.get("message") or "") or None,
+                json.dumps(_as_list(fields.get("applies_openings"))),
+                payload.get("sill_below_mm"),
+                payload.get("min_area_m2"),
+                bool(fields.get("requires_door")),
+                bool(fields.get("requires_adjacent_door")),
+                str(fields["required_safety"]),
+                str(fields.get("severity") or "WARNING"),
+                str(fields.get("source_ref") or "") or None,
+            ],
+        )
+        return ("id", found[0]["id"]) if found else None
+    if entity == ENTITY_GLASS_SURCHARGE:
+        # Resolve the declared product inside the same org+system scope the
+        # engine loader applies (org rows outrank global, system rows
+        # outrank cross-system for a sku).
+        product = rows(
+            "SELECT id FROM public.glass_products "
+            "WHERE sku=%s AND is_active=TRUE "
+            "AND (org_id=%s OR org_id IS NULL) "
+            "AND (system_id=%s OR system_id IS NULL) "
+            "ORDER BY org_id NULLS LAST, system_id NULLS LAST LIMIT 1",
+            [
+                str(fields["product_sku"]).strip().upper(),
+                str(org_id), str(system_id),
+            ],
+        )
+        if not product:
+            raise CatalogImportError("catalog_glass_product_not_found")
+        found = rows(
+            "INSERT INTO public.glass_product_surcharges("
+            "product_id, org_id, kind, unit, unit_cost, currency, label,"
+            " data_provenance, review_pending)"
+            " VALUES(%s,%s,%s,%s,%s,%s,%s,'IMPORT',TRUE)"
+            " ON CONFLICT DO NOTHING RETURNING id",
+            [
+                str(product[0]["id"]), str(org_id),
+                str(fields["kind"]), str(fields["unit"]),
+                payload.get("unit_cost"),
+                str(fields.get("currency") or "") or None,
+                str(fields.get("label") or "") or None,
+            ],
+        )
+        return ("id", found[0]["id"]) if found else None
+    if entity == ENTITY_GLASS_LIMIT:
+        found = rows(
+            "INSERT INTO public.glass_type_limits("
+            "org_id, code, lamina_kind, thickness_min_mm, thickness_max_mm,"
+            " min_side_mm, max_side_mm, min_area_m2, max_area_m2,"
+            " max_aspect_ratio, requires_exact_cut, severity, source_ref,"
+            " data_provenance, review_pending)"
+            " VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'IMPORT',TRUE)"
+            " ON CONFLICT DO NOTHING RETURNING id",
+            [
+                str(org_id),
+                str(fields["code"]).strip().upper(),
+                str(fields["lamina_kind"]),
+                payload.get("thickness_min_mm"),
+                payload.get("thickness_max_mm"),
+                payload.get("min_side_mm"),
+                payload.get("max_side_mm"),
+                payload.get("min_area_m2"),
+                payload.get("max_area_m2"),
+                payload.get("max_aspect_ratio"),
+                bool(fields.get("requires_exact_cut")),
+                str(fields.get("severity") or "WARNING"),
+                str(fields.get("source_ref") or "") or None,
             ],
         )
         return ("id", found[0]["id"]) if found else None

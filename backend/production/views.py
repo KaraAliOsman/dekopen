@@ -538,6 +538,79 @@ class ProductionOrderLabelsView(APIView):
         return Response(output)
 
 
+class ProductionOrderGlazierOrderView(APIView):
+    """D02 pedido al vidriero: cut list + per-piece QR labels rendered from
+    sealed evidence. ``?output=csv`` switches to the flat CSV export
+    (``format`` would collide with DRF's reserved format-override query
+    param and 404 before the view runs);
+    ``?orders=<uuid,uuid>`` merges sibling work orders of the same frozen
+    version into one batch (the 'lote')."""
+
+    @extend_schema(
+        operation_id="production_order_glazier_order",
+        parameters=[
+            ACTIVE_ORGANIZATION_HEADER,
+            OpenApiParameter(
+                name="output",
+                type=OpenApiTypes.STR,
+                enum=["pdf", "csv"],
+                default="pdf",
+                location=OpenApiParameter.QUERY,
+            ),
+            OpenApiParameter(
+                name="orders",
+                type=OpenApiTypes.STR,
+                required=False,
+                location=OpenApiParameter.QUERY,
+                description="UUIDs adicionales de órdenes de la misma versión (lote).",
+            ),
+        ],
+        request=None,
+        responses={
+            (200, "application/pdf"): OpenApiTypes.STR,
+            (200, "text/csv"): OpenApiTypes.STR,
+            **ERRORS,
+        },
+        tags=["production"],
+    )
+    def get(self, request, order_id: UUID):
+        output_format = request.query_params.get("output") or "pdf"
+        if output_format not in ("pdf", "csv"):
+            raise contract_error(
+                400,
+                "invalid_glazier_order_format",
+                "El formato del pedido al vidriero debe ser pdf o csv.",
+            )
+        extra_ids: list[UUID] = []
+        for value in (request.query_params.get("orders") or "").split(","):
+            value = value.strip()
+            if not value:
+                continue
+            try:
+                extra_ids.append(UUID(value))
+            except ValueError:
+                raise contract_error(
+                    400,
+                    "invalid_glazier_order_batch",
+                    "La lista de órdenes del lote contiene un identificador inválido.",
+                )
+        with public_production_errors():
+            with documentary_scope(request, _READERS) as (_, _, org_id):
+                from production.glass_order import glazier_order
+
+                content, content_type, download_name = glazier_order(
+                    org_id=org_id,
+                    order_id=order_id,
+                    extra_order_ids=extra_ids,
+                    output_format=output_format,
+                )
+        response = HttpResponse(content, content_type=content_type)
+        response["Content-Disposition"] = (
+            f'attachment; filename="{download_name}"'
+        )
+        return response
+
+
 class ProductionOrderDispatchView(APIView):
     @extend_schema(
         operation_id="production_order_dispatch",

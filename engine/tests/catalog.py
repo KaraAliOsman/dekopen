@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import Literal
 
 
 from dekopen_engine import (
@@ -19,6 +20,13 @@ from dekopen_engine import (
     SystemFamily,
     SystemParams,
     TypologyLimit,
+)
+from dekopen_engine.glass_composition import parse_glass_notation
+from dekopen_engine.models import (
+    GlassProduct,
+    GlassSafetyRule,
+    GlassSurchargeRate,
+    GlassTypeLimit,
 )
 
 
@@ -160,6 +168,14 @@ def demo_60_params() -> SystemParams:
                 gasket_exterior_mm=d("2.00"),
                 cut_add_mm=d("9.00"),
             ),
+            d("6.38"): GlazingBeadRule(
+                glass_thickness_mm=d("6.38"),
+                bead_article=bead_24,
+                bead_width_mm=d("24.00"),
+                gasket_interior_mm=d("3.00"),
+                gasket_exterior_mm=d("3.00"),
+                cut_add_mm=d("9.00"),
+            ),
             d("20.00"): GlazingBeadRule(
                 glass_thickness_mm=d("20.00"),
                 bead_article=bead_14,
@@ -233,8 +249,11 @@ def demo_60_params() -> SystemParams:
             # White members need steel only from one metre up; foiled/dark
             # members are reinforced unconditionally (thermal expansion).
             ReinforcementRule(
-                role=role, finish_class="WHITE", min_length_mm=d("1000.00"),
-                screws_per_m=d("4.00"), screw_sku="TORNILLO-4X16",
+                role=role,
+                finish_class="WHITE",
+                min_length_mm=d("1000.00"),
+                screws_per_m=d("4.00"),
+                screw_sku="TORNILLO-4X16",
             )
             for role in (
                 ProfileRole.FRAME,
@@ -246,8 +265,11 @@ def demo_60_params() -> SystemParams:
         ]
         + [
             ReinforcementRule(
-                role=role, finish_class="NON_WHITE", min_length_mm=d("0.00"),
-                screws_per_m=d("4.00"), screw_sku="TORNILLO-4X16",
+                role=role,
+                finish_class="NON_WHITE",
+                min_length_mm=d("0.00"),
+                screws_per_m=d("4.00"),
+                screw_sku="TORNILLO-4X16",
             )
             for role in (
                 ProfileRole.FRAME,
@@ -292,7 +314,205 @@ def demo_60_params() -> SystemParams:
                 max_leaf_weight_kg=d("120.00"),
             ),
         },
+        glass_products=_demo_60_glass_products(),
+        glass_safety_rules=_demo_glass_safety_rules(),
+        glass_type_limits=_demo_glass_type_limits(),
     )
+
+
+def _demo_60_glass_products() -> dict[str, GlassProduct]:
+    """DEMO_60 glass catalog — parity with `supabase/seed.sql` D02 rows
+    (compositions built by the same engine parser)."""
+
+    def product(
+        sku: str,
+        name: str,
+        notation: str,
+        *,
+        safety_class: str | None = None,
+        ug_w_m2k: str | None = None,
+        g_value: str | None = None,
+        light_transmission_pct: str | None = None,
+        weight_kg_m2: str,
+        price_tier: int,
+        review_pending: bool,
+        surcharges: list[GlassSurchargeRate] | None = None,
+    ) -> GlassProduct:
+        return GlassProduct(
+            sku=sku,
+            name=name,
+            composition=parse_glass_notation(notation),
+            safety_class=safety_class,
+            ug_w_m2k=d(ug_w_m2k) if ug_w_m2k is not None else None,
+            g_value=d(g_value) if g_value is not None else None,
+            light_transmission_pct=(
+                d(light_transmission_pct) if light_transmission_pct is not None else None
+            ),
+            weight_kg_m2=d(weight_kg_m2),
+            min_area_m2=d("0.3000"),
+            price_tier=price_tier,
+            review_pending=review_pending,
+            surcharges=list(surcharges or []),
+        )
+
+    def rate(
+        kind: Literal["TEMPERED", "EDGE_POLISH", "DRILL", "PALILLAJE"],
+        unit: Literal["M2", "M", "EA", "CROSS"],
+        amount: str,
+        label: str,
+    ) -> GlassSurchargeRate:
+        return GlassSurchargeRate(
+            kind=kind, unit=unit, amount=d(amount), label=label, currency="CLP"
+        )
+
+    return {
+        "VIDRIO-BASE": product(
+            "VIDRIO-BASE",
+            "Termopanel incoloro 4·16·4",
+            "4-16-4 Float Incoloro",
+            weight_kg_m2="20.000",
+            price_tier=2,
+            review_pending=False,
+            surcharges=[
+                rate("DRILL", "EA", "3500.0000", "Perforación"),
+                rate("PALILLAJE", "CROSS", "1500.0000", "Palillaje interior — por cruce"),
+            ],
+        ),
+        "DVH-20": product(
+            "DVH-20",
+            "Termopanel incoloro 4·12·4",
+            "4-12-4 Float Incoloro",
+            weight_kg_m2="20.000",
+            price_tier=2,
+            review_pending=False,
+            surcharges=[
+                rate("PALILLAJE", "CROSS", "1500.0000", "Palillaje interior — por cruce"),
+            ],
+        ),
+        "VIDRIO-LOWE-24": product(
+            "VIDRIO-LOWE-24",
+            "Termopanel Low-E 4·16·4",
+            "4 / 16 Ar / 4 Low-E (c3)",
+            ug_w_m2k="1.400",
+            g_value="0.630",
+            light_transmission_pct="80.00",
+            weight_kg_m2="20.000",
+            price_tier=4,
+            review_pending=True,
+            surcharges=[
+                rate("DRILL", "EA", "3500.0000", "Perforación"),
+                rate("PALILLAJE", "CROSS", "1500.0000", "Palillaje interior — por cruce"),
+            ],
+        ),
+        "VIDRIO-TEMP-6": product(
+            "VIDRIO-TEMP-6",
+            "Templado incoloro 6 mm",
+            "6 templado",
+            safety_class="B",
+            weight_kg_m2="15.000",
+            price_tier=3,
+            review_pending=True,
+            surcharges=[
+                rate("EDGE_POLISH", "M", "1200.0000", "Canto pulido"),
+                rate("TEMPERED", "M2", "5500.0000", "Recargo templado"),
+            ],
+        ),
+        "VIDRIO-LAM-638": product(
+            "VIDRIO-LAM-638",
+            "Laminado seguridad 3+3",
+            "3+3 PVB 0,38",
+            safety_class="A",
+            weight_kg_m2="15.407",
+            price_tier=4,
+            review_pending=True,
+            surcharges=[
+                rate("EDGE_POLISH", "M", "1200.0000", "Canto pulido"),
+            ],
+        ),
+    }
+
+
+def _demo_glass_safety_rules() -> list[GlassSafetyRule]:
+    """Seeded NCh 135-family WARNING rules (synthetic pending official
+    text) — parity with `supabase/seed.sql`. No floor-distance rule is
+    seeded: the model knows the pane's offset to the unit base, never the
+    floor height of the installation."""
+    return [
+        GlassSafetyRule(
+            code="GLASS-SAFETY-ADJ-DOOR",
+            title="Paño lateral junto a puerta",
+            message="El paño lateral de una puerta debería llevar vidrio de seguridad.",
+            requires_adjacent_door=True,
+            required_safety="SAFETY_GLASS",
+            severity="WARNING",
+            source_ref="NCh 135/2 — referencia sintética pendiente de norma oficial",
+            review_pending=True,
+        ),
+        GlassSafetyRule(
+            code="GLASS-SAFETY-DOOR",
+            title="Paño vidriado en puerta",
+            message=(
+                "El paño de una puerta vidriada debería llevar vidrio de "
+                "seguridad (templado o laminado)."
+            ),
+            requires_door=True,
+            required_safety="SAFETY_GLASS",
+            severity="WARNING",
+            source_ref="NCh 135/2 — referencia sintética pendiente de norma oficial",
+            review_pending=True,
+        ),
+        GlassSafetyRule(
+            code="GLASS-SAFETY-LARGE-PANE",
+            title="Gran paño vidriado",
+            message=(
+                "Un paño de 4 m² o más expone una superficie grande: se "
+                "recomienda vidrio de seguridad."
+            ),
+            min_area_m2=d("4.0000"),
+            required_safety="SAFETY_GLASS",
+            severity="WARNING",
+            source_ref="NCh 135/2 — referencia sintética pendiente de norma oficial",
+            review_pending=True,
+        ),
+    ]
+
+
+def _demo_glass_type_limits() -> list[GlassTypeLimit]:
+    """Seeded manufacturing bounds (synthetic) — parity with
+    `supabase/seed.sql`."""
+    return [
+        GlassTypeLimit(
+            code="GLASS-LIMIT-FLOAT-4",
+            lamina_kind="FLOAT",
+            thickness_min_mm=d("4.00"),
+            thickness_max_mm=d("4.00"),
+            max_area_m2=d("4.5000"),
+            source_ref="Referencia sintética — revisar con proveedor",
+            review_pending=True,
+        ),
+        GlassTypeLimit(
+            code="GLASS-LIMIT-MONO-SIDE",
+            lamina_kind="FLOAT",
+            min_side_mm=d("250.00"),
+            max_aspect_ratio=d("12.000"),
+            source_ref="Referencia sintética — relación de aspecto ≤ 12",
+            review_pending=True,
+        ),
+        GlassTypeLimit(
+            code="GLASS-LIMIT-TEMPERED-EXACT-CUT",
+            lamina_kind="TEMPERED",
+            requires_exact_cut=True,
+            source_ref="Práctica vidriera — el templado no se recorta",
+            review_pending=True,
+        ),
+        GlassTypeLimit(
+            code="GLASS-LIMIT-TEMPERED-SIDE",
+            lamina_kind="TEMPERED",
+            max_side_mm=d("3200.00"),
+            source_ref="Referencia sintética — revisar con proveedor",
+            review_pending=True,
+        ),
+    ]
 
 
 def demo_hardware_kits() -> list[HardwareKitRule]:
@@ -701,14 +921,20 @@ def _sliding_reinforcement_rules() -> list[ReinforcementRule]:
     )
     return [
         ReinforcementRule(
-            role=role, finish_class="WHITE", min_length_mm=d("1000.00"),
-            screws_per_m=d("4.00"), screw_sku="TORNILLO-4X16",
+            role=role,
+            finish_class="WHITE",
+            min_length_mm=d("1000.00"),
+            screws_per_m=d("4.00"),
+            screw_sku="TORNILLO-4X16",
         )
         for role in roles
     ] + [
         ReinforcementRule(
-            role=role, finish_class="NON_WHITE", min_length_mm=d("0.00"),
-            screws_per_m=d("4.00"), screw_sku="TORNILLO-4X16",
+            role=role,
+            finish_class="NON_WHITE",
+            min_length_mm=d("0.00"),
+            screws_per_m=d("4.00"),
+            screw_sku="TORNILLO-4X16",
         )
         for role in roles
     ]
@@ -724,36 +950,56 @@ def demo_corredera_60_params() -> SystemParams:
         system_family=SystemFamily.SLIDING,
         effective_profile_articles={
             ProfileRole.FRAME: _article(
-                sku="MARCO-CORR", role=ProfileRole.FRAME, face_width_mm="50.00",
-                welding_loss_mm="6.00", reinforcement_gap_mm="15.00",
+                sku="MARCO-CORR",
+                role=ProfileRole.FRAME,
+                face_width_mm="50.00",
+                welding_loss_mm="6.00",
+                reinforcement_gap_mm="15.00",
             ),
             ProfileRole.RAIL: _article(
-                sku="RIEL-CORR", role=ProfileRole.RAIL, face_width_mm="52.00",
-                welding_loss_mm="6.00", reinforcement_gap_mm="15.00",
+                sku="RIEL-CORR",
+                role=ProfileRole.RAIL,
+                face_width_mm="52.00",
+                welding_loss_mm="6.00",
+                reinforcement_gap_mm="15.00",
             ),
             ProfileRole.SLIDING_SASH: _article(
-                sku="HOJA-CORR", role=ProfileRole.SLIDING_SASH, face_width_mm="42.00",
-                welding_loss_mm="6.00", reinforcement_gap_mm="15.00",
+                sku="HOJA-CORR",
+                role=ProfileRole.SLIDING_SASH,
+                face_width_mm="42.00",
+                welding_loss_mm="6.00",
+                reinforcement_gap_mm="15.00",
             ),
             ProfileRole.INTERLOCK: _article(
-                sku="ENCUENTRO-CORR", role=ProfileRole.INTERLOCK, face_width_mm="38.00",
-                welding_loss_mm="6.00", reinforcement_gap_mm="15.00",
+                sku="ENCUENTRO-CORR",
+                role=ProfileRole.INTERLOCK,
+                face_width_mm="38.00",
+                welding_loss_mm="6.00",
+                reinforcement_gap_mm="15.00",
             ),
             ProfileRole.MULLION_V: _article(
-                sku="POSTE-CORR-V", role=ProfileRole.MULLION_V, face_width_mm="60.00",
-                welding_loss_mm="0.00", reinforcement_gap_mm="5.00",
+                sku="POSTE-CORR-V",
+                role=ProfileRole.MULLION_V,
+                face_width_mm="60.00",
+                welding_loss_mm="0.00",
+                reinforcement_gap_mm="5.00",
             ),
             ProfileRole.MULLION_H: _article(
-                sku="POSTE-CORR-H", role=ProfileRole.MULLION_H, face_width_mm="60.00",
-                welding_loss_mm="0.00", reinforcement_gap_mm="5.00",
+                sku="POSTE-CORR-H",
+                role=ProfileRole.MULLION_H,
+                face_width_mm="60.00",
+                welding_loss_mm="0.00",
+                reinforcement_gap_mm="5.00",
             ),
         },
         glazing_bead_rules={
             d("4.00"): GlazingBeadRule(
                 glass_thickness_mm=d("4.00"),
                 bead_article=_article(
-                    sku="JQ-CORR-24", role=ProfileRole.GLAZING_BEAD,
-                    face_width_mm="24.00", welding_loss_mm="0.00",
+                    sku="JQ-CORR-24",
+                    role=ProfileRole.GLAZING_BEAD,
+                    face_width_mm="24.00",
+                    welding_loss_mm="0.00",
                     reinforcement_gap_mm="15.00",
                 ),
                 bead_width_mm=d("24.00"),
@@ -764,8 +1010,10 @@ def demo_corredera_60_params() -> SystemParams:
             d("20.00"): GlazingBeadRule(
                 glass_thickness_mm=d("20.00"),
                 bead_article=_article(
-                    sku="JQ-CORR-14", role=ProfileRole.GLAZING_BEAD,
-                    face_width_mm="14.00", welding_loss_mm="0.00",
+                    sku="JQ-CORR-14",
+                    role=ProfileRole.GLAZING_BEAD,
+                    face_width_mm="14.00",
+                    welding_loss_mm="0.00",
                     reinforcement_gap_mm="15.00",
                 ),
                 bead_width_mm=d("14.00"),
@@ -804,12 +1052,20 @@ def alu_corredera_params() -> SystemParams:
     """ALU_CORREDERA_70 — mechanically jointed aluminium slider. Synthetic."""
 
     def _alu(
-        *, sku: str, role: ProfileRole, face_width_mm: str, weight_kg_m: str = "1.4000",
+        *,
+        sku: str,
+        role: ProfileRole,
+        face_width_mm: str,
+        weight_kg_m: str = "1.4000",
     ) -> EffectiveProfileArticle:
         return EffectiveProfileArticle(
-            sku=sku, role=role, material=MaterialType.ALUMINIUM,
-            face_width_mm=d(face_width_mm), welding_loss_mm=d("0.00"),
-            reinforcement_gap_mm=d("0.00"), weight_kg_m=d(weight_kg_m),
+            sku=sku,
+            role=role,
+            material=MaterialType.ALUMINIUM,
+            face_width_mm=d(face_width_mm),
+            welding_loss_mm=d("0.00"),
+            reinforcement_gap_mm=d("0.00"),
+            weight_kg_m=d(weight_kg_m),
             steel_weight_kg_m=d("0.0000"),
         )
 
@@ -819,24 +1075,46 @@ def alu_corredera_params() -> SystemParams:
         material=MaterialType.ALUMINIUM,
         system_family=SystemFamily.SLIDING,
         effective_profile_articles={
-            ProfileRole.FRAME: _alu(sku="MARCO-AC", role=ProfileRole.FRAME,
-                                  face_width_mm="45.00", weight_kg_m="1.2500"),
-            ProfileRole.RAIL: _alu(sku="RIEL-AC", role=ProfileRole.RAIL,
-                                   face_width_mm="50.00", weight_kg_m="1.4500"),
-            ProfileRole.SLIDING_SASH: _alu(sku="HOJA-AC", role=ProfileRole.SLIDING_SASH,
-                                           face_width_mm="35.00", weight_kg_m="1.1000"),
-            ProfileRole.INTERLOCK: _alu(sku="ENCUENTRO-AC", role=ProfileRole.INTERLOCK,
-                                        face_width_mm="30.00", weight_kg_m="0.9500"),
-            ProfileRole.MULLION_V: _alu(sku="POSTE-AC-V", role=ProfileRole.MULLION_V,
-                                        face_width_mm="55.00", weight_kg_m="1.3000"),
-            ProfileRole.MULLION_H: _alu(sku="POSTE-AC-H", role=ProfileRole.MULLION_H,
-                                        face_width_mm="55.00", weight_kg_m="1.3000"),
+            ProfileRole.FRAME: _alu(
+                sku="MARCO-AC", role=ProfileRole.FRAME, face_width_mm="45.00", weight_kg_m="1.2500"
+            ),
+            ProfileRole.RAIL: _alu(
+                sku="RIEL-AC", role=ProfileRole.RAIL, face_width_mm="50.00", weight_kg_m="1.4500"
+            ),
+            ProfileRole.SLIDING_SASH: _alu(
+                sku="HOJA-AC",
+                role=ProfileRole.SLIDING_SASH,
+                face_width_mm="35.00",
+                weight_kg_m="1.1000",
+            ),
+            ProfileRole.INTERLOCK: _alu(
+                sku="ENCUENTRO-AC",
+                role=ProfileRole.INTERLOCK,
+                face_width_mm="30.00",
+                weight_kg_m="0.9500",
+            ),
+            ProfileRole.MULLION_V: _alu(
+                sku="POSTE-AC-V",
+                role=ProfileRole.MULLION_V,
+                face_width_mm="55.00",
+                weight_kg_m="1.3000",
+            ),
+            ProfileRole.MULLION_H: _alu(
+                sku="POSTE-AC-H",
+                role=ProfileRole.MULLION_H,
+                face_width_mm="55.00",
+                weight_kg_m="1.3000",
+            ),
         },
         glazing_bead_rules={
             d("20.00"): GlazingBeadRule(
                 glass_thickness_mm=d("20.00"),
-                bead_article=_alu(sku="JQ-AC-10", role=ProfileRole.GLAZING_BEAD,
-                                  face_width_mm="10.00", weight_kg_m="0.2000"),
+                bead_article=_alu(
+                    sku="JQ-AC-10",
+                    role=ProfileRole.GLAZING_BEAD,
+                    face_width_mm="10.00",
+                    weight_kg_m="0.2000",
+                ),
                 bead_width_mm=d("10.00"),
                 gasket_interior_mm=d("3.00"),
                 gasket_exterior_mm=d("3.00"),

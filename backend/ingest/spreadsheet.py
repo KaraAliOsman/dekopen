@@ -39,6 +39,10 @@ ENTITY_FINISH = "FINISH"
 ENTITY_GLAZING = "GLAZING_RULE"
 ENTITY_HARDWARE = "HARDWARE_KIT"
 ENTITY_PRICE = "PRICE"
+ENTITY_GLASS_PRODUCT = "GLASS_PRODUCT"
+ENTITY_GLASS_SURCHARGE = "GLASS_SURCHARGE"
+ENTITY_GLASS_SAFETY = "GLASS_SAFETY_RULE"
+ENTITY_GLASS_LIMIT = "GLASS_TYPE_LIMIT"
 
 ENTITIES = (
     ENTITY_PROFILE,
@@ -50,6 +54,10 @@ ENTITIES = (
     ENTITY_GLAZING,
     ENTITY_HARDWARE,
     ENTITY_PRICE,
+    ENTITY_GLASS_PRODUCT,
+    ENTITY_GLASS_SURCHARGE,
+    ENTITY_GLASS_SAFETY,
+    ENTITY_GLASS_LIMIT,
 )
 
 CONFIDENCE_VERIFIED_STRUCTURED = "VERIFIED_STRUCTURED"
@@ -92,6 +100,35 @@ _OPENING_TYPES = (
     "SLIDING",
 )
 _RAIL_TYPES = ("mono", "dual")
+_SAFETY_CLASSES = ("A", "B", "C")
+_REQUIRED_SAFETY = (
+    "TEMPERED",
+    "LAMINATED",
+    "SAFETY_GLASS",
+    "SAFETY_CLASS_A",
+    "SAFETY_CLASS_B",
+    "SAFETY_CLASS_C",
+)
+_SEVERITIES = ("WARNING", "MANDATORY")
+# Engine surcharge/units — kept in sync by contract (models.py Literal sets
+# and glass_pricing rate units).
+_SURCHARGE_KINDS = ("TEMPERED", "EDGE_POLISH", "DRILL", "PALILLAJE")
+_SURCHARGE_UNITS = ("M2", "M", "EA", "CROSS")
+# Engine _LAMINA_KIND_ALIASES — kept in sync by contract.
+_LAMINA_KINDS = (
+    "ANY",
+    "FLOAT",
+    "TINTED",
+    "TEMPERED",
+    "HEAT_STRENGTHENED",
+    "LAMINATED",
+    "LOW_E",
+    "SOLAR_CONTROL",
+    "REFLECTIVE",
+    "MIRROR",
+    "SATIN",
+    "PRINTED",
+)
 
 # Column kind → how the cell is read. `enum` values are normalized
 # (upper, accents kept) and validated; `bool` accepts si/no/true/false/1/0.
@@ -206,6 +243,73 @@ _SHEETS: dict[str, dict[str, Any]] = {
             ("moneda", "currency", "text", False, None),
         ],
     },
+    "Productos vidrio": {
+        # D02: a declared supplier product — the structured composition is
+        # parsed from `notacion` at confirm (unparseable imports keep a
+        # UNKNOWN composition and review_pending; never invented layers).
+        "entity": ENTITY_GLASS_PRODUCT,
+        "columns": [
+            ("sku", "sku", "text", True, None),
+            ("nombre", "name", "text", True, None),
+            ("notacion", "notation", "text", True, None),
+            ("clase_seguridad", "safety_class", "enum", False, _SAFETY_CLASSES),
+            ("ug_w_m2k", "ug_w_m2k", "decimal", False, None),
+            ("factor_solar_g", "g_value", "decimal", False, None),
+            ("transmitancia_luz_pct", "light_transmission_pct", "decimal", False, None),
+            ("peso_kg_m2", "weight_kg_m2", "decimal", False, None),
+            ("area_minima_m2", "min_billable_area_m2", "decimal", False, None),
+            ("nivel_precio", "price_tier", "int", False, None),
+            ("proveedor", "supplier", "text", False, None),
+        ],
+    },
+    "Recargos vidrio": {
+        # D02: priced extras per product — the row resolves the product by
+        # sku inside the same org+system scope the engine repository uses.
+        "entity": ENTITY_GLASS_SURCHARGE,
+        "columns": [
+            ("sku_producto", "product_sku", "text", True, None),
+            ("tipo", "kind", "enum", True, _SURCHARGE_KINDS),
+            ("unidad", "unit", "enum", True, _SURCHARGE_UNITS),
+            ("costo", "unit_cost", "decimal", True, None),
+            ("moneda", "currency", "text", False, None),
+            ("etiqueta", "label", "text", False, None),
+        ],
+    },
+    "Seguridad vidrio": {
+        # D02 NCh-135-family rules as org-editable data — the official
+        # wording never ships; fuente carries the cited reference.
+        "entity": ENTITY_GLASS_SAFETY,
+        "columns": [
+            ("codigo", "code", "text", True, None),
+            ("titulo", "title", "text", True, None),
+            ("mensaje", "message", "text", False, None),
+            ("aperturas", "applies_openings", "csv_list", False, None),
+            ("antepecho_menor_mm", "sill_below_mm", "decimal", False, None),
+            ("area_minima_m2", "min_area_m2", "decimal", False, None),
+            ("requiere_puerta", "requires_door", "bool", False, None),
+            ("requiere_puerta_adyacente", "requires_adjacent_door", "bool", False, None),
+            ("seguridad_requerida", "required_safety", "enum", True, _REQUIRED_SAFETY),
+            ("severidad", "severity", "enum", False, _SEVERITIES),
+            ("fuente", "source_ref", "text", False, None),
+        ],
+    },
+    "Límites vidrio": {
+        "entity": ENTITY_GLASS_LIMIT,
+        "columns": [
+            ("codigo", "code", "text", True, None),
+            ("tipo_lamina", "lamina_kind", "enum", True, _LAMINA_KINDS),
+            ("espesor_min_mm", "thickness_min_mm", "decimal", False, None),
+            ("espesor_max_mm", "thickness_max_mm", "decimal", False, None),
+            ("lado_min_mm", "min_side_mm", "decimal", False, None),
+            ("lado_max_mm", "max_side_mm", "decimal", False, None),
+            ("area_min_m2", "min_area_m2", "decimal", False, None),
+            ("area_max_m2", "max_area_m2", "decimal", False, None),
+            ("relacion_max", "max_aspect_ratio", "decimal", False, None),
+            ("corte_exacto", "requires_exact_cut", "bool", False, None),
+            ("severidad", "severity", "enum", False, _SEVERITIES),
+            ("fuente", "source_ref", "text", False, None),
+        ],
+    },
 }
 
 _LEEME = "LEEME"
@@ -227,6 +331,22 @@ _EXAMPLES: dict[str, list[list[str]]] = {
         ]
     ],
     "Precios": [["COMPRA-MARCO-60", "PROFILE", "BAR", "12500", "CLP"]],
+    "Productos vidrio": [[
+        "VID-LOWE-24", "Termopanel Low-E 4·16·4", "4 / 16 Ar / 4 Low-E (c3)",
+        "B", "1.400", "0.630", "80", "20", "0.30", "4", "Vidriería Sur",
+    ]],
+    "Recargos vidrio": [[
+        "VID-LOWE-24", "PALILLAJE", "CROSS", "1500", "CLP", "Palillaje interior",
+    ]],
+    "Seguridad vidrio": [[
+        "GLASS-SAFETY-DOOR", "Paño vidriado en puerta",
+        "El paño de una puerta vidriada debería llevar vidrio de seguridad.",
+        "", "", "", "si", "", "SAFETY_GLASS", "WARNING", "NCh 135/2",
+    ]],
+    "Límites vidrio": [[
+        "GLASS-LIMIT-TEMPERED-EXACT-CUT", "TEMPERED", "", "", "", "3200",
+        "", "", "", "si", "WARNING", "Práctica vidriera",
+    ]],
 }
 
 _LEEME_LINES = [
@@ -247,6 +367,11 @@ _LEEME_LINES = [
     f"  clase_acabado: {', '.join(_FINISH_CLASSES)}",
     "  tipo_riel: mono, dual",
     "  obligatorio: si / no",
+    f"  tipo recargo vidrio: {', '.join(_SURCHARGE_KINDS)}",
+    f"  unidad recargo vidrio: {', '.join(_SURCHARGE_UNITS)}",
+    f"  tipo_lamina: {', '.join(_LAMINA_KINDS)}",
+    f"  seguridad_requerida: {', '.join(_REQUIRED_SAFETY)}",
+    f"  severidad: {', '.join(_SEVERITIES)}",
 ]
 
 

@@ -75,6 +75,45 @@ export function resolvedSlidingLayout(node: IntentNode): SlidingLayout | null {
 export type Opening = (typeof OPENINGS)[number];
 export type SplitType = "SPLIT_V" | "SPLIT_H";
 
+/** D02 serializable layer stack — the exact dict shape the engine's
+ * `composition_to_dict` emits and `composition_from_dict` accepts.
+ * Laminae order is exterior → interior; a laminate carries 2+ panes
+ * plus its interlayer. */
+export type GlassLaminaSpec = {
+  type: "lamina";
+  panes: string[];
+  interlayer?: string | null;
+  tint?: string | null;
+  treatment?: string | null;
+  coating?: string | null;
+  coating_face?: number | null;
+  supplier_sku?: string | null;
+};
+
+export type GlassChamberSpec = {
+  type: "chamber";
+  width_mm: string;
+  gas?: string | null;
+  spacer?: string | null;
+  sealant?: string | null;
+};
+
+export type GlassCompositionSpec = {
+  layers: (GlassLaminaSpec | GlassChamberSpec)[];
+};
+
+export type GlassSurchargeSelectionSpec = {
+  kind: "EDGE_POLISH" | "DRILL" | "PALILLAJE" | string;
+  edges?: string[] | null;
+  count?: number | null;
+  columns?: number | null;
+  rows?: number | null;
+};
+
+export type GlassOptionsSpec = {
+  surcharges?: GlassSurchargeSelectionSpec[];
+};
+
 export type IntentNode = {
   id: string;
   type: "ROOT" | SplitType | "BAY";
@@ -88,6 +127,13 @@ export type IntentNode = {
   glass_thickness_mm?: string | null;
   glass_spec?: string | null;
   glass_article_sku?: string | null;
+  /** D02 structured stack the catalog product carries (or the composer
+   * built) — serializes 1:1 to the engine's `composition_to_dict` shape.
+   * Null = the bay relies on the legacy text spec. */
+  glass_composition?: GlassCompositionSpec | null;
+  /** D02 declared extras on the pane (polished edges, drills, georgian
+   * bars). Rates live on the catalog product — the node only picks. */
+  glass_options?: GlassOptionsSpec | null;
   panel_article_sku?: string | null;
   hardware_set_sku?: string | null;
   handle_height_mm?: string | null;
@@ -300,6 +346,8 @@ const BAY_SPEC_KEYS = [
   "glass_thickness_mm",
   "glass_spec",
   "glass_article_sku",
+  "glass_composition",
+  "glass_options",
   "panel_article_sku",
   "hardware_set_sku",
   "handle_height_mm",

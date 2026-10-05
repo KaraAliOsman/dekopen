@@ -185,6 +185,7 @@ import type {
   ProductionOrderDeliveryConfirmationParams,
   ProductionOrderDetail,
   ProductionOrderDispatchNoteParams,
+  ProductionOrderGlazierOrderParams,
   ProductionOrderList,
   ProductionOrderTrace,
   ProductionPieceTrace,
@@ -11344,6 +11345,113 @@ export const productionOrderDxfFile = async (
 ): Promise<productionOrderDxfFileResponse> => {
   return apiMutator<productionOrderDxfFileResponse>(
     getProductionOrderDxfFileUrl(orderId, filename),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export type productionOrderGlazierOrderResponse200ApplicationPdf = {
+  data: Blob;
+  status: 200;
+};
+
+export type productionOrderGlazierOrderResponse200TextCsv = {
+  data: string;
+  status: 200;
+};
+
+export type productionOrderGlazierOrderResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type productionOrderGlazierOrderResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type productionOrderGlazierOrderResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type productionOrderGlazierOrderResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type productionOrderGlazierOrderResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type productionOrderGlazierOrderResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type productionOrderGlazierOrderResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type productionOrderGlazierOrderResponseSuccess = (
+  | productionOrderGlazierOrderResponse200ApplicationPdf
+  | productionOrderGlazierOrderResponse200TextCsv
+) & {
+  headers: Headers;
+};
+export type productionOrderGlazierOrderResponseError = (
+  | productionOrderGlazierOrderResponse400
+  | productionOrderGlazierOrderResponse401
+  | productionOrderGlazierOrderResponse403
+  | productionOrderGlazierOrderResponse404
+  | productionOrderGlazierOrderResponse409
+  | productionOrderGlazierOrderResponse422
+  | productionOrderGlazierOrderResponse503
+) & {
+  headers: Headers;
+};
+
+export type productionOrderGlazierOrderResponse =
+  productionOrderGlazierOrderResponseSuccess | productionOrderGlazierOrderResponseError;
+
+export const getProductionOrderGlazierOrderUrl = (
+  orderId: string,
+  params?: ProductionOrderGlazierOrderParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v1/production/orders/${orderId}/glass-order/?${stringifiedParams}`
+    : `/api/v1/production/orders/${orderId}/glass-order/`;
+};
+
+/**
+ * D02 pedido al vidriero: cut list + per-piece QR labels rendered from
+ * sealed evidence. ``?output=csv`` switches to the flat CSV export
+ * (``format`` would collide with DRF's reserved format-override query
+ * param and 404 before the view runs);
+ * ``?orders=<uuid,uuid>`` merges sibling work orders of the same frozen
+ * version into one batch (the 'lote').
+ */
+export const productionOrderGlazierOrder = async (
+  orderId: string,
+  params?: ProductionOrderGlazierOrderParams,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<productionOrderGlazierOrderResponse> => {
+  return apiMutator<productionOrderGlazierOrderResponse>(
+    getProductionOrderGlazierOrderUrl(orderId, params),
     {
       ...options,
       method: "GET",

@@ -9,7 +9,7 @@ from django.db import connection
 from psycopg import sql
 
 from authentication.errors import contract_error
-from dekopen_engine.documentary_canonical import documentary_canonical_json_v1
+from dekopen_engine.documentary_canonical import same_documentary_value
 from dekopen_engine.models import EngineResult
 from dekopen_engine.snapshot import calculation_response, calculation_hash, result_payload
 from documents.repository import documentary_backend
@@ -472,6 +472,28 @@ def _typology(tree):
         ) from error
 
 
+def _glass_resolution(bom):
+    """D02 structured-glass bookkeeping for ``project_positions``: a
+    ``bay:leaf`` → composition map plus the review flag — set when a bay
+    declares a spec the parser could not structure (UNKNOWN never seals as
+    resolved)."""
+    compositions = {}
+    pending = False
+    for piece in bom.get("glasses") or []:
+        key = f"{piece.get('bay_id') or ''}:{piece.get('leaf_id') or ''}"
+        composition = piece.get("composition")
+        if composition is None:
+            compositions[key] = {
+                "status": "UNKNOWN",
+                "spec": piece.get("glass_spec"),
+            }
+            if piece.get("glass_spec"):
+                pending = True
+        else:
+            compositions[key] = composition
+    return compositions, pending
+
+
 def save_position(org_id, project_id, data, *, position_id=None):
     editable(org_id, project_id)
     current = None
@@ -485,6 +507,7 @@ def save_position(org_id, project_id, data, *, position_id=None):
         cursor.execute("SELECT private.reserve_catalog_authority(%s,%s)",
                        [design["system_id"], org_id])
     bom = calculate_design(org_id, design)
+    glass_composition, glass_pending = _glass_resolution(bom)
     values = [
         data["location_tag"],
         data["quantity"],
@@ -496,12 +519,16 @@ def save_position(org_id, project_id, data, *, position_id=None):
         design["color"],
         json_text(design["parametric_tree"]),
         json_text(bom),
+        json_text(glass_composition),
+        glass_pending,
     ]
     if current:
         rows(
             "UPDATE public.project_positions SET location_tag=%s,quantity=%s,typology=%s,"
             "system_id=%s,width_mm=%s,height_mm=%s,color_interior=%s,color_exterior=%s,"
-            "parametric_tree=%s::jsonb,bom_snapshot=%s::jsonb,updated_at=clock_timestamp() "
+            "parametric_tree=%s::jsonb,bom_snapshot=%s::jsonb,"
+            "glass_composition=%s::jsonb,glass_review_pending=%s,"
+            "updated_at=clock_timestamp() "
             "WHERE id=%s AND org_id=%s RETURNING id",
             [*values, position_id, org_id],
         )
@@ -515,8 +542,9 @@ def save_position(org_id, project_id, data, *, position_id=None):
         rows(
             "INSERT INTO public.project_positions(location_tag,quantity,typology,system_id,"
             "width_mm,height_mm,color_interior,color_exterior,parametric_tree,bom_snapshot,"
+            "glass_composition,glass_review_pending,"
             "id,project_id,org_id,position_index) "
-            "VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s,%s,%s,%s) RETURNING id",
+            "VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s::jsonb,%s,%s,%s,%s,%s) RETURNING id",
             [*values, position_id, project_id, org_id, index],
         )
     rows(
@@ -543,7 +571,11 @@ def delete_position(org_id, position_id, expected):
 
 
 def _same_documentary_value(left, right):
-    return documentary_canonical_json_v1(left) == documentary_canonical_json_v1(right)
+    # Scale-free compare: the canonical BOM serializes mm as "16.00" while
+    # the frozen snapshot's raw model_dump keeps "16" — the same
+    # measurement must not read as binding drift (shared with
+    # documents.service's freeze-time check).
+    return same_documentary_value(left, right)
 
 
 def next_revision_code(value):

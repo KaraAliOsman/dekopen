@@ -1,4 +1,4 @@
-"""Canonical SHOT-06 scope: 29 mapped, 24 consumed, 2 metadata, 3 reserved."""
+"""Canonical SHOT-06 scope: 32 mapped, 27 consumed, 2 metadata, 3 reserved."""
 
 import ast
 from collections.abc import Callable
@@ -39,6 +39,11 @@ CORE_CONSUMERS: dict[str, Callable[..., object]] = {
     "cut_rules": geometry._append_leaf,
     "reinforcement_rules": geometry._append_profile,
     "typology_limits": geometry._append_leaf,
+    # D02 glass authorities: products, safety rules and type limits are
+    # consumed inside the per-piece glass evaluation pass.
+    "glass_products": geometry._evaluate_glass,
+    "glass_safety_rules": geometry._evaluate_glass,
+    "glass_type_limits": geometry._evaluate_glass,
 }
 METADATA = {"system_code", "depth_mm"}
 RESERVED = {"sliding_lateral_clearance_mm", "corner_bracket_loss_mm", "hook_depth_mm"}
@@ -62,7 +67,7 @@ def _param_reads(consumer: Callable[..., object]) -> set[str]:
 
 def test_every_system_parameter_has_an_explicit_scope() -> None:
     assert (
-        len(CORE_CONSUMERS) == 24
+        len(CORE_CONSUMERS) == 27
         and len(METADATA) == 2
         and len(RESERVED) == 3
         and len(API_BOUNDARY) == 1

@@ -1,10 +1,16 @@
 """Read-only technical choices for the manual estimator, without cost information."""
 
+from decimal import Decimal
+
 from drf_spectacular.utils import extend_schema
 from rest_framework import serializers
 from rest_framework.views import APIView
 
 from catalogs.serializers import ProfileSectionSerializer
+from dekopen_engine.glass_composition import (
+    composition_to_dict,
+    format_glass_notation,
+)
 from engine_api.repository import SystemParamsRepository
 from pricing.repository import rows
 from pricing.views import ERRORS, scope
@@ -90,6 +96,35 @@ class GlassSpecChoiceSerializer(serializers.Serializer):
     spec = serializers.CharField(allow_null=True)
 
 
+class GlassSurchargeChoiceSerializer(serializers.Serializer):
+    kind = serializers.CharField()
+    unit = serializers.CharField()
+    amount = serializers.CharField()
+    currency = serializers.CharField(allow_null=True)
+    label = serializers.CharField(allow_null=True)
+
+
+class GlassProductChoiceSerializer(serializers.Serializer):
+    """D02 structured glass product for the selector cards/composer."""
+
+    sku = serializers.CharField()
+    name = serializers.CharField()
+    notation = serializers.CharField(allow_null=True)
+    composition = serializers.DictField(allow_null=True)
+    total_thickness_mm = serializers.CharField(allow_null=True)
+    safety_class = serializers.CharField(allow_null=True)
+    ug_w_m2k = serializers.CharField(allow_null=True)
+    g_value = serializers.CharField(allow_null=True)
+    light_transmission_pct = serializers.CharField(allow_null=True)
+    weight_kg_m2 = serializers.CharField(allow_null=True)
+    min_billable_area_m2 = serializers.CharField(allow_null=True)
+    # Declared 1..5 relative-price band — comparability signal only; real
+    # money stays in the cost lists.
+    price_tier = serializers.IntegerField(allow_null=True)
+    surcharges = GlassSurchargeChoiceSerializer(many=True)
+    review_pending = serializers.BooleanField()
+
+
 class PanelChoiceSerializer(serializers.Serializer):
     sku = serializers.CharField()
     name = serializers.CharField()
@@ -104,6 +139,7 @@ class DesignOptionsSerializer(serializers.Serializer):
     # is on file. The design surface must not silently invent positions.
     handle_policy = HandlePolicySerializer(allow_null=True)
     glass_skus = serializers.ListField(child=serializers.CharField())
+    glass_products = GlassProductChoiceSerializer(many=True)
     glass_specs = GlassSpecChoiceSerializer(many=True)
     colors = serializers.ListField(child=serializers.CharField())
     coupler_skus = serializers.ListField(child=serializers.CharField())
@@ -210,6 +246,66 @@ class DesignOptionsView(APIView):
                         }
                     ),
                     "glass_skus": [item["technical_sku"] for item in glass_rows],
+                    # D02 structured products (same scope resolution the
+                    # engine repository applies): the selector's card
+                    # content — name, notation, thickness/weight, safety
+                    # class, declared surcharges and pending-review flag.
+                    "glass_products": [
+                        {
+                            "sku": product.sku,
+                            "name": product.name,
+                            "notation": (
+                                format_glass_notation(product.composition)
+                                if product.composition is not None
+                                else None
+                            ),
+                            "composition": (
+                                composition_to_dict(product.composition)
+                                if product.composition is not None
+                                else None
+                            ),
+                            "total_thickness_mm": (
+                                None
+                                if product.composition is None
+                                else str(
+                                    product.composition.total_thickness_mm().quantize(
+                                        Decimal("0.01")
+                                    )
+                                )
+                            ),
+                            "safety_class": product.safety_class,
+                            "ug_w_m2k": (
+                                None if product.ug_w_m2k is None else str(product.ug_w_m2k)
+                            ),
+                            "g_value": (
+                                None if product.g_value is None else str(product.g_value)
+                            ),
+                            "light_transmission_pct": (
+                                None
+                                if product.light_transmission_pct is None
+                                else str(product.light_transmission_pct)
+                            ),
+                            "weight_kg_m2": (
+                                None if product.weight_kg_m2 is None else str(product.weight_kg_m2)
+                            ),
+                            "min_billable_area_m2": (
+                                None if product.min_area_m2 is None else str(product.min_area_m2)
+                            ),
+                            "price_tier": product.price_tier,
+                            "surcharges": [
+                                {
+                                    "kind": rate.kind,
+                                    "unit": rate.unit,
+                                    "amount": str(rate.amount),
+                                    "currency": rate.currency,
+                                    "label": rate.label,
+                                }
+                                for rate in product.surcharges
+                            ],
+                            "review_pending": product.review_pending,
+                        }
+                        for product in params.glass_products.values()
+                    ],
                     "glass_specs": [
                         {
                             "sku": item["technical_sku"],

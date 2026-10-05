@@ -17,7 +17,7 @@ from ingest.spreadsheet import (
 )
 
 
-def test_template_builds_nine_sheets_plus_readme():
+def test_template_builds_the_declared_sheets_plus_readme():
     from openpyxl import load_workbook
     import io
 
@@ -35,6 +35,10 @@ def test_template_builds_nine_sheets_plus_readme():
         "Vidrios",
         "Herrajes",
         "Precios",
+        "Productos vidrio",
+        "Recargos vidrio",
+        "Seguridad vidrio",
+        "Límites vidrio",
     ]
 
 
@@ -54,6 +58,10 @@ def test_template_is_recognized_and_parses_clean():
         "GLAZING_RULE",
         "HARDWARE_KIT",
         "PRICE",
+        "GLASS_PRODUCT",
+        "GLASS_SURCHARGE",
+        "GLASS_SAFETY_RULE",
+        "GLASS_TYPE_LIMIT",
     }
     assert all(
         candidate["confidence"] == "VERIFIED_STRUCTURED" for candidate in candidates

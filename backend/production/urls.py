@@ -17,6 +17,7 @@ from production.views import (
     ProductionOrderDispatchNoteEnvioView,
     ProductionOrderInstallationView,
     ProductionOrderLabelsView,
+    ProductionOrderGlazierOrderView,
     ProductionOrderCncFileView,
     ProductionOrderCutPackView,
     ProductionOrderCancelView,
@@ -129,6 +130,11 @@ urlpatterns = [
         "orders/<uuid:order_id>/labels/",
         ProductionOrderLabelsView.as_view(),
         name="production-order-labels",
+    ),
+    path(
+        "orders/<uuid:order_id>/glass-order/",
+        ProductionOrderGlazierOrderView.as_view(),
+        name="production-order-glass-order",
     ),
     path(
         "orders/<uuid:order_id>/delivery/",

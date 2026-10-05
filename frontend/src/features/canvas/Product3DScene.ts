@@ -204,6 +204,32 @@ export function iguSpec(
   return { panes, chambers };
 }
 
+/** D02 structured stack → the scene's panes/chambers. The parsed
+ * composition is the authority when it exists — notations that `iguSpec`
+ * cannot read (laminated "3+3 PVB 0,38", slash-separated "4 / 12 / 4")
+ * still draw their real stack instead of degrading to a slab. */
+export function iguFromComposition(
+  composition: { layers?: unknown } | null | undefined,
+): { panes: number[]; chambers: number[] } | null {
+  const layers = Array.isArray(composition?.layers) ? composition.layers : null;
+  if (!layers || layers.length < 3) return null;
+  const panes: number[] = [];
+  const chambers: number[] = [];
+  for (const layer of layers) {
+    const item = layer as Record<string, unknown>;
+    if (item.type === "lamina") {
+      const paneList = Array.isArray(item.panes) ? item.panes : [];
+      panes.push(
+        paneList.reduce((sum, pane) => sum + (Number(String(pane).replace(",", ".")) || 0), 0) +
+          (item.interlayer ? 0.38 : 0),
+      );
+    } else if (item.type === "chamber") {
+      chambers.push(Number(String(item.width_mm).replace(",", ".")) || 0);
+    }
+  }
+  return panes.length >= 2 && chambers.length === panes.length - 1 ? { panes, chambers } : null;
+}
+
 /** The aluminium edge spacer of a real IGU cavity — a perimeter bar just
  * inside the glazing edge, the thin metal line visible at the glass
  * border on any real insulated unit. */
@@ -244,8 +270,9 @@ function glassInfill(
   h: number,
   glassT: number,
   spec: string | null | undefined,
+  composition?: { layers?: unknown } | null,
 ): void {
-  const igu = iguSpec(spec);
+  const igu = iguFromComposition(composition) ?? iguSpec(spec);
   if (!igu) {
     solids.push(box(owner, "glass", "GLASS", x, y, z0, w, h, glassT));
     return;
@@ -277,10 +304,11 @@ function contourGlassInfill(
   z0: number,
   glassT: number,
   spec: string | null | undefined,
+  composition?: { layers?: unknown } | null,
 ): void {
   const outline = insetContourPoints(contour, insetMm).map((p) => [p.x, p.y] as Pt2);
   if (outline.length < 3) return;
-  const igu = iguSpec(spec);
+  const igu = iguFromComposition(composition) ?? iguSpec(spec);
   if (!igu) {
     solids.push({
       kind: "shape",
@@ -1159,6 +1187,7 @@ function leafSolids(
           Math.max(region.h - 2 * bead, 1),
           glassT,
           bay.glass_spec,
+          bay.glass_composition,
         );
         return;
       }
@@ -1194,6 +1223,7 @@ function leafSolids(
         Math.max(paneRegion.h - 2 * sashW, 1),
         glassT,
         bay.glass_spec,
+        bay.glass_composition,
       );
       gasketAndBead(
         solids,
@@ -1333,6 +1363,7 @@ function leafSolids(
         Math.max(leafRegion.h - 2 * sashW, 1),
         glassT,
         bay.glass_spec,
+        bay.glass_composition,
       );
     }
     gasketAndBead(
@@ -1395,6 +1426,7 @@ function leafSolids(
     Math.max(region.h - 2 * bead, 1),
     glassT,
     bay.glass_spec,
+    bay.glass_composition,
   );
   gasketAndBead(
     solids,
@@ -1488,6 +1520,7 @@ function framelessSolids(
     Math.max(h - 2 * reveal, 1),
     glassT,
     modulePrimaryBay(module)?.glass_spec,
+    modulePrimaryBay(module)?.glass_composition,
   );
   const edgeSpan = (edge: string): Region => {
     switch (edge) {
@@ -1753,6 +1786,7 @@ export function buildScene3D(
         Math.max((depth - glassT) / 2, 0),
         glassT,
         primaryBay?.glass_spec,
+        primaryBay?.glass_composition,
       );
     } else {
       const out = {

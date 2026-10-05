@@ -6,13 +6,12 @@ from decimal import Decimal
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
 
-
-class EngineModel(BaseModel):
-    """Strict shared configuration for deterministic engine values."""
-
-    model_config = ConfigDict(strict=True, extra="forbid", allow_inf_nan=False)
+from dekopen_engine.engine_base import EngineModel as EngineModel  # noqa: F401
+from dekopen_engine.glass_composition import (
+    GlassComposition as GlassComposition,  # noqa: F401  (re-export)
+)
 
 
 class MaterialType(str, Enum):
@@ -168,6 +167,134 @@ class PlanPoint(EngineModel):
     y_mm: Decimal
 
 
+class GlassSurchargeSelection(EngineModel):
+    """A per-piece glass extra declared on the design node (D02).
+
+    - ``EDGE_POLISH``: ``edges`` lists the polished sides (top/right/
+      bottom/left); no edges means every edge the piece exposes.
+    - ``DRILL``: ``count`` perforations.
+    - ``PALILLAJE`` (georgian bars): ``columns`` × ``rows`` grid inside the
+      IGU; crossings = columns·rows. ``count`` overrides when the supplier
+      prices a fixed qty."""
+
+    kind: Literal["EDGE_POLISH", "DRILL", "PALILLAJE"]
+    edges: list[Literal["top", "right", "bottom", "left"]] | None = None
+    count: int | None = None
+    columns: int | None = None
+    rows: int | None = None
+
+
+class GlassOptions(EngineModel):
+    """Per-bay glass extras the designer declared (tree payload, D02)."""
+
+    surcharges: list[GlassSurchargeSelection] = []
+
+
+class GlassSafetyRule(EngineModel):
+    """One situational glazing-safety rule row (NCh 135 family, D02).
+
+    Every predicate field is optional and narrows where the rule applies.
+    ``severity`` is the org's call: WARNING advises, MANDATORY blocks —
+    safety rules never block by default. ``source_ref`` cites the norm the
+    row claims to implement; seeded examples are marked synthetic pending
+    technical review."""
+
+    code: str
+    title: str
+    message: str | None = None
+    applies_openings: list[str] | None = None
+    # Pane bottom edge within this distance of the module base — the
+    # "glazing below 800 mm of finished floor" family of rules.
+    sill_below_mm: Decimal | None = None
+    min_area_m2: Decimal | None = None
+    requires_door: bool | None = None
+    requires_adjacent_door: bool | None = None
+    required_safety: Literal[
+        "TEMPERED", "LAMINATED", "SAFETY_GLASS",
+        "SAFETY_CLASS_A", "SAFETY_CLASS_B", "SAFETY_CLASS_C",
+    ]
+    severity: Literal["WARNING", "MANDATORY"] = "WARNING"
+    source_ref: str | None = None
+    review_pending: bool = False
+
+
+class GlassTypeLimit(EngineModel):
+    """Manufacturing bounds for a lamina kind + thickness band (D02) —
+    supplier data: min/max side, area limits, aspect ratio, and whether
+    the pane must be ordered to exact measure (tempered is never trimmed)."""
+
+    code: str
+    lamina_kind: str = "ANY"
+    thickness_min_mm: Decimal | None = None
+    thickness_max_mm: Decimal | None = None
+    min_side_mm: Decimal | None = None
+    max_side_mm: Decimal | None = None
+    min_area_m2: Decimal | None = None
+    max_area_m2: Decimal | None = None
+    max_aspect_ratio: Decimal | None = None
+    requires_exact_cut: bool = False
+    severity: Literal["WARNING", "MANDATORY"] = "WARNING"
+    source_ref: str | None = None
+    review_pending: bool = False
+
+
+class GlassSafetyFinding(EngineModel):
+    """A breached safety/limit rule on a concrete pane (D02)."""
+
+    rule_code: str
+    severity: Literal["WARNING", "MANDATORY"]
+    required_safety: str | None = None
+    message: str
+    source_ref: str | None = None
+    review_pending: bool = False
+
+
+class GlassBayContext(EngineModel):
+    """Situational context a BAY contributes to the glass rule pass (D02):
+    its opening type, the distance of the pane bottom to the module base
+    and whether a door leaf sits beside it."""
+
+    opening_type: str | None = None
+    sill_mm: Decimal | None = None
+    adjacent_door: bool = False
+
+
+class GlassSurchargeRate(EngineModel):
+    """One priced extra a glass product supports (catalog data, D02)."""
+
+    kind: Literal["TEMPERED", "EDGE_POLISH", "DRILL", "PALILLAJE"]
+    unit: Literal["M2", "M", "EA", "CROSS"]
+    amount: Decimal
+    currency: str | None = None
+    label: str | None = None
+
+
+class GlassProduct(EngineModel):
+    """A supplier's glass product — the composed SKU a bay chooses (D02).
+
+    ``composition`` is the structured layer stack; ``None`` marks a
+    product whose notation never parsed (UNKNOWN — it stays selectable
+    but every derived number reports unknown instead of guessing).
+    Ug / g / light transmission / safety class are supplier-declared data —
+    shown, never computed. ``min_area_m2`` is the supplier's minimum
+    billable cut area; ``surcharges`` are the product's priced extras."""
+
+    sku: str
+    name: str
+    composition: GlassComposition | None = None
+    safety_class: str | None = None
+    ug_w_m2k: Decimal | None = None
+    g_value: Decimal | None = None
+    light_transmission_pct: Decimal | None = None
+    weight_kg_m2: Decimal | None = None
+    min_area_m2: Decimal | None = None
+    # Declared 1..5 relative-price band for the selector's comparability
+    # signal — real money stays in the cost lists.
+    price_tier: int | None = None
+    surcharges: list[GlassSurchargeRate] = []
+    review_pending: bool = False
+
+
 class GlassPiece(EngineModel):
     bay_id: str
     leaf_id: str | None = None
@@ -191,6 +318,16 @@ class GlassPiece(EngineModel):
     # polishing authority consumes this as its suggested preselection; a
     # framed pane leaves it None.
     exposed_edges: list[str] | None = None
+    # D02: structured composition the piece resolved to, the full package
+    # thickness it implies (laminae + interlayers + chambers — the glazing
+    # bead key), declared extras (polish, drills, palillaje), the exact-cut
+    # flag ("tempered is ordered to measure, never trimmed") and every
+    # safety/limit finding the pane triggered.
+    composition: GlassComposition | None = None
+    thickness_total_mm: Decimal | None = None
+    requires_exact_cut: bool = False
+    surcharge_selections: list[GlassSurchargeSelection] = []
+    safety_findings: list[GlassSafetyFinding] = []
 
 
 HARDWARE_COMPONENT_CATEGORIES = (
@@ -535,6 +672,14 @@ class SystemParams(EngineModel):
     cut_rules: dict[ProfileRole, ProfileCutRule] = Field(default_factory=dict)
     reinforcement_rules: list[ReinforcementRule] = Field(default_factory=list)
     typology_limits: dict[str, TypologyLimit] = Field(default_factory=dict)
+    # Declared glass authorities (D02): the products a bay may carry
+    # (keyed by technical sku), situational safety rules (NCh 135 family)
+    # and per-kind dimensional limits. Empty = the catalog never declared
+    # them — the engine evaluates nothing and reports no data, it never
+    # invents a table.
+    glass_products: dict[str, GlassProduct] = Field(default_factory=dict)
+    glass_safety_rules: list[GlassSafetyRule] = Field(default_factory=list)
+    glass_type_limits: list[GlassTypeLimit] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _family_data_coherence(self) -> "SystemParams":
@@ -589,6 +734,13 @@ class ParametricNode(EngineModel):
     # fully defines the unit — slots, moving/fixed kind, rail assignment.
     # Absent, the SLIDING_*L presets map to canonical layouts.
     sliding_layout: SlidingLayout | None = None
+    # D02: the structured composition the bay's glass product carries.
+    # When present it is the authoritative stack — `glass_spec` stays the
+    # persisted notation string and `glass_thickness_mm` the declared
+    # package thickness for older payloads.
+    glass_composition: GlassComposition | None = None
+    # Declared per-bay extras (edge polish, drills, palillaje grid).
+    glass_options: GlassOptions | None = None
 
 
 class ProfileCut(EngineModel):

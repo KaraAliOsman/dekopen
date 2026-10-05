@@ -53,6 +53,31 @@ class PlanPointSerializer(serializers.Serializer):
     y_mm = serializers.CharField()
 
 
+class GlassSurchargeSelectionSerializer(serializers.Serializer):
+    kind = serializers.ChoiceField(
+        choices=["EDGE_POLISH", "DRILL", "PALILLAJE"]
+    )
+    edges = serializers.ListField(
+        child=serializers.ChoiceField(
+            choices=["top", "right", "bottom", "left"]
+        ),
+        allow_null=True,
+        required=False,
+    )
+    count = serializers.IntegerField(allow_null=True, required=False)
+    columns = serializers.IntegerField(allow_null=True, required=False)
+    rows = serializers.IntegerField(allow_null=True, required=False)
+
+
+class GlassSafetyFindingSerializer(serializers.Serializer):
+    rule_code = serializers.CharField()
+    severity = serializers.ChoiceField(choices=["WARNING", "MANDATORY"])
+    required_safety = serializers.CharField(allow_null=True)
+    message = serializers.CharField()
+    source_ref = serializers.CharField(allow_null=True)
+    review_pending = serializers.BooleanField()
+
+
 class GlassPieceSerializer(serializers.Serializer):
     bay_id = serializers.CharField()
     leaf_id = serializers.CharField(allow_null=True)
@@ -71,6 +96,18 @@ class GlassPieceSerializer(serializers.Serializer):
     exposed_edges = serializers.ListField(
         child=serializers.CharField(), allow_null=True
     )
+    # D02 structured layer stack, surcharges and rule findings. The
+    # composition object is the engine-produced dict verbatim.
+    composition = serializers.DictField(allow_null=True, required=False)
+    thickness_total_mm = serializers.DecimalField(
+        max_digits=12, decimal_places=2, coerce_to_string=True,
+        allow_null=True, required=False,
+    )
+    requires_exact_cut = serializers.BooleanField(required=False)
+    surcharge_selections = GlassSurchargeSelectionSerializer(
+        many=True, required=False
+    )
+    safety_findings = GlassSafetyFindingSerializer(many=True, required=False)
 
 
 class PanelPieceSerializer(serializers.Serializer):

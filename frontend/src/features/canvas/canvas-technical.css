@@ -321,3 +321,257 @@
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
 }
+
+/* ---------- D02 structured glazing picker ---------- */
+
+.glazing-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-top: 0.35rem;
+}
+
+.glass-cards {
+  display: grid;
+  gap: 0.4rem;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.glass-card {
+  position: relative;
+}
+
+.glass-card__body {
+  background: var(--theme-bg-canvas);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-2);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.45rem 0.55rem;
+  text-align: left;
+  width: 100%;
+  height: 100%;
+}
+
+.glass-card.is-active .glass-card__body {
+  border-color: var(--theme-accent);
+  outline: 1px solid var(--theme-accent);
+}
+
+.glass-card.is-incompatible .glass-card__body {
+  opacity: 0.72;
+}
+
+.glass-card__name {
+  color: var(--theme-text-primary);
+  font-size: var(--type-dense);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.glass-card__sku {
+  color: var(--theme-text-muted);
+  display: block;
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-size: var(--type-micro);
+  font-weight: 400;
+}
+
+.glass-card__notation {
+  color: var(--theme-text-secondary);
+  font-size: var(--type-micro);
+}
+
+.glass-card__notation.is-unknown {
+  color: var(--theme-text-muted);
+  font-style: italic;
+}
+
+.glass-card__stats {
+  color: var(--theme-text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: var(--type-micro);
+  gap: 0.35rem;
+}
+
+.glass-card__tier {
+  color: var(--theme-accent-strong, var(--theme-accent));
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+}
+
+.glass-card__flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.glass-card__flag {
+  background: var(--theme-surface-raised);
+  border-radius: var(--r-pill);
+  color: var(--theme-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: var(--type-micro);
+  padding: 1px 7px;
+}
+
+.glass-card__flag.is-warn {
+  color: var(--theme-warning);
+}
+
+.glass-card__star {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.3rem;
+}
+
+.glass-findings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.glass-finding {
+  align-items: flex-start;
+  background: var(--theme-surface-raised);
+  border-left: 2px solid var(--theme-warning);
+  color: var(--theme-text-primary);
+  display: flex;
+  font-size: var(--type-dense);
+  gap: 0.4rem;
+  padding: 0.35rem 0.5rem;
+}
+
+.glass-finding--mandatory {
+  border-left-color: var(--theme-danger);
+}
+
+.glass-finding--fix {
+  align-items: center;
+  border-left-color: var(--theme-accent);
+  flex-wrap: wrap;
+}
+
+.glass-finding__source {
+  color: var(--theme-text-muted);
+}
+
+.glass-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.glass-section {
+  background: var(--theme-bg-canvas);
+  border: 1px solid var(--theme-border-subtle);
+  display: block;
+  width: 100%;
+}
+
+.glass-section__side {
+  fill: var(--theme-text-muted);
+  /* Real font size (not viewBox units) — stays readable at any scale. */
+  font-size: var(--type-micro);
+}
+
+.glass-section__label {
+  fill: var(--theme-text-secondary);
+  font-size: var(--type-micro);
+}
+
+.glass-layer-svg__pane {
+  fill: var(--theme-glass-tint);
+  stroke: var(--theme-text-secondary);
+  stroke-width: 0.6;
+}
+
+.glass-layer-svg__chamber {
+  fill: transparent;
+}
+
+.glass-layer-svg__spacer {
+  fill: var(--theme-text-muted);
+  opacity: 0.35;
+}
+
+.glass-composer__layers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.glass-layer {
+  align-items: center;
+  border-left: 2px solid var(--theme-border-subtle);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding-left: 0.4rem;
+}
+
+.glass-layer--chamber {
+  border-left-color: var(--theme-accent);
+}
+
+.glass-layer__role {
+  color: var(--theme-text-muted);
+  font-size: var(--type-micro);
+  min-width: 5.5rem;
+}
+
+.glass-layer__panes,
+.glass-layer__pane {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.2rem;
+}
+
+.glass-layer select {
+  min-width: 0;
+}
+
+.glass-composer__summary {
+  font-size: var(--type-micro);
+  margin: 0;
+}
+
+.glass-surcharges {
+  border-top: 1px solid var(--theme-border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding-top: 0.4rem;
+}
+
+.glass-surcharge {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.glass-surcharge__edges,
+.glass-surcharge__grid,
+.glass-surcharge__count {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.3rem;
+  margin-left: 1.4rem;
+}
+
+.glass-surcharge input[type="number"] {
+  width: 3.5rem;
+}

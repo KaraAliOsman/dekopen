@@ -1186,6 +1186,29 @@ export function ProductionPage(): JSX.Element {
     }
   }
 
+  // D02 pedido al vidriero — sealed-evidence cut list + QR labels. The
+  // backend merges sibling OTs of the same version via ?orders=; this
+  // button exports a single OT's glass (the common floor flow).
+  async function downloadGlazierOrder(
+    orderId: string,
+    orderCode: string,
+    output: "pdf" | "csv",
+  ): Promise<void> {
+    try {
+      const { blob, filename } = await apiFetchBlob(
+        `/api/v1/production/orders/${orderId}/glass-order/?output=${output}`,
+      );
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename ?? `${orderCode}-pedido-vidriero.${output}`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setMessage(t("production.glazierOrderError"));
+    }
+  }
+
   // INSTALLER is a field role — it confirms deliveries and installations,
   // never station steps or work-order transitions (server enforces).
   // ESTIMATOR gets a read-only view — the attention queue deep-links them
@@ -2110,6 +2133,26 @@ export function ProductionPage(): JSX.Element {
                             onClick={() => downloadProductionPack(detail.id, detail.order_code)}
                           >
                             {t("production.productionPackButton")}
+                          </button>
+                          <button
+                            type="button"
+                            className="production-cutpack"
+                            disabled={busy}
+                            onClick={() =>
+                              downloadGlazierOrder(detail.id, detail.order_code, "pdf")
+                            }
+                          >
+                            {t("production.glazierOrderPdf")}
+                          </button>
+                          <button
+                            type="button"
+                            className="production-cutpack"
+                            disabled={busy}
+                            onClick={() =>
+                              downloadGlazierOrder(detail.id, detail.order_code, "csv")
+                            }
+                          >
+                            {t("production.glazierOrderCsv")}
                           </button>
                           {canOptimize && !TERMINAL_ORDER_STATUSES.has(detail.status) ? (
                             <>

@@ -464,3 +464,115 @@ def test_extras_serializer_contract():
     assert not PriceRequestSerializer(data=blank_label).is_valid()
     overflow = {**base,'extras':[{'label':str(i),'kind':'OTHER','amount':'1'} for i in range(11)]}
     assert not PriceRequestSerializer(data=overflow).is_valid()
+
+
+def test_position_cost_glass_product_min_area_and_surcharges(monkeypatch):
+    """D02: a registered glass product bills its declared minimum area and
+    emits a line per applicable surcharge (tempered m² + polished metres).
+    Money still comes from the cost list — the product only shapes the
+    quantity and the extras."""
+    from types import SimpleNamespace
+
+    from dekopen_engine.glass_composition import parse_glass_notation
+    from dekopen_engine.models import (
+        GlassPiece,
+        GlassProduct,
+        GlassSurchargeRate,
+        GlassSurchargeSelection,
+    )
+    import pricing.service as service
+
+    glass = GlassPiece(
+        bay_id="B1", width_mm=Decimal("800.00"), height_mm=Decimal("600.00"),
+        area_m2=Decimal("0.48"), weight_kg=Decimal("7.20"),
+        thickness_net_mm=Decimal("8.00"),
+        composition=parse_glass_notation("6 templado"),
+        surcharge_selections=[
+            GlassSurchargeSelection(kind="EDGE_POLISH", edges=["top", "left"])
+        ],
+    )
+    result = SimpleNamespace(
+        profile_cuts=[], reinforcements=[], glasses=[glass],
+        panels=[], hardware_items=[], fittings=[], leaf_weights=[],
+    )
+    product = GlassProduct(
+        sku="VID-T", name="Templado 6",
+        composition=parse_glass_notation("6 templado"),
+        min_area_m2=Decimal("0.50"),
+        surcharges=[
+            GlassSurchargeRate(kind="TEMPERED", unit="M2", amount=Decimal("5000"), currency="CLP", label="Templado"),
+            GlassSurchargeRate(kind="EDGE_POLISH", unit="M", amount=Decimal("2500"), currency="CLP", label="Canto pulido"),
+            GlassSurchargeRate(kind="DRILL", unit="EA", amount=Decimal("3500"), currency="CLP", label="Perforación"),
+        ],
+    )
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def execute(self, sql):
+            return None
+
+    class Conn:
+        needs_rollback = False
+
+        def cursor(self):
+            return Cursor()
+
+    class Repo:
+        org_id = "org"
+
+        def cost(self, sku, unit):
+            assert (sku, unit) == ("VID-T", "M2")
+            return Decimal("10000")
+
+        def convert(self, amount, currency):
+            return amount
+
+    position = {
+        "system_id": "sys", "width_mm": Decimal("2000"),
+        "height_mm": Decimal("1000"),
+        "parametric_tree": {"id": "B1", "glass_article_sku": "VID-T"},
+        "color_interior": "WHITE", "color_exterior": "WHITE",
+    }
+    params_repo = SimpleNamespace(
+        load_visible=lambda *a, **k: SimpleNamespace(
+            glass_products={"VID-T": product}
+        ),
+        load_coupler_articles=lambda *a, **k: {},
+    )
+    monkeypatch.setattr(service, "connection", Conn())
+    monkeypatch.setattr(service, "SystemParamsRepository", lambda: params_repo)
+    monkeypatch.setattr(service, "CuttingRepository", lambda: SimpleNamespace())
+    monkeypatch.setattr(
+        service, "engine_result_from_api", lambda **kwargs: result
+    )
+    monkeypatch.setattr(
+        service, "one", lambda *a, **k: {"currency": "CLP"}
+    )
+    total, _area, _result, formation = service.position_cost(
+        Repo(), position,
+        {"waste_factor_pct": Decimal("0"),
+         "labor_rate_per_m2": Decimal("0"),
+         "installation_rate_per_m2": Decimal("0")},
+    )
+    glass_lines = [
+        line for line in formation["composition"]
+        if line["kind"].startswith("GLASS")
+    ]
+    by_kind = {line["kind"]: line for line in glass_lines}
+    # area 0.48 m2 < declared minimum 0.50 → the base and the tempered
+    # surcharge both bill 0.50 m2.
+    assert by_kind["GLASS"]["quantity"] == "0.5000"
+    assert by_kind["GLASS"]["cost"] == "5000.0000"
+    assert by_kind["GLASS_TEMPERED"]["quantity"] == "0.5000"
+    assert by_kind["GLASS_TEMPERED"]["cost"] == "2500.0000"
+    # polished metres: top (0.8 m) + left (0.6 m) = 1.4 m.
+    assert by_kind["GLASS_EDGE_POLISH"]["quantity"] == "1.4000"
+    assert by_kind["GLASS_EDGE_POLISH"]["cost"] == "3500.0000"
+    # No DRILL selection → no drill line.
+    assert "GLASS_DRILL" not in by_kind
+    assert total == Decimal("5000.0000") + Decimal("2500.0000") + Decimal("3500.0000")

@@ -1641,3 +1641,221 @@ $d01$;
 
 COMMIT;
 
+BEGIN;
+
+-- ------------------------------------------------------------------------
+-- D02 — Vidrios de verdad: catálogo demo de productos estructurados,
+-- reglas de seguridad y límites SINTÉTICOS (pendientes de revisión técnica;
+-- la norma oficial entra por la ingesta de catálogo, no se inventa aquí).
+-- ------------------------------------------------------------------------
+
+-- Junquillos para el laminado 3+3 (6,38 mm): el paño real usa la misma
+-- familia de junquillo del vidrio delgado de cada sistema.
+INSERT INTO public.glazing_bead_matrix (
+    id, system_id, org_id, glass_thickness_mm, bead_article_id,
+    bead_width_mm, gasket_interior_mm, gasket_exterior_mm, cut_add_mm
+)
+SELECT
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/' || s.code || '/bead/6.38/' || bead_sku),
+    s.id, NULL, 6.38,
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/' || s.code || '/' || bead_sku),
+    bead_w, 3.00, 3.00, cut_add
+FROM public.profile_systems s
+CROSS JOIN (VALUES
+    ('DEMO_60',           'JQ-24'::text,      24.00::numeric, 9.00::numeric),
+    ('DEMO_CORREDERA_60', 'JQ-CORR-24'::text, 24.00::numeric, 9.00::numeric)
+) AS b(sys_code, bead_sku, bead_w, cut_add)
+WHERE s.code = b.sys_code AND s.is_global = TRUE
+ON CONFLICT (system_id, glass_thickness_mm) DO NOTHING;
+
+-- Autoridades de compra para los nuevos SKU técnicos de vidrio.
+INSERT INTO public.glass_purchase_mappings
+ (id, system_id, org_id, technical_sku, purchasing_sku, manufacturer_name,
+  purchase_unit, version, provenance, glass_spec)
+SELECT uuid_generate_v5(uuid_ns_url(),
+        'https://dekopen.local/shot09/glass/' || s.code || '/' || m.technical_sku || '/V1'),
+ s.id, NULL, m.technical_sku, m.purchasing_sku, 'Referencia DEKOPEN', 'EA', 1,
+ '{"source":"Referencia DEKOPEN","certified":"false"}'::jsonb, m.glass_spec
+FROM public.profile_systems s
+JOIN (VALUES
+    ('DEMO_60', 'DVH-20', 'COMPRA-DVH-20', '4-12-4 Float Incoloro'),
+    ('DEMO_60', 'VIDRIO-LOWE-24', 'COMPRA-TP-LOWE-24', '4 / 16 Ar / 4 Low-E (c3)'),
+    ('DEMO_60', 'VIDRIO-TEMP-6', 'COMPRA-TEMP-6', '6 templado'),
+    ('DEMO_60', 'VIDRIO-LAM-638', 'COMPRA-LAM-638', '3+3 PVB 0,38'),
+    ('DEMO_70', 'VIDRIO-LOWE-24', 'COMPRA-TP-LOWE-24', '4 / 16 Ar / 4 Low-E (c3)'),
+    ('DEMO_70', 'VIDRIO-TEMP-24', 'COMPRA-TP-TEMP-24', '4 templado / 16 aire / 4'),
+    ('DEMO_CORREDERA_60', 'VIDRIO-LAM-638', 'COMPRA-LAM-638', '3+3 PVB 0,38'),
+    ('ALU_CORREDERA_70', 'VIDRIO-LOWE-20', 'COMPRA-TP-LOWE-20', '4 / 12 Ar / 4 Low-E (c3)')
+    ) AS m(sys_code, technical_sku, purchasing_sku, glass_spec) ON m.sys_code = s.code
+WHERE s.is_global = TRUE
+ON CONFLICT (id) DO NOTHING;
+
+-- Catálogo demo de productos de vidrio: composición estructurada generada
+-- por el propio parser del motor. Los datos de proveedor (Ug, g, TL,
+-- clase de seguridad) son SINTÉTICOS y quedan pendientes de revisión.
+INSERT INTO public.glass_products (
+    id, org_id, system_id, sku, commercial_name, notation, composition,
+    total_thickness_mm, safety_class, ug_w_m2k, g_value,
+    light_transmission_pct, weight_kg_m2, min_billable_area_m2, price_tier,
+    supplier_name, supplier_sku, data_provenance, review_pending
+)
+SELECT
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/d02/glass/' || s.code || '/' || p.sku),
+    NULL, s.id, p.sku, p.commercial_name, p.notation, p.composition::jsonb,
+    p.total_thickness_mm, p.safety_class, p.ug_w_m2k, p.g_value,
+    p.light_transmission_pct, p.weight_kg_m2, p.min_billable_area_m2, p.price_tier,
+    'Vidriería DEMO (sintético)', p.sku, 'SEED_SYNTHETIC', p.review_pending
+FROM public.profile_systems s
+JOIN (VALUES
+    ('DEMO_60'::text, 'VIDRIO-BASE'::text, 'Termopanel incoloro 4·16·4'::text, '4-16-4 Float Incoloro'::text,
+     '{"layers":[{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null},{"type":"chamber","width_mm":"16","gas":"AIR","spacer":"ALUMINIUM","sealant":null},{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null}]}'::text, '24'::numeric, NULL::text, NULL::numeric, NULL::numeric, NULL::numeric,
+     '20.00'::numeric, '0.30'::numeric, 2::smallint, FALSE::boolean),
+    ('DEMO_60'::text, 'DVH-20'::text, 'Termopanel incoloro 4·12·4'::text, '4-12-4 Float Incoloro'::text,
+     '{"layers":[{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null},{"type":"chamber","width_mm":"12","gas":"AIR","spacer":"ALUMINIUM","sealant":null},{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null}]}'::text, '20'::numeric, NULL::text, NULL::numeric, NULL::numeric, NULL::numeric,
+     '20.00'::numeric, '0.30'::numeric, 2::smallint, FALSE::boolean),
+    ('DEMO_60'::text, 'VIDRIO-LOWE-24'::text, 'Termopanel Low-E 4·16·4'::text, '4 / 16 Ar / 4 Low-E (c3)'::text,
+     '{"layers":[{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null},{"type":"chamber","width_mm":"16","gas":"ARGON","spacer":"ALUMINIUM","sealant":null},{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":"LOW_E","coating_face":3,"supplier_sku":null}]}'::text, '24'::numeric, NULL::text, 1.400, 0.630, 80.00,
+     '20.00'::numeric, '0.30'::numeric, 4::smallint, TRUE::boolean),
+    ('DEMO_60'::text, 'VIDRIO-TEMP-6'::text, 'Templado incoloro 6 mm'::text, '6 templado'::text,
+     '{"layers":[{"type":"lamina","panes":["6"],"interlayer":null,"tint":"CLEAR","treatment":"TEMPERED","coating":null,"coating_face":null,"supplier_sku":null}]}'::text, '6'::numeric, 'B'::text, NULL::numeric, NULL::numeric, NULL::numeric,
+     '15.00'::numeric, '0.30'::numeric, 3::smallint, TRUE::boolean),
+    ('DEMO_60'::text, 'VIDRIO-LAM-638'::text, 'Laminado seguridad 3+3'::text, '3+3 PVB 0,38'::text,
+     '{"layers":[{"type":"lamina","panes":["3","3"],"interlayer":"PVB_038","tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null}]}'::text, '6.38'::numeric, 'A'::text, NULL::numeric, NULL::numeric, NULL::numeric,
+     '15.4066'::numeric, '0.30'::numeric, 4::smallint, TRUE::boolean),
+    ('DEMO_70'::text, 'VIDRIO-BASE'::text, 'Termopanel incoloro 4·16·4'::text, '4-16-4 Float Incoloro'::text,
+     '{"layers":[{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null},{"type":"chamber","width_mm":"16","gas":"AIR","spacer":"ALUMINIUM","sealant":null},{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null}]}'::text, '24'::numeric, NULL::text, NULL::numeric, NULL::numeric, NULL::numeric,
+     '20.00'::numeric, '0.30'::numeric, 2::smallint, FALSE::boolean),
+    ('DEMO_70'::text, 'DVH-20'::text, 'Termopanel incoloro 4·12·4'::text, '4-12-4 Float Incoloro'::text,
+     '{"layers":[{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null},{"type":"chamber","width_mm":"12","gas":"AIR","spacer":"ALUMINIUM","sealant":null},{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null}]}'::text, '20'::numeric, NULL::text, NULL::numeric, NULL::numeric, NULL::numeric,
+     '20.00'::numeric, '0.30'::numeric, 2::smallint, FALSE::boolean),
+    ('DEMO_70'::text, 'VIDRIO-LOWE-24'::text, 'Termopanel Low-E 4·16·4'::text, '4 / 16 Ar / 4 Low-E (c3)'::text,
+     '{"layers":[{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null},{"type":"chamber","width_mm":"16","gas":"ARGON","spacer":"ALUMINIUM","sealant":null},{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":"LOW_E","coating_face":3,"supplier_sku":null}]}'::text, '24'::numeric, NULL::text, 1.400, 0.630, 80.00,
+     '20.00'::numeric, '0.30'::numeric, 4::smallint, TRUE::boolean),
+    ('DEMO_70'::text, 'VIDRIO-TEMP-24'::text, 'Termopanel templado 4·16·4'::text, '4 templado / 16 aire / 4'::text,
+     '{"layers":[{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":"TEMPERED","coating":null,"coating_face":null,"supplier_sku":null},{"type":"chamber","width_mm":"16","gas":"AIR","spacer":"ALUMINIUM","sealant":null},{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null}]}'::text, '24'::numeric, 'B'::text, NULL::numeric, NULL::numeric, NULL::numeric,
+     '20.00'::numeric, '0.30'::numeric, 4::smallint, TRUE::boolean),
+    ('DEMO_CORREDERA_60'::text, 'VIDRIO-BASE'::text, 'Termopanel incoloro 4·16·4'::text, '4-16-4 Float Incoloro'::text,
+     '{"layers":[{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null},{"type":"chamber","width_mm":"16","gas":"AIR","spacer":"ALUMINIUM","sealant":null},{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null}]}'::text, '24'::numeric, NULL::text, NULL::numeric, NULL::numeric, NULL::numeric,
+     '20.00'::numeric, '0.30'::numeric, 2::smallint, FALSE::boolean),
+    ('DEMO_CORREDERA_60'::text, 'DVH-20'::text, 'Termopanel incoloro 4·12·4'::text, '4-12-4 Float Incoloro'::text,
+     '{"layers":[{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null},{"type":"chamber","width_mm":"12","gas":"AIR","spacer":"ALUMINIUM","sealant":null},{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null}]}'::text, '20'::numeric, NULL::text, NULL::numeric, NULL::numeric, NULL::numeric,
+     '20.00'::numeric, '0.30'::numeric, 2::smallint, FALSE::boolean),
+    ('DEMO_CORREDERA_60'::text, 'MONO-4'::text, 'Monolítico incoloro 4 mm'::text, '4 Float Incoloro'::text,
+     '{"layers":[{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null}]}'::text, '4'::numeric, NULL::text, NULL::numeric, NULL::numeric, NULL::numeric,
+     '10.00'::numeric, '0.30'::numeric, 1::smallint, FALSE::boolean),
+    ('DEMO_CORREDERA_60'::text, 'VIDRIO-LAM-638'::text, 'Laminado seguridad 3+3'::text, '3+3 PVB 0,38'::text,
+     '{"layers":[{"type":"lamina","panes":["3","3"],"interlayer":"PVB_038","tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null}]}'::text, '6.38'::numeric, 'A'::text, NULL::numeric, NULL::numeric, NULL::numeric,
+     '15.4066'::numeric, '0.30'::numeric, 4::smallint, TRUE::boolean),
+    ('ALU_CORREDERA_70'::text, 'VIDRIO-BASE'::text, 'Termopanel incoloro 4·12·4'::text, '4-12-4 Float Incoloro'::text,
+     '{"layers":[{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null},{"type":"chamber","width_mm":"12","gas":"AIR","spacer":"ALUMINIUM","sealant":null},{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null}]}'::text, '20'::numeric, NULL::text, NULL::numeric, NULL::numeric, NULL::numeric,
+     '20.00'::numeric, '0.30'::numeric, 2::smallint, FALSE::boolean),
+    ('ALU_CORREDERA_70'::text, 'VIDRIO-LOWE-20'::text, 'Termopanel Low-E 4·12·4'::text, '4 / 12 Ar / 4 Low-E (c3)'::text,
+     '{"layers":[{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null},{"type":"chamber","width_mm":"12","gas":"ARGON","spacer":"ALUMINIUM","sealant":null},{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":"LOW_E","coating_face":3,"supplier_sku":null}]}'::text, '20'::numeric, NULL::text, 1.400, 0.630, 80.00,
+     '20.00'::numeric, '0.30'::numeric, 4::smallint, TRUE::boolean),
+    ('ALU_65'::text, 'DVH-24'::text, 'Termopanel incoloro 4·16·4'::text, '4-16-4 Float Incoloro'::text,
+     '{"layers":[{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null},{"type":"chamber","width_mm":"16","gas":"AIR","spacer":"ALUMINIUM","sealant":null},{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null}]}'::text, '24'::numeric, NULL::text, NULL::numeric, NULL::numeric, NULL::numeric,
+     '20.00'::numeric, '0.30'::numeric, 2::smallint, FALSE::boolean),
+    ('ALU_65'::text, 'MONO-5'::text, 'Monolítico incoloro 5 mm'::text, '5 Float Incoloro'::text,
+     '{"layers":[{"type":"lamina","panes":["5"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null}]}'::text, '5'::numeric, NULL::text, NULL::numeric, NULL::numeric, NULL::numeric,
+     '12.50'::numeric, '0.30'::numeric, 1::smallint, FALSE::boolean),
+    ('GLASS_45'::text, 'DVH-28'::text, 'Termopanel incoloro 4·20·4'::text, '4-20-4 Float Incoloro'::text,
+     '{"layers":[{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null},{"type":"chamber","width_mm":"20","gas":"AIR","spacer":"ALUMINIUM","sealant":null},{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null}]}'::text, '28'::numeric, NULL::text, NULL::numeric, NULL::numeric, NULL::numeric,
+     '20.00'::numeric, '0.30'::numeric, 2::smallint, FALSE::boolean),
+    ('GLASS_45'::text, 'DVH-32'::text, 'Termopanel incoloro 4·24·4'::text, '4-24-4 Float Incoloro'::text,
+     '{"layers":[{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null},{"type":"chamber","width_mm":"24","gas":"AIR","spacer":"ALUMINIUM","sealant":null},{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null}]}'::text, '32'::numeric, NULL::text, NULL::numeric, NULL::numeric, NULL::numeric,
+     '20.00'::numeric, '0.30'::numeric, 2::smallint, FALSE::boolean),
+    ('GLASS_45'::text, 'MONO-8'::text, 'Monolítico incoloro 8 mm'::text, '8 Float Incoloro'::text,
+     '{"layers":[{"type":"lamina","panes":["8"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null}]}'::text, '8'::numeric, NULL::text, NULL::numeric, NULL::numeric, NULL::numeric,
+     '20.00'::numeric, '0.30'::numeric, 1::smallint, FALSE::boolean)
+    ) AS p(sys_code, sku, commercial_name, notation, composition, total_thickness_mm,
+            safety_class, ug_w_m2k, g_value, light_transmission_pct, weight_kg_m2,
+            min_billable_area_m2, price_tier, review_pending)
+    ON p.sys_code = s.code
+WHERE s.is_global = TRUE
+ON CONFLICT DO NOTHING;
+
+-- Recargos demo por producto (CLP sintéticos).
+INSERT INTO public.glass_product_surcharges (
+    id, product_id, org_id, kind, unit, unit_cost, currency, label,
+    data_provenance, review_pending
+)
+SELECT
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/d02/glass-surcharge/' || gp.id::text || '/' || r.kind),
+    gp.id, NULL, r.kind, r.unit, r.unit_cost, 'CLP', r.label,
+    'SEED_SYNTHETIC', TRUE
+FROM public.glass_products gp
+JOIN (VALUES
+    ('VIDRIO-LOWE-24'::text, 'PALILLAJE'::text, 'CROSS'::text, '1500'::numeric, 'Palillaje interior — por cruce'::text),
+    ('VIDRIO-LOWE-24'::text, 'DRILL'::text, 'EA'::text, '3500'::numeric, 'Perforación'::text),
+    ('VIDRIO-TEMP-24'::text, 'TEMPERED'::text, 'M2'::text, '5500'::numeric, 'Recargo templado'::text),
+    ('VIDRIO-TEMP-24'::text, 'PALILLAJE'::text, 'CROSS'::text, '1500'::numeric, 'Palillaje interior — por cruce'::text),
+    ('VIDRIO-TEMP-6'::text, 'TEMPERED'::text, 'M2'::text, '5500'::numeric, 'Recargo templado'::text),
+    ('VIDRIO-TEMP-6'::text, 'EDGE_POLISH'::text, 'M'::text, '1200'::numeric, 'Canto pulido'::text),
+    ('VIDRIO-LAM-638'::text, 'EDGE_POLISH'::text, 'M'::text, '1200'::numeric, 'Canto pulido'::text),
+    ('VIDRIO-LOWE-20'::text, 'DRILL'::text, 'EA'::text, '3500'::numeric, 'Perforación'::text),
+    ('VIDRIO-BASE'::text, 'PALILLAJE'::text, 'CROSS'::text, '1500'::numeric, 'Palillaje interior — por cruce'::text),
+    ('VIDRIO-BASE'::text, 'DRILL'::text, 'EA'::text, '3500'::numeric, 'Perforación'::text),
+    ('DVH-20'::text, 'PALILLAJE'::text, 'CROSS'::text, '1500'::numeric, 'Palillaje interior — por cruce'::text),
+    ('DVH-24'::text, 'PALILLAJE'::text, 'CROSS'::text, '1500'::numeric, 'Palillaje interior — por cruce'::text),
+    ('DVH-28'::text, 'PALILLAJE'::text, 'CROSS'::text, '1500'::numeric, 'Palillaje interior — por cruce'::text),
+    ('DVH-32'::text, 'PALILLAJE'::text, 'CROSS'::text, '1500'::numeric, 'Palillaje interior — por cruce'::text)
+    ) AS r(sku, kind, unit, unit_cost, label)
+    ON r.sku = gp.sku
+WHERE gp.org_id IS NULL
+ON CONFLICT DO NOTHING;
+
+-- Reglas de seguridad demo (familia NCh 135/2): avisos, no bloqueos. El
+-- texto es sintético y queda pendiente de la norma oficial vía ingesta.
+INSERT INTO public.glass_safety_rules (
+    id, org_id, code, title, message, applies_openings, sill_below_mm,
+    min_area_m2, requires_door, requires_adjacent_door, required_safety,
+    severity, source_ref, data_provenance, review_pending
+)
+SELECT
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/d02/glass-rule/' || r.code),
+    NULL, r.code, r.title, r.message, r.applies_openings, r.sill_below_mm,
+    r.min_area_m2, r.requires_door, r.requires_adjacent_door, r.required_safety,
+    r.severity, 'NCh 135/2 — referencia sintética pendiente de norma oficial',
+    'SEED_SYNTHETIC', TRUE
+FROM (VALUES
+    ('GLASS-SAFETY-DOOR'::text, 'Paño vidriado en puerta'::text, 'El paño de una puerta vidriada debería llevar vidrio de seguridad (templado o laminado).'::text,
+     NULL::text[], NULL::numeric, NULL, 'True'::boolean, NULL, 'SAFETY_GLASS'::text, 'WARNING'::text),
+    ('GLASS-SAFETY-ADJ-DOOR'::text, 'Paño lateral junto a puerta'::text, 'El paño lateral de una puerta debería llevar vidrio de seguridad.'::text,
+     NULL::text[], NULL, NULL, NULL, 'True'::boolean, 'SAFETY_GLASS'::text, 'WARNING'::text),
+    -- Ninguna regla de antepecho: la distancia del vidrio al piso no la
+    -- sabe el modelo (la base de la unidad no es el piso). Una regla
+    -- sill_below_mm dispararía en falso en toda ventana normal; las reglas
+    -- de piso llegan con la norma oficial y contexto de instalación.
+    ('GLASS-SAFETY-LARGE-PANE'::text, 'Gran paño vidriado'::text, 'Un paño de 4 m² o más expone una superficie grande: se recomienda vidrio de seguridad.'::text,
+     NULL::text[], NULL, '4.0'::numeric, NULL, NULL, 'SAFETY_GLASS'::text, 'WARNING'::text)
+    ) AS r(code, title, message, applies_openings, sill_below_mm, min_area_m2,
+            requires_door, requires_adjacent_door, required_safety, severity)
+ON CONFLICT DO NOTHING;
+
+-- Límites dimensionales demo (sintéticos; el templado exige medida exacta).
+INSERT INTO public.glass_type_limits (
+    id, org_id, code, lamina_kind, thickness_min_mm, thickness_max_mm,
+    min_side_mm, max_side_mm, min_area_m2, max_area_m2, max_aspect_ratio,
+    requires_exact_cut, severity, source_ref, data_provenance, review_pending
+)
+SELECT
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/d02/glass-limit/' || r.code),
+    NULL, r.code, r.lamina_kind, r.thickness_min_mm, r.thickness_max_mm,
+    r.min_side_mm, r.max_side_mm, r.min_area_m2, r.max_area_m2,
+    r.max_aspect_ratio, r.requires_exact_cut, r.severity, r.source_ref,
+    'SEED_SYNTHETIC', TRUE
+FROM (VALUES
+    ('GLASS-LIMIT-TEMPERED-EXACT-CUT'::text, 'TEMPERED'::text, NULL, NULL, NULL, NULL,
+     NULL::numeric, NULL, NULL, TRUE::boolean, 'WARNING'::text, 'Práctica vidriera — el templado no se recorta'::text),
+    ('GLASS-LIMIT-FLOAT-4'::text, 'FLOAT'::text, '4'::numeric, '4'::numeric, NULL, NULL,
+     NULL, '4.5'::numeric, NULL, FALSE::boolean, 'WARNING'::text, 'Referencia sintética — revisar con proveedor'::text),
+    ('GLASS-LIMIT-TEMPERED-SIDE'::text, 'TEMPERED'::text, NULL, NULL, NULL, '3200'::numeric,
+     NULL, NULL, NULL, FALSE::boolean, 'WARNING'::text, 'Referencia sintética — revisar con proveedor'::text),
+    ('GLASS-LIMIT-MONO-SIDE'::text, 'FLOAT'::text, NULL, NULL, '250'::numeric, NULL,
+     NULL, NULL, '12.0'::numeric, FALSE::boolean, 'WARNING'::text, 'Referencia sintética — relación de aspecto ≤ 12'::text)
+    ) AS r(code, lamina_kind, thickness_min_mm, thickness_max_mm, min_side_mm,
+            max_side_mm, min_area_m2, max_area_m2, max_aspect_ratio,
+            requires_exact_cut, severity, source_ref)
+ON CONFLICT DO NOTHING;
+
+COMMIT;

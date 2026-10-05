@@ -221,6 +221,8 @@ describe("rectangular intent", () => {
       glass_thickness_mm: "24.00",
       glass_spec: "4-16-4",
       glass_article_sku: "GLASS-A",
+      glass_composition: null,
+      glass_options: null,
       panel_article_sku: null,
       hardware_set_sku: null,
       handle_height_mm: null,

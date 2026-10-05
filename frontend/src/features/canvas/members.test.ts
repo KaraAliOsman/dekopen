@@ -20,6 +20,7 @@ const CATALOG: DesignOptions = {
   handle_policy: null,
   hardware_kits: [],
   glass_skus: [],
+  glass_products: [],
   glass_specs: [],
   coupler_skus: ["CPL-90"],
   coupler_profiles: [{ sku: "CPL-90", name: "Coplana", material: "PVC", face_width_mm: "90.00" }],

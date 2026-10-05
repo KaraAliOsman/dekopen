@@ -5,6 +5,9 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { GlassPieceComposition } from "./glassPieceComposition";
+import type { GlassSafetyFinding } from "./glassSafetyFinding";
+import type { GlassSurchargeSelection } from "./glassSurchargeSelection";
 import type { PlanPoint } from "./planPoint";
 
 export interface GlassPiece {
@@ -35,4 +38,14 @@ export interface GlassPiece {
   article_sku: string | null;
   /** @nullable */
   exposed_edges: string[] | null;
+  /** @nullable */
+  composition?: GlassPieceComposition;
+  /**
+   * @nullable
+   * @pattern ^-?\d{0,10}(?:\.\d{0,2})?$
+   */
+  thickness_total_mm?: string | null;
+  requires_exact_cut?: boolean;
+  surcharge_selections?: GlassSurchargeSelection[];
+  safety_findings?: GlassSafetyFinding[];
 }

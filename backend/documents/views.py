@@ -136,6 +136,12 @@ DOCUMENTARY_ERROR_DETAILS = {
     "invalid_purchase_requirement": "La necesidad de compra no es válida para esta versión.",
     "invalid_supplier": "El proveedor no es válido para este pedido.",
     "invalid_supplier_eligibility": "La elegibilidad indicada no corresponde al proveedor.",
+    "glazier_order_mixed_versions": (
+        "Un pedido al vidriero solo agrupa órdenes de la misma versión congelada."
+    ),
+    "glazier_order_no_glass": (
+        "La orden no contiene vidrios; el pedido al vidriero queda vacío."
+    ),
 }
 
 

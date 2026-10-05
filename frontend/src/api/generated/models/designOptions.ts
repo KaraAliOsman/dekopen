@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { CouplerChoice } from "./couplerChoice";
+import type { GlassProductChoice } from "./glassProductChoice";
 import type { GlassSpecChoice } from "./glassSpecChoice";
 import type { GlazingBeadChoice } from "./glazingBeadChoice";
 import type { HandlePolicy } from "./handlePolicy";
@@ -19,6 +20,7 @@ export interface DesignOptions {
   hardware_kits: KitChoice[];
   handle_policy: HandlePolicy | null;
   glass_skus: string[];
+  glass_products: GlassProductChoice[];
   glass_specs: GlassSpecChoice[];
   colors: string[];
   coupler_skus: string[];
