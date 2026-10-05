@@ -3,7 +3,7 @@ type: state
 status: active
 updated: 2026-10-05
 volatility: high
-verified_ref: e17fb7101fd7f84287cf51e7c3b86fadc6cbd0f7
+verified_ref: d7dc6a9c83d19958ca7730930ec27381c30c967c
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
@@ -15,6 +15,7 @@ sources:
   - D07 vano/fabricación PR https://github.com/KaraAliOsman/dekopen/pull/14
   - D05 colores/acabados PR https://github.com/KaraAliOsman/dekopen/pull/15
   - IA2 AI ops/tools PR https://github.com/KaraAliOsman/dekopen/pull/16
+  - D06 accesorios/extras PR https://github.com/KaraAliOsman/dekopen/pull/17
   - integracion/v1 merge 747c528b67d234d697624929ccbcc7098261ed54
   - open PR metadata observed 2026-09-27/28
   - AGENTS.md
@@ -57,9 +58,9 @@ Hard invariants documented by the repo include:
 - workshop-language validation;
 - Oknosoft/WindowBuilder as a domain reference.
 
-## D06 state (pendiente de merge en `integracion/v1`)
+## D06 state
 
-On branch `devin/D06-accesorios-extras`, pending review/merge:
+Merged into `integracion/v1` as squash `d7dc6a9c83d19958ca7730930ec27381c30c967c` (dekopen PR #17):
 
 - `ExtraArticle` (catalogo global u org) y `ServiceArticle` (org) son datos: kinds SILL/FRAME_EXTENSION/COVER_TRIM/SKIRT (corte, `pricing_unit=METER`) y MOSQUITO_SCREEN/VENTILATOR (contados, `EACH`); `families`/`unit_kinds` predicados de aplicabilidad, `suggestion_reason` marca el articulo como acompanante sugerido con causa (migracion `20261231000000_d06_extras.sql`: `extra_articles`, `service_articles`, `extra_templates`, `service_templates`, `project_services`, `organizations.extras_display`).
 - El motor (`engine/.../extras.py`) mide desde la geometria: vierteaguas = corrido inferior exterior continuo + `vuelo` por extremo (1500+30+30 → 1 corte de 1560 mm), ensanche/tapajunta = largos de los lados exteriores declarados, contados = hojas operables (override `qty`); servicios = unidades / m2 / ml de perimetro / cargo unico. Nada se digita: cantidad x precio = total por sublinea (`bom.extra_lines`) y por servicio (`service_lines` en pricing), y el plan de corte/BOM de OT recibe las piezas `origin=EXTRA` (perfil `cut_profile_sku` del articulo) y los `fittings` contados.

@@ -8,7 +8,7 @@
 | D03 | D1 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/9 | db136a7207487e4e843b17f36f03a4c78a54b79b | CI 6/6 verde; squash mergeado. Modelo Opening + BayLeaf + capacidades por sistema + simbología DIN por vista + herrajes/manilla por hoja. |
 | D04 | D1 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/8 | 388e79bdc0ff111a9c2e76a445260bd9f18b92c3 | CI 6/6 verde; squash mergeado. Kits como clases por envolvente + qty/cut rules como datos + manillas validadas + opciones vendibles + picking/mecanizado en OT. |
 | D05 | D2 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/15 | 85cf4d6019111c08421c01024b98556e31199934 | CI 6/6 verde; squash mergeado. Catálogo por sistema + bicolor por posición + SKU por acabado + recargos motor + renders por cara. |
-| D06 | D2 | pendiente |  |  |  |
+| D06 | D2 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/17 | d7dc6a9c83d19958ca7730930ec27381c30c967c | CI 6/6 verde; squash mergeado. ExtraArticle/ServiceArticle + sublíneas medidas por motor + servicios de proyecto + plantillas org + DOC-01 con sublíneas. |
 | D07 | D2 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/14 | 5474798011022008f2ceb31dfefb15813ad24262 | CI 6/6 verde; squash mergeado. Motor rough_opening + reglas de montaje versionadas + estados de medida con sello + gate OT + chip/inspector/cota doble. |
 | IA2 | D2 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/16 | e17fb7101fd7f84287cf51e7c3b86fadc6cbd0f7 | CI 6/6 verde; squash mergeado. Registro único 36 ops UI/IA/API + 8 herramientas de motor + clarify tipado + preview+Aplicar deshacible + prompt es-CL versionado. Evals MOCK 0/26 → 26/26. |
 | IA3 | D2 | pendiente |  |  |  |
