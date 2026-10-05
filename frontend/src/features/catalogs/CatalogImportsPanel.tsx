@@ -173,7 +173,12 @@ function codeText(code: string): string {
         .map((role) => ct(`option.${role.trim()}`))
         .join(", "),
     );
-  return ct(WARNING_LABEL[code] ?? ITEM_ERROR_LABEL[code] ?? "importsErrorUnknown");
+  const label = WARNING_LABEL[code] ?? ITEM_ERROR_LABEL[code];
+  if (label) return ct(label as TranslationKey);
+  // Las advertencias del parser pueden llegar ya como frase en español
+  // ("La hoja «Sistemas» no tiene las columnas…") — se muestran tal cual;
+  // solo los códigos compactos sin mapeo caen al mensaje genérico.
+  return code.includes(" ") ? code : ct("importsErrorUnknown");
 }
 
 const CONFIDENCE_LABEL: Record<string, string> = {
@@ -290,10 +295,15 @@ export function CatalogImportsPanel({
     setMessage("");
     setReviewDirty(false);
     setSystemId(entry.system_id ?? systems[0]?.id ?? "");
+    // Claves ya publicadas por un confirm parcial anterior — quedan
+    // marcadas Publicado y fuera de la selección; re-enviarlas (sobre todo
+    // la fila Sistema como new_system) provoca el 409 catalog_system_changed.
+    const done = new Set((entry.result ?? []).map((result) => String(result.key ?? "")));
     setRows(
       entry.candidates.map((raw) => {
         const candidate = asCandidate(raw);
-        return { ...candidate, include: isSafe(candidate) };
+        const published = done.has(candidate.key);
+        return { ...candidate, include: isSafe(candidate) && !published, published };
       }),
     );
   }
@@ -354,9 +364,7 @@ export function CatalogImportsPanel({
     // org-owned system in the same confirm transaction. A row already
     // published by a previous partial confirm must NOT be re-sent as
     // new_system (that re-declare is the catalog_system_changed 409).
-    const newSystemRow = included.find(
-      (row) => row.entity === "SYSTEM" && !row.published,
-    );
+    const newSystemRow = included.find((row) => row.entity === "SYSTEM" && !row.published);
     const items: CatalogItemRequest[] = included.map((row) => ({
       key: row.key,
       entity: row.entity as CatalogItemRequest["entity"],
@@ -430,9 +438,7 @@ export function CatalogImportsPanel({
           setSystemId(newId);
           setRows((current) =>
             current.map((row) =>
-              row.key === createdSystem.key
-                ? { ...row, published: true, include: false }
-                : row,
+              row.key === createdSystem.key ? { ...row, published: true, include: false } : row,
             ),
           );
         }
@@ -466,11 +472,7 @@ export function CatalogImportsPanel({
     setReviewDirty(true);
     setRows((current) =>
       current.map((row) =>
-        row.published
-          ? row
-          : isSafe(row)
-            ? { ...row, include: true }
-            : { ...row, include: false },
+        row.published ? row : isSafe(row) ? { ...row, include: true } : { ...row, include: false },
       ),
     );
   }
