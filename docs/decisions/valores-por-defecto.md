@@ -20,6 +20,11 @@ Fuente inicial: `docs/design/CONSTITUCION.md`, seccion 11. Los encargos siguient
 | Limites dimensionales      | Por sistema x tipologia con fuente declarada (SEED_SYNTHETIC / MANUAL / IMPORT / LEGACY_UNVERIFIED); sin fila = sin limite verificado | Catalogo > Sistemas               | implementado | D01                       |
 | Refuerzo                   | Acero declarado como dato (ix_cm4, tornillos por metro); los tornillos entran a la BOM como fittings (TORNILLO-4X16) | Catalogo > Sistemas > Refuerzos   | implementado | D01                       |
 | Ingesta de catalogo        | Dos vias (plantilla XLSX/CSV y candidatos IA) que convergen en la misma revision humana; nada se publica sin confirmar | Catalogo > Importar               | implementado | D01                       |
+| Clase de herraje           | Automatica: el motor elige la clase mas ajustada que cumple envolvente/peso/restricciones (empate de envolvente = ambiguedad, nunca moneda al aire); el usuario puede fijar una clase compatible como override | Inspector > Herrajes              | implementado | D04                       |
+| Altura de manilla          | La familia declara la regla (CENTERED / FIXED_FROM_BASE / RANGE) y su banda; la hoja puede editarla dentro del rango y el motor avisa si queda fuera; sin dato = Sin dato, nunca un mm inventado | Inspector > Herrajes (hoja)       | implementado | D04                       |
+| Opciones de herraje        | Vendibles por posicion con `price_delta_clp` (delta de venta); fuente seleccionada sin precio = error `hardware_option_price_missing`, nunca precio cero silencioso | Documento al cliente / pricing    | implementado | D04                       |
+| Mecanizado de herrajes     | Declarado por componente como dato; sin coordenadas en catalogo la operacion queda `DECLARED_NOT_EMITTED` — no se inventan coordenadas | OT (payload P14)                  | implementado | D04                       |
+| Clase siguiente al fallar  | Si una clase explicita falla y otra compatible existe, el mensaje la nombra con su delta CLP; si ninguna clase cabe, se sugiere dividir la bahia nombrando la clase mas pesada | Motor (contexto de error)         | implementado | D04                       |
 
 ## Decisiones de implementacion — P01 (sistema de diseno v2)
 
