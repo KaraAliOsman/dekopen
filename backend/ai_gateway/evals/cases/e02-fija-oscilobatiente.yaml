@@ -1,0 +1,19 @@
+id: E02
+view: editor
+via: design_assist
+surface: position
+fixture: editor
+product_variant: vacia
+prompt: "la izquierda fija y la derecha oscilobatiente con la manilla a la derecha"
+expected: "2 bahías: izquierda FIXED, derecha TILT_TURN_LEFT."
+expect:
+  op_gap: split_bay
+  any:
+    - product:
+        bays: [FIXED, TILT_TURN_LEFT]
+        bays_count: 2
+        splits:
+          - type: SPLIT_V
+    - behavior:
+        asks_clarification: true
+        no_ops_accepted: true

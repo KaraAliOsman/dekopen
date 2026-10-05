@@ -1,0 +1,17 @@
+id: E06
+view: editor
+via: design_assist
+surface: position
+fixture: editor
+product_variant: vacia
+prompt: "pon vidrio laminado 4+4"
+expected: "Sin operación; responde que no está disponible y lista las alternativas reales."
+expect:
+  any:
+    - behavior:
+        no_ops_accepted: true
+        text_matches_any:
+          - "VIDRIO-BASE|4 Float|24\\s*mm|laminado|no\\s+(está|existe|hay)|disponible|alternativa"
+    - behavior:
+        asks_clarification: true
+        no_ops_accepted: true

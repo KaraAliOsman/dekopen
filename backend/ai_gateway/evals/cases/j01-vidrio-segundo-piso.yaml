@@ -1,0 +1,18 @@
+id: J01
+view: proyecto
+via: agent
+surface: project
+fixture: proyecto
+refs:
+  project_id: "fd515745-3b5b-540e-aa5d-455d0d7067b5"
+prompt: "cambia el vidrio de todas las ventanas del segundo piso a VIDRIO-BASE"
+expected: "Lote solo sobre las posiciones cuya ubicación indica 2º piso ('Estar segundo piso'). Si la ubicación no lo permite, aclaración."
+expect:
+  any:
+    - behavior:
+        batch:
+          positions_min: 1
+          only_locations: ["segundo piso"]
+    - behavior:
+        asks_clarification: true
+        no_ops_accepted: true

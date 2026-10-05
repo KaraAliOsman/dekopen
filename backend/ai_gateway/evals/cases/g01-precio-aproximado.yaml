@@ -1,0 +1,26 @@
+id: G01
+view: general
+via: agent
+surface: dashboard
+fixture: dashboard
+prompt: "dame un precio aproximado de una ventana de 2 × 2 sin crearla"
+expected: "No inventa; ofrece crear un borrador y calcularlo con el motor."
+expect:
+  context_gap: precio_unitario (no hay cálculo del motor en la proyección)
+  any:
+    - behavior:
+        artifact:
+          kind: quote_draft
+    - behavior:
+        artifact:
+          kind: product_draft
+    - behavior:
+        steps_kinds_contain: [navigate]
+    - behavior:
+        asks_clarification: true
+    - behavior:
+        sin_dato: true
+    - behavior:
+        steps_kinds_absent: [ops, batch_ops]
+        text_matches_any:
+          - "motor|borrador|cotizaci[oó]n|no\\s+puedo|no\\s+tengo|calcular"

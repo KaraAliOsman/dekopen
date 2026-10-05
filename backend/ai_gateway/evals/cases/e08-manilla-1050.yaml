@@ -1,0 +1,15 @@
+id: E08
+view: editor
+via: design_assist
+surface: position
+fixture: editor
+product_variant: vacia
+prompt: "manilla a 1050 del piso"
+expected: "Pide aclaración (altura de instalación o elevación objetivo). Sin operación si falta la medida."
+expect:
+  expects_clarification: true
+  op_gap: handle_height
+  any:
+    - behavior:
+        asks_clarification: true
+        no_ops_accepted: true

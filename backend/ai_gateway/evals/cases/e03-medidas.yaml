@@ -1,0 +1,13 @@
+id: E03
+view: editor
+via: design_assist
+surface: position
+fixture: editor
+product_variant: vacia
+prompt: "hazla de 1,8 metros de ancho por 1350 de alto"
+expected: "1800 × 1350."
+expect:
+  any:
+    - product:
+        total_width_mm: 1800
+        height_mm: 1350

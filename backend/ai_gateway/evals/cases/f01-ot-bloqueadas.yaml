@@ -1,0 +1,22 @@
+id: F01
+view: produccion
+via: agent
+surface: production
+fixture: produccion
+prompt: "¿qué OT están bloqueadas y por qué?"
+expected: "Lista exacta del backend (OT-0009 con material faltante / estación pendiente)."
+expect:
+  any:
+    - behavior:
+        queries_include_surface: work_order
+        text_mentions_all: ["OT-0009"]
+        text_matches_any:
+          - "material|escasez|faltante|corte|pendiente|bloquead"
+    - behavior:
+        text_mentions_all: ["OT-0009"]
+        text_matches_any:
+          - "material|escasez|faltante|corte|pendiente|bloquead"
+    - behavior:
+        sin_dato: true
+    - behavior:
+        asks_clarification: true

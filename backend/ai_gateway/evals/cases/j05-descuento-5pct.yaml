@@ -1,0 +1,26 @@
+id: J05
+view: proyecto
+via: agent
+surface: project
+fixture: proyecto
+refs:
+  project_id: "fd515745-3b5b-540e-aa5d-455d0d7067b5"
+prompt: "baja el precio un 5 %"
+expected: "Propuesta que requiere aprobación si cae bajo la banda; no se aplica sola."
+expect:
+  expects_prepared_only: true
+  context_gap: regla_descuento (no hay op de precio; lo honesto es derivar a Precios)
+  any:
+    - behavior:
+        prepare_action: emit_revision
+    - behavior:
+        steps_kinds_contain: [navigate]
+        steps_kinds_absent: [ops, batch_ops]
+    - behavior:
+        asks_clarification: true
+    - behavior:
+        sin_dato: true
+    - behavior:
+        steps_kinds_absent: [ops, batch_ops]
+        text_matches_any:
+          - "precios|cotizaci[oó]n|descuento|revisi[oó]n|no\\s+puedo|motor"

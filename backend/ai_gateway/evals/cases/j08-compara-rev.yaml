@@ -1,0 +1,19 @@
+id: J08
+view: proyecto
+via: agent
+surface: project
+fixture: proyecto_cotizado
+refs:
+  project_id: "fd515745-3b5b-540e-aa5d-455d0d7067b5"
+prompt: "compara la REV-A con la REV-B"
+expected: "Artefacto de comparación con las diferencias reales."
+expect:
+  context_gap: version_diff (la proyección solo expone latest_version, no ambas revisiones completas)
+  any:
+    - behavior:
+        artifact:
+          kind: comparison
+    - behavior:
+        sin_dato: true
+    - behavior:
+        asks_clarification: true

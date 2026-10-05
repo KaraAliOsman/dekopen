@@ -1,0 +1,18 @@
+id: E09
+view: editor
+via: agent
+surface: position
+fixture: editor
+product_variant: dividida
+refs:
+  position_id: "5700e30f-d1fa-5fa6-8a3c-6d6f68e72fdc"
+prompt: "¿cuánto pesa la hoja derecha?"
+expected: "Cifra igual a la del motor, o 'sin dato' con la causa."
+expect:
+  context_gap: peso_hoja (la proyección de posición no expone el peso por hoja del motor)
+  any:
+    - behavior:
+        sin_dato: true
+        reply_nonempty: true
+    - behavior:
+        asks_clarification: true

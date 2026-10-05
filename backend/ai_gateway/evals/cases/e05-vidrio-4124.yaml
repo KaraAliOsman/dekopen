@@ -1,0 +1,18 @@
+id: E05
+view: editor
+via: design_assist
+surface: position
+fixture: editor
+product_variant: vacia
+prompt: "cambia el vidrio a termopanel 4-12-4"
+expected: "Vidrio = el SKU del catálogo con composición 4-12-4, o la lista de opciones disponibles si no existe (nunca un SKU inventado)."
+expect:
+  expects_no_change: false
+  any:
+    - behavior:
+        no_ops_accepted: true
+        text_matches_any:
+          - "VIDRIO-BASE|4 Float|24\\s*mm|opciones|disponible|no\\s+existe|cat[aá]logo"
+    - behavior:
+        asks_clarification: true
+        no_ops_accepted: true

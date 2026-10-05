@@ -1,0 +1,18 @@
+id: E10
+view: editor
+via: agent
+surface: position
+fixture: editor
+product_variant: vacia
+refs:
+  position_id: "5700e30f-d1fa-5fa6-8a3c-6d6f68e72fdc"
+prompt: "¿por qué no puedo guardar?"
+expected: "Lista exactamente los bloqueos que devuelve la validación del motor."
+expect:
+  context_gap: validation_issues (la proyección de posición no expone los bloqueos del motor)
+  any:
+    - behavior:
+        sin_dato: true
+        reply_nonempty: true
+    - behavior:
+        asks_clarification: true

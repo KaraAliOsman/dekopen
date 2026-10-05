@@ -1,0 +1,17 @@
+id: F03
+view: compras
+via: agent
+surface: purchase_plan
+fixture: compras
+prompt: "prepara la compra de lo que falta"
+expected: "Artefacto de plan de compra con líneas y proveedor de la lista real; nada enviado."
+expect:
+  expects_prepared_only: true
+  any:
+    - behavior:
+        artifact:
+          kind: purchase_plan
+    - behavior:
+        asks_clarification: true
+    - behavior:
+        sin_dato: true

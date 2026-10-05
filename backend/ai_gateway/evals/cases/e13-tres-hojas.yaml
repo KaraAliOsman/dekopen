@@ -1,0 +1,20 @@
+id: E13
+view: editor
+via: design_assist
+surface: position
+fixture: editor
+product_variant: vacia
+prompt: "tres hojas: fija al centro y abatibles a los lados"
+expected: "3 bahías: TURN_LEFT · FIXED · TURN_RIGHT (bisagras en las jambas exteriores y manillas hacia el centro), anchos iguales salvo instrucción."
+expect:
+  op_gap: split_bay
+  any:
+    - product:
+        bays: [TURN_LEFT, FIXED, TURN_RIGHT]
+        bays_count: 3
+    - product:
+        bays: [TURN_RIGHT, FIXED, TURN_LEFT]
+        bays_count: 3
+    - behavior:
+        asks_clarification: true
+        no_ops_accepted: true
