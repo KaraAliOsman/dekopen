@@ -1,6 +1,6 @@
 # DEKOPEN v1 — Auditoría, constitución de diseño y cola de trabajo para Codex
 
-Fecha: 2026-10-04 · Repo auditado: `KaraAliOsman/framedex` en `main@b3d1c9b` (2026-10-01)
+Fecha: 2026-10-04 · Repo auditado: `KaraAliOsman/dekopen` en `main@b3d1c9b` (2026-10-01)
 Fuentes: 81 sesiones (565 adjuntos), revisados en 70 hojas de contacto de 431 capturas, 21 videos (39 hojas de fotogramas, incluido el recorrido A-Z de 27 min), 12 PDF (82 páginas), ~95 reportes de auditoría, el código actual de main, los metadatos de GitHub (112 PR) e investigación externa (Orgadata/Logikal, Windowmaker, Stolcad, FeneCAM, ProF2, Alumilcal, Moxisys, PandaDoc/Qwilr, OGUC y NCh).
 
 ---
@@ -152,7 +152,7 @@ Corre `.\ejecutar-cola.ps1 -SoloPreparar`, entra al clon (`cd $env:USERPROFILE\d
 
 **Antes de empezar (5 minutos):**
 1. **Clave de IA:** ya está. Tu `Downloads\framedex\.env` trae `AI_GATEWAY_MIMO_API_KEY` (la tuya) y `AI_GATEWAY_MIMO_BASE_URL=https://api.primalabs.ai/v1`; el script lo copia al clon y agrega `AI_GATEWAY_MIMO_MODEL=primalabs-ai/MiMo-V2.6-Pro`. Es la convención que ya usa el backend. El `.env` está en `.gitignore` y los prompts prohíben commitearlo.
-2. Instalar Codex CLI (`npm install -g @openai/codex`), iniciar sesión (`codex login`) y tener Docker Desktop abierto.
+2. **Codex ya está instalado** (tu app Codex Web GPT trae el CLI en `%LOCALAPPDATA%\OpenAI\Codexin\codex.exe`, ya con tu sesión). El script lo encuentra solo y usa el modelo `gpt-5.5` con razonamiento alto (el `gpt-6.1-sol` de tu config no corre con `codex exec` + cuenta ChatGPT). Docker Desktop el script lo abre solo si no está corriendo.
 
 **Durante el programa:** nada. Codex no te va a preguntar. Deja el PC encendido.
 
