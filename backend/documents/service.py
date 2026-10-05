@@ -398,8 +398,30 @@ def _synthesized_handle_intents(
     return merged
 
 
+def _numeric_collapsed(value: object) -> object:
+    """Numeric strings and Decimals collapse to a scale-free Decimal.
+
+    One write path stores ``"1400.00"`` where another persists ``"1400"``;
+    the measurement is identical and must not read as binding drift."""
+    if isinstance(value, Decimal):
+        return value.normalize() if value.is_finite() else value
+    if isinstance(value, str):
+        try:
+            parsed = Decimal(value)
+        except InvalidOperation:
+            return value
+        return parsed.normalize() if parsed.is_finite() else value
+    if isinstance(value, dict):
+        return {key: _numeric_collapsed(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_numeric_collapsed(item) for item in value]
+    return value
+
+
 def _same_documentary_value(left: object, right: object) -> bool:
-    return documentary_canonical_json_v1(left) == documentary_canonical_json_v1(right)
+    return documentary_canonical_json_v1(
+        _numeric_collapsed(left)
+    ) == documentary_canonical_json_v1(_numeric_collapsed(right))
 
 
 _BOM_ADDITIVE_KEYS = frozenset({"fittings"})

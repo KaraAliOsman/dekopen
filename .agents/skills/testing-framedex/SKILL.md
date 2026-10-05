@@ -449,3 +449,13 @@ description: Local dev-stack recipe for DEKOPEN E2E testing — Supabase CLI sta
 - Remnant "Etiqueta" renders `.inventory-label` inline (no close button); "Imprimir" → `window.print()` w/ `@media print` isolating the label (24-page count in dialog is harmless — hidden content). Print dialog BLOCKS CDP websocket — cancel it via GUI before continuing.
 - Doc generators ("Generar / abrir", DOC-0x PDF/XLSX) call `window.open(signed_storage_url)` — stub `window.open` to capture the URL, then `urlretrieve` and verify `%PDF`+`%%EOF`/PK.
 - Mobile pass: `Emulation.setDeviceMetricsOverride width=390 dsf=0 mobile=false` — must re-check `innerWidth` after nav (mobile=true can yield iw≠width).
+
+## Phase-16 evidence-harness notes
+- **OWNER TOTP vault**: `dev_fixture.py` does NOT enroll a factor — `frontend/scripts/ux-capture/auth.ts` enrolls on first run and persists the base32 secret to `.fixture-state.json` under `totp` (`{"<email>": "<BASE32>"}`). Reuse it for manual tests:
+  `cd frontend && node -e "const O=require('otpauth');console.log(new O.TOTP({digits:6,period:30,secret:O.Secret.fromBase32('<B32>')}).generate())"`.
+  With a factor enrolled, `/auth/mfa` shows the challenge form directly.
+- **Multi-org selector**: `/select-organization` only renders when `/api/v1/auth/me` 409s `organization_selection_required` — no persisted org pick. The app stores it in `localStorage["dekopen.active_org.<user-id>"]`; sign-out does NOT clear it. To force the selector in a reused profile: DevTools → Application → Local Storage → delete `dekopen.active_org.*`, keep `sb-` auth-token, navigate to `/select-organization`.
+- **Expected console noise** in the owner login: `me` 409 (org-selection) then 403 `mfa_required` — the contract, not errors.
+- **Fixture rerun safety**: `supabase start` after a container wipe creates a FRESH DB — re-run `SUPABASE_SERVICE_ROLE_KEY=… .venv/bin/python scripts/dev_fixture.py` and re-read `.fixture-state.json` (the script is idempotent per-DB; a state file from a wiped DB is stale but harmless — it just re-seeds).
+- `node` resolves via nvm (v24.x) — `npm run ux:capture` (`--experimental-strip-types`) works as-is; `~/node22` is stale.
+- `browser_console`/CDP only works when Chrome was launched with `--remote-debugging-port`; otherwise use F12 DevTools UI.
