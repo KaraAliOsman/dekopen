@@ -303,14 +303,16 @@ export function VanoSection({
                 ))}
               </ul>
             )}
-            {selectedRule && selectedRule.authority.fixings != null && (
-              <p className="vano-note">
-                {t("projects.vanoFixings")}:{" "}
-                {(selectedRule.authority.fixings as Array<{ code: string }>)
-                  .map((fixing) => fixing.code)
-                  .join(" · ")}
-              </p>
-            )}
+            {selectedRule &&
+              Array.isArray(selectedRule.authority.fixings) &&
+              (selectedRule.authority.fixings as Array<unknown>).length > 0 && (
+                <p className="vano-note">
+                  {t("projects.vanoFixings")}:{" "}
+                  {(selectedRule.authority.fixings as Array<{ code: string }>)
+                    .map((fixing) => fixing.code)
+                    .join(" · ")}
+                </p>
+              )}
           </div>
         )}
         {!preview?.resolution && !previewPending && !saved?.vano && (
