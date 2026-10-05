@@ -13,8 +13,9 @@ import type {
   CatalogItemRequest,
   NewSystemRequest,
 } from "../../api/generated/models";
-import { CatalogProfileRoleEnum } from "../../api/generated/models";
-import { t, type TranslationKey } from "../../i18n/es-CL";
+import { CatalogItemRoleEnum } from "../../api/generated/models";
+import { domainLabel } from "../../i18n/domainLabels";
+import { t, tOptional, type TranslationKey } from "../../i18n/es-CL";
 
 const ct = (key: string) => t(`catalog.${key}` as TranslationKey);
 
@@ -49,8 +50,79 @@ type Candidate = {
 
 type EditableRow = Candidate & { include: boolean };
 
-const ROLE_CHOICES = Object.values(CatalogProfileRoleEnum);
+// El confirm acepta los 17 roles (CatalogItemRoleEnum); el enum "profile"
+// heredado solo tiene 9 y dejaba fuera SLIDING_SASH/INTERLOCK/RAIL…
+const ROLE_CHOICES = Object.values(CatalogItemRoleEnum);
 const PENDING_STATUSES = new Set(["UPLOADED", "EXTRACTING"]);
+
+/** Campos cuyo valor es un enum de dominio — se etiquetan, no se vuelcan
+ * en crudo ("CASEMENT", "TURN_LEFT", …) en la tabla de revisión. */
+const FIELD_VALUE_ENUM: Record<string, string> = {
+  material: "MaterialEnum",
+  system_family: "SystemFamilyEnum",
+  opening_type: "ImportOpeningTypeEnum",
+  rail_type: "RailTypeEnum",
+  role: "CatalogItemRoleEnum",
+};
+
+function fieldNameLabel(name: string): string {
+  return tOptional(`catalog.field.${name}`) ?? name;
+}
+
+function fieldValueLabel(name: string, value: unknown): string {
+  if (value === null || value === undefined || value === "") return "";
+  if (typeof value === "boolean") return t(value ? "inspector.yes" : "inspector.no");
+  const enumName = FIELD_VALUE_ENUM[name];
+  if (enumName && typeof value === "string") {
+    return domainLabel(enumName, value).label;
+  }
+  if (name === "unit" && typeof value === "string") {
+    return tOptional(`purchasing.unitValue.${value.toUpperCase()}.other`) ?? value;
+  }
+  if (name === "finish_class" && typeof value === "string") {
+    return (
+      tOptional(`catalog.option.finishClass.${value}`) ??
+      tOptional(`projects.color.${value}`) ??
+      value
+    );
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (item && typeof item === "object") {
+          const entry = item as Record<string, unknown>;
+          // Contenido de kit {sku, qty} → "SKU ×2"; nunca "[object Object]".
+          if ("sku" in entry) {
+            const qty = entry.qty !== undefined ? ` ×${String(entry.qty)}` : "";
+            return `${String(entry.sku)}${qty}`;
+          }
+          return Object.entries(entry)
+            .map(([k, v]) => `${fieldNameLabel(k)} ${String(v)}`)
+            .join(" ");
+        }
+        if (name === "finishes") {
+          return tOptional(`projects.color.${String(item)}`) ?? String(item);
+        }
+        return String(item);
+      })
+      .join(", ");
+  }
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+/** Resumen legible de los campos de un candidato no-PROFILE — nombres de
+ * campo traducidos y valores de enum etiquetados, jamás "clave: valor". */
+function candidateFieldSummary(fields: Record<string, unknown>): string {
+  return Object.entries(fields)
+    .filter(([, value]) => value !== null && value !== undefined && value !== "")
+    .map(([name, value]) => {
+      const rendered = fieldValueLabel(name, value);
+      return rendered ? `${fieldNameLabel(name)}: ${rendered}` : "";
+    })
+    .filter(Boolean)
+    .join(" · ");
+}
 
 const STATUS_LABEL: Record<string, TranslationKey> = {
   UPLOADED: "projects.importsStatusUploaded",
@@ -253,11 +325,17 @@ export function CatalogImportsPanel({
   function patchRow(key: string, patch: Partial<EditableRow>): void {
     setReviewDirty(true);
     setRows((current) => current.map((row) => (row.key === key ? { ...row, ...patch } : row)));
+    // Editar la fila invalida el resultado anterior: el error por-ítem de la
+    // fila y el mensaje global de confirmación dejan de aplicar en cuanto el
+    // gestor corrige algo — nunca quedan obsoletos en pantalla.
+    setItemErrors((current) => current.filter((entry) => entry.key !== key));
+    setMessage("");
   }
 
   function closeReview(): void {
     setReviewId(null);
     setReviewDirty(false);
+    setItemErrors([]);
   }
 
   async function confirm(entry: CatalogImportResponse): Promise<void> {
@@ -290,6 +368,15 @@ export function CatalogImportsPanel({
           depth_mm: String(newSystemRow.fields.depth_mm ?? ""),
           material: String(newSystemRow.fields.material ?? "PVC"),
           system_family: String(newSystemRow.fields.system_family ?? "CASEMENT"),
+          sliding_glazing_deduction_width_mm: String(
+            newSystemRow.fields.sliding_glazing_deduction_width_mm ?? "0",
+          ),
+          sliding_glazing_deduction_height_mm: String(
+            newSystemRow.fields.sliding_glazing_deduction_height_mm ?? "0",
+          ),
+          door_leaf_side_clearance_mm: String(
+            newSystemRow.fields.door_leaf_side_clearance_mm ?? "0",
+          ),
           finishes: Array.isArray(newSystemRow.fields.finishes)
             ? (newSystemRow.fields.finishes as string[])
             : ["WHITE"],
@@ -494,10 +581,7 @@ export function CatalogImportsPanel({
                 {rows.map((row) => {
                   const itemError = itemErrors.find((entry) => entry.key === row.key);
                   if (row.entity !== "PROFILE") {
-                    const summary = Object.entries(row.fields)
-                      .filter(([, value]) => value !== null && value !== undefined && value !== "")
-                      .map(([name, value]) => `${name}: ${String(value)}`)
-                      .join(" · ");
+                    const summary = candidateFieldSummary(row.fields);
                     return (
                       <Fragment key={row.key}>
                         <tr
@@ -557,7 +641,7 @@ export function CatalogImportsPanel({
                                 <span className="imports-evidence-ref">{row.source_ref}</span>
                               )}
                               <code className="imports-evidence-text">
-                                {JSON.stringify(row.fields)}
+                                {row.source_text || candidateFieldSummary(row.fields)}
                               </code>
                             </td>
                           </tr>
@@ -722,6 +806,10 @@ export function CatalogImportsPanel({
               </tbody>
             </table>
           </div>
+          {/* El error de confirmación se repite junto al botón: la tabla de
+              revisión puede ser larga y el mensaje superior queda fuera de
+              vista justo donde se decide. */}
+          {message && <p className="form-error">{message}</p>}
           <div className="projects-actions">
             <button type="button" disabled={busy} onClick={() => void confirm(reviewImport)}>
               {ct("importsConfirm")}

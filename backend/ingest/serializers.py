@@ -190,6 +190,17 @@ class NewSystemSerializer(StrictSerializer):
     system_family = serializers.ChoiceField(
         choices=["CASEMENT", "SLIDING", "LIFT_SLIDE", "DOOR", "FACADE_FIXED"]
     )
+    # Fabricación declarada — profile_systems los exige NOT NULL y el motor
+    # los consume como autoridad; nunca se inventan en el servidor.
+    sliding_glazing_deduction_width_mm = DecimalStringField(
+        max_digits=10, decimal_places=2, min_value=Decimal("0")
+    )
+    sliding_glazing_deduction_height_mm = DecimalStringField(
+        max_digits=10, decimal_places=2, min_value=Decimal("0")
+    )
+    door_leaf_side_clearance_mm = DecimalStringField(
+        max_digits=10, decimal_places=2, min_value=Decimal("0")
+    )
     finishes = serializers.ListField(
         child=serializers.CharField(max_length=50), required=False, default=list
     )

@@ -47,7 +47,7 @@ _PROVENANCE_COLUMNS = (
 SYSTEMS = Resource(
     "profile_systems",
     SystemWriteSerializer,
-    ("is_global", "is_demo", *_PROVENANCE_COLUMNS),
+    ("is_global", "is_demo", "system_family", *_PROVENANCE_COLUMNS),
 )
 ARTICLES = Resource(
     "profile_articles",

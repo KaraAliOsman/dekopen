@@ -403,7 +403,10 @@ def _insert_entity_row(
             [
                 str(system_id), str(org_id), fields["role"],
                 payload.get("cut_angle_deg") or "45.00",
-                fields.get("welded_ends"),
+                # welded_ends es INTEGER (0-2): un bool rompe en Postgres
+                # ("column is of type integer but expression is of type boolean").
+                fields.get("welded_ends") if not isinstance(fields.get("welded_ends"), bool)
+                else int(fields["welded_ends"]),
                 payload.get("interlock_deduction_mm") or "0.00",
                 payload.get("rounding_mm") or "0.01",
                 fields.get("reinforcement_sku") or None,
@@ -517,8 +520,10 @@ def _create_system(
     found = rows(
         "INSERT INTO public.profile_systems("
         "code, name, org_id, depth_mm, material, is_global, is_active,"
-        " system_family, finishes, data_provenance, review_pending)"
-        " VALUES(%s,%s,%s,%s,%s,FALSE,TRUE,%s,%s::jsonb,'IMPORT',TRUE)"
+        " system_family, finishes, sliding_glazing_deduction_width_mm,"
+        " sliding_glazing_deduction_height_mm, door_leaf_side_clearance_mm,"
+        " data_provenance, review_pending)"
+        " VALUES(%s,%s,%s,%s,%s,FALSE,TRUE,%s,%s::jsonb,%s,%s,%s,'IMPORT',TRUE)"
         " ON CONFLICT DO NOTHING RETURNING id",
         [
             str(fields["code"]).strip().upper(),
@@ -528,6 +533,9 @@ def _create_system(
             str(fields["material"]),
             str(fields["system_family"]),
             json.dumps(fields.get("finishes") or ["WHITE"]),
+            _decimal_text(fields.get("sliding_glazing_deduction_width_mm")) or "0",
+            _decimal_text(fields.get("sliding_glazing_deduction_height_mm")) or "0",
+            _decimal_text(fields.get("door_leaf_side_clearance_mm")) or "0",
         ],
     )
     if not found:
@@ -601,8 +609,11 @@ def confirm_catalog_import(
                     "La importación ya está ligada a un sistema existente.",
                 )
             # The Sistemas sheet becomes an org-owned system in the same
-            # transaction; every other entity lands on it.
-            system_id = _create_system(org_id=org_id, fields=new_system)
+            # transaction; every other entity lands on it. catalog_backend:
+            # profile_systems is a catalog table (RLS grants live on the
+            # catalog role — without it the INSERT fails SQLSTATE 42501).
+            with catalog_backend():
+                system_id = _create_system(org_id=org_id, fields=new_system)
         if system_id is None:
             raise contract_error(
                 422, "catalog_system_required",
@@ -786,9 +797,11 @@ def confirm_catalog_import(
         pending_finishes = sorted(set(finish_codes))
         if any(str(item.get("entity") or "") == ENTITY_FINISH for item in items):
             with catalog_backend():
+                # RETURNING id: rows() is SELECT-only — a bare UPDATE crashes
+                # on cursor.description=None.
                 rows(
                     "UPDATE public.profile_systems SET finishes=%s::jsonb"
-                    " WHERE id=%s AND org_id=%s",
+                    " WHERE id=%s AND org_id=%s RETURNING id",
                     [json.dumps(pending_finishes), str(system_id), str(org_id)],
                 )
         if errors:

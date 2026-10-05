@@ -1,6 +1,6 @@
 {
   "summary": {
-    "generated_at": "2026-10-05T09:17:24.415Z",
+    "generated_at": "2026-10-05T11:07:10.383Z",
     "routes": 282,
     "routes_with_findings": [
       "portal-vigente",
@@ -7356,11 +7356,11 @@
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
         },
         {
           "kind": "http-error",
@@ -7411,11 +7411,11 @@
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
         },
         {
           "kind": "http-error",
@@ -7521,11 +7521,11 @@
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
         },
         {
           "kind": "http-error",
@@ -7576,11 +7576,11 @@
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
         },
         {
           "kind": "http-error",
@@ -7959,11 +7959,11 @@
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
         },
         {
           "kind": "http-error",
@@ -8397,11 +8397,11 @@
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
         },
         {
           "kind": "http-error",
@@ -8452,11 +8452,11 @@
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
         },
         {
           "kind": "http-error",
@@ -8507,11 +8507,11 @@
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
         },
         {
           "kind": "http-error",
@@ -8617,11 +8617,11 @@
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
         },
         {
           "kind": "http-error",
@@ -9055,11 +9055,11 @@
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
         },
         {
           "kind": "http-error",
@@ -9438,11 +9438,11 @@
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=production&refs=%7B%7D"
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
         },
         {
           "kind": "http-error",
@@ -9493,11 +9493,11 @@
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/jobs/?limit=100&offset=0"
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=jobs&refs=%7B%7D"
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=jobs&refs=%7B%7D"
+          "detail": "403 http://127.0.0.1:5173/api/v1/jobs/?limit=100&offset=0"
         },
         {
           "kind": "http-error",
@@ -9552,15 +9552,15 @@
         },
         {
           "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/jobs/?limit=100&offset=0"
+        },
+        {
+          "kind": "http-error",
           "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=jobs&refs=%7B%7D"
         },
         {
           "kind": "http-error",
           "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
-        },
-        {
-          "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/jobs/?limit=100&offset=0"
         },
         {
           "kind": "http-error",
@@ -9615,11 +9615,11 @@
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=jobs&refs=%7B%7D"
+          "detail": "403 http://127.0.0.1:5173/api/v1/jobs/?limit=100&offset=0"
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/jobs/?limit=100&offset=0"
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=jobs&refs=%7B%7D"
         },
         {
           "kind": "http-error",
@@ -9745,11 +9745,11 @@
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/jobs/?limit=100&offset=0"
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
+          "detail": "403 http://127.0.0.1:5173/api/v1/jobs/?limit=100&offset=0"
         }
       ],
       "finalUrl": "http://127.0.0.1:5173/jobs"
@@ -9792,11 +9792,11 @@
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/jobs/?limit=100&offset=0"
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=jobs&refs=%7B%7D"
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=jobs&refs=%7B%7D"
+          "detail": "403 http://127.0.0.1:5173/api/v1/jobs/?limit=100&offset=0"
         },
         {
           "kind": "http-error",
@@ -9954,11 +9954,11 @@
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=jobs&refs=%7B%7D"
         },
         {
           "kind": "http-error",
-          "detail": "403 http://127.0.0.1:5173/api/v1/ai/ask/?surface=jobs&refs=%7B%7D"
+          "detail": "403 http://127.0.0.1:5173/api/v1/ai/jobs/"
         },
         {
           "kind": "http-error",

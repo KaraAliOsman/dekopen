@@ -20,6 +20,12 @@ export interface NewSystemRequest {
   depth_mm: string;
   material: MaterialEnum;
   system_family: SystemFamilyEnum;
+  /** @pattern ^-?\d{0,8}(?:\.\d{0,2})?$ */
+  sliding_glazing_deduction_width_mm: string;
+  /** @pattern ^-?\d{0,8}(?:\.\d{0,2})?$ */
+  sliding_glazing_deduction_height_mm: string;
+  /** @pattern ^-?\d{0,8}(?:\.\d{0,2})?$ */
+  door_leaf_side_clearance_mm: string;
   /**
    * @items.minLength 1
    * @items.maxLength 50

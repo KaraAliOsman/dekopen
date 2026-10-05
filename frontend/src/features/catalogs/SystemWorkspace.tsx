@@ -12,6 +12,7 @@ import type {
   WorkCenterRequestRequest,
 } from "../../api/generated/models";
 import { t } from "../../i18n/es-CL";
+import { domainLabel } from "../../i18n/domainLabels";
 import { Icon } from "../../ui/icons";
 import { fmtMm } from "../../format";
 import { centerKindLabel, opKindLabel, stationCodeLabel } from "../production/labels";
@@ -507,6 +508,9 @@ export function SystemWorkspaceView({
           <div className="ws-identity-meta">
             {system.manufacturer && <span className="ws-chip">{system.manufacturer}</span>}
             {system.family && <span className="ws-chip">{system.family}</span>}
+            <span className="ws-chip">
+              {domainLabel("SystemFamilyEnum", system.system_family).label}
+            </span>
             <span className="ws-chip">{ct(`option.${system.material}`)}</span>
             {(system.applications ?? []).map((app) => (
               <span key={app} className="ws-chip ws-chip--app">

@@ -105,6 +105,9 @@ _SHEETS: dict[str, dict[str, Any]] = {
             ("profundidad_mm", "depth_mm", "decimal", True, None),
             ("material", "material", "enum", True, _MATERIALS),
             ("familia", "system_family", "enum", True, _FAMILIES),
+            ("deduccion_vidrio_ancho_mm", "sliding_glazing_deduction_width_mm", "decimal", True, None),
+            ("deduccion_vidrio_alto_mm", "sliding_glazing_deduction_height_mm", "decimal", True, None),
+            ("holgura_lateral_puerta_mm", "door_leaf_side_clearance_mm", "decimal", True, None),
             ("acabados", "finishes", "csv_list", False, None),
         ],
     },
@@ -209,7 +212,7 @@ _LEEME = "LEEME"
 SHEET_ORDER = [_LEEME, *_SHEETS.keys()]
 
 _EXAMPLES: dict[str, list[list[str]]] = {
-    "Sistemas": [["MI-SERIE-60", "Mi Serie 60mm PVC", "60", "PVC", "CASEMENT", "WHITE,FOILED"]],
+    "Sistemas": [["MI-SERIE-60", "Mi Serie 60mm PVC", "60", "PVC", "CASEMENT", "20", "20", "7", "WHITE,FOILED"]],
     "Perfiles": [["MARCO-60", "Marco 60", "FRAME", "58", "6000", "6", "1.90", "1.70", ""]],
     "Reglas de corte": [["FRAME", "45", "2", "0", "0.01", ""]],
     "Refuerzos": [["SASH", "NON_WHITE", "0", "si", "ACERO-35", "0", "4", "TORNILLO-4X16"]],

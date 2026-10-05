@@ -5,7 +5,8 @@
  * evidence stored at seal time, never recomputed client-side. */
 
 import { fmtMm } from "../../format";
-import { t } from "../../i18n/es-CL";
+import { t, tOptional } from "../../i18n/es-CL";
+import { domainLabel } from "../../i18n/domainLabels";
 import {
   opFaceLabel,
   opKindLabel,
@@ -28,6 +29,20 @@ type TraceBar = {
   source?: string;
   cuts?: Array<Record<string, unknown>>;
 };
+
+/** Origen de barra/lámina sellado en la traza — NEW/REMNANT llegan como
+ * códigos del motor y se etiquetan aquí, nunca en crudo. */
+function traceSourceLabel(source: string | undefined): string {
+  if (source === "REMNANT") return t("production.traceSourceRemnant");
+  if (!source || source === "NEW") return t("production.traceSourceNew");
+  return source;
+}
+
+/** Acabado declarado en el sistema — códigos conocidos se etiquetan; un
+ * código propio del taller se muestra tal cual (es dato, no inglés). */
+function finishLabel(code: string): string {
+  return tOptional(`projects.color.${code}`) ?? code;
+}
 
 type TraceSheet = {
   sheet_index?: number;
@@ -122,10 +137,10 @@ export function TracePlan({ plan }: { plan: ProductionOrderTracePlan }) {
                 <td>{bar.bar_index ?? index + 1}</td>
                 <td>
                   {bar.commercial_sku ?? "—"}
-                  {bar.material ? ` · ${bar.material}` : ""}
-                  {bar.color ? ` · ${bar.color}` : ""}
+                  {bar.material ? ` · ${domainLabel("CutMaterialEnum", bar.material).label}` : ""}
+                  {bar.color ? ` · ${finishLabel(bar.color)}` : ""}
                 </td>
-                <td>{bar.source ?? "NEW"}</td>
+                <td>{traceSourceLabel(bar.source)}</td>
                 <td>{bar.cuts?.length ?? 0}</td>
               </tr>
             ))}
@@ -147,7 +162,7 @@ export function TracePlan({ plan }: { plan: ProductionOrderTracePlan }) {
               <tr key={sheet.sheet_index ?? index}>
                 <td>{sheet.sheet_index ?? index + 1}</td>
                 <td>{sheet.workshop_sku ?? "—"}</td>
-                <td>{sheet.source ?? "NEW"}</td>
+                <td>{traceSourceLabel(sheet.source)}</td>
                 <td>{sheet.pieces?.length ?? 0}</td>
               </tr>
             ))}
@@ -179,7 +194,11 @@ export function TraceStock({ stock }: { stock: ProductionOrderTraceStock }) {
           <tbody>
             {movements.map((movement) => (
               <tr key={movement.id}>
-                <td>{movement.movement_type}</td>
+                <td>
+                  {movement.movement_type
+                    ? domainLabel("InventoryMovementMovementTypeEnum", movement.movement_type).label
+                    : "—"}
+                </td>
                 <td>{movement.sku}</td>
                 <td>{movement.quantity}</td>
                 <td title={movement.note ?? undefined}>{traceNoteLabel(movement.note)}</td>
@@ -240,7 +259,9 @@ export function TracePieceMatches({
               : ""}
             {match.location?.position_code ? ` · ${match.location.position_code}` : ""}
             {match.location?.location_code ? ` · ${match.location.location_code}` : ""}
-            {match.location?.piece?.role ? ` · ${match.location.piece.role}` : ""}
+            {match.location?.piece?.role
+              ? ` · ${domainLabel("CatalogItemRoleEnum", match.location.piece.role).label}`
+              : ""}
             {match.location?.piece?.length_mm
               ? ` · ${fmtMm(match.location.piece.length_mm)} mm`
               : ""}
