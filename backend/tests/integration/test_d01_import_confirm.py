@@ -83,6 +83,7 @@ def test_confirm_publishes_system_profile_finish_and_rule(real_rows):
         },
         {"key": "f0", "entity": "FINISH"},
         {"key": "r0", "entity": "CUT_RULE"},
+        {"key": "k0", "entity": "HARDWARE_KIT"},
     ]
     with authenticated_rls_context(real_rows.tokens["A"].claims):
         import_id = _seed_import(org_id, actor, candidates)
@@ -109,11 +110,30 @@ def test_confirm_publishes_system_profile_finish_and_rule(real_rows):
                     "role": "FRAME",
                     "face_width_mm": "80",
                 },
-                {"key": "f0", "entity": "FINISH", "finish_code": "PINTADO"},
+                # Como el panel real: los datos de la fila viajan en `fields`,
+                # no top-level (antes el acabado nunca confirmaba →
+                # catalog_item_unknown).
+                {"key": "f0", "entity": "FINISH", "fields": {"finish_code": "PINTADO"}},
                 {
                     "key": "r0",
                     "entity": "CUT_RULE",
                     "fields": {"role": "FRAME", "welded_ends": True},
+                },
+                {
+                    # La hoja declara tipología detallada; el kit guarda la
+                    # familia normalizada del motor (chk_kits_opening_type).
+                    "key": "k0",
+                    "entity": "HARDWARE_KIT",
+                    "fields": {
+                        "sku": "KIT-E2E",
+                        "name": "Kit E2E",
+                        "opening_type": "TILT_TURN_RIGHT",
+                        "min_leaf_width_mm": "500",
+                        "max_leaf_width_mm": "1300",
+                        "min_leaf_height_mm": "600",
+                        "max_leaf_height_mm": "2400",
+                        "max_leaf_weight_kg": "80",
+                    },
                 },
             ],
         )
@@ -121,7 +141,7 @@ def test_confirm_publishes_system_profile_finish_and_rule(real_rows):
     assert out["import"]["status"] == "CONFIRMED"
 
     created_keys = {entry["key"] for entry in out["created"]}
-    assert created_keys == {"s0", "p0", "f0", "r0"}
+    assert created_keys == {"s0", "p0", "f0", "r0", "k0"}
 
     system = rows(
         "SELECT id, org_id, system_family, finishes, data_provenance,"
@@ -160,3 +180,11 @@ def test_confirm_publishes_system_profile_finish_and_rule(real_rows):
         [system["id"]],
     )[0]
     assert rule["data_provenance"] == "IMPORT"
+
+    kit = rows(
+        "SELECT sku, opening_type, data_provenance"
+        " FROM public.hardware_kits WHERE system_id=%s AND sku='KIT-E2E'",
+        [system["id"]],
+    )[0]
+    assert kit["opening_type"] == "TILT_TURN"
+    assert kit["data_provenance"] == "IMPORT"

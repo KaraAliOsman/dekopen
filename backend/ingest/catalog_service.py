@@ -16,6 +16,8 @@ from django.db import DatabaseError, transaction
 
 from authentication.errors import contract_error
 from authentication.rls import catalog_backend
+from dekopen_engine.hardware import normalize_opening_type
+from dekopen_engine.models import BayOpeningType
 from documents.repository import documentary_backend
 from documents.storage import SupabaseDocumentStorage
 from catalogs import evidence as catalog_evidence
@@ -480,6 +482,15 @@ def _insert_entity_row(
         contents = fields.get("contents")
         if not isinstance(contents, list):
             contents = []
+        # La hoja lleva la tipología detallada (TILT_TURN_RIGHT); el kit la
+        # guarda como familia de herraje (TILT_TURN) — misma normalización
+        # del motor, constraint chk_kits_opening_type incluido.
+        try:
+            opening_family = normalize_opening_type(
+                BayOpeningType(str(fields["opening_type"]))
+            )
+        except (ValueError, KeyError):
+            raise CatalogImportError("catalog_opening_type_unknown")
         found = rows(
             "INSERT INTO public.hardware_kits("
             "system_id, org_id, sku, name, opening_type, min_leaf_width_mm,"
@@ -492,7 +503,7 @@ def _insert_entity_row(
                 str(system_id), str(org_id),
                 str(fields["sku"]).strip().upper(),
                 str(fields.get("name") or fields["sku"]),
-                str(fields["opening_type"]),
+                opening_family,
                 payload["min_leaf_width_mm"], payload["max_leaf_width_mm"],
                 payload["min_leaf_height_mm"], payload["max_leaf_height_mm"],
                 payload["max_leaf_weight_kg"],
@@ -661,6 +672,9 @@ def confirm_catalog_import(
                 if cost_list_id is None:
                     errors.append({"key": key, "code": "catalog_price_list_required"})
                     continue
+                # Las columnas de la hoja Precios viajan dentro de `fields` —
+                # el item top-level solo lleva key/entity/sku/name.
+                price_fields = dict(item.get("fields") or candidate.get("fields") or {})
                 try:
                     with transaction.atomic(), catalog_backend():
                         inserted = rows(
@@ -670,13 +684,15 @@ def confirm_catalog_import(
                             " ON CONFLICT (cost_list_id, sku) DO NOTHING RETURNING id",
                             [
                                 str(cost_list_id), str(org_id),
-                                str(item.get("purchase_sku") or item["sku"]).strip().upper(),
-                                str(item.get("item_type") or "PROFILE"),
-                                str(item.get("unit") or "BAR"),
-                                str(item["unit_cost"]),
+                                str(
+                                    price_fields.get("purchase_sku") or item["sku"]
+                                ).strip().upper(),
+                                str(price_fields.get("item_type") or "PROFILE"),
+                                str(price_fields.get("unit") or "BAR"),
+                                str(price_fields["unit_cost"]),
                             ],
                         )
-                except DatabaseError:
+                except (DatabaseError, KeyError):
                     errors.append({"key": key, "code": "catalog_insert_failed"})
                     continue
                 if not inserted:
@@ -686,7 +702,12 @@ def confirm_catalog_import(
                 done.add(key)
                 continue
             if entity == ENTITY_FINISH:
-                code = str(item.get("finish_code") or item.get("sku") or "").strip().upper()
+                finish_fields = dict(
+                    item.get("fields") or candidate.get("fields") or {}
+                )
+                code = str(
+                    finish_fields.get("finish_code") or item.get("sku") or ""
+                ).strip().upper()
                 if not code:
                     errors.append({"key": key, "code": "catalog_item_unknown"})
                     continue

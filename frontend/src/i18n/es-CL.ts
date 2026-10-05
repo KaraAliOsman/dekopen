@@ -2504,6 +2504,18 @@ export const messages = {
   "catalog.importsErrorSingletonRole":
     "El sistema ya tiene un artículo con este rol único; ajusta el rol o el sistema.",
   "catalog.importsErrorInsertFailed": "No se pudo crear el artículo; revisa los datos de la fila.",
+  "catalog.importsErrorBeadUnknown":
+    "El junquillo (SKU) no existe en el sistema destino; súbelo primero en la hoja Perfiles.",
+  "catalog.importsErrorPriceListRequired":
+    "Elegí una lista de costos de destino para las filas de precios.",
+  "catalog.importsErrorOpeningType": "La apertura declarada no es reconocida.",
+  "catalog.importsErrorSystemChanged":
+    "El sistema ya fue creado por una confirmación anterior; desmarca la fila Sistema o elige ese sistema como destino.",
+  "catalog.importsErrorEntityUnknown": "El tipo de fila no es reconocido.",
+  "catalog.importsErrorRowInvalid":
+    "La fila tiene errores de lectura; corrige el archivo y súbelo de nuevo.",
+  "catalog.importsErrorFieldRequired": "A la fila le falta un dato obligatorio.",
+  "catalog.importsPublished": "Publicado",
   "catalog.importsErrorUnknown":
     "No se pudo completar la operación. Revisa los datos e inténtalo de nuevo.",
   "projects.systemLimits": "Límites de hoja",

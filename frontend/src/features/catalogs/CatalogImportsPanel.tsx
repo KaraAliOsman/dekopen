@@ -48,7 +48,7 @@ type Candidate = {
   existing: ExistingRef[];
 };
 
-type EditableRow = Candidate & { include: boolean };
+type EditableRow = Candidate & { include: boolean; published?: boolean };
 
 // El confirm acepta los 17 roles (CatalogItemRoleEnum); el enum "profile"
 // heredado solo tiene 9 y dejaba fuera SLIDING_SASH/INTERLOCK/RAIL…
@@ -78,6 +78,9 @@ function fieldValueLabel(name: string, value: unknown): string {
   }
   if (name === "unit" && typeof value === "string") {
     return tOptional(`purchasing.unitValue.${value.toUpperCase()}.other`) ?? value;
+  }
+  if (name === "item_type" && typeof value === "string") {
+    return tOptional(`catalog.entity.${value}`) ?? value;
   }
   if (name === "finish_class" && typeof value === "string") {
     return (
@@ -151,6 +154,13 @@ const ITEM_ERROR_LABEL: Record<string, string> = {
   catalog_sku_conflict: "importsErrorSkuConflict",
   catalog_singleton_role_conflict: "importsErrorSingletonRole",
   catalog_insert_failed: "importsErrorInsertFailed",
+  catalog_bead_unknown: "importsErrorBeadUnknown",
+  catalog_price_list_required: "importsErrorPriceListRequired",
+  catalog_opening_type_unknown: "importsErrorOpeningType",
+  catalog_system_changed: "importsErrorSystemChanged",
+  catalog_entity_unknown: "importsErrorEntityUnknown",
+  catalog_row_invalid: "importsErrorRowInvalid",
+  catalog_field_required: "importsErrorFieldRequired",
 };
 
 function codeText(code: string): string {
@@ -341,8 +351,12 @@ export function CatalogImportsPanel({
   async function confirm(entry: CatalogImportResponse): Promise<void> {
     const included = rows.filter((row) => row.include);
     // A Sistemas row declares the target itself — the backend creates the
-    // org-owned system in the same confirm transaction.
-    const newSystemRow = included.find((row) => row.entity === "SYSTEM");
+    // org-owned system in the same confirm transaction. A row already
+    // published by a previous partial confirm must NOT be re-sent as
+    // new_system (that re-declare is the catalog_system_changed 409).
+    const newSystemRow = included.find(
+      (row) => row.entity === "SYSTEM" && !row.published,
+    );
     const items: CatalogItemRequest[] = included.map((row) => ({
       key: row.key,
       entity: row.entity as CatalogItemRequest["entity"],
@@ -401,6 +415,27 @@ export function CatalogImportsPanel({
       );
       if (response.status !== 200) throw new ApiError(response.status, response.data);
       if (mounted.current) {
+        const created = (response.data.created ?? []) as {
+          key: string;
+          entity?: string;
+          id?: string;
+        }[];
+        const createdSystem = created.find((c) => c.entity === "SYSTEM" && c.id);
+        if (createdSystem?.id) {
+          // The org system now exists even if sibling rows failed: retarget
+          // the select to it (it was created this session, the parent list
+          // refresh below makes it visible) and pin the row as published so
+          // the next retry confirms items against system_id, not new_system.
+          const newId = String(createdSystem.id);
+          setSystemId(newId);
+          setRows((current) =>
+            current.map((row) =>
+              row.key === createdSystem.key
+                ? { ...row, published: true, include: false }
+                : row,
+            ),
+          );
+        }
         const errors = response.data.errors as { key: string; code: string }[];
         setItemErrors(errors);
         if (errors.length) {
@@ -408,6 +443,9 @@ export function CatalogImportsPanel({
           // open so the manager can fix the failed rows and resubmit.
           setMessage(ct("importsConfirmError"));
           await load();
+          // Rows WERE published — the parent systems list must reflect the
+          // new system in the destination select without a page reload.
+          onConfirmed?.();
         } else {
           closeReview();
           setMessage(
@@ -427,7 +465,13 @@ export function CatalogImportsPanel({
   function includeOnlySafe(): void {
     setReviewDirty(true);
     setRows((current) =>
-      current.map((row) => (isSafe(row) ? { ...row, include: true } : { ...row, include: false })),
+      current.map((row) =>
+        row.published
+          ? row
+          : isSafe(row)
+            ? { ...row, include: true }
+            : { ...row, include: false },
+      ),
     );
   }
 
@@ -593,7 +637,7 @@ export function CatalogImportsPanel({
                             <input
                               type="checkbox"
                               checked={row.include}
-                              disabled={row.row_errors.length > 0}
+                              disabled={row.row_errors.length > 0 || row.published}
                               onChange={(event) =>
                                 patchRow(row.key, { include: event.target.checked })
                               }
@@ -601,6 +645,9 @@ export function CatalogImportsPanel({
                           </td>
                           <td colSpan={3}>
                             <span className="production-chip">{ct(`entity.${row.entity}`)}</span>{" "}
+                            {row.published && (
+                              <span className="production-chip">{ct("importsPublished")}</span>
+                            )}{" "}
                             {summary || ct("importsNoFields")}
                           </td>
                           <td colSpan={6}>
@@ -660,7 +707,7 @@ export function CatalogImportsPanel({
                           <input
                             type="checkbox"
                             checked={row.include}
-                            disabled={row.row_errors.length > 0}
+                            disabled={row.row_errors.length > 0 || row.published}
                             onChange={(event) =>
                               patchRow(row.key, { include: event.target.checked })
                             }
