@@ -308,8 +308,40 @@ export function VanoSection({
               (selectedRule.authority.fixings as Array<unknown>).length > 0 && (
                 <p className="vano-note">
                   {t("projects.vanoFixings")}:{" "}
-                  {(selectedRule.authority.fixings as Array<{ code: string }>)
-                    .map((fixing) => fixing.code)
+                  {(
+                    selectedRule.authority.fixings as Array<{
+                      code?: string;
+                      label?: string;
+                      qty_per_unit?: string;
+                    }>
+                  )
+                    .map(
+                      (fixing) =>
+                        (fixing.code ?? fixing.label ?? "") +
+                        (fixing.qty_per_unit ? ` ×${fixing.qty_per_unit}` : ""),
+                    )
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+              )}
+            {selectedRule &&
+              Array.isArray(selectedRule.authority.frame_extensions) &&
+              (selectedRule.authority.frame_extensions as Array<unknown>).length > 0 && (
+                <p className="vano-note">
+                  {t("projects.vanoExtensions")}:{" "}
+                  {(
+                    selectedRule.authority.frame_extensions as Array<{
+                      side?: string;
+                      label?: string;
+                      mm?: string;
+                    }>
+                  )
+                    .map(
+                      (extension) =>
+                        (extension.label ?? extension.side ?? "") +
+                        (extension.mm ? ` +${extension.mm} mm` : ""),
+                    )
+                    .filter(Boolean)
                     .join(" · ")}
                 </p>
               )}
