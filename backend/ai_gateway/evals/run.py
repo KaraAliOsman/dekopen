@@ -30,9 +30,9 @@ _BACKEND_DIR = Path(__file__).resolve().parents[2]
 if str(_BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(_BACKEND_DIR))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
-# El arnés corre fuera del servidor: MOCK sólo está habilitado con DEBUG o la
-# bandera explícita — el runner la fija para la corrida.
-os.environ.setdefault("AI_GATEWAY_MOCK_ENABLED", "1")
+# AI_GATEWAY_MOCK_ENABLED se fija dentro de main() sólo cuando la corrida
+# incluye MOCK: una corrida de proveedor real no debe dejar la ruta MOCK
+# habilitada en el proceso.
 
 import django  # noqa: E402
 
@@ -43,6 +43,8 @@ import yaml  # noqa: E402
 from ai_gateway.evals import taxonomy  # noqa: E402
 from ai_gateway.evals.expect import evaluate  # noqa: E402
 from ai_gateway.evals.fixtures import given as given_for  # noqa: E402
+from ai_gateway.evals.fixtures import module as fixture_module  # noqa: E402
+from ai_gateway.evals.fixtures import product as fixture_product  # noqa: E402
 from ai_gateway.evals.harness import ProviderBroker, run_case, configured_provider_names  # noqa: E402
 from ai_gateway.evals.sandbox import OpsSandbox, SandboxUnavailable  # noqa: E402
 
@@ -60,28 +62,76 @@ def load_cases(cases_dir: Path) -> list[dict]:
 
 
 def apply_sandbox(case: dict, run: dict, given: dict, sandbox: OpsSandbox) -> None:
-    """Aplica las ops aceptadas sobre una copia del producto fixture y deja
-    en run["sandbox"] la proyección resultante (o la razón de no aplicar)."""
-    ops = list((run.get("outcome") or {}).get("ops_accepted") or [])
+    """Aplica las ops aceptadas sobre copias de los productos fixture: las
+    ops sueltas sobre `given["product"]` y los items de `batch_ops` sobre el
+    producto de CADA posición cubierta. Deja en run["sandbox"] el resultado
+    (o la razón de no aplicar) — un `sandbox_error` invalida el caso, no lo
+    deja pasar por omisión."""
+    outcome = run.get("outcome") or {}
+    ops = list(outcome.get("ops_accepted") or [])
     product_json = given.get("product")
-    if not ops or not isinstance(product_json, dict):
-        run["sandbox"] = {
-            "applied": 0,
-            "product_after": product_json,
-            "product_changed": False,
-            "note": "sin ops aceptadas" if not ops else "sin producto fixture",
-        }
-        return
-    try:
-        after = sandbox.apply(product_json, ops)
-    except SandboxUnavailable as error:
-        run["sandbox"] = {"applied": 0, "sandbox_error": str(error), "product_changed": None}
-        return
     run["sandbox"] = {
-        "applied": len(ops),
-        "product_after": after,
-        "product_changed": after != product_json,
+        "applied": 0,
+        "product_after": product_json,
+        "product_changed": False,
     }
+    errors: list[str] = []
+    if ops and isinstance(product_json, dict):
+        try:
+            after = sandbox.apply(product_json, ops)
+            run["sandbox"].update(
+                {
+                    "applied": len(ops),
+                    "product_after": after,
+                    "product_changed": after != product_json,
+                }
+            )
+        except SandboxUnavailable as error:
+            errors.append(str(error))
+            run["sandbox"]["product_changed"] = None
+    elif ops:
+        run["sandbox"]["note"] = "sin producto fixture"
+
+    # Items de batch_ops: ops ya validadas por posición — se aplican al
+    # producto de esa posición para evaluar el resultado estructural.
+    batch_items = [
+        item
+        for step in outcome.get("steps") or []
+        if isinstance(step, dict) and step.get("kind") == "batch_ops"
+        for item in step.get("items") or []
+        if isinstance(item, dict) and item.get("position_id")
+    ]
+    if batch_items:
+        rows = {str(row["id"]): row for row in given.get("positions") or []}
+        batch_results: dict[str, dict] = {}
+        for item in batch_items:
+            pid = str(item["position_id"])
+            item_ops = [op for op in item.get("ops") or [] if isinstance(op, dict)]
+            row = rows.get(pid)
+            if row is None:
+                batch_results[pid] = {"error": "posición fuera del fixture"}
+                continue
+            if not item_ops:
+                batch_results[pid] = {"error": "item sin ops"}
+                continue
+            product_row = fixture_product(
+                [fixture_module(row["parametric_tree"], row["width_mm"], row["height_mm"])]
+            )
+            try:
+                after = sandbox.apply(product_row, item_ops)
+                batch_results[pid] = {
+                    "product_after": after,
+                    "changed": after != product_row,
+                }
+            except SandboxUnavailable as error:
+                errors.append(str(error))
+                batch_results[pid] = {"error": str(error)}
+        run["sandbox"]["batch_results"] = batch_results
+
+    if errors:
+        run["sandbox"]["sandbox_error"] = errors[0]
+    if not ops and not batch_items:
+        run["sandbox"]["note"] = "sin ops aceptadas"
 
 
 def run_suite(provider: str, cases: list[dict]) -> dict:
@@ -213,6 +263,10 @@ def main() -> int:
     providers = (
         ["MOCK", *configured_provider_names()] if args.provider == "auto" else [args.provider]
     )
+    if "MOCK" in providers:
+        # El arnés corre fuera del servidor: MOCK sólo está habilitado con
+        # DEBUG o la bandera explícita — la fija únicamente para corridas MOCK.
+        os.environ.setdefault("AI_GATEWAY_MOCK_ENABLED", "1")
     stamp = args.tag or ""
     exit_code = 0
     for provider in providers:

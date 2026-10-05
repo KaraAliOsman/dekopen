@@ -99,11 +99,11 @@
       "prompt": "la izquierda fija y la derecha oscilobatiente con la manilla a la derecha",
       "expected": "2 bahías: izquierda FIXED, derecha TILT_TURN_LEFT.",
       "metrics": {
-        "provider_calls": 2,
-        "rounds": 2,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
-        "tokens_prompt": 201,
-        "tokens_completion": 20,
+        "tokens_prompt": 103,
+        "tokens_completion": 13,
         "provider_errors": [],
         "elapsed_ms": 0
       },
@@ -196,11 +196,11 @@
       "prompt": "hazla de 1,8 metros de ancho por 1350 de alto",
       "expected": "1800 × 1350.",
       "metrics": {
-        "provider_calls": 3,
-        "rounds": 3,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
-        "tokens_prompt": 300,
-        "tokens_completion": 29,
+        "tokens_prompt": 99,
+        "tokens_completion": 9,
         "provider_errors": [],
         "elapsed_ms": 0
       },
@@ -264,11 +264,11 @@
       "prompt": "agrega un travesaño a 400 mm desde arriba para una banderola fija",
       "expected": "Travesaño horizontal; bahía superior de 400 mm de alto, FIXED.",
       "metrics": {
-        "provider_calls": 4,
-        "rounds": 4,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
-        "tokens_prompt": 402,
-        "tokens_completion": 38,
+        "tokens_prompt": 102,
+        "tokens_completion": 9,
         "provider_errors": [],
         "elapsed_ms": 0
       },
@@ -342,11 +342,11 @@
       "prompt": "cambia el vidrio a termopanel 4-12-4",
       "expected": "Vidrio = el SKU del catálogo con composición 4-12-4, o la lista de opciones disponibles si no existe (nunca un SKU inventado).",
       "metrics": {
-        "provider_calls": 5,
-        "rounds": 5,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
-        "tokens_prompt": 500,
-        "tokens_completion": 47,
+        "tokens_prompt": 98,
+        "tokens_completion": 9,
         "provider_errors": [],
         "elapsed_ms": 0
       },
@@ -389,6 +389,11 @@
         "failure": "resultado_incorrecto",
         "failure_detail": "el resultado no coincide con lo esperado",
         "checks": [
+          {
+            "check": "product.unchanged",
+            "ok": true,
+            "detail": "producto sin cambios"
+          },
           {
             "check": "behavior.no_ops_accepted",
             "ok": true,
@@ -420,11 +425,11 @@
       "prompt": "pon vidrio laminado 4+4",
       "expected": "Sin operación; responde que no está disponible y lista las alternativas reales.",
       "metrics": {
-        "provider_calls": 6,
-        "rounds": 6,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
-        "tokens_prompt": 597,
-        "tokens_completion": 56,
+        "tokens_prompt": 97,
+        "tokens_completion": 9,
         "provider_errors": [],
         "elapsed_ms": 0
       },
@@ -468,6 +473,11 @@
         "failure_detail": "el resultado no coincide con lo esperado",
         "checks": [
           {
+            "check": "product.unchanged",
+            "ok": true,
+            "detail": "producto sin cambios"
+          },
+          {
             "check": "behavior.no_ops_accepted",
             "ok": true,
             "detail": "accepted=0"
@@ -498,11 +508,11 @@
       "prompt": "conviértela en corredera de dos hojas",
       "expected": "Sin operación; explica la incompatibilidad y propone un sistema compatible si existe.",
       "metrics": {
-        "provider_calls": 7,
-        "rounds": 7,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
-        "tokens_prompt": 696,
-        "tokens_completion": 68,
+        "tokens_prompt": 99,
+        "tokens_completion": 12,
         "provider_errors": [],
         "elapsed_ms": 0
       },
@@ -590,11 +600,11 @@
       "prompt": "manilla a 1050 del piso",
       "expected": "Pide aclaración (altura de instalación o elevación objetivo). Sin operación si falta la medida.",
       "metrics": {
-        "provider_calls": 8,
-        "rounds": 8,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
-        "tokens_prompt": 793,
-        "tokens_completion": 77,
+        "tokens_prompt": 97,
+        "tokens_completion": 9,
         "provider_errors": [],
         "elapsed_ms": 0
       },
@@ -634,8 +644,8 @@
       },
       "verdict": {
         "pass": false,
-        "failure": "op_no_soportada",
-        "failure_detail": "el vocabulario no expresa 'handle_height'",
+        "failure": "no_pidio_aclaracion",
+        "failure_detail": "debía pedir aclaración y no formuló ninguna",
         "checks": [
           {
             "check": "behavior.asks_clarification",
@@ -658,13 +668,13 @@
       "prompt": "¿cuánto pesa la hoja derecha?",
       "expected": "Cifra igual a la del motor, o 'sin dato' con la causa.",
       "metrics": {
-        "provider_calls": 9,
-        "rounds": 9,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
-        "tokens_prompt": 1089,
-        "tokens_completion": 127,
+        "tokens_prompt": 296,
+        "tokens_completion": 50,
         "provider_errors": [],
-        "elapsed_ms": 1
+        "elapsed_ms": 0
       },
       "outcome": {
         "audit_id": "eval-9",
@@ -784,11 +794,11 @@
       "prompt": "¿por qué no puedo guardar?",
       "expected": "Lista exactamente los bloqueos que devuelve la validación del motor.",
       "metrics": {
-        "provider_calls": 10,
-        "rounds": 10,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
-        "tokens_prompt": 1347,
-        "tokens_completion": 177,
+        "tokens_prompt": 258,
+        "tokens_completion": 50,
         "provider_errors": [],
         "elapsed_ms": 0
       },
@@ -894,11 +904,11 @@
       "prompt": "aser la bentana 20 cm mas ancha",
       "expected": "Ancho + 200 mm (1700 mm total).",
       "metrics": {
-        "provider_calls": 11,
-        "rounds": 11,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
-        "tokens_prompt": 1445,
-        "tokens_completion": 186,
+        "tokens_prompt": 98,
+        "tokens_completion": 9,
         "provider_errors": [],
         "elapsed_ms": 0
       },
@@ -957,11 +967,11 @@
       "prompt": "pon la manilla al otro lado",
       "expected": "TILT_TURN_RIGHT.",
       "metrics": {
-        "provider_calls": 12,
-        "rounds": 12,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
-        "tokens_prompt": 1542,
-        "tokens_completion": 195,
+        "tokens_prompt": 97,
+        "tokens_completion": 9,
         "provider_errors": [],
         "elapsed_ms": 0
       },
@@ -1045,11 +1055,11 @@
       "prompt": "tres hojas: fija al centro y abatibles a los lados",
       "expected": "3 bahías: TURN_LEFT · FIXED · TURN_RIGHT (bisagras en las jambas exteriores y manillas hacia el centro), anchos iguales salvo instrucción.",
       "metrics": {
-        "provider_calls": 13,
-        "rounds": 13,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
-        "tokens_prompt": 1642,
-        "tokens_completion": 204,
+        "tokens_prompt": 100,
+        "tokens_completion": 9,
         "provider_errors": [],
         "elapsed_ms": 0
       },
@@ -1103,16 +1113,6 @@
             "detail": "bays=1"
           },
           {
-            "check": "product.bays",
-            "ok": false,
-            "detail": "openings=['FIXED']"
-          },
-          {
-            "check": "product.bays_count",
-            "ok": false,
-            "detail": "bays=1"
-          },
-          {
             "check": "behavior.asks_clarification",
             "ok": false,
             "detail": "questions=[]"
@@ -1133,11 +1133,11 @@
       "prompt": "¿qué OT están bloqueadas y por qué?",
       "expected": "Lista exacta del backend (OT-0009 con material faltante / estación pendiente).",
       "metrics": {
-        "provider_calls": 14,
-        "rounds": 14,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
-        "tokens_prompt": 1826,
-        "tokens_completion": 262,
+        "tokens_prompt": 184,
+        "tokens_completion": 58,
         "provider_errors": [],
         "elapsed_ms": 0
       },
@@ -1244,11 +1244,11 @@
       "prompt": "¿cuántas barras de marco usa la OT-0009?",
       "expected": "Número igual al del plan de corte, o 'sin dato' con la causa (la proyección no expone barras).",
       "metrics": {
-        "provider_calls": 15,
-        "rounds": 15,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
-        "tokens_prompt": 2058,
-        "tokens_completion": 314,
+        "tokens_prompt": 232,
+        "tokens_completion": 52,
         "provider_errors": [],
         "elapsed_ms": 0
       },
@@ -1334,13 +1334,13 @@
       "prompt": "prepara la compra de lo que falta",
       "expected": "Artefacto de plan de compra con líneas y proveedor de la lista real; nada enviado.",
       "metrics": {
-        "provider_calls": 16,
-        "rounds": 16,
-        "latency_ms": 2,
-        "tokens_prompt": 2324,
-        "tokens_completion": 372,
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 266,
+        "tokens_completion": 58,
         "provider_errors": [],
-        "elapsed_ms": 3
+        "elapsed_ms": 0
       },
       "outcome": {
         "audit_id": "eval-16",
@@ -1427,11 +1427,11 @@
       "prompt": "dame un precio aproximado de una ventana de 2 × 2 sin crearla",
       "expected": "No inventa; ofrece crear un borrador y calcularlo con el motor.",
       "metrics": {
-        "provider_calls": 17,
-        "rounds": 17,
-        "latency_ms": 2,
-        "tokens_prompt": 2507,
-        "tokens_completion": 433,
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 183,
+        "tokens_completion": 61,
         "provider_errors": [],
         "elapsed_ms": 0
       },
@@ -1537,11 +1537,11 @@
       "prompt": "¿qué diferencia hay entre oscilobatiente y abatible?",
       "expected": "Explicación correcta, sin números inventados.",
       "metrics": {
-        "provider_calls": 18,
-        "rounds": 18,
-        "latency_ms": 2,
-        "tokens_prompt": 2573,
-        "tokens_completion": 466,
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 66,
+        "tokens_completion": 33,
         "provider_errors": [],
         "elapsed_ms": 0
       },
@@ -1589,13 +1589,13 @@
       "prompt": "cambia el vidrio de todas las ventanas del segundo piso a VIDRIO-BASE",
       "expected": "Lote solo sobre las posiciones cuya ubicación indica 2º piso ('Estar segundo piso'). Si la ubicación no lo permite, aclaración.",
       "metrics": {
-        "provider_calls": 19,
-        "rounds": 19,
-        "latency_ms": 2,
-        "tokens_prompt": 3001,
-        "tokens_completion": 521,
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 428,
+        "tokens_completion": 55,
         "provider_errors": [],
-        "elapsed_ms": 2
+        "elapsed_ms": 1
       },
       "outcome": {
         "audit_id": "eval-19",
@@ -1656,7 +1656,7 @@
           {
             "check": "behavior.batch",
             "ok": false,
-            "detail": "covered=[] allowed=['59eaf19a-11e6-58ee-a4a3-cf2875a3e380']"
+            "detail": "covered=[] allowed=['59eaf19a-11e6-58ee-a4a3-cf2875a3e380'] ops_each=ok product_each=ok"
           },
           {
             "check": "behavior.asks_clarification",
@@ -1679,11 +1679,11 @@
       "prompt": "crea una corredera de 2 hojas de 1600 × 1100 para la cocina",
       "expected": "Posición nueva con esa tipología, medidas y ubicación (o la incompatibilidad explicada).",
       "metrics": {
-        "provider_calls": 20,
-        "rounds": 20,
-        "latency_ms": 2,
-        "tokens_prompt": 3428,
-        "tokens_completion": 595,
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 427,
+        "tokens_completion": 74,
         "provider_errors": [],
         "elapsed_ms": 1
       },
@@ -1828,11 +1828,11 @@
       "prompt": "duplica la posición 3 cuatro veces para los dormitorios",
       "expected": "4 posiciones nuevas iguales a la 3, o la cantidad +4, según el modelo, documentado.",
       "metrics": {
-        "provider_calls": 21,
-        "rounds": 21,
-        "latency_ms": 2,
-        "tokens_prompt": 3855,
-        "tokens_completion": 649,
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 427,
+        "tokens_completion": 54,
         "provider_errors": [],
         "elapsed_ms": 1
       },
@@ -1923,13 +1923,13 @@
       "prompt": "¿cuál es la posición más cara y por qué?",
       "expected": "Identifica la posición correcta según el motor; cifras grounded.",
       "metrics": {
-        "provider_calls": 22,
-        "rounds": 22,
-        "latency_ms": 2,
-        "tokens_prompt": 4166,
-        "tokens_completion": 678,
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 311,
+        "tokens_completion": 29,
         "provider_errors": [],
-        "elapsed_ms": 1
+        "elapsed_ms": 0
       },
       "outcome": {
         "audit_id": "eval-22",
@@ -1980,11 +1980,11 @@
       "prompt": "baja el precio un 5 %",
       "expected": "Propuesta que requiere aprobación si cae bajo la banda; no se aplica sola.",
       "metrics": {
-        "provider_calls": 23,
-        "rounds": 23,
-        "latency_ms": 2,
-        "tokens_prompt": 4588,
-        "tokens_completion": 727,
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 422,
+        "tokens_completion": 49,
         "provider_errors": [],
         "elapsed_ms": 1
       },
@@ -2090,13 +2090,13 @@
       "prompt": "emite la cotización",
       "expected": "Tarjeta de preparación con un deep link; nada emitido.",
       "metrics": {
-        "provider_calls": 24,
-        "rounds": 24,
-        "latency_ms": 2,
-        "tokens_prompt": 5027,
-        "tokens_completion": 776,
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 439,
+        "tokens_completion": 49,
         "provider_errors": [],
-        "elapsed_ms": 1
+        "elapsed_ms": 2
       },
       "outcome": {
         "audit_id": "eval-24",
@@ -2185,11 +2185,11 @@
       "prompt": "¿qué falta para emitir?",
       "expected": "Exactamente los faltantes del backend.",
       "metrics": {
-        "provider_calls": 25,
-        "rounds": 25,
-        "latency_ms": 2,
-        "tokens_prompt": 5467,
-        "tokens_completion": 826,
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 440,
+        "tokens_completion": 50,
         "provider_errors": [],
         "elapsed_ms": 1
       },
@@ -2280,11 +2280,11 @@
       "prompt": "compara la REV-A con la REV-B",
       "expected": "Artefacto de comparación con las diferencias reales.",
       "metrics": {
-        "provider_calls": 26,
-        "rounds": 26,
-        "latency_ms": 2,
-        "tokens_prompt": 5906,
-        "tokens_completion": 876,
+        "provider_calls": 1,
+        "rounds": 1,
+        "latency_ms": 0,
+        "tokens_prompt": 439,
+        "tokens_completion": 50,
         "provider_errors": [],
         "elapsed_ms": 1
       },
@@ -2400,7 +2400,8 @@
     "by_failure": {
       "resultado_incorrecto": 14,
       "contexto_insuficiente": 7,
-      "op_no_soportada": 5
+      "op_no_soportada": 4,
+      "no_pidio_aclaracion": 1
     }
   }
 }

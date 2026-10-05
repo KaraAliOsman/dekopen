@@ -8,6 +8,8 @@ resultante en el sandbox), nunca de interpretar el texto libre del modelo.
 
 from __future__ import annotations
 
+from ai_gateway.evals.expect import _CLARIFY_RE, _text_corpus
+
 # Las diez causas, en el orden del encargo.
 PROVEEDOR_NO_CONFIGURADO = "proveedor_no_configurado"
 PROVEEDOR_ERROR = "proveedor_error"
@@ -32,6 +34,11 @@ FAILURE_CODES = (
     NO_PIDIO_ACLARACION,
     ACCION_CONSECUENTE_EJECUTADA,
 )
+
+# Etiqueta fuera de las diez causas: el fallo fue del arnés (p.ej. el sandbox
+# Node no pudo aplicar las ops) y el caso no es medible — no cuenta como
+# fallo del modelo en el diagnóstico.
+ERROR_ARNES = "error_arnes"
 
 # ProviderError codes: la llave/URL de entorno no existe → el proveedor no
 # está configurado; cualquier otra falla del transporte es proveedor_error.
@@ -93,6 +100,12 @@ def classify(case: dict, run: dict) -> tuple[str | None, str | None]:
         # Cualquier otro contract_error es un fallo de resultado observable.
         return RESULTADO_INCORRECTO, code
 
+    # 4.5) El propio arnés no pudo medir el resultado (sandbox caído): el
+    # caso queda sin medir — no es un fallo del modelo ni de la ruta.
+    sandbox_error = (run.get("sandbox") or {}).get("sandbox_error")
+    if sandbox_error:
+        return ERROR_ARNES, str(sandbox_error)[:160]
+
     outcome = run.get("outcome") or {}
     expected = case.get("expect") or {}
     ops_proposed = outcome.get("ops_proposed") or []
@@ -108,6 +121,14 @@ def classify(case: dict, run: dict) -> tuple[str | None, str | None]:
     expects_prepared_only = bool(expected.get("expects_prepared_only"))
     op_gap = expected.get("op_gap")
     context_gap = expected.get("context_gap")
+
+    # 4.7) El caso exigía aclaración y la salida no contiene una pregunta
+    # real (ni canal questions ni "?" en texto nuevo). Prioriza sobre op_gap:
+    # si además faltaba vocabulario, el fallo observable sigue siendo que no
+    # aclaró — p.ej. E08 pide altura de manilla y el asistente se calla.
+    asked = bool(questions) or bool(_CLARIFY_RE.search(_text_corpus(outcome, case.get("prompt"))))
+    if expects_clarification and not asked and not context_gap and not ops_accepted and not changed:
+        return NO_PIDIO_ACLARACION, "debía pedir aclaración y no formuló ninguna"
 
     # 5) El vocabulario de operaciones no puede expresar lo pedido: el caso
     # declara el hueco y el modelo no pudo producir un cambio válido.

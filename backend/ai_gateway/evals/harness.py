@@ -140,22 +140,26 @@ class ProviderBroker:
             "credits_debited": 0,
         }
 
-    def metrics(self) -> dict:
+    def metrics(self, start: int = 0) -> dict:
+        """Métricas del tramo `start:` de self.calls — `run_case` captura el
+        índice al empezar para que cada caso reporte SUS llamadas, no las
+        acumuladas de la suite."""
+        calls = self.calls[start:]
         return {
-            "provider_calls": len(self.calls),
+            "provider_calls": len(calls),
             "rounds": len(
                 [
                     c
-                    for c in self.calls
+                    for c in calls
                     if ":r" in c["operation_key"]
                     or c["capability"] == "design_assist"
                     or c["capability"] == "context_assist"
                 ]
             ),
-            "latency_ms": sum(c.get("latency_ms", 0) for c in self.calls),
-            "tokens_prompt": sum(c.get("tokens_prompt", 0) for c in self.calls),
-            "tokens_completion": sum(c.get("tokens_completion", 0) for c in self.calls),
-            "provider_errors": [c["error"] for c in self.calls if "error" in c],
+            "latency_ms": sum(c.get("latency_ms", 0) for c in calls),
+            "tokens_prompt": sum(c.get("tokens_prompt", 0) for c in calls),
+            "tokens_completion": sum(c.get("tokens_completion", 0) for c in calls),
+            "provider_errors": [c["error"] for c in calls if "error" in c],
         }
 
 
@@ -269,6 +273,7 @@ def _error_dict(error: Exception) -> dict:
 def run_case(case: dict, *, broker: ProviderBroker) -> dict:
     """Ejecuta el caso por su ruta y devuelve el registro de resultado
     (outcome completo + métricas). No evalúa — eso es `expect.evaluate`."""
+    call_start = len(broker.calls)
     given = fixtures.given(
         case.get("fixture") or "editor",
         product_variant=case.get("product_variant") or "vacia",
@@ -397,7 +402,7 @@ def run_case(case: dict, *, broker: ProviderBroker) -> dict:
         record["error"] = _error_dict(error)
 
     record["metrics"] = {
-        **broker.metrics(),
+        **broker.metrics(call_start),
         "elapsed_ms": int((time.monotonic() - started) * 1000),
     }
     record["given"] = {"product": product_json, "positions": len(given.get("positions") or [])}

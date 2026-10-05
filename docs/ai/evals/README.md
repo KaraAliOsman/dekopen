@@ -40,7 +40,7 @@ como artefacto.
 | Rutas | `backend/ai_gateway/evals/harness.py` | `run_case` parchea sólo los bordes de I/O (gateway, context, catálogo, position_row, batch positions) y llama a la función real de cada ruta |
 | Fixtures | `backend/ai_gateway/evals/fixtures.py` | Mundo DEMO_60: editor (posición vacía/dividida/oscilobatiente), proyecto VIVIENDA con 12 posiciones, proyecto cotizado (REV-A/REV-B), producción, OT con faltante, plan de compras, dashboard |
 | Casos | `backend/ai_gateway/evals/cases/*.yaml` | 26 casos con prompt verbatim, expectativa y aserciones declarativas |
-| Evaluación | `backend/ai_gateway/evals/expect.py` | Aserciones por resultado: `product` (estructura aplicada) + `behavior` (ops, pasos, artefactos, preguntas, texto citable) |
+| Evaluación | `backend/ai_gateway/evals/expect.py` | Aserciones por resultado: `product` (estructura aplicada) + `behavior` (ops, pasos, artefactos, preguntas, texto citable). El check `batch` verifica cobertura, las ops por posición (`ops_each`) y el producto resultante de cada una (`product_each`, contra `sandbox.batch_results`) |
 | Proyección | `backend/ai_gateway/evals/projection.py` | Aplana el producto (sobre `assembly` o bare tree) a módulos/bahías/splits con Decimal |
 | Sandbox | `backend/ai_gateway/evals/sandbox.py` + `sandbox_apply_entry.ts` | Esbuild-bundla `applyDesignOps` real y la corre en Node — jamás una reimplementación en Python |
 | Taxonomía | `backend/ai_gateway/evals/taxonomy.py` | Las 10 categorías del encargo, en árbol de decisión determinista |
@@ -69,6 +69,12 @@ como artefacto.
 10. `resultado_incorrecto` — fallback: el resultado no coincide con lo
     esperado por otra razón.
 
+Etiqueta fuera de la taxonomía: `error_arnes` — el propio arnés no pudo
+medir (p.ej. el sandbox Node/esbuild no aplicó las ops). No cuenta como
+fallo del modelo: el caso queda sin medir hasta que el arnés se repare.
+Las comparaciones de medidas son exactas (tolerancia 0,00 mm, como el
+motor) y las métricas de llamadas se reportan por caso, no acumuladas.
+
 ## Casos
 
 | Id | Vista | Vía | Prompt | Espera |
@@ -86,7 +92,7 @@ aclaración sin aplicar ops".
 
 | Proveedor | Casos | Pasan | Fallos por taxonomía |
 | --- | --- | --- | --- |
-| MOCK | 26 | **0** | `resultado_incorrecto` 14 · `contexto_insuficiente` 7 · `op_no_soportada` 5 |
+| MOCK | 26 | **0** | `resultado_incorrecto` 14 · `contexto_insuficiente` 7 · `op_no_soportada` 4 · `no_pidio_aclaracion` 1 |
 | MIMO (configurado) | 26 | **0** | `proveedor_error` 26 (`ai_provider_quota`, HTTP 429) |
 
 Artefactos: [`2026-10-05-mock.json`](./2026-10-05-mock.json) ·

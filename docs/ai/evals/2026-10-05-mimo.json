@@ -17,7 +17,7 @@
         "provider_errors": [
           "ai_provider_quota"
         ],
-        "elapsed_ms": 914
+        "elapsed_ms": 1020
       },
       "outcome": {},
       "error": {
@@ -46,16 +46,15 @@
       "prompt": "la izquierda fija y la derecha oscilobatiente con la manilla a la derecha",
       "expected": "2 bahías: izquierda FIXED, derecha TILT_TURN_LEFT.",
       "metrics": {
-        "provider_calls": 2,
-        "rounds": 2,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
         "tokens_prompt": 0,
         "tokens_completion": 0,
         "provider_errors": [
-          "ai_provider_quota",
           "ai_provider_quota"
         ],
-        "elapsed_ms": 692
+        "elapsed_ms": 680
       },
       "outcome": {},
       "error": {
@@ -84,17 +83,15 @@
       "prompt": "hazla de 1,8 metros de ancho por 1350 de alto",
       "expected": "1800 × 1350.",
       "metrics": {
-        "provider_calls": 3,
-        "rounds": 3,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
         "tokens_prompt": 0,
         "tokens_completion": 0,
         "provider_errors": [
-          "ai_provider_quota",
-          "ai_provider_quota",
           "ai_provider_quota"
         ],
-        "elapsed_ms": 648
+        "elapsed_ms": 635
       },
       "outcome": {},
       "error": {
@@ -123,18 +120,15 @@
       "prompt": "agrega un travesaño a 400 mm desde arriba para una banderola fija",
       "expected": "Travesaño horizontal; bahía superior de 400 mm de alto, FIXED.",
       "metrics": {
-        "provider_calls": 4,
-        "rounds": 4,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
         "tokens_prompt": 0,
         "tokens_completion": 0,
         "provider_errors": [
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
           "ai_provider_quota"
         ],
-        "elapsed_ms": 649
+        "elapsed_ms": 633
       },
       "outcome": {},
       "error": {
@@ -163,19 +157,15 @@
       "prompt": "cambia el vidrio a termopanel 4-12-4",
       "expected": "Vidrio = el SKU del catálogo con composición 4-12-4, o la lista de opciones disponibles si no existe (nunca un SKU inventado).",
       "metrics": {
-        "provider_calls": 5,
-        "rounds": 5,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
         "tokens_prompt": 0,
         "tokens_completion": 0,
         "provider_errors": [
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
           "ai_provider_quota"
         ],
-        "elapsed_ms": 661
+        "elapsed_ms": 647
       },
       "outcome": {},
       "error": {
@@ -204,20 +194,15 @@
       "prompt": "pon vidrio laminado 4+4",
       "expected": "Sin operación; responde que no está disponible y lista las alternativas reales.",
       "metrics": {
-        "provider_calls": 6,
-        "rounds": 6,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
         "tokens_prompt": 0,
         "tokens_completion": 0,
         "provider_errors": [
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
           "ai_provider_quota"
         ],
-        "elapsed_ms": 660
+        "elapsed_ms": 657
       },
       "outcome": {},
       "error": {
@@ -246,21 +231,15 @@
       "prompt": "conviértela en corredera de dos hojas",
       "expected": "Sin operación; explica la incompatibilidad y propone un sistema compatible si existe.",
       "metrics": {
-        "provider_calls": 7,
-        "rounds": 7,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
         "tokens_prompt": 0,
         "tokens_completion": 0,
         "provider_errors": [
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
           "ai_provider_quota"
         ],
-        "elapsed_ms": 674
+        "elapsed_ms": 695
       },
       "outcome": {},
       "error": {
@@ -289,22 +268,15 @@
       "prompt": "manilla a 1050 del piso",
       "expected": "Pide aclaración (altura de instalación o elevación objetivo). Sin operación si falta la medida.",
       "metrics": {
-        "provider_calls": 8,
-        "rounds": 8,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
         "tokens_prompt": 0,
         "tokens_completion": 0,
         "provider_errors": [
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
           "ai_provider_quota"
         ],
-        "elapsed_ms": 668
+        "elapsed_ms": 638
       },
       "outcome": {},
       "error": {
@@ -333,23 +305,15 @@
       "prompt": "¿cuánto pesa la hoja derecha?",
       "expected": "Cifra igual a la del motor, o 'sin dato' con la causa.",
       "metrics": {
-        "provider_calls": 9,
-        "rounds": 9,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
         "tokens_prompt": 0,
         "tokens_completion": 0,
         "provider_errors": [
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
           "ai_provider_quota"
         ],
-        "elapsed_ms": 618
+        "elapsed_ms": 665
       },
       "outcome": {},
       "error": {
@@ -378,24 +342,15 @@
       "prompt": "¿por qué no puedo guardar?",
       "expected": "Lista exactamente los bloqueos que devuelve la validación del motor.",
       "metrics": {
-        "provider_calls": 10,
-        "rounds": 10,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
         "tokens_prompt": 0,
         "tokens_completion": 0,
         "provider_errors": [
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
           "ai_provider_quota"
         ],
-        "elapsed_ms": 671
+        "elapsed_ms": 644
       },
       "outcome": {},
       "error": {
@@ -424,25 +379,15 @@
       "prompt": "aser la bentana 20 cm mas ancha",
       "expected": "Ancho + 200 mm (1700 mm total).",
       "metrics": {
-        "provider_calls": 11,
-        "rounds": 11,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
         "tokens_prompt": 0,
         "tokens_completion": 0,
         "provider_errors": [
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
           "ai_provider_quota"
         ],
-        "elapsed_ms": 638
+        "elapsed_ms": 637
       },
       "outcome": {},
       "error": {
@@ -471,26 +416,15 @@
       "prompt": "pon la manilla al otro lado",
       "expected": "TILT_TURN_RIGHT.",
       "metrics": {
-        "provider_calls": 12,
-        "rounds": 12,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
         "tokens_prompt": 0,
         "tokens_completion": 0,
         "provider_errors": [
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
           "ai_provider_quota"
         ],
-        "elapsed_ms": 687
+        "elapsed_ms": 617
       },
       "outcome": {},
       "error": {
@@ -519,27 +453,15 @@
       "prompt": "tres hojas: fija al centro y abatibles a los lados",
       "expected": "3 bahías: TURN_LEFT · FIXED · TURN_RIGHT (bisagras en las jambas exteriores y manillas hacia el centro), anchos iguales salvo instrucción.",
       "metrics": {
-        "provider_calls": 13,
-        "rounds": 13,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
         "tokens_prompt": 0,
         "tokens_completion": 0,
         "provider_errors": [
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
           "ai_provider_quota"
         ],
-        "elapsed_ms": 656
+        "elapsed_ms": 631
       },
       "outcome": {},
       "error": {
@@ -568,28 +490,15 @@
       "prompt": "¿qué OT están bloqueadas y por qué?",
       "expected": "Lista exacta del backend (OT-0009 con material faltante / estación pendiente).",
       "metrics": {
-        "provider_calls": 14,
-        "rounds": 14,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
         "tokens_prompt": 0,
         "tokens_completion": 0,
         "provider_errors": [
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
           "ai_provider_quota"
         ],
-        "elapsed_ms": 648
+        "elapsed_ms": 632
       },
       "outcome": {},
       "error": {
@@ -618,29 +527,15 @@
       "prompt": "¿cuántas barras de marco usa la OT-0009?",
       "expected": "Número igual al del plan de corte, o 'sin dato' con la causa (la proyección no expone barras).",
       "metrics": {
-        "provider_calls": 15,
-        "rounds": 15,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
         "tokens_prompt": 0,
         "tokens_completion": 0,
         "provider_errors": [
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
           "ai_provider_quota"
         ],
-        "elapsed_ms": 631
+        "elapsed_ms": 684
       },
       "outcome": {},
       "error": {
@@ -669,30 +564,15 @@
       "prompt": "prepara la compra de lo que falta",
       "expected": "Artefacto de plan de compra con líneas y proveedor de la lista real; nada enviado.",
       "metrics": {
-        "provider_calls": 16,
-        "rounds": 16,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
         "tokens_prompt": 0,
         "tokens_completion": 0,
         "provider_errors": [
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
           "ai_provider_quota"
         ],
-        "elapsed_ms": 696
+        "elapsed_ms": 624
       },
       "outcome": {},
       "error": {
@@ -721,31 +601,15 @@
       "prompt": "dame un precio aproximado de una ventana de 2 × 2 sin crearla",
       "expected": "No inventa; ofrece crear un borrador y calcularlo con el motor.",
       "metrics": {
-        "provider_calls": 17,
-        "rounds": 17,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
         "tokens_prompt": 0,
         "tokens_completion": 0,
         "provider_errors": [
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
           "ai_provider_quota"
         ],
-        "elapsed_ms": 656
+        "elapsed_ms": 673
       },
       "outcome": {},
       "error": {
@@ -774,32 +638,15 @@
       "prompt": "¿qué diferencia hay entre oscilobatiente y abatible?",
       "expected": "Explicación correcta, sin números inventados.",
       "metrics": {
-        "provider_calls": 18,
-        "rounds": 18,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
         "tokens_prompt": 0,
         "tokens_completion": 0,
         "provider_errors": [
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
           "ai_provider_quota"
         ],
-        "elapsed_ms": 651
+        "elapsed_ms": 646
       },
       "outcome": {},
       "error": {
@@ -828,33 +675,15 @@
       "prompt": "cambia el vidrio de todas las ventanas del segundo piso a VIDRIO-BASE",
       "expected": "Lote solo sobre las posiciones cuya ubicación indica 2º piso ('Estar segundo piso'). Si la ubicación no lo permite, aclaración.",
       "metrics": {
-        "provider_calls": 19,
-        "rounds": 19,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
         "tokens_prompt": 0,
         "tokens_completion": 0,
         "provider_errors": [
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
           "ai_provider_quota"
         ],
-        "elapsed_ms": 652
+        "elapsed_ms": 621
       },
       "outcome": {},
       "error": {
@@ -883,31 +712,12 @@
       "prompt": "crea una corredera de 2 hojas de 1600 × 1100 para la cocina",
       "expected": "Posición nueva con esa tipología, medidas y ubicación (o la incompatibilidad explicada).",
       "metrics": {
-        "provider_calls": 20,
-        "rounds": 20,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
         "tokens_prompt": 0,
         "tokens_completion": 0,
         "provider_errors": [
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
           "ai_provider_quota"
         ],
         "elapsed_ms": 647
@@ -939,35 +749,15 @@
       "prompt": "duplica la posición 3 cuatro veces para los dormitorios",
       "expected": "4 posiciones nuevas iguales a la 3, o la cantidad +4, según el modelo, documentado.",
       "metrics": {
-        "provider_calls": 21,
-        "rounds": 21,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
         "tokens_prompt": 0,
         "tokens_completion": 0,
         "provider_errors": [
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
           "ai_provider_quota"
         ],
-        "elapsed_ms": 646
+        "elapsed_ms": 640
       },
       "outcome": {},
       "error": {
@@ -996,36 +786,15 @@
       "prompt": "¿cuál es la posición más cara y por qué?",
       "expected": "Identifica la posición correcta según el motor; cifras grounded.",
       "metrics": {
-        "provider_calls": 22,
-        "rounds": 22,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
         "tokens_prompt": 0,
         "tokens_completion": 0,
         "provider_errors": [
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
           "ai_provider_quota"
         ],
-        "elapsed_ms": 656
+        "elapsed_ms": 717
       },
       "outcome": {},
       "error": {
@@ -1054,37 +823,15 @@
       "prompt": "baja el precio un 5 %",
       "expected": "Propuesta que requiere aprobación si cae bajo la banda; no se aplica sola.",
       "metrics": {
-        "provider_calls": 23,
-        "rounds": 23,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
         "tokens_prompt": 0,
         "tokens_completion": 0,
         "provider_errors": [
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
           "ai_provider_quota"
         ],
-        "elapsed_ms": 655
+        "elapsed_ms": 633
       },
       "outcome": {},
       "error": {
@@ -1113,38 +860,15 @@
       "prompt": "emite la cotización",
       "expected": "Tarjeta de preparación con un deep link; nada emitido.",
       "metrics": {
-        "provider_calls": 24,
-        "rounds": 24,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
         "tokens_prompt": 0,
         "tokens_completion": 0,
         "provider_errors": [
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
           "ai_provider_quota"
         ],
-        "elapsed_ms": 650
+        "elapsed_ms": 676
       },
       "outcome": {},
       "error": {
@@ -1173,39 +897,15 @@
       "prompt": "¿qué falta para emitir?",
       "expected": "Exactamente los faltantes del backend.",
       "metrics": {
-        "provider_calls": 25,
-        "rounds": 25,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
         "tokens_prompt": 0,
         "tokens_completion": 0,
         "provider_errors": [
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
           "ai_provider_quota"
         ],
-        "elapsed_ms": 663
+        "elapsed_ms": 667
       },
       "outcome": {},
       "error": {
@@ -1234,40 +934,15 @@
       "prompt": "compara la REV-A con la REV-B",
       "expected": "Artefacto de comparación con las diferencias reales.",
       "metrics": {
-        "provider_calls": 26,
-        "rounds": 26,
+        "provider_calls": 1,
+        "rounds": 1,
         "latency_ms": 0,
         "tokens_prompt": 0,
         "tokens_completion": 0,
         "provider_errors": [
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
-          "ai_provider_quota",
           "ai_provider_quota"
         ],
-        "elapsed_ms": 661
+        "elapsed_ms": 676
       },
       "outcome": {},
       "error": {

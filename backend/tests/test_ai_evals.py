@@ -66,6 +66,106 @@ def test_evaluate_result_not_text():
     assert verdict["pass"] is True
 
 
+def test_evaluate_exact_mm_no_tolerance():
+    """La vara es 0,00 mm: 1800,4 no puede aprobar una expectativa de 1800."""
+    case = next(c for c in load_cases(CASES_DIR) if c["id"] == "E03")
+    product = fixtures.given("editor")["product"]
+    product["assembly"]["modules"][0]["width_mm"] = Decimal("1800.4")
+    product["assembly"]["modules"][0]["height_mm"] = Decimal("1350.00")
+    run = {
+        "outcome": {"ops_accepted": [{"op": "set_total_width"}]},
+        "sandbox": {"product_after": product, "product_changed": True},
+        "error": None,
+        "metrics": {},
+    }
+    verdict = evaluate(case, run, fixtures.given("editor"))
+    assert verdict["pass"] is False
+
+
+def test_evaluate_sandbox_error_fails_case():
+    """Un sandbox caído invalida el caso — no pasa por omisión aunque el
+    comportamiento textual parezca correcto."""
+    case = {
+        "id": "X",
+        "expect": {"any": [{"behavior": {"no_ops_accepted": True}}]},
+    }
+    run = {
+        "outcome": {"ops_accepted": [{"op": "set_glass"}]},
+        "sandbox": {"sandbox_error": "node no está en el PATH", "product_changed": None},
+        "error": None,
+    }
+    assert evaluate(case, run, {})["pass"] is False
+    assert taxonomy.classify(case, run)[0] == taxonomy.ERROR_ARNES
+
+
+def test_evaluate_batch_verifies_ops_and_product():
+    """Un lote al segundo piso con la op equivocada no satisface J01: el
+    check compara la op y el vidrio resultante por posición."""
+    case = next(c for c in load_cases(CASES_DIR) if c["id"] == "J01")
+    segundo_piso = next(
+        row for row in fixtures.project_positions_rows() if "segundo piso" in row["location_tag"]
+    )
+    outcome = {
+        "steps": [
+            {
+                "kind": "batch_ops",
+                "items": [
+                    {
+                        "position_id": segundo_piso["id"],
+                        "ops": [{"op": "set_total_width", "width_mm": "1500"}],
+                    }
+                ],
+            }
+        ],
+        "ops_proposed": [],
+        "ops_accepted": [],
+    }
+    run = {"outcome": outcome, "sandbox": {}, "error": None}
+    # La op es set_total_width, no set_glass → el lote correcto en cobertura
+    # pero equivocado en contenido debe fallar.
+    assert evaluate(case, run, fixtures.given("proyecto"))["pass"] is False
+
+    outcome["steps"][0]["items"][0]["ops"] = [{"op": "set_glass"}]
+    run["sandbox"] = {"batch_results": {}}
+    # Op correcta pero sin resultado aplicado → product_each falla igual.
+    assert evaluate(case, run, fixtures.given("proyecto"))["pass"] is False
+
+    product_after = fixtures.product(
+        [fixtures.module(fixtures.bay("SLIDING_2L"), "1800.00", "1200.00")]
+    )
+    product_after["assembly"]["modules"][0]["tree"]["glass_article_sku"] = "VIDRIO-BASE"
+    run["sandbox"] = {
+        "batch_results": {
+            str(segundo_piso["id"]): {"product_after": product_after, "changed": True}
+        }
+    }
+    assert evaluate(case, run, fixtures.given("proyecto"))["pass"] is True
+
+
+def test_taxonomy_clarification_missing_beats_op_gap():
+    """E08 exige aclaración: no preguntar nada es no_pidio_aclaracion, no
+    op_no_soportada, aunque el caso también declare op_gap."""
+    case = next(c for c in load_cases(CASES_DIR) if c["id"] == "E08")
+    run = {
+        "error": None,
+        "outcome": {"ops_accepted": [], "ops_proposed": [], "rejected": [], "questions": []},
+        "sandbox": {"product_changed": False},
+    }
+    assert taxonomy.classify(case, run)[0] == taxonomy.NO_PIDIO_ACLARACION
+
+
+def test_broker_metrics_per_case():
+    """metrics(start) recorta el tramo: cada caso reporta SUS llamadas."""
+    from ai_gateway.evals.harness import ProviderBroker
+
+    broker = ProviderBroker("MOCK")
+    broker.calls.append({"capability": "design_assist", "operation_key": "a", "latency_ms": 10})
+    broker.calls.append({"capability": "agent", "operation_key": "b", "latency_ms": 20})
+    assert broker.metrics(1)["provider_calls"] == 1
+    assert broker.metrics(1)["latency_ms"] == 20
+    assert broker.metrics(0)["provider_calls"] == 2
+
+
 def test_evaluate_rejects_prompt_echo_as_clarification():
     """Un proveedor que repite el prompt no está pidiendo aclaración."""
     case = {

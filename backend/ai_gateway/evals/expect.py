@@ -22,7 +22,6 @@ del producto resultante en el sandbox; `behavior` sobre el outcome de la ruta.
 from __future__ import annotations
 
 import re
-from decimal import Decimal
 from typing import Any
 
 from .projection import dec, project_product
@@ -61,10 +60,12 @@ def _text_corpus(outcome: dict, prompt: str | None = None) -> str:
 
 
 def _eq_mm(actual: Any, expected: Any) -> bool:
+    """Igualdad exacta: ENGINEERING.md fija tolerancia 0,00 mm — una vara con
+    holgura dejaría pasar medidas incorrectas como correctas."""
     a, e = dec(actual), dec(expected)
     if a is None or e is None:
         return False
-    return abs(a - e) <= Decimal("0.5")
+    return a == e
 
 
 def _bay_match(bay: dict, spec: dict) -> bool:
@@ -153,7 +154,11 @@ def _check_product(checks: dict, product_after: dict | None, product_changed: bo
 
 
 def _check_behavior(
-    checks: dict, outcome: dict, spec_positions: list[dict], prompt: str | None
+    checks: dict,
+    outcome: dict,
+    spec_positions: list[dict],
+    prompt: str | None,
+    sandbox: dict | None = None,
 ) -> list[dict]:
     results = []
     text = _text_corpus(outcome, prompt)
@@ -258,11 +263,13 @@ def _check_behavior(
             detail = f"artifacts={len(artifacts)}"
         elif name == "batch":
             spec = want or {}
+            items: list[dict] = []
             covered: set[str] = set()
             for step in steps:
                 if isinstance(step, dict) and step.get("kind") == "batch_ops":
                     for item in step.get("items") or []:
                         if isinstance(item, dict) and item.get("position_id"):
+                            items.append(item)
                             covered.add(str(item["position_id"]))
             locations = spec.get("only_locations") or []
             if locations:
@@ -288,6 +295,42 @@ def _check_behavior(
             if "positions_count" in spec:
                 ok = ok and len(covered) == int(spec["positions_count"])
             detail = f"covered={sorted(covered)} allowed={sorted(allowed)}"
+            # ops_each: cada posición cubierta debe llevar una op que calce
+            # cada patrón — un lote al segundo piso que cambia el ANCHO no
+            # satisface "cambia el vidrio".
+            ops_each = spec.get("ops_each") or []
+            if ops_each:
+                ok_ops = all(
+                    all(
+                        any(
+                            re.search(str(rx), str(op.get("op") or ""))
+                            for op in item.get("ops") or []
+                            if isinstance(op, dict)
+                        )
+                        for rx in ops_each
+                    )
+                    for item in items
+                )
+                ok = ok and ok_ops
+                detail += f" ops_each={'ok' if ok_ops else 'faltan'}"
+            # product_each: aserciones de producto contra el resultado del
+            # sandbox por posición cubierta (run['sandbox']['batch_results']).
+            product_each = spec.get("product_each")
+            if product_each:
+                batch_results = (sandbox or {}).get("batch_results") or {}
+                bad = []
+                for pid in sorted(covered):
+                    entry = batch_results.get(pid) or {}
+                    sub = _check_product(
+                        product_each,
+                        entry.get("product_after"),
+                        bool(entry.get("changed")),
+                    )
+                    failed = [c["detail"] for c in sub if not c["ok"]]
+                    if failed:
+                        bad.append(f"{pid}:{failed}")
+                ok = ok and not bad
+                detail += f" product_each={'ok' if not bad else bad}"
         elif name == "queries_include_surface":
             ok = any(
                 q.get("surface") == want and q.get("status") == "ok"
@@ -361,6 +404,7 @@ def evaluate(case: dict, run: dict, given: dict | None = None) -> dict:
                         outcome,
                         spec_positions,
                         case.get("prompt"),
+                        sandbox,
                     )
                 )
             if not results:
@@ -373,4 +417,15 @@ def evaluate(case: dict, run: dict, given: dict | None = None) -> dict:
             all_results.append(
                 {"check": "expect.defined", "ok": False, "detail": "el caso no declara checks"}
             )
+    # El sandbox no aplicó las ops aceptadas: el resultado quedó sin medir —
+    # el caso no puede declararse exitoso aunque los checks de texto pasaran.
+    if sandbox.get("sandbox_error"):
+        all_results.append(
+            {
+                "check": "sandbox.ok",
+                "ok": False,
+                "detail": f"sandbox no aplicó ops: {sandbox['sandbox_error']}",
+            }
+        )
+        passed = False
     return {"pass": passed, "checks": all_results}

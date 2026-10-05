@@ -12,9 +12,6 @@ expect:
     - product:
         bays: [TURN_LEFT, FIXED, TURN_RIGHT]
         bays_count: 3
-    - product:
-        bays: [TURN_RIGHT, FIXED, TURN_LEFT]
-        bays_count: 3
     - behavior:
         asks_clarification: true
         no_ops_accepted: true

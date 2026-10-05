@@ -8,10 +8,15 @@ prompt: "pon vidrio laminado 4+4"
 expected: "Sin operación; responde que no está disponible y lista las alternativas reales."
 expect:
   any:
-    - behavior:
+    # «Laminado»/«disponible» a secas no basta: sin SKU laminado en catálogo
+    # lo correcto es no aplicar nada y declarar la no disponibilidad o
+    # enumerar alternativas reales.
+    - product:
+        unchanged: true
+      behavior:
         no_ops_accepted: true
         text_matches_any:
-          - "VIDRIO-BASE|4 Float|24\\s*mm|laminado|no\\s+(está|existe|hay)|disponible|alternativa"
+          - "no\\s+(lo\\s+)?(existe|est[aá]\\s+disponible|hay|tengo)|cat[aá]logo|opciones|alternativas?|VIDRIO-BASE|4\\s*Float|incoloro"
     - behavior:
         asks_clarification: true
         no_ops_accepted: true

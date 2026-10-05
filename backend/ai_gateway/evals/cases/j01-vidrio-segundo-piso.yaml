@@ -13,6 +13,12 @@ expect:
         batch:
           positions_min: 1
           only_locations: ["segundo piso"]
+          # Cobertura no basta: cada posición debe llevar la op del cambio
+          # pedido y el producto resultante debe quedar con ese vidrio.
+          ops_each: ["set_glass"]
+          product_each:
+            every_bay:
+              glass_article_sku_in: ["VIDRIO-BASE"]
     - behavior:
         asks_clarification: true
         no_ops_accepted: true
