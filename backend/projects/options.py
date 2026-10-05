@@ -45,12 +45,53 @@ def _section_json(section):
     return None if section is None else section.model_dump()
 
 
+def _component_json(component) -> dict:
+    """Declared catalog component for the design surface — including the
+    qty/cut rules when the catalog carries them (D04)."""
+    return {
+        "sku": component.sku,
+        "name": component.name,
+        "qty": None if component.qty is None else str(component.qty),
+        "unit": component.unit,
+        "category": component.category,
+        "qty_rule": (
+            None
+            if component.qty_rule is None
+            else component.qty_rule.model_dump(mode="json")
+        ),
+        "cut_rule": (
+            None
+            if component.cut_rule is None
+            else component.cut_rule.model_dump(mode="json")
+        ),
+        "weight_kg": (
+            None if component.weight_kg is None else str(component.weight_kg)
+        ),
+        "cost_clp": (
+            None if component.cost_clp is None else str(component.cost_clp)
+        ),
+        "machining": [
+            declaration.model_dump(mode="json")
+            for declaration in component.machining
+        ],
+    }
+
+
 class KitComponentSerializer(serializers.Serializer):
     sku = serializers.CharField()
     name = serializers.CharField()
-    qty = serializers.CharField()
+    qty = serializers.CharField(allow_null=True)
     unit = serializers.CharField()
     category = serializers.CharField()
+    # Declared rules behind the quantity/cut — the editor mirrors the
+    # engine's expansion, it never invents counts.
+    qty_rule = serializers.DictField(allow_null=True, required=False)
+    cut_rule = serializers.DictField(allow_null=True, required=False)
+    weight_kg = serializers.CharField(allow_null=True, required=False)
+    cost_clp = serializers.CharField(allow_null=True, required=False)
+    machining = serializers.ListField(
+        child=serializers.DictField(), required=False
+    )
 
 
 class KitChoiceSerializer(serializers.Serializer):
@@ -70,6 +111,11 @@ class KitChoiceSerializer(serializers.Serializer):
     # quantities. The design surface uses it to bind visual hardware to the
     # selected kit instead of inventing positions and counts (phase-03).
     contents = KitComponentSerializer(many=True)
+    # D04: the class the kit plays inside its family, and the declared
+    # restrictions beyond the envelope.
+    class_label = serializers.CharField(allow_null=True)
+    max_aspect_ratio = serializers.CharField(allow_null=True)
+    min_stay_height_mm = serializers.CharField(allow_null=True)
 
 
 class HandleSlotSerializer(serializers.Serializer):
@@ -89,6 +135,43 @@ class HandlePolicySerializer(serializers.Serializer):
     policy_id = serializers.CharField()
     version = serializers.IntegerField()
     slots = HandleSlotSerializer(many=True)
+
+
+class HandleModelChoiceSerializer(serializers.Serializer):
+    sku = serializers.CharField()
+    name = serializers.CharField()
+    kind = serializers.CharField()
+    price_delta_clp = serializers.CharField(allow_null=True)
+
+
+class HandleColorChoiceSerializer(serializers.Serializer):
+    sku = serializers.CharField()
+    name = serializers.CharField()
+    price_delta_clp = serializers.CharField(allow_null=True)
+
+
+class HardwareFamilySerializer(serializers.Serializer):
+    """D04: the family's sellable handle catalogue + declared height rule."""
+
+    opening_type = serializers.CharField()
+    handle_models = HandleModelChoiceSerializer(many=True)
+    handle_colors = HandleColorChoiceSerializer(many=True)
+    handle_height_rule = serializers.CharField(allow_null=True)
+    handle_height_min_mm = serializers.CharField(allow_null=True)
+    handle_height_max_mm = serializers.CharField(allow_null=True)
+    handle_height_default_mm = serializers.CharField(allow_null=True)
+
+
+class HardwareOptionSerializer(serializers.Serializer):
+    """D04: a sellable option — the catalog declares its price delta and
+    the components it adds to the leaf BOM."""
+
+    sku = serializers.CharField()
+    name = serializers.CharField()
+    kind = serializers.CharField()
+    opening_type = serializers.CharField()
+    price_delta_clp = serializers.CharField(allow_null=True)
+    contents = KitComponentSerializer(many=True)
 
 
 class GlassSpecChoiceSerializer(serializers.Serializer):
@@ -135,6 +218,8 @@ class DesignOptionsSerializer(serializers.Serializer):
     profiles = ProfileChoiceSerializer(many=True)
     glazing_thicknesses = serializers.ListField(child=serializers.CharField())
     hardware_kits = KitChoiceSerializer(many=True)
+    hardware_families = HardwareFamilySerializer(many=True)
+    hardware_options = HardwareOptionSerializer(many=True)
     # Declared handle-mounting authority for the system — null when no policy
     # is on file. The design surface must not silently invent positions.
     handle_policy = HandlePolicySerializer(allow_null=True)
@@ -202,18 +287,90 @@ class DesignOptionsView(APIView):
                             "max_leaf_height_mm": str(item.max_leaf_height_mm),
                             "max_leaf_weight_kg": str(item.max_leaf_weight_kg),
                             "weight_kg": None if item.weight_kg is None else str(item.weight_kg),
-                            "contents": [
-                                {
-                                    "sku": component.sku,
-                                    "name": component.name,
-                                    "qty": str(component.qty),
-                                    "unit": component.unit,
-                                    "category": component.category,
-                                }
-                                for component in item.contents
-                            ],
+                            "contents": [_component_json(c) for c in item.contents],
+                            "class_label": item.class_label,
+                            "max_aspect_ratio": (
+                                None
+                                if item.max_aspect_ratio is None
+                                else str(item.max_aspect_ratio)
+                            ),
+                            "min_stay_height_mm": (
+                                None
+                                if item.min_stay_height_mm is None
+                                else str(item.min_stay_height_mm)
+                            ),
                         }
                         for item in params.available_hardware_kits
+                    ],
+                    "hardware_families": [
+                        {
+                            "opening_type": family.opening_type,
+                            "handle_models": [
+                                {
+                                    "sku": model.sku,
+                                    "name": model.name,
+                                    "kind": model.kind,
+                                    "price_delta_clp": (
+                                        None
+                                        if model.price_delta_clp is None
+                                        else str(model.price_delta_clp)
+                                    ),
+                                }
+                                for model in family.handle_models
+                            ],
+                            "handle_colors": [
+                                {
+                                    "sku": color.sku,
+                                    "name": color.name,
+                                    "price_delta_clp": (
+                                        None
+                                        if color.price_delta_clp is None
+                                        else str(color.price_delta_clp)
+                                    ),
+                                }
+                                for color in family.handle_colors
+                            ],
+                            "handle_height_rule": family.handle_height_rule,
+                            "handle_height_min_mm": (
+                                None
+                                if family.handle_height_min_mm is None
+                                else str(family.handle_height_min_mm)
+                            ),
+                            "handle_height_max_mm": (
+                                None
+                                if family.handle_height_max_mm is None
+                                else str(family.handle_height_max_mm)
+                            ),
+                            "handle_height_default_mm": (
+                                None
+                                if family.handle_height_default_mm is None
+                                else str(family.handle_height_default_mm)
+                            ),
+                        }
+                        for family in sorted(
+                            params.hardware_families.values(),
+                            key=lambda family: family.opening_type,
+                        )
+                    ],
+                    "hardware_options": [
+                        {
+                            "sku": option.sku,
+                            "name": option.name,
+                            "kind": option.kind.value,
+                            "opening_type": option.opening_type,
+                            "price_delta_clp": (
+                                None
+                                if option.price_delta_clp is None
+                                else str(option.price_delta_clp)
+                            ),
+                            "contents": [
+                                _component_json(c) for c in option.components
+                            ],
+                        }
+                        for option in sorted(
+                            params.hardware_options.values(),
+                            key=lambda option: option.sku,
+                        )
                     ],
                     "handle_policy": (
                         None

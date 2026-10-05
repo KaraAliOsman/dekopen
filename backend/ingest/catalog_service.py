@@ -35,7 +35,11 @@ from ingest.spreadsheet import (
     ENTITY_GLASS_PRODUCT,
     ENTITY_GLASS_SAFETY,
     ENTITY_GLASS_SURCHARGE,
+    ENTITY_HANDLE_COLOR,
+    ENTITY_HANDLE_MODEL,
     ENTITY_HARDWARE,
+    ENTITY_HARDWARE_FAMILY,
+    ENTITY_HARDWARE_OPTION,
     ENTITY_LIMIT,
     ENTITY_PRICE,
     ENTITY_PROFILE,
@@ -504,9 +508,11 @@ def _insert_entity_row(
             "system_id, org_id, sku, name, opening_type, min_leaf_width_mm,"
             " max_leaf_width_mm, min_leaf_height_mm, max_leaf_height_mm,"
             " max_leaf_weight_kg, rail_type, carriages_qty, stay_arms_qty,"
-            " contents, data_provenance, review_pending)"
+            " contents, data_provenance, review_pending,"
+            " class_label, max_aspect_ratio, min_stay_height_mm)"
             " VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,"
-            " 'IMPORT', TRUE) ON CONFLICT (system_id, sku) DO NOTHING RETURNING id",
+            " 'IMPORT', TRUE, %s, %s, %s)"
+            " ON CONFLICT (system_id, sku) DO NOTHING RETURNING id",
             [
                 str(system_id), str(org_id),
                 str(fields["sku"]).strip().upper(),
@@ -519,6 +525,81 @@ def _insert_entity_row(
                 int(fields.get("carriages_qty") or 0),
                 int(fields.get("stay_arms_qty") or 0),
                 json.dumps(contents, default=str),
+                _class_label(fields.get("class_label")),
+                payload.get("max_aspect_ratio"),
+                payload.get("min_stay_height_mm"),
+            ],
+        )
+        return ("id", found[0]["id"]) if found else None
+    if entity == ENTITY_HARDWARE_FAMILY:
+        _opening_family(fields)
+        found = rows(
+            "INSERT INTO public.hardware_families("
+            "system_id, org_id, opening_type, handle_height_rule,"
+            " handle_height_min_mm, handle_height_max_mm,"
+            " handle_height_default_mm, data_provenance, review_pending)"
+            " VALUES(%s,%s,%s,%s,%s,%s,%s,'IMPORT',TRUE)"
+            " ON CONFLICT DO NOTHING RETURNING id",
+            [
+                str(system_id), str(org_id), str(fields["opening_type"]),
+                fields.get("handle_height_rule") or None,
+                payload.get("handle_height_min_mm"),
+                payload.get("handle_height_max_mm"),
+                payload.get("handle_height_default_mm"),
+            ],
+        )
+        return ("id", found[0]["id"]) if found else None
+    if entity == ENTITY_HANDLE_MODEL:
+        _opening_family(fields)
+        found = rows(
+            "INSERT INTO public.hardware_handle_models("
+            "system_id, org_id, opening_type, sku, name, kind,"
+            " price_delta_clp, data_provenance, review_pending)"
+            " VALUES(%s,%s,%s,%s,%s,%s,%s,'IMPORT',TRUE)"
+            " ON CONFLICT DO NOTHING RETURNING id",
+            [
+                str(system_id), str(org_id), str(fields["opening_type"]),
+                str(fields["sku"]).strip().upper(),
+                str(fields.get("name") or fields["sku"]),
+                str(fields["kind"]),
+                payload.get("price_delta_clp"),
+            ],
+        )
+        return ("id", found[0]["id"]) if found else None
+    if entity == ENTITY_HANDLE_COLOR:
+        _opening_family(fields)
+        found = rows(
+            "INSERT INTO public.hardware_handle_colors("
+            "system_id, org_id, opening_type, sku, name, price_delta_clp,"
+            " data_provenance, review_pending)"
+            " VALUES(%s,%s,%s,%s,%s,%s,'IMPORT',TRUE)"
+            " ON CONFLICT DO NOTHING RETURNING id",
+            [
+                str(system_id), str(org_id), str(fields["opening_type"]),
+                str(fields["sku"]).strip().upper(),
+                str(fields.get("name") or fields["sku"]),
+                payload.get("price_delta_clp"),
+            ],
+        )
+        return ("id", found[0]["id"]) if found else None
+    if entity == ENTITY_HARDWARE_OPTION:
+        _opening_family(fields)
+        components = fields.get("components")
+        if not isinstance(components, list):
+            components = []
+        found = rows(
+            "INSERT INTO public.hardware_options("
+            "system_id, org_id, opening_type, sku, name, kind,"
+            " price_delta_clp, components, data_provenance, review_pending)"
+            " VALUES(%s,%s,%s,%s,%s,%s,%s,%s::jsonb,'IMPORT',TRUE)"
+            " ON CONFLICT DO NOTHING RETURNING id",
+            [
+                str(system_id), str(org_id), str(fields["opening_type"]),
+                str(fields["sku"]).strip().upper(),
+                str(fields.get("name") or fields["sku"]),
+                str(fields["kind"]),
+                payload.get("price_delta_clp"),
+                json.dumps(components, default=str),
             ],
         )
         return ("id", found[0]["id"]) if found else None
@@ -644,6 +725,20 @@ def _insert_entity_row(
         )
         return ("id", found[0]["id"]) if found else None
     return None
+
+
+def _class_label(value: object) -> str | None:
+    text = str(value or "").strip()
+    return text[:80] or None
+
+
+def _opening_family(fields: dict) -> str:
+    """D04 entities scope to the normalized opening family; the spreadsheet
+    enum already carries it — this just refuses anything else."""
+    opening = str(fields.get("opening_type") or "")
+    if opening not in ("TURN", "TILT_TURN", "SLIDING", "DOOR", "AWNING"):
+        raise CatalogImportError("catalog_opening_type_unknown")
+    return opening
 
 
 def _decimal_text(value: object) -> str | None:

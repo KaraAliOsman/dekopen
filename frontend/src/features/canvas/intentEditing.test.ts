@@ -225,6 +225,9 @@ describe("rectangular intent", () => {
       glass_options: null,
       panel_article_sku: null,
       hardware_set_sku: null,
+      handle_model_sku: null,
+      handle_color_sku: null,
+      hardware_option_skus: null,
       handle_height_mm: null,
     });
   });

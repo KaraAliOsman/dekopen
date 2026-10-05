@@ -16902,6 +16902,14 @@ components:
         * `profile_articles` - profile_articles
         * `profile_systems` - profile_systems
         * `reinforcement_cut_policies` - reinforcement_cut_policies
+    AxisEnum:
+      enum:
+      - WIDTH
+      - HEIGHT
+      type: string
+      description: |-
+        * `WIDTH` - WIDTH
+        * `HEIGHT` - HEIGHT
     AxisOffsets:
       type: object
       properties:
@@ -17104,6 +17112,9 @@ components:
       - trial_ends_at
     CatalogHardwareComponent:
       type: object
+      description: |-
+        D04 declared-component document: qty is optional — a component may
+        declare a qty_rule instead; the DB validator enforces the contract.
       properties:
         sku:
           type: string
@@ -17112,19 +17123,46 @@ components:
         qty:
           type: string
           format: decimal
+          nullable: true
         unit:
           type: string
         category:
           allOf:
           - $ref: '#/components/schemas/CategoryEnum'
           default: OTHER
+        qty_rule:
+          type: object
+          additionalProperties: {}
+          nullable: true
+        cut_rule:
+          type: object
+          additionalProperties: {}
+          nullable: true
+        weight_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,5}(?:\.\d{0,3})?$
+          nullable: true
+        cost_clp:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        machining:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          nullable: true
       required:
       - name
-      - qty
       - sku
       - unit
     CatalogHardwareComponentRequest:
       type: object
+      description: |-
+        D04 declared-component document: qty is optional — a component may
+        declare a qty_rule instead; the DB validator enforces the contract.
       properties:
         sku:
           type: string
@@ -17135,6 +17173,7 @@ components:
         qty:
           type: string
           format: decimal
+          nullable: true
         unit:
           type: string
           minLength: 1
@@ -17142,9 +17181,32 @@ components:
           allOf:
           - $ref: '#/components/schemas/CategoryEnum'
           default: OTHER
+        qty_rule:
+          type: object
+          additionalProperties: {}
+          nullable: true
+        cut_rule:
+          type: object
+          additionalProperties: {}
+          nullable: true
+        weight_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,5}(?:\.\d{0,3})?$
+          nullable: true
+        cost_clp:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        machining:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          nullable: true
       required:
       - name
-      - qty
       - sku
       - unit
     CatalogImportConfirmRequest:
@@ -18019,6 +18081,47 @@ components:
       - reconciliation_required
       - registration_state
       - scheduled_changes
+    ComponentCutRule:
+      type: object
+      description: 'Declared cut rule — D04: transmisión = leaf span − X.'
+      properties:
+        axis:
+          $ref: '#/components/schemas/AxisEnum'
+        minus_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+      required:
+      - axis
+      - minus_mm
+    ComponentQtyRule:
+      type: object
+      description: 'Declared quantity rule — D04: puntos de cierre = f(span).'
+      properties:
+        kind:
+          $ref: '#/components/schemas/ComponentQtyRuleKindEnum'
+        per_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        min_qty:
+          type: integer
+        max_qty:
+          type: integer
+          nullable: true
+      required:
+      - kind
+      - max_qty
+      - min_qty
+      - per_mm
+    ComponentQtyRuleKindEnum:
+      enum:
+      - PER_WIDTH
+      - PER_HEIGHT
+      type: string
+      description: |-
+        * `PER_WIDTH` - PER_WIDTH
+        * `PER_HEIGHT` - PER_HEIGHT
     CompositionLine:
       type: object
       properties:
@@ -18822,6 +18925,14 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/KitChoice'
+        hardware_families:
+          type: array
+          items:
+            $ref: '#/components/schemas/HardwareFamily'
+        hardware_options:
+          type: array
+          items:
+            $ref: '#/components/schemas/HardwareOption'
         handle_policy:
           allOf:
           - $ref: '#/components/schemas/HandlePolicy'
@@ -18879,7 +18990,9 @@ components:
       - glazing_beads
       - glazing_thicknesses
       - handle_policy
+      - hardware_families
       - hardware_kits
+      - hardware_options
       - panel_choices
       - panel_skus
       - profiles
@@ -19762,7 +19875,11 @@ components:
       - GLASS_SURCHARGE
       - GLASS_TYPE_LIMIT
       - GLAZING_RULE
+      - HANDLE_COLOR
+      - HANDLE_MODEL
+      - HARDWARE_FAMILY
       - HARDWARE_KIT
+      - HARDWARE_OPTION
       - PRICE
       - PROFILE
       - REINFORCEMENT_RULE
@@ -19777,7 +19894,11 @@ components:
         * `GLASS_SURCHARGE` - GLASS_SURCHARGE
         * `GLASS_TYPE_LIMIT` - GLASS_TYPE_LIMIT
         * `GLAZING_RULE` - GLAZING_RULE
+        * `HANDLE_COLOR` - HANDLE_COLOR
+        * `HANDLE_MODEL` - HANDLE_MODEL
+        * `HARDWARE_FAMILY` - HARDWARE_FAMILY
         * `HARDWARE_KIT` - HARDWARE_KIT
+        * `HARDWARE_OPTION` - HARDWARE_OPTION
         * `PRICE` - PRICE
         * `PROFILE` - PROFILE
         * `REINFORCEMENT_RULE` - REINFORCEMENT_RULE
@@ -20404,6 +20525,20 @@ components:
       - bead_width_mm
       - glass_thickness_mm
       - sku
+    HandleColorChoice:
+      type: object
+      properties:
+        sku:
+          type: string
+        name:
+          type: string
+        price_delta_clp:
+          type: string
+          nullable: true
+      required:
+      - name
+      - price_delta_clp
+      - sku
     HandleIntent:
       type: object
       properties:
@@ -20483,6 +20618,23 @@ components:
       - leaf_height_mm
       - leaf_top_from_outer_top_mm
       - placement_policy_id
+    HandleModelChoice:
+      type: object
+      properties:
+        sku:
+          type: string
+        name:
+          type: string
+        kind:
+          type: string
+        price_delta_clp:
+          type: string
+          nullable: true
+      required:
+      - kind
+      - name
+      - price_delta_clp
+      - sku
     HandlePolicy:
       type: object
       properties:
@@ -20619,11 +20771,79 @@ components:
           allOf:
           - $ref: '#/components/schemas/CategoryEnum'
           default: OTHER
+        qty_rule:
+          allOf:
+          - $ref: '#/components/schemas/ComponentQtyRule'
+          nullable: true
+          description: Declared rule behind qty
+        cut_rule:
+          allOf:
+          - $ref: '#/components/schemas/ComponentCutRule'
+          nullable: true
+        weight_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,9}(?:\.\d{0,3})?$
+          nullable: true
+        cost_clp:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        machining:
+          type: array
+          items:
+            $ref: '#/components/schemas/MachiningDeclaration'
+        length_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+          description: Resolved cut length on the emitted BOM line
+        option_sku:
+          type: string
+          nullable: true
+          description: Option that brought this component into the leaf BOM
       required:
       - name
       - qty
       - sku
       - unit
+    HardwareFamily:
+      type: object
+      description: 'D04: the family''s sellable handle catalogue + declared height
+        rule.'
+      properties:
+        opening_type:
+          type: string
+        handle_models:
+          type: array
+          items:
+            $ref: '#/components/schemas/HandleModelChoice'
+        handle_colors:
+          type: array
+          items:
+            $ref: '#/components/schemas/HandleColorChoice'
+        handle_height_rule:
+          type: string
+          nullable: true
+        handle_height_min_mm:
+          type: string
+          nullable: true
+        handle_height_max_mm:
+          type: string
+          nullable: true
+        handle_height_default_mm:
+          type: string
+          nullable: true
+      required:
+      - handle_colors
+      - handle_height_default_mm
+      - handle_height_max_mm
+      - handle_height_min_mm
+      - handle_height_rule
+      - handle_models
+      - opening_type
     HardwareItem:
       type: object
       properties:
@@ -20644,6 +20864,57 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/HardwareComponent'
+        class_label:
+          type: string
+          nullable: true
+        handle_model_sku:
+          type: string
+          nullable: true
+        handle_model_name:
+          type: string
+          nullable: true
+        handle_color_sku:
+          type: string
+          nullable: true
+        handle_color_name:
+          type: string
+          nullable: true
+        option_skus:
+          type: array
+          items:
+            type: string
+        option_names:
+          type: array
+          items:
+            type: string
+        handle_height_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        cost_clp:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        weight_kg:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,9}(?:\.\d{0,3})?$
+          nullable: true
+        price_delta_clp:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        price_deltas:
+          type: array
+          items:
+            $ref: '#/components/schemas/HardwareSelectionPrice'
+        machining:
+          type: array
+          items:
+            $ref: '#/components/schemas/MachiningDeclaration'
       required:
       - bay_id
       - contents
@@ -20652,6 +20923,63 @@ components:
       - name
       - qty
       - unit
+    HardwareOption:
+      type: object
+      description: |-
+        D04: a sellable option — the catalog declares its price delta and
+        the components it adds to the leaf BOM.
+      properties:
+        sku:
+          type: string
+        name:
+          type: string
+        kind:
+          type: string
+        opening_type:
+          type: string
+        price_delta_clp:
+          type: string
+          nullable: true
+        contents:
+          type: array
+          items:
+            $ref: '#/components/schemas/KitComponent'
+      required:
+      - contents
+      - kind
+      - name
+      - opening_type
+      - price_delta_clp
+      - sku
+    HardwareSelectionPrice:
+      type: object
+      properties:
+        sku:
+          type: string
+        name:
+          type: string
+        source:
+          $ref: '#/components/schemas/HardwareSelectionPriceSourceEnum'
+        price_delta_clp:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+      required:
+      - name
+      - price_delta_clp
+      - sku
+      - source
+    HardwareSelectionPriceSourceEnum:
+      enum:
+      - HANDLE_MODEL
+      - HANDLE_COLOR
+      - OPTION
+      type: string
+      description: |-
+        * `HANDLE_MODEL` - HANDLE_MODEL
+        * `HANDLE_COLOR` - HANDLE_COLOR
+        * `OPTION` - OPTION
     HostMemberSideEnum:
       enum:
       - LEFT
@@ -21252,13 +21580,25 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/KitComponent'
+        class_label:
+          type: string
+          nullable: true
+        max_aspect_ratio:
+          type: string
+          nullable: true
+        min_stay_height_mm:
+          type: string
+          nullable: true
       required:
+      - class_label
       - contents
+      - max_aspect_ratio
       - max_leaf_height_mm
       - max_leaf_weight_kg
       - max_leaf_width_mm
       - min_leaf_height_mm
       - min_leaf_width_mm
+      - min_stay_height_mm
       - name
       - opening_type
       - sku
@@ -21272,10 +21612,30 @@ components:
           type: string
         qty:
           type: string
+          nullable: true
         unit:
           type: string
         category:
           type: string
+        qty_rule:
+          type: object
+          additionalProperties: {}
+          nullable: true
+        cut_rule:
+          type: object
+          additionalProperties: {}
+          nullable: true
+        weight_kg:
+          type: string
+          nullable: true
+        cost_clp:
+          type: string
+          nullable: true
+        machining:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
       required:
       - category
       - name
@@ -21606,6 +21966,59 @@ components:
         * `BOTTOM_LEFT` - BOTTOM_LEFT
         * `BOTTOM_RIGHT` - BOTTOM_RIGHT
         * `CENTROID` - CENTROID
+    MachiningDeclaration:
+      type: object
+      description: |-
+        Declared machining operation — status is the engine's verdict:
+        EMITTED only when the catalog carried coordinates.
+      properties:
+        kind:
+          $ref: '#/components/schemas/MachiningDeclarationKindEnum'
+        side:
+          type: string
+          nullable: true
+        u_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        y_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        note:
+          type: string
+          nullable: true
+        status:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/MachiningDeclarationStatusEnum'
+          - $ref: '#/components/schemas/NullEnum'
+      required:
+      - kind
+    MachiningDeclarationKindEnum:
+      enum:
+      - LOCK_PREP
+      - HINGE_PREP
+      - ESPAG_HOUSING
+      - DRAINAGE
+      - OTHER
+      type: string
+      description: |-
+        * `LOCK_PREP` - LOCK_PREP
+        * `HINGE_PREP` - HINGE_PREP
+        * `ESPAG_HOUSING` - ESPAG_HOUSING
+        * `DRAINAGE` - DRAINAGE
+        * `OTHER` - OTHER
+    MachiningDeclarationStatusEnum:
+      enum:
+      - EMITTED
+      - DECLARED_NOT_EMITTED
+      type: string
+      description: |-
+        * `EMITTED` - EMITTED
+        * `DECLARED_NOT_EMITTED` - DECLARED_NOT_EMITTED
     MaterialEnum:
       enum:
       - PVC
@@ -23587,6 +24000,8 @@ components:
         labor_rate_per_m2:
           type: string
         installation_rate_per_m2:
+          type: string
+        hardware_option_delta:
           type: string
         composition:
           type: array

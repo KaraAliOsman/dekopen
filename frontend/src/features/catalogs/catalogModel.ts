@@ -456,9 +456,16 @@ export function writeFromDraft<R extends Resource>(
     values.contents = contents.map((item) => ({
       sku: item.sku.trim(),
       name: item.name.trim(),
-      qty: exact(item.qty),
+      qty: item.qty == null || item.qty.trim() === "" ? null : exact(item.qty),
       unit: item.unit.trim(),
       category: item.category ?? "OTHER",
+      // D04: rule/cost/machining fields ride the component as data — a plain
+      // catalog edit must round-trip them instead of stripping them away.
+      ...(item.qty_rule ? { qty_rule: item.qty_rule } : {}),
+      ...(item.cut_rule ? { cut_rule: item.cut_rule } : {}),
+      ...(item.weight_kg != null ? { weight_kg: item.weight_kg } : {}),
+      ...(item.cost_clp != null ? { cost_clp: item.cost_clp } : {}),
+      ...(item.machining ? { machining: item.machining } : {}),
     }));
   }
   if (resource === "articles") {

@@ -1,4 +1,4 @@
-import { fmtMm, parseLocaleNumber } from "../../format";
+import { fmtMm, formatMoney, parseLocaleNumber } from "../../format";
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import "./canvas.css";
@@ -9,6 +9,9 @@ import type {
   GlassProductChoice,
   GlassSafetyFinding,
   GlassSpecChoice,
+  HardwareFamily,
+  HardwareItem,
+  HardwareOption,
   KitChoice,
   PanelChoice,
   ProductIssue,
@@ -33,7 +36,14 @@ import { CanvasViewport } from "./CanvasViewport";
 import { ObjectTree } from "./ObjectTreeView";
 import { buildObjectTree } from "./objectTree";
 import { resolveMembers, type MemberGeometry } from "./members";
-import { bayEnvelopeMm, rankKits } from "./kitCompatibility";
+import {
+  autoPickKit,
+  bayEnvelopeMm,
+  normalizedOpening,
+  rankKits,
+  resolveComponent,
+  suggestUpgrade,
+} from "./kitCompatibility";
 import { SectionView } from "./SectionView";
 import { SectionPreviewSvg } from "./SectionPreviewSvg";
 import { GlazingPicker, type GlazingPatch } from "./GlazingPicker";
@@ -872,6 +882,9 @@ function BayInspector({
   panelSkus,
   panelChoices,
   kits,
+  hardwareFamilies,
+  hardwareOptions,
+  resolvedHardware,
   members,
   leafWeightKg,
   busy,
@@ -891,6 +904,13 @@ function BayInspector({
   panelSkus: string[];
   panelChoices: PanelChoice[];
   kits: KitChoice[];
+  /** D04 declared sellable catalogue: handle families by opening and the
+   * position-level options the system offers. */
+  hardwareFamilies: HardwareFamily[];
+  hardwareOptions: HardwareOption[];
+  /** Engine-emitted item for this bay — the resolved class/selection truth
+   * after the last calculation; null before the first one. */
+  resolvedHardware: HardwareItem | null;
   members: MemberGeometry;
   /** Engine-resolved leaf mass; null = undecidable (never assumed). */
   leafWeightKg: number | null;
@@ -924,12 +944,23 @@ function BayInspector({
     // Mirrors setModuleOpening's normalization at leaf scope: a sliding pick
     // seeds the 2-leaf preset, a non-door bay never keeps a panel sku, and a
     // door always carries declared handedness (manufacture refuses to guess).
+    // D04: hardware selections are family-scoped — an opening change clears
+    // them rather than smuggling another family's skus to the engine.
     patchBay({
       opening_type: next,
       sliding_layout: next === "SLIDING" ? structuredClone(SLIDING_PRESETS.SLIDING_2L!) : null,
       panel_article_sku: next === "DOOR_ENTRY" ? (bay.panel_article_sku ?? null) : null,
       door_handedness: next === "DOOR_ENTRY" ? (bay.door_handedness ?? "LEFT") : null,
+      handle_model_sku: null,
+      handle_color_sku: null,
+      hardware_option_skus: null,
     });
+  }
+
+  function toggleHardwareOption(sku: string, on: boolean): void {
+    const current = bay.hardware_option_skus ?? [];
+    const next = on ? [...new Set([...current, sku])] : current.filter((item) => item !== sku);
+    patchBay({ hardware_option_skus: next.length > 0 ? next : null });
   }
 
   // Hardware picker context: bay envelope from the intent tree + the
@@ -1040,6 +1071,44 @@ function BayInspector({
       {operable && kits.length > 0 && (
         <details className="inspector-section" open={bay.hardware_set_sku != null}>
           <summary>{t("assembly.hardware")}</summary>
+          {/* Clase resuelta — read-only for the basic user: the engine's
+              pick or the declared kit, plus the F6 "why this kit" summary. */}
+          {(() => {
+            const resolvedEval = selectedKitEval ?? autoPickKit(kitEvaluations);
+            if (!resolvedEval) return null;
+            const upgrade = suggestUpgrade(kitEvaluations, resolvedEval);
+            return (
+              <div className="assembly-kit-summary">
+                <p className="assembly-kit-class">
+                  <span>{t("assembly.kitClass")}</span>:{" "}
+                  {resolvedEval.kit.class_label ?? t("assembly.kitClassUnknown")}
+                  {bay.hardware_set_sku == null && <small> · {t("assembly.kitClassAuto")}</small>}
+                </p>
+                <details className="assembly-kit-why">
+                  <summary>{t("assembly.kitWhy")}</summary>
+                  <p className="assembly-hint">
+                    {resolvedEval.fit === "compatible"
+                      ? t("assembly.kitWhyFits")
+                      : resolvedEval.reasons
+                          .map((reason) => t(`assembly.kitReason.${reason}` as TranslationKey))
+                          .join(" · ")}
+                  </p>
+                  {resolvedEval.fit !== "compatible" && upgrade && (
+                    <p className="assembly-hint" role="status">
+                      {t("assembly.kitUpgrade").replace("{kit}", upgrade.kit.name)}
+                      {" · "}
+                      {upgrade.deltaClp !== null
+                        ? t("assembly.kitUpgradeDelta").replace(
+                            "{delta}",
+                            formatMoney(String(upgrade.deltaClp), "CLP"),
+                          )
+                        : t("assembly.kitUpgradeDeltaUnknown")}
+                    </p>
+                  )}
+                </details>
+              </div>
+            );
+          })()}
           <label className="assembly-field">
             <span>{t("assembly.hardwareKit")}</span>
             <select
@@ -1088,6 +1157,226 @@ function BayInspector({
                 </li>
               ))}
             </ul>
+          )}
+          {/* D04 sellable selections — only what the family declares. */}
+          {(() => {
+            const family = hardwareFamilies.find(
+              (item) => item.opening_type === normalizedOpening(opening),
+            );
+            const options = hardwareOptions.filter(
+              (item) => item.opening_type === normalizedOpening(opening),
+            );
+            const declaredHeight = family
+              ? {
+                  min: Number(family.handle_height_min_mm ?? NaN),
+                  max: Number(family.handle_height_max_mm ?? NaN),
+                  rule: family.handle_height_rule,
+                }
+              : null;
+            const declaredMm = Number(bay.handle_height_mm ?? NaN);
+            const heightOutOfRange =
+              Number.isFinite(declaredMm) &&
+              declaredHeight != null &&
+              Number.isFinite(declaredHeight.min) &&
+              Number.isFinite(declaredHeight.max) &&
+              (declaredMm < declaredHeight.min || declaredMm > declaredHeight.max);
+            if (!family && options.length === 0) return null;
+            return (
+              <>
+                {family && family.handle_models.length > 0 && (
+                  <label className="assembly-field">
+                    <span>{t("assembly.handleModel")}</span>
+                    <select
+                      aria-label={t("assembly.handleModel")}
+                      disabled={busy}
+                      value={bay.handle_model_sku ?? ""}
+                      onChange={(event) =>
+                        patchBay({ handle_model_sku: event.target.value || null })
+                      }
+                    >
+                      <option value="">{t("assembly.handleDefault")}</option>
+                      {family.handle_models.map((model) => (
+                        <option key={model.sku} value={model.sku}>
+                          {model.name}
+                          {model.price_delta_clp
+                            ? ` · +${formatMoney(model.price_delta_clp, "CLP")}`
+                            : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {family && family.handle_colors.length > 0 && (
+                  <label className="assembly-field">
+                    <span>{t("assembly.handleColor")}</span>
+                    <select
+                      aria-label={t("assembly.handleColor")}
+                      disabled={busy}
+                      value={bay.handle_color_sku ?? ""}
+                      onChange={(event) =>
+                        patchBay({ handle_color_sku: event.target.value || null })
+                      }
+                    >
+                      <option value="">{t("assembly.handleDefault")}</option>
+                      {family.handle_colors.map((color) => (
+                        <option key={color.sku} value={color.sku}>
+                          {color.name}
+                          {color.price_delta_clp
+                            ? ` · +${formatMoney(color.price_delta_clp, "CLP")}`
+                            : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {declaredHeight &&
+                  Number.isFinite(declaredHeight.min) &&
+                  Number.isFinite(declaredHeight.max) &&
+                  declaredHeight.rule === "RANGE" && (
+                    <p className="assembly-hint">
+                      {t("assembly.handleHeightRange")
+                        .replace("{min}", fmtMm(String(declaredHeight.min)))
+                        .replace("{max}", fmtMm(String(declaredHeight.max)))}
+                      {heightOutOfRange ? ` — ${t("assembly.handleHeightOutOfRange")}` : ""}
+                    </p>
+                  )}
+                {options.length > 0 && (
+                  <fieldset className="assembly-field assembly-hardware-options">
+                    <legend>{t("assembly.handleOptions")}</legend>
+                    {options.map((option) => (
+                      <label key={option.sku} className="assembly-check">
+                        <input
+                          type="checkbox"
+                          disabled={busy}
+                          checked={(bay.hardware_option_skus ?? []).includes(option.sku)}
+                          onChange={(event) =>
+                            toggleHardwareOption(option.sku, event.target.checked)
+                          }
+                        />
+                        <span>
+                          {option.name}
+                          {" · "}
+                          {option.price_delta_clp
+                            ? `+${formatMoney(option.price_delta_clp, "CLP")}`
+                            : t("assembly.optionDeltaUnknown")}
+                        </span>
+                      </label>
+                    ))}
+                  </fieldset>
+                )}
+              </>
+            );
+          })()}
+          {/* Avanzado: the expanded component list. The engine's emitted
+              BOM lines win when the last calculation covers the same kit —
+              they carry the leaf's real qty and cut length. Otherwise the
+              declared-data mirror applies the same rules on the bay
+              envelope (pre-calculation preview). */}
+          {(() => {
+            const resolvedEval = selectedKitEval ?? autoPickKit(kitEvaluations);
+            const span = {
+              leafWidthMm: leafEnvelope ? Math.round(leafEnvelope.w * 10) / 10 : null,
+              leafHeightMm: leafEnvelope ? Math.round(leafEnvelope.h * 10) / 10 : null,
+            };
+            const engineOptionSkus = new Set(
+              (resolvedHardware?.contents ?? [])
+                .map((item) => item.option_sku)
+                .filter((sku): sku is string => typeof sku === "string" && sku.length > 0),
+            );
+            const draftOptionSkus = new Set(bay.hardware_option_skus ?? []);
+            const sameOptions =
+              engineOptionSkus.size === draftOptionSkus.size &&
+              [...draftOptionSkus].every((sku) => engineOptionSkus.has(sku));
+            const engineContents =
+              resolvedHardware && sameOptions && resolvedHardware.kit_sku === resolvedEval?.kit.sku
+                ? resolvedHardware.contents
+                : null;
+            const optionContents = hardwareOptions
+              .filter((item) => (bay.hardware_option_skus ?? []).includes(item.sku))
+              .flatMap((item) => item.contents);
+            const contents = [...(resolvedEval?.kit.contents ?? []), ...optionContents];
+            if (engineContents === null && contents.length === 0) return null;
+            return (
+              <details className="assembly-kit-advanced">
+                <summary>{t("assembly.kitAdvanced")}</summary>
+                <table className="assembly-kit-table">
+                  <thead>
+                    <tr>
+                      <th>{t("assembly.kitComponentQty")}</th>
+                      <th />
+                      <th>{t("assembly.kitComponentLength")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {engineContents !== null
+                      ? engineContents.map((component, index) => (
+                          <tr key={`${component.sku}-${index}`}>
+                            <td>{component.qty}</td>
+                            <td>
+                              {component.name}
+                              {(component.machining?.length ?? 0) > 0 && (
+                                <small>
+                                  {" "}
+                                  · {component.machining!.length}{" "}
+                                  {t("assembly.kitComponentMachining")}
+                                </small>
+                              )}
+                            </td>
+                            <td>
+                              {component.length_mm != null && component.length_mm !== ""
+                                ? `${fmtMm(String(component.length_mm))} mm`
+                                : "—"}
+                            </td>
+                          </tr>
+                        ))
+                      : contents.map((component, index) => {
+                          const resolved = resolveComponent(component, span);
+                          return (
+                            <tr key={`${component.sku}-${index}`}>
+                              <td>{resolved.qty ?? "—"}</td>
+                              <td>
+                                {resolved.name}
+                                {resolved.machiningCount > 0 && (
+                                  <small>
+                                    {" "}
+                                    · {resolved.machiningCount}{" "}
+                                    {t("assembly.kitComponentMachining")}
+                                  </small>
+                                )}
+                              </td>
+                              <td>
+                                {resolved.lengthMm !== null
+                                  ? `${fmtMm(String(resolved.lengthMm))} mm`
+                                  : "—"}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                  </tbody>
+                </table>
+              </details>
+            );
+          })()}
+          {/* The engine's resolved leaf truth after the last calculation —
+              what manufacture will actually produce (handle, height, options). */}
+          {resolvedHardware && (
+            <p className="assembly-hint" aria-label={t("assembly.hardware")}>
+              {[
+                resolvedHardware.handle_model_name
+                  ? `${resolvedHardware.handle_model_name}${
+                      resolvedHardware.handle_color_name
+                        ? ` · ${resolvedHardware.handle_color_name}`
+                        : ""
+                    }`
+                  : null,
+                resolvedHardware.handle_height_mm
+                  ? `${fmtMm(resolvedHardware.handle_height_mm)} mm`
+                  : null,
+                ...(resolvedHardware.option_names ?? []),
+              ]
+                .filter((item): item is string => item !== null && item !== "")
+                .join(" · ") || t("assembly.kitClassUnknown")}
+            </p>
           )}
         </details>
       )}
@@ -2735,6 +3024,13 @@ export function AssemblyEditor({
             bay={selectedBayNode}
             product={product}
             kits={options?.hardware_kits ?? []}
+            hardwareFamilies={options?.hardware_families ?? []}
+            hardwareOptions={options?.hardware_options ?? []}
+            resolvedHardware={
+              evaluation?.modules
+                ?.find((item) => item.module_id === selectedBayModule.id)
+                ?.result?.hardware_items?.find((item) => item.bay_id === selectedBayNode.id) ?? null
+            }
             members={members}
             leafWeightKg={
               evaluation?.modules

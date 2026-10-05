@@ -859,6 +859,6 @@ def test_global_search_uses_canonical_catalog_visibility(documentary_tenant):
     org, _, users, _ = documentary_tenant
     with as_user(users["ESTIMATOR"]):
         systems = search(org, "demo_60")["results"]
-        articles = search(org, "marco")["results"]
+        articles = search(org, "marco demo")["results"]
     assert any(r["group"] == "systems" and "DEMO_60" in r["title"] for r in systems)
     assert any(r["group"] == "articles" and r["title"] == "MARCO" for r in articles)

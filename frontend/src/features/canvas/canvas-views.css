@@ -1140,3 +1140,134 @@
   padding: 1px 5px;
   white-space: nowrap;
 }
+
+/* D04 herrajes: resolved class + why-this-kit + avanzado component table. */
+.assembly-kit-summary {
+  border: 1px solid var(--theme-border-subtle);
+  padding: 0.35rem 0.5rem;
+}
+
+.assembly-kit-class {
+  color: var(--theme-text-secondary);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.assembly-kit-class > span {
+  color: var(--theme-text-muted);
+}
+
+.assembly-kit-class > small {
+  color: var(--theme-text-muted);
+}
+
+.assembly-kit-why {
+  margin-top: 0.15rem;
+}
+
+.assembly-kit-why > summary {
+  color: var(--theme-text-secondary);
+  cursor: pointer;
+  font-size: 0.8rem;
+  list-style: none;
+  user-select: none;
+}
+
+.assembly-kit-why > summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: 0.3rem;
+}
+
+.assembly-kit-why[open] > summary::before {
+  content: "▾";
+}
+
+.assembly-kit-why > summary::-webkit-details-marker {
+  display: none;
+}
+
+.assembly-hardware-options {
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+}
+
+.assembly-hardware-options > legend {
+  color: var(--theme-text-secondary);
+  font-size: 0.85rem;
+  padding: 0;
+}
+
+.assembly-check {
+  align-items: baseline;
+  color: var(--theme-text-secondary);
+  display: flex;
+  font-size: 0.85rem;
+  gap: 0.35rem;
+}
+
+.assembly-check input[type="checkbox"] {
+  width: auto;
+}
+
+.assembly-kit-advanced > summary {
+  color: var(--theme-text-muted);
+  cursor: pointer;
+  font-size: 0.8rem;
+  list-style: none;
+  user-select: none;
+}
+
+.assembly-kit-advanced > summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: 0.3rem;
+}
+
+.assembly-kit-advanced[open] > summary::before {
+  content: "▾";
+}
+
+.assembly-kit-advanced > summary::-webkit-details-marker {
+  display: none;
+}
+
+.assembly-kit-table {
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  width: 100%;
+}
+
+.assembly-kit-table th {
+  color: var(--theme-text-muted);
+  font-weight: 500;
+  text-align: left;
+}
+
+.assembly-kit-table td,
+.assembly-kit-table th {
+  border-bottom: 1px solid var(--theme-border-subtle);
+  padding: 0.15rem 0.25rem 0.15rem 0;
+}
+
+.assembly-kit-table td:first-child,
+.assembly-kit-table th:first-child {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  width: 2.5rem;
+}
+
+.assembly-kit-table td:last-child,
+.assembly-kit-table th:last-child {
+  color: var(--theme-text-secondary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.assembly-kit-table small {
+  color: var(--theme-text-muted);
+}

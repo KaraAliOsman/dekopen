@@ -459,3 +459,13 @@ description: Local dev-stack recipe for DEKOPEN E2E testing — Supabase CLI sta
 - **Fixture rerun safety**: `supabase start` after a container wipe creates a FRESH DB — re-run `SUPABASE_SERVICE_ROLE_KEY=… .venv/bin/python scripts/dev_fixture.py` and re-read `.fixture-state.json` (the script is idempotent per-DB; a state file from a wiped DB is stale but harmless — it just re-seeds).
 - `node` resolves via nvm (v24.x) — `npm run ux:capture` (`--experimental-strip-types`) works as-is; `~/node22` is stale.
 - `browser_console`/CDP only works when Chrome was launched with `--remote-debugging-port`; otherwise use F12 DevTools UI.
+
+## D04 herrajes inspector/OT notes
+- **Design-options API** (`/api/v1/projects/design-options/{system_id}/`): kits under `hardware_kits` (not `kits`), parts under `contents` (not `components`). Decimals serialize as STRINGS (`"60"`, `"500"`) — `typeof x === "number"` checks fail silently on these fields; use the `num()` coercion helper (qty_rule's `per_mm > 0` survives coercion; `cut_rule.minus_mm` typeof checks do not).
+- **Inspector «Herrajes»**: bay select = click the tree `button:has-text("Oscilobatiente izquierda")` (or the bay rect); section is a `<details>` CLOSED when the bay has no explicit `hardware_set_sku` — click its `summary`; nested «¿Por qué este kit?» and «Avanzado» each need their own summary click. «Altura de manilla (mm)» DraftField lives in the «Relleno» section; the out-of-range hint renders inside «Herrajes».
+- **Avanzado table prefers engine-emitted BOM lines** (`resolvedHardware.contents` with real `qty`/`length_mm` from the finished leaf) when the last calc covers the same kit + option set; the local mirror on the bay envelope is only the pre-calculation fallback. If inspector Largo ≠ OT picking length, that's the bug signature.
+- **OT deep-link**: `/production?order=<order_uuid>` selects the order directly; `hardware_picking`/`hardware_machining` live in `public.orders.payload_json` — no dedicated UI, verify via API/DB.
+- **Playwright scripts outside `frontend/` can't resolve `@playwright/test`** — import via absolute path `"/home/ubuntu/repos/dekopen/frontend/node_modules/@playwright/test/index.mjs"`.
+- **Mailpit**: message DETAIL has no `Created` field (only `Date`); filter newest on the `/api/v1/messages` LIST item's `Created` before fetching detail.
+- `locator.screenshot()` on `<details>` can fail ("not visible or not an HTMLElement") — take a `page.screenshot()` after `summary.scrollIntoView()`.
+- Force theme in a fresh context: `context.addInitScript(() => localStorage.setItem("dekopen.theme", "dark"))` (values `"light"`/`"dark"`, applied to `documentElement.dataset.theme`).

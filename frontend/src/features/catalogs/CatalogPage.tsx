@@ -1163,8 +1163,8 @@ function CatalogEditor({
                           <input
                             aria-label={`${ct(`field.${key}`)} · ${ct("component")} ${index + 1}`}
                             type="text"
-                            required
-                            value={component[key]}
+                            required={key !== "qty" || component.qty_rule == null}
+                            value={component[key] ?? ""}
                             inputMode={key === "qty" ? "decimal" : undefined}
                             data-pattern={
                               key === "qty" ? "(?=.*[1-9])[0-9]+([.,][0-9]+)?" : ".*\\S.*"

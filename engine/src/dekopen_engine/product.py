@@ -42,7 +42,10 @@ from dekopen_engine.geometry import (
     resolved_sliding_layout,
 )
 from dekopen_engine.glass import derive_net_glass_thickness
-from dekopen_engine.hardware import NoCompatibleHardwareKit
+from dekopen_engine.hardware import (
+    HardwareSelectionError,
+    NoCompatibleHardwareKit,
+)
 from dekopen_engine.manufacturing_trace import (
     Axis,
     GeometryManufacturingTraceV1,
@@ -126,6 +129,8 @@ class IssueCode(str, Enum):
     HARDWARE_KIT_INCOMPATIBLE = "hardware_kit_incompatible"
     HARDWARE_KIT_OVERWEIGHT = "hardware_kit_overweight"
     HARDWARE_UNDECIDABLE = "hardware_undecidable"
+    HARDWARE_SELECTION_UNKNOWN = "hardware_selection_unknown"
+    HANDLE_HEIGHT_OUT_OF_RANGE = "handle_height_out_of_range"
     TYPOLOGY_FAMILY_INCOMPATIBLE = "typology_family_incompatible"
     LEAF_DIMENSIONAL_LIMIT = "leaf_dimensional_limit"
     # D02 structured-glass rule findings surfaced on the bay that carries
@@ -1897,6 +1902,18 @@ def evaluate_product(
                 )
             )
         except DomainRejection as error:
+            module_issues.append(
+                ProductIssue(
+                    code=error.code,
+                    severity=Severity.ERROR,
+                    target=f"module:{module.id}",
+                    params={**error.params, "reason": str(error)},
+                )
+            )
+        except HardwareSelectionError as error:
+            # D04: a leaf picked a sellable datum the family never declared
+            # or a handle height outside its declared range — the issue
+            # names the field and the real bounds.
             module_issues.append(
                 ProductIssue(
                     code=error.code,

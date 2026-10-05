@@ -594,6 +594,8 @@ def test_design_options_emits_structured_glass_products(monkeypatch):
         available_panel_rules={},
         finishes=("WHITE",),
         glass_products={"VID-LOWE": product},
+        hardware_families={},
+        hardware_options={},
         rebate_depth_mm=Decimal("18.00"),
         sash_overlap_mm=Decimal("6.00"),
         depth_mm=Decimal("70.00"),

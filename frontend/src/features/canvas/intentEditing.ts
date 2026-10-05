@@ -136,6 +136,11 @@ export type IntentNode = {
   glass_options?: GlassOptionsSpec | null;
   panel_article_sku?: string | null;
   hardware_set_sku?: string | null;
+  /** D04 sellable hardware selections on the leaf: declared skus against the
+   * system's handle/option catalogue; the engine validates membership. */
+  handle_model_sku?: string | null;
+  handle_color_sku?: string | null;
+  hardware_option_skus?: string[] | null;
   handle_height_mm?: string | null;
   /** Declared hinge side of a DOOR_ENTRY leaf (DIN: LEFT = hinges left).
    * Doors carry no side in their opening_type, so handedness is declared
@@ -350,6 +355,9 @@ const BAY_SPEC_KEYS = [
   "glass_options",
   "panel_article_sku",
   "hardware_set_sku",
+  "handle_model_sku",
+  "handle_color_sku",
+  "hardware_option_skus",
   "handle_height_mm",
   "door_handedness",
 ] as const;

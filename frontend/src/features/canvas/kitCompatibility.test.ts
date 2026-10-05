@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { KitChoice } from "../../api/generated/models";
 import type { IntentNode } from "./intentEditing";
-import { bayEnvelopeMm, evaluateKitChoice, rankKits } from "./kitCompatibility";
+import { bayEnvelopeMm, evaluateKitChoice, rankKits, resolveComponent } from "./kitCompatibility";
 
 function kit(partial: Partial<KitChoice> & { sku: string }): KitChoice {
   return {
@@ -14,6 +14,9 @@ function kit(partial: Partial<KitChoice> & { sku: string }): KitChoice {
     max_leaf_height_mm: "2400",
     max_leaf_weight_kg: "120",
     weight_kg: null,
+    class_label: null,
+    max_aspect_ratio: null,
+    min_stay_height_mm: null,
     contents: [],
     ...partial,
   };
@@ -116,5 +119,37 @@ describe("bayEnvelopeMm", () => {
 
   it("returns null for a missing bay", () => {
     expect(bayEnvelopeMm(tree, "nope", 1800, 1500, { vertical: 60, horizontal: 40 })).toBeNull();
+  });
+});
+
+describe("resolveComponent", () => {
+  const ctx = { leafWidthMm: 1400, leafHeightMm: 1500 };
+
+  it("resolves cut length from API-serialized string minus_mm", () => {
+    const component = {
+      sku: "DEMO-TT-CREM-70",
+      name: "Transmisión cremona demo 70",
+      qty: "1",
+      unit: "unit",
+      category: "LOCK",
+      cut_rule: { axis: "HEIGHT", minus_mm: "60" },
+    } as KitChoice["contents"][number];
+    const resolved = resolveComponent(component, ctx);
+    expect(resolved.lengthMm).toBe(1440);
+    expect(resolved.qty).toBe(1);
+  });
+
+  it("resolves per-height qty rules from string fields", () => {
+    const component = {
+      sku: "DEMO-TT-CIERRE-70",
+      name: "Punto de cierre demo 70",
+      qty: null,
+      unit: "unit",
+      category: "LOCK",
+      qty_rule: { axis: "HEIGHT", per_mm: "500", min_qty: "2", max_qty: "6" },
+    } as KitChoice["contents"][number];
+    const resolved = resolveComponent(component, ctx);
+    expect(resolved.qty).toBe(3); // ceil(1500 / 500)
+    expect(resolved.lengthMm).toBeNull();
   });
 });
