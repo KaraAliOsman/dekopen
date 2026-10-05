@@ -1,0 +1,103 @@
+{
+  "generatedAt": "2026-10-05T01:50:59.449Z",
+  "baseUrl": "http://127.0.0.1:5173",
+  "records": [
+    {
+      "routeId": "login",
+      "path": "/login",
+      "role": "ESTIMATOR",
+      "theme": "light",
+      "viewport": "1440x900",
+      "screenshot": "login__ESTIMATOR__light__1440x900.png",
+      "overflowX": false,
+      "consoleErrors": [],
+      "httpErrors": [],
+      "findings": []
+    },
+    {
+      "routeId": "login",
+      "path": "/login",
+      "role": "ESTIMATOR",
+      "theme": "light",
+      "viewport": "1280x800",
+      "screenshot": "login__ESTIMATOR__light__1280x800.png",
+      "overflowX": false,
+      "consoleErrors": [],
+      "httpErrors": [],
+      "findings": []
+    },
+    {
+      "routeId": "login",
+      "path": "/login",
+      "role": "ESTIMATOR",
+      "theme": "light",
+      "viewport": "1024x768",
+      "screenshot": "login__ESTIMATOR__light__1024x768.png",
+      "overflowX": false,
+      "consoleErrors": [],
+      "httpErrors": [],
+      "findings": []
+    },
+    {
+      "routeId": "login",
+      "path": "/login",
+      "role": "ESTIMATOR",
+      "theme": "light",
+      "viewport": "390x844",
+      "screenshot": "login__ESTIMATOR__light__390x844.png",
+      "overflowX": false,
+      "consoleErrors": [],
+      "httpErrors": [],
+      "findings": []
+    },
+    {
+      "routeId": "login",
+      "path": "/login",
+      "role": "ESTIMATOR",
+      "theme": "dark",
+      "viewport": "1440x900",
+      "screenshot": "login__ESTIMATOR__dark__1440x900.png",
+      "overflowX": false,
+      "consoleErrors": [],
+      "httpErrors": [],
+      "findings": []
+    },
+    {
+      "routeId": "login",
+      "path": "/login",
+      "role": "ESTIMATOR",
+      "theme": "dark",
+      "viewport": "1280x800",
+      "screenshot": "login__ESTIMATOR__dark__1280x800.png",
+      "overflowX": false,
+      "consoleErrors": [],
+      "httpErrors": [],
+      "findings": []
+    },
+    {
+      "routeId": "login",
+      "path": "/login",
+      "role": "ESTIMATOR",
+      "theme": "dark",
+      "viewport": "1024x768",
+      "screenshot": "login__ESTIMATOR__dark__1024x768.png",
+      "overflowX": false,
+      "consoleErrors": [],
+      "httpErrors": [],
+      "findings": []
+    },
+    {
+      "routeId": "login",
+      "path": "/login",
+      "role": "ESTIMATOR",
+      "theme": "dark",
+      "viewport": "390x844",
+      "screenshot": "login__ESTIMATOR__dark__390x844.png",
+      "overflowX": false,
+      "consoleErrors": [],
+      "httpErrors": [],
+      "findings": []
+    }
+  ],
+  "topFindings": []
+}

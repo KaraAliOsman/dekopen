@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Documented synthetic fixtures for DEKOPEN local development.
+"""Documented realistic DEMO fixtures for DEKOPEN local development.
 
-Creates one demo org with one account per role, commercial prerequisites
-(pricing rules + a cost list covering every reference-catalog purchase SKU),
-two clients, and three projects that exercise the product breadth:
+Creates two demo orgs, one account per role in the primary org, commercial
+prerequisites (pricing rules + a cost list covering every reference-catalog
+purchase SKU), six clients, and projects that exercise the product breadth.
 
   VIVIENDA  — a house: several positions, one priced-and-emitted path capable
   OBRA      — a larger works order: more positions, quantities > 1
@@ -46,7 +46,9 @@ if not SERVICE_KEY:
 
 NS = uuid.uuid5(uuid.NAMESPACE_URL, "https://dekopen.local/dev-fixture")
 ORG_ID = str(uuid.uuid5(NS, "org"))
-ORG_NAME = "DEKOPEN Demo Fixture"
+ORG_NAME = "Ventanas del Sur SpA"
+ORG_B_ID = str(uuid.uuid5(NS, "org-secondary"))
+ORG_B_NAME = "Cristales Bio Bio Ltda."
 
 ACCOUNTS = [
     ("owner", "demo-owner@fixture.dekopen.local", "OWNER"),
@@ -228,6 +230,21 @@ def tilt_turn(width: str, height: str, uid: str = "m1") -> dict:
     )
 
 
+def bay(width: str, height: str, opening: str, uid: str = "m1") -> dict:
+    return design(
+        width,
+        height,
+        {
+            "id": uid,
+            "type": "BAY",
+            "opening_type": opening,
+            "glass_thickness_mm": "24.00",
+            "glass_spec": "4-16-4 Float Incoloro",
+            "glass_article_sku": "VIDRIO-BASE",
+        },
+    )
+
+
 def main() -> None:
     users = {key: ensure_user(key, email) for key, email, _ in ACCOUNTS}
 
@@ -237,7 +254,29 @@ def main() -> None:
             {
                 "id": ORG_ID,
                 "name": ORG_NAME,
-                "tax_id": "76.000.000-0",
+                "commercial_name": ORG_NAME,
+                "tax_id": "76.543.210-3",
+                "giro": "Fabricacion e instalacion de ventanas de PVC y aluminio",
+                "brand_address": "Paicavi 1250, Concepcion",
+                "brand_phone": "+56 41 255 0198",
+                "brand_email": "contacto@ventanasdelsur.example",
+                "brand_logo_key": "fixture/ventanas-del-sur.svg",
+                "brand_logo_sha256": "0" * 64,
+                "country": "CL",
+                "currency": "CLP",
+                "subscription_active": True,
+            },
+            {
+                "id": ORG_B_ID,
+                "name": ORG_B_NAME,
+                "commercial_name": ORG_B_NAME,
+                "tax_id": "77.123.456-9",
+                "giro": "Comercializacion de cristales y termopaneles",
+                "brand_address": "Los Carrera 840, Talcahuano",
+                "brand_phone": "+56 41 233 4411",
+                "brand_email": "operaciones@cristalesbiobio.example",
+                "brand_logo_key": "fixture/cristales-bio-bio.svg",
+                "brand_logo_sha256": "1" * 64,
                 "country": "CL",
                 "currency": "CLP",
                 "subscription_active": True,
@@ -255,6 +294,15 @@ def main() -> None:
                 "is_active": True,
             }
             for key, _, role in ACCOUNTS
+        ]
+        + [
+            {
+                "id": str(uuid.uuid5(NS, "membership-secondary-owner")),
+                "org_id": ORG_B_ID,
+                "user_id": users["owner"],
+                "role": "OWNER",
+                "is_active": True,
+            }
         ],
     )
 
@@ -314,7 +362,7 @@ def main() -> None:
                 "INSERT INTO public.cost_list_items(id,org_id,cost_list_id,sku,"
                 "unit,item_type,unit_cost,description) "
                 "VALUES(%s,%s,%s,%s,%s,'FIXTURE',100.00,'DEMO FIXTURE cost') "
-                "ON CONFLICT (id) DO NOTHING",
+                "ON CONFLICT (cost_list_id,sku) DO NOTHING",
                 (str(uuid.uuid5(NS, f"cost-{sku}-{unit}")), ORG_ID, cost_list_id, sku, unit),
             )
 
@@ -359,11 +407,63 @@ def main() -> None:
     estimator = login(ACCOUNTS[1][1])
 
     clients = [
-        ("Vivienda Particular SpA", "76.543.210-1", "vivienda@fixture.test"),
-        ("Constructora Obra Grande Ltda.", "96.111.222-3", "obra@fixture.test"),
+        (
+            "Maria Paz Rojas",
+            "15.678.901-1",
+            "maria.rojas@example.cl",
+            "+56 9 6123 4500",
+            "Los Notros 1840, San Pedro de la Paz",
+            "Persona natural",
+            "San Pedro de la Paz",
+        ),
+        (
+            "Constructora Rio Claro SpA",
+            "76.456.789-7",
+            "obras@rioclaro.example.cl",
+            "+56 41 266 7788",
+            "Ongolmo 533, Concepcion",
+            "Construccion de edificios",
+            "Concepcion",
+        ),
+        (
+            "Inversiones Lomas Ltda.",
+            "96.543.210-8",
+            "administracion@lomas.example.cl",
+            "+56 41 244 6611",
+            "Camino a Chiguayante 3210, Chiguayante",
+            "Inmobiliaria",
+            "Chiguayante",
+        ),
+        (
+            "Colegio Valle Andino",
+            "76.987.654-5",
+            "mantencion@valleandino.example.cl",
+            "+56 41 231 5544",
+            "Av. Collao 980, Concepcion",
+            "Servicios educacionales",
+            "Concepcion",
+        ),
+        (
+            "Jorge Andres Vidal",
+            "18.456.789-K",
+            "jvidal@example.cl",
+            "+56 9 7345 2281",
+            "Pasaje Maiten 402, Hualpen",
+            "Persona natural",
+            "Hualpen",
+        ),
+        (
+            "Clinica Puerto Sur SpA",
+            "77.888.999-4",
+            "infraestructura@puertosur.example.cl",
+            "+56 41 287 4400",
+            "Barros Arana 1220, Concepcion",
+            "Servicios de salud",
+            "Concepcion",
+        ),
     ]
     client_ids = {}
-    for name, rut, email in clients:
+    for name, rut, email, phone, address, giro, comuna in clients:
         cid = str(uuid.uuid5(NS, f"client-{rut}"))
         rest(
             "clients",
@@ -374,6 +474,10 @@ def main() -> None:
                     "name": name,
                     "rut": rut,
                     "email": email,
+                    "phone": phone,
+                    "address": address,
+                    "giro": giro,
+                    "comuna": comuna,
                     "is_active": True,
                     "created_by": users["owner"],
                 }
@@ -384,7 +488,8 @@ def main() -> None:
     existing_projects = api(estimator, "GET", "/projects/").get("items", [])
 
     def project(slug: str, name: str, client: str, address: str) -> dict:
-        found = next((p for p in existing_projects if p["name"] == name), None)
+        display_name = f"{name} [{slug}]"
+        found = next((p for p in existing_projects if p["name"] == display_name), None)
         if found:
             return found
         created = api(
@@ -392,7 +497,7 @@ def main() -> None:
             "POST",
             "/projects/",
             {
-                "name": name,
+                "name": display_name,
                 "client_id": client_ids[client],
                 "client_name": client,
                 "delivery_address": address,
@@ -444,9 +549,9 @@ def main() -> None:
         )
 
     vivienda = project(
-        "VIVIENDA",
+        "CASA_LOMAS",
         "Vivienda demo — casa (fixture)",
-        "Vivienda Particular SpA",
+        "Maria Paz Rojas",
         "Av. Demostración 100, Santiago",
     )
     for loc, tree, qty in [
@@ -454,39 +559,114 @@ def main() -> None:
         ("Baño", fixed("600", "800", "vb1"), 1),
         ("Living", tilt_turn("2400", "1500", "vl1"), 1),
         ("Cocina", fixed("1200", "900", "vc1"), 1),
+        ("Logia", bay("900", "900", "TURN_LEFT", "lg1"), 1),
+        ("Estar segundo piso", bay("1800", "1200", "SLIDING_2L", "es1"), 1),
+        ("Dormitorio norte", bay("1400", "1100", "TILT_TURN_LEFT", "dn1"), 1),
+        ("Pasillo", fixed("700", "1400", "ps1"), 1),
+        ("Acceso terraza", bay("900", "2100", "TURN_RIGHT", "pt1"), 1),
+        ("Bow comedor modulo 1", fixed("900", "1300", "bw1"), 1),
+        ("Bow comedor modulo 2", fixed("900", "1300", "bw2"), 1),
+        ("Conjunto acoplado escritorio", tilt_turn("2200", "1300", "ac1"), 1),
     ]:
         position(vivienda["id"], loc, tree, qty)
 
     obra = project(
-        "OBRA",
+        "TORRE_BARROS",
         "Obra grande demo — edificio (fixture)",
-        "Constructora Obra Grande Ltda.",
-        "Camino Fixture km 4, Renca",
+        "Constructora Rio Claro SpA",
+        "Barros Arana 1445, Concepcion",
     )
-    for i in range(1, 9):
+    for i in range(1, 101):
         position(
-            obra["id"], f"Eje {i}", tilt_turn("1800", "1400", f"ob{i}"), 4
+            obra["id"],
+            f"Piso {(i - 1) // 10 + 1} eje {((i - 1) % 10) + 1}",
+            tilt_turn("1800", "1400", f"ob{i}"),
+            1,
         )
 
     incompleta = project(
         "INCOMPLETA",
         "Proyecto incompleto (fixture)",
-        "Vivienda Particular SpA",
-        "Sin despacho",
+        "Colegio Valle Andino",
+        "Av. Collao 980, Concepcion",
     )
     position(
         incompleta["id"], "Pendiente de cotizar", fixed("900", "600", "inc1"), 1
     )
 
-    stage(estimator, users, vivienda, obra)
+    aprobado = project(
+        "APROBADO",
+        "Clinica Puerto Sur - anticipo recibido DEMO",
+        "Clinica Puerto Sur SpA",
+        "Barros Arana 1220, Concepcion",
+    )
+    position(aprobado["id"], "Box consulta", tilt_turn("1500", "1200", "ap1"), 8)
+
+    produccion = project(
+        "PRODUCCION",
+        "Condominio Los Raulies - en produccion DEMO",
+        "Inversiones Lomas Ltda.",
+        "Camino a Chiguayante 3210, Chiguayante",
+    )
+    position(
+        produccion["id"],
+        "Torre A vano tipo",
+        bay("1600", "1300", "SLIDING_2L", "pr1"),
+        18,
+    )
+
+    despachado = project(
+        "DESPACHADO",
+        "Casa Jorge Vidal - despachado DEMO",
+        "Jorge Andres Vidal",
+        "Pasaje Maiten 402, Hualpen",
+    )
+    position(despachado["id"], "Fachada principal", fixed("1800", "1200", "dp1"), 3)
+
+    instalado = project(
+        "INSTALADO",
+        "Reposicion oficinas Rio Claro - instalado DEMO",
+        "Constructora Rio Claro SpA",
+        "Ongolmo 533, Concepcion",
+    )
+    position(instalado["id"], "Sala reuniones", tilt_turn("2000", "1400", "in1"), 2)
+
+    rechazado = project(
+        "RECHAZADO",
+        "Presupuesto local comercial - rechazado DEMO",
+        "Maria Paz Rojas",
+        "Anibal Pinto 650, Concepcion",
+    )
+    position(rechazado["id"], "Vitrina", fixed("2400", "2100", "rj1"), 1)
 
     print(f"org {ORG_ID} ({ORG_NAME})")
+    print(f"org {ORG_B_ID} ({ORG_B_NAME})")
     for key, email, role in ACCOUNTS:
         print(f"  {role:18} {email}  / {PASSWORD}")
     print(f"  clients: {list(client_ids)}")
     print(f"  projects: vivienda={vivienda['id']} obra={obra['id']} incompleta={incompleta['id']}")
     print(f"  cost items: {len(skus)} SKUs covered")
     print("DEMO FIXTURE — datos sintéticos de referencia (DEMO_60).")
+
+
+def mark_project_phases(projects: dict[str, str]) -> None:
+    status_by_phase = {
+        "borrador": "DRAFT",
+        "cotizado": "QUOTED",
+        "enviado": "QUOTED",
+        "aprobado con anticipo": "APPROVED",
+        "en produccion": "IN_PRODUCTION",
+        "despachado": "COMPLETED",
+        "instalado": "COMPLETED",
+        "rechazado": "CANCELLED",
+    }
+    for phase, project_id in projects.items():
+        sql(
+            "UPDATE public.projects SET status=%s, notes_internal="
+            "regexp_replace(COALESCE(notes_internal,''), "
+            "E'\\nFase fixture P00: .*', '', 'g') || %s WHERE id=%s",
+            (status_by_phase[phase], f"\nFase fixture P00: {phase}.", project_id),
+        )
 
 
 def stage(estimator: str, users: dict[str, str], *projects: dict) -> None:

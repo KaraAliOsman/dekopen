@@ -9,3 +9,10 @@ Append-only chronology. Keep newest entries at the bottom.
 - Seeded schema, index, product direction, owner decisions, current-state page, known-risk page, competitor map and source pages.
 - Established separation between current repo fact, owner intent, historical context and external research.
 - No attempt was made to turn the wiki into an alternative source of engineering numeric truth.
+
+## [2026-10-05] P00 | foundation branch, constitution and visual evidence harness
+
+- Created the v1 foundation changes for `integracion/v1`: design constitution in-repo, defaults/activation records, queue state, route hygiene and `ux:capture`.
+- Added a realistic DEMO fixture direction for Ventanas del Sur SpA while keeping `DEMO_60` explicitly synthetic and non-certified.
+- Verified local focused tests, engine/backend/frontend unit suites, frontend typecheck and build. Local generated-API drift check was blocked by Windows application control on the `rpds` DLL.
+- Captured a smoke baseline for `/login`; full-route capture remains a follow-up once every portal/token fixture state exists.

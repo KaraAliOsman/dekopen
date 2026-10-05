@@ -28,7 +28,7 @@ import { useRegisterDesignOpsBridge } from "../assistant/assistantContext";
 import type { DesignOp } from "../commands/types";
 import { BowPlanContent, planBounds } from "./BowPlanSvg";
 import { CanvasViewport } from "./CanvasViewport";
-import { ObjectTree } from "./ObjectTree";
+import { ObjectTree } from "./ObjectTreeView";
 import { buildObjectTree } from "./objectTree";
 import { resolveMembers, type MemberGeometry } from "./members";
 import { bayEnvelopeMm, rankKits } from "./kitCompatibility";

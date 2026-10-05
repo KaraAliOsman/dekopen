@@ -1,11 +1,12 @@
 ---
 type: state
 status: active
-updated: 2026-09-28
+updated: 2026-10-05
 volatility: high
-verified_ref: main@5fa99363ecad53a1a8d19d4bacce315a0af8782c
+verified_ref: 8360f68
 sources:
   - repository main
+  - P00 foundation branch
   - open PR metadata observed 2026-09-27/28
   - AGENTS.md
   - docs/PRODUCT.md
@@ -46,6 +47,20 @@ Hard invariants documented by the repo include:
 - AI using the same typed operations as UI;
 - workshop-language validation;
 - Oknosoft/WindowBuilder as a domain reference.
+
+## P00 foundation state
+
+P00 adds the v1 integration foundation:
+
+- `integracion/v1` exists as the queue integration branch.
+- `docs/design/CONSTITUCION.md` is the mandatory design constitution copied from the queue.
+- `docs/decisions/valores-por-defecto.md` records constitution defaults for later implementation.
+- `docs/operations/ACTIVACION.md` indexes deferred external integrations without secret values.
+- `frontend/scripts/ux-capture/` provides a Playwright capture harness with text/presentation detectors and unit coverage.
+- The production route table hides `/projects/demo/positions/g1/edit` behind the same dev-only mechanism as `/benchmark`.
+- `scripts/dev_fixture.py` now seeds more realistic DEMO fixture identity, clients and project volume while preserving `DEMO_60` as synthetic reference data.
+
+Verification caveat: local Windows policy blocked `rpds` during generated-API drift checking, and the committed baseline capture is a smoke baseline for `/login`; later queue items must run the full route matrix once portal tokens and all fixture states are available.
 
 ## Recent branch/PR caution
 

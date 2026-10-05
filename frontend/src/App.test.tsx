@@ -3,7 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 
-import { AppRoutes } from "./App";
+import { AppRoutes, DEV_ONLY_ROUTE_PATHS, visibleDevOnlyRoutePaths } from "./App";
 import { AuthSessionContext, type AuthSessionContextValue } from "./auth/AuthSessionProvider";
 import { ThemeProvider } from "./theme/ThemeProvider";
 import { ConfirmProvider } from "./ui";
@@ -104,5 +104,11 @@ describe("SHOT-04 application routes", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cambiar tema" }));
     expect(document.documentElement.dataset.theme).toBe("dark");
     expect(window.localStorage.getItem("dekopen.theme")).toBe("dark");
+  });
+
+  it("keeps dev-only routes out of production routing", () => {
+    expect(DEV_ONLY_ROUTE_PATHS).toContain("/projects/demo/positions/g1/edit");
+    expect(visibleDevOnlyRoutePaths({ DEV: false })).toEqual([]);
+    expect(visibleDevOnlyRoutePaths({ DEV: true })).toEqual(DEV_ONLY_ROUTE_PATHS);
   });
 });

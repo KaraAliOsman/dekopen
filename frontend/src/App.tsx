@@ -16,6 +16,14 @@ import { MfaPage } from "./auth/MfaPage";
 import { SelectOrganizationPage } from "./auth/SelectOrganizationPage";
 import { consumeReturnTo } from "./auth/returnTo";
 import { LandingPage } from "./features/landing/LandingPage";
+
+export const DEV_ONLY_ROUTE_PATHS = ["/projects/demo/positions/g1/edit", "/benchmark"] as const;
+
+export function visibleDevOnlyRoutePaths(
+  env: Pick<ImportMetaEnv, "DEV"> = import.meta.env,
+): readonly string[] {
+  return env.DEV ? DEV_ONLY_ROUTE_PATHS : [];
+}
 const WalletPage = lazy(async () => ({
   default: (await import("./features/billing/WalletPage")).WalletPage,
 }));
@@ -173,18 +181,30 @@ export function AppRoutes(): JSX.Element {
             </ReadyGuard>
           }
         />
-        <Route
-          path="/projects/demo/positions/g1/edit"
-          element={
-            <ReadyGuard>
-              <AppShell>
-                <Suspense fallback={<p role="status">{t("canvas.loading")}</p>}>
-                  <CanvasEditor2DView demoRoute />
+        {visibleDevOnlyRoutePaths().length > 0 && (
+          <>
+            <Route
+              path="/projects/demo/positions/g1/edit"
+              element={
+                <ReadyGuard>
+                  <AppShell>
+                    <Suspense fallback={<p role="status">{t("canvas.loading")}</p>}>
+                      <CanvasEditor2DView demoRoute />
+                    </Suspense>
+                  </AppShell>
+                </ReadyGuard>
+              }
+            />
+            <Route
+              path="/benchmark"
+              element={
+                <Suspense fallback={<p role="status" />}>
+                  <BenchmarkPage />
                 </Suspense>
-              </AppShell>
-            </ReadyGuard>
-          }
-        />
+              }
+            />
+          </>
+        )}
         <Route
           path="/pricing/commercial"
           element={
@@ -226,16 +246,6 @@ export function AppRoutes(): JSX.Element {
             </Suspense>
           }
         />
-        {import.meta.env.DEV && (
-          <Route
-            path="/benchmark"
-            element={
-              <Suspense fallback={<p role="status" />}>
-                <BenchmarkPage />
-              </Suspense>
-            }
-          />
-        )}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route
