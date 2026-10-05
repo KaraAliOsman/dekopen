@@ -24,22 +24,19 @@
   padding: 0 var(--space-8);
 }
 
-.ui-field__input:focus {
-  border-color: var(--theme-accent);
-  outline: none;
-}
-
 /* ---------- focus ---------- */
 
-:where(
-  .ui-button,
-  .ui-icon-button,
-  .ui-context-nav__link,
-  .ui-inline-edit,
-  .ui-field__input
-):focus-visible {
+:where(.ui-button, .ui-icon-button, .ui-context-nav__link, .ui-inline-edit):focus-visible {
   outline: 2px solid var(--theme-focus-ring);
   outline-offset: 1px;
+}
+
+/* El contrato de foco de los campos es el anillo por sombra (--focus-ring-shadow),
+   no outline — lo verifica canvas.spec.ts. */
+.ui-field__input:focus {
+  border-color: var(--focus-ring);
+  box-shadow: var(--focus-ring-shadow);
+  outline: none;
 }
 
 /* ---------- disabled ---------- */
