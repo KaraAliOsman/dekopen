@@ -1,6 +1,6 @@
-# DEKOPEN v1 — Auditoría, constitución de diseño y cola de trabajo para Codex
+﻿# DEKOPEN v1 — Auditoría, constitución de diseño y cola de trabajo para Codex
 
-Fecha: 2026-10-04 · Repo auditado: `KaraAliOsman/dekopen` en `main@b3d1c9b` (2026-10-01)
+Fecha: 2026-10-04 · Repo: `KaraAliOsman/dekopen` (antes `framedex`; el código auditado es `main@b3d1c9b` de 2026-10-01 y `main` hoy incluye además tus commits locales)
 Fuentes: 81 sesiones (565 adjuntos), revisados en 70 hojas de contacto de 431 capturas, 21 videos (39 hojas de fotogramas, incluido el recorrido A-Z de 27 min), 12 PDF (82 páginas), ~95 reportes de auditoría, el código actual de main, los metadatos de GitHub (112 PR) e investigación externa (Orgadata/Logikal, Windowmaker, Stolcad, FeneCAM, ProF2, Alumilcal, Moxisys, PandaDoc/Qwilr, OGUC y NCh).
 
 ---
