@@ -3,7 +3,7 @@ type: state
 status: active
 updated: 2026-10-05
 volatility: high
-verified_ref: db136a7207487e4e843b17f36f03a4c78a54b79b
+verified_ref: 5474798011022008f2ceb31dfefb15813ad24262
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
@@ -12,6 +12,7 @@ sources:
   - D02 glass PR https://github.com/KaraAliOsman/dekopen/pull/10
   - D04 hardware PR https://github.com/KaraAliOsman/dekopen/pull/8
   - D03 openings/typologies PR https://github.com/KaraAliOsman/dekopen/pull/9
+  - D07 vano/fabricación PR https://github.com/KaraAliOsman/dekopen/pull/14
   - integracion/v1 merge 747c528b67d234d697624929ccbcc7098261ed54
   - open PR metadata observed 2026-09-27/28
   - AGENTS.md
