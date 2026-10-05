@@ -39,6 +39,11 @@ from dekopen_engine.models import (
     ParametricNode,
 )
 from dekopen_engine.engine_base import EngineModel
+from dekopen_engine.openings import (
+    legacy_openings_for_spec,
+    resolve_opening_spec,
+    resolve_unit_kind,
+)
 
 
 class GlassPieceContext(EngineModel):
@@ -283,9 +288,14 @@ def bay_glass_contexts(
     def subtree_has_door(node: ParametricNode) -> bool:
         if node.opening_type is not None and node.opening_type.value in _DOOR_OPENINGS:
             return True
+        # D03 spec form: a door unit declares unit_kind on its top node,
+        # not a door enum on the leaf bay.
+        if node.unit_kind is not None and node.unit_kind.value == "DOOR":
+            return True
         return any(subtree_has_door(child) for child in node.children)
 
     contexts: dict[str, GlassBayContext] = {}
+    unit_kind = resolve_unit_kind(tree)
 
     def walk(
         node: ParametricNode,
@@ -295,10 +305,27 @@ def bay_glass_contexts(
     ) -> None:
         if node.type is NodeType.BAY:
             sill = module_height_mm - (top_offset_mm + height_mm)
+            opening_value = (
+                node.opening_type.value if node.opening_type else None
+            )
+            if opening_value is None:
+                # D03 spec form: resolve to the door-ish legacy name when
+                # the spec maps to one — the door-safety rule keys off
+                # DOOR_ENTRY/DOOR_DOUBLE, never the movement key.
+                try:
+                    spec = resolve_opening_spec(node, default_unit=unit_kind)
+                except ValueError:
+                    spec = None
+                if spec is not None:
+                    doorish = sorted(
+                        o.value
+                        for o in legacy_openings_for_spec(spec)
+                        if o.value in _DOOR_OPENINGS
+                    )
+                    if doorish:
+                        opening_value = doorish[0]
             contexts[node.id] = GlassBayContext(
-                opening_type=(
-                    node.opening_type.value if node.opening_type else None
-                ),
+                opening_type=opening_value,
                 sill_mm=sill,
                 adjacent_door=near_door,
             )

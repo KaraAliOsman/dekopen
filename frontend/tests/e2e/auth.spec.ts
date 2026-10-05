@@ -411,7 +411,12 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   await page.getByLabel("Condiciones de pago", { exact: true }).fill("50% anticipo, 50% entrega");
   await page.getByLabel("Cotización válida hasta", { exact: true }).fill("2026-10-19");
   await expect(page.getByLabel("Criterio de fabricación", { exact: true })).not.toHaveValue("");
-  await expect(page.getByLabel("Criterio de manillas", { exact: true })).not.toHaveValue("");
+  // DEMO_60 ships two handle authorities since D03 (V3 adds TILT,
+  // BOTTOM_HUNG and the double-door leaves): the freeze requires an
+  // explicit pick when several versions compete, so select the current one.
+  await page
+    .getByLabel("Criterio de manillas", { exact: true })
+    .selectOption({ label: "DEMO_60_HANDLES_V3 · v3" });
   // DEMO_60 ships two reinforcement authorities since D01 (V2 adds the
   // DOOR_SASH role): the freeze requires an explicit pick when several
   // versions compete, so select the current one.

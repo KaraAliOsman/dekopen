@@ -146,7 +146,10 @@ SPECTACULAR_SETTINGS = {
         "PaymentStatusEnum": ["NO_DEAL", "PENDING", "PARTIAL", "PAID"],
         "PaymentKindEnum": ["ANTICIPO", "PARCIAL", "SALDO"],
         "VerticalReferenceEnum": ["OUTER_TOP", "OUTER_BOTTOM", "LEAF_TOP", "LEAF_BOTTOM"],
-        "KitOpeningTypeEnum": ["AWNING", "DOOR", "SLIDING", "TILT_TURN", "TURN"],
+        "KitOpeningTypeEnum": [
+            "AWNING", "BOTTOM_HUNG", "DOOR", "FALLEBA", "SLIDING", "TILT",
+            "TILT_TURN", "TURN",
+        ],
         "ImportOpeningTypeEnum": [
             "AWNING", "DOOR_ENTRY", "FIXED", "SLIDING_2L",
             "TILT_TURN_LEFT", "TILT_TURN_RIGHT", "TURN_LEFT", "TURN_RIGHT",

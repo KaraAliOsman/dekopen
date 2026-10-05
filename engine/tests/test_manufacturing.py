@@ -93,7 +93,7 @@ def project(
 ) -> tuple[GeometryComputation, ManufacturingFactsV1]:
     computation = compute_geometry(node, params)
     assert computation.manufacturing_trace is not None
-    openings = sorted({leaf.opening_type.value for leaf in computation.manufacturing_trace.leaves})
+    openings = sorted({leaf.opening_type for leaf in computation.manufacturing_trace.leaves})
     intents = [
         HandleIntentV1(
             bay_id=leaf.bay_id,

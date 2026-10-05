@@ -84,3 +84,15 @@ Append-only chronology. Keep newest entries at the bottom.
 - Ingesta: la plantilla D01 gana columnas/hojas de herraje (clases, familias, manillas, opciones) con test de ida y vuelta.
 - UI: inspector "Herrajes" muestra clase resuelta + "¿Por qué este kit?" + kit override + manilla (modelo/color/altura con aviso fuera de rango) + opciones vendibles + tabla de componentes en "Avanzado"; documento al cliente solo lo vendible.
 - Verificado: `make lint/typecheck/test/build` y `make test-db` verdes; OT real `OT-P-000014-REV-A-01` liberada en local con picking expandido (cierres ×3 por PER_HEIGHT, cremona cortada 1326 mm); capturas antes/después en `docs/redesign/captures/d04-herrajes/`; ux:capture scoped en rutas tocadas sin hallazgos nuevos.
+
+
+## [2026-10-05] D03 | aperturas y tipologías de verdad
+
+- Modelo real de apertura: `Opening{movement × hinge_side × direction × leaf_role × fixed_in_sash}`, `BayLeaf{slot, opening}` y `OpeningSpec{unit_kind, leaves}` en `models.py`/`openings.py`. El enum `opening_type` sigue aceptado una versión y mapea totalmente (`spec_for_legacy`/`legacy_openings_for_spec`); goldens migrados idénticos.
+- 13 movimientos declarados (FIXED, TURN, TILT, TILT_TURN, TOP_HUNG, BOTTOM_HUNG, SLIDE, LIFT_SLIDE, PARALLEL_SLIDE, FOLD, PIVOT_V, PIVOT_H, VERTICAL_SLIDE); los seis últimos son declarados-only para D08 y corredera sigue por `sliding_layout`.
+- `unit_kind` WINDOW/DOOR en el nodo superior de la unidad habilita hojas DOOR_SASH dentro de splits: puerta simple, doble (activa+pasiva con inversor/falleba) y puerta + lateral fijo sin columna de traslapo.
+- `system_opening_capabilities` (migración `20261230000000`): capacidades por sistema movimiento×direcciones×roles×units×max_leaves con fallback de familia; el editor, la API y la IA solo ofrecen lo admitido y el rechazo nombra los sistemas que sí lo admiten.
+- Manilla derivada por hoja vía política de herrajes (lado de cierre, activa sola en francesa, altura `handle_height_mm` del sistema/kit editable); herrajes por hoja en grupos normalizados incl. FALLEBA e INVERSOR con autoridad de compra/acero.
+- Simbología DIN por vista según `_contrato.md` §9 en `documents/renderers.py` (`_spec_leaf_glyphs`), `ProductFrontSvg` y `OpeningGlyph`: continuo = hacia el observador, discontinuo = se aleja; puerta = arco desde la esquina de bisagras + umbral bajo hojas operables; fijo sin glifo.
+- Nombres es-CL "<movimiento> hacia <dirección> — bisagras a la <lado>" + propios ("Francesa 2 hojas — activa derecha", "Solo abatimiento (banderola)"), generados por el motor y espejados en `domainLabels`.
+- Verificado: `make lint|typecheck|test|build` y `make test-db` verdes (`PY=.venv/bin/python`); goldens idénticos al migrar + goldens nuevos por tipología; test de capacidades nombrando sistemas; 18 capturas técnicas 1440×900 en `docs/redesign/captures/d03-aperturas-tipologias/`.

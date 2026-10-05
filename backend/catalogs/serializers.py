@@ -21,6 +21,9 @@ KIT_OPENING_TYPES = sorted(
         for opening in SUPPORTED_OPENING_TYPES
         if opening is not BayOpeningType.FIXED
     }
+    # D03 kit families that only exist on the Opening axis: banderola,
+    # abatimiento de bisagras abajo y la falleba de la hoja pasiva.
+    | {"TILT", "BOTTOM_HUNG", "FALLEBA"}
 )
 
 

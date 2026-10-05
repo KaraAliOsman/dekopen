@@ -7,7 +7,7 @@ import type {
   DesignOp,
   DesignOpState,
 } from "../commands/types";
-import type { IntentNode, Opening } from "./intentEditing";
+import type { IntentNode, OpeningChoice } from "./intentEditing";
 import { baySpec, findNode, parentSplitOf } from "./intentEditing";
 import { OPENING_OPTIONS } from "./openings";
 import { runCommand } from "../commands/registry";
@@ -243,15 +243,29 @@ function decodeCoupling(
     : null;
 }
 
-const OPENING_LABELS: Partial<Record<Opening, string>> = {
+const OPENING_LABELS: Partial<Record<string, string>> = {
   FIXED: "fijo",
+  FIXED_SASH: "fijo en hoja",
   TURN_LEFT: "abatible izquierda",
   TURN_RIGHT: "abatible derecha",
+  TURN_LEFT_OUT: "abatible afuera izquierda",
+  TURN_RIGHT_OUT: "abatible afuera derecha",
   TILT_TURN_LEFT: "oscilobatiente izquierda",
   TILT_TURN_RIGHT: "oscilobatiente derecha",
+  TILT: "banderola",
+  BOTTOM_HUNG: "abatimiento inferior",
+  BOTTOM_HUNG_OUT: "abatimiento inferior afuera",
+  FRENCH_L: "francesa activa izquierda",
+  FRENCH_R: "francesa activa derecha",
+  FRENCH_OUT_L: "francesa afuera activa izquierda",
+  FRENCH_OUT_R: "francesa afuera activa derecha",
   SLIDING_2L: "corredera 2 hojas",
   AWNING: "proyectante",
   DOOR_ENTRY: "puerta",
+  DOOR_LEFT_OUT: "puerta afuera izquierda",
+  DOOR_RIGHT_OUT: "puerta afuera derecha",
+  DOOR_DOUBLE: "puerta doble",
+  DOOR_DOUBLE_L: "puerta doble izquierda",
 };
 
 function moduleLabel(args: CommandArgs): string {
@@ -422,11 +436,11 @@ export const ASSEMBLY_COMMANDS: CommandSpec[] = [
     apply: (ctx, args) => {
       const id = args.module ?? selectedModule(ctx)?.id;
       return id && args.opening
-        ? setModuleOpening(ctx.product, id, args.opening as Opening)
+        ? setModuleOpening(ctx.product, id, args.opening as OpeningChoice | string)
         : ctx.product;
     },
     describe: (args) =>
-      `${moduleLabel(args)}: ${OPENING_LABELS[args.opening as Opening] ?? args.opening ?? "?"}`,
+      `${moduleLabel(args)}: ${OPENING_LABELS[args.opening ?? ""] ?? args.opening ?? "?"}`,
     ai: {
       op: "set_opening",
       decode: (op, product, state) => {

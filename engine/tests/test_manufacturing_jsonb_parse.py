@@ -20,7 +20,6 @@ from dekopen_engine.manufacturing import (
     reinforcement_policy_from_json,
 )
 from dekopen_engine.manufacturing_trace import MemberSide
-from dekopen_engine.models import BayOpeningType
 
 _HANDLE: dict[str, Any] = {
     "schema_version": 1,
@@ -87,7 +86,7 @@ def _stringify_numerics(value: object) -> object:
 def test_handle_policy_parses_native_numerics() -> None:
     policy = handle_policy_from_json(_HANDLE)
     assert policy.version == 2
-    assert policy.slots[0].opening_type is BayOpeningType.TURN_LEFT
+    assert policy.slots[0].opening_type == "TURN_LEFT"
     assert policy.slots[0].host_member_side is MemberSide.RIGHT
     assert policy.slots[0].horizontal_offset_mm == Decimal("-10.00")
 

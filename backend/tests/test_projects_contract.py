@@ -550,7 +550,11 @@ def test_design_options_emits_structured_glass_products(monkeypatch):
     from uuid import uuid4
 
     from dekopen_engine.glass_composition import parse_glass_notation
-    from dekopen_engine.models import GlassProduct, GlassSurchargeRate
+    from dekopen_engine.models import (
+        GlassProduct,
+        GlassSurchargeRate,
+        SystemFamily,
+    )
     from projects import options as options_module
     from rest_framework.test import APIClient
 
@@ -596,6 +600,8 @@ def test_design_options_emits_structured_glass_products(monkeypatch):
         glass_products={"VID-LOWE": product},
         hardware_families={},
         hardware_options={},
+        opening_capabilities=(),
+        system_family=SystemFamily.CASEMENT,
         rebate_depth_mm=Decimal("18.00"),
         sash_overlap_mm=Decimal("6.00"),
         depth_mm=Decimal("70.00"),

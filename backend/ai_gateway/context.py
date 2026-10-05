@@ -526,11 +526,72 @@ def stable_refs(refs: dict) -> dict:
     return {key: value for key, value in refs.items() if key not in VOLATILE_REFS}
 
 
+def _system_opening_options(org_id: UUID, position: dict) -> list[dict]:
+    """The system's declared opening repertoire (D03) — what the AI may
+    offer in set_opening ops. Declared capability rows win; a system with
+    none falls back to its fabrication family's repertoire."""
+    from dekopen_engine import (
+        default_capabilities_for_family,
+        spec_options_from_capabilities,
+    )
+    from dekopen_engine.models import (
+        LeafRole,
+        OpeningCapability,
+        OpeningDirection,
+        OpeningMovement,
+        SystemFamily,
+        UnitKind,
+    )
+
+    if not position.get("system_uuid"):
+        return []
+    capability_rows = rows(
+        "SELECT movement, directions, leaf_roles, unit_kinds, max_leaves, "
+        "fixed_in_sash FROM public.system_opening_capabilities "
+        "WHERE system_id=%s AND (org_id=%s OR org_id IS NULL) "
+        "ORDER BY movement",
+        [position["system_uuid"], org_id],
+    )
+    capabilities = (
+        tuple(
+            OpeningCapability(
+                movement=OpeningMovement(str(row["movement"])),
+                directions=tuple(
+                    OpeningDirection(value) for value in row["directions"] or ()
+                ),
+                leaf_roles=tuple(
+                    LeafRole(value) for value in row["leaf_roles"] or ()
+                ),
+                unit_kinds=tuple(
+                    UnitKind(value) for value in row["unit_kinds"] or ()
+                ),
+                max_leaves=int(row["max_leaves"]),
+                fixed_in_sash=bool(row["fixed_in_sash"]),
+            )
+            for row in capability_rows
+        )
+        or default_capabilities_for_family(
+            SystemFamily(str(position["system_family"]))
+        )
+    )
+    # Compact projection for the prompt: the option key the op echoes back
+    # plus its Spanish name and unit kind — spec payloads stay in the API.
+    return [
+        {
+            "key": option["key"],
+            "name": option["name"],
+            "unit_kind": option["unit_kind"],
+        }
+        for option in spec_options_from_capabilities(capabilities)
+    ]
+
+
 def _position(org_id: UUID, refs: dict) -> dict:
     result = rows(
         "SELECT p.id, p.project_id, p.position_index, p.location_tag, p.typology, "
         "p.width_mm, p.height_mm, p.parametric_tree, "
-        "s.code AS system_code, s.name AS system_name, s.material, "
+        "s.id AS system_uuid, s.code AS system_code, s.name AS system_name, "
+        "s.material, s.system_family, "
         "pr.code AS project_code, pr.name AS project_name "
         "FROM public.project_positions p "
         "LEFT JOIN public.profile_systems s ON s.id = p.system_id "
@@ -542,6 +603,7 @@ def _position(org_id: UUID, refs: dict) -> dict:
     if not result:
         raise _ContextError("ai_context_not_found")
     position = result[0]
+    opening_options = _system_opening_options(org_id, position)
     tree = _jsonb(position.get("parametric_tree"))
     assembly = tree.get("assembly") if isinstance(tree, dict) else None
     modules = assembly.get("modules") if isinstance(assembly, dict) else None
@@ -610,6 +672,7 @@ def _position(org_id: UUID, refs: dict) -> dict:
             "code": _cut(position["system_code"]),
             "name": _cut(position["system_name"]),
             "material": _cut(position["material"]),
+            "opening_options": opening_options,
         },
         "width_mm": _cut(position["width_mm"]),
         "height_mm": _cut(position["height_mm"]),

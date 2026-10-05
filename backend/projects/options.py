@@ -11,6 +11,7 @@ from dekopen_engine.glass_composition import (
     composition_to_dict,
     format_glass_notation,
 )
+from dekopen_engine import admitted_capabilities, spec_options_from_capabilities
 from engine_api.repository import SystemParamsRepository
 from pricing.repository import rows
 from pricing.views import ERRORS, scope
@@ -214,8 +215,26 @@ class PanelChoiceSerializer(serializers.Serializer):
     thickness_mm = serializers.CharField()
 
 
+class OpeningOptionSerializer(serializers.Serializer):
+    """One admitted opening choice: the key the engine emits, the Spanish
+    display name and the unit kind the option types the module as."""
+
+    key = serializers.CharField()
+    name = serializers.CharField()
+    unit_kind = serializers.CharField()
+    legacy = serializers.CharField(allow_null=True, required=False)
+    opening = serializers.DictField(required=False)
+    leaves = serializers.ListField(child=serializers.DictField(), required=False)
+
+
 class DesignOptionsSerializer(serializers.Serializer):
     profiles = ProfileChoiceSerializer(many=True)
+    # Concrete opening compositions the system admits (D03): the editor,
+    # the API and the IA only offer these — each carries its spec payload
+    # and Spanish display name.
+    opening_options = serializers.ListField(
+        child=OpeningOptionSerializer(), required=False
+    )
     glazing_thicknesses = serializers.ListField(child=serializers.CharField())
     hardware_kits = KitChoiceSerializer(many=True)
     hardware_families = HardwareFamilySerializer(many=True)
@@ -262,6 +281,9 @@ class DesignOptionsView(APIView):
             )
             return response(
                 {
+                    "opening_options": spec_options_from_capabilities(
+                        admitted_capabilities(params)
+                    ),
                     "profiles": [
                         {
                             "sku": item.sku,
@@ -380,7 +402,7 @@ class DesignOptionsView(APIView):
                             "version": handle_policy.version,
                             "slots": [
                                 {
-                                    "opening_type": slot.opening_type.value,
+                                    "opening_type": slot.opening_type,
                                     "leaf_slot": slot.leaf_slot,
                                     "leaf_handedness": slot.leaf_handedness,
                                     "handle_domain_slot": slot.handle_domain_slot,

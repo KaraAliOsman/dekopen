@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 
+from dekopen_engine.geometry import IncompatibleTypologyError
 from dekopen_engine.snapshot import calculation_response, evaluation_response
 from dekopen_engine.weight import MissingFabricationAuthority
 from drf_spectacular.utils import OpenApiResponse, extend_schema
@@ -42,6 +43,45 @@ from engine_api.serializers import (
     EngineCalculateResponseSerializer,
     EngineSystemsResponseSerializer,
 )
+
+
+def _compatible_system_codes(
+    repository: SystemParamsRepository,
+    active_org_id,
+    families_csv: str | None,
+) -> list[str]:
+    """Concrete system codes whose family covers a refused opening (D03):
+    the engine names families, the catalog edge translates them into the
+    systems the tenant can actually pick."""
+    families = {family for family in (families_csv or "").split(",") if family}
+    if not families:
+        return []
+    return [
+        system.code
+        for system in repository.list_visible(active_org_id)
+        if system.system_family.value in families
+    ]
+
+
+def _typology_error_detail(error: IncompatibleTypologyError) -> dict[str, object]:
+    """The refusal body: the engine's Spanish message plus the systems
+    that admit the opening, named for the user to switch."""
+    systems = [
+        code
+        for code in error.params.get("compatible_systems", "").split(",")
+        if code
+    ]
+    detail = str(error)
+    if systems:
+        detail += f"; sistemas que sí la admiten: {', '.join(systems)}"
+    return {
+        "detail": detail,
+        "extra": {
+            "typology_error_code": error.code,
+            "compatible_systems": systems,
+            **error.params,
+        },
+    }
 
 
 class EngineSystemsView(APIView):
@@ -124,16 +164,29 @@ class EngineCalculateView(APIView):
                     request.headers.get("X-Organization-ID"),
                 )
                 enforce_owner_mfa(tenant, token.aal)
-                params = SystemParamsRepository().load_visible(
+                repository = SystemParamsRepository()
+                params = repository.load_visible(
                     data["system_id"], tenant.active_organization.organization_id
                 )
-                result = calculate_from_api(
-                    parametric_tree=data["parametric_tree"],
-                    nominal_width_mm=data["nominal_width_mm"],
-                    nominal_height_mm=data["nominal_height_mm"],
-                    color=data["color"],
-                    params=params,
-                )
+                try:
+                    result = calculate_from_api(
+                        parametric_tree=data["parametric_tree"],
+                        nominal_width_mm=data["nominal_width_mm"],
+                        nominal_height_mm=data["nominal_height_mm"],
+                        color=data["color"],
+                        params=params,
+                    )
+                except IncompatibleTypologyError as error:
+                    # Translate the engine's admitting families into the
+                    # visible systems the user can switch to (D03).
+                    error.params["compatible_systems"] = ",".join(
+                        _compatible_system_codes(
+                            repository,
+                            tenant.active_organization.organization_id,
+                            error.params.get("compatible_families"),
+                        )
+                    )
+                    raise
                 response_payload = self.build_response(data, result, params)
         except SystemNotFound as error:
             raise contract_error(
@@ -152,6 +205,14 @@ class EngineCalculateView(APIView):
                 status.HTTP_409_CONFLICT,
                 "catalog_authority_missing",
                 "catalogs.errors.authority_missing",
+            ) from error
+        except IncompatibleTypologyError as error:
+            body = _typology_error_detail(error)
+            raise contract_error(
+                status.HTTP_400_BAD_REQUEST,
+                "typology_incompatible",
+                body["detail"],
+                extra=body["extra"],
             ) from error
         except (InvalidEngineRequest, ValueError) as error:
             raise contract_error(
@@ -252,12 +313,22 @@ class EngineAssemblyCalculateView(APIView):
                         "nominal dimensions must equal the assembly envelope "
                         "(width across columns, tallest stacked-column height)"
                     )
-                evaluation = evaluate_assembly_from_api(
-                    product=model,
-                    color=data["color"],
-                    params=params,
-                    coupler_articles=coupler_articles,
-                )
+                try:
+                    evaluation = evaluate_assembly_from_api(
+                        product=model,
+                        color=data["color"],
+                        params=params,
+                        coupler_articles=coupler_articles,
+                    )
+                except IncompatibleTypologyError as error:
+                    error.params["compatible_systems"] = ",".join(
+                        _compatible_system_codes(
+                            repository,
+                            tenant.active_organization.organization_id,
+                            error.params.get("compatible_families"),
+                        )
+                    )
+                    raise
                 response_payload = evaluation_response(
                     {**data, "system_id": str(data["system_id"])}, evaluation
                 )
@@ -278,6 +349,14 @@ class EngineAssemblyCalculateView(APIView):
                 status.HTTP_409_CONFLICT,
                 "catalog_authority_missing",
                 "catalogs.errors.authority_missing",
+            ) from error
+        except IncompatibleTypologyError as error:
+            body = _typology_error_detail(error)
+            raise contract_error(
+                status.HTTP_400_BAD_REQUEST,
+                "typology_incompatible",
+                body["detail"],
+                extra=body["extra"],
             ) from error
         except (InvalidEngineRequest, ValueError) as error:
             raise contract_error(

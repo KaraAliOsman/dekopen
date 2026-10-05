@@ -20,8 +20,8 @@ MUTATIONS = {
     "sliding-glass-width": ("width -= sliding.sliding_glazing_deduction_width_mm", "width -= sliding.sliding_glazing_deduction_width_mm + DELTA"),
     "sliding-glass-height": ("height -= sliding.sliding_glazing_deduction_height_mm", "height -= sliding.sliding_glazing_deduction_height_mm + DELTA"),
     "door-jamb": ("length_mm=nominal_height_mm + per_end,", "length_mm=nominal_height_mm + per_end + DELTA,"),
-    "door-width": ("clear_width - _TWO * params.door_leaf_side_clearance_mm", "clear_width - _TWO * params.door_leaf_side_clearance_mm + DELTA"),
-    "door-height": ("- params.door_bottom_clearance_mm\n        + params.sash_overlap_mm", "- params.door_bottom_clearance_mm\n        + params.sash_overlap_mm + DELTA"),
+    "door-width": ("rect.width_mm - _TWO * side", "rect.width_mm - _TWO * side + DELTA"),
+    "door-height": ("- params.door_bottom_clearance_mm + overlap", "- params.door_bottom_clearance_mm + overlap + DELTA"),
 }
 
 

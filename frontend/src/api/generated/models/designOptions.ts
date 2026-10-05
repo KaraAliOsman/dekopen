@@ -13,11 +13,13 @@ import type { HandlePolicy } from "./handlePolicy";
 import type { HardwareFamily } from "./hardwareFamily";
 import type { HardwareOption } from "./hardwareOption";
 import type { KitChoice } from "./kitChoice";
+import type { OpeningOption } from "./openingOption";
 import type { PanelChoice } from "./panelChoice";
 import type { ProfileChoice } from "./profileChoice";
 
 export interface DesignOptions {
   profiles: ProfileChoice[];
+  opening_options?: OpeningOption[];
   glazing_thicknesses: string[];
   hardware_kits: KitChoice[];
   hardware_families: HardwareFamily[];

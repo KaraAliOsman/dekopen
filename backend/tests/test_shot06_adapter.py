@@ -87,5 +87,6 @@ def test_system_params_contract_accounts_for_every_field() -> None:
         "system_family", "cut_rules", "reinforcement_rules", "typology_limits",
         "glass_products", "glass_safety_rules", "glass_type_limits",
         "hardware_families", "hardware_options",
+        "opening_capabilities",
     }
-    assert len(demo_60_params().model_dump()) == 35
+    assert len(demo_60_params().model_dump()) == 36

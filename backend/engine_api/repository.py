@@ -31,7 +31,16 @@ from dekopen_engine import (
     SystemFamily,
     SystemParams,
     TypologyLimit,
+    default_capabilities_for_family,
     openings_for_family,
+    spec_options_from_capabilities,
+)
+from dekopen_engine.models import (
+    LeafRole,
+    OpeningCapability,
+    OpeningDirection,
+    OpeningMovement,
+    UnitKind,
 )
 from dekopen_engine.glass_composition import (
     GlassComposition,
@@ -62,8 +71,15 @@ class VisibleProfileSystem:
     is_demo: bool
     system_family: SystemFamily
     typology_limits: tuple[dict[str, object], ...] = ()
+    opening_capabilities: tuple[OpeningCapability, ...] = ()
 
     def public_dict(self) -> dict[str, object]:
+        # The declared capability rows narrow the family's physical
+        # repertoire (D03); an empty table falls back to the family.
+        capabilities = (
+            self.opening_capabilities
+            or default_capabilities_for_family(self.system_family)
+        )
         return {
             "id": str(self.id),
             "code": self.code,
@@ -77,6 +93,9 @@ class VisibleProfileSystem:
             # Declared leaf envelope per typology with its provenance — the
             # editor and quotation show it next to the chosen system.
             "typology_limits": list(self.typology_limits),
+            # The concrete compositions the system admits — the editor,
+            # the API and the IA only offer these (D03).
+            "opening_options": spec_options_from_capabilities(capabilities),
         }
 
 
@@ -133,6 +152,21 @@ def _article_from_row(row: Sequence[object], *, offset: int = 0) -> EffectivePro
     )
 
 
+def _capability_from_row(
+    row: Sequence[object], *, offset: int = 0
+) -> OpeningCapability:
+    return OpeningCapability(
+        movement=OpeningMovement(str(row[offset])),
+        directions=tuple(
+            OpeningDirection(value) for value in row[offset + 1] or ()
+        ),
+        leaf_roles=tuple(LeafRole(value) for value in row[offset + 2] or ()),
+        unit_kinds=tuple(UnitKind(value) for value in row[offset + 3] or ()),
+        max_leaves=int(row[offset + 4]),
+        fixed_in_sash=bool(row[offset + 5]),
+    )
+
+
 def _hardware_contents(value: object) -> list[HardwareComponent]:
     # SELECT contents::text avoids driver JSON decoding through binary floats.
     if not isinstance(value, str):
@@ -170,6 +204,22 @@ class SystemParamsRepository:
                 [active_org_id],
             )
             limit_rows = cursor.fetchall()
+            cursor.execute(
+                """
+                SELECT system_id, movement, directions, leaf_roles,
+                       unit_kinds, max_leaves, fixed_in_sash
+                FROM public.system_opening_capabilities
+                WHERE org_id IS NULL OR org_id = %s
+                ORDER BY system_id, movement
+                """,
+                [active_org_id],
+            )
+            capability_rows = cursor.fetchall()
+        capabilities_by_system: dict[str, list[OpeningCapability]] = {}
+        for row in capability_rows:
+            capabilities_by_system.setdefault(str(row[0]), []).append(
+                _capability_from_row(row, offset=1)
+            )
         limits_by_system: dict[str, list[dict[str, object]]] = {}
         for row in limit_rows:
             limits_by_system.setdefault(str(row[0]), []).append({
@@ -191,6 +241,9 @@ class SystemParamsRepository:
                 system_family=SystemFamily(str(row[4])),
                 typology_limits=tuple(
                     limits_by_system.get(str(row[0]), [])
+                ),
+                opening_capabilities=tuple(
+                    capabilities_by_system.get(str(row[0]), [])
                 ),
             )
             for row in rows
@@ -263,7 +316,27 @@ class SystemParamsRepository:
             glass_type_limits=self._load_glass_type_limits(active_org_id),
             hardware_families=self._load_hardware_families(system_id, active_org_id),
             hardware_options=self._load_hardware_options(system_id, active_org_id),
+            opening_capabilities=self._load_opening_capabilities(
+                system_id, active_org_id
+            ),
         )
+
+    def _load_opening_capabilities(
+        self, system_id: UUID, active_org_id: UUID
+    ) -> tuple[OpeningCapability, ...]:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                SELECT movement, directions, leaf_roles, unit_kinds,
+                       max_leaves, fixed_in_sash
+                FROM public.system_opening_capabilities
+                WHERE {self._SCOPE_SQL}
+                ORDER BY movement
+                """,
+                [system_id, active_org_id],
+            )
+            rows = cursor.fetchall()
+        return tuple(_capability_from_row(row) for row in rows)
 
     _SCOPE_SQL = (
         "system_id = %s AND (org_id = %s OR (org_id IS NULL AND system_id IN "

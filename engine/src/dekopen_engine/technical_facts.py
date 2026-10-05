@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from dekopen_engine.hardware import HardwareCandidateEvaluation
 from dekopen_engine.manufacturing_trace import GeometryManufacturingTraceV1
-from dekopen_engine.models import BayOpeningType, EngineResult, HardwareKitRule, RailType
+from dekopen_engine.models import EngineResult, HardwareKitRule, LeafRole, RailType
 from dekopen_engine.weight import ExactLeafWeight
 
 
@@ -32,7 +32,8 @@ class InfillTechnicalFacts:
 class LeafTechnicalFacts:
     bay_id: str
     leaf_id: str | None
-    opening_type: BayOpeningType
+    # D03: emitted opening identity — legacy enum value or canonical key.
+    opening_type: str
     rail_type: RailType
     finished_width_mm: Decimal
     finished_height_mm: Decimal
@@ -40,6 +41,8 @@ class LeafTechnicalFacts:
     candidates: list[HardwareCandidateEvaluation]
     selected_kit: HardwareKitRule | None
     exact_weight: ExactLeafWeight | None
+    # D03: the leaf's role in its composition (SINGLE/ACTIVE/PASSIVE).
+    leaf_role: LeafRole = LeafRole.SINGLE
 
 
 @dataclass(frozen=True, slots=True)

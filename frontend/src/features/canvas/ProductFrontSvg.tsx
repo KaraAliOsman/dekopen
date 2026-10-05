@@ -3,8 +3,14 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerE
 import type { ProductIssue } from "../../api/generated/models";
 import { fmtMm, parseLocaleNumber } from "../../format";
 import { t } from "../../i18n/es-CL";
-import type { IntentNode } from "./intentEditing";
-import { isSlidingOpening, resolvedSlidingLayout } from "./intentEditing";
+import type { IntentNode, UnitKind } from "./intentEditing";
+import {
+  bayLeafTraces,
+  isSlidingOpening,
+  OPTION_SPEC_KEY,
+  resolvedSlidingLayout,
+  type OpeningSpecPayload,
+} from "./intentEditing";
 import { OPENING_OPTIONS } from "./openings";
 import { memberSurface, type MemberSurface } from "./materials";
 import { contourOutset, contourPathD, insetContourPoints, pointsPathD } from "./contourGeometry";
@@ -171,7 +177,27 @@ function normalizeDimension(candidate: string): string | null {
   return value.toFixed(2);
 }
 
-/** Industry opening glyph: hinge side = triangle base, handle = apex. */
+/** Parse an emitted spec key — "TURN:LEFT:OUTWARD[:ROLE]" or the DOOR:
+ * prefixed leaf form — into the parts the glyph needs. */
+function glyphSpec(kind: string): {
+  movement: string;
+  hinge: "LEFT" | "RIGHT" | "TOP" | "BOTTOM" | null;
+  direction: "INWARD" | "OUTWARD" | null;
+} | null {
+  const body = kind.startsWith("DOOR:") ? kind.slice(5) : kind;
+  const parts = body.split(":");
+  const movement = parts[0];
+  if (!movement || !/^[A-Z_]+$/.test(movement) || !parts[1]) return null;
+  const hinge = ["LEFT", "RIGHT", "TOP", "BOTTOM"].includes(parts[1])
+    ? (parts[1] as "LEFT" | "RIGHT" | "TOP" | "BOTTOM")
+    : null;
+  const direction = parts[2] === "OUTWARD" ? "OUTWARD" : parts[2] === "INWARD" ? "INWARD" : null;
+  return { movement, hinge, direction };
+}
+
+/** Industry opening glyph: hinge side = triangle base, handle = apex.
+ * DIN interior view (D03): a continuous line opens toward the viewer
+ * (INWARD); a dashed line opens away (OUTWARD). */
 export function OpeningGlyph({
   opening,
   x,
@@ -196,23 +222,64 @@ export function OpeningGlyph({
   const cx = x + w / 2;
   const cy = y + h / 2;
   const kind = opening ?? "FIXED";
+  const spec = glyphSpec(kind);
+  const isDoor = kind === "DOOR_ENTRY" || kind.startsWith("DOOR:");
+  // DIN: continuous = opens toward the interior viewer; dashed = outward.
+  // Legacy enums carry their direction in the name (AWNING is outward).
+  const dashed = spec ? spec.direction === "OUTWARD" : kind === "AWNING";
+  const dash = dashed ? "6 3" : undefined;
+  const hinge = spec
+    ? spec.hinge
+    : kind.includes("RIGHT")
+      ? "RIGHT"
+      : kind.includes("LEFT")
+        ? "LEFT"
+        : kind === "AWNING"
+          ? "TOP"
+          : isDoor
+            ? doorHinge === "right"
+              ? "RIGHT"
+              : "LEFT"
+            : null;
+  const sideHinge = hinge === "LEFT" || hinge === "RIGHT";
+  const movement = spec?.movement ?? kind;
   return (
-    <g className={`opening-glyph opening-${kind.toLowerCase()}`} aria-hidden="true">
-      {kind.includes("RIGHT") && (
-        <polyline points={`${right},${top} ${left},${cy} ${right},${bottom}`} fill="none" />
+    <g
+      className={`opening-glyph opening-${kind.toLowerCase().replace(/[:|]/g, "-")}`}
+      aria-hidden="true"
+    >
+      {hinge === "RIGHT" && (
+        <polyline
+          points={`${right},${top} ${left},${cy} ${right},${bottom}`}
+          fill="none"
+          strokeDasharray={dash}
+        />
       )}
-      {kind.includes("LEFT") && (
-        <polyline points={`${left},${top} ${right},${cy} ${left},${bottom}`} fill="none" />
+      {hinge === "LEFT" && (
+        <polyline
+          points={`${left},${top} ${right},${cy} ${left},${bottom}`}
+          fill="none"
+          strokeDasharray={dash}
+        />
       )}
-      {kind.startsWith("TILT") && (
-        <polyline points={`${left},${bottom} ${cx},${top} ${right},${bottom}`} fill="none" />
+      {/* Hinged at the bottom (banderola / abatimiento inferior) or the
+       * tilt arm of an oscilobatiente — base on the sill edge. */}
+      {(hinge === "BOTTOM" || movement === "TILT_TURN" || kind.startsWith("TILT_TURN")) && (
+        <polyline
+          points={`${left},${bottom} ${cx},${top} ${right},${bottom}`}
+          fill="none"
+          strokeDasharray={dash}
+        />
       )}
-      {/* Awning is top-hinged — its triangle mirrors the issued doc (base at
-          the top edge), not the tilt glyph. */}
-      {kind === "AWNING" && (
-        <polyline points={`${left},${top} ${cx},${bottom} ${right},${top}`} fill="none" />
+      {/* Top-hinged proyectante — base on the head edge. */}
+      {(hinge === "TOP" || kind === "AWNING") && movement !== "TILT_TURN" && (
+        <polyline
+          points={`${left},${top} ${cx},${bottom} ${right},${top}`}
+          fill="none"
+          strokeDasharray={dash}
+        />
       )}
-      {kind.startsWith("SLIDING") &&
+      {(movement === "SLIDE" || kind.startsWith("SLIDING")) &&
         (() => {
           const panes = { SLIDING_3L: 3, SLIDING_4L: 4 }[kind] ?? 2;
           const paneW = (right - left) / panes;
@@ -233,24 +300,28 @@ export function OpeningGlyph({
         })()}
       {/* A door glyph shows its swing: quarter-arc centred on the bottom
        * hinge corner plus a jamb tick on the hinge side. */}
-      {kind === "DOOR_ENTRY" &&
+      {isDoor &&
+        sideHinge &&
         (() => {
-          const hingeX = doorHinge === "right" ? right : left;
+          const hingeX = hinge === "RIGHT" ? right : left;
           const sweepTo =
-            doorHinge === "right" ? right - Math.min(w, h) * 0.8 : left + Math.min(w, h) * 0.8;
+            hinge === "RIGHT" ? right - Math.min(w, h) * 0.8 : left + Math.min(w, h) * 0.8;
           const arcR = Math.min(w, h) * 0.8;
-          const sweep = doorHinge === "right" ? 1 : 0;
+          const sweep = hinge === "RIGHT" ? 1 : 0;
           return (
             <>
               <line x1={hingeX} y1={top} x2={hingeX} y2={bottom} opacity={0.5} />
               <path
                 d={`M ${sweepTo} ${bottom} A ${arcR} ${arcR} 0 0 ${sweep} ${hingeX} ${bottom - arcR}`}
                 fill="none"
+                strokeDasharray={dash}
               />
             </>
           );
         })()}
-      {kind === "FIXED" && <line x1={left} y1={top} x2={right} y2={bottom} opacity={0.18} />}
+      {(kind === "FIXED" || spec?.movement === "FIXED") && (
+        <line x1={left} y1={top} x2={right} y2={bottom} opacity={0.18} />
+      )}
     </g>
   );
 }
@@ -547,7 +618,8 @@ function HandleLever({
 }
 
 /** A leaf bay: sash ring (when operable), glazing bead sightline, glass or
- * panel infill, opening glyph and handle lever. */
+ * panel infill, opening glyph and handle lever. Spec leaves (D03) render
+ * per leaf — a french pair draws two sashes meeting at the inversor. */
 function Bay({
   node,
   region,
@@ -555,6 +627,7 @@ function Bay({
   selected = false,
   onSelect,
   moduleBottom,
+  unitKind = "WINDOW",
 }: {
   node: IntentNode;
   region: Region;
@@ -564,8 +637,20 @@ function Bay({
   /** Sheet-space y of the module's outer bottom edge — the datum the
    * declared handle height measures up from (OUTER_BOTTOM authority). */
   moduleBottom?: number;
+  /** Declared unit kind of the unit root (door units draw thresholds). */
+  unitKind?: UnitKind;
 }): JSX.Element {
+  const leafTraces = bayLeafTraces(node);
   const opening = node.opening_type ?? "FIXED";
+  const emittedKey = leafTraces.some((leaf) => leaf.opening)
+    ? leafTraces.map((leaf) => `${leaf.slot}:${leaf.key}`).join("|")
+    : null;
+  const ariaLabelKey = emittedKey
+    ? (OPENING_OPTIONS.find(
+        ([value]) =>
+          OPTION_SPEC_KEY[value] === emittedKey || OPTION_SPEC_KEY[value] === `DOOR:${emittedKey}`,
+      )?.[1] ?? "intent.fixed")
+    : (OPENING_OPTIONS.find(([value]) => value === opening)?.[1] ?? "intent.fixed");
   const bead = members.beadFor(node.glass_thickness_mm ?? null);
   const insulated = Number(node.glass_thickness_mm ?? "0") >= 12;
   const sashSurface = memberSurface(members.sash.material);
@@ -576,7 +661,7 @@ function Bay({
           onSelect();
         },
         role: "button" as const,
-        "aria-label": `${t("intent.bay")} · ${t(OPENING_OPTIONS.find(([value]) => value === opening)?.[1] ?? "intent.fixed")}`,
+        "aria-label": `${t("intent.bay")} · ${t(ariaLabelKey)}`,
         tabIndex: 0,
         onKeyDown: (event: React.KeyboardEvent) => {
           if (event.key === "Enter" || event.key === " ") {
@@ -727,12 +812,37 @@ function Bay({
     );
   }
 
-  const isDoor = opening === "DOOR_ENTRY";
-  const operable = opening !== "FIXED";
+  const isDoor = opening === "DOOR_ENTRY" || unitKind === "DOOR";
   const reveal = 3;
 
+  /** Resolve a leaf's declared/legacy hinge side. */
+  const leafHinge = (
+    openingSpec: OpeningSpecPayload | null,
+    key: string,
+  ): "LEFT" | "RIGHT" | "TOP" | "BOTTOM" | null => {
+    if (openingSpec?.hinge_side && openingSpec.hinge_side !== "NONE") {
+      return openingSpec.hinge_side;
+    }
+    if (key.includes("LEFT")) return "LEFT";
+    if (key.includes("RIGHT")) return "RIGHT";
+    if (key === "AWNING") return "TOP";
+    if (key === "DOOR_ENTRY") return node.door_handedness ?? "LEFT";
+    return null;
+  };
+
+  const leafCount = leafTraces.length;
+  const leafDraws = leafTraces.map((leaf) => {
+    const operable = leaf.opening ? leaf.opening.movement !== "FIXED" : leaf.key !== "FIXED";
+    // Fijo en hoja draws its sash ring but takes no opening glyph.
+    const sash = operable || leaf.opening?.fixed_in_sash === true;
+    const hinge = leafHinge(leaf.opening, leaf.key);
+    const passive = leaf.opening?.leaf_role === "PASSIVE";
+    return { leaf, operable, sash, hinge, passive };
+  });
+  const anySash = leafDraws.some((leaf) => leaf.sash);
+
   const thresholdH = isDoor ? (members.threshold?.faceWidthMm ?? 30) : 0;
-  const sashArea: Region = operable
+  const sashArea: Region = anySash
     ? {
         x: region.x + reveal,
         y: region.y + reveal,
@@ -741,35 +851,48 @@ function Bay({
       }
     : region;
   const sashT = members.sash.faceWidthMm;
-  const glass: Region = operable
-    ? {
-        x: sashArea.x + sashT,
-        y: sashArea.y + sashT,
-        w: sashArea.w - sashT * 2,
-        h: sashArea.h - sashT * 2,
-      }
-    : {
-        x: region.x + bead,
-        y: region.y + bead,
-        w: region.w - bead * 2,
-        h: region.h - bead * 2,
-      };
-  const pane: Region = operable
-    ? { x: glass.x + bead, y: glass.y + bead, w: glass.w - bead * 2, h: glass.h - bead * 2 }
-    : glass;
-  const isPanel = Boolean(node.panel_article_sku);
-  // DIN: the opening name is the hinge side; the handle sits opposite. A
-  // door carries no side in its opening type — the declared
-  // `door_handedness` (hinge side) decides, defaulting to hinge-left.
-  const handleSide = opening.includes("LEFT")
-    ? "right"
-    : opening.includes("RIGHT")
-      ? "left"
-      : isDoor
-        ? node.door_handedness === "RIGHT"
-          ? "left"
-          : "right"
+  // Each leaf owns an equal column of the sash area — pair leaves meet at
+  // the inversor stile straddling the boundary.
+  const leafBoxes: Region[] = leafDraws.map((_, index) => ({
+    x: sashArea.x + (sashArea.w * index) / leafCount,
+    y: sashArea.y,
+    w: sashArea.w / leafCount,
+    h: sashArea.h,
+  }));
+  const leafGeom = leafDraws.map((leaf, index) => {
+    const box = leafBoxes[index]!;
+    const glassBox: Region = leaf.sash
+      ? { x: box.x + sashT, y: box.y + sashT, w: box.w - sashT * 2, h: box.h - sashT * 2 }
+      : { x: box.x + bead, y: box.y + bead, w: box.w - bead * 2, h: box.h - bead * 2 };
+    const pane: Region = leaf.sash
+      ? {
+          x: glassBox.x + bead,
+          y: glassBox.y + bead,
+          w: glassBox.w - bead * 2,
+          h: glassBox.h - bead * 2,
+        }
+      : glassBox;
+    // DIN: the handle sits opposite the hinges; a top/bottom-hinged leaf
+    // centres its handle on the free member.
+    const handleSide: "left" | "right" | null =
+      leaf.operable && !leaf.passive
+        ? leaf.hinge === "LEFT"
+          ? "right"
+          : leaf.hinge === "RIGHT"
+            ? "left"
+            : null
         : null;
+    const handleTop =
+      leaf.operable && !leaf.passive && (leaf.hinge === "BOTTOM" || leaf.hinge === "TOP");
+    const doorHinge =
+      leaf.hinge === "RIGHT"
+        ? ("right" as const)
+        : leaf.hinge === "LEFT"
+          ? ("left" as const)
+          : undefined;
+    return { ...leaf, box, glassBox, pane, handleSide, handleTop, doorHinge };
+  });
+  const isPanel = Boolean(node.panel_article_sku);
   // OUTER_BOTTOM datum resolution shared with the 3D scene: a declared
   // height that lands off the leaf is reported (is-datum-invalid flag),
   // not silently clamped into a plausible-looking position.
@@ -787,56 +910,72 @@ function Bay({
       className={`module-bay${selected ? " is-selected" : ""}${onSelect ? " bay-pickable" : ""}`}
       {...baySelectProps}
     >
-      {operable && (
-        <>
-          <Member
-            x={sashArea.x}
-            y={sashArea.y}
-            w={sashArea.w}
-            h={Math.max(sashArea.h, 0)}
-            surface={sashSurface}
-            className="member-sash"
-          />
-          {/* glazing beads: sightline ring inside the sash */}
-          <rect
-            className="member-bead"
-            x={glass.x}
-            y={glass.y}
-            width={Math.max(glass.w, 0)}
-            height={Math.max(glass.h, 0)}
-          />
-        </>
+      {leafGeom.map(
+        (leaf, index) =>
+          leaf.sash && (
+            <g key={`sash-${index}`}>
+              <Member
+                x={leaf.box.x}
+                y={leaf.box.y}
+                w={leaf.box.w}
+                h={Math.max(leaf.box.h, 0)}
+                surface={sashSurface}
+                className="member-sash"
+              />
+              {/* glazing beads: sightline ring inside the sash */}
+              <rect
+                className="member-bead"
+                x={leaf.glassBox.x}
+                y={leaf.glassBox.y}
+                width={Math.max(leaf.glassBox.w, 0)}
+                height={Math.max(leaf.glassBox.h, 0)}
+              />
+            </g>
+          ),
       )}
-      {isPanel ? (
-        <rect
-          className="bay-panel"
-          x={pane.x}
-          y={pane.y}
-          width={Math.max(pane.w, 0)}
-          height={Math.max(pane.h, 0)}
+      {leafCount > 1 && (
+        <Member
+          x={sashArea.x + sashArea.w / 2 - sashT * 0.45}
+          y={sashArea.y}
+          w={sashT * 0.9}
+          h={Math.max(sashArea.h, 0)}
+          surface={sashSurface}
+          className="member-inversor"
         />
-      ) : (
-        <g>
+      )}
+      {leafGeom.map((leaf, index) =>
+        isPanel ? (
           <rect
-            className="module-glass"
-            x={pane.x}
-            y={pane.y}
-            width={Math.max(pane.w, 0)}
-            height={Math.max(pane.h, 0)}
+            key={`pane-${index}`}
+            className="bay-panel"
+            x={leaf.pane.x}
+            y={leaf.pane.y}
+            width={Math.max(leaf.pane.w, 0)}
+            height={Math.max(leaf.pane.h, 0)}
           />
-          {/* The sheen only belongs on inert glass — under an operable leaf
-           * it crosses the opening glyph and reads as a scribble. */}
-          {pane.w > 30 && pane.h > 30 && !node.opening_type && (
-            <line
-              className="glass-sheen"
-              x1={pane.x + pane.w * 0.18}
-              y1={pane.y + pane.h * 0.82}
-              x2={pane.x + pane.w * 0.82}
-              y2={pane.y + pane.h * 0.18}
+        ) : (
+          <g key={`pane-${index}`}>
+            <rect
+              className="module-glass"
+              x={leaf.pane.x}
+              y={leaf.pane.y}
+              width={Math.max(leaf.pane.w, 0)}
+              height={Math.max(leaf.pane.h, 0)}
             />
-          )}
-          {insulated && <InsulatedRing pane={pane} />}
-        </g>
+            {/* The sheen only belongs on inert glass — under an operable leaf
+             * it crosses the opening glyph and reads as a scribble. */}
+            {leaf.pane.w > 30 && leaf.pane.h > 30 && !leaf.operable && (
+              <line
+                className="glass-sheen"
+                x1={leaf.pane.x + leaf.pane.w * 0.18}
+                y1={leaf.pane.y + leaf.pane.h * 0.82}
+                x2={leaf.pane.x + leaf.pane.w * 0.82}
+                y2={leaf.pane.y + leaf.pane.h * 0.18}
+              />
+            )}
+            {insulated && <InsulatedRing pane={leaf.pane} />}
+          </g>
+        ),
       )}
       {isDoor && thresholdH > 0 && (
         <Member
@@ -848,48 +987,98 @@ function Bay({
           className="member-threshold"
         />
       )}
-      {pane.w > 60 && pane.h > 60 && (
-        <OpeningGlyph
-          opening={node.opening_type}
-          x={pane.x}
-          y={pane.y}
-          w={pane.w}
-          h={pane.h}
-          doorHinge={node.door_handedness === "RIGHT" ? "right" : "left"}
-        />
+      {leafGeom.map((leaf, index) =>
+        leaf.operable && leaf.pane.w > 60 && leaf.pane.h > 60 ? (
+          <OpeningGlyph
+            key={`glyph-${index}`}
+            opening={leaf.leaf.key}
+            x={leaf.pane.x}
+            y={leaf.pane.y}
+            w={leaf.pane.w}
+            h={leaf.pane.h}
+            doorHinge={leaf.doorHinge ?? (node.door_handedness === "RIGHT" ? "right" : "left")}
+          />
+        ) : null,
       )}
-      {handleSide && operable && (
-        <HandleLever
-          x={
-            handleSide === "right"
-              ? sashArea.x + sashArea.w - sashT * 0.55
-              : sashArea.x + sashT * 0.55
-          }
-          // The lever mounts at the declared height measured up from the
-          // module's outer bottom edge — the OUTER_BOTTOM datum the
-          // manufacturing authority resolves (1050 mm when undeclared). A
-          // declared value that lands off the leaf draws clamped AND
-          // flagged — the incompatibility is shown, never hidden.
-          y={datumY}
-          side={handleSide}
-          invalid={datumInvalid}
-          declaredMm={declaredMm ?? undefined}
-        />
-      )}
-      {isDoor && operable && (
-        <g className="door-hinges" aria-hidden="true">
-          {[0.18, 0.5, 0.82].map((ratio) => (
+      {leafGeom.map((leaf, index) => {
+        if (!leaf.operable || leaf.passive) return null;
+        if (leaf.handleTop) {
+          // Banderola / abatimiento: handle centred on the free (top) member.
+          const hx = leaf.box.x + leaf.box.w / 2;
+          const hy = leaf.box.y + sashT * 0.9;
+          return (
+            <g key={`handle-${index}`} transform={`rotate(-90 ${hx} ${hy})`}>
+              <HandleLever x={hx} y={hy} side="right" invalid={false} />
+            </g>
+          );
+        }
+        if (!leaf.handleSide) return null;
+        return (
+          <HandleLever
+            key={`handle-${index}`}
+            x={
+              leaf.handleSide === "right"
+                ? leaf.box.x + leaf.box.w - sashT * 0.55
+                : leaf.box.x + sashT * 0.55
+            }
+            // The lever mounts at the declared height measured up from the
+            // module's outer bottom edge — the OUTER_BOTTOM datum the
+            // manufacturing authority resolves (1050 mm when undeclared). A
+            // declared value that lands off the leaf draws clamped AND
+            // flagged — the incompatibility is shown, never hidden.
+            y={datumY}
+            side={leaf.handleSide}
+            invalid={datumInvalid}
+            declaredMm={declaredMm ?? undefined}
+          />
+        );
+      })}
+      {leafGeom.map((leaf, index) =>
+        leaf.passive && leaf.hinge && (leaf.hinge === "LEFT" || leaf.hinge === "RIGHT") ? (
+          <g key={`falleba-${index}`} className="falleba-bolts" aria-hidden="true">
+            {/* Flush bolts at the passive leaf's free stile, top and bottom. */}
             <rect
-              key={ratio}
-              className="door-hinge"
-              x={handleSide === "left" ? sashArea.x + sashArea.w - sashT * 0.34 : sashArea.x}
-              y={sashArea.y + sashArea.h * ratio - sashT * 0.28}
-              width={sashT * 0.34}
-              height={sashT * 0.56}
+              x={
+                leaf.hinge === "LEFT"
+                  ? leaf.box.x + leaf.box.w - sashT * 0.8
+                  : leaf.box.x + sashT * 0.45
+              }
+              y={leaf.box.y + sashT * 0.35}
+              width={sashT * 0.35}
+              height={Math.min(leaf.box.h * 0.06, 22)}
             />
-          ))}
-        </g>
+            <rect
+              x={
+                leaf.hinge === "LEFT"
+                  ? leaf.box.x + leaf.box.w - sashT * 0.8
+                  : leaf.box.x + sashT * 0.45
+              }
+              y={leaf.box.y + leaf.box.h - sashT * 0.35 - Math.min(leaf.box.h * 0.06, 22)}
+              width={sashT * 0.35}
+              height={Math.min(leaf.box.h * 0.06, 22)}
+            />
+          </g>
+        ) : null,
       )}
+      {isDoor &&
+        leafGeom.map((leaf, index) =>
+          leaf.operable && leaf.doorHinge ? (
+            <g key={`hinges-${index}`} className="door-hinges" aria-hidden="true">
+              {[0.18, 0.5, 0.82].map((ratio) => (
+                <rect
+                  key={ratio}
+                  className="door-hinge"
+                  x={
+                    leaf.doorHinge === "left" ? leaf.box.x : leaf.box.x + leaf.box.w - sashT * 0.34
+                  }
+                  y={leaf.box.y + leaf.box.h * ratio - sashT * 0.28}
+                  width={sashT * 0.34}
+                  height={sashT * 0.56}
+                />
+              ))}
+            </g>
+          ) : null,
+        )}
       {selectRing}
     </g>
   );
@@ -927,6 +1116,7 @@ function ModuleTree({
   onSelectDivision,
   showSplitDims = false,
   moduleBottom,
+  unitKind = "WINDOW",
 }: {
   node: IntentNode;
   region: Region;
@@ -952,6 +1142,9 @@ function ModuleTree({
   /** Sheet-space y of the module's outer bottom edge, threaded to bays for
    * the declared handle datum. */
   moduleBottom?: number;
+  /** The unit root's declared kind — bays below a door unit draw door
+   * rails/thresholds without repeating the declaration per bay. */
+  unitKind?: UnitKind;
 }): JSX.Element {
   if (node.type === "ROOT" && node.children?.length === 1 && node.children[0]) {
     return (
@@ -970,6 +1163,7 @@ function ModuleTree({
         onSelectDivision={onSelectDivision}
         showSplitDims={showSplitDims}
         moduleBottom={moduleBottom}
+        unitKind={node.children[0].unit_kind ?? "WINDOW"}
       />
     );
   }
@@ -1029,6 +1223,7 @@ function ModuleTree({
           onSelectDivision={onSelectDivision}
           showSplitDims={showSplitDims}
           moduleBottom={moduleBottom}
+          unitKind={node.unit_kind ?? unitKind}
         />
         <ModuleTree
           node={second!}
@@ -1045,6 +1240,7 @@ function ModuleTree({
           onSelectDivision={onSelectDivision}
           moduleBottom={moduleBottom}
           showSplitDims={showSplitDims}
+          unitKind={node.unit_kind ?? unitKind}
         />
         {/* The mullion, its dim and the grip draw after both subtrees so the
             bar stays selectable and its label stays visible where the second
@@ -1112,6 +1308,7 @@ function ModuleTree({
       selected={selectedBayId === node.id}
       onSelect={onSelectBay ? () => onSelectBay(node.id) : undefined}
       moduleBottom={moduleBottom}
+      unitKind={node.unit_kind ?? unitKind}
     />
   );
 }

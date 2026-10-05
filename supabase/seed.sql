@@ -2034,3 +2034,289 @@ FROM (VALUES
 ON CONFLICT DO NOTHING;
 
 COMMIT;
+
+-- ============================================================
+-- D03 — aperturas reales en la semilla: inversor para la francesa,
+-- herrajes de las tipologías nuevas, límites por eje canónico y la
+-- tabla de capacidades que cada sistema declara explícitamente.
+-- ============================================================
+BEGIN;
+
+-- Inversores (montante de hoja pasiva) para los casement de la semilla.
+INSERT INTO public.profile_articles (
+    id, system_id, org_id, sku, name, role, material,
+    face_width_mm, commercial_length_mm, welding_loss_mm,
+    reinforcement_gap_mm, weight_kg_m, steel_weight_kg_m, data_provenance
+)
+SELECT
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/' || s.code || '/' || a.sku),
+    s.id, NULL, a.sku, a.name, 'INVERSOR'::public.profile_role, 'PVC',
+    a.face, 6000.00, a.weld, a.gap, a.weight, 1.7000, 'SEED_SYNTHETIC'
+FROM public.profile_systems s
+CROSS JOIN (VALUES
+    ('DEMO_60', 'INVERSOR-60', 'Inversor Hoja Pasiva Demo 60', 85.00, 6.00, 15.00, 2.4000),
+    ('DEMO_70', 'INVERSOR-70', 'Inversor Hoja Pasiva Demo 70', 88.00, 6.00, 15.00, 2.6000)
+) AS a(sys_code, sku, name, face, weld, gap, weight)
+WHERE s.code = a.sys_code AND s.is_global = TRUE
+ON CONFLICT (system_id, sku) DO NOTHING;
+
+-- Regla de corte del inversor: suelda a 45° como el SASH; el descuento de
+-- encuentro es dato sintético del catálogo demo.
+INSERT INTO public.profile_cut_rules (
+    id, system_id, org_id, role, cut_angle_deg, welded_ends,
+    interlock_deduction_mm, rounding_mm, data_provenance
+)
+SELECT
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/' || s.code || '/cutrule/INVERSOR'),
+    s.id, NULL, 'INVERSOR'::public.profile_role, 45.00, 2, 0.00, 0.01, 'SEED_SYNTHETIC'
+FROM public.profile_systems s
+WHERE s.code IN ('DEMO_60', 'DEMO_70') AND s.is_global = TRUE
+ON CONFLICT DO NOTHING;
+
+-- Refuerzo del inversor con la misma política que el SASH (PVC soldado).
+INSERT INTO public.profile_reinforcement_rules (
+    id, system_id, org_id, role, finish_class, min_length_mm,
+    mandatory, screws_per_m, screw_sku, data_provenance
+)
+SELECT
+    uuid_generate_v5(uuid_ns_url(),
+        'https://dekopen.local/catalog/' || s.code || '/reinforce/INVERSOR/' || finish || '/' || min_len),
+    s.id, NULL, 'INVERSOR'::public.profile_role, finish, min_len,
+    TRUE, 4.00, 'TORNILLO-4X16', 'SEED_SYNTHETIC'
+FROM public.profile_systems s
+CROSS JOIN (VALUES
+    ('WHITE'::text, 1000.00::numeric),
+    ('NON_WHITE'::text, 0.00::numeric)
+) AS classes(finish, min_len)
+WHERE s.code IN ('DEMO_60', 'DEMO_70') AND s.is_global = TRUE
+ON CONFLICT DO NOTHING;
+
+-- Suministro del inversor (mismo patrón que el resto de perfiles).
+INSERT INTO public.profile_purchase_mappings
+ (id, profile_article_id, org_id, commercial_sku, manufacturer_name, supplier_name,
+  purchase_unit, physical_stock_identity, stock_color, cutting_profile_id, binding_version)
+SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot07/purchase/' || article.id::text),
+ article.id, NULL, 'COMPRA-' || article.sku, 'Referencia DEKOPEN', 'Proveedor de referencia', 'BAR',
+ uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/physical/profile/' || article.id::text),
+ 'WHITE',
+ uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot07/cutting/DEMO'),
+ 1
+FROM public.profile_articles article
+JOIN public.profile_systems s ON s.id = article.system_id
+WHERE s.code IN ('DEMO_60','DEMO_70')
+  AND s.is_global = TRUE AND article.org_id IS NULL
+  AND article.sku IN ('INVERSOR-60','INVERSOR-70')
+ON CONFLICT (id) DO NOTHING;
+
+-- Acero del inversor con identidad física propia (PARA → subcontrol por
+-- artículo) como en el resto de refuerzos del catálogo demo.
+INSERT INTO public.reinforcement_articles
+ (id, system_id, org_id, parent_profile_article_id, sku, commercial_sku, name,
+  manufacturer_name, supplier_name, stock_length_mm, purchase_unit, is_default,
+  physical_stock_identity, stock_color, cutting_profile_id, binding_version)
+SELECT uuid_generate_v5(uuid_ns_url(),
+        'https://dekopen.local/shot07/steel/' || article.id::text),
+ s.id, NULL, article.id, 'ACERO-' || article.sku, 'COMPRA-ACERO-' || article.sku,
+ 'Acero ' || article.name, 'Referencia DEKOPEN', 'Proveedor de referencia',
+ 6000.00, 'BAR', TRUE,
+ uuid_generate_v5(uuid_ns_url(),
+        'https://dekopen.local/shot09/physical/steel/' || article.id::text),
+ 'WHITE',
+ uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot07/cutting/DEMO'),
+ 1
+FROM public.profile_articles article
+JOIN public.profile_systems s ON s.id = article.system_id
+WHERE s.code IN ('DEMO_60','DEMO_70')
+  AND s.is_global = TRUE AND article.org_id IS NULL
+  AND article.sku IN ('INVERSOR-60','INVERSOR-70')
+  AND NOT EXISTS (SELECT 1 FROM public.reinforcement_articles r
+                  WHERE r.parent_profile_article_id = article.id
+                    AND r.org_id IS NULL)
+ON CONFLICT (id) DO NOTHING;
+
+-- Herrajes de las tipologías D03: banderola, abatimiento de bisagras
+-- abajo y la falleba de la hoja pasiva (francesa y puerta doble).
+INSERT INTO public.hardware_kits (
+    id, org_id, system_id, sku, name, opening_type,
+    min_leaf_width_mm, max_leaf_width_mm,
+    min_leaf_height_mm, max_leaf_height_mm,
+    max_leaf_weight_kg, rail_type, carriages_qty, stay_arms_qty,
+    contents, weight_kg, data_provenance
+)
+SELECT
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/' || s.code || '/' || k.sku),
+    NULL, s.id, k.sku, k.name, k.opening,
+    k.min_w, k.max_w, k.min_h, k.max_h, k.max_kg,
+    'dual', 0, k.stays, k.contents::jsonb, k.weight, 'SEED_SYNTHETIC'
+FROM public.profile_systems s
+CROSS JOIN (VALUES
+    ('DEMO_60', 'KIT-TILT', 'Kit Solo Abatimiento Demo 60', 'TILT',
+     400.00, 1600.00, 400.00, 1200.00, 60.00, 0, 1.80,
+     '[{"sku":"DEMO-BIS-BAND","name":"Bisagra banderola Demo","qty":2,"unit":"unit","category":"HINGE"},
+       {"sku":"DEMO-SCISSOR-TILT","name":"Tijera abatimiento Demo","qty":2,"unit":"unit","category":"FITTING"},
+       {"sku":"DEMO-MAN-BAND","name":"Manilla banderola Demo","qty":1,"unit":"unit","category":"HANDLE"}]'),
+    ('DEMO_60', 'KIT-BOTTOM-HUNG', 'Kit Abatimiento Inferior Demo 60', 'BOTTOM_HUNG',
+     400.00, 1400.00, 500.00, 1600.00, 80.00, 2, 2.20,
+     '[{"sku":"DEMO-BIS-ABAT","name":"Bisagra abatimiento inferior Demo","qty":2,"unit":"unit","category":"HINGE"},
+       {"sku":"DEMO-STAY-BH","name":"Compás retenedor abatimiento Demo","qty":2,"unit":"unit","category":"FITTING"},
+       {"sku":"DEMO-MAN-BAND","name":"Manilla banderola Demo","qty":1,"unit":"unit","category":"HANDLE"}]'),
+    ('DEMO_60', 'KIT-FALLEBA', 'Kit Falleba Hoja Pasiva Demo 60', 'FALLEBA',
+     300.00, 1200.00, 600.00, 2400.00, 100.00, 0, 1.50,
+     '[{"sku":"DEMO-FALLEBA-ROD","name":"Falleba cremallera Demo","qty":1,"unit":"unit","category":"LOCK"},
+       {"sku":"DEMO-FALLEBA-BOLT","name":"Pasador falleba Demo","qty":2,"unit":"unit","category":"FITTING"}]'),
+    ('DEMO_70', 'KIT-TILT-70', 'Kit Solo Abatimiento Demo 70', 'TILT',
+     400.00, 1600.00, 400.00, 1200.00, 65.00, 0, 1.90,
+     '[{"sku":"DEMO-BIS-BAND-70","name":"Bisagra banderola Demo 70","qty":2,"unit":"unit","category":"HINGE"},
+       {"sku":"DEMO-SCISSOR-TILT-70","name":"Tijera abatimiento Demo 70","qty":2,"unit":"unit","category":"FITTING"},
+       {"sku":"DEMO-MAN-70","name":"Manilla demo 70","qty":1,"unit":"unit","category":"HANDLE"}]'),
+    ('DEMO_70', 'KIT-BOTTOM-HUNG-70', 'Kit Abatimiento Inferior Demo 70', 'BOTTOM_HUNG',
+     400.00, 1400.00, 500.00, 1600.00, 85.00, 2, 2.30,
+     '[{"sku":"DEMO-BIS-ABAT-70","name":"Bisagra abatimiento inferior Demo 70","qty":2,"unit":"unit","category":"HINGE"},
+       {"sku":"DEMO-STAY-BH-70","name":"Compás retenedor abatimiento Demo 70","qty":2,"unit":"unit","category":"FITTING"},
+       {"sku":"DEMO-MAN-70","name":"Manilla demo 70","qty":1,"unit":"unit","category":"HANDLE"}]'),
+    ('DEMO_70', 'KIT-FALLEBA-70', 'Kit Falleba Hoja Pasiva Demo 70', 'FALLEBA',
+     300.00, 1200.00, 600.00, 2400.00, 110.00, 0, 1.60,
+     '[{"sku":"DEMO-FALLEBA-ROD-70","name":"Falleba cremallera Demo 70","qty":1,"unit":"unit","category":"LOCK"},
+       {"sku":"DEMO-FALLEBA-BOLT-70","name":"Pasador falleba Demo 70","qty":2,"unit":"unit","category":"FITTING"}]')
+) AS k(sys_code, sku, name, opening, min_w, max_w, min_h, max_h, max_kg, stays, weight, contents)
+WHERE s.code = k.sys_code AND s.is_global = TRUE
+ON CONFLICT (system_id, sku) DO NOTHING;
+
+-- Mapeo de compra de los kits nuevos (el bloque shot09 ya corrió).
+INSERT INTO public.hardware_purchase_mappings
+ (id, hardware_kit_id, org_id, purchasing_sku, manufacturer_name, purchase_unit, version, provenance)
+SELECT uuid_generate_v5(uuid_ns_url(),'https://dekopen.local/shot09/hardware/'||kit.id||'/V1'),
+ kit.id, NULL, 'COMPRA-'||kit.sku, 'Catálogo de demostración', 'KIT', 1,
+ '{"source":"Referencia DEKOPEN","mode":"KIT_ONLY"}'::jsonb
+FROM public.hardware_kits kit
+JOIN public.profile_systems system ON system.id = kit.system_id
+WHERE system.code IN ('DEMO_60','DEMO_70') AND system.is_global = TRUE
+  AND kit.org_id IS NULL
+  AND kit.sku IN ('KIT-TILT','KIT-BOTTOM-HUNG','KIT-FALLEBA',
+                  'KIT-TILT-70','KIT-BOTTOM-HUNG-70','KIT-FALLEBA-70')
+ON CONFLICT (id) DO NOTHING;
+
+-- Límites por eje canónico del modelo D03: las hojas en forma nueva
+-- (TURN:LEFT:OUTWARD, DOOR:TURN:RIGHT:INWARD, TILT, BOTTOM_HUNG,
+-- DOOR_DOUBLE) se acotan contra su eje de movimiento; las que ya traen
+-- nombre enum siguen con su fila heredada.
+INSERT INTO public.system_typology_limits (
+    id, system_id, org_id, opening_type,
+    min_leaf_width_mm, max_leaf_width_mm,
+    min_leaf_height_mm, max_leaf_height_mm,
+    max_leaf_weight_kg, max_aspect_ratio, data_provenance
+)
+SELECT
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/' || s.code || '/limits/' || opening),
+    s.id, NULL, opening, min_w::numeric, max_w::numeric, min_h::numeric,
+    max_h::numeric, max_kg::numeric, aspect::numeric, 'SEED_SYNTHETIC'
+FROM public.profile_systems s
+CROSS JOIN (VALUES
+    ('DEMO_60', 'TURN',        350.00, 1400.00, 400.00, 2500.00, 100.00, 2.80),
+    ('DEMO_60', 'TILT_TURN',   450.00, 1600.00, 450.00, 2500.00, 130.00, NULL),
+    ('DEMO_60', 'TILT',        400.00, 1600.00, 400.00, 1200.00, 60.00,  NULL),
+    ('DEMO_60', 'TOP_HUNG',    400.00, 1800.00, 350.00, 1200.00, 45.00,  NULL),
+    ('DEMO_60', 'BOTTOM_HUNG', 400.00, 1400.00, 500.00, 1600.00, 80.00,  NULL),
+    ('DEMO_60', 'DOOR:TURN',   600.00, 1100.00, 1700.00, 2500.00, 120.00, NULL),
+    ('DEMO_60', 'DOOR_DOUBLE', 500.00, 900.00,  1700.00, 2500.00, 120.00, NULL),
+    ('DEMO_70', 'TURN',        350.00, 1500.00, 400.00, 2500.00, 110.00, 2.80),
+    ('DEMO_70', 'TILT_TURN',   450.00, 1600.00, 450.00, 2500.00, 130.00, NULL),
+    ('DEMO_70', 'TILT',        400.00, 1600.00, 400.00, 1200.00, 65.00,  NULL),
+    ('DEMO_70', 'TOP_HUNG',    400.00, 1800.00, 350.00, 1200.00, 50.00,  NULL),
+    ('DEMO_70', 'BOTTOM_HUNG', 400.00, 1400.00, 500.00, 1600.00, 85.00,  NULL),
+    ('DEMO_70', 'DOOR:TURN',   600.00, 1150.00, 1700.00, 2500.00, 130.00, NULL),
+    ('DEMO_70', 'DOOR_DOUBLE', 500.00, 950.00,  1700.00, 2500.00, 130.00, NULL),
+    ('ALU_65',  'TURN',        350.00, 1000.00, 400.00, 2200.00, 60.00,  NULL),
+    ('ALU_65',  'TILT_TURN',   450.00, 1200.00, 450.00, 2200.00, 90.00,  NULL),
+    ('ALU_65',  'TILT',        400.00, 1200.00, 400.00, 1200.00, 50.00,  NULL),
+    ('ALU_65',  'TOP_HUNG',    400.00, 1400.00, 350.00, 1200.00, 40.00,  NULL),
+    ('ALU_65',  'BOTTOM_HUNG', 400.00, 1200.00, 500.00, 1500.00, 60.00,  NULL),
+    ('ALU_65',  'DOOR:TURN',   600.00, 1100.00, 1700.00, 2500.00, 100.00, NULL),
+    ('ALU_65',  'DOOR_DOUBLE', 500.00, 900.00,  1700.00, 2500.00, 100.00, NULL),
+    ('GLASS_45','TURN',        350.00, 1000.00, 400.00, 2200.00, 50.00,  NULL),
+    ('GLASS_45','TILT_TURN',   450.00, 1200.00, 450.00, 2200.00, 70.00,  NULL),
+    ('GLASS_45','TILT',        400.00, 1200.00, 400.00, 1200.00, 45.00,  NULL),
+    ('GLASS_45','TOP_HUNG',    400.00, 1400.00, 350.00, 1200.00, 40.00,  NULL),
+    ('GLASS_45','BOTTOM_HUNG', 400.00, 1200.00, 500.00, 1500.00, 50.00,  NULL)
+) AS l(sys_code, opening, min_w, max_w, min_h, max_h, max_kg, aspect)
+WHERE s.code = l.sys_code AND s.is_global = TRUE
+ON CONFLICT DO NOTHING;
+
+-- Capacidades declaradas por sistema (D03): el repertorio que el editor,
+-- la API y la IA pueden ofrecer. GLASS_45 declara solo unidades WINDOW —
+-- sin hoja de puerta en su catálogo, la puerta no entra en su oferta.
+INSERT INTO public.system_opening_capabilities (
+    id, system_id, org_id, movement, directions, leaf_roles,
+    unit_kinds, max_leaves, fixed_in_sash, hardware_group, data_provenance
+)
+SELECT
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/' || s.code || '/capability/' || cap.key),
+    s.id, NULL, cap.movement, cap.directions::text[], cap.roles::text[],
+    cap.units::text[], cap.max_leaves, cap.sash, NULL, 'SEED_SYNTHETIC'
+FROM public.profile_systems s
+CROSS JOIN (VALUES
+    -- Casement completos: repertorio íntegro incluida la puerta.
+    ('DEMO_60', 'FIXED',      'cap-fixed',  '{}',              '{SINGLE}',                  '{WINDOW,DOOR}', 2, TRUE),
+    ('DEMO_60', 'TURN',       'cap-turn',   '{INWARD,OUTWARD}','{SINGLE,ACTIVE,PASSIVE}',   '{WINDOW,DOOR}', 2, FALSE),
+    ('DEMO_60', 'TILT_TURN',  'cap-tt',     '{INWARD}',        '{SINGLE,ACTIVE,PASSIVE}',   '{WINDOW}',      2, FALSE),
+    ('DEMO_60', 'TILT',       'cap-tilt',   '{INWARD}',        '{SINGLE}',                  '{WINDOW}',      1, FALSE),
+    ('DEMO_60', 'TOP_HUNG',   'cap-top',    '{OUTWARD}',       '{SINGLE}',                  '{WINDOW}',      1, FALSE),
+    ('DEMO_60', 'BOTTOM_HUNG','cap-bh',     '{INWARD,OUTWARD}','{SINGLE}',                  '{WINDOW}',      1, FALSE),
+    ('DEMO_70', 'FIXED',      'cap-fixed',  '{}',              '{SINGLE}',                  '{WINDOW,DOOR}', 2, TRUE),
+    ('DEMO_70', 'TURN',       'cap-turn',   '{INWARD,OUTWARD}','{SINGLE,ACTIVE,PASSIVE}',   '{WINDOW,DOOR}', 2, FALSE),
+    ('DEMO_70', 'TILT_TURN',  'cap-tt',     '{INWARD}',        '{SINGLE,ACTIVE,PASSIVE}',   '{WINDOW}',      2, FALSE),
+    ('DEMO_70', 'TILT',       'cap-tilt',   '{INWARD}',        '{SINGLE}',                  '{WINDOW}',      1, FALSE),
+    ('DEMO_70', 'TOP_HUNG',   'cap-top',    '{OUTWARD}',       '{SINGLE}',                  '{WINDOW}',      1, FALSE),
+    ('DEMO_70', 'BOTTOM_HUNG','cap-bh',     '{INWARD,OUTWARD}','{SINGLE}',                  '{WINDOW}',      1, FALSE),
+    ('ALU_65',  'FIXED',      'cap-fixed',  '{}',              '{SINGLE}',                  '{WINDOW,DOOR}', 2, TRUE),
+    ('ALU_65',  'TURN',       'cap-turn',   '{INWARD,OUTWARD}','{SINGLE,ACTIVE,PASSIVE}',   '{WINDOW,DOOR}', 2, FALSE),
+    ('ALU_65',  'TILT_TURN',  'cap-tt',     '{INWARD}',        '{SINGLE,ACTIVE,PASSIVE}',   '{WINDOW}',      2, FALSE),
+    ('ALU_65',  'TILT',       'cap-tilt',   '{INWARD}',        '{SINGLE}',                  '{WINDOW}',      1, FALSE),
+    ('ALU_65',  'TOP_HUNG',   'cap-top',    '{OUTWARD}',       '{SINGLE}',                  '{WINDOW}',      1, FALSE),
+    ('ALU_65',  'BOTTOM_HUNG','cap-bh',     '{INWARD,OUTWARD}','{SINGLE}',                  '{WINDOW}',      1, FALSE),
+    -- GLASS_45: casement sin hoja de puerta — solo unidades WINDOW.
+    ('GLASS_45','FIXED',      'cap-fixed',  '{}',              '{SINGLE}',                  '{WINDOW}',      2, TRUE),
+    ('GLASS_45','TURN',       'cap-turn',   '{INWARD,OUTWARD}','{SINGLE,ACTIVE,PASSIVE}',   '{WINDOW}',      2, FALSE),
+    ('GLASS_45','TILT_TURN',  'cap-tt',     '{INWARD}',        '{SINGLE,ACTIVE,PASSIVE}',   '{WINDOW}',      2, FALSE),
+    ('GLASS_45','TILT',       'cap-tilt',   '{INWARD}',        '{SINGLE}',                  '{WINDOW}',      1, FALSE),
+    ('GLASS_45','TOP_HUNG',   'cap-top',    '{OUTWARD}',       '{SINGLE}',                  '{WINDOW}',      1, FALSE),
+    ('GLASS_45','BOTTOM_HUNG','cap-bh',     '{INWARD,OUTWARD}','{SINGLE}',                  '{WINDOW}',      1, FALSE),
+    -- Correderas: fijo + hoja corredera sobre unidades de ventana.
+    ('DEMO_CORREDERA_60', 'FIXED', 'cap-fixed', '{}',          '{SINGLE}',                  '{WINDOW}',      1, FALSE),
+    ('DEMO_CORREDERA_60', 'SLIDE', 'cap-slide', '{}',          '{SINGLE}',                  '{WINDOW}',      1, FALSE),
+    ('ALU_CORREDERA_70',  'FIXED', 'cap-fixed', '{}',          '{SINGLE}',                  '{WINDOW}',      1, FALSE),
+    ('ALU_CORREDERA_70',  'SLIDE', 'cap-slide', '{}',          '{SINGLE}',                  '{WINDOW}',      1, FALSE)
+) AS cap(sys_code, movement, key, directions, roles, units, max_leaves, sash)
+WHERE s.code = cap.sys_code AND s.is_global = TRUE
+ON CONFLICT DO NOTHING;
+
+-- Política de manillas v3: las autoridades son inmutables (UPDATE/DELETE
+-- vetados por trigger), así que la semilla declara una fila version=3 que
+-- copia los slots de la v2 vigente y añade banderola (TILT), abatimiento
+-- de bisagras abajo (BOTTOM_HUNG) — manilla centrada en el travesaño
+-- superior — y la puerta doble (DOOR_DOUBLE) con la manilla en la hoja
+-- activa según su bisagra; la hoja pasiva cierra con falleba.
+INSERT INTO public.handle_requirement_policies (id, system_id, org_id, version, authority)
+SELECT uuid_generate_v5(uuid_ns_url(),
+        'https://dekopen.local/d03/handles/' || s.code || '/V3'),
+    s.id, NULL, 3,
+    jsonb_set(
+        jsonb_set(
+            jsonb_set(p.authority, '{policy_id}',
+                to_jsonb(replace(p.authority->>'policy_id', '_V2', '_V3'))),
+            '{version}', '3'::jsonb),
+        '{slots}',
+        (p.authority->'slots') || jsonb_build_array(
+            '{"opening_type":"TILT","leaf_slot":null,"leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"TOP","horizontal_reference":"HOST_MEMBER_CENTER","horizontal_offset_mm":0.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00}'::jsonb,
+            '{"opening_type":"BOTTOM_HUNG","leaf_slot":null,"leaf_handedness":null,"handle_domain_slot":"PRIMARY","host_member_side":"TOP","horizontal_reference":"HOST_MEMBER_CENTER","horizontal_offset_mm":0.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00}'::jsonb,
+            '{"opening_type":"DOOR_DOUBLE","leaf_slot":null,"leaf_handedness":"LEFT","handle_domain_slot":"PRIMARY","host_member_side":"RIGHT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":-10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00}'::jsonb,
+            '{"opening_type":"DOOR_DOUBLE","leaf_slot":null,"leaf_handedness":"RIGHT","handle_domain_slot":"PRIMARY","host_member_side":"LEFT","horizontal_reference":"HOST_MEMBER_AXIS","horizontal_offset_mm":10.00,"permitted_vertical_references":["OUTER_TOP","OUTER_BOTTOM","LEAF_TOP","LEAF_BOTTOM"],"mounting_min_from_leaf_top_mm":0.00,"mounting_max_from_leaf_top_mm":3000.00}'::jsonb
+        ))
+FROM public.handle_requirement_policies p
+JOIN public.profile_systems s ON s.id = p.system_id
+WHERE s.code IN ('DEMO_60','DEMO_70','ALU_65','GLASS_45')
+  AND p.org_id IS NULL
+  AND p.version = 2
+ON CONFLICT DO NOTHING;
+
+COMMIT;

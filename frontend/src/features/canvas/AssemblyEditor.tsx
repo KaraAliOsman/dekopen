@@ -56,15 +56,20 @@ import {
 } from "./ProductFrontSvg";
 
 import { useAssemblyCalculation } from "./useAssemblyCalculation";
-import type { IntentNode, Opening, SlidingLayout, SplitType } from "./intentEditing";
+import type { IntentNode, Opening, OpeningChoice, SlidingLayout, SplitType } from "./intentEditing";
 import {
+  bayIsDoor,
+  bayKitGroup,
+  bayOperable,
+  changeOpening,
   findNode,
   intentBays,
   isSlidingOpening,
+  nodeSpecKey,
+  OPTION_SPEC_KEY,
   resolvedSlidingLayout,
   topIntent,
   updateBay,
-  SLIDING_PRESETS,
 } from "./intentEditing";
 import {
   addAdjacentUnit,
@@ -885,6 +890,7 @@ function BayInspector({
   hardwareFamilies,
   hardwareOptions,
   resolvedHardware,
+  openingOptions,
   members,
   leafWeightKg,
   busy,
@@ -911,6 +917,9 @@ function BayInspector({
   /** Engine-emitted item for this bay — the resolved class/selection truth
    * after the last calculation; null before the first one. */
   resolvedHardware: HardwareItem | null;
+  /** The system's declared opening repertoire (D03) — the grid only shows
+   * what the catalog admits. Undefined (options not loaded) shows all. */
+  openingOptions?: { key?: unknown }[];
   members: MemberGeometry;
   /** Engine-resolved leaf mass; null = undecidable (never assumed). */
   leafWeightKg: number | null;
@@ -919,7 +928,8 @@ function BayInspector({
   onAskAssistant?(): void;
 }): JSX.Element {
   const opening = bay.opening_type ?? "FIXED";
-  const isDoor = opening === "DOOR_ENTRY";
+  const isDoor = bayIsDoor(module.tree, bay);
+  const activeKey = nodeSpecKey(module.tree, bay);
   const slidingLayout = resolvedSlidingLayout(bay);
   const bays = intentBays(module.tree);
   const bayOrdinal = bays.findIndex((node) => node.id === bay.id) + 1;
@@ -939,22 +949,14 @@ function BayInspector({
     patchBay(patch);
   }
 
-  function pickOpening(next: Opening): void {
+  function pickOpening(next: OpeningChoice): void {
+    // changeOpening owns the normalization (spec payload vs legacy enum,
+    // unit-kind lift for door options, stale layout/panel/handedness clear).
     if (next === "DOOR_ENTRY" && !isTopBay) return;
-    // Mirrors setModuleOpening's normalization at leaf scope: a sliding pick
-    // seeds the 2-leaf preset, a non-door bay never keeps a panel sku, and a
-    // door always carries declared handedness (manufacture refuses to guess).
-    // D04: hardware selections are family-scoped — an opening change clears
-    // them rather than smuggling another family's skus to the engine.
-    patchBay({
-      opening_type: next,
-      sliding_layout: next === "SLIDING" ? structuredClone(SLIDING_PRESETS.SLIDING_2L!) : null,
-      panel_article_sku: next === "DOOR_ENTRY" ? (bay.panel_article_sku ?? null) : null,
-      door_handedness: next === "DOOR_ENTRY" ? (bay.door_handedness ?? "LEFT") : null,
-      handle_model_sku: null,
-      handle_color_sku: null,
-      hardware_option_skus: null,
-    });
+    // changeOpening owns the normalization (spec payload vs legacy enum,
+    // unit-kind lift for door options, stale layout/panel/handedness clear,
+    // hardware-selection clear — D04 selections are family-scoped).
+    commit(setModuleTree(product, module.id, changeOpening(module.tree, bay.id, next)));
   }
 
   function toggleHardwareOption(sku: string, on: boolean): void {
@@ -967,7 +969,7 @@ function BayInspector({
   // engine's leaf mass. The select ranks valid kits first; incompatible
   // kits stay consultable with their reason but are not selectable as if
   // they were equivalent (mandate 04). The engine re-checks at save.
-  const operable = opening !== "FIXED" && !(isDoor && bay.panel_article_sku);
+  const operable = bayOperable(bay) && !(isDoor && bay.panel_article_sku);
   const leafEnvelope = operable
     ? bayEnvelopeMm(module.tree, bay.id, Number(module.width_mm), Number(module.height_mm), {
         vertical: members.mullionV?.faceWidthMm ?? 0,
@@ -976,7 +978,7 @@ function BayInspector({
     : null;
   const kitEvaluations = operable
     ? rankKits(kits, {
-        opening,
+        opening: bayKitGroup(module.tree, bay),
         leafWidthMm: leafEnvelope ? Math.round(leafEnvelope.w * 10) / 10 : null,
         leafHeightMm: leafEnvelope ? Math.round(leafEnvelope.h * 10) / 10 : null,
         leafWeightKg,
@@ -1021,22 +1023,47 @@ function BayInspector({
       <details className="inspector-section" open>
         <summary>{t("assembly.opening")}</summary>
         <div className="opening-grid" role="group" aria-label={t("assembly.opening")}>
-          {OPENING_OPTIONS.map(([value, labelKey]) => {
+          {OPENING_OPTIONS.filter(([value]) => {
+            if (!openingOptions) return true;
+            // The grid shows only what the system's capabilities admit
+            // (D03): match the option's emitted key — sliding presets
+            // resolve to the SLIDE movement, DOOR_ENTRY to any door leaf.
+            const wanted = OPTION_SPEC_KEY[value];
+            const keys = new Set((openingOptions ?? []).map((option) => String(option.key)));
+            if (keys.has(wanted)) return true;
+            if (wanted === "SLIDE") return keys.has("PRIMARY:SLIDE");
+            if (wanted.startsWith("DOOR:PRIMARY:TURN:")) {
+              return [...keys].some(
+                (key) => key.startsWith("DOOR:PRIMARY:TURN:") && key.endsWith(":INWARD"),
+              );
+            }
+            return false;
+          }).map(([value, labelKey]) => {
             const doorBlocked = value === "DOOR_ENTRY" && !isTopBay;
+            const isActive =
+              OPTION_SPEC_KEY[value] === activeKey || value === (bay.opening_type ?? "");
+            const glyphKey =
+              OPTION_SPEC_KEY[value] === "SLIDE" ? value : (OPTION_SPEC_KEY[value] ?? value);
             return (
               <button
                 key={value}
                 type="button"
-                className={`opening-choice${opening === value ? " is-active" : ""}`}
+                className={`opening-choice${isActive ? " is-active" : ""}`}
                 title={doorBlocked ? t("assembly.doorTopOnly") : t(labelKey)}
                 aria-label={t(labelKey)}
-                aria-pressed={opening === value}
+                aria-pressed={isActive}
                 disabled={busy || doorBlocked}
                 onClick={() => pickOpening(value)}
               >
                 <svg viewBox="0 0 100 100" aria-hidden="true">
                   <rect className="opening-choice__frame" x={4} y={4} width={92} height={92} />
-                  <OpeningGlyph opening={value} x={4} y={4} w={92} h={92} />
+                  <OpeningGlyph
+                    opening={OPTION_SPEC_KEY[value] === "SLIDE" ? value : glyphKey}
+                    x={4}
+                    y={4}
+                    w={92}
+                    h={92}
+                  />
                 </svg>
               </button>
             );
@@ -1802,6 +1829,7 @@ function ModuleInspector({
   panelChoices,
   mullionSkus,
   couplerSkus,
+  openingOptions,
   busy,
   commit,
   onAskAssistant,
@@ -1818,6 +1846,8 @@ function ModuleInspector({
   panelChoices: PanelChoice[];
   mullionSkus: Partial<Record<SplitType, string>>;
   couplerSkus: string[];
+  /** Declared opening repertoire — undefined shows all options. */
+  openingOptions?: { key?: unknown }[];
   busy: boolean;
   commit(next: ProductJson): void;
   onAskAssistant?(): void;
@@ -1827,8 +1857,9 @@ function ModuleInspector({
   const recentGlass = useCanvasStore((state) => state.recentGlass);
   const toggleFavoriteGlass = useCanvasStore((state) => state.toggleFavoriteGlass);
   const pushRecentGlass = useCanvasStore((state) => state.pushRecentGlass);
-  const isDoor = opening === "DOOR_ENTRY";
-  const slidingBay = isSlidingOpening(opening) ? modulePrimaryBay(module) : null;
+  const openingActiveKey = (OPTION_SPEC_KEY as Record<string, string>)[opening] ?? opening;
+  const isDoor = opening === "DOOR_ENTRY" || opening.startsWith("DOOR:");
+  const slidingBay = isSlidingOpening(opening as Opening) ? modulePrimaryBay(module) : null;
   const slidingLayout = slidingBay ? resolvedSlidingLayout(slidingBay) : null;
   const ordinal = product.assembly.modules.findIndex((item) => item.id === module.id) + 1;
   const commitSlidingLayout = (layout: SlidingLayout) => {
@@ -1869,23 +1900,39 @@ function ModuleInspector({
       <details className="inspector-section" open>
         <summary>{t("assembly.opening")}</summary>
         <div className="opening-grid" role="group" aria-label={t("assembly.opening")}>
-          {OPENING_OPTIONS.map(([value, labelKey]) => (
-            <button
-              key={value}
-              type="button"
-              className={`opening-choice${opening === value ? " is-active" : ""}`}
-              title={t(labelKey)}
-              aria-label={t(labelKey)}
-              aria-pressed={opening === value}
-              disabled={busy}
-              onClick={() => commit(setModuleOpening(product, module.id, value))}
-            >
-              <svg viewBox="0 0 100 100" aria-hidden="true">
-                <rect className="opening-choice__frame" x={4} y={4} width={92} height={92} />
-                <OpeningGlyph opening={value} x={4} y={4} w={92} h={92} />
-              </svg>
-            </button>
-          ))}
+          {OPENING_OPTIONS.filter(([value]) => {
+            if (!openingOptions) return true;
+            const wanted = OPTION_SPEC_KEY[value];
+            const keys = new Set((openingOptions ?? []).map((option) => String(option.key)));
+            if (keys.has(wanted)) return true;
+            if (wanted === "SLIDE") return keys.has("PRIMARY:SLIDE");
+            if (wanted.startsWith("DOOR:PRIMARY:TURN:")) {
+              return [...keys].some(
+                (key) => key.startsWith("DOOR:PRIMARY:TURN:") && key.endsWith(":INWARD"),
+              );
+            }
+            return false;
+          }).map(([value, labelKey]) => {
+            const glyphKey = OPTION_SPEC_KEY[value] === "SLIDE" ? value : OPTION_SPEC_KEY[value];
+            const isActive = OPTION_SPEC_KEY[value] === openingActiveKey || value === opening;
+            return (
+              <button
+                key={value}
+                type="button"
+                className={`opening-choice${isActive ? " is-active" : ""}`}
+                title={t(labelKey)}
+                aria-label={t(labelKey)}
+                aria-pressed={isActive}
+                disabled={busy}
+                onClick={() => commit(setModuleOpening(product, module.id, value))}
+              >
+                <svg viewBox="0 0 100 100" aria-hidden="true">
+                  <rect className="opening-choice__frame" x={4} y={4} width={92} height={92} />
+                  <OpeningGlyph opening={glyphKey} x={4} y={4} w={92} h={92} />
+                </svg>
+              </button>
+            );
+          })}
         </div>
         <div className="inspector-actions">
           <button
@@ -3010,6 +3057,7 @@ export function AssemblyEditor({
             panelChoices={options?.panel_choices ?? []}
             mullionSkus={mullionSkus}
             couplerSkus={couplerSkus}
+            openingOptions={options?.opening_options}
             busy={busy}
             commit={commit}
             onAskAssistant={
@@ -3031,6 +3079,7 @@ export function AssemblyEditor({
                 ?.find((item) => item.module_id === selectedBayModule.id)
                 ?.result?.hardware_items?.find((item) => item.bay_id === selectedBayNode.id) ?? null
             }
+            openingOptions={options?.opening_options}
             members={members}
             leafWeightKg={
               evaluation?.modules

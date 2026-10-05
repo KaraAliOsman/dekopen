@@ -78,12 +78,14 @@ class ExactLeafWeight:
 
 
 # Roles that make up a moving leaf: casement sashes, sliding sashes, the
-# encuentro (interlock) between moving leaves, and dedicated door sashes.
+# encuentro (interlock) between moving leaves, dedicated door sashes and
+# the inversor — the passive leaf's meeting stile in a two-leaf pair (D03).
 _LEAF_ROLES = frozenset({
     ProfileRole.SASH,
     ProfileRole.SLIDING_SASH,
     ProfileRole.INTERLOCK,
     ProfileRole.DOOR_SASH,
+    ProfileRole.INVERSOR,
 })
 
 

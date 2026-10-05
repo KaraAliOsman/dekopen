@@ -9,6 +9,10 @@ from typing import Literal
 from dekopen_engine import (
     HardwareComponent,
     HardwareKitRule,
+    LeafRole,
+    OpeningCapability,
+    OpeningDirection,
+    OpeningMovement,
     PanelRule,
     EffectiveProfileArticle,
     GlazingBeadRule,
@@ -20,6 +24,7 @@ from dekopen_engine import (
     SystemFamily,
     SystemParams,
     TypologyLimit,
+    UnitKind,
 )
 from dekopen_engine.glass_composition import parse_glass_notation
 from dekopen_engine.models import (
@@ -119,6 +124,15 @@ def demo_60_params() -> SystemParams:
         weight_kg_m="2.4000",
     )
 
+    inversor = _article(
+        sku="INVERSOR-60",
+        role=ProfileRole.INVERSOR,
+        face_width_mm="85.00",
+        welding_loss_mm="6.00",
+        reinforcement_gap_mm="15.00",
+        weight_kg_m="2.4000",
+    )
+
     return SystemParams(
         system_code="DEMO_60",
         finishes=("WHITE", "FOILED"),
@@ -129,6 +143,7 @@ def demo_60_params() -> SystemParams:
             ProfileRole.FRAME: frame,
             ProfileRole.SASH: sash,
             ProfileRole.DOOR_SASH: door_sash,
+            ProfileRole.INVERSOR: inversor,
             ProfileRole.MULLION_V: mullion_v,
             ProfileRole.MULLION_H: mullion_h,
             ProfileRole.THRESHOLD: EffectiveProfileArticle(
@@ -232,6 +247,9 @@ def demo_60_params() -> SystemParams:
             ProfileRole.DOOR_SASH: ProfileCutRule(
                 role=ProfileRole.DOOR_SASH, cut_angle_deg=d("45.0"), welded_ends=2
             ),
+            ProfileRole.INVERSOR: ProfileCutRule(
+                role=ProfileRole.INVERSOR, cut_angle_deg=d("45.0"), welded_ends=2
+            ),
             ProfileRole.MULLION_V: ProfileCutRule(
                 role=ProfileRole.MULLION_V, cut_angle_deg=d("90.0"), welded_ends=0
             ),
@@ -259,6 +277,7 @@ def demo_60_params() -> SystemParams:
                 ProfileRole.FRAME,
                 ProfileRole.SASH,
                 ProfileRole.DOOR_SASH,
+                ProfileRole.INVERSOR,
                 ProfileRole.MULLION_V,
                 ProfileRole.MULLION_H,
             )
@@ -275,6 +294,7 @@ def demo_60_params() -> SystemParams:
                 ProfileRole.FRAME,
                 ProfileRole.SASH,
                 ProfileRole.DOOR_SASH,
+                ProfileRole.INVERSOR,
                 ProfileRole.MULLION_V,
                 ProfileRole.MULLION_H,
             )
@@ -313,10 +333,116 @@ def demo_60_params() -> SystemParams:
                 max_leaf_height_mm=d("2500.00"),
                 max_leaf_weight_kg=d("120.00"),
             ),
+            # Spec-key rows (D03): the seed declares envelopes per
+            # canonical axis — the engine resolves emitted keys against
+            # these, not against the legacy names.
+            "TURN": TypologyLimit(
+                opening_type="TURN",
+                min_leaf_width_mm=d("350.00"),
+                max_leaf_width_mm=d("1400.00"),
+                min_leaf_height_mm=d("400.00"),
+                max_leaf_height_mm=d("2500.00"),
+                max_leaf_weight_kg=d("100.00"),
+                max_aspect_ratio=d("2.80"),
+            ),
+            "TILT_TURN": TypologyLimit(
+                opening_type="TILT_TURN",
+                min_leaf_width_mm=d("450.00"),
+                max_leaf_width_mm=d("1600.00"),
+                min_leaf_height_mm=d("450.00"),
+                max_leaf_height_mm=d("2500.00"),
+                max_leaf_weight_kg=d("130.00"),
+            ),
+            "TILT": TypologyLimit(
+                opening_type="TILT",
+                min_leaf_width_mm=d("400.00"),
+                max_leaf_width_mm=d("1600.00"),
+                min_leaf_height_mm=d("400.00"),
+                max_leaf_height_mm=d("1200.00"),
+                max_leaf_weight_kg=d("60.00"),
+            ),
+            "TOP_HUNG": TypologyLimit(
+                opening_type="TOP_HUNG",
+                min_leaf_width_mm=d("400.00"),
+                max_leaf_width_mm=d("1800.00"),
+                min_leaf_height_mm=d("350.00"),
+                max_leaf_height_mm=d("1200.00"),
+                max_leaf_weight_kg=d("45.00"),
+            ),
+            "BOTTOM_HUNG": TypologyLimit(
+                opening_type="BOTTOM_HUNG",
+                min_leaf_width_mm=d("400.00"),
+                max_leaf_width_mm=d("1400.00"),
+                min_leaf_height_mm=d("500.00"),
+                max_leaf_height_mm=d("1600.00"),
+                max_leaf_weight_kg=d("80.00"),
+            ),
+            "DOOR:TURN": TypologyLimit(
+                opening_type="DOOR:TURN",
+                min_leaf_width_mm=d("600.00"),
+                max_leaf_width_mm=d("1100.00"),
+                min_leaf_height_mm=d("1700.00"),
+                max_leaf_height_mm=d("2500.00"),
+                max_leaf_weight_kg=d("120.00"),
+            ),
+            "DOOR_DOUBLE": TypologyLimit(
+                opening_type="DOOR_DOUBLE",
+                min_leaf_width_mm=d("500.00"),
+                max_leaf_width_mm=d("900.00"),
+                min_leaf_height_mm=d("1700.00"),
+                max_leaf_height_mm=d("2500.00"),
+                max_leaf_weight_kg=d("120.00"),
+            ),
         },
         glass_products=_demo_60_glass_products(),
         glass_safety_rules=_demo_glass_safety_rules(),
         glass_type_limits=_demo_glass_type_limits(),
+        # Declared opening repertoire the seed carries for DEMO_60 (D03):
+        # repository ORDER BY movement.
+        opening_capabilities=(
+            OpeningCapability(
+                movement=OpeningMovement.BOTTOM_HUNG,
+                directions=(OpeningDirection.INWARD, OpeningDirection.OUTWARD),
+                leaf_roles=(LeafRole.SINGLE,),
+                unit_kinds=(UnitKind.WINDOW,),
+                max_leaves=1,
+            ),
+            OpeningCapability(
+                movement=OpeningMovement.FIXED,
+                leaf_roles=(LeafRole.SINGLE,),
+                unit_kinds=(UnitKind.WINDOW, UnitKind.DOOR),
+                max_leaves=2,
+                fixed_in_sash=True,
+            ),
+            OpeningCapability(
+                movement=OpeningMovement.TILT,
+                directions=(OpeningDirection.INWARD,),
+                leaf_roles=(LeafRole.SINGLE,),
+                unit_kinds=(UnitKind.WINDOW,),
+                max_leaves=1,
+            ),
+            OpeningCapability(
+                movement=OpeningMovement.TILT_TURN,
+                directions=(OpeningDirection.INWARD,),
+                leaf_roles=(LeafRole.SINGLE, LeafRole.ACTIVE, LeafRole.PASSIVE),
+                unit_kinds=(UnitKind.WINDOW,),
+                max_leaves=2,
+            ),
+            OpeningCapability(
+                movement=OpeningMovement.TOP_HUNG,
+                directions=(OpeningDirection.OUTWARD,),
+                leaf_roles=(LeafRole.SINGLE,),
+                unit_kinds=(UnitKind.WINDOW,),
+                max_leaves=1,
+            ),
+            OpeningCapability(
+                movement=OpeningMovement.TURN,
+                directions=(OpeningDirection.INWARD, OpeningDirection.OUTWARD),
+                leaf_roles=(LeafRole.SINGLE, LeafRole.ACTIVE, LeafRole.PASSIVE),
+                unit_kinds=(UnitKind.WINDOW, UnitKind.DOOR),
+                max_leaves=2,
+            ),
+        ),
     )
 
 
@@ -567,6 +693,42 @@ def demo_hardware_kits() -> list[HardwareKitRule]:
             0,
             0,
         ),
+        (
+            "KIT-TILT",
+            "Kit Solo Abatimiento Demo 60",
+            "TILT",
+            "400",
+            "1600",
+            "400",
+            "1200",
+            "60",
+            0,
+            0,
+        ),
+        (
+            "KIT-BOTTOM-HUNG",
+            "Kit Abatimiento Bisagra Inferior Demo 60",
+            "BOTTOM_HUNG",
+            "400",
+            "1400",
+            "500",
+            "1600",
+            "80",
+            0,
+            0,
+        ),
+        (
+            "KIT-FALLEBA",
+            "Kit Falleba Hoja Pasiva Demo 60",
+            "FALLEBA",
+            "300",
+            "1200",
+            "600",
+            "2400",
+            "100",
+            0,
+            0,
+        ),
     ]
     contents = {
         "KIT-AWNING-16": [
@@ -584,6 +746,42 @@ def demo_hardware_kits() -> list[HardwareKitRule]:
                 qty=d("1"),
                 unit="unit",
             )
+        ],
+        "KIT-TILT": [
+            HardwareComponent(
+                sku="DEMO-SCISSOR-TILT",
+                name="Compás de abatimiento Demo",
+                qty=d("2"),
+                unit="unit",
+            )
+        ],
+        "KIT-BOTTOM-HUNG": [
+            HardwareComponent(
+                sku="DEMO-HINGE-BOTTOM",
+                name="Bisagra inferior Demo",
+                qty=d("2"),
+                unit="unit",
+            ),
+            HardwareComponent(
+                sku="DEMO-SCISSOR-BH",
+                name="Brazo limitador Demo",
+                qty=d("2"),
+                unit="unit",
+            ),
+        ],
+        "KIT-FALLEBA": [
+            HardwareComponent(
+                sku="DEMO-FALLEBA-ROD",
+                name="Falleba de cierre Demo",
+                qty=d("1"),
+                unit="unit",
+            ),
+            HardwareComponent(
+                sku="DEMO-FALLEBA-BOLT",
+                name="Pasador de falleba Demo",
+                qty=d("2"),
+                unit="unit",
+            ),
         ],
     }
     kits = [

@@ -19,7 +19,8 @@ from dekopen_engine.manufacturing_trace import (
     TraceRectV1,
     TraceSegmentV1,
 )
-from dekopen_engine.models import BayOpeningType, EngineModel, MaterialType, ProfileRole
+from dekopen_engine.models import EngineModel, MaterialType, ProfileRole
+from dekopen_engine.openings import leaf_policy_opening_candidates
 
 
 class ManufacturingAuthorityError(ValueError):
@@ -99,10 +100,10 @@ def handle_policy_from_json(raw: object) -> HandleRequirementPolicyV1:
             ):
                 raise ManufacturingAuthorityError("invalid_handle_policy")
             side = MemberSide(str(item["host_member_side"]))
-            if side not in (MemberSide.LEFT, MemberSide.RIGHT, MemberSide.BOTTOM):
+            if side not in (MemberSide.LEFT, MemberSide.RIGHT, MemberSide.TOP, MemberSide.BOTTOM):
                 raise ManufacturingAuthorityError("invalid_handle_policy")
             slots.append(HandleSlotRuleV1(
-                opening_type=BayOpeningType(str(item["opening_type"])),
+                opening_type=str(item["opening_type"]),
                 leaf_slot=None if item.get("leaf_slot") is None else str(item["leaf_slot"]),
                 leaf_handedness=item.get("leaf_handedness"),
                 handle_domain_slot=str(item["handle_domain_slot"]),
@@ -218,7 +219,9 @@ class HandleIntentV1(EngineModel):
 
 
 class HandleSlotRuleV1(EngineModel):
-    opening_type: BayOpeningType
+    # The leaf's emitted opening identity (D03): a legacy enum value or
+    # the canonical key — the policy matches the leaf's own string.
+    opening_type: str
     leaf_slot: str | None = None
     handle_domain_slot: str
     # Optional handedness pin: a rule carrying LEFT/RIGHT applies only to
@@ -227,7 +230,7 @@ class HandleSlotRuleV1(EngineModel):
     # with no handedness is a wildcard; declared-handedness rules win over
     # it when both would match.
     leaf_handedness: Literal["LEFT", "RIGHT"] | None = None
-    host_member_side: Literal[MemberSide.LEFT, MemberSide.RIGHT, MemberSide.BOTTOM]
+    host_member_side: Literal[MemberSide.LEFT, MemberSide.RIGHT, MemberSide.TOP, MemberSide.BOTTOM]
     horizontal_reference: Literal["HOST_MEMBER_AXIS", "HOST_MEMBER_CENTER"] = (
         "HOST_MEMBER_AXIS"
     )
@@ -322,9 +325,12 @@ class LeafAssemblyFactV1(EngineModel):
     bay_id: str
     leaf_id: str | None
     leaf_slot: str
-    opening_type: BayOpeningType
+    opening_type: str
     # Declared door hinge side, when the leaf carries one.
     door_handedness: Literal["LEFT", "RIGHT"] | None = None
+    # A leaf the handle policy must skip (D03): passive french/door
+    # leaves close with their falleba, fixed-in-sash lites never open.
+    handle_expected: bool = True
     rect: TraceRectV1
 
 
@@ -547,6 +553,7 @@ def project_manufacturing_facts_v1(
             leaf_slot=leaf.leaf_slot,
             opening_type=leaf.opening_type,
             door_handedness=leaf.door_handedness,
+            handle_expected=leaf.handle_expected,
             rect=rect,
         ))
 
@@ -711,9 +718,14 @@ def project_manufacturing_facts_v1(
             raise ManufacturingAuthorityError("Leaf member side is ambiguous")
         member_by_leaf_side[leaf_side_key] = fact
     for leaf in sorted(trace.leaves, key=lambda item: item.semantic_leaf_id):
+        if not leaf.handle_expected:
+            # Passive leaves (falleba) and fixed-in-sash lites mount no
+            # user-operated handle (D03).
+            continue
+        opening_candidates = leaf_policy_opening_candidates(leaf.opening_type)
         handle_rules = [
             slot_rule for slot_rule in handle_policy.slots
-            if slot_rule.opening_type is leaf.opening_type
+            if slot_rule.opening_type in opening_candidates
             and (slot_rule.leaf_slot is None or slot_rule.leaf_slot == leaf.leaf_slot)
             and (
                 slot_rule.leaf_handedness is None
@@ -737,8 +749,8 @@ def project_manufacturing_facts_v1(
                 or slot_rule.handle_domain_slot not in pinned_slots
             ]
         if not handle_rules:
-            if leaf.opening_type is BayOpeningType.DOOR_ENTRY and any(
-                slot_rule.opening_type is BayOpeningType.DOOR_ENTRY
+            if leaf.opening_type.startswith("DOOR") and any(
+                slot_rule.opening_type.startswith("DOOR")
                 and slot_rule.leaf_handedness is not None
                 for slot_rule in handle_policy.slots
             ):
