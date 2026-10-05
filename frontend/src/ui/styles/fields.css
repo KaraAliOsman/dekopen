@@ -31,12 +31,10 @@
   outline-offset: 1px;
 }
 
-/* El contrato de foco de los campos es el anillo por sombra (--focus-ring-shadow),
-   no outline — lo verifica canvas.spec.ts. */
+/* El anillo de foco vive en el contrato global :focus-visible (controls.css)
+   — box-shadow var(--focus-ring-shadow), lo verifica canvas.spec.ts. */
 .ui-field__input:focus {
   border-color: var(--focus-ring);
-  box-shadow: var(--focus-ring-shadow);
-  outline: none;
 }
 
 /* ---------- disabled ---------- */

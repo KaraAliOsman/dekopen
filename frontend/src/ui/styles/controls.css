@@ -114,7 +114,7 @@ button:disabled {
 
 /* one focus contract for every interactive element in the product */
 :is(a, button, input, select, textarea, [tabindex]):focus-visible {
-  box-shadow: var(--focus-ring);
+  box-shadow: var(--focus-ring-shadow);
   outline: none;
 }
 
