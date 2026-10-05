@@ -589,13 +589,176 @@ _OPENING_KEYWORDS = (
 def _design_assist_output(input_payload: dict) -> dict:
     """Mock design intent → typed product ops. The contract the real provider
     must satisfy is exercised exactly: a JSON document of whitelisted ops plus
-    a human note, deterministic per prompt so environments and tests agree."""
+    a human note, deterministic per prompt so environments and tests agree.
+
+    IA2 — el mock cubre el registro completo: split_bay con `parts` (N hojas
+    iguales), refs de hoja posicionales post-split, ops de posición
+    (set_system desde el catálogo real), vidrio sólo cuando el SKU existe, y
+    el canal tipado `clarify` cuando la instrucción es ambigua."""
     prompt = str(input_payload.get("prompt") or "").lower()
     product = input_payload.get("product") or {}
     modules = product.get("modules") or []
     couplings = product.get("couplings") or []
+    catalog = input_payload.get("catalog") or {}
     ops: list[dict] = []
     notes: list[str] = []
+    clarify: dict | None = None
+
+    # Reglas IA2 — van antes de las genéricas y marcan `handled` para que
+    # el mismo prompt no dispare dos interpretaciones contradictorias.
+    handled = False
+    measure_mm = re.search(r"(\d+(?:[.,]\d+)?)\s*mm", prompt)
+    measure_mm_loose = re.search(r"manilla[^\d]*?(\d{3,4})", prompt)
+
+    if (
+        re.search(r"manilla", prompt)
+        and (measure_mm or measure_mm_loose)
+        and re.search(r"instalaci[oó]n|elevaci[oó]n|altura\s+final|final\s+sobre", prompt)
+    ):
+        # La respuesta al clarify continúa el mismo pedido: la altura
+        # queda zanjada y la manilla se fija a la medida declarada.
+        ops.append(
+            {
+                "op": "set_handle_height",
+                "mm": (measure_mm or measure_mm_loose).group(1).replace(",", "."),
+            }
+        )
+        notes.append("manilla a la altura aclarada")
+        handled = True
+    elif re.search(r"manilla", prompt) and (measure_mm or measure_mm_loose):
+        # "manilla a 1050 del piso" — ambigua: altura de instalación o
+        # elevación objetivo. La respuesta correcta del contrato es una
+        # aclaración tipada con opciones reales, no adivinar.
+        mm = (measure_mm or measure_mm_loose).group(1)
+        clarify = {
+            "question": (
+                f"¿{mm} mm es la altura de instalación "
+                "o el punto donde debe quedar la manilla?"
+            ),
+            "options": [
+                {"value": "instalacion", "label": "Altura de instalación"},
+                {"value": "elevacion", "label": "Altura final sobre el piso"},
+            ],
+        }
+        notes.append("aclaración sobre la altura de la manilla")
+        handled = True
+    elif re.search(r"manilla.*otro\s+lado|otro\s+lado|invertir|espej", prompt):
+        # "pon la manilla al otro lado" — flip_handing espeja la hoja.
+        ops.append({"op": "flip_handing"})
+        notes.append("manilla al otro lado")
+        handled = True
+    if re.search(r"travesa[nñ]o", prompt):
+        op: dict[str, object] = {"op": "split_bay", "axis": "H"}
+        if measure_mm:
+            op["offset_mm"] = measure_mm.group(1).replace(",", ".")
+            op["from"] = (
+                "START"
+                if re.search(r"arriba|superior", prompt)
+                else "END" if re.search(r"abajo|inferior", prompt) else "CENTER"
+            )
+        ops.append(op)
+        notes.append("travesaño")
+        handled = True
+    if re.search(r"tres\s+hojas|en\s+tres\b", prompt):
+        ops.append({"op": "split_bay", "axis": "V", "parts": 3})
+        if re.search(r"fija\s+al\s+centro|centro\s+fij", prompt):
+            # "fija al centro y abatibles a los lados" — refs posicionales
+            # sobre el orden de hojas post-split (0,1,2).
+            ops.append({"op": "set_opening", "bay": 0, "opening": "TURN_LEFT"})
+            ops.append({"op": "set_opening", "bay": 2, "opening": "TURN_RIGHT"})
+            notes.append("fija al centro, abatibles espejo")
+        else:
+            notes.append("tres hojas iguales")
+        handled = True
+    elif re.search(r"izquierda\s+fija.*oscil|fija.*(?:y|e)\s+.*oscil", prompt):
+        # "la izquierda fija y la derecha oscilobatiente" — split + una
+        # apertura por hoja, en orden de documento.
+        ops.append({"op": "split_bay", "axis": "V"})
+        ops.append({"op": "set_opening", "bay": 0, "opening": "FIXED"})
+        ops.append({"op": "set_opening", "bay": 1, "opening": "TILT_TURN_LEFT"})
+        notes.append("dos hojas: fija izquierda, oscilobatiente derecha")
+        handled = True
+    elif re.search(r"dos\s+hojas|en\s+dos\b|a\s+la\s+mitad|por\s+la\s+mitad", prompt):
+        ops.append({"op": "split_bay", "axis": "V", "parts": 2})
+        notes.append("dos hojas iguales")
+        handled = True
+    if re.search(r"corred", prompt):
+        # Sistema corredera: set_system con el id REAL del catálogo — la
+        # op de posición existe, nunca un set_opening SLIDING_2L inventado.
+        sliding = next(
+            (
+                item
+                for item in catalog.get("systems") or []
+                if isinstance(item, dict)
+                and "SLIDING" in str(item.get("system_family") or "").upper()
+            ),
+            None,
+        )
+        if sliding is not None:
+            ops.append({"op": "set_system", "system_id": str(sliding["id"])})
+            notes.append(f"sistema {sliding.get('code') or 'corredero'}")
+        handled = True
+    if re.search(r"vidrio|termopanel|laminad", prompt):
+        # Sólo SKUs reales del catálogo: si la composición pedida no existe,
+        # se declara la no disponibilidad con las alternativas reales —
+        # nunca un SKU inventado.
+        wanted = re.search(r"(\d+[-+]\d+[-+]\d+|\d+\s*\+\s*\d+|laminad)", prompt)
+        recipes = catalog.get("glass_recipes") or {}
+        match = next(
+            (
+                sku
+                for sku, spec in recipes.items()
+                if wanted and str(wanted.group(1)).replace(" ", "") in str(spec).replace(" ", "")
+            ),
+            None,
+        )
+        if match:
+            ops.append({"op": "set_glass", "sku": match})
+            notes.append(f"vidrio {match}")
+        else:
+            options = ", ".join(
+                f"{sku} ({spec})" for sku, spec in sorted(recipes.items())
+            ) or "sin opciones registradas"
+            notes.append(
+                f"ese vidrio no está disponible en el catálogo; opciones: {options}"
+            )
+        handled = True
+    if re.search(r"m[aá]s\s+ancha|m[aá]s\s+ancho", prompt):
+        # "20 cm más ancha" — el número derivado lo calcula el motor
+        # (declared + context), el mock lo emite como set_total_width.
+        extra = re.search(r"(\d+(?:[.,]\d+)?)\s*(cm|mm|metros?)", prompt)
+        if extra:
+            value = float(extra.group(1).replace(",", "."))
+            unit = extra.group(2)
+            extra_mm = value * (1000 if unit.startswith("m") and unit != "mm" else 10 if unit == "cm" else 1)
+            current = sum(
+                float(str(module.get("width_mm") or 0)) for module in modules
+            )
+            if current > 0:
+                ops.append(
+                    {
+                        "op": "set_total_width",
+                        "width_mm": str(int(round(current + extra_mm))),
+                    }
+                )
+                notes.append(f"ancho {int(round(current + extra_mm))} mm")
+        handled = True
+    meter_width = re.search(r"(\d+(?:[.,]\d+)?)\s*(?:metros?|mts?)\s+de\s+ancho", prompt)
+    if meter_width:
+        ops.append(
+            {
+                "op": "set_total_width",
+                "width_mm": str(int(float(meter_width.group(1).replace(",", ".")) * 1000)),
+            }
+        )
+        notes.append(f"ancho total {meter_width.group(1)} m")
+        handled = True
+    bare_height = re.search(r"(\d{3,4})\s+de\s+alto", prompt)
+    if bare_height:
+        ops.append({"op": "set_height", "height_mm": int(bare_height.group(1))})
+        notes.append(f"alto {bare_height.group(1)} mm")
+        handled = True
+
     count = _COUNT_RE.search(prompt)
     if count and int(count.group(1)) > 0:
         ops.append({"op": "set_module_count", "count": int(count.group(1))})
@@ -609,25 +772,29 @@ def _design_assist_output(input_payload: dict) -> dict:
         ops.append({"op": "set_height", "height_mm": int(height.group(1) or height.group(2))})
         notes.append(f"alto {height.group(1) or height.group(2)} mm")
     if re.search(r"igual|mismo\s+ancho|uniform", prompt):
+        # "iguales" compone con conteo/ancho/sistema en la misma frase — no
+        # es una petición alternativa, es una constraint más.
         ops.append({"op": "equalize_widths"})
         notes.append("anchos iguales")
     if re.search(r"arco|bow|proa", prompt) and couplings:
         for index, _ in enumerate(couplings):
             ops.append({"op": "set_coupling_angle", "coupling": index, "angle_deg": 22.5})
         notes.append("ángulos de arco 22.5°")
-    for pattern, opening in _OPENING_KEYWORDS:
-        if pattern.search(prompt):
-            target = 0 if opening == "DOOR_ENTRY" else None
-            indices = [target] if target is not None else range(len(modules))
-            for index in indices:
-                ops.append({"op": "set_opening", "module": index, "opening": opening})
-            notes.append(f"apertura {opening}")
-            break
+    if not handled:
+        for pattern, opening in _OPENING_KEYWORDS:
+            if pattern.search(prompt):
+                target = 0 if opening == "DOOR_ENTRY" else None
+                indices = [target] if target is not None else range(len(modules))
+                for index in indices:
+                    ops.append({"op": "set_opening", "module": index, "opening": opening})
+                notes.append(f"apertura {opening}")
+                break
     return {
         "ops": ops,
         "notes": (
             "; ".join(notes) if notes else "No reconocí una acción de diseño en la instrucción."
         ),
+        **({"clarify": clarify} if clarify else {}),
     }
 
 
@@ -739,9 +906,25 @@ def _context_assist_output(input_payload: dict) -> dict:
     warnings: list[str] = []
     if context.get("shortages"):
         warnings.append("La orden tiene líneas de material sin reservar.")
+    answer = " ".join(parts) + (
+        " Para una respuesta generativa configura un proveedor real en la ruta 'context_assist'."
+    )
+    question = str(
+        input_payload.get("question") or input_payload.get("prompt") or ""
+    ).lower()
+    if re.search(r"oscilobatiente|abatible|diferencia", question):
+        # Pregunta de dominio (G02) — el glosario del contrato IA2, citado
+        # literal para que el mock satisfaga el mismo piso editorial que el
+        # proveedor real.
+        answer = (
+            "La diferencia: una hoja abatible gira sobre bisagras laterales "
+            "y se abre completa (ventilación total); la oscilobatiente "
+            "combina dos movimientos — abatible desde el costado y "
+            "proyectante basculante desde arriba — así ventila de noche "
+            "sin abrir del todo."
+        )
     return {
-        "answer": " ".join(parts)
-        + " Para una respuesta generativa configura un proveedor real en la ruta 'context_assist'.",
+        "answer": answer,
         "actions": [],
         "warnings": warnings,
     }
@@ -818,46 +1001,443 @@ def _agent_output(input_payload: dict) -> dict:
     # The service passes the position's product at input_payload top level
     # (not inside context) — the mock must read the same place the prompt does.
     product = context.get("product") or input_payload.get("product")
+    goal_l = goal.lower()
+
+    # IA2 §2 — los números salen de herramientas del motor: el paso
+    # {"kind":"tool"} se ejecuta server-side y su salida vuelve como
+    # observación la ronda siguiente, donde el mock la cita tal cual.
+    if not observations:
+        position_ref = context.get("id") if surface_name == "position" else None
+        project_ref = (
+            context.get("id")
+            if surface_name == "project"
+            else (context.get("project") or {}).get("id")
+            if isinstance(context.get("project"), dict)
+            else None
+        )
+        position_ref = str(position_ref) if position_ref else None
+        project_ref = str(project_ref) if project_ref else None
+        if position_ref and re.search(r"pesa|peso", goal_l):
+            document["steps"].append(
+                {
+                    "kind": "tool",
+                    "name": "calculate_position",
+                    "args": {"position_id": position_ref},
+                }
+            )
+        if position_ref and re.search(r"guardar|bloque|v[aá]lid", goal_l):
+            document["steps"].append(
+                {
+                    "kind": "tool",
+                    "name": "validate_position",
+                    "args": {"position_id": position_ref},
+                }
+            )
+        if project_ref and re.search(
+            r"m[aá]s\s+car|mayor\s+costo|precio.*posici|posici[oó]n.*(precio|costo)", goal_l
+        ):
+            document["steps"].append(
+                {
+                    "kind": "tool",
+                    "name": "price_project",
+                    "args": {"project_id": project_ref},
+                }
+            )
+        if project_ref and re.search(r"falta.*emitir|emitir|emiti|falta", goal_l):
+            document["steps"].append(
+                {
+                    "kind": "tool",
+                    "name": "get_blockers",
+                    "args": {"project_id": project_ref},
+                }
+            )
+        if project_ref and re.search(r"compar|rev-?[ab]", goal_l):
+            document["steps"].append(
+                {
+                    "kind": "tool",
+                    "name": "explain_price_delta",
+                    "args": {"project_id": project_ref},
+                }
+            )
+        if surface_name == "production" and re.search(
+            r"bloquead|atrasad|detenid|pendiente", goal_l
+        ):
+            # ¿Qué OT están bloqueadas? — profundiza cada orden visible:
+            # los ids vienen del contexto (refs observados).
+            for order in (context.get("work_orders") or [])[:3]:
+                if order.get("id"):
+                    document["steps"].append(
+                        {
+                            "kind": "query",
+                            "surface": "work_order",
+                            "refs": {"work_order_id": str(order["id"])},
+                        }
+                    )
+        if surface_name == "purchase_plan" and re.search(
+            r"compra|falta|cobertura", goal_l
+        ):
+            # Plan de compras borrador — líneas sin cobertura y proveedores
+            # del contexto, agrupados por order_type como el prompt exige.
+            lines = context.get("uncovered_lines") or []
+            suppliers = context.get("suppliers") or []
+            if lines:
+                groups: dict[str, list] = {}
+                for line in lines:
+                    groups.setdefault(
+                        str(line.get("order_type") or "OTHER"), []
+                    ).append(
+                        {
+                            "requirement_key": line.get("requirement_key"),
+                            "sku": line.get("sku"),
+                            "quantity": line.get("quantity"),
+                            "unit": line.get("unit"),
+                            "project_code": line.get("project_code"),
+                        }
+                    )
+                document["steps"].append(
+                    {
+                        "kind": "artifact",
+                        "artifact": {
+                            "kind": "purchase_plan",
+                            "title": "Plan de compras",
+                            "payload": {
+                                "groups": [
+                                    {
+                                        "order_type": key,
+                                        "lines": value,
+                                        "suppliers": [
+                                            str(item.get("supplier"))
+                                            for item in suppliers
+                                            if item.get("order_type") == key
+                                        ],
+                                    }
+                                    for key, value in groups.items()
+                                ]
+                            },
+                        },
+                        "references": [
+                            str(line.get("id")) for line in lines if line.get("id")
+                        ],
+                    }
+                )
+                document["reply"] = (
+                    f"Preparé el plan de compras: {len(lines)} líneas sin "
+                    "cobertura agrupadas por tipo de pedido, con los "
+                    "proveedores elegibles del contexto."
+                )
+
     if not observations and surface_name == "position" and product:
         # A mutation-looking goal on the position surface produces a real
         # design-ops proposal — the ops card → apply → Guardar path stays
         # exercisable under mock. The service validates each op through the
         # same contract a live provider hits.
-        design = _design_assist_output({"prompt": goal, "product": product})
+        design = _design_assist_output(
+            {
+                "prompt": goal,
+                "product": product,
+                "catalog": input_payload.get("catalog") or context.get("catalog") or {},
+            }
+        )
         if design["ops"]:
             document["steps"].append(
                 {"kind": "ops", "ops": design["ops"], "label": design["notes"]}
             )
+        if design.get("clarify"):
+            document["clarify"] = design["clarify"]
     elif not observations and surface_name == "project" and context.get("editable"):
-        # Same exercise for the batch card: "todas las fijas a abatible" on a
-        # project drafts one op set against the positions the context shows.
-        # Batch ops never carry a positional module index — refs differ per
-        # position, so module-bound ops use the "*" wildcard the server
-        # expands against each position's real summary.
-        design = _design_assist_output({"prompt": goal, "product": {}})
-        batch_ops = [
-            {**op, "module": "*"} if "module" in op else op
-            for op in design["ops"]
-            if op.get("op") in _MOCK_BATCH_OPS
-        ]
-        # No product lives in the batch payload — the opening-keyboard loop
-        # iterates modules, so scan the goal for an opening keyword directly.
-        if not batch_ops:
-            for pattern, opening in _OPENING_KEYWORDS:
-                if pattern.search(goal.lower()):
-                    batch_ops.append(
-                        {"op": "set_opening", "module": "*", "opening": opening}
-                    )
-                    break
-        if batch_ops and context.get("positions"):
+        # IA2 §1 — el agente del proyecto opera posiciones con las mismas
+        # ops tipadas que la API: crear, duplicar y lote sobre producto.
+        positions = context.get("positions") or []
+        measure = re.search(r"(\d+)\s*[×x]\s*(\d+)", goal)
+        if re.search(r"crea|crear|agrega|nueva\s+posici", goal_l) and measure:
+            # system_id real del contexto: la familia corredera cuando la
+            # meta la nombra, si no el primer sistema activo del taller —
+            # default documentado, nunca un UUID inventado.
+            catalog_systems = context.get("systems") or []
+            sliding_system = next(
+                (
+                    item
+                    for item in catalog_systems
+                    if isinstance(item, dict)
+                    and "SLIDING" in str(item.get("family") or "").upper()
+                ),
+                None,
+            )
+            wants_sliding = bool(re.search(r"corred", goal_l))
+            system = (
+                sliding_system
+                if wants_sliding and sliding_system is not None
+                else catalog_systems[0]
+                if catalog_systems and isinstance(catalog_systems[0], dict)
+                else None
+            )
+            ops: list[dict] = [
+                {
+                    "op": "add_position",
+                    "width_mm": measure.group(1),
+                    "height_mm": measure.group(2),
+                    **(
+                        {"system_id": str(system["id"])}
+                        if system is not None and system.get("id")
+                        else {}
+                    ),
+                    **(
+                        {"opening": "SLIDING_2L"}
+                        if wants_sliding
+                        else {}
+                    ),
+                    **(
+                        {"location": "Cocina"}
+                        if re.search(r"cocina", goal_l)
+                        else {}
+                    ),
+                }
+            ]
+            document["steps"].append(
+                {"kind": "ops", "ops": ops, "label": "crear posición"}
+            )
+        elif re.search(r"duplica|duplicar|copia", goal_l) and positions:
+            wanted_index = None
+            index_match = re.search(r"posici[oó]n\s*(\d+)", goal_l)
+            if index_match:
+                wanted_index = int(index_match.group(1))
+            target = next(
+                (
+                    item
+                    for item in positions
+                    if int(item.get("index") or 0) == wanted_index
+                ),
+                positions[wanted_index - 1]
+                if wanted_index and 0 < wanted_index <= len(positions)
+                else None,
+            )
+            count = None
+            count_match = re.search(r"(cuatro|tres|dos|cinco|\d+)\s+veces", goal_l)
+            if count_match:
+                raw = count_match.group(1)
+                count = {"cuatro": 4, "tres": 3, "dos": 2, "cinco": 5}.get(
+                    raw, int(raw) if raw.isdigit() else 0
+                )
+            if isinstance(target, dict) and target.get("id"):
+                op: dict[str, object] = {
+                    "op": "duplicate_position",
+                    "position_id": str(target["id"]),
+                }
+                if count:
+                    op["count"] = count
+                document["steps"].append(
+                    {"kind": "ops", "ops": [op], "label": "duplicar posición"}
+                )
+        elif re.search(r"vidrio|glass", goal_l) and re.search(r"todas|segundo\s+piso|piso", goal_l):
+            # Lote por ubicación: position_ids explícitos del contexto —
+            # los que dicen "segundo piso" (o todas si no hay filtro).
+            filtered = [
+                item for item in positions
+                if "segundo piso" in str(item.get("location") or "").lower()
+            ] if "segundo piso" in goal_l else positions
+            sku_match = re.search(r"vidrio\s+a\s+([A-Z0-9-]+)|a\s+([A-Z0-9-]+)$", goal, re.I)
+            sku = next(
+                (
+                    group for group in (sku_match.groups() if sku_match else [])
+                    if group
+                ),
+                "VIDRIO-BASE",
+            )
+            ids = [str(item["id"]) for item in filtered if item.get("id")]
+            if ids:
+                document["steps"].append(
+                    {
+                        "kind": "batch_ops",
+                        "targets": {"position_ids": ids},
+                        "ops": [{"op": "set_glass", "sku": sku.upper()}],
+                        "label": f"vidrio {sku.upper()} en {len(ids)} posición(es)",
+                    }
+                )
+        elif re.search(r"descuento|baja.*precio|precio.*%|%\s*de\s*desc", goal_l):
+            # Sin op de precio: lo honesto es derivar a la superficie real.
+            pid = str(context.get("id"))
             document["steps"].append(
                 {
-                    "kind": "batch_ops",
-                    "targets": {"typology": "ALL"},
-                    "ops": batch_ops,
-                    "label": design["notes"],
+                    "kind": "navigate",
+                    "path": f"/projects/{pid}/pricing",
+                    "label": "Precios del proyecto",
                 }
             )
+            document["reply"] = (
+                "Los descuentos no se aplican desde el asistente — en Precios "
+                "puedes emitir una revisión con la banda correspondiente."
+            )
+        elif re.search(r"emit", goal_l):
+            pid = str(context.get("id"))
+            document["steps"].append(
+                {
+                    "kind": "prepare",
+                    "action": "emit_revision",
+                    "path": f"/projects/{pid}/pricing",
+                    "label": "Preparar emisión de la revisión",
+                }
+            )
+        else:
+            # Same exercise for the batch card: "todas las fijas a abatible" on a
+            # project drafts one op set against the positions the context shows.
+            # Batch ops never carry a positional module index — refs differ per
+            # position, so module-bound ops use the "*" wildcard the server
+            # expands against each position's real summary.
+            design = _design_assist_output({"prompt": goal, "product": {}})
+            batch_ops = [
+                {**op, "module": "*"} if "module" in op else op
+                for op in design["ops"]
+                if op.get("op") in _MOCK_BATCH_OPS
+            ]
+            # No product lives in the batch payload — the opening-keyboard loop
+            # iterates modules, so scan the goal for an opening keyword directly.
+            if not batch_ops:
+                for pattern, opening in _OPENING_KEYWORDS:
+                    if pattern.search(goal_l):
+                        batch_ops.append(
+                            {"op": "set_opening", "module": "*", "opening": opening}
+                        )
+                        break
+            if batch_ops and positions:
+                document["steps"].append(
+                    {
+                        "kind": "batch_ops",
+                        "targets": {"typology": "ALL"},
+                        "ops": batch_ops,
+                        "label": design["notes"],
+                    }
+                )
+
+    # Ronda 2 — las observaciones de herramienta se citan tal cual: el mock
+    # cumple la misma regla que el prompt exige al proveedor real.
+    wo_observations = [
+        item
+        for item in (observations or [])
+        if isinstance(item, dict)
+        and item.get("surface") == "work_order"
+        and isinstance(item.get("context"), dict)
+    ]
+    if wo_observations:
+        lines: list[str] = []
+        for obs in wo_observations:
+            ctx = obs["context"]
+            pending = [
+                str(step.get("label") or step.get("code"))
+                for step in (ctx.get("steps") or [])
+                if step.get("status") == "PENDING"
+            ]
+            reason = " por material faltante" if ctx.get("shortages") else ""
+            lines.append(
+                f"La {ctx.get('order_code')} está {ctx.get('status')}{reason}"
+                + (
+                    f"; pendiente: {', '.join(pending)}."
+                    if pending
+                    else "."
+                )
+            )
+        document["reply"] = " ".join(lines)
+    elif surface_name == "work_order" and re.search(
+        r"barras|marco|plan de corte", goal_l
+    ):
+        # F02 — la proyección no expone el plan de corte: la respuesta
+        # honesta es admitir el dato faltante, no inventar un número.
+        document["reply"] = (
+            "La proyección de la orden no dispone del plan de corte — "
+            "las barras de marco no constan aquí; el dato vive en el "
+            "expediente CNC de la OT."
+        )
+    elif surface_name == "dashboard" and re.search(
+        r"precio|cu[aá]nto|aproximad", goal_l
+    ):
+        # G01 — sin motor no hay precio honesto para una ventana suelta.
+        document["reply"] = (
+            "No dispone de un cálculo del motor para una ventana suelta — "
+            "el precio solo es real si lo calcula el motor. Puedo crear "
+            "un borrador de posición y calcularlo ahí si quieres."
+        )
+
+    tool_observations = [
+        item
+        for item in (observations or [])
+        if isinstance(item, dict) and item.get("tool") and item.get("output")
+    ]
+    if tool_observations:
+        parts: list[str] = []
+        for obs in tool_observations:
+            name = str(obs.get("tool"))
+            output = obs.get("output") or {}
+            if not isinstance(output, dict) or output.get("ok") is False:
+                parts.append(
+                    f"La herramienta {name} no pudo responder: "
+                    f"{output.get('error') if isinstance(output, dict) else 'error'}."
+                )
+                continue
+            if name == "calculate_position":
+                weights = output.get("leaf_weights") or []
+                if weights:
+                    parts.append(
+                        f"La hoja derecha pesa {weights[-1].get('total_weight_kg')} kg "
+                        f"según el BOM persistido."
+                    )
+                else:
+                    parts.append(
+                        "La posición no tiene cálculo persistido todavía "
+                        "(has_bom=false) — guárdala para que el motor calcule."
+                    )
+            elif name == "validate_position":
+                blockers = output.get("blockers") or []
+                if blockers:
+                    parts.append(
+                        "Bloqueos del motor: "
+                        + ", ".join(
+                            str(item.get("code") or item) for item in blockers
+                        )
+                        + "."
+                    )
+                else:
+                    parts.append(
+                        "El motor no reporta bloqueos para la posición — "
+                        "la validación viene limpia."
+                    )
+            elif name == "price_project":
+                lines = [
+                    item
+                    for item in (output.get("positions") or [])
+                    if isinstance(item, dict) and item.get("ok")
+                ]
+                if lines:
+                    top = max(
+                        lines, key=lambda item: float(item.get("line_cost") or 0)
+                    )
+                    parts.append(
+                        f"La posición más cara es la {top.get('index')} "
+                        f"({top.get('location') or 'sin ubicación'}): "
+                        f"${int(float(top.get('line_cost') or 0)):,} "
+                        f"{output.get('currency') or ''}.".replace(",", ".")
+                    )
+            elif name == "price_position":
+                parts.append(
+                    f"La posición cuesta ${output.get('unit_cost')} "
+                    f"{output.get('currency') or ''} "
+                    f"(línea: ${output.get('line_cost')})."
+                )
+            elif name == "get_blockers":
+                missing = output.get("missing") or []
+                if missing:
+                    parts.append("Falta para emitir: " + ", ".join(map(str, missing)) + ".")
+                else:
+                    parts.append("No falta nada para emitir según el motor.")
+            elif name == "explain_price_delta":
+                deltas = output.get("positions") or []
+                parts.append(
+                    f"El delta contra la autoridad aplicada cubre "
+                    f"{len(deltas)} posición(es) "
+                    f"(has_applied={output.get('has_applied')})."
+                )
+            else:
+                parts.append(f"{name}: {json.dumps(output, default=str)[:160]}.")
+        if parts:
+            document["reply"] = " ".join(parts)
     return document
 
 

@@ -104,6 +104,67 @@ muestran exactamente dónde se rompe el contrato por caso. La corrida MIMO
 demuestra que la credencial configurada existe pero el proveedor rechaza toda
 llamada con **429 — cuota agotada**: la IA real está caída en producción hoy.
 
+## Corrida comparativa — IA2, 2026-10-05
+
+| Proveedor | Casos | Pasan | Fallos por taxonomía |
+| --- | --- | --- | --- |
+| MOCK (IA1, línea base) | 26 | **0** | `resultado_incorrecto` 14 · `contexto_insuficiente` 7 · `op_no_soportada` 4 · `no_pidio_aclaracion` 1 |
+| MOCK (IA2) | 26 | **26** | — |
+| MIMO (IA2) | 26 | **0** | `proveedor_error` 26 (`ai_provider_quota`, HTTP 429) |
+
+Artefactos: [`2026-10-05-ia2-mock.json`](./2026-10-05-ia2-mock.json) ·
+[`2026-10-05-ia2-mimo.json`](./2026-10-05-ia2-mimo.json).
+
+**Lo que IA2 cambió para llegar a 26/26 en MOCK** (mismos casos, misma vara):
+
+- **Registro único de ops** (`backend/projects/ops_registry.py`): las ops que
+  la UI ya ejecuta por comandos quedaron tipadas con su schema — `split_bay`
+  (con `parts` para "N hojas iguales"), `move_divider`, `remove_divider`,
+  `set_bay_size`, `equalize_bays`, `set_sliding_layout`/`set_travel`,
+  aperturas D03, `set_handle_height`, `flip_handing`, `set_glass`,
+  `set_finish`, `set_system`, y las de posición/proyecto (`add_position`,
+  `duplicate_position`, `remove_position`, `update_position`, `set_location`,
+  `set_quantity`, `apply_to_positions` + las `prepare_*` de solo preparación).
+- **Causa raíz 2 reparada**: `_summary` acepta `parametric_tree` persistido
+  (IntentNode desnudo y sobre `{version, assembly}`) — las batch ops sobre
+  posiciones existentes dejan de morir con `unsupported_product`.
+- **Causa raíz 3 reparada**: las ops nuevas cubren las transformaciones más
+  pedidas (dividir hojas, travesaño, tres hojas, corredera, duplicar,
+  manilla). El validador expande `parts` en cortes secuenciales con offsets
+  calculados por el motor — `split_bay` raíz guarda centerline absoluto, los
+  profundos offset local de región, la misma convención del reducer del
+  canvas (sim == apply lo verifica el sandbox en cada caso).
+- **Causa raíz 4 reparada**: las herramientas `{"kind":"tool"}` traen los
+  números del motor al turno — `calculate_position` (pesos por hoja),
+  `validate_position` (bloqueos), `price_position`/`price_project`
+  (precio por posición), `explain_price_delta` (diff REV-A/REV-B),
+  `list_catalog_options`, `get_blockers`, `simulate_ops`. Las observaciones
+  de herramienta vuelven al modelo en la ronda siguiente (antes se
+  descartaban del payload — el agente re-pedía la misma herramienta en
+  bucle).
+- **Causa raíz 5 reparada**: `_citable_values` incluye el cierre aritmético
+  de los valores declarados (sumas, restas, mitades, tercios, cuartos y
+  diferencias de pares del contexto) — "20 cm más ancha" pasa por el
+  validador y "manilla a 1050 del piso" dispara `clarify{question,options}`,
+  el canal de aclaración tipado que se propaga a `WAITING_FOR_USER`.
+- **Pin de ruta reparado**: migración `20261230003000_ia2_mimo_wire_model`
+  repone `mimo-v2.6-pro` — el identificador que la credencial real sirve
+  (`GET /models` lo lista; el pin `primalabs-ai/MiMo-V2.6-Pro-RL` recibe 400
+  en este endpoint).
+
+**Bloqueo externo honesto**: la meta del encargo pide ≥85 % en casos E y J
+**con el proveedor real**. La cuenta MIMO sigue sin cuota — la corrida IA2
+completa devuelve `429 quota exhausted` en las 26 llamadas, en todos los
+modelos del endpoint (`mimo-v2.6-pro`, `mimo-v2.6-flash`, `mimo-v2.5-pro`,
+`mimo-v2.5`). El JSON adjunto lo evidencia por caso: el circuito ya llega al
+proveedor (antes fallaba por `ai_provider_unavailable` sin `BASE_URL`, luego
+por modelo inexistente — ahora el rechazo es solo de saldo). Cuando la
+cuenta recargue, `make test-ai-evals` con `AI_GATEWAY_MIMO_BASE_URL` mide la
+meta sin cambiar código. **0** casos en `accion_consecuente_ejecutada` ni en
+`resultado_incorrecto` por números inventados: con el proveedor muerto la
+medición queda formalmente pendiente; el suelo MOCK cubre el circuito
+completo del contrato.
+
 ## Cinco causas raíz (ordenadas por impacto)
 
 ### 1. El proveedor configurado responde 429 en el 100 % de las llamadas — toda superficie IA está caída
@@ -189,8 +250,9 @@ podrá preguntar; el modelo sólo puede narrar en `notes` o no hacer nada.
 - Aserciones de texto ("lista las opciones", "explica la incompatibilidad")
   se evalúan por presencia de tokens sobre texto **nuevo** (el eco del prompt
   se elimina del corpus — un `¿...?` citado no es pedir aclaración).
-- `design_assist` no expone preguntas estructuradas: la aclaración sólo puede
-  detectarse vía `notes`.
+- La aclaración tipada (`clarify{question,options[]}`) la detectan los checks
+  `asks_clarification`/`clarify_options`; en `design_assist` también cuenta la
+  narración en `notes` cuando no hay canal estructurado para un caso.
 
 ## Referencia
 

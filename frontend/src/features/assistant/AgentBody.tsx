@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { ApiError } from "../../api/apiMutator";
 import {
@@ -16,7 +17,13 @@ import type { AiJobDetail } from "../../api/generated/models/aiJobDetail";
 import { t } from "../../i18n/es-CL";
 import { jobErrorKey } from "../jobs/jobError";
 import type { DesignOp } from "../commands/types";
-import { describeDesignOp, designAssistProduct, productFingerprint } from "../canvas/designOps";
+import {
+  describeDesignOp,
+  describeScopeOp,
+  designAssistProduct,
+  productFingerprint,
+} from "../canvas/designOps";
+import { applyPositionOps, applyProjectOps, splitOps } from "./positionOps";
 import type { ProductJson } from "../canvas/productEditing";
 import { stableRefs, useDesignOpsBridge } from "./assistantContext";
 import { BatchOpsStep } from "./BatchOpsStep";
@@ -78,6 +85,9 @@ interface TranscriptAgentTurn {
   rejected?: { op?: string; reason?: string }[];
   artifacts?: unknown[];
   code?: string;
+  /** IA2 §3 — aclaración tipada: una pregunta con opciones reales que la
+   * UI muestra como chips; la respuesta continúa el MISMO job. */
+  clarify?: { question?: string; options?: { value?: string; label?: string }[] } | null;
 }
 
 /** Transcript → thread: user entries pair with the agent/error entry that
@@ -158,6 +168,22 @@ function asDesignOps(step: AiAgentStep): DesignOp[] {
   return (step.ops ?? []).filter((item): item is DesignOp => typeof item.op === "string");
 }
 
+/** El producto contra el que se propuso el turno: la copia enviada en la
+ * sesión, o el producto vivo cuando su huella coincide con la persistida.
+ * Sin match no hay referencia válida — las ops de producto son obsoletas
+ * (stale) y se dibujan con su nombre de registro, no con descripción. */
+function proposalProduct(turn: Turn, live: unknown): ProductJson | null {
+  if (turn.product) return turn.product as ProductJson;
+  if (!live || !turn.productSig) return null;
+  try {
+    return productFingerprint(designAssistProduct(live as ProductJson)) === turn.productSig
+      ? (live as ProductJson)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export { SURFACE_LABELS };
 
 /** §08-WG — communication workflows are goals on the project/quotation
@@ -203,6 +229,7 @@ export function AgentBody({
   onComposing?: (composing: boolean) => void;
 }): JSX.Element {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const bridge = useDesignOpsBridge();
   const [goal, setGoal] = useState("");
   const [busy, setBusy] = useState(false);
@@ -544,32 +571,95 @@ export function AgentBody({
 
   function applyOps(turnIndex: number, stepIndex: number, ops: DesignOp[]): void {
     const turn = thread[turnIndex];
-    // The bridge must still close over the exact product the ops were
-    // validated against — a commit in between made them stale. In-session
-    // turns identity-compare the snapshot; restored turns carry the durable
-    // product_sig the server persisted, so a reload doesn't reopen the
-    // apply-onto-changed-design hole.
-    if (!bridge || !turn) return;
-    if (turn.product !== null) {
-      if (turn.product !== bridge.product) return;
-    } else if (
-      turn.productSig !== null &&
-      turn.productSig !== productFingerprint(designAssistProduct(bridge.product as ProductJson))
-    ) {
+    if (!turn) return;
+    // IA2 — el arreglo puede mezclar tres ejecuciones reales: ops de
+    // producto (canvas), de campos de la posición viva (PUT) y de lista de
+    // posiciones del proyecto (create/duplicate/remove/update). Cada grupo
+    // reporta su resultado por separado — un fallo en uno no bloquea los
+    // otros ni infla el conteo de aplicadas.
+    const groups = splitOps(ops);
+    // Misma regla que dibuja el plan como obsoleto: sin producto de
+    // referencia (snapshot o huella coincidente) el plan no aplica.
+    const staleProduct =
+      groups.product.length > 0 &&
+      (!bridge || proposalProduct(turn, bridge.product) !== bridge.product);
+    if (groups.product.length > 0 && staleProduct) return;
+
+    const failures: DesignOp[] = [];
+    const applied: DesignOp[] = [];
+    const after = (): void => {
+      if (applied.length) {
+        reportOutcome(turn.transcriptIndex, stepIndex, "applied", applied);
+      }
+      if (failures.length) {
+        reportOutcome(turn.transcriptIndex, stepIndex, "apply_failed", failures);
+      }
+      setThread((prev) =>
+        prev.map((item, i) =>
+          // IA2 — "Aplicado" sólo cuando todo el paso aplicó: un éxito
+          // parcial o un fallo deja el mensaje de error visible y el paso
+          // no se marca, para que la insignia nunca mienta.
+          i === turnIndex
+            ? {
+                ...item,
+                appliedOps: failures.length
+                  ? item.appliedOps
+                  : new Set(item.appliedOps).add(stepIndex),
+              }
+            : item,
+        ),
+      );
+      void queryClient.invalidateQueries({ queryKey: ["project-pages"] });
+      void queryClient.invalidateQueries({ queryKey: ["project", organizationId] });
+    };
+
+    if (groups.product.length > 0 && bridge) {
+      try {
+        bridge.apply(groups.product);
+        applied.push(...groups.product);
+      } catch {
+        failures.push(...groups.product);
+      }
+    }
+
+    const positionId = refs.position_id;
+    const projectId = refs.project_id;
+    const asyncOps: Promise<void>[] = [];
+    if (groups.position.length > 0 && positionId) {
+      asyncOps.push(
+        applyPositionOps(groups.position, positionId, headers).then((outcome) => {
+          applied.push(...outcome.applied);
+          failures.push(...outcome.failed.map((item) => item.op));
+          if (outcome.failed.length) {
+            setMessage(t("agent.opFailed").replace("{detail}", outcome.failed[0]?.error ?? ""));
+          }
+        }),
+      );
+    } else if (groups.position.length > 0) {
+      failures.push(...groups.position);
+    }
+    if (groups.project.length > 0 && projectId) {
+      asyncOps.push(
+        applyProjectOps(
+          groups.project,
+          { projectId, fallbackPositionId: positionId ?? null },
+          headers,
+        ).then((outcome) => {
+          applied.push(...outcome.applied);
+          failures.push(...outcome.failed.map((item) => item.op));
+          if (outcome.failed.length) {
+            setMessage(t("agent.opFailed").replace("{detail}", outcome.failed[0]?.error ?? ""));
+          }
+        }),
+      );
+    } else if (groups.project.length > 0) {
+      failures.push(...groups.project);
+    }
+    if (!asyncOps.length) {
+      after();
       return;
     }
-    try {
-      bridge.apply(ops);
-    } catch {
-      reportOutcome(turn.transcriptIndex, stepIndex, "apply_failed", ops);
-      return;
-    }
-    reportOutcome(turn.transcriptIndex, stepIndex, "applied", ops);
-    setThread((prev) =>
-      prev.map((item, i) =>
-        i === turnIndex ? { ...item, appliedOps: new Set(item.appliedOps).add(stepIndex) } : item,
-      ),
-    );
+    void Promise.all(asyncOps).then(after);
   }
 
   function declineOps(turnIndex: number, stepIndex: number, ops: DesignOp[]): void {
@@ -684,6 +774,30 @@ export function AgentBody({
                       ))}
                     </div>
                   ) : null}
+                  {turn.result.clarify?.question ? (
+                    <div className="ask-dock__questions ask-dock__clarify">
+                      <p>{turn.result.clarify.question}</p>
+                      {turn.result.clarify.options?.length ? (
+                        <div className="ask-dock__chips" role="list">
+                          {turn.result.clarify.options.map((option, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              className="ask-dock__chip"
+                              disabled={busy || live}
+                              // La respuesta continúa el mismo pedido: el chip
+                              // viaja con el goal original, como en el panel.
+                              onClick={() =>
+                                void send(`${turn.goal} — ${option.label ?? option.value ?? ""}`)
+                              }
+                            >
+                              {option.label ?? option.value}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                   {turn.result.warnings?.length ? (
                     <ul className="ask-dock__warnings">
                       {turn.result.warnings.map((warning, i) => (
@@ -758,28 +872,60 @@ export function AgentBody({
                           if (!ops.length) return null;
                           const applied = turn.appliedOps.has(stepIndex);
                           const declined = turn.declinedOps.has(stepIndex);
+                          const groups = splitOps(ops);
+                          // IA2 — el bloqueo de "stale" sólo corre para ops de
+                          // producto; las de posición/proyecto van por API y no
+                          // dependen del producto vivo ni del bridge.
+                          // El plan propuesto sigue vivo sólo si el producto
+                          // de referencia (snapshot o huella persistida) es
+                          // el producto vivo — un turno restaurado sin copia
+                          // se compara por huella, no desaparece del chequeo.
+                          const proposal = proposalProduct(turn, bridge?.product);
                           const stale =
-                            !bridge || (turn.product !== null && turn.product !== bridge.product);
+                            groups.product.length > 0 && (!bridge || proposal !== bridge.product);
+                          const unroutable =
+                            (groups.position.length > 0 && !refs.position_id) ||
+                            (groups.project.length > 0 && !refs.project_id) ||
+                            (groups.product.length > 0 && !bridge);
+                          // IA2 §4 — la simulación se agrega al contrato del
+                          // step (openapi.yaml regen en el mismo PR); el cast
+                          // cubre el periodo entre ambos.
+                          const simulation = (step as AiAgentStep & { simulation?: unknown })
+                            .simulation as
+                            | {
+                                modules?: {
+                                  ref?: string;
+                                  bays?: { ref?: string; opening?: string }[];
+                                  splits?: { type?: string; offset_mm?: string }[];
+                                }[];
+                              }
+                            | undefined;
                           return (
                             <div key={stepIndex} className="ask-dock__ops">
                               <ul>
                                 {ops.map((op, i) => (
                                   <li key={i}>
-                                    {turn.product
-                                      ? describeDesignOp(
-                                          op,
-                                          turn.product as ProductJson,
-                                          ops.slice(0, i),
-                                        )
-                                      : op.op}
+                                    {proposal
+                                      ? describeDesignOp(op, proposal, ops.slice(0, i))
+                                      : (describeScopeOp(op) ?? op.op)}
                                   </li>
                                 ))}
                               </ul>
+                              {simulation?.modules?.length ? (
+                                <p className="ask-dock__ops-sim">
+                                  {simulation.modules
+                                    .map(
+                                      (module) =>
+                                        `${module.ref ?? "?"}: ${(module.bays ?? []).length} paño(s)${(module.splits ?? []).length ? `, ${(module.splits ?? []).length} división(es)` : ""}`,
+                                    )
+                                    .join(" · ")}
+                                </p>
+                              ) : null}
                               <div className="ask-dock__ops-actions">
                                 <button
                                   type="button"
                                   className="ask-dock__action"
-                                  disabled={applied || declined || stale || !bridge}
+                                  disabled={applied || declined || stale || unroutable}
                                   title={stale && bridge ? t("assistant.stale") : undefined}
                                   onClick={() => applyOps(turnIndex, stepIndex, ops)}
                                 >

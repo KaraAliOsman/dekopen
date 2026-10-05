@@ -7,7 +7,6 @@ product_variant: vacia
 prompt: "agrega un travesaño a 400 mm desde arriba para una banderola fija"
 expected: "Travesaño horizontal; bahía superior de 400 mm de alto, FIXED."
 expect:
-  op_gap: split_bay_h
   any:
     - product:
         splits:

@@ -29,6 +29,7 @@ from ai_gateway.serializers import (
     AiJobOutcomeSerializer,
     AiJobSerializer,
     AiMetricsSerializer,
+    AiOpsContractSerializer,
 )
 from ai_gateway.context import REQUIRED_REFS as AGENT_REQUIRED_REFS
 from authentication.errors import ContractAPIException, contract_error
@@ -651,6 +652,25 @@ class AiJobOutcomeView(APIView):
                 entry=data,
             )
             return Response(result)
+
+
+class AiOpsContractView(APIView):
+    """IA2 §1 — el registro tipado de ops expuesto como documento de
+    contrato: el mismo texto que el prompt, el validador y el TS
+    generado. Cualquier cliente puede descubrir las ops en runtime en
+    vez de adivinarlas."""
+
+    @extend_schema(
+        operation_id="ai_ops_contract",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        responses={200: AiOpsContractSerializer, **ERRORS},
+        tags=["ai"],
+    )
+    def get(self, request):
+        from projects.ops_registry import contract_document
+
+        with documentary_scope(request, _AGENT_CALLERS) as (_, _, _org_id):
+            return Response(contract_document())
 
 
 class AiMetricsView(APIView):

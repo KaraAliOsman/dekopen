@@ -1011,6 +1011,32 @@
   color: var(--theme-mark);
 }
 
+.assistant-panel__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+
+.assistant-panel__chip {
+  border: 1px solid var(--theme-border-strong, var(--theme-border));
+  border-radius: var(--radius-pill);
+  background: var(--theme-surface-raised, var(--theme-surface));
+  color: var(--theme-text-primary);
+  font-size: var(--type-dense);
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+.assistant-panel__chip:hover:not(:disabled) {
+  background: var(--theme-surface-hover, var(--theme-surface-sunken));
+}
+
+.assistant-panel__chip:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .assistant-panel__meta {
   color: var(--theme-text-muted);
   font-size: var(--type-micro);

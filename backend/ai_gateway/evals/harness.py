@@ -25,10 +25,14 @@ from typing import Any
 from unittest.mock import patch
 from uuid import UUID
 
+from decimal import Decimal
+
 from ai_gateway import agent, assist as ask_assist
+from ai_gateway import tools as agent_tools
 from ai_gateway.context import _ContextError, REQUIRED_REFS
 from ai_gateway.providers import ProviderError, provider_for
 from authentication.errors import ContractAPIException
+from pricing import service as pricing_service
 from projects import design_assist, service as projects_service
 
 from . import fixtures
@@ -41,8 +45,11 @@ from . import fixtures
 _CAPABILITIES = ("design_assist", "agent", "context_assist", "design_alternatives")
 
 # Pin de provider_model por proveedor cuando no hay `AI_GATEWAY_{P}_MODEL` —
-# el valor que las migraciones fijan en ai_routes (última: 20261203).
-_WIRE_MODEL_PINS = {"MIMO": "primalabs-ai/MiMo-V2.6-Pro-RL"}
+# el valor que las migraciones fijan en ai_routes (vigente:
+# 20261230003000_ia2_mimo_wire_model):
+# el endpoint de la credencial sirve `mimo-v2.6-pro`; el pin primalabs que
+# reemplazó responde 400 en este endpoint (causa raíz IA1-1).
+_WIRE_MODEL_PINS = {"MIMO": "mimo-v2.6-pro"}
 
 
 def configured_provider_names() -> list[str]:
@@ -211,6 +218,96 @@ def _position_row_lookup(given: dict):
     return fake_position_row
 
 
+def _tools_rows(given: dict):
+    """Réplica de las consultas SQL que `ai_gateway.tools` hace (§2) — las
+    mismas filas fixture que las proyecciones de contexto, resueltas por
+    tabla y por el primer parámetro (id de posición o project_id)."""
+
+    def fake_rows(sql: str, params: list | tuple | None = None):
+        params = list(params or [])
+        if "public.pricing_rules" in sql:
+            rules = given.get("pricing_rules")
+            return [dict(rules)] if rules else []
+        if "tenancy_organizations" in sql:
+            currency = (given.get("pricing_rules") or {}).get("currency", "CLP")
+            return [{"currency": currency}]
+        if "public.project_positions" in sql:
+            rows_ = [dict(row) for row in given.get("positions") or []]
+            if given.get("position"):
+                rows_.append(dict(given["position"]))
+            if "WHERE id=%s" in sql and params:
+                return [row for row in rows_ if str(row.get("id")) == str(params[0])]
+            if "project_id=%s" in sql and len(params) >= 2:
+                return [
+                    row
+                    for row in rows_
+                    if str(row.get("project_id") or "") == str(params[1])
+                ]
+            return rows_
+        if "public.profile_systems" in sql:
+            systems = given.get("systems") or []
+            if "WHERE id=%s" in sql and params:
+                return [row for row in systems if str(row.get("id")) == str(params[0])]
+            return [dict(row) for row in systems]
+        if "public.project_versions" in sql:
+            return [dict(row) for row in given.get("versions") or []]
+        if "public.pricing_operations" in sql:
+            return [dict(row) for row in given.get("pricing_operations") or []]
+        return []
+
+    return fake_rows
+
+
+def _project_row_lookup(given: dict):
+    """projects_service.project_row para get_blockers — status y revisión
+    del contexto fixture del proyecto."""
+
+    def fake_project_row(org_id: UUID, project_id: Any) -> dict:
+        entries = (given.get("contexts") or {}).get("project") or []
+        context = (entries[0].get("context") or {}) if entries else {}
+        if not context:
+            raise _ContextError("ai_context_not_found")
+        return {
+            "id": str(project_id),
+            "status": context.get("status"),
+            "current_revision": context.get("current_revision"),
+        }
+
+    return fake_project_row
+
+
+def _fake_opening_options(org_id: UUID, position: dict) -> list[dict]:
+    """`tools._system_opening_options` sobre el fixture: las mismas opciones
+    D03 que el catálogo fixture declara, sin tocar Postgres."""
+    catalog = fixtures.catalog_for(position.get("system_uuid"))
+    return list(catalog["openings"]) if catalog else []
+
+
+def _fake_position_cost(repo: Any, position: dict, rules: dict):
+    """Réplica determinista de `pricing.service.position_cost` — el motor
+    real exige Postgres+RLS; la vara del arnés sólo necesita un costo
+    monótono en área/hojas para que «la más cara» sea verificable."""
+    width = Decimal(str(position.get("width_mm") or "0"))
+    height = Decimal(str(position.get("height_mm") or "0"))
+    area = (width * height / Decimal("1000000")).quantize(Decimal("0.0001"))
+    leaves = max(1, len(fixtures._bay_ids(position.get("parametric_tree"))))
+    cost = Decimal("120000") * area + Decimal("45000") * (leaves - 1) + Decimal("60000")
+    formation = {
+        "composition": [
+            {
+                "kind": "profile",
+                "sku": "MARCO-60",
+                "quantity": str(area),
+                "unit": "m2",
+                "cost": str(cost.quantize(Decimal("0.01"))),
+            }
+        ],
+        "materials_cost": str(cost.quantize(Decimal("0.01"))),
+        "area_m2": str(area),
+    }
+    return cost, area, None, formation
+
+
 def _batch_positions_lookup(given: dict):
     """Réplica de agent._batch_positions sobre las filas fixture — mismo
     contrato de errores y límites."""
@@ -317,6 +414,8 @@ def run_case(case: dict, *, broker: ProviderBroker) -> dict:
                 "rejected": result.get("rejected") or [],
                 "notes": result.get("notes"),
                 "model": result.get("model"),
+                "clarify": result.get("clarify"),
+                "simulation": result.get("simulation"),
             }
         elif via == "agent":
             surface = case["surface"]
@@ -325,7 +424,15 @@ def run_case(case: dict, *, broker: ProviderBroker) -> dict:
                 patch.object(agent, "build_context", fake_context),
                 patch.object(design_assist, "_catalog", fake_catalog),
                 patch.object(projects_service, "position_row", _position_row_lookup(given)),
+                patch.object(projects_service, "project_row", _project_row_lookup(given)),
                 patch.object(agent, "_batch_positions", _batch_positions_lookup(given)),
+                # IA2 §2 — el borde de I/O de las herramientas del motor:
+                # mismas filas fixture, motor de precio determinista.
+                patch.object(agent_tools, "rows", _tools_rows(given)),
+                patch.object(
+                    agent_tools, "_system_opening_options", _fake_opening_options
+                ),
+                patch.object(pricing_service, "position_cost", _fake_position_cost),
             ):
                 result = agent._act(
                     org_id=org_id,
@@ -343,7 +450,7 @@ def run_case(case: dict, *, broker: ProviderBroker) -> dict:
             )
             state = (
                 "WAITING_FOR_USER"
-                if result.get("questions")
+                if result.get("questions") or result.get("clarify")
                 else "WAITING_FOR_APPROVAL"
                 if pending
                 else "SUCCEEDED"

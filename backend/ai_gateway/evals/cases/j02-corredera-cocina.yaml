@@ -6,18 +6,19 @@ fixture: proyecto
 refs:
   project_id: "fd515745-3b5b-540e-aa5d-455d0d7067b5"
 prompt: "crea una corredera de 2 hojas de 1600 × 1100 para la cocina"
-expected: "Posición nueva con esa tipología, medidas y ubicación (o la incompatibilidad explicada)."
+expected: "add_position con las medidas declaradas (y la serie corredera o la aclaración por sistema), o la aclaración tipada."
 expect:
-  op_gap: create_position (no existe op para crear posiciones ni SLIDING en OPENINGS)
   any:
+    # IA2 §1 — add_position existe; la propuesta viaja como paso ops.
+    - behavior:
+        ops_any: ["add_position"]
+    - behavior:
+        clarify_options: {min: 1}
+    - behavior:
+        asks_clarification: true
     - behavior:
         artifact:
           kind: project_draft
-    - behavior:
-        artifact:
-          kind: product_draft
-    - behavior:
-        asks_clarification: true
     - behavior:
         steps_kinds_absent: [ops, batch_ops]
         text_matches_any:

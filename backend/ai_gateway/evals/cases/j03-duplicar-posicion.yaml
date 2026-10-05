@@ -6,15 +6,19 @@ fixture: proyecto
 refs:
   project_id: "fd515745-3b5b-540e-aa5d-455d0d7067b5"
 prompt: "duplica la posición 3 cuatro veces para los dormitorios"
-expected: "4 posiciones nuevas iguales a la 3, o la cantidad +4, según el modelo, documentado."
+expected: "duplicate_position sobre la posición de índice 3 (o quantity +4 vía update_position), o la aclaración."
 expect:
-  op_gap: duplicate_position
   any:
+    # IA2 §1 — la op de proyecto existe y viaja como paso ops.
+    - behavior:
+        ops_any: ["duplicate_position|update_position"]
+    - behavior:
+        clarify_options: {min: 1}
+    - behavior:
+        asks_clarification: true
     - behavior:
         artifact:
           kind: project_draft
-    - behavior:
-        asks_clarification: true
     - behavior:
         steps_kinds_absent: [ops, batch_ops]
         text_matches_any:

@@ -199,6 +199,10 @@ export function applyDesignOpOn(
         panelSkus: [],
         mullionSkus: {},
       },
+      // IA2 — los comandos de división miden con la geometría de miembros
+      // del sistema: viaja por el estado de la secuencia (AssistantPanel la
+      // inyecta desde resolveMembers(options)).
+      ...(state?.members ? { members: state.members } : {}),
       disabled: false,
       commit: () => {},
       select: () => {},

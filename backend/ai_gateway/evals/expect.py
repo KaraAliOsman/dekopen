@@ -73,7 +73,7 @@ def _bay_match(bay: dict, spec: dict) -> bool:
         if key == "glass_article_sku_in":
             if bay.get("glass_article_sku") not in expected:
                 return False
-        elif key in ("glass_thickness_mm",):
+        elif key in ("glass_thickness_mm", "handle_height_mm"):
             if not _eq_mm(bay.get(key), expected):
                 return False
         else:
@@ -128,7 +128,10 @@ def _check_product(checks: dict, product_after: dict | None, product_changed: bo
             ok = bool(expected) and all(
                 any(
                     split["type"] == spec.get("type")
-                    and _eq_mm(split["offset_mm"], spec.get("offset_mm"))
+                    and (
+                        spec.get("offset_mm") is None
+                        or _eq_mm(split["offset_mm"], spec.get("offset_mm"))
+                    )
                     for split in got_splits
                 )
                 for spec in expected
@@ -208,8 +211,56 @@ def _check_behavior(
             ok = len(questions) >= int(want)
             detail = f"questions={len(questions)}"
         elif name == "asks_clarification":
-            ok = bool(want) == (bool(questions) or bool(_CLARIFY_RE.search(text)))
-            detail = f"questions={questions}"
+            # IA2 §3 — el canal tipado cuenta igual que una pregunta en
+            # texto: clarify {question, options[]} o questions[].
+            clarify = outcome.get("clarify")
+            ok = bool(want) == (
+                bool(questions)
+                or bool(isinstance(clarify, dict) and clarify.get("question"))
+                or bool(_CLARIFY_RE.search(text))
+            )
+            detail = f"questions={questions} clarify={clarify}"
+        elif name == "clarify_options":
+            # La aclaración tipada existe y sus opciones calzan el rango
+            # pedido — "pregunte con opciones reales" (E08 del encargo).
+            clarify = outcome.get("clarify")
+            options = (
+                (clarify or {}).get("options") or []
+                if isinstance(clarify, dict)
+                else []
+            )
+            minimum = (want or {}).get("min", 1) if isinstance(want, dict) else int(want)
+            maximum = (want or {}).get("max", 99) if isinstance(want, dict) else 99
+            ok = (
+                isinstance(clarify, dict)
+                and bool(clarify.get("question"))
+                and minimum <= len(options) <= maximum
+            )
+            detail = f"clarify={clarify}"
+        elif name == "ops_any":
+            # Cada regex debe calzar al menos UNA op ACEPTADA — una op que
+            # el validador rechazó no cuenta como trabajo correcto.
+            expected = want if isinstance(want, list) else [want]
+            ok = all(
+                any(
+                    re.search(str(rx), str(op.get("op") or ""))
+                    for op in ops_accepted
+                    if isinstance(op, dict)
+                )
+                for rx in expected
+            )
+            detail = f"accepted={ops_accepted}"
+        elif name == "queries_include_tool":
+            # Una herramienta del motor (§2) corrió y devolvió output — la
+            # evidencia de "calcula con el motor, no inventa".
+            expected = want if isinstance(want, list) else [want]
+            used = {
+                str(q.get("tool"))
+                for q in outcome.get("queries") or []
+                if isinstance(q, dict) and q.get("surface") == "tool" and q.get("status") == "ok"
+            }
+            ok = all(str(name_) in used for name_ in expected)
+            detail = f"tools={sorted(used)}"
         elif name == "sin_dato":
             ok = bool(want) == bool(_NO_DATA_RE.search(text))
             detail = "admite sin dato" if _NO_DATA_RE.search(text) else "no lo admite"

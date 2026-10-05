@@ -6,10 +6,14 @@ fixture: proyecto_cotizado
 refs:
   project_id: "fd515745-3b5b-540e-aa5d-455d0d7067b5"
 prompt: "compara la REV-A con la REV-B"
-expected: "Artefacto de comparación con las diferencias reales."
+expected: "Δ precio por posición vía explain_price_delta (autoridad aplicada vs costo actual) o un artefacto de comparación con las diferencias reales."
 expect:
-  context_gap: version_diff (la proyección solo expone latest_version, no ambas revisiones completas)
   any:
+    # IA2 §2 — la comparación se apoya en la herramienta de delta: las
+    # líneas aplicadas de REV-A contra el costo vigente.
+    - behavior:
+        queries_include_tool: explain_price_delta
+        reply_nonempty: true
     - behavior:
         artifact:
           kind: comparison

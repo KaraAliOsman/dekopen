@@ -1,4 +1,5 @@
 import type { ProductJson } from "../canvas/productEditing";
+import type { MemberGeometry } from "../canvas/members";
 import type { TranslationKey } from "../../i18n/es-CL";
 
 /** The validated op contract returned by POST /positions/<id>/design-assist/.
@@ -13,11 +14,20 @@ export type DesignOp = { op: string } & Record<string, unknown>;
 export interface DesignOpState {
   addedModules: string[];
   addedCouplings: string[];
+  /** IA2 — vanos (`added_b{n}`) y divisiones (`added_d{n}`) creadas por
+   * ops estructurales de la misma secuencia: el wire las nombra sintéticas
+   * y el diff del árbol tras cada op revela el id real que produjo. */
+  addedBays: string[];
+  addedDividers: string[];
   /** The product as the op sequence's author saw it. Numeric addresses and
    * `m{n}`/`c{n}` positional refs resolve against THIS list — the same
    * original-index contract the backend validator applies — never against
    * the live product an earlier structural op already mutated. */
   origin?: ProductJson;
+  /** IA2 — geometría de miembros del sistema (resolveMembers): split_bay y
+   * equalize_bays la necesitan para cortar donde el motor corta — sin ella
+   * el decode rechaza en vez de medir mal. */
+  members?: MemberGeometry;
 }
 
 /** Editor tools a command may arm. */
@@ -43,6 +53,9 @@ export interface CommandContext {
   selection: string | null;
   catalog: CommandCatalog;
   disabled: boolean;
+  /** IA2 — member geometry resuelta del sistema (resolveMembers(options));
+   * los comandos de división la exigen — el canvas siempre la tiene. */
+  members?: MemberGeometry;
   commit(next: ProductJson): void;
   select(id: string | null): void;
   setTool?(tool: EditorTool): void;

@@ -11,6 +11,7 @@ real en la base).
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid5, NAMESPACE_URL
 
@@ -38,8 +39,84 @@ def _id(key: str) -> str:
 # ---------------------------------------------------------------------------
 # Catálogo DEMO_60 — lo que `design_assist._catalog` devuelve sobre seed.sql:
 # un solo SKU de vidrio (VIDRIO-BASE, receta '4 Float Incoloro'), el panel
-# sándwich de 24 mm y la matriz de junquillos {4,5,6,20,24}.
+# sándwich de 24 mm y la matriz de junquillos {4,5,6,20,24}. IA2 extiende la
+# forma: aperturas D03 (key + alias legacy), postes por eje, acabados,
+# regla de manilla y las series elegibles del tenant.
 # ---------------------------------------------------------------------------
+
+# Opciones de apertura del fixture — mismo descriptor que
+# spec_options_from_capabilities emite para la familia CASEMENT (D03).
+DEMO_60_OPENINGS: list[dict] = [
+    {"key": "PRIMARY:FIXED", "name": "Fijo", "unit_kind": "WINDOW", "legacy": "FIXED"},
+    {
+        "key": "PRIMARY:FIXED_SASH",
+        "name": "Fijo en hoja",
+        "unit_kind": "WINDOW",
+        "legacy": None,
+    },
+    {
+        "key": "PRIMARY:TURN:LEFT:INWARD",
+        "name": "Abatible hacia adentro — bisagras a la izquierda",
+        "unit_kind": "WINDOW",
+        "legacy": "TURN_LEFT",
+    },
+    {
+        "key": "PRIMARY:TURN:RIGHT:INWARD",
+        "name": "Abatible hacia adentro — bisagras a la derecha",
+        "unit_kind": "WINDOW",
+        "legacy": "TURN_RIGHT",
+    },
+    {
+        "key": "PRIMARY:TILT_TURN:LEFT:INWARD",
+        "name": "Oscilobatiente — bisagras a la izquierda",
+        "unit_kind": "WINDOW",
+        "legacy": "TILT_TURN_LEFT",
+    },
+    {
+        "key": "PRIMARY:TILT_TURN:RIGHT:INWARD",
+        "name": "Oscilobatiente — bisagras a la derecha",
+        "unit_kind": "WINDOW",
+        "legacy": "TILT_TURN_RIGHT",
+    },
+    {
+        "key": "PRIMARY:TOP_HUNG:TOP:OUTWARD",
+        "name": "Proyectante",
+        "unit_kind": "WINDOW",
+        "legacy": "AWNING",
+    },
+    {
+        "key": "DOOR:PRIMARY:TURN:LEFT:INWARD",
+        "name": "Puerta bisagras a la izquierda hacia adentro",
+        "unit_kind": "DOOR",
+        "legacy": "DOOR_ENTRY",
+    },
+]
+
+DEMO_60_OPENING_KEYS = {
+    key
+    for option in DEMO_60_OPENINGS
+    for key in (option.get("key"), option.get("legacy"))
+    if isinstance(key, str)
+}
+
+# Las series que el tenant del fixture tiene elegibles — espejo de la
+# consulta a profile_systems que _catalog y list_catalog_options hacen.
+SYSTEM_ROWS: list[dict] = [
+    {
+        "id": str(DEMO_60_ID),
+        "code": DEMO_60_CODE,
+        "name": DEMO_60_NAME,
+        "system_family": "CASEMENT",
+        "material": "PVC",
+    },
+    {
+        "id": _id("system/demo-sliding"),
+        "code": "DEMO_CORREDERA_60",
+        "name": "Demo Corredera 60",
+        "system_family": "SLIDING",
+        "material": "PVC",
+    },
+]
 
 CATALOGS: dict[str, dict] = {
     str(DEMO_60_ID): {
@@ -47,12 +124,83 @@ CATALOGS: dict[str, dict] = {
         "glass_recipes": {"VIDRIO-BASE": "4 Float Incoloro"},
         "panel_skus": {"PANEL-SANDWICH-DEMO-24"},
         "thicknesses": {4, 5, 6, 20, 24},
+        "openings": DEMO_60_OPENINGS,
+        "opening_keys": DEMO_60_OPENING_KEYS,
+        "mullions": {
+            "SPLIT_V": {"sku": "POSTE-V-60", "face_mm": Decimal("60")},
+            "SPLIT_H": {"sku": "POSTE-H-60", "face_mm": Decimal("60")},
+        },
+        # La geometría de miembros por rol — la forma que `sim.region` y
+        # `resolveMembers` consumen (no un mapa sku→cara).
+        "members": {
+            "frame_mm": Decimal("60"),
+            "sash_mm": Decimal("72"),
+            "mullion_v_mm": Decimal("60"),
+            "mullion_h_mm": Decimal("60"),
+            "threshold_mm": None,
+        },
+        "finishes": {"WHITE"},
+        "handle_rule": {
+            "rule": "CENTERED_SASH",
+            "min_mm": Decimal("400"),
+            "max_mm": Decimal("1600"),
+            "default_mm": Decimal("1050"),
+        },
+        "systems": {
+            str(row["id"]): {
+                "code": row["code"],
+                "system_family": row["system_family"],
+                "material": row["material"],
+            }
+            for row in SYSTEM_ROWS
+        },
     }
 }
 
 
 def catalog_for(system_id: Any) -> dict | None:
     return CATALOGS.get(str(system_id))
+
+
+# ---------------------------------------------------------------------------
+# Precio del fixture — lo que las herramientas del motor (§2) leen de las
+# tablas de pricing: una fila de reglas CLP y una autoridad APPLIED en la
+# variante cotizada (para explain_price_delta).
+# ---------------------------------------------------------------------------
+
+PRICING_RULES: dict = {
+    "org_id": str(ORG_ID),
+    "currency": "CLP",
+    "labor_rate_per_m2": Decimal("15000"),
+    "installation_rate_per_m2": Decimal("12000"),
+    "margin_pct": Decimal("30"),
+    "waste_pct": Decimal("8"),
+}
+
+
+def pricing_operations_cotizado() -> list[dict]:
+    """REV-A ya tiene precio aplicado — explain_price_delta compara contra
+    esta autoridad; las líneas son (index, costo) como las emite el motor."""
+    return [
+        {
+            "id": _id("pricing-op/rev-a"),
+            "result": {
+                "cost_lines": [[str(row["position_index"]), "310000.00"] for row in project_positions_rows()]
+            },
+        }
+    ]
+
+
+def versions_cotizado() -> list[dict]:
+    """project_versions de la variante cotizada: REV-B emitida pero sin
+    completar el expediente documental (eso es lo que falta para emitir)."""
+    return [
+        {
+            "revision_code": "REV-B",
+            "documentary_complete": False,
+            "production_allowed": False,
+        }
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -213,8 +361,57 @@ def position_context(
     }
 
 
-def editor_position_row() -> dict:
-    """Lo que `projects_service.position_row` devuelve para la posición."""
+def _bay_ids(tree: Any) -> list[str]:
+    """Ids de hoja del árbol de intención (orden de lectura) — los bay_id
+    que el BOM del motor usaría."""
+    found: list[str] = []
+
+    def walk(node: Any) -> None:
+        if not isinstance(node, dict):
+            return
+        if node.get("type") == "BAY":
+            found.append(str(node.get("id") or "b1"))
+        for child in node.get("children") or []:
+            walk(child)
+
+    walk(tree)
+    return found
+
+
+def _bom_for(tree: Any) -> dict:
+    """El `bom_snapshot` persistido que las herramientas §2 leen: pesos por
+    hoja, cortes y vidrios — la forma real que el motor deja al guardar.
+    Pesos plausibles del fixture (kg con 3 decimales, como el motor)."""
+    weights = []
+    for index, bay_id in enumerate(_bay_ids(tree)):
+        weights.append(
+            {
+                "bay_id": bay_id,
+                "leaf_id": f"{bay_id}/L1",
+                # 14.2 + 4.5·i kg — la hoja derecha de la variante dividida
+                # pesa 18.750 kg (valor que E09 debe citar).
+                "total_weight_kg": str(Decimal("14.200") + Decimal("4.550") * index),
+                "weight_unknown_reasons": [],
+            }
+        )
+    return {
+        "issues": [],
+        "leaf_weights": weights,
+        "profile_cuts": [
+            {"sku": "MARCO-60", "length_mm": "1500.00", "quantity": "2"},
+            {"sku": "HOJA-60", "length_mm": "1200.00", "quantity": "2"},
+        ],
+        "glasses": [{"sku": "VIDRIO-BASE", "width_mm": "1420.00", "height_mm": "1120.00"}],
+        "panels": [],
+        "hardware_items": [{"sku": "MAN-STD", "quantity": "1"}],
+    }
+
+
+def editor_position_row(*, product_variant: str = "vacia") -> dict:
+    """Lo que `projects_service.position_row` y `tools._position` devuelven
+    para la posición — IA2 incluye quantity/colores y el bom_snapshot que
+    las herramientas del motor (calculate/validate) consultan."""
+    tree = PRODUCT_VARIANTS[product_variant]()["assembly"]["modules"][0]["tree"]
     return {
         "id": str(EDITOR_POSITION_ID),
         "project_id": str(PROJECT_ID),
@@ -222,9 +419,13 @@ def editor_position_row() -> dict:
         "position_index": 1,
         "location_tag": "Editor — evaluación",
         "typology": "FIXED",
+        "quantity": 1,
         "width_mm": "1500.00",
         "height_mm": "1200.00",
-        "parametric_tree": {"type": "BAY", "opening_type": "FIXED"},
+        "color_interior": "WHITE",
+        "color_exterior": "WHITE",
+        "parametric_tree": tree,
+        "bom_snapshot": _bom_for(tree),
     }
 
 
@@ -269,19 +470,26 @@ _POSITIONS_SPEC: list[tuple[str, str, str, str, dict]] = [
 
 
 def project_positions_rows() -> list[dict]:
-    """Filas de `project_positions` tal como `_batch_positions` las lee."""
+    """Filas de `project_positions` tal como `_batch_positions` y las
+    herramientas del motor las leen (quantity, colores y bom_snapshot son
+    columnas que `tools._position`/`price_project` seleccionan)."""
     rows = []
     for index, (location, width, height, typology, tree) in enumerate(_POSITIONS_SPEC, 1):
         rows.append(
             {
                 "id": _id(f"pos/{index}"),
+                "project_id": str(PROJECT_ID),
                 "position_index": index,
                 "location_tag": location,
                 "typology": typology,
+                "quantity": 1,
                 "width_mm": width,
                 "height_mm": height,
+                "color_interior": "WHITE",
+                "color_exterior": "WHITE",
                 "system_id": str(DEMO_60_ID),
                 "parametric_tree": tree,
+                "bom_snapshot": _bom_for(tree),
             }
         )
     return rows
@@ -492,9 +700,11 @@ def given(fixture: str, *, product_variant: str = "vacia") -> dict:
         return {
             "contexts": {"position": [{"refs": {}, "context": _wrap("position", context)}]},
             "product": product_json,
-            "position": editor_position_row(),
+            "position": editor_position_row(product_variant=product_variant),
             "catalogs": CATALOGS,
             "positions": [],
+            "systems": SYSTEM_ROWS,
+            "pricing_rules": PRICING_RULES,
         }
     if fixture == "proyecto":
         return {
@@ -505,6 +715,10 @@ def given(fixture: str, *, product_variant: str = "vacia") -> dict:
             "position": None,
             "catalogs": CATALOGS,
             "positions": project_positions_rows(),
+            "systems": SYSTEM_ROWS,
+            "pricing_rules": PRICING_RULES,
+            "versions": [],
+            "pricing_operations": [],
         }
     if fixture == "proyecto_cotizado":
         return {
@@ -515,6 +729,10 @@ def given(fixture: str, *, product_variant: str = "vacia") -> dict:
             "position": None,
             "catalogs": CATALOGS,
             "positions": project_positions_rows(),
+            "systems": SYSTEM_ROWS,
+            "pricing_rules": PRICING_RULES,
+            "versions": versions_cotizado(),
+            "pricing_operations": pricing_operations_cotizado(),
         }
     if fixture == "produccion":
         return {

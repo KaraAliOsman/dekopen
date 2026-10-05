@@ -359,6 +359,43 @@ describe("splitModuleBay", () => {
     // Unknown bay → no change.
     expect(twice).toBe(once);
   });
+
+  it("expands parts=3 into sequential cuts with the engine's offsets (IA2)", () => {
+    // 1500mm module, frame 60, mullion face 70 — the wire's `parts` form of
+    // split_bay. The backend validator accepts the same expansion: the root
+    // split stores the absolute centerline (60 + 1380/3 = 520), the nested
+    // split the region-local offset (885/2 = 442.5).
+    const single = makeBowProduct({ moduleCount: 1, widthMm: 1500, heightMm: 1200, angleDeg: 15 });
+    const next = splitModuleBay(
+      single,
+      "m1",
+      { type: "SPLIT_V", mullionSku: "MULL-60", parts: 3 },
+      MULLION_MEMBERS,
+    );
+    const tree = next.assembly.modules[0]!.tree;
+    expect(tree.type).toBe("SPLIT_V");
+    expect(tree.split_offset_mm).toBe("520.00");
+    const second = tree.children![1]!;
+    expect(second.type).toBe("SPLIT_V");
+    expect(second.split_offset_mm).toBe("442.50");
+    // Tres hojas reales — un vano por hoja.
+    const leafIds = (node: typeof tree): string[] =>
+      node.type === "BAY" ? [node.id] : (node.children ?? []).flatMap(leafIds);
+    expect(leafIds(tree)).toHaveLength(3);
+  });
+
+  it("centers each parts cut on the region that remains", () => {
+    // parts out of range is not the wire's business — the validator bounds
+    // it; here only the honest expansion lands.
+    const single = makeBowProduct({ moduleCount: 1, widthMm: 1500, heightMm: 1200, angleDeg: 15 });
+    const next = splitModuleBay(
+      single,
+      "m1",
+      { type: "SPLIT_V", mullionSku: "MULL-60", parts: 2 },
+      MULLION_MEMBERS,
+    );
+    expect(next.assembly.modules[0]!.tree.split_offset_mm).toBe("750.00");
+  });
 });
 
 describe("moveModuleDivision", () => {

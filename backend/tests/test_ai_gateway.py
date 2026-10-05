@@ -1136,7 +1136,7 @@ def test_design_assist_payload_carries_system_and_json_mode(monkeypatch):
     )
     payload = captured["input_payload"]
     options = captured["provider_options"]
-    assert options["system"] == design_assist.DESIGN_ASSIST_SYSTEM
+    assert options["system"] == design_assist.design_assist_system()
     assert options["json_output"] is True
     # Controls stay out of the audited payload — the replay hash then covers
     # only client semantics and survives prompt edits.

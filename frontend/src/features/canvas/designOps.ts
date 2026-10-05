@@ -1,6 +1,8 @@
 import { applyDesignOpOn } from "../commands/registry";
 import type { CommandSpec, DesignOp, DesignOpState } from "../commands/types";
 import { ASSEMBLY_COMMANDS } from "./assemblyCommands";
+import type { IntentNode } from "./intentEditing";
+import type { MemberGeometry } from "./members";
 import type { ProductJson } from "./productEditing";
 
 export type { DesignOp };
@@ -73,6 +75,13 @@ export function applyDesignOp(
 
 /** Ids minted by one apply — the modules/couplings in `next` absent from
  * `before` — join the sequence's synthetic-ref state in creation order. */
+function collectNodeIds(node: IntentNode | undefined, kind: "BAY" | "SPLIT", out: string[]): void {
+  if (!node) return;
+  if (kind === "BAY" && node.type === "BAY") out.push(node.id);
+  if (kind === "SPLIT" && (node.type === "SPLIT_V" || node.type === "SPLIT_H")) out.push(node.id);
+  for (const child of node.children ?? []) collectNodeIds(child, kind, out);
+}
+
 function harvestAdded(state: DesignOpState, before: ProductJson, next: ProductJson): void {
   const moduleIds = new Set(before.assembly.modules.map((module) => module.id));
   const couplingIds = new Set(before.assembly.couplings.map((coupling) => coupling.id));
@@ -86,22 +95,83 @@ function harvestAdded(state: DesignOpState, before: ProductJson, next: ProductJs
       .filter((coupling) => !couplingIds.has(coupling.id))
       .map((coupling) => coupling.id),
   );
+  // IA2 — bay/divider ids minted inside the same module's tree (split_bay
+  // creates both): the wire's added_b{n}/added_d{n} resolve to them in
+  // document order, exactly like the backend's added_bays/added_dividers.
+  const beforeBays: string[] = [];
+  const beforeDividers: string[] = [];
+  const nextBays: string[] = [];
+  const nextDividers: string[] = [];
+  for (const module of before.assembly.modules) {
+    collectNodeIds(module.tree as IntentNode | undefined, "BAY", beforeBays);
+    collectNodeIds(module.tree as IntentNode | undefined, "SPLIT", beforeDividers);
+  }
+  for (const module of next.assembly.modules) {
+    collectNodeIds(module.tree as IntentNode | undefined, "BAY", nextBays);
+    collectNodeIds(module.tree as IntentNode | undefined, "SPLIT", nextDividers);
+  }
+  const beforeBaySet = new Set(beforeBays);
+  const beforeDividerSet = new Set(beforeDividers);
+  state.addedBays.push(...nextBays.filter((id) => !beforeBaySet.has(id)));
+  state.addedDividers.push(...nextDividers.filter((id) => !beforeDividerSet.has(id)));
+}
+
+/** IA2 — el estado que una secuencia de ops lleva: ids sintéticos +
+ * geometría de miembros (split/equalize la necesitan). */
+export function designOpState(product: ProductJson, members?: MemberGeometry): DesignOpState {
+  return {
+    addedModules: [],
+    addedCouplings: [],
+    addedBays: [],
+    addedDividers: [],
+    origin: product,
+    ...(members ? { members } : {}),
+  };
 }
 
 export function applyDesignOps(
   product: ProductJson,
   ops: DesignOp[],
   specs: CommandSpec[] = ASSEMBLY_COMMANDS,
+  members?: MemberGeometry,
 ): ProductJson {
   // Synthetic refs resolve in apply order: after each structural op, the ids
   // it minted join the state so `added_m1`/`added_c2` in a later op points at
   // the real entity the sequence produced, never a guess.
-  const state: DesignOpState = { addedModules: [], addedCouplings: [], origin: product };
+  const state: DesignOpState = designOpState(product, members);
   return ops.reduce((current, op) => {
     const next = applyDesignOp(current, op, specs, state);
     harvestAdded(state, current, next);
     return next;
   }, product);
+}
+
+/** IA2 — etiquetas para ops fuera del registro de canvas (posición y
+ * proyecto): no pasan por `describe` porque ningún CommandSpec las decodifica
+ * contra el producto. */
+export function describeScopeOp(op: DesignOp): string | null {
+  const short = (id: unknown) =>
+    typeof id === "string" && id.length > 8 ? `${id.slice(0, 8)}…` : String(id ?? "");
+  switch (op.op) {
+    case "set_system":
+      return `sistema → ${short(op.system_id)}`;
+    case "set_finish":
+      return `acabado → ${String(op.color ?? "?")}`;
+    case "set_location":
+      return `ubicación → ${String(op.location ?? "?")}`;
+    case "set_quantity":
+      return `cantidad → ${String(op.count ?? "?")}`;
+    case "add_position":
+      return `crear posición ${String(op.width_mm ?? "?")} × ${String(op.height_mm ?? "?")} mm`;
+    case "duplicate_position":
+      return `duplicar posición ${short(op.position_id)}${op.count ? ` ×${String(op.count)}` : ""}`;
+    case "remove_position":
+      return `quitar posición ${short(op.position_id)}`;
+    case "update_position":
+      return `actualizar posición ${short(op.position_id)}`;
+    default:
+      return null;
+  }
 }
 
 /** Human one-line description of a wire op — the registry spec's `describe`
@@ -114,7 +184,9 @@ export function describeDesignOp(
   priorOps: DesignOp[] = [],
   specs: CommandSpec[] = ASSEMBLY_COMMANDS,
 ): string {
-  const state: DesignOpState = { addedModules: [], addedCouplings: [], origin: product };
+  const scoped = describeScopeOp(op);
+  if (scoped !== null) return scoped;
+  const state: DesignOpState = designOpState(product);
   const evolved = priorOps.reduce((current, prior) => {
     const next = applyDesignOp(current, prior, specs, state);
     harvestAdded(state, current, next);

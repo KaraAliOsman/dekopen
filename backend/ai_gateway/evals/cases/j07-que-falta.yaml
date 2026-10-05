@@ -6,9 +6,14 @@ fixture: proyecto_cotizado
 refs:
   project_id: "fd515745-3b5b-540e-aa5d-455d0d7067b5"
 prompt: "¿qué falta para emitir?"
-expected: "Exactamente los faltantes del backend."
+expected: "Exactamente los faltantes del backend — vía get_blockers: precio aplicado existe, falta expediente documental completo."
 expect:
   any:
+    # IA2 §2 — la respuesta sale de la herramienta, no de memoria.
+    - behavior:
+        queries_include_tool: get_blockers
+        text_matches_any:
+          - "documentar|producci[oó]n|aprobaci[oó]n|revisi[oó]n|sellada|precio|cotizaci[oó]n|pago"
     - behavior:
         text_matches_any:
           - "documentar|producci[oó]n|aprobaci[oó]n|revisi[oó]n|sellada|precio|cotizaci[oó]n|pago"

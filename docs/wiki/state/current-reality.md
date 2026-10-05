@@ -139,6 +139,20 @@ Baseline findings (2026-10-05, ordered by impact — verified file:line evidence
 4. Context projections lack sash weight, engine validation blockers, per-position prices, version diffs and cut-plan bars — honest answers reduce to "sin dato".
 5. `_declared_values` accepts only literal numbers — relative-measure instructions ("20 cm más ancha") are impossible, while absurd literal values pass range checks.
 
+## IA2 AI operations and engine tools
+
+The IA2 encargo gives the AI the same typed operations a user has in the editor and project, engine-backed tools for numbers, and a typed clarify channel:
+
+- `backend/projects/ops_registry.py` is the single ops registry: 36 ops across `product`/`position`/`project` scopes plus `prepare_*` routes (emit/release/purchase/payment_link stay prepare-only). `ops_contract()` exports the registry into OpenAPI and `frontend/src/api/opsContract.generated.ts`; UI, API and AI execute the same ops.
+- `design_assist._validate_ops(ops, summary, catalog, declared, declared_strict)` returns `(accepted, rejected, simulation)`; `declared_strict` limits "must be prompt-cited" to semantic decisions (e.g. `parts`), while derived numbers (`offset_mm`, prices, weights) are computed by the engine/sim — rejecting a correct derived number is now impossible by construction.
+- Engine tools in `ai_gateway/tools.py`: `calculate_position`, `validate_position`, `price_position`, `price_project`, `explain_price_delta`, `list_catalog_options`, `get_blockers`, `simulate_ops` — the model cites numbers only from tool output or context.
+- `clarify {question, options[]}` renders as chips in `AssistantPanel`; a chip submits `<prompt> — <option.label>` through the same channel (verified E08 end-to-end).
+- `ai_gateway/context.py` now projects `systems:[{id, code, family}]`, per-position prices, revision diffs, cut bars, sash weights and validation blockers; `_system_opening_options` keeps the `legacy` alias so both D03 keys (`PRIMARY:TILT_TURN:LEFT:INWARD`) and legacy enums (`TILT_TURN_LEFT`) validate against `opening_keys`.
+- Frontend parity: `assemblyCommands.ts` (incl. `parts` count), `positionOps.starterDesign` autofills glass only from single-option lists, `AgentBody` marks "Aplicado" solely when every op succeeds.
+- Versioned es-CL system prompt (`projects/design_prompt.py`) with glossary/conventions; agent limits `ai_gateway/limits.py` (20 steps / 6 queries / 6 clarify rounds + timeout) with per-job `job_metrics`.
+- Migration `20261230003000_ia2_mimo_wire_model.sql` pins `mimo-v2.6-pro` in `ai_routes`. The real provider remains 429 quota-blocked (verified 0/26); MOCK evals run 26/26 with zero rejected ops (`docs/ai/evals/2026-10-05-ia2-mock.json` / `-ia2-mimo.json`).
+- Verified in a real browser: E02 split+openings, E04 travesaño, E08 clarify→chip→set_handle_height, J02 agent creates a SLIDING_2L position (captures `docs/redesign/captures/ia2-asistente/`); `make lint|typecheck|test|build|test-db` green.
+
 ## P01 design-system state
 
 P01 lands the design constitution as code (branch `devin/P01-sistema-diseno`, PR head `9e9941dd1435bfc14c32d03a4cf7ecf2d410207b`):

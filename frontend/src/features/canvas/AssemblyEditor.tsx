@@ -2378,7 +2378,10 @@ export function AssemblyEditor({
     product && !disabled ? (product as unknown as { [key: string]: unknown }) : null,
     product && !disabled
       ? (ops: DesignOp[]) => {
-          if (product) commit(applyDesignOps(product, ops));
+          // IA2 — las ops estructurales miden con la geometría de miembros
+          // del sistema activo; sin ella el split/equalize no puede
+          // posicionar y el apply queda sin efecto (rechazo honesto).
+          if (product) commit(applyDesignOps(product, ops, undefined, members));
         }
       : null,
   );
@@ -2418,6 +2421,7 @@ export function AssemblyEditor({
         panelSkus,
         mullionSkus,
       },
+      members,
       disabled: busy,
       commit,
       select,
@@ -2446,6 +2450,7 @@ export function AssemblyEditor({
     product,
     selection,
     options,
+    members,
     glassSkus,
     couplerSkus,
     panelSkus,

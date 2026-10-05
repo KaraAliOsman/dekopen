@@ -13,7 +13,7 @@ SELECT ok(
 SELECT is(
     (SELECT provider || '|' || provider_model FROM public.ai_routes
      WHERE capability = 'context_assist'),
-    'MIMO|primalabs-ai/MiMo-V2.6-Pro-RL',
+    'MIMO|mimo-v2.6-pro',
     'context_assist is pinned to the sole MiMo model'
 );
 SELECT ok(

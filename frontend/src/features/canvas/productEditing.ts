@@ -13,12 +13,16 @@ import {
   SLIDING_PRESETS,
 } from "./intentEditing";
 import {
+  changeOpening,
   findNode,
+  flipBay,
   intentBays,
   moveDivision,
   parentSplitOf,
   primaryOpeningKey,
   removeDivision,
+  replaceNode,
+  resolvedSlidingLayout,
   splitBay,
   updateBay,
   walkIntent,
@@ -33,6 +37,10 @@ import {
   resolveCouplings,
   usedEdges,
 } from "./assemblyGraph";
+
+/** Serializa un mm calculado en el cliente para el contrato del motor
+ * (mismo formato "0.00" que usa el resto del modulo). */
+const mmStr = (value: number): string => value.toFixed(2);
 
 /** Compositional product model (product-v2) — modules joined by couplings.
  *
@@ -137,9 +145,9 @@ export function makeTrapezoidModule(
     contour: {
       vertices: [
         { x_mm: "0", y_mm: "0" },
-        { x_mm: w.toFixed(2), y_mm: "0" },
-        { x_mm: (w - offsetRightMm).toFixed(2), y_mm: h.toFixed(2) },
-        { x_mm: offsetLeftMm.toFixed(2), y_mm: h.toFixed(2) },
+        { x_mm: mmStr(w), y_mm: "0" },
+        { x_mm: mmStr(w - offsetRightMm), y_mm: mmStr(h) },
+        { x_mm: mmStr(offsetLeftMm), y_mm: mmStr(h) },
       ],
       bulges: [null, null, null, null],
     },
@@ -163,11 +171,11 @@ export function makeArchModule(
     contour: {
       vertices: [
         { x_mm: "0", y_mm: "0" },
-        { x_mm: w.toFixed(2), y_mm: "0" },
-        { x_mm: w.toFixed(2), y_mm: h.toFixed(2) },
-        { x_mm: "0", y_mm: h.toFixed(2) },
+        { x_mm: mmStr(w), y_mm: "0" },
+        { x_mm: mmStr(w), y_mm: mmStr(h) },
+        { x_mm: "0", y_mm: mmStr(h) },
       ],
-      bulges: [null, null, riseMm.toFixed(2), null],
+      bulges: [null, null, mmStr(riseMm), null],
     },
     tree,
   };
@@ -242,8 +250,8 @@ export function makeBowProduct(options: {
     remaining -= width;
     modules.push({
       id: `m${index}`,
-      width_mm: width.toFixed(2),
-      height_mm: heightMm.toFixed(2),
+      width_mm: mmStr(width),
+      height_mm: mmStr(heightMm),
       tree: makeBayTree(`m${index}`, opening, glassThicknessMm, glassSpec, glassArticleSku),
     });
     if (index > 1) {
@@ -852,8 +860,8 @@ export function scaledContour(
   const n = contour.vertices.length;
   return {
     vertices: contour.vertices.map((v) => ({
-      x_mm: ((Number(v.x_mm) - minX) * sx).toFixed(2),
-      y_mm: ((Number(v.y_mm) - minY) * sy).toFixed(2),
+      x_mm: mmStr((Number(v.x_mm) - minX) * sx),
+      y_mm: mmStr((Number(v.y_mm) - minY) * sy),
     })),
     bulges: contour.bulges.map((b, i) => {
       if (b === null || b === undefined) return null;
@@ -864,7 +872,7 @@ export function scaledContour(
       const len = Math.hypot(dx, dy) || 1;
       // unit normal of the chord, scaled: |(-dy,dx)/len ⊙ (sx,sy)|
       const factor = Math.hypot((-dy / len) * sx, (dx / len) * sy);
-      return (Number(b) * factor).toFixed(2);
+      return mmStr(Number(b) * factor);
     }),
   };
 }
@@ -912,17 +920,17 @@ export function resizeModuleSeam(
     module.id === left.id
       ? {
           ...module,
-          width_mm: leftMm.toFixed(2),
+          width_mm: mmStr(leftMm),
           ...(module.contour
-            ? { contour: scaledContour(module.contour, leftMm.toFixed(2), module.height_mm) }
+            ? { contour: scaledContour(module.contour, mmStr(leftMm), module.height_mm) }
             : {}),
         }
       : module.id === right.id
         ? {
             ...module,
-            width_mm: rightMm.toFixed(2),
+            width_mm: mmStr(rightMm),
             ...(module.contour
-              ? { contour: scaledContour(module.contour, rightMm.toFixed(2), module.height_mm) }
+              ? { contour: scaledContour(module.contour, mmStr(rightMm), module.height_mm) }
               : {}),
           }
         : module,
@@ -1027,9 +1035,7 @@ export function equalizeModuleWidths(product: ProductJson): ProductJson {
   const share = Math.round((total / modules.length) * 100) / 100;
   const nextModules = modules.map((module, index) => {
     const widthMm =
-      index === modules.length - 1
-        ? (total - share * (modules.length - 1)).toFixed(2)
-        : share.toFixed(2);
+      index === modules.length - 1 ? mmStr(total - share * (modules.length - 1)) : mmStr(share);
     return {
       ...module,
       width_mm: widthMm,
@@ -1072,7 +1078,7 @@ export function scaleModuleWidths(product: ProductJson, totalMm: string): Produc
     assembly: {
       ...product.assembly,
       modules: modules.map((module) => {
-        const widthMm = ((map.get(module.id) ?? 1) / 100).toFixed(2);
+        const widthMm = mmStr((map.get(module.id) ?? 1) / 100);
         return {
           ...module,
           width_mm: widthMm,
@@ -1456,7 +1462,7 @@ function baySpanOnAxis(
   vertical: boolean,
   moduleSpanMm: number,
   members: MemberGeometry,
-): { spanMm: number; isTopBay: boolean } | null {
+): { spanMm: number; originMm: number; isTopBay: boolean } | null {
   const pathTo = (node: IntentNode): { node: IntentNode; index: number }[] | null => {
     if (node.id === bayId) return [];
     for (const [index, child] of (node.children ?? []).entries()) {
@@ -1485,7 +1491,7 @@ function baySpanOnAxis(
     if (index === 0) hi = Math.min(hi, centerline - mullionHalf);
     else lo = Math.max(lo, centerline + mullionHalf);
   }
-  return { spanMm: Math.max(hi - lo, 0), isTopBay: path.length === 0 };
+  return { spanMm: Math.max(hi - lo, 0), originMm: lo, isTopBay: path.length === 0 };
 }
 
 /** "Dividir" — split a module's bay region with a catalog mullion.
@@ -1499,7 +1505,16 @@ function baySpanOnAxis(
 export function splitModuleBay(
   product: ProductJson,
   moduleId: string,
-  division: { type: SplitType; mullionSku: string; offsetMm?: string; bayId?: string },
+  division: {
+    type: SplitType;
+    mullionSku: string;
+    offsetMm?: string;
+    bayId?: string;
+    /** IA2 — divide the bay into N equal parts (2..8): the wire's `parts`
+     * form of split_bay; the engine owns the per-cut offsets so the model
+     * never invents a measure. */
+    parts?: number;
+  },
   members: MemberGeometry,
 ): ProductJson {
   const module = product.assembly.modules.find((item) => item.id === moduleId);
@@ -1514,28 +1529,66 @@ export function splitModuleBay(
   }
   const size = division.type === "SPLIT_V" ? Number(module.width_mm) : Number(module.height_mm);
   if (!Number.isFinite(size) || size <= 0) return product;
-  const region = baySpanOnAxis(root, bay.id, division.type === "SPLIT_V", size, members);
-  if (region === null || region.spanMm <= 0) return product;
-  // The top bay's split becomes the new root — its default centers the
-  // module span, a pure product coordinate with no member geometry in it.
-  // Deeper bays store bay-local offsets, so centering halves the bay's own
-  // span — which only real (declared) member geometry may bound.
-  const offset = division.offsetMm ?? (region.isTopBay ? size / 2 : region.spanMm / 2).toFixed(2);
   const used = new Set(walkIntent(module.tree).map((node) => node.id));
   const freeId = (base: string): string => {
     let index = 1;
     while (used.has(`${base}${index}`)) index += 1;
     return `${base}${index}`;
   };
+  const mintIds = (bayId: string) => {
+    const ids = {
+      split: freeId(`${module.id}-s${division.type === "SPLIT_V" ? "v" : "h"}`),
+      secondBay: freeId(`${bayId}-b`),
+    };
+    used.add(ids.split);
+    used.add(ids.secondBay);
+    return ids;
+  };
+  const parts =
+    division.parts !== undefined && Number.isInteger(division.parts)
+      ? Math.trunc(division.parts)
+      : 0;
+  if (parts >= 2 && parts <= 8) {
+    // N equal parts = N-1 sequential cuts: each cut slices span/(n-k+1) off
+    // the front of the bay region that keeps growing to the right — the
+    // same expansion the backend validator applies, so sim == apply.
+    try {
+      let tree = root;
+      let currentBay = bay.id;
+      for (let cut = 1; cut < parts; cut += 1) {
+        const region = baySpanOnAxis(tree, currentBay, division.type === "SPLIT_V", size, members);
+        if (region === null || region.spanMm <= 0) return product;
+        // The root split stores the absolute centerline; deeper splits store
+        // the region-local offset — the same convention the backend sim uses.
+        const local = region.spanMm / (parts - cut + 1);
+        const offset = mmStr(region.isTopBay ? region.originMm + local : local);
+        const ids = mintIds(currentBay);
+        tree = splitBay(
+          tree,
+          currentBay,
+          { type: division.type, offsetMm: offset, mullionSku: division.mullionSku },
+          ids,
+        );
+        currentBay = ids.secondBay;
+      }
+      return replaceModule(product, moduleId, { ...module, tree });
+    } catch {
+      return product;
+    }
+  }
+  const region = baySpanOnAxis(root, bay.id, division.type === "SPLIT_V", size, members);
+  if (region === null || region.spanMm <= 0) return product;
+  // The top bay's split becomes the new root — its default centers the
+  // module span, a pure product coordinate with no member geometry in it.
+  // Deeper bays store bay-local offsets, so centering halves the bay's own
+  // span — which only real (declared) member geometry may bound.
+  const offset = division.offsetMm ?? mmStr(region.isTopBay ? size / 2 : region.spanMm / 2);
   try {
     const tree = splitBay(
       module.tree.type === "ROOT" ? (module.tree.children?.[0] ?? module.tree) : module.tree,
       bay.id,
       { type: division.type, offsetMm: offset, mullionSku: division.mullionSku },
-      {
-        split: freeId(`${module.id}-s${division.type === "SPLIT_V" ? "v" : "h"}`),
-        secondBay: freeId(`${bay.id}-b`),
-      },
+      mintIds(bay.id),
     );
     return replaceModule(product, moduleId, { ...module, tree });
   } catch {
@@ -1650,4 +1703,288 @@ export function addStackedUnit(
     },
   };
   return linkModules(withMember, baseId, "top", member.id, "bottom", "STACKED");
+}
+
+/* ---------- IA2 — ops de vano/división del contrato tipado ----------
+ * Cada función porta la misma regla que backend/projects/design_ops_sim.py
+ * ejecuta en la simulación del asistente: la IA propone sobre el sim y la
+ * UI aplica sobre el árbol real — nunca dos semánticas distintas. */
+
+/** Patch directo sobre una hoja concreta del módulo (spec fields:
+ * glazing, herrajes, handle_height). Reusa updateBay — mismas reglas
+ * de identidad que el clipboard de spec. */
+export function updateModuleBay(
+  product: ProductJson,
+  moduleId: string,
+  bayId: string,
+  patch: Partial<IntentNode>,
+): ProductJson {
+  const module = product.assembly.modules.find((item) => item.id === moduleId);
+  if (!module) return product;
+  try {
+    const tree = updateBay(module.tree, bayId, patch);
+    return replaceModule(product, moduleId, { ...module, tree });
+  } catch {
+    return product;
+  }
+}
+
+/** Apertura de UNA hoja — changeOpening ya resuelve el spec OPTION_SPECS,
+ * limpia herrajes heredados y exige top-bay para puertas. */
+export function setBayOpening(
+  product: ProductJson,
+  moduleId: string,
+  bayId: string,
+  opening: string,
+): ProductJson {
+  const module = product.assembly.modules.find((item) => item.id === moduleId);
+  if (!module) return product;
+  // IA2 — la op wire puede citar la key D03 del catálogo
+  // ("PRIMARY:TILT_TURN:LEFT:INWARD"), el id de opción del editor o el enum
+  // legacy; changeOpening sólo acepta las dos últimas.
+  const optionId =
+    (OPTION_SPEC_KEY as Record<string, string>)[opening] !== undefined
+      ? opening
+      : SPEC_KEY_TO_OPTION[opening];
+  if (!optionId) return product;
+  try {
+    const tree = changeOpening(module.tree, bayId, optionId as Parameters<typeof changeOpening>[2]);
+    return replaceModule(product, moduleId, { ...module, tree });
+  } catch {
+    return product;
+  }
+}
+
+/** flip_handing — espejo de UNA hoja (manilla al otro lado, recorrido
+ * invertido, hojas del par intercambiadas). No-op honesto cuando la hoja
+ * no tiene nada espejable. */
+export function flipModuleBay(product: ProductJson, moduleId: string, bayId: string): ProductJson {
+  const module = product.assembly.modules.find((item) => item.id === moduleId);
+  const node = module ? findNode(module.tree, bayId) : null;
+  if (!module || !node || node.type !== "BAY") return product;
+  const flipped = flipBay(node);
+  if (flipped === null) return product;
+  try {
+    const tree = replaceNode(module.tree, bayId, flipped);
+    return replaceModule(product, moduleId, { ...module, tree });
+  } catch {
+    return product;
+  }
+}
+
+/** set_sliding_layout — preset u orientación de recorrido sobre hojas
+ * correderas existentes. `preset` cambia el layout entero;
+ * `primaryIndex` fija qué panel viaja delante. */
+export function setBaySlidingPreset(
+  product: ProductJson,
+  moduleId: string,
+  bayId: string,
+  change: { preset?: string; primaryIndex?: number },
+): ProductJson {
+  const module = product.assembly.modules.find((item) => item.id === moduleId);
+  const node = module ? findNode(module.tree, bayId) : null;
+  if (!module || !node || node.type !== "BAY") return product;
+  const resolved = resolvedSlidingLayout(node);
+  if (resolved === null) return product;
+  const nextLayout: SlidingLayout = change.preset
+    ? structuredClone(SLIDING_PRESETS[change.preset] ?? resolved)
+    : { ...resolved, panels: resolved.panels.map((panel) => ({ ...panel })) };
+  if (change.primaryIndex !== undefined) {
+    nextLayout.primary_index = change.primaryIndex;
+  }
+  const isPresetOnly = !change.preset;
+  const patch: Partial<IntentNode> = isPresetOnly
+    ? { sliding_layout: nextLayout }
+    : { opening_type: change.preset as IntentNode["opening_type"], sliding_layout: nextLayout };
+  return updateModuleBay(product, moduleId, bayId, patch);
+}
+
+/** set_travel — marca el panel `slot` de la corredera como MOVING|FIXED. */
+export function setBayTravel(
+  product: ProductJson,
+  moduleId: string,
+  bayId: string,
+  slot: number,
+  kind: "MOVING" | "FIXED",
+): ProductJson {
+  const module = product.assembly.modules.find((item) => item.id === moduleId);
+  const node = module ? findNode(module.tree, bayId) : null;
+  if (!module || !node || node.type !== "BAY") return product;
+  const resolved = resolvedSlidingLayout(node);
+  if (resolved === null || slot < 0 || slot >= resolved.panels.length) return product;
+  const panels = resolved.panels.map((panel, index) =>
+    index === slot ? { ...panel, kind } : { ...panel },
+  );
+  const layout: SlidingLayout = {
+    tracks: resolved.tracks,
+    panels,
+    primary_index: resolved.primary_index ?? 0,
+  };
+  return updateModuleBay(product, moduleId, bayId, { sliding_layout: layout });
+}
+
+/** equalize_bays — reparto igualitario del vano libre entre las hojas que
+ * una cadena de divisiones del mismo eje acota. Misma matemática que
+ * sim.apply_equalize: la cadena (split + splits hijos del mismo tipo)
+ * comparte el vano declarado por baySpanOnAxis de la región raíz. */
+export function equalizeModuleBays(
+  product: ProductJson,
+  moduleId: string,
+  members: MemberGeometry,
+): ProductJson {
+  const module = product.assembly.modules.find((item) => item.id === moduleId);
+  if (!module) return product;
+  const tree = structuredClone(module.tree);
+  const root = tree.type === "ROOT" ? (tree.children?.[0] ?? tree) : tree;
+  const moduleWidth = Number(module.width_mm);
+  const moduleHeight = Number(module.height_mm);
+
+  const pathTo = (node: IntentNode, id: string): { node: IntentNode; index: number }[] | null => {
+    if (node.id === id) return [];
+    for (const [index, child] of (node.children ?? []).entries()) {
+      const rest = pathTo(child, id);
+      if (rest !== null) return [{ node, index }, ...rest];
+    }
+    return null;
+  };
+
+  let mutated = false;
+  for (const node of walkIntent(root)) {
+    if (node.type !== "SPLIT_V" && node.type !== "SPLIT_H") continue;
+    const vertical = node.type === "SPLIT_V";
+    // Solo la raíz de cada cadena: un split con antecesor del mismo eje lo
+    // reparte su propia cadena padre, no una región inventada.
+    const path = pathTo(root, node.id) ?? [];
+    if (path.some(({ node: parent }) => parent.type === node.type)) continue;
+    const chain: IntentNode[] = [node];
+    let current = node;
+    for (;;) {
+      const next = (current.children ?? []).find((child) => child.type === node.type);
+      if (!next) break;
+      chain.push(next);
+      current = next;
+    }
+    const span = vertical ? moduleWidth : moduleHeight;
+    if (!Number.isFinite(span) || span <= 0) return product;
+    const mullion = (vertical ? members.mullionV : members.mullionH)?.faceWidthMm ?? 0;
+    const region = baySpanOnAxis(root, node.id, vertical, span, members);
+    if (region === null) return product;
+    const lo = span - region.spanMm === 0 ? 0 : undefined;
+    // La región real: lo = origen local del split (baySpanOnAxis solo da
+    // span; el origen lo recalcula la misma caminata de antecesores).
+    const originOf = (targetId: string): number | null => {
+      const targetPath = pathTo(root, targetId) ?? [];
+      let origin = 0;
+      for (const { node: parent, index } of targetPath) {
+        if (parent.type !== "SPLIT_V" && parent.type !== "SPLIT_H") continue;
+        if ((parent.type === "SPLIT_V") !== vertical) continue;
+        const offset = Number(parent.split_offset_mm);
+        const half =
+          ((parent.type === "SPLIT_V" ? members.mullionV : members.mullionH)?.faceWidthMm ?? 0) / 2;
+        if (!Number.isFinite(offset)) return null;
+        if (index === 1) origin = origin + offset + half;
+      }
+      return origin;
+    };
+    const lo_ = originOf(node.id);
+    if (lo_ === null) return product;
+    void lo;
+    const count = chain.length;
+    const share = (region.spanMm - count * mullion) / (count + 1);
+    if (share <= 0) return product;
+    for (const [slot, split] of chain.entries()) {
+      const own = slot === 0 ? lo_ : originOf(split.id);
+      if (own === null) return product;
+      const centerline = lo_ + (slot + 1) * share + (slot + 1) * mullion - mullion / 2;
+      const offset = centerline - own;
+      if (offset <= 0) return product;
+      split.split_offset_mm = mmStr(offset);
+      mutated = true;
+    }
+  }
+  if (!mutated) return product;
+  return replaceModule(product, moduleId, { ...module, tree });
+}
+
+/** set_bay_size — fija el vano libre de la hoja moviendo la división que
+ * la acota en el eje pedido (o la medida del módulo cuando no hay división
+ * en ese eje: el vano ES el módulo). Devuelve el producto o un motivo. */
+export function resizeModuleBay(
+  product: ProductJson,
+  moduleId: string,
+  bayId: string,
+  mm: number,
+  axis: "V" | "H" | undefined,
+  members: MemberGeometry,
+): ProductJson | "hoja_invalida" | "medida_invalida" {
+  const module = product.assembly.modules.find((item) => item.id === moduleId);
+  if (!module || !Number.isFinite(mm) || mm <= 0) return "hoja_invalida";
+  const tree = structuredClone(module.tree);
+  const root = tree.type === "ROOT" ? (tree.children?.[0] ?? tree) : tree;
+  const bay = findNode(root, bayId);
+  if (!bay || bay.type !== "BAY") return "hoja_invalida";
+
+  let useAxis = axis;
+  if (useAxis === undefined) {
+    const parent = parentSplitOf(root, bayId);
+    useAxis = parent?.type === "SPLIT_V" ? "V" : parent ? "H" : undefined;
+  }
+  if (useAxis === undefined) {
+    if (!Number.isFinite(Number(module.width_mm))) return "hoja_invalida";
+    return replaceModule(product, moduleId, { ...module, width_mm: mmStr(mm), tree });
+  }
+  const vertical = useAxis === "V";
+  const span = vertical ? Number(module.width_mm) : Number(module.height_mm);
+  if (!Number.isFinite(span) || span <= 0) return "hoja_invalida";
+  const region = baySpanOnAxis(root, bayId, vertical, span, members);
+  if (region === null || region.spanMm <= 0 || mm >= region.spanMm) return "medida_invalida";
+
+  const pathTo = (node: IntentNode, id: string): { node: IntentNode; index: number }[] | null => {
+    if (node.id === id) return [];
+    for (const [index, child] of (node.children ?? []).entries()) {
+      const rest = pathTo(child, id);
+      if (rest !== null) return [{ node, index }, ...rest];
+    }
+    return null;
+  };
+  const bayPath = pathTo(root, bayId) ?? [];
+  let bound: { node: IntentNode; index: number } | null = null;
+  for (const { node: parent, index } of [...bayPath].reverse()) {
+    if (parent.type !== "SPLIT_V" && parent.type !== "SPLIT_H") continue;
+    if ((parent.type === "SPLIT_V") !== vertical) continue;
+    bound = { node: parent, index };
+    break;
+  }
+  if (bound === null) {
+    const key = vertical ? "width_mm" : "height_mm";
+    return replaceModule(product, moduleId, { ...module, [key]: mmStr(mm), tree });
+  }
+  const mullion = (vertical ? members.mullionV : members.mullionH)?.faceWidthMm ?? 0;
+  const half = mullion / 2;
+  const loRegion = span - region.spanMm === 0 ? 0 : 0; // el origen de la hoja se recalcula abajo
+  void loRegion;
+  const originOf = (targetId: string): number | null => {
+    const targetPath = pathTo(root, targetId) ?? [];
+    let origin = 0;
+    for (const { node: parent, index } of targetPath) {
+      if (parent.type !== "SPLIT_V" && parent.type !== "SPLIT_H") continue;
+      if ((parent.type === "SPLIT_V") !== vertical) continue;
+      const offset = Number(parent.split_offset_mm);
+      const parentHalf =
+        ((parent.type === "SPLIT_V" ? members.mullionV : members.mullionH)?.faceWidthMm ?? 0) / 2;
+      if (!Number.isFinite(offset)) return null;
+      if (index === 1) origin = origin + offset + parentHalf;
+    }
+    return origin;
+  };
+  const bayOrigin = originOf(bayId);
+  if (bayOrigin === null) return "medida_invalida";
+  const centerline =
+    bound.index === 0 ? bayOrigin + mm + half : bayOrigin + region.spanMm - mm - half;
+  const parentOrigin = bound.node.id === root.id ? 0 : originOf(bound.node.id);
+  if (parentOrigin === null) return "medida_invalida";
+  const offset = centerline - parentOrigin;
+  if (offset <= 0) return "medida_invalida";
+  bound.node.split_offset_mm = mmStr(offset);
+  return replaceModule(product, moduleId, { ...module, tree });
 }

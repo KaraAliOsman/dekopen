@@ -12,8 +12,11 @@ OPENAPI = ROOT / "backend" / "openapi.yaml"
 GENERATED = ROOT / "frontend" / "src" / "api" / "generated"
 
 
+OPS_CONTRACT = ROOT / "frontend" / "src" / "features" / "commands" / "opsContract.generated.ts"
+
+
 def snapshot() -> dict[str, bytes]:
-    paths = [OPENAPI, *sorted(GENERATED.rglob("*.ts"))]
+    paths = [OPENAPI, OPS_CONTRACT, *sorted(GENERATED.rglob("*.ts"))]
     return {path.relative_to(ROOT).as_posix(): path.read_bytes() for path in paths}
 
 
@@ -43,6 +46,9 @@ def main() -> None:
     if npm is None:
         raise SystemExit("npm is required to verify generated-client drift")
     run([npm, "run", "api:generate"], ROOT / "frontend")
+    # IA2 §1 — el contrato tipado de ops también es artefacto generado:
+    # el TS derivado del registro debe ser reproducible, no editado a mano.
+    run([sys.executable, "scripts/gen_ops_contract.py"], ROOT)
     after = snapshot()
     changed = sorted(
         path for path in set(before) | set(after) if before.get(path) != after.get(path)

@@ -108,7 +108,6 @@ Append-only chronology. Keep newest entries at the bottom.
 - UI: sección "Vano y montaje" en el inspector con preview debounced, chip compuesto en el encabezado de posición, cota doble vano+fabricación en el lienzo con letreros "Holgura"/"Solape" por lado, Ajustes gana "Reglas de taller".
 - Verificado: `make lint|typecheck|test|build` y `make test-db` verdes; 14 goldens engine + pgTAP 177 (16 ok) + integración confirm/gate/revisión; capturas en `docs/redesign/captures/d07-vano-fabricacion/` (pendiente de carga al PR).
 - Decisiones nuevas registradas en `docs/decisions/valores-por-defecto.md` sección D07.
-||||||| parent of 5d17f112 (D05 — Colores y acabados de verdad: catálogo system_color_options por sistema, bicolor por posición (color_exterior), reglas de combinación del motor, SKU por acabado (stock_color EXT/INT), recargos declarados, renders por cara (2D/3D/portal/PDF), selector ColorSelector con swatches reales)
 
 ## [2026-10-05] D05 | colores y acabados de verdad
 
@@ -120,3 +119,16 @@ Append-only chronology. Keep newest entries at the bottom.
 - Selector `ColorSelector`: swatches reales, "Igual en ambas caras", resumen + recargo, issue con nombre. Fix: el checkbox era indesmarcable (sameFaces se derivaba de la igualdad; desmarcar exige exterior distinto — se inicializa con la primera opción válida).
 - Readiness: la sonda de compra usa el color base declarado (primer finish_class='WHITE' faces='BOTH' del dominio; NATURAL en aluminio) en vez de 'WHITE' fijo.
 - Verificado: lint/typecheck/test/build y `make test-db` verdes (pgTAP 970); 24 capturas en `docs/redesign/captures/d05-colores-acabados/shots/` (selector, bicolor, editor 2D, 3D ambas caras, posición guardada) a 1440/1280/1024 claro+oscuro. Nota: a 1024px el fieldset de cabecera ocluye el botón "Vista 3D" (defecto de layout preexistente, documentado).
+
+
+## [2026-10-05] IA2 | operaciones y herramientas de la IA
+
+- `ops_registry.py` (36 ops tipadas product/position/project + `prepare_*`) es la única fuente: `ops_contract()` → OpenAPI → `opsContract.generated.ts`; UI, API e IA comparten el mismo vocabulario — `check_generated_api` vela la paridad.
+- `_validate_ops` devuelve `(accepted, rejected, simulation)`; `declared_strict` separa lo que debe citarse en el prompt (decisiones semánticas como `parts`) de los derivados que el motor calcula — un número derivado correcto ya no se rechaza.
+- Herramientas del motor para el modelo: `calculate_position`, `validate_position`, `price_position`, `price_project`, `explain_price_delta`, `list_catalog_options`, `get_blockers`, `simulate_ops` (`ai_gateway/tools.py`); el contexto proyecta sistemas (`{id, code, family}`), precios por posición, diff de revisiones, barras de corte, pesos y bloqueantes.
+- `clarify {question, options[]}` tipado: el panel muestra chips y el chip reenvía `<prompt> — <etiqueta>` por el mismo canal (E08 verificado); la previsualización lista ops + simulación y un solo "Aplicar" ejecuta la transacción.
+- Paridad UI: `assemblyCommands` coacciona `parts` y emite specs completas; `starterDesign` autocompleta vidrio solo con opción única (convención del editor); el agente marca "Aplicado" solo sin fallos.
+- Tres hallazgos reales corregidos en e2e: el contexto del proyecto no proyectaba sistemas (`add_position` sin `system_id` citable), el starter no llevaba vidrio (400 del motor al crear posición) y la proyección de aperturas perdía el alias `legacy` (`set_opening` rechazado `apertura_inválida` pese a estar en el glosario).
+- Prompt es-CL versionado en `projects/design_prompt.py` (glosario + convenciones + ejemplos generados desde el registro); límites por job 20 pasos/6 consultas/6 rondas + timeout con `job_metrics`.
+- Migración `20261230003000_ia2_mimo_wire_model.sql` fija `mimo-v2.6-pro` en `ai_routes`. Evals: MOCK 26/26 con 0 ops rechazadas; MIMO 0/26 `proveedor_error` (429 — cuota externa agotada, documentado en `docs/ai/evals/README.md`).
+- Verificado: `make lint|typecheck|test|build` y `make test-db` verdes; e2e E02/E04/E08/J02 en navegador real con capturas `docs/redesign/captures/ia2-asistente/`; ux:capture scoped sin hallazgos nuevos en las rutas tocadas.

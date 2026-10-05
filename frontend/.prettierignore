@@ -5,3 +5,6 @@ test-results/
 playwright-report/
 src/styles/tokens.unused.txt
 scripts/ux-capture/.auth/
+# Archivo generado por scripts/gen_ops_contract.py — el drift real lo
+# vigila scripts/check_generated_api.py, no el formato.
+src/features/commands/opsContract.generated.ts

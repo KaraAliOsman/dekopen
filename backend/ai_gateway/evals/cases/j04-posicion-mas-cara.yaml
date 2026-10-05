@@ -1,15 +1,28 @@
 id: J04
 view: proyecto
-via: ask
+via: agent
 surface: project
 fixture: proyecto
 refs:
   project_id: "fd515745-3b5b-540e-aa5d-455d0d7067b5"
 prompt: "¿cuál es la posición más cara y por qué?"
-expected: "Identifica la posición correcta según el motor; cifras grounded."
+expected: "La posición 3 (Living, 2400×1500 — la mayor área) identificada con price_project; cifras citadas de la herramienta."
 expect:
-  context_gap: precio_por_posicion (la proyección de proyecto no expone precio por posición)
   any:
+    # IA2 §2 — el costo por posición sale de la herramienta, nunca del
+    # aire; el modelo ordena y cita la línea mayor.
+    - behavior:
+        queries_include_tool: price_project
+        text_matches_any:
+          - "living|posici[oó]n\\s*3|\\b3\\b|537|mayor|m[aá]s\\s+cara"
+    - behavior:
+        queries_include_tool: price_position
+        text_matches_any:
+          - "living|posici[oó]n\\s*3|\\b3\\b|537|mayor|m[aá]s\\s+cara"
+    - behavior:
+        text_matches_any:
+          - "living"
+        reply_nonempty: true
     - behavior:
         sin_dato: true
         reply_nonempty: true
