@@ -3,11 +3,12 @@ type: state
 status: active
 updated: 2026-10-05
 volatility: high
-verified_ref: 9e9941dd1435bfc14c32d03a4cf7ecf2d410207b
+verified_ref: bc7ed09ed2df41df838f19ffdd3346326e646c4f
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
   - P01 design-system PR https://github.com/KaraAliOsman/dekopen/pull/4
+  - D01 systems/profiles PR https://github.com/KaraAliOsman/dekopen/pull/6
   - integracion/v1 merge 747c528b67d234d697624929ccbcc7098261ed54
   - open PR metadata observed 2026-09-27/28
   - AGENTS.md
@@ -50,9 +51,9 @@ Hard invariants documented by the repo include:
 - workshop-language validation;
 - Oknosoft/WindowBuilder as a domain reference.
 
-## D01 state (pendiente de merge en `integracion/v1`)
+## D01 state
 
-On branch `devin/D01-sistemas-perfiles`, pending review/merge:
+Merged into `integracion/v1` as squash `bc7ed09ed2df41df838f19ffdd3346326e646c4f` (dekopen PR #6):
 
 - `profile_systems.system_family` (CASEMENT / SLIDING / LIFT_SLIDE / DOOR / FACADE_FIXED) separates fabrication families; `allowed_openings` maps each family to its typologies and the engine raises `IncompatibleTypologyError` when a design's typology does not belong to the system's family.
 - Profile roles now cover sliding/door hardware (SLIDING_SASH, INTERLOCK, RAIL, DOOR_SASH, FRAME_EXTENSION, SILL, COVER_TRIM, SKIRT); cut rules and reinforcement (incl. `screws_per_meter` → TORNILLO-4X16 BOM fittings) are data, not code.
