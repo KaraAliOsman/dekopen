@@ -1,6 +1,6 @@
 | ID | Ola | Estado | PR | SHA | Notas |
 |---|---|---|---|---|---|
-| P00 | 0 | mergeado | https://github.com/KaraAliOsman/framedex/pull/114 | a096f85b2e56e21eda024c1ec92a456ed9d30b03 | CI 4/4 verde; PR mergeado en integracion/v1. |
+| P00 | 0 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/1 | 747c528b67d234d697624929ccbcc7098261ed54 | CI 4/4 verde; PR mergeado en integracion/v1. Arnés completo (logins por rol, 41 rutas, baseline autenticada), fixture realista idempotente, fix select-organization→mfa. |
 | P01 | 0b | pendiente |  |  |  |
 | IA1 | 0b | pendiente |  |  |  |
 | D01 | 0b | pendiente |  |  |  |
