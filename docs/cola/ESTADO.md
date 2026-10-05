@@ -7,7 +7,7 @@
 | D02 | D1 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/10 | b623a067fe3db3872138c036e24c39a631ed947c | CI 6/6 verde; squash mergeado. GlassComposition + derivados motor + NCh 135 como datos + recargos + pedido al vidriero PDF/CSV+QR + selector Básico/Avanzado. |
 | D03 | D1 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/9 | db136a7207487e4e843b17f36f03a4c78a54b79b | CI 6/6 verde; squash mergeado. Modelo Opening + BayLeaf + capacidades por sistema + simbología DIN por vista + herrajes/manilla por hoja. |
 | D04 | D1 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/8 | 388e79bdc0ff111a9c2e76a445260bd9f18b92c3 | CI 6/6 verde; squash mergeado. Kits como clases por envolvente + qty/cut rules como datos + manillas validadas + opciones vendibles + picking/mecanizado en OT. |
-| D05 | D2 | pendiente |  |  |  |
+| D05 | D2 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/15 | 85cf4d6019111c08421c01024b98556e31199934 | CI 6/6 verde; squash mergeado. Catálogo por sistema + bicolor por posición + SKU por acabado + recargos motor + renders por cara. |
 | D06 | D2 | pendiente |  |  |  |
 | D07 | D2 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/14 | 5474798011022008f2ceb31dfefb15813ad24262 | CI 6/6 verde; squash mergeado. Motor rough_opening + reglas de montaje versionadas + estados de medida con sello + gate OT + chip/inspector/cota doble. |
 | IA2 | D2 | pendiente |  |  |  |

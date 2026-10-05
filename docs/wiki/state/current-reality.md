@@ -3,7 +3,7 @@ type: state
 status: active
 updated: 2026-10-05
 volatility: high
-verified_ref: 5474798011022008f2ceb31dfefb15813ad24262
+verified_ref: 85cf4d6019111c08421c01024b98556e31199934
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
@@ -13,6 +13,7 @@ sources:
   - D04 hardware PR https://github.com/KaraAliOsman/dekopen/pull/8
   - D03 openings/typologies PR https://github.com/KaraAliOsman/dekopen/pull/9
   - D07 vano/fabricación PR https://github.com/KaraAliOsman/dekopen/pull/14
+  - D05 colores/acabados PR https://github.com/KaraAliOsman/dekopen/pull/15
   - integracion/v1 merge 747c528b67d234d697624929ccbcc7098261ed54
   - open PR metadata observed 2026-09-27/28
   - AGENTS.md
@@ -100,9 +101,9 @@ Merged into `integracion/v1` as squash `388e79bdc0ff111a9c2e76a445260bd9f18b92c3
 - BOM `hardware_items` seal the leaf's sellable choices (class label, handle model/colour names, option skus/names, resolved handle height, sums, `price_deltas`, machining), so issued documents never re-query the catalog; `hardware_picking` + `hardware_machining` fields are emitted in the work-order payload for P14 (no dedicated UI yet — machining without coordinates stays `DECLARED_NOT_EMITTED`).
 - Editor inspector gains a full "Herrajes" section: resolved class summary, "¿Por qué este kit?", kit-class override, handle model/colour/height with out-of-range warning, sellable options, and the component table under "Avanzado"; the client document renders only the sellable side.
 
-## D05 state (pendiente de merge en `integracion/v1`)
+## D05 state
 
-On branch `devin/D05-colores-acabados`, pending review/merge:
+Merged into `integracion/v1` as squash `85cf4d6019111c08421c01024b98556e31199934` (dekopen PR #15):
 
 - Real per-system color catalog: `system_color_options` (code keys `profile_systems.finishes`; kind, manufacturer_code, gloss, render_color/texture, finish_class, film_clearance, glass_clearance_mm, dark, faces, pair_code, size_factor, surcharge_*, sort_order, data_provenance) plus `profile_systems.bicolor_allowed` (migration `20261230002000_d05_colores.sql`; seed rows are `SEED_SYNTHETIC`).
 - Bicolor per position: `project_positions.color_exterior` (NULL/equal-to-interior = monocolor; the canonical preimage strips it so monocolor `calculation_hash` is unchanged). Engine combination rules in `finishes.resolve_color_selection`: face availability, `bicolor_allowed`, whole-bar kinds (ANODIZED) never bicolor, two MASS colours never on one bar, `pair_code` honoured both directions — each rejection names finish + face in es-CL.
