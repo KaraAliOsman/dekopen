@@ -373,6 +373,15 @@ def openings_for_family(family: SystemFamily) -> frozenset[BayOpeningType]:
     return FAMILY_OPENINGS[family]
 
 
+class EdgeSide(str, Enum):
+    """Outer edge of a module in elevation — also the coupling-claim unit."""
+
+    LEFT = "left"
+    RIGHT = "right"
+    TOP = "top"
+    BOTTOM = "bottom"
+
+
 class SlidingPanel(EngineModel):
     """One slot of a sliding unit, ordered left→right in elevation."""
 
@@ -1382,6 +1391,10 @@ class SystemParams(EngineModel):
     # the engine falls back to the family's legacy-expressible openings,
     # so undeclared rows never admit more than the enum already could.
     opening_capabilities: tuple[OpeningCapability, ...] = ()
+    # Declared position accessories (D06): the extras a system may sell,
+    # keyed by article sku. An empty map means the catalog never declared
+    # them — no extras exist for the position, they are never invented.
+    extra_articles: dict[str, ExtraArticle] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _family_data_coherence(self) -> "SystemParams":
@@ -1469,6 +1482,20 @@ class ParametricNode(EngineModel):
         return self
 
 
+class PieceOrigin(str, Enum):
+    """Who emitted a BOM piece (D06).
+
+    PRODUCT pieces come from the position's own structure and price from
+    stock/catalog cost. EXTRA pieces belong to a declared position extra —
+    they reach the cut plan and the OT BOM like everything else, but the
+    extra's declared unit price already carries their sell and cost, so
+    pricing must not charge them again as stock material.
+    """
+
+    PRODUCT = "PRODUCT"
+    EXTRA = "EXTRA"
+
+
 class ProfileCut(EngineModel):
     sku: str
     role: ProfileRole
@@ -1483,6 +1510,7 @@ class ProfileCut(EngineModel):
     # cut requires bending authority — without one it must surface as a
     # manufacturing-incomplete piece, never a straight cut of that length.
     sagitta_mm: Decimal | None = None
+    origin: PieceOrigin = PieceOrigin.PRODUCT
 
 
 class FittingPiece(EngineModel):
@@ -1495,6 +1523,7 @@ class FittingPiece(EngineModel):
     qty: int = Field(gt=0)
     bay_id: str | None = None
     leaf_id: str | None = None
+    origin: PieceOrigin = PieceOrigin.PRODUCT
 
 
 class ReinforcementPiece(EngineModel):
@@ -1526,3 +1555,226 @@ class EngineResult(EngineModel):
     fittings: list[FittingPiece] = Field(default_factory=list)
     hardware_items: list[HardwareItem] = Field(default_factory=list)
     leaf_weights: list[LeafWeight] = Field(default_factory=list)
+    # Engine-derived sellable sublines of the position's declared extras
+    # (D06) — cantidad × precio = total, in the article's declared
+    # currency. Money fields stay None when the article never declared
+    # them; documents print "Sin dato", never an invented number.
+    extra_lines: list[ExtraLine] = Field(default_factory=list)
+
+
+class ExtraKind(str, Enum):
+    """What a position-extra article sells (D06).
+
+    Cut kinds saw a catalogued profile into the BOM (pieces carry
+    origin=EXTRA); counted kinds emit fittings per operable leaf.
+    Limitador/manilla-especial deliberately have no kind here — D04
+    hardware options already sell them per leaf with price deltas.
+    """
+
+    SILL = "SILL"  # vierteaguas / alféizar — cut under the bottom run
+    FRAME_EXTENSION = "FRAME_EXTENSION"  # ensanche — cut on declared sides
+    COVER_TRIM = "COVER_TRIM"  # tapajunta — cut on declared sides
+    MOSQUITO_SCREEN = "MOSQUITO_SCREEN"  # counted per operable leaf
+    VENTILATOR = "VENTILATOR"  # aireador — counted per operable leaf
+
+
+# Kinds that cut a catalogued profile into the BOM, versus kinds counted
+# per operable leaf — the article's kind fixes which contract applies.
+EXTRA_CUT_KINDS = frozenset(
+    {ExtraKind.SILL, ExtraKind.FRAME_EXTENSION, ExtraKind.COVER_TRIM}
+)
+EXTRA_COUNTED_KINDS = frozenset(
+    {ExtraKind.MOSQUITO_SCREEN, ExtraKind.VENTILATOR}
+)
+
+# The ProfileRole a cut-kind extra's pieces carry into the cut plan.
+EXTRA_KIND_ROLE = {
+    ExtraKind.SILL: ProfileRole.SILL,
+    ExtraKind.FRAME_EXTENSION: ProfileRole.FRAME_EXTENSION,
+    ExtraKind.COVER_TRIM: ProfileRole.COVER_TRIM,
+}
+
+
+class ExtraPricingUnit(str, Enum):
+    METER = "M"  # per linear meter of cut length
+    EACH = "EA"  # per counted unit
+
+
+class ExtraArticle(EngineModel):
+    """One catalogued position accessory (D06).
+
+    Sublines are derived, never typed: the engine measures quantity off
+    the product geometry (sill = bottom run width + declared vuelos,
+    ensanche/tapajunta = the declared exterior sides' lengths, counted
+    kinds = operable leaves) and prices it at the article's declared unit
+    price. An article without a price still produces the quantity/cut
+    data — the sell column reads "Sin dato" instead of inventing money.
+
+    `families`/`unit_kinds` are the applicability predicates — empty means
+    compatible with everything. `suggestion_reason` non-empty marks the
+    article as a typology companion: evaluation surfaces it as an
+    accept/discard suggestion, with that reason, on every position that
+    qualifies and has not selected it.
+    """
+
+    sku: str
+    name: str
+    kind: ExtraKind
+    pricing_unit: ExtraPricingUnit
+    unit_price: Decimal | None = None
+    unit_price_currency: str = "CLP"
+    unit_cost: Decimal | None = None
+    unit_cost_currency: str | None = None
+    # Cut kinds only: the catalog profile this extra saws — the piece
+    # enters the cut plan and OT BOM with origin=EXTRA.
+    cut_profile_sku: str | None = None
+    cut_material: MaterialType | None = None
+    # SILL only: reveal (vuelo) added at each end of an uninterrupted
+    # bottom run — vierteaguas 1500 + 30 + 30 → 1 560 mm.
+    vuelo_default_mm: Decimal | None = None
+    families: tuple[SystemFamily, ...] = ()
+    unit_kinds: tuple[UnitKind, ...] = ()
+    suggestion_reason: str | None = None
+
+    @model_validator(mode="after")
+    def _kind_contract(self) -> "ExtraArticle":
+        if self.kind in EXTRA_CUT_KINDS:
+            if self.cut_profile_sku is None or self.cut_material is None:
+                raise ValueError(
+                    f"{self.kind.value} extras require cut_profile_sku and "
+                    "cut_material"
+                )
+            if self.pricing_unit is not ExtraPricingUnit.METER:
+                raise ValueError(f"{self.kind.value} extras price per meter")
+            if (
+                self.vuelo_default_mm is not None
+                and self.kind is not ExtraKind.SILL
+            ):
+                raise ValueError("vuelo_default_mm only applies to SILL extras")
+        else:
+            if self.pricing_unit is not ExtraPricingUnit.EACH:
+                raise ValueError(f"{self.kind.value} extras price per unit")
+            if self.cut_profile_sku is not None:
+                raise ValueError("counted extras carry no cut profile")
+        return self
+
+
+class ExtraSelection(EngineModel):
+    """A declared extra on the product (D06).
+
+    Lives inside ProductModel so it seals with the position's
+    parametric_tree — issued documents reproduce it exactly.
+
+    `sides` applies to ensanche/tapajunta cut kinds: which exterior edges
+    get the member (a SILL always takes the bottom run). `qty` overrides
+    the derived count for counted kinds (e.g. a mosquitero fijo over a
+    fixed pane). `vuelo_*_mm` override the article's reveal on a SILL.
+    """
+
+    sku: str
+    sides: tuple[EdgeSide, ...] = ()
+    qty: int | None = Field(default=None, ge=1)
+    vuelo_left_mm: Decimal | None = Field(default=None, ge=0)
+    vuelo_right_mm: Decimal | None = Field(default=None, ge=0)
+
+
+class ExtraLine(EngineModel):
+    """One engine-derived sellable subline — cantidad × precio = total."""
+
+    sku: str
+    name: str
+    kind: ExtraKind
+    quantity: Decimal
+    unit: ExtraPricingUnit
+    unit_price: Decimal | None = None
+    unit_price_currency: str = "CLP"
+    total_price: Decimal | None = None
+    unit_cost: Decimal | None = None
+    unit_cost_currency: str | None = None
+    total_cost: Decimal | None = None
+    # Derivation trace shown in documents — "1 560 mm" or "2 hojas".
+    detail: str | None = None
+
+
+class ExtraSuggestion(EngineModel):
+    """A catalogued companion the position qualifies for (D06).
+
+    Advisory only — the user accepts or discards it; an accepted
+    suggestion becomes a real ExtraSelection.
+    """
+
+    sku: str
+    name: str
+    kind: ExtraKind
+    reason: str
+
+
+class ExtraTemplate(EngineModel):
+    """Org default extra preselected into every new position (D06)."""
+
+    sku: str
+    sides: tuple[EdgeSide, ...] = ()
+    qty: int | None = Field(default=None, ge=1)
+
+
+class ServiceKind(str, Enum):
+    """What a project service covers (D06) — positions, not pieces."""
+
+    INSTALLATION = "INSTALLATION"  # instalación
+    SEALING = "SEALING"  # sellado y espuma
+    REMOVAL = "REMOVAL"  # retiro de la ventana existente
+    SCAFFOLDING = "SCAFFOLDING"  # andamio
+    FREIGHT = "FREIGHT"  # flete
+
+
+class ServiceQtyRule(str, Enum):
+    """How a service's quantity derives from the quoted positions."""
+
+    PER_POSITION_UNIT = "PER_POSITION_UNIT"  # Σ position quantity
+    PER_M2 = "PER_M2"  # Σ glazed opening area
+    PER_LINEAR_METER = "PER_LINEAR_METER"  # Σ position perimeter (ml)
+    FIXED = "FIXED"  # one project-level charge
+
+
+class ServiceArticle(EngineModel):
+    """One catalogued project service (D06).
+
+    The qty rule fixes the measured quantity off the quoted positions;
+    the price is the article's declared unit price. Services price at
+    project level — never discounted, always taxed — riding the same
+    contract as project extras in commercial.totals.
+    """
+
+    code: str
+    name: str
+    kind: ServiceKind
+    qty_rule: ServiceQtyRule
+    unit_price: Decimal | None = None
+    unit_price_currency: str = "CLP"
+    unit_cost: Decimal | None = None
+    unit_cost_currency: str | None = None
+
+
+class ServiceLine(EngineModel):
+    """One engine-derived project service line — cantidad × precio."""
+
+    code: str
+    name: str
+    kind: ServiceKind
+    quantity: Decimal
+    unit: str  # "ud" | "m²" | "ml" | "servicio"
+    unit_price: Decimal | None = None
+    unit_price_currency: str = "CLP"
+    total_price: Decimal | None = None
+    unit_cost: Decimal | None = None
+    unit_cost_currency: str | None = None
+    total_cost: Decimal | None = None
+    detail: str | None = None
+
+
+class ServicePositionMeasure(EngineModel):
+    """What service derivation needs from one quoted position."""
+
+    width_mm: Decimal
+    height_mm: Decimal
+    quantity: int = Field(gt=0)

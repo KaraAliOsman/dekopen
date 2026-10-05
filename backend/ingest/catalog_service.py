@@ -29,6 +29,7 @@ from dekopen_engine.glass_composition import (
 from ingest.extract import extract_tagged, kind_for, safe_file_name, sniffed_kind
 from ingest.spreadsheet import (
     ENTITY_CUT_RULE,
+    ENTITY_EXTRA,
     ENTITY_FINISH,
     ENTITY_GLAZING,
     ENTITY_GLASS_LIMIT,
@@ -44,6 +45,7 @@ from ingest.spreadsheet import (
     ENTITY_PRICE,
     ENTITY_PROFILE,
     ENTITY_REINFORCEMENT,
+    ENTITY_SERVICE,
     ENTITIES,
     looks_like_template,
     parse_catalog_spreadsheet,
@@ -721,6 +723,61 @@ def _insert_entity_row(
                 bool(fields.get("requires_exact_cut")),
                 str(fields.get("severity") or "WARNING"),
                 str(fields.get("source_ref") or "") or None,
+            ],
+        )
+        return ("id", found[0]["id"]) if found else None
+    if entity == ENTITY_EXTRA:
+        # D06: system-scoped accessory — the engine re-measures every
+        # quantity off the product geometry; the sheet declares the
+        # article's price/cost, cut profile and suggestion cause.
+        found = rows(
+            "INSERT INTO public.extra_articles("
+            "system_id, org_id, sku, name, kind, pricing_unit,"
+            " unit_price, unit_price_currency, unit_cost, unit_cost_currency,"
+            " cut_profile_sku, cut_material, vuelo_default_mm,"
+            " families, unit_kinds, suggestion_reason,"
+            " data_provenance, review_pending)"
+            " VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,"
+            " %s,'IMPORT',TRUE) ON CONFLICT DO NOTHING RETURNING id",
+            [
+                str(system_id), str(org_id),
+                str(fields["sku"]).strip().upper(),
+                str(fields.get("name") or fields["sku"]),
+                str(fields["kind"]),
+                str(fields["pricing_unit"]),
+                payload.get("unit_price"),
+                str(fields.get("unit_price_currency") or "") or None,
+                payload.get("unit_cost"),
+                str(fields.get("unit_cost_currency") or "") or None,
+                str(fields.get("cut_profile_sku") or "").strip().upper() or None,
+                str(fields.get("cut_material") or "") or None,
+                payload.get("vuelo_default_mm"),
+                _as_list(fields.get("families")),
+                _as_list(fields.get("unit_kinds")),
+                str(fields.get("suggestion_reason") or "") or None,
+            ],
+        )
+        return ("id", found[0]["id"]) if found else None
+    if entity == ENTITY_SERVICE:
+        # D06: org data — a project service is never bound to the importing
+        # system; its qty_rule fixes how pricing measures the charge.
+        found = rows(
+            "INSERT INTO public.service_articles("
+            "org_id, code, name, kind, qty_rule,"
+            " unit_price, unit_price_currency, unit_cost, unit_cost_currency,"
+            " data_provenance, review_pending)"
+            " VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,'IMPORT',TRUE)"
+            " ON CONFLICT DO NOTHING RETURNING id",
+            [
+                str(org_id),
+                str(fields["code"]).strip().upper(),
+                str(fields.get("name") or fields["code"]),
+                str(fields["kind"]),
+                str(fields["qty_rule"]),
+                payload.get("unit_price"),
+                str(fields.get("unit_price_currency") or "") or None,
+                payload.get("unit_cost"),
+                str(fields.get("unit_cost_currency") or "") or None,
             ],
         )
         return ("id", found[0]["id"]) if found else None

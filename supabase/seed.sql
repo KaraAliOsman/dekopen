@@ -2444,6 +2444,123 @@ WHERE s.code IN ('DEMO_60','DEMO_70','ALU_65','GLASS_45')
   AND p.version = 2
 ON CONFLICT DO NOTHING;
 
+-- ─── Extras y servicios de verdad (D06) ────────────────────────────────────
+--
+-- Los perfiles de remate que los extras serran (vierteaguas, ensanche,
+-- tapajunta) son artículos de catálogo con su rol propio — entran al plan
+-- de corte y a la OT como cualquier otro miembro, con origen EXTRA.
+INSERT INTO public.profile_articles (
+    id, system_id, org_id, sku, name, role, material, face_width_mm,
+    commercial_length_mm, welding_loss_mm, reinforcement_gap_mm, weight_kg_m,
+    data_provenance
+)
+SELECT
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/' || s.code || '/' || a.sku),
+    s.id, NULL, a.sku, a.name, a.role::public.profile_role,
+    a.mat::public.material_type, a.face_mm, 6000.00, 0.00, 0.00, a.weight,
+    'SEED_SYNTHETIC'
+FROM public.profile_systems s
+CROSS JOIN (VALUES
+    ('DEMO_60',           'VIERT-ALU-60',  'Vierteaguas aluminio 60',   'SILL',            'ALUMINIUM', 68.00, 0.3500),
+    ('DEMO_60',           'ENS-PVC-60',    'Ensanche PVC 60',           'FRAME_EXTENSION', 'PVC',       45.00, 0.4500),
+    ('DEMO_60',           'TPJ-PVC-60',    'Tapajunta PVC 60',          'COVER_TRIM',      'PVC',       38.00, 0.3000),
+    ('DEMO_70',           'VIERT-ALU-70',  'Vierteaguas aluminio 70',   'SILL',            'ALUMINIUM', 78.00, 0.4200),
+    ('DEMO_70',           'ENS-PVC-70',    'Ensanche PVC 70',           'FRAME_EXTENSION', 'PVC',       55.00, 0.5200),
+    ('DEMO_70',           'TPJ-PVC-70',    'Tapajunta PVC 70',          'COVER_TRIM',      'PVC',       42.00, 0.3400),
+    ('DEMO_CORREDERA_60', 'VIERT-ALU-C60', 'Vierteaguas corredera 60',  'SILL',            'ALUMINIUM', 72.00, 0.3800),
+    ('ALU_CORREDERA_70',  'VIERT-ALU-C70', 'Vierteaguas corredera 70',  'SILL',            'ALUMINIUM', 82.00, 0.4600)
+) AS a(sys_code, sku, name, role, mat, face_mm, weight)
+WHERE s.code = a.sys_code AND s.is_global = TRUE
+ON CONFLICT (id) DO NOTHING;
+
+-- Cobertura de compra de los perfiles de remate: el plan de corte y la OT
+-- los valoran como cualquier miembro — sin mapping el costo del extra
+-- no tiene autoridad.
+INSERT INTO public.profile_purchase_mappings
+ (id, profile_article_id, org_id, commercial_sku, manufacturer_name, supplier_name,
+  purchase_unit, physical_stock_identity, stock_color, cutting_profile_id, binding_version)
+SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot07/purchase/' || article.id::text),
+ article.id, NULL, 'COMPRA-' || article.sku, 'Referencia DEKOPEN', 'Proveedor de referencia', 'BAR',
+ uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/physical/profile/' || article.id::text),
+ 'WHITE',
+ uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot07/cutting/DEMO'),
+ 1
+FROM public.profile_articles article
+JOIN public.profile_systems s ON s.id = article.system_id
+WHERE article.sku IN ('VIERT-ALU-60','ENS-PVC-60','TPJ-PVC-60',
+                      'VIERT-ALU-70','ENS-PVC-70','TPJ-PVC-70',
+                      'VIERT-ALU-C60','VIERT-ALU-C70')
+  AND s.is_global = TRUE AND article.org_id IS NULL
+ON CONFLICT (id) DO NOTHING;
+
+-- Artículos de extra vendibles por sistema: el artículo declara precio y
+-- costo, el motor deriva cantidad, sublínea, BOM y cortes. Las filas de
+-- corte referencian el perfil de remate declarado arriba; los contados
+-- (mosquitero, aireador) emiten fittings por hoja operable.
+INSERT INTO public.extra_articles (
+    id, system_id, org_id, sku, name, kind, pricing_unit,
+    unit_price, unit_price_currency, unit_cost, unit_cost_currency,
+    cut_profile_sku, cut_material, vuelo_default_mm,
+    families, unit_kinds, suggestion_reason, data_provenance
+)
+SELECT
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/' || s.code || '/extra/' || e.sku),
+    s.id, NULL, e.sku, e.name, e.kind, e.unit,
+    e.price, 'CLP', e.cost, 'CLP',
+    e.profile, e.mat, e.vuelo,
+    e.fams::text[], e.units::text[], e.reason, 'SEED_SYNTHETIC'
+FROM public.profile_systems s
+CROSS JOIN (VALUES
+    ('DEMO_60', 'EXT-VIERT-60',  'Vierteaguas exterior',      'SILL',            'M',  11000.00, 5500.00, 'VIERT-ALU-60',  'ALUMINIUM', 30.00, '{}',        '{WINDOW}', 'El vierteaguas suele acompañar a las ventanas de fachada'),
+    ('DEMO_60', 'EXT-ENS-60',    'Ensanche de marco',         'FRAME_EXTENSION', 'M',  8500.00,  4200.00, 'ENS-PVC-60',    'PVC',       NULL,  '{}',        '{}',       'El vano puede exigir ensanche en laterales'),
+    ('DEMO_60', 'EXT-TPJ-60',    'Tapajunta de encuentro',    'COVER_TRIM',      'M',  4900.00,  2400.00, 'TPJ-PVC-60',    'PVC',       NULL,  '{}',        '{}',       NULL::text),
+    ('DEMO_60', 'EXT-MOSQ-ENR',  'Mosquitero enrollable',     'MOSQUITO_SCREEN', 'EA', 32000.00, 18000.00, NULL::text,     NULL,        NULL,  '{}',        '{WINDOW}', 'Las ventanas practicables suelen llevar mosquitero'),
+    ('DEMO_60', 'EXT-AIREADOR',  'Aireador de lama',          'VENTILATOR',      'EA', 15000.00, 8500.00,  NULL::text,     NULL,        NULL,  '{}',        '{WINDOW}', NULL::text),
+    ('DEMO_70', 'EXT-VIERT-70',  'Vierteaguas exterior',      'SILL',            'M',  13500.00, 6800.00, 'VIERT-ALU-70',  'ALUMINIUM', 35.00, '{}',        '{WINDOW}', 'El vierteaguas suele acompañar a las ventanas de fachada'),
+    ('DEMO_70', 'EXT-ENS-70',    'Ensanche de marco',         'FRAME_EXTENSION', 'M',  9800.00,  4900.00, 'ENS-PVC-70',    'PVC',       NULL,  '{}',        '{}',       'El vano puede exigir ensanche en laterales'),
+    ('DEMO_70', 'EXT-TPJ-70',    'Tapajunta de encuentro',    'COVER_TRIM',      'M',  5600.00,  2750.00, 'TPJ-PVC-70',    'PVC',       NULL,  '{}',        '{}',       NULL::text),
+    ('DEMO_70', 'EXT-MOSQ-ENR',  'Mosquitero enrollable',     'MOSQUITO_SCREEN', 'EA', 36000.00, 20000.00, NULL::text,     NULL,        NULL,  '{}',        '{WINDOW}', 'Las ventanas practicables suelen llevar mosquitero'),
+    ('DEMO_CORREDERA_60', 'EXT-VIERT-C60', 'Vierteaguas corredera',     'SILL',   'M',  11800.00, 5900.00, 'VIERT-ALU-C60', 'ALUMINIUM', 30.00, '{SLIDING}', '{WINDOW}', 'El vierteaguas suele acompañar a las ventanas de fachada'),
+    ('DEMO_CORREDERA_60', 'EXT-MOSQ-CORR', 'Mosquitero corredera',      'MOSQUITO_SCREEN', 'EA', 28500.00, 16000.00, NULL::text, NULL, NULL, '{SLIDING}', '{WINDOW}', 'Las correderas suelen llevar mosquitero corredera'),
+    ('ALU_CORREDERA_70',  'EXT-VIERT-C70', 'Vierteaguas corredera',     'SILL',   'M',  14200.00, 7100.00, 'VIERT-ALU-C70', 'ALUMINIUM', 35.00, '{SLIDING,LIFT_SLIDE}', '{WINDOW}', 'El vierteaguas suele acompañar a las ventanas de fachada'),
+    ('ALU_CORREDERA_70',  'EXT-MOSQ-CORR', 'Mosquitero corredera',      'MOSQUITO_SCREEN', 'EA', 31000.00, 17500.00, NULL::text, NULL, NULL, '{SLIDING,LIFT_SLIDE}', '{WINDOW}', 'Las correderas suelen llevar mosquitero corredera')
+) AS e(sys_code, sku, name, kind, unit, price, cost, profile, mat, vuelo, fams, units, reason)
+WHERE s.code = e.sys_code AND s.is_global = TRUE
+ON CONFLICT DO NOTHING;
+
+-- Autoridad de compra de los accesorios contados (mosquitero, aireador):
+-- se venden por unidad y llegan a la OT como fittings, así que el freeze
+-- exige una correspondencia técnica→compra por sistema como cualquier otro
+-- accesorio unitario.
+INSERT INTO public.fitting_purchase_mappings
+ (id, system_id, org_id, technical_sku, purchasing_sku, manufacturer_name,
+  purchase_unit, version, provenance)
+SELECT uuid_generate_v5(uuid_ns_url(),
+        'https://dekopen.local/catalog/' || s.code || '/fitting/' || a.sku || '/V1'),
+ s.id, NULL, a.sku, 'COMPRA-' || a.sku, 'Referencia DEKOPEN',
+ 'EA', 1, '{"source":"Referencia DEKOPEN","mode":"KIT_ONLY"}'::jsonb
+FROM public.profile_systems s
+JOIN public.extra_articles a ON a.system_id = s.id
+WHERE a.kind IN ('MOSQUITO_SCREEN', 'VENTILATOR')
+  AND a.org_id IS NULL
+  AND s.is_global = TRUE
+ON CONFLICT (system_id, org_id, technical_sku, version) DO NOTHING;
+
+-- Servicios de proyecto globales: instalación por ml de perímetro, sellado,
+-- retiro de la ventana existente y flete — el motor deriva la cantidad de
+-- las posiciones cotizadas; el precio nunca se descuenta, siempre tributa.
+INSERT INTO public.service_articles (
+    id, org_id, code, name, kind, qty_rule,
+    unit_price, unit_price_currency, unit_cost, unit_cost_currency,
+    data_provenance
+) VALUES
+    (uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/services/INST-ML'), NULL, 'INST-ML',   'Instalación por metro lineal de perímetro', 'INSTALLATION', 'PER_LINEAR_METER', 4500.00,  'CLP', 2800.00,  'CLP', 'SEED_SYNTHETIC'),
+    (uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/services/INST-UD'), NULL, 'INST-UD',   'Instalación por unidad',                   'INSTALLATION', 'PER_POSITION_UNIT', 28000.00, 'CLP', 17000.00, 'CLP', 'SEED_SYNTHETIC'),
+    (uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/services/RETIRO'),  NULL, 'RETIRO',    'Retiro de ventana existente',              'REMOVAL',      'PER_POSITION_UNIT', 18000.00, 'CLP', 9000.00,  'CLP', 'SEED_SYNTHETIC'),
+    (uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/services/ANDAMIO'), NULL, 'ANDAMIO',   'Andamio',                                 'SCAFFOLDING',  'FIXED',             90000.00, 'CLP', 62000.00, 'CLP', 'SEED_SYNTHETIC'),
+    (uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/services/FLETE'),   NULL, 'FLETE',     'Flete a obra',                             'FREIGHT',      'FIXED',             45000.00, 'CLP', 30000.00, 'CLP', 'SEED_SYNTHETIC')
+ON CONFLICT DO NOTHING;
+
 COMMIT;
 
 -- D07 — mounting rules seed: one version-1 rule per mounting type for every

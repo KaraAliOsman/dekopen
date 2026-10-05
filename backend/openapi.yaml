@@ -2831,6 +2831,401 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/catalogs/extra-articles/:
+    get:
+      operationId: catalog_extraarticle_list
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: query
+        name: system_id
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - catalogs
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtraArticleList'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+    post:
+      operationId: catalog_extraarticle_create
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - catalogs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExtraArticleWriteRequest'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtraArticleResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/catalogs/extra-articles/{row_id}/:
+    get:
+      operationId: catalog_extraarticle_retrieve
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: row_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - catalogs
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtraArticleResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+    patch:
+      operationId: catalog_extraarticle_update
+      parameters:
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Quoted revision from the most recently read catalog entity.
+        required: true
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: row_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - catalogs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedExtraArticleWriteRequest'
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtraArticleResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+    delete:
+      operationId: catalog_extraarticle_delete
+      parameters:
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Quoted revision from the most recently read catalog entity.
+        required: true
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: row_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - catalogs
+      security:
+      - SupabaseBearer: []
+      responses:
+        '204':
+          description: Deleted
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/catalogs/extra-articles/{row_id}/review/:
+    post:
+      operationId: catalog_extraarticle_review
+      description: Mark the row technically reviewed; LEGACY_UNVERIFIED provenance
+        becomes MANUAL.
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: row_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - catalogs
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtraArticleResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/catalogs/glazing/:
     get:
       operationId: catalog_bead_list
@@ -3782,6 +4177,401 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SectionImportResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/catalogs/service-articles/:
+    get:
+      operationId: catalog_servicearticle_list
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: query
+        name: system_id
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - catalogs
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceArticleList'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+    post:
+      operationId: catalog_servicearticle_create
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - catalogs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceArticleWriteRequest'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceArticleResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/catalogs/service-articles/{row_id}/:
+    get:
+      operationId: catalog_servicearticle_retrieve
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: row_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - catalogs
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceArticleResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+    patch:
+      operationId: catalog_servicearticle_update
+      parameters:
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Quoted revision from the most recently read catalog entity.
+        required: true
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: row_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - catalogs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedServiceArticleWriteRequest'
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceArticleResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+    delete:
+      operationId: catalog_servicearticle_delete
+      parameters:
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Quoted revision from the most recently read catalog entity.
+        required: true
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: row_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - catalogs
+      security:
+      - SupabaseBearer: []
+      responses:
+        '204':
+          description: Deleted
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/catalogs/service-articles/{row_id}/review/:
+    post:
+      operationId: catalog_servicearticle_review
+      description: Mark the row technically reviewed; LEGACY_UNVERIFIED provenance
+        becomes MANUAL.
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: row_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - catalogs
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceArticleResponse'
           description: ''
         '400':
           content:
@@ -6792,6 +7582,144 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrgBranding'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/organization/extras-config/:
+    get:
+      operationId: organization_extras_config_read
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - projects
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtrasConfigResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+    put:
+      operationId: organization_extras_config_update
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - projects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExtrasConfigWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ExtrasConfigWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ExtrasConfigWriteRequest'
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtrasConfigResponse'
           description: ''
         '400':
           content:
@@ -14569,6 +15497,157 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/projects/{project_id}/services/:
+    get:
+      operationId: project_services_read
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: project_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - projects
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectServicesResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+    put:
+      operationId: project_services_update
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: project_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - projects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceSelectionWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ServiceSelectionWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ServiceSelectionWriteRequest'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectServicesResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/projects/{project_id}/successor/:
     post:
       operationId: projects_start_successor
@@ -19451,6 +20530,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PanelChoice'
+        extra_articles:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExtraArticleOption'
         rebate_depth_mm:
           type: string
         sash_overlap_mm:
@@ -20089,6 +21172,10 @@ components:
           allOf:
           - $ref: '#/components/schemas/EngineResultPayload'
           nullable: true
+        extra_suggestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExtraSuggestion'
         calculation_hash:
           type: string
           pattern: ^sha256:[0-9a-f]{64}$
@@ -20183,6 +21270,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ColorSurchargeApplication'
+        extra_lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExtraLine'
         calculation_hash:
           type: string
           pattern: ^sha256:[0-9a-f]{64}$
@@ -20378,6 +21469,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ColorSurchargeApplication'
+        extra_lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExtraLine'
       required:
       - fittings
       - glasses
@@ -20398,6 +21493,7 @@ components:
     EntityEnum:
       enum:
       - CUT_RULE
+      - EXTRA_ARTICLE
       - FINISH
       - GLASS_PRODUCT
       - GLASS_SAFETY_RULE
@@ -20412,11 +21508,13 @@ components:
       - PRICE
       - PROFILE
       - REINFORCEMENT_RULE
+      - SERVICE_ARTICLE
       - SYSTEM
       - TYPOLOGY_LIMIT
       type: string
       description: |-
         * `CUT_RULE` - CUT_RULE
+        * `EXTRA_ARTICLE` - EXTRA_ARTICLE
         * `FINISH` - FINISH
         * `GLASS_PRODUCT` - GLASS_PRODUCT
         * `GLASS_SAFETY_RULE` - GLASS_SAFETY_RULE
@@ -20431,6 +21529,7 @@ components:
         * `PRICE` - PRICE
         * `PROFILE` - PROFILE
         * `REINFORCEMENT_RULE` - REINFORCEMENT_RULE
+        * `SERVICE_ARTICLE` - SERVICE_ARTICLE
         * `SYSTEM` - SYSTEM
         * `TYPOLOGY_LIMIT` - TYPOLOGY_LIMIT
     EnvironmentEnum:
@@ -20624,6 +21723,246 @@ components:
       - source_url
       - unit
       - value_text
+    ExtraArticleList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExtraArticleResponse'
+      required:
+      - items
+    ExtraArticleOption:
+      type: object
+      description: |-
+        D06: one catalog extra the position inspector can attach — the same
+        catalog row the engine re-measures; the UI never fabricates a number.
+      properties:
+        sku:
+          type: string
+        name:
+          type: string
+        kind:
+          type: string
+        pricing_unit:
+          type: string
+        unit_price:
+          type: string
+          nullable: true
+        unit_price_currency:
+          type: string
+          nullable: true
+        vuelo_default_mm:
+          type: string
+          nullable: true
+        families:
+          type: array
+          items:
+            type: string
+        unit_kinds:
+          type: array
+          items:
+            type: string
+        suggestion_reason:
+          type: string
+          nullable: true
+        cut_profile_sku:
+          type: string
+          nullable: true
+        cut_material:
+          type: string
+          nullable: true
+      required:
+      - cut_material
+      - cut_profile_sku
+      - families
+      - kind
+      - name
+      - pricing_unit
+      - sku
+      - suggestion_reason
+      - unit_kinds
+      - unit_price
+      - unit_price_currency
+      - vuelo_default_mm
+    ExtraArticleResponse:
+      type: object
+      description: |-
+        Read-only provenance/review state — written only by import jobs and
+        the technical-review endpoint, never by catalog CRUD.
+      properties:
+        data_provenance:
+          allOf:
+          - $ref: '#/components/schemas/DataProvenanceEnum'
+          readOnly: true
+        technical_reviewed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        technical_reviewed_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        review_pending:
+          type: boolean
+          readOnly: true
+          default: false
+        system_id:
+          type: string
+          format: uuid
+        sku:
+          type: string
+          maxLength: 100
+        name:
+          type: string
+          maxLength: 255
+        kind:
+          $ref: '#/components/schemas/ExtraKindEnum'
+        pricing_unit:
+          $ref: '#/components/schemas/PricingUnitEnum'
+        unit_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        unit_price_currency:
+          type: string
+          nullable: true
+          maxLength: 3
+        unit_cost:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        unit_cost_currency:
+          type: string
+          nullable: true
+          maxLength: 3
+        cut_profile_sku:
+          type: string
+          nullable: true
+          maxLength: 100
+        cut_material:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/MaterialEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        vuelo_default_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
+        families:
+          type: array
+          items:
+            $ref: '#/components/schemas/SystemFamilyEnum'
+        unit_kinds:
+          type: array
+          items:
+            $ref: '#/components/schemas/UnitKindsEnum'
+        suggestion_reason:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+          default: true
+        revision:
+          type: string
+          readOnly: true
+        read_only:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+      required:
+      - data_provenance
+      - id
+      - kind
+      - name
+      - pricing_unit
+      - read_only
+      - review_pending
+      - revision
+      - sku
+      - system_id
+      - technical_reviewed_at
+      - technical_reviewed_by
+    ExtraArticleWriteRequest:
+      type: object
+      description: |-
+        D06 catalogued position accessory — the article declares price/cost,
+        its cut profile for saw kinds and the applicability predicates the
+        suggestion engine scopes with.
+      properties:
+        system_id:
+          type: string
+          format: uuid
+        sku:
+          type: string
+          minLength: 1
+          maxLength: 100
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        kind:
+          $ref: '#/components/schemas/ExtraKindEnum'
+        pricing_unit:
+          $ref: '#/components/schemas/PricingUnitEnum'
+        unit_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        unit_price_currency:
+          type: string
+          nullable: true
+          maxLength: 3
+        unit_cost:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        unit_cost_currency:
+          type: string
+          nullable: true
+          maxLength: 3
+        cut_profile_sku:
+          type: string
+          nullable: true
+          maxLength: 100
+        cut_material:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/MaterialEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        vuelo_default_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
+        families:
+          type: array
+          items:
+            $ref: '#/components/schemas/SystemFamilyEnum'
+        unit_kinds:
+          type: array
+          items:
+            $ref: '#/components/schemas/UnitKindsEnum'
+        suggestion_reason:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+          default: true
+      required:
+      - kind
+      - name
+      - pricing_unit
+      - sku
+      - system_id
     ExtraChargeKindEnum:
       enum:
       - INSTALLATION
@@ -20655,6 +21994,174 @@ components:
       required:
       - amount
       - label
+    ExtraKindEnum:
+      enum:
+      - SILL
+      - FRAME_EXTENSION
+      - COVER_TRIM
+      - MOSQUITO_SCREEN
+      - VENTILATOR
+      type: string
+      description: |-
+        * `SILL` - SILL
+        * `FRAME_EXTENSION` - FRAME_EXTENSION
+        * `COVER_TRIM` - COVER_TRIM
+        * `MOSQUITO_SCREEN` - MOSQUITO_SCREEN
+        * `VENTILATOR` - VENTILATOR
+    ExtraLine:
+      type: object
+      description: 'D06: one engine-derived sellable subline — cantidad × precio =
+        total.'
+      properties:
+        sku:
+          type: string
+        name:
+          type: string
+        kind:
+          $ref: '#/components/schemas/ExtraKindEnum'
+        quantity:
+          type: string
+        unit:
+          type: string
+        unit_price:
+          type: string
+          nullable: true
+        unit_price_currency:
+          type: string
+        total_price:
+          type: string
+          nullable: true
+        unit_cost:
+          type: string
+          nullable: true
+        unit_cost_currency:
+          type: string
+          nullable: true
+        total_cost:
+          type: string
+          nullable: true
+        detail:
+          type: string
+          nullable: true
+      required:
+      - detail
+      - kind
+      - name
+      - quantity
+      - sku
+      - total_cost
+      - total_price
+      - unit
+      - unit_cost
+      - unit_cost_currency
+      - unit_price
+      - unit_price_currency
+    ExtraSuggestion:
+      type: object
+      description: 'D06: a catalogued companion the position qualifies for.'
+      properties:
+        sku:
+          type: string
+        name:
+          type: string
+        kind:
+          $ref: '#/components/schemas/ExtraKindEnum'
+        reason:
+          type: string
+      required:
+      - kind
+      - name
+      - reason
+      - sku
+    ExtraTemplateResponse:
+      type: object
+      properties:
+        extra_article_id:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        name:
+          type: string
+        kind:
+          type: string
+        system_id:
+          type: string
+          format: uuid
+        system_code:
+          type: string
+        sides:
+          type: array
+          items:
+            type: string
+        qty:
+          type: integer
+          nullable: true
+      required:
+      - extra_article_id
+      - kind
+      - name
+      - qty
+      - sides
+      - sku
+      - system_code
+      - system_id
+    ExtraTemplateWriteRequest:
+      type: object
+      properties:
+        extra_article_id:
+          type: string
+          format: uuid
+        sides:
+          type: array
+          items:
+            $ref: '#/components/schemas/EdgesEnum'
+        qty:
+          type: integer
+          minimum: 1
+          nullable: true
+      required:
+      - extra_article_id
+    ExtrasConfigResponse:
+      type: object
+      properties:
+        extras_display:
+          type: string
+        extra_templates:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExtraTemplateResponse'
+        service_templates:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+      - extra_templates
+      - extras_display
+      - service_templates
+    ExtrasConfigWriteRequest:
+      type: object
+      properties:
+        extras_display:
+          $ref: '#/components/schemas/ExtrasDisplayEnum'
+        extra_templates:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExtraTemplateWriteRequest'
+        service_templates:
+          type: array
+          items:
+            type: string
+            format: uuid
+    ExtrasDisplayEnum:
+      enum:
+      - DETAILED
+      - GROUPED
+      type: string
+      description: |-
+        * `DETAILED` - DETAILED
+        * `GROUPED` - GROUPED
     FabricationLockRequest:
       type: object
       description: Fijación manual de la medida de fabricación — queda registrada.
@@ -20699,6 +22206,11 @@ components:
         leaf_id:
           type: string
           nullable: true
+        origin:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/PieceOriginEnum'
+          - $ref: '#/components/schemas/NullEnum'
       required:
       - bay_id
       - kind
@@ -23904,6 +25416,74 @@ components:
           nullable: true
         active:
           type: boolean
+    PatchedExtraArticleWriteRequest:
+      type: object
+      description: |-
+        D06 catalogued position accessory — the article declares price/cost,
+        its cut profile for saw kinds and the applicability predicates the
+        suggestion engine scopes with.
+      properties:
+        system_id:
+          type: string
+          format: uuid
+        sku:
+          type: string
+          minLength: 1
+          maxLength: 100
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        kind:
+          $ref: '#/components/schemas/ExtraKindEnum'
+        pricing_unit:
+          $ref: '#/components/schemas/PricingUnitEnum'
+        unit_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        unit_price_currency:
+          type: string
+          nullable: true
+          maxLength: 3
+        unit_cost:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        unit_cost_currency:
+          type: string
+          nullable: true
+          maxLength: 3
+        cut_profile_sku:
+          type: string
+          nullable: true
+          maxLength: 100
+        cut_material:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/MaterialEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        vuelo_default_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
+        families:
+          type: array
+          items:
+            $ref: '#/components/schemas/SystemFamilyEnum'
+        unit_kinds:
+          type: array
+          items:
+            $ref: '#/components/schemas/UnitKindsEnum'
+        suggestion_reason:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+          default: true
     PatchedKitWriteRequest:
       type: object
       properties:
@@ -24012,6 +25592,46 @@ components:
         expected_updated_at:
           type: string
           format: date-time
+    PatchedServiceArticleWriteRequest:
+      type: object
+      description: |-
+        D06 catalogued project service — org data (no system parent): the
+        article declares the qty rule; the engine measures it off the quoted
+        positions.
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 100
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        kind:
+          $ref: '#/components/schemas/ServiceKindEnum'
+        qty_rule:
+          $ref: '#/components/schemas/QtyRuleEnum'
+        unit_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        unit_price_currency:
+          type: string
+          nullable: true
+          maxLength: 3
+        unit_cost:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        unit_cost_currency:
+          type: string
+          nullable: true
+          maxLength: 3
+        is_active:
+          type: boolean
+          default: true
     PatchedSystemWriteRequest:
       type: object
       properties:
@@ -24491,6 +26111,14 @@ components:
       - quote_total_gross
       - sealed_revision
       - status
+    PieceOriginEnum:
+      enum:
+      - PRODUCT
+      - EXTRA
+      type: string
+      description: |-
+        * `PRODUCT` - PRODUCT
+        * `EXTRA` - EXTRA
     PlanCoupling:
       type: object
       properties:
@@ -25245,6 +26873,14 @@ components:
         * `FIXED_PRICE_MATRIX_DIMENSIONAL` - FIXED_PRICE_MATRIX_DIMENSIONAL
         * `TARGET_GROSS_MARGIN_PROJECT` - TARGET_GROSS_MARGIN_PROJECT
         * `COMMERCIAL_LIST_WITH_DISCOUNTS` - COMMERCIAL_LIST_WITH_DISCOUNTS
+    PricingUnitEnum:
+      enum:
+      - M
+      - EA
+      type: string
+      description: |-
+        * `M` - M
+        * `EA` - EA
     ProcessProfileOption:
       type: object
       description: Compact option for the system→process-profile binding picker.
@@ -25876,6 +27512,11 @@ components:
           format: decimal
           pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
           nullable: true
+        origin:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/PieceOriginEnum'
+          - $ref: '#/components/schemas/NullEnum'
       required:
       - angle_left
       - angle_right
@@ -26404,6 +28045,20 @@ components:
         * `IN_PRODUCTION` - IN_PRODUCTION
         * `COMPLETED` - COMPLETED
         * `CANCELLED` - CANCELLED
+    ProjectServicesResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceArticleOption'
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceLine'
+      required:
+      - items
+      - lines
     ProjectVersionResponse:
       type: object
       properties:
@@ -26641,6 +28296,18 @@ components:
       description: |-
         * `PASS` - PASS
         * `FAIL` - FAIL
+    QtyRuleEnum:
+      enum:
+      - PER_POSITION_UNIT
+      - PER_M2
+      - PER_LINEAR_METER
+      - FIXED
+      type: string
+      description: |-
+        * `PER_POSITION_UNIT` - PER_POSITION_UNIT
+        * `PER_M2` - PER_M2
+        * `PER_LINEAR_METER` - PER_LINEAR_METER
+        * `FIXED` - FIXED
     RailTypeEnum:
       enum:
       - dual
@@ -27411,6 +29078,235 @@ components:
           maxLength: 200
       required:
       - confirmed
+    ServiceArticleList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceArticleResponse'
+      required:
+      - items
+    ServiceArticleOption:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        kind:
+          type: string
+        qty_rule:
+          type: string
+        unit_price:
+          type: string
+          nullable: true
+        unit_price_currency:
+          type: string
+          nullable: true
+        unit_cost:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        read_only:
+          type: boolean
+        selected:
+          type: boolean
+      required:
+      - code
+      - id
+      - is_active
+      - kind
+      - name
+      - qty_rule
+      - read_only
+      - selected
+      - unit_cost
+      - unit_price
+      - unit_price_currency
+    ServiceArticleResponse:
+      type: object
+      description: |-
+        Read-only provenance/review state — written only by import jobs and
+        the technical-review endpoint, never by catalog CRUD.
+      properties:
+        data_provenance:
+          allOf:
+          - $ref: '#/components/schemas/DataProvenanceEnum'
+          readOnly: true
+        technical_reviewed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        technical_reviewed_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        review_pending:
+          type: boolean
+          readOnly: true
+          default: false
+        code:
+          type: string
+          maxLength: 100
+        name:
+          type: string
+          maxLength: 255
+        kind:
+          $ref: '#/components/schemas/ServiceKindEnum'
+        qty_rule:
+          $ref: '#/components/schemas/QtyRuleEnum'
+        unit_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        unit_price_currency:
+          type: string
+          nullable: true
+          maxLength: 3
+        unit_cost:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        unit_cost_currency:
+          type: string
+          nullable: true
+          maxLength: 3
+        is_active:
+          type: boolean
+          default: true
+        revision:
+          type: string
+          readOnly: true
+        read_only:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+      required:
+      - code
+      - data_provenance
+      - id
+      - kind
+      - name
+      - qty_rule
+      - read_only
+      - review_pending
+      - revision
+      - technical_reviewed_at
+      - technical_reviewed_by
+    ServiceArticleWriteRequest:
+      type: object
+      description: |-
+        D06 catalogued project service — org data (no system parent): the
+        article declares the qty rule; the engine measures it off the quoted
+        positions.
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 100
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        kind:
+          $ref: '#/components/schemas/ServiceKindEnum'
+        qty_rule:
+          $ref: '#/components/schemas/QtyRuleEnum'
+        unit_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        unit_price_currency:
+          type: string
+          nullable: true
+          maxLength: 3
+        unit_cost:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        unit_cost_currency:
+          type: string
+          nullable: true
+          maxLength: 3
+        is_active:
+          type: boolean
+          default: true
+      required:
+      - code
+      - kind
+      - name
+      - qty_rule
+    ServiceKindEnum:
+      enum:
+      - INSTALLATION
+      - SEALING
+      - REMOVAL
+      - SCAFFOLDING
+      - FREIGHT
+      type: string
+      description: |-
+        * `INSTALLATION` - INSTALLATION
+        * `SEALING` - SEALING
+        * `REMOVAL` - REMOVAL
+        * `SCAFFOLDING` - SCAFFOLDING
+        * `FREIGHT` - FREIGHT
+    ServiceLine:
+      type: object
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        kind:
+          type: string
+        quantity:
+          type: string
+        unit:
+          type: string
+        unit_price:
+          type: string
+          nullable: true
+        unit_price_currency:
+          type: string
+          nullable: true
+        total_price:
+          type: string
+          nullable: true
+        detail:
+          type: string
+          nullable: true
+      required:
+      - code
+      - detail
+      - kind
+      - name
+      - quantity
+      - total_price
+      - unit
+      - unit_price
+      - unit_price_currency
+    ServiceSelectionWriteRequest:
+      type: object
+      properties:
+        service_article_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+      - service_article_ids
     ShareQuoteResponse:
       type: object
       properties:
@@ -28343,6 +30239,14 @@ components:
       - kit
       type: string
       description: '* `kit` - kit'
+    UnitKindsEnum:
+      enum:
+      - WINDOW
+      - DOOR
+      type: string
+      description: |-
+        * `WINDOW` - WINDOW
+        * `DOOR` - DOOR
     User:
       type: object
       properties:

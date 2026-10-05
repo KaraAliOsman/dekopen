@@ -339,6 +339,7 @@ def test_real_bearer_and_db_adapter_preserve_engine_geometry(
         "profile_cuts", "reinforcements", "glasses", "panels", "hardware_items",
         "leaf_weights", "fittings", "calculation_hash",
         "finish_class", "finish_key", "finish_label", "color_surcharges",
+        "extra_lines",
     }
     assert_no_context()
 
@@ -496,7 +497,7 @@ def test_shot06_all_28_catalog_fields_reach_typed_engine(real_rows: RLSFixtures)
     expected_fields = expected.model_dump()
     actual_fields["available_hardware_kits"] = sorted(actual_fields["available_hardware_kits"], key=lambda k: k["sku"])
     expected_fields["available_hardware_kits"] = sorted(expected_fields["available_hardware_kits"], key=lambda k: k["sku"])
-    assert len(SystemParams.model_fields) == len(actual_fields) == 38
+    assert len(SystemParams.model_fields) == len(actual_fields) == 39
     # The demo seed declares the same synthetic per-article masses the engine
     # fixture carries — mass authority must reach the typed model
     # field-for-field rather than arriving through a fallback.
@@ -514,6 +515,17 @@ def test_shot06_all_28_catalog_fields_reach_typed_engine(real_rows: RLSFixtures)
     # fixture; the typed field is still present and populated in both paths.
     assert actual_fields.pop("available_hardware_kits")
     assert expected_fields.pop("available_hardware_kits")
+    # D06: the seed's sellable extras reach the typed model populated; the
+    # engine fixture predates the field (empty dict). The finishing profiles
+    # the extras saw are likewise seed-only rows — drop both sides' SILL/
+    # FRAME_EXTENSION/COVER_TRIM/SKIRT roles like the section normalization.
+    assert actual_fields.pop("extra_articles")
+    assert expected_fields.pop("extra_articles") == {}
+    from dekopen_engine.models import ProfileRole
+
+    for role in ("SILL", "FRAME_EXTENSION", "COVER_TRIM", "SKIRT"):
+        actual_fields["effective_profile_articles"].pop(ProfileRole(role), None)
+        expected_fields["effective_profile_articles"].pop(ProfileRole(role), None)
     # Rule ordering is a repository presentation detail; compare contents.
     def rule_key(rule: dict[str, object]) -> tuple[str, str, str]:
         return (str(rule["role"]), str(rule["finish_class"]), str(rule["min_length_mm"]))

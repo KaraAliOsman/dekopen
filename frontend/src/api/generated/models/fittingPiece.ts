@@ -5,6 +5,7 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { FittingPieceOrigin } from "./fittingPieceOrigin";
 
 /**
  * Counted frameless fitting — patch/clamp/hinge/lock/connector/seal/support.
@@ -17,4 +18,5 @@ export interface FittingPiece {
   bay_id: string | null;
   /** @nullable */
   leaf_id: string | null;
+  origin?: (typeof FittingPieceOrigin)[keyof typeof FittingPieceOrigin] | null;
 }

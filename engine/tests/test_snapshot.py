@@ -84,7 +84,8 @@ def test_snapshot_request_identity_and_response_contract() -> None:
     assert request["system_id"] == "3067da09-3119-5ad0-a1d5-498cd2dfd753"
     response = calculation_response(request, golden_result())
     # D05: finish identity + declared surcharge rows ride on the BOM.
-    assert set(response) == {"calculation_hash", "profile_cuts", "reinforcements", "glasses", "panels", "hardware_items", "leaf_weights", "fittings", "finish_key", "finish_label", "finish_class", "color_surcharges"}
+    # D06: measured extras sublines ride alongside.
+    assert set(response) == {"calculation_hash", "profile_cuts", "reinforcements", "glasses", "panels", "hardware_items", "leaf_weights", "fittings", "finish_key", "finish_label", "finish_class", "color_surcharges", "extra_lines"}
     assert json.loads(generated_bytes()) == {"request": request, "response": response}
     changed = deepcopy(request)
     changed["color"] = "CHANGED-HASH-INPUT"

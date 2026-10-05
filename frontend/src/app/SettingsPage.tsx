@@ -3,11 +3,15 @@ import { Link } from "react-router-dom";
 
 import { ApiError } from "../api/apiMutator";
 import {
+  catalogExtraarticleList,
+  catalogServicearticleList,
   getOrganizationBrandingLogoReadUrl,
   organizationBrandingGet,
   organizationBrandingLogoDelete,
   organizationBrandingLogoUpload,
   organizationBrandingSave,
+  organizationExtrasConfigRead,
+  organizationExtrasConfigUpdate,
   projectPaymentIntegrationSave,
   projectPaymentIntegrationStatus,
   siiCafRegister,
@@ -18,16 +22,19 @@ import {
 import { apiFetchBlob } from "../api/apiMutator";
 import type {
   ApiUrlEnum,
+  ExtraArticleResponse,
+  ExtraTemplateWriteRequest,
   Membership,
   PaymentIntegrationStatus,
   MembershipRoleEnum,
+  ServiceArticleResponse,
   SiiCaf,
   SiiCertificate,
 } from "../api/generated/models";
 import { PageHeader } from "../ui";
 import { useAuthSession } from "../auth/AuthSessionProvider";
 import { formatDate } from "../format";
-import { t, type TranslationKey } from "../i18n/es-CL";
+import { t, tDynamic, type TranslationKey } from "../i18n/es-CL";
 import { MOD_K_HINT, MOD_KEY_HINT } from "../platform";
 import { useTheme } from "../theme/ThemeProvider";
 
@@ -697,6 +704,189 @@ function WorkshopRulesCard({ orgId }: { orgId: string }): JSX.Element {
   );
 }
 
+/** D06 — org extras policy: how sublines print on the offer, plus the
+ * default templates preselected into new vanos (extra articles, per
+ * system) and new projects (services). All references are catalog rows —
+ * a template never carries a price, the engine re-measures it. */
+function OrgExtrasCard({ orgId }: { orgId: string }): JSX.Element {
+  const [display, setDisplay] = useState<"DETAILED" | "GROUPED">("DETAILED");
+  const [extraTemplates, setExtraTemplates] = useState<ExtraTemplateWriteRequest[]>([]);
+  const [serviceTemplates, setServiceTemplates] = useState<string[]>([]);
+  const [extras, setExtras] = useState<ExtraArticleResponse[]>([]);
+  const [services, setServices] = useState<ServiceArticleResponse[]>([]);
+  const [pickExtra, setPickExtra] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
+  const requestOptions = { headers: { "X-Organization-ID": orgId } };
+
+  const load = useCallback(async () => {
+    try {
+      const [config, extraList, serviceList] = await Promise.all([
+        organizationExtrasConfigRead(requestOptions),
+        catalogExtraarticleList({}, requestOptions),
+        catalogServicearticleList({}, requestOptions),
+      ]);
+      if (config.status !== 200 || extraList.status !== 200 || serviceList.status !== 200)
+        throw new ApiError(config.status, config.data);
+      setDisplay(config.data.extras_display === "GROUPED" ? "GROUPED" : "DETAILED");
+      setExtraTemplates(
+        (config.data.extra_templates ?? []).map((template) => ({
+          extra_article_id: template.extra_article_id,
+          sides: (template.sides ?? []) as ExtraTemplateWriteRequest["sides"],
+          qty: template.qty,
+        })),
+      );
+      setServiceTemplates([...(config.data.service_templates ?? [])]);
+      setExtras(extraList.data.items);
+      setServices(serviceList.data.items);
+    } catch {
+      setMessage({ text: t("settings.extrasLoadError"), error: true });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const chosen = new Set(extraTemplates.map((template) => template.extra_article_id));
+  const serviceChosen = new Set(serviceTemplates);
+  const extraById = new Map(extras.map((article) => [article.id, article]));
+
+  async function save(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    setBusy(true);
+    setMessage(null);
+    try {
+      const response = await organizationExtrasConfigUpdate(
+        {
+          extras_display: display,
+          extra_templates: extraTemplates,
+          service_templates: serviceTemplates,
+        },
+        requestOptions,
+      );
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      setMessage({ text: t("settings.extrasSaved"), error: false });
+    } catch {
+      setMessage({ text: t("settings.extrasError"), error: true });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="settings-card">
+      <h3 className="eyebrow">{t("settings.extras")}</h3>
+      <p className="settings-hint">{t("settings.extrasHint")}</p>
+      {message && <p className={message.error ? "form-error" : "settings-hint"}>{message.text}</p>}
+      <form noValidate className="payments-form" onSubmit={save}>
+        <fieldset>
+          <legend>{t("settings.extrasDisplay")}</legend>
+          {(["DETAILED", "GROUPED"] as const).map((option) => (
+            <label key={option} className="settings-choice">
+              <input
+                type="radio"
+                name="extras-display"
+                checked={display === option}
+                onChange={() => setDisplay(option)}
+              />
+              <span>{tDynamic("settings.extrasDisplay", option)}</span>
+            </label>
+          ))}
+        </fieldset>
+        <fieldset>
+          <legend>{t("settings.extraTemplates")}</legend>
+          {extraTemplates.length === 0 && (
+            <p className="settings-hint">{t("settings.extraTemplatesEmpty")}</p>
+          )}
+          <ul className="settings-list settings-plain">
+            {extraTemplates.map((template, index) => {
+              const article = extraById.get(template.extra_article_id);
+              return (
+                <li key={template.extra_article_id}>
+                  <span>
+                    {article?.name ?? template.extra_article_id}
+                    {article ? ` · ${article.sku}` : ""}
+                  </span>{" "}
+                  <button
+                    type="button"
+                    className="ui-button ui-button--ghost"
+                    disabled={busy}
+                    onClick={() =>
+                      setExtraTemplates((prev) => prev.filter((_, at) => at !== index))
+                    }
+                  >
+                    {t("settings.extraTemplateRemove")}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <select
+            className="assembly-select"
+            aria-label={t("settings.extraTemplateAdd")}
+            disabled={busy}
+            value={pickExtra}
+            onChange={(event) => {
+              const articleId = event.target.value;
+              setPickExtra("");
+              const article = extraById.get(articleId);
+              if (!article || chosen.has(articleId)) return;
+              setExtraTemplates((prev) => [...prev, { extra_article_id: articleId }]);
+            }}
+          >
+            <option value="">{t("settings.extraTemplateAdd")}</option>
+            {extras
+              .filter((article) => !chosen.has(article.id))
+              .map((article) => (
+                <option key={article.id} value={article.id}>
+                  {article.name} · {article.sku}
+                  {tDynamic("catalog.extraKind", article.kind)
+                    ? ` · ${tDynamic("catalog.extraKind", article.kind)}`
+                    : ""}
+                </option>
+              ))}
+          </select>
+        </fieldset>
+        <fieldset>
+          <legend>{t("settings.serviceTemplates")}</legend>
+          {services.length === 0 && (
+            <p className="settings-hint">{t("settings.serviceTemplatesEmpty")}</p>
+          )}
+          <ul className="settings-list settings-plain">
+            {services.map((service) => (
+              <li key={service.id}>
+                <label className="settings-choice">
+                  <input
+                    type="checkbox"
+                    disabled={busy}
+                    checked={serviceChosen.has(service.id)}
+                    onChange={() =>
+                      setServiceTemplates((prev) =>
+                        prev.includes(service.id)
+                          ? prev.filter((id) => id !== service.id)
+                          : [...prev, service.id],
+                      )
+                    }
+                  />
+                  <span>
+                    {service.name} · {service.code}
+                  </span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        </fieldset>
+        <div className="payments-form-actions">
+          <button type="submit" className="primary-action" disabled={busy}>
+            {t("settings.extrasSave")}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export function SettingsPage(): JSX.Element {
   const auth = useAuthSession();
   const { theme, toggleTheme } = useTheme();
@@ -820,6 +1010,7 @@ export function SettingsPage(): JSX.Element {
           <div className="settings-grid">
             <OrgBrandingCard orgId={org.id} />
             <WorkshopRulesCard orgId={org.id} />
+            <OrgExtrasCard orgId={org.id} />
           </div>
         </section>
       )}

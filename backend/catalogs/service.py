@@ -14,7 +14,9 @@ from documents.repository import DocumentaryError
 from catalogs.serializers import (
     ArticleWriteSerializer,
     BeadWriteSerializer,
+    ExtraArticleWriteSerializer,
     KitWriteSerializer,
+    ServiceArticleWriteSerializer,
     SystemWriteSerializer,
 )
 
@@ -61,6 +63,14 @@ ARTICLES = Resource(
 )
 BEADS = Resource("glazing_bead_matrix", BeadWriteSerializer, _PROVENANCE_COLUMNS)
 KITS = Resource("hardware_kits", KitWriteSerializer, _PROVENANCE_COLUMNS)
+EXTRA_ARTICLES = Resource(
+    "extra_articles", ExtraArticleWriteSerializer, _PROVENANCE_COLUMNS
+)
+# service_articles is org data without a system parent: its visibility is
+# the org/global split only (NULL org = the shared seed catalogue).
+SERVICE_ARTICLES = Resource(
+    "service_articles", ServiceArticleWriteSerializer, _PROVENANCE_COLUMNS
+)
 
 
 def _not_found():
@@ -137,7 +147,7 @@ def require_revision(current, expected):
         raise contract_error(409, "catalog_stale_edit", "catalogs.errors.stale_edit")
 
 
-def visibility_sql(*, child: bool, alias: str | None = None) -> str:
+def visibility_sql(*, child: bool, alias: str | None = None, unscoped: bool = False) -> str:
     """Canonical catalog visibility — the ONLY definition of who sees what.
 
     A row is visible when it belongs to the caller's org, or when it is a
@@ -147,6 +157,9 @@ def visibility_sql(*, child: bool, alias: str | None = None) -> str:
     rules can never diverge.
     """
     org_col = f"{alias}.org_id" if alias else "org_id"
+    if unscoped:
+        # No system parent — NULL-org rows are the shared catalogue.
+        return f"({org_col} = %s OR {org_col} IS NULL)"
     if not child:
         return f"({org_col} = %s OR ({org_col} IS NULL AND {alias + '.' if alias else ''}is_global))"
     system_col = f"{alias}.system_id" if alias else "system_id"
@@ -158,13 +171,16 @@ def visibility_sql(*, child: bool, alias: str | None = None) -> str:
 
 
 def _visibility(resource):
-    return visibility_sql(child=resource is not SYSTEMS)
+    return visibility_sql(
+        child=resource is not SYSTEMS,
+        unscoped=resource is SERVICE_ARTICLES,
+    )
 
 
 def list_rows(resource, org_id, system_id=None):
     where = _visibility(resource)
     params = [org_id]
-    if system_id is not None:
+    if system_id is not None and resource is not SERVICE_ARTICLES:
         where += " AND system_id = %s"
         params.append(system_id)
     values = _fetch(resource, where, params)
@@ -200,7 +216,7 @@ def _require_owned(row, org_id):
 
 
 def _bind_parent(resource, org_id, values):
-    if resource is SYSTEMS:
+    if resource is SYSTEMS or resource is SERVICE_ARTICLES:
         return
 
     system_id = values["system_id"]
@@ -411,6 +427,8 @@ def update(resource, org_id, row_id, values, expected_revision=None, actor_id=No
             error_extra={"fields": validator.errors},
         )
     values = validator.validated_data
+    if resource is SERVICE_ARTICLES and "system_id" in values:
+        values.pop("system_id")
     if resource is ARTICLES and "section" in values:
         _check_drawing_ref(org_id, values["section"])
         _stamp_section(values, current, actor_id)

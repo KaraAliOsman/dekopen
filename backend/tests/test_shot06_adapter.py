@@ -68,6 +68,7 @@ def test_core_response_is_typed_and_complete(
         "profile_cuts", "reinforcements", "glasses", "panels", "hardware_items",
         "leaf_weights", "fittings", "calculation_hash",
         "finish_class", "finish_key", "finish_label", "color_surcharges",
+        "extra_lines",
     }
     assert actual["hardware_items"][0]["kit_sku"] == kit
     assert actual["leaf_weights"][0]["total_weight_kg"] == weight
@@ -93,5 +94,8 @@ def test_system_params_contract_accounts_for_every_field() -> None:
         "hardware_families", "hardware_options",
         "opening_capabilities",
         "color_options", "bicolor_allowed",
+        # D06: catalog-provided accessory articles the position pass prices
+        # and cuts against (extras.py inside evaluate_product).
+        "extra_articles",
     }
-    assert len(demo_60_params().model_dump()) == 38
+    assert len(demo_60_params().model_dump()) == 39

@@ -7,6 +7,7 @@
  */
 import type { ColorOptionChoice } from "./colorOptionChoice";
 import type { CouplerChoice } from "./couplerChoice";
+import type { ExtraArticleOption } from "./extraArticleOption";
 import type { GlassProductChoice } from "./glassProductChoice";
 import type { GlassSpecChoice } from "./glassSpecChoice";
 import type { GlazingBeadChoice } from "./glazingBeadChoice";
@@ -37,6 +38,7 @@ export interface DesignOptions {
   glazing_beads: GlazingBeadChoice[];
   panel_skus: string[];
   panel_choices: PanelChoice[];
+  extra_articles?: ExtraArticleOption[];
   rebate_depth_mm: string;
   sash_overlap_mm: string;
   depth_mm: string;

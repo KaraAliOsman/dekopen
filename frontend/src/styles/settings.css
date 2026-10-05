@@ -179,3 +179,25 @@
   font-weight: 600;
   text-decoration: none;
 }
+
+/* D06 — radio/checkbox choice rows inside settings cards. */
+.settings-choice {
+  align-items: center;
+  display: flex !important;
+  gap: 8px;
+}
+
+.payments-form fieldset {
+  border: 0;
+  display: grid;
+  gap: 8px;
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0;
+}
+
+.payments-form fieldset legend {
+  font-size: var(--text-s, 12px);
+  font-weight: 600;
+  padding: 0;
+}

@@ -138,6 +138,18 @@ SPECTACULAR_SETTINGS = {
         "UnitEnum": ["kit"],
         "PurchaseUnitEnum": ["BAR"],
         "MaterialEnum": ["PVC", "ALUMINIUM"],
+        "ExtraKindEnum": [
+            "SILL", "FRAME_EXTENSION", "COVER_TRIM", "MOSQUITO_SCREEN",
+            "VENTILATOR",
+        ],
+        "ServiceKindEnum": [
+            "INSTALLATION", "SEALING", "REMOVAL", "SCAFFOLDING", "FREIGHT",
+        ],
+        "SystemFamilyEnum": [
+            "CASEMENT", "SLIDING", "LIFT_SLIDE", "DOOR", "FACADE_FIXED",
+        ],
+        "EdgesEnum": ["top", "right", "bottom", "left"],
+        "PieceOriginEnum": ["PRODUCT", "EXTRA"],
         "CutMaterialEnum": ["PVC", "ALUMINIUM", "STEEL"],
         "InspectorRuleIdEnum": [f"R{i:02d}" for i in range(1, 15)],
         "DrainFixRuleIdEnum": ["R07"],

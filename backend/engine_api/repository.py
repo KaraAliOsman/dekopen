@@ -39,6 +39,9 @@ from dekopen_engine.models import (
     ColorKind,
     ColorOption,
     ColorSurcharge,
+    ExtraArticle,
+    ExtraKind,
+    ExtraPricingUnit,
     LeafRole,
     OpeningCapability,
     OpeningDirection,
@@ -324,6 +327,7 @@ class SystemParamsRepository:
             ),
             color_options=self._load_color_options(system_id, active_org_id),
             bicolor_allowed=bool(system[23]),
+            extra_articles=self._load_extra_articles(system_id, active_org_id),
         )
 
     def _load_color_options(
@@ -935,6 +939,69 @@ class SystemParamsRepository:
             )
             options[option.sku] = option
         return options
+
+    def _load_extra_articles(
+        self, system_id: UUID, active_org_id: UUID
+    ) -> dict[str, ExtraArticle]:
+        """D06 sellable extras — geometry-linked and counted articles the
+        system declares. The engine measures them; the backend never invents
+        a quantity or a price."""
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                SELECT sku, name, kind::text, pricing_unit::text,
+                       unit_price, unit_price_currency,
+                       unit_cost, unit_cost_currency,
+                       cut_profile_sku, cut_material::text,
+                       vuelo_default_mm,
+                       array_to_json(families)::text,
+                       array_to_json(unit_kinds)::text,
+                       suggestion_reason
+                FROM public.extra_articles
+                WHERE {self._SCOPE_SQL}
+                ORDER BY sku
+                """,
+                [system_id, active_org_id],
+            )
+            rows = cursor.fetchall()
+        articles: dict[str, ExtraArticle] = {}
+        for row in rows:
+            families = tuple(
+                SystemFamily(value)
+                for value in (json.loads(row[11]) if row[11] else [])
+            )
+            unit_kinds = tuple(
+                UnitKind(value)
+                for value in (json.loads(row[12]) if row[12] else [])
+            )
+            article = ExtraArticle(
+                sku=str(row[0]),
+                name=str(row[1]),
+                kind=ExtraKind(str(row[2])),
+                pricing_unit=ExtraPricingUnit(str(row[3])),
+                unit_price=_decimal_or_none(row[4]),
+                unit_price_currency=(
+                    None if row[5] is None else str(row[5])
+                ),
+                unit_cost=_decimal_or_none(row[6]),
+                unit_cost_currency=(
+                    None if row[7] is None else str(row[7])
+                ),
+                cut_profile_sku=(
+                    None if row[8] is None else str(row[8])
+                ),
+                cut_material=(
+                    None if row[9] is None else MaterialType(str(row[9]))
+                ),
+                vuelo_default_mm=_decimal_or_none(row[10]),
+                families=families,
+                unit_kinds=unit_kinds,
+                suggestion_reason=(
+                    None if row[13] is None else str(row[13])
+                ),
+            )
+            articles[article.sku] = article
+        return articles
 
     def _load_panel_rules(self, system_id: UUID, active_org_id: UUID) -> dict[str, PanelRule]:
         with connection.cursor() as cursor:

@@ -430,9 +430,10 @@ def _same_documentary_value(left: object, right: object) -> bool:
 
 
 # Output-additive BOM keys: lists/fields the engine emits that a sealed
-# snapshot may predate. D05 adds the finish identity + declared surcharges.
+# snapshot may predate. D05 adds the finish identity + declared surcharges;
+# D06 adds the measured extras sublines.
 _BOM_ADDITIVE_KEYS = frozenset(
-    {"fittings", "finish_key", "finish_label", "finish_class", "color_surcharges"}
+    {"fittings", "finish_key", "finish_label", "finish_class", "color_surcharges", "extra_lines"}
 )
 _PIECE_ADDITIVE_KEYS = {
     # Output-additive metadata the model gained after BOMs were already
@@ -450,8 +451,11 @@ _PIECE_ADDITIVE_KEYS = {
             "exposed_edges",
         }
     ),
-    "profile_cuts": frozenset({"sagitta_mm"}),
+    "profile_cuts": frozenset({"sagitta_mm", "origin"}),
     "reinforcements": frozenset({"sagitta_mm"}),
+    # D06: accessory cut/fitting pieces carry origin=EXTRA so the cut plan
+    # and OT BOM can tell them apart — sealed pre-D06 BOMs never had it.
+    "fittings": frozenset({"origin"}),
     # D04: resolved class label, sellable selections and declared machining
     # ride the emitted item — snapshots sealed before them must not flag.
     "hardware_items": frozenset(
@@ -556,11 +560,21 @@ def _calculation_identity_hashes(
     shape/sagitta, glass spec/article) must project the current payload back
     to that era's preimage or positions sealed then can never freeze again."""
     payload = result_payload(result)
+    # D06 era: emitted extras before `extra_lines` existed and pieces
+    # before `origin` marked EXTRA accessories.
+    era_d06 = _drop_bom_keys(
+        payload,
+        frozenset({"extra_lines"}),
+        {
+            "profile_cuts": frozenset({"origin"}),
+            "fittings": frozenset({"origin"}),
+        },
+    )
     # D05 era: positions sealed before the finish identity + color
     # surcharges existed never carried them — project back so their
     # stored hash still validates.
     era_d05 = _drop_bom_keys(
-        payload,
+        era_d06,
         frozenset(
             {"finish_key", "finish_label", "finish_class", "color_surcharges"}
         ),
@@ -608,22 +622,29 @@ def _calculation_identity_hashes(
     return tuple(
         calculation_hash(req, payload_era)
         for req in requests
-        for payload_era in (payload, era_d05, era_d04, era9, era94, era92, era86)
+        for payload_era in (payload, era_d06, era_d05, era_d04, era9, era94, era92, era86)
     )
 
 
 def _piece_identity(item: Mapping[str, object]) -> tuple[object, ...]:
-    return (
-        item.get("bay_id"),
-        item.get("leaf_id"),
-        item.get("role"),
-        item.get("sku") or item.get("parent_profile_sku"),
-        item.get("length_mm"),
-        item.get("width_mm"),
-        item.get("height_mm"),
-        item.get("angle_left"),
-        item.get("angle_right"),
-        item.get("qty"),
+    # Numeric fields collapse scale-free ("1500.00" == "1500"): the stored
+    # snapshot serializes canonical 2dp while the priced one rides the raw
+    # model_dump, and a missed identity match would drop additive keys on
+    # only one side — reading as binding drift that isn't there.
+    return tuple(
+        numeric_collapsed(value)
+        for value in (
+            item.get("bay_id"),
+            item.get("leaf_id"),
+            item.get("role"),
+            item.get("sku") or item.get("parent_profile_sku"),
+            item.get("length_mm"),
+            item.get("width_mm"),
+            item.get("height_mm"),
+            item.get("angle_left"),
+            item.get("angle_right"),
+            item.get("qty"),
+        )
     )
 
 
@@ -1709,7 +1730,8 @@ def freeze_revision_a(
         )
         organization = one(
             "SELECT name, tax_id, commercial_name, giro, brand_address,"
-            " brand_phone, brand_email, brand_logo_key, brand_logo_sha256"
+            " brand_phone, brand_email, brand_logo_key, brand_logo_sha256,"
+            " extras_display"
             " FROM public.tenancy_organizations WHERE id = %s",
             [str(org_id)],
             "organization_not_found",
@@ -1734,6 +1756,11 @@ def freeze_revision_a(
                 "brand_email": organization["brand_email"],
                 "brand_logo_key": organization["brand_logo_key"],
                 "brand_logo_sha256": organization["brand_logo_sha256"],
+                # D06: sealed policy for how extras/services print —
+                # DETAILED prints every sublínea, GROUPED folds them into
+                # the position sum. Older snapshots omit it and render
+                # detailed (the only behavior that ever existed).
+                "extras_display": organization["extras_display"],
             },
             "revision": revision,
             "sealed_by": actor_id,

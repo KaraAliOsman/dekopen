@@ -1807,3 +1807,150 @@ p.handle-pending {
   font-variant-numeric: tabular-nums;
   max-width: 100%;
 }
+
+/* D06 — Extras de la posición: declared accessories, suggestions and the
+   engine-derived sublines (cantidad × precio = total). */
+.position-extras {
+  margin-top: var(--space-12, 12px);
+}
+
+.position-extras__suggestions,
+.position-extras__list {
+  display: grid;
+  gap: var(--space-8, 8px);
+  list-style: none;
+  margin: 0 0 var(--space-8, 8px);
+  padding: 0;
+}
+
+.position-extras__suggestions li {
+  align-items: flex-start;
+  background: var(--theme-surface-sunken, rgba(0, 0, 0, 0.03));
+  border-radius: var(--r-2, 6px);
+  display: flex;
+  gap: var(--space-8, 8px);
+  justify-content: space-between;
+  padding: var(--space-8, 8px);
+}
+
+.position-extras__suggestion {
+  display: grid;
+  font-size: var(--text-sm, 0.8125rem);
+  gap: 2px;
+}
+
+.position-extras__reason {
+  color: var(--theme-text-muted);
+  font-size: var(--text-xs, 0.75rem);
+}
+
+.position-extras__item {
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-2, 6px);
+  display: grid;
+  gap: var(--space-8, 8px);
+  padding: var(--space-8, 8px);
+}
+
+.position-extras__item-head {
+  align-items: center;
+  display: flex;
+  font-size: var(--text-sm, 0.8125rem);
+  justify-content: space-between;
+}
+
+.position-extras__item-head em,
+.position-extras__lines dt em {
+  color: var(--theme-text-muted);
+  font-style: normal;
+}
+
+.position-extras__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8, 8px);
+}
+
+.position-extras__fields label {
+  display: grid;
+  font-size: var(--text-xs, 0.75rem);
+  gap: 2px;
+  min-width: 120px;
+}
+
+.position-extras__fields input {
+  max-width: 140px;
+}
+
+.position-extras__sides {
+  display: flex;
+  gap: var(--space-12, 12px);
+}
+
+.position-extras__side {
+  align-items: center;
+  display: flex !important;
+  gap: var(--space-4, 4px);
+}
+
+.position-extras__add select {
+  width: 100%;
+}
+
+.position-extras__lines {
+  border-top: 1px solid var(--theme-border-subtle);
+  margin-top: var(--space-8, 8px);
+  padding-top: var(--space-8, 8px);
+}
+
+/* D06 — Servicios del proyecto. */
+.project-services {
+  display: grid;
+  gap: var(--space-8, 8px);
+  padding-top: var(--space-8, 8px);
+}
+
+.project-services__list {
+  display: grid;
+  gap: var(--space-4, 4px);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.project-services__item {
+  align-items: baseline;
+  display: flex;
+  gap: var(--space-8, 8px);
+}
+
+.project-services__item em {
+  color: var(--theme-text-muted);
+  font-size: var(--text-xs, 0.75rem);
+  font-style: normal;
+}
+
+.project-services__lines {
+  border-collapse: collapse;
+  font-size: var(--text-sm, 0.8125rem);
+  width: 100%;
+}
+
+.project-services__lines td {
+  border-top: 1px solid var(--theme-border-subtle);
+  padding: var(--space-4, 4px) var(--space-8, 8px) var(--space-4, 4px) 0;
+}
+
+.project-services__lines td:last-child {
+  text-align: right;
+}
+
+.project-services__status {
+  color: var(--theme-text-muted);
+  font-size: var(--text-sm, 0.8125rem);
+  margin: 0;
+}
+
+.project-services__status.is-error {
+  color: var(--danger-ink);
+}

@@ -356,6 +356,113 @@ class KitWriteSerializer(StrictSerializer):
     is_active = serializers.BooleanField()
 
 
+_EXTRA_KINDS = ("SILL", "FRAME_EXTENSION", "COVER_TRIM",
+                "MOSQUITO_SCREEN", "VENTILATOR")
+_EXTRA_CUT_KINDS = ("SILL", "FRAME_EXTENSION", "COVER_TRIM")
+_EXTRA_UNITS = ("M", "EA")
+_EXTRA_FAMILIES = ("CASEMENT", "SLIDING", "LIFT_SLIDE", "DOOR", "FACADE_FIXED")
+_EXTRA_UNIT_KINDS = ("WINDOW", "DOOR")
+_SERVICE_KINDS = ("INSTALLATION", "SEALING", "REMOVAL", "SCAFFOLDING", "FREIGHT")
+_SERVICE_QTY_RULES = ("PER_POSITION_UNIT", "PER_M2", "PER_LINEAR_METER", "FIXED")
+
+
+class ExtraArticleWriteSerializer(StrictSerializer):
+    """D06 catalogued position accessory — the article declares price/cost,
+    its cut profile for saw kinds and the applicability predicates the
+    suggestion engine scopes with."""
+
+    system_id = serializers.UUIDField()
+    sku = serializers.CharField(max_length=100)
+    name = serializers.CharField(max_length=255)
+    kind = serializers.ChoiceField(choices=_EXTRA_KINDS)
+    pricing_unit = serializers.ChoiceField(choices=_EXTRA_UNITS)
+    unit_price = decimal_field(
+        14, 2, min_value=Decimal("0.00"), required=False, allow_null=True
+    )
+    unit_price_currency = serializers.CharField(
+        max_length=3, required=False, allow_null=True, allow_blank=True
+    )
+    unit_cost = decimal_field(
+        14, 2, min_value=Decimal("0.00"), required=False, allow_null=True
+    )
+    unit_cost_currency = serializers.CharField(
+        max_length=3, required=False, allow_null=True, allow_blank=True
+    )
+    cut_profile_sku = serializers.CharField(
+        max_length=100, required=False, allow_null=True, allow_blank=True
+    )
+    cut_material = serializers.ChoiceField(
+        choices=["PVC", "ALUMINIUM"], required=False, allow_null=True
+    )
+    vuelo_default_mm = decimal_field(
+        10, 2, min_value=Decimal("0.00"), required=False, allow_null=True
+    )
+    families = serializers.ListField(
+        child=serializers.ChoiceField(choices=_EXTRA_FAMILIES),
+        required=False,
+    )
+    unit_kinds = serializers.ListField(
+        child=serializers.ChoiceField(choices=_EXTRA_UNIT_KINDS),
+        required=False,
+    )
+    suggestion_reason = serializers.CharField(
+        required=False, allow_null=True, allow_blank=True
+    )
+    is_active = serializers.BooleanField(required=False, default=True)
+
+    def validate(self, values):
+        kind = values.get("kind")
+        unit = values.get("pricing_unit")
+        if kind in _EXTRA_CUT_KINDS and unit != "M":
+            raise serializers.ValidationError(
+                {"pricing_unit": "los extras con corte se venden por metro"}
+            )
+        if kind in ("MOSQUITO_SCREEN", "VENTILATOR") and unit != "EA":
+            raise serializers.ValidationError(
+                {"pricing_unit": "los extras contados se venden por unidad"}
+            )
+        has_profile = bool(values.get("cut_profile_sku"))
+        has_material = bool(values.get("cut_material"))
+        if kind in _EXTRA_CUT_KINDS:
+            if not has_profile or not has_material:
+                raise serializers.ValidationError(
+                    {"cut_profile_sku": "los extras con corte declaran su perfil y material"}
+                )
+        elif has_profile or has_material:
+            raise serializers.ValidationError(
+                {"cut_profile_sku": "solo los extras con corte declaran perfil"}
+            )
+        if values.get("vuelo_default_mm") is not None and kind != "SILL":
+            raise serializers.ValidationError(
+                {"vuelo_default_mm": "solo el vierteaguas declara vuelos"}
+            )
+        return values
+
+
+class ServiceArticleWriteSerializer(StrictSerializer):
+    """D06 catalogued project service — org data (no system parent): the
+    article declares the qty rule; the engine measures it off the quoted
+    positions."""
+
+    code = serializers.CharField(max_length=100)
+    name = serializers.CharField(max_length=255)
+    kind = serializers.ChoiceField(choices=_SERVICE_KINDS)
+    qty_rule = serializers.ChoiceField(choices=_SERVICE_QTY_RULES)
+    unit_price = decimal_field(
+        14, 2, min_value=Decimal("0.00"), required=False, allow_null=True
+    )
+    unit_price_currency = serializers.CharField(
+        max_length=3, required=False, allow_null=True, allow_blank=True
+    )
+    unit_cost = decimal_field(
+        14, 2, min_value=Decimal("0.00"), required=False, allow_null=True
+    )
+    unit_cost_currency = serializers.CharField(
+        max_length=3, required=False, allow_null=True, allow_blank=True
+    )
+    is_active = serializers.BooleanField(required=False, default=True)
+
+
 class ReadinessBlockerSerializer(serializers.Serializer):
     code = serializers.CharField()
     missing_authority = serializers.CharField()
@@ -428,6 +535,18 @@ class KitResponseSerializer(ProvenanceFieldsMixin, KitWriteSerializer):
     id = serializers.UUIDField()
 
 
+class ExtraArticleResponseSerializer(ProvenanceFieldsMixin, ExtraArticleWriteSerializer):
+    revision = serializers.CharField(read_only=True)
+    read_only = serializers.BooleanField()
+    id = serializers.UUIDField()
+
+
+class ServiceArticleResponseSerializer(ProvenanceFieldsMixin, ServiceArticleWriteSerializer):
+    revision = serializers.CharField(read_only=True)
+    read_only = serializers.BooleanField()
+    id = serializers.UUIDField()
+
+
 class SystemListSerializer(serializers.Serializer):
     items = SystemResponseSerializer(many=True)
 
@@ -442,6 +561,14 @@ class BeadListSerializer(serializers.Serializer):
 
 class KitListSerializer(serializers.Serializer):
     items = KitResponseSerializer(many=True)
+
+
+class ExtraArticleListSerializer(serializers.Serializer):
+    items = ExtraArticleResponseSerializer(many=True)
+
+
+class ServiceArticleListSerializer(serializers.Serializer):
+    items = ServiceArticleResponseSerializer(many=True)
 
 
 class CatalogFilterSerializer(StrictSerializer):

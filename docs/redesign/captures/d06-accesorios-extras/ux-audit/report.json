@@ -1,0 +1,1109 @@
+{
+  "summary": {
+    "generated_at": "2026-10-05T21:20:00.237Z",
+    "routes": 60,
+    "routes_with_findings": [
+      "project-borrador",
+      "project-cotizado",
+      "project-vitrina",
+      "project-conjuntos",
+      "project-escala",
+      "settings-general"
+    ],
+    "total_findings": 114
+  },
+  "results": [
+    {
+      "route": "projects",
+      "url": "/projects",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/projects--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects"
+    },
+    {
+      "route": "projects",
+      "url": "/projects",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/projects--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects"
+    },
+    {
+      "route": "projects",
+      "url": "/projects",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/projects--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects"
+    },
+    {
+      "route": "projects",
+      "url": "/projects",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/projects--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects"
+    },
+    {
+      "route": "projects",
+      "url": "/projects",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/projects--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects"
+    },
+    {
+      "route": "projects",
+      "url": "/projects",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/projects--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects"
+    },
+    {
+      "route": "project-borrador",
+      "url": "/projects/32e87f7e-d1e0-4857-9b66-6698c39be992",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/project-borrador--1440x900--light.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. Dormitorio principal1600 × 1200Conjun · rgb(11, 119, 112) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/32e87f7e-d1e0-4857-9b66-6698c39be992"
+    },
+    {
+      "route": "project-borrador",
+      "url": "/projects/32e87f7e-d1e0-4857-9b66-6698c39be992",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/project-borrador--1440x900--dark.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. Dormitorio principal1600 × 1200Conjun · rgb(72, 188, 175) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/32e87f7e-d1e0-4857-9b66-6698c39be992"
+    },
+    {
+      "route": "project-borrador",
+      "url": "/projects/32e87f7e-d1e0-4857-9b66-6698c39be992",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/project-borrador--1280x800--light.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. Dormitorio principal1600 × 1200Conjun · rgb(11, 119, 112) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/32e87f7e-d1e0-4857-9b66-6698c39be992"
+    },
+    {
+      "route": "project-borrador",
+      "url": "/projects/32e87f7e-d1e0-4857-9b66-6698c39be992",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/project-borrador--1280x800--dark.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. Dormitorio principal1600 × 1200Conjun · rgb(72, 188, 175) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/32e87f7e-d1e0-4857-9b66-6698c39be992"
+    },
+    {
+      "route": "project-borrador",
+      "url": "/projects/32e87f7e-d1e0-4857-9b66-6698c39be992",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/project-borrador--1024x768--light.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. Dormitorio principal1600 × 1200Conjun · rgb(11, 119, 112) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/32e87f7e-d1e0-4857-9b66-6698c39be992"
+    },
+    {
+      "route": "project-borrador",
+      "url": "/projects/32e87f7e-d1e0-4857-9b66-6698c39be992",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/project-borrador--1024x768--dark.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. Dormitorio principal1600 × 1200Conjun · rgb(72, 188, 175) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/32e87f7e-d1e0-4857-9b66-6698c39be992"
+    },
+    {
+      "route": "project-cotizado",
+      "url": "/projects/bf3aa62d-142f-4f4b-bb1b-18f01dbad991",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/project-cotizado--1440x900--light.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. Depto 101 — living2200 × 1400Conjunto · rgb(11, 119, 112) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/bf3aa62d-142f-4f4b-bb1b-18f01dbad991"
+    },
+    {
+      "route": "project-cotizado",
+      "url": "/projects/bf3aa62d-142f-4f4b-bb1b-18f01dbad991",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/project-cotizado--1440x900--dark.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. Depto 101 — living2200 × 1400Conjunto · rgb(72, 188, 175) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/bf3aa62d-142f-4f4b-bb1b-18f01dbad991"
+    },
+    {
+      "route": "project-cotizado",
+      "url": "/projects/bf3aa62d-142f-4f4b-bb1b-18f01dbad991",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/project-cotizado--1280x800--light.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. Depto 101 — living2200 × 1400Conjunto · rgb(11, 119, 112) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/bf3aa62d-142f-4f4b-bb1b-18f01dbad991"
+    },
+    {
+      "route": "project-cotizado",
+      "url": "/projects/bf3aa62d-142f-4f4b-bb1b-18f01dbad991",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/project-cotizado--1280x800--dark.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. Depto 101 — living2200 × 1400Conjunto · rgb(72, 188, 175) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/bf3aa62d-142f-4f4b-bb1b-18f01dbad991"
+    },
+    {
+      "route": "project-cotizado",
+      "url": "/projects/bf3aa62d-142f-4f4b-bb1b-18f01dbad991",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/project-cotizado--1024x768--light.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. Depto 101 — living2200 × 1400Conjunto · rgb(11, 119, 112) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/bf3aa62d-142f-4f4b-bb1b-18f01dbad991"
+    },
+    {
+      "route": "project-cotizado",
+      "url": "/projects/bf3aa62d-142f-4f4b-bb1b-18f01dbad991",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/project-cotizado--1024x768--dark.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. Depto 101 — living2200 × 1400Conjunto · rgb(72, 188, 175) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/bf3aa62d-142f-4f4b-bb1b-18f01dbad991"
+    },
+    {
+      "route": "project-vitrina",
+      "url": "/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/project-vitrina--1440x900--light.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. V01 Fijo living1800 × 1400Fijo · Blan · rgb(11, 119, 112) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a"
+    },
+    {
+      "route": "project-vitrina",
+      "url": "/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/project-vitrina--1440x900--dark.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. V01 Fijo living1800 × 1400Fijo · Blan · rgb(72, 188, 175) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a"
+    },
+    {
+      "route": "project-vitrina",
+      "url": "/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/project-vitrina--1280x800--light.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. V01 Fijo living1800 × 1400Fijo · Blan · rgb(11, 119, 112) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a"
+    },
+    {
+      "route": "project-vitrina",
+      "url": "/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/project-vitrina--1280x800--dark.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. V01 Fijo living1800 × 1400Fijo · Blan · rgb(72, 188, 175) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a"
+    },
+    {
+      "route": "project-vitrina",
+      "url": "/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/project-vitrina--1024x768--light.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. V01 Fijo living1800 × 1400Fijo · Blan · rgb(11, 119, 112) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a"
+    },
+    {
+      "route": "project-vitrina",
+      "url": "/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/project-vitrina--1024x768--dark.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. V01 Fijo living1800 × 1400Fijo · Blan · rgb(72, 188, 175) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a"
+    },
+    {
+      "route": "project-conjuntos",
+      "url": "/projects/4fe38030-c226-4190-bce2-97a5375a62b6",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/project-conjuntos--1440x900--light.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. Bow hall2700 × 1500Conjunto · Blanco$ · rgb(11, 119, 112) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/4fe38030-c226-4190-bce2-97a5375a62b6"
+    },
+    {
+      "route": "project-conjuntos",
+      "url": "/projects/4fe38030-c226-4190-bce2-97a5375a62b6",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/project-conjuntos--1440x900--dark.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. Bow hall2700 × 1500Conjunto · Blanco$ · rgb(72, 188, 175) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/4fe38030-c226-4190-bce2-97a5375a62b6"
+    },
+    {
+      "route": "project-conjuntos",
+      "url": "/projects/4fe38030-c226-4190-bce2-97a5375a62b6",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/project-conjuntos--1280x800--light.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. Bow hall2700 × 1500Conjunto · Blanco$ · rgb(11, 119, 112) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/4fe38030-c226-4190-bce2-97a5375a62b6"
+    },
+    {
+      "route": "project-conjuntos",
+      "url": "/projects/4fe38030-c226-4190-bce2-97a5375a62b6",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/project-conjuntos--1280x800--dark.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. Bow hall2700 × 1500Conjunto · Blanco$ · rgb(72, 188, 175) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/4fe38030-c226-4190-bce2-97a5375a62b6"
+    },
+    {
+      "route": "project-conjuntos",
+      "url": "/projects/4fe38030-c226-4190-bce2-97a5375a62b6",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/project-conjuntos--1024x768--light.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. Bow hall2700 × 1500Conjunto · Blanco$ · rgb(11, 119, 112) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/4fe38030-c226-4190-bce2-97a5375a62b6"
+    },
+    {
+      "route": "project-conjuntos",
+      "url": "/projects/4fe38030-c226-4190-bce2-97a5375a62b6",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/project-conjuntos--1024x768--dark.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. Bow hall2700 × 1500Conjunto · Blanco$ · rgb(72, 188, 175) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/4fe38030-c226-4190-bce2-97a5375a62b6"
+    },
+    {
+      "route": "project-escala",
+      "url": "/projects/f04905fb-76f7-4a21-83a8-a99e5ff55945",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/project-escala--1440x900--light.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. Piso 1 unidad 11600 × 1200Conjunto ·  · rgb(11, 119, 112) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/f04905fb-76f7-4a21-83a8-a99e5ff55945"
+    },
+    {
+      "route": "project-escala",
+      "url": "/projects/f04905fb-76f7-4a21-83a8-a99e5ff55945",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/project-escala--1440x900--dark.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. Piso 1 unidad 11600 × 1200Conjunto ·  · rgb(72, 188, 175) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/f04905fb-76f7-4a21-83a8-a99e5ff55945"
+    },
+    {
+      "route": "project-escala",
+      "url": "/projects/f04905fb-76f7-4a21-83a8-a99e5ff55945",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/project-escala--1280x800--light.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. Piso 1 unidad 11600 × 1200Conjunto ·  · rgb(11, 119, 112) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/f04905fb-76f7-4a21-83a8-a99e5ff55945"
+    },
+    {
+      "route": "project-escala",
+      "url": "/projects/f04905fb-76f7-4a21-83a8-a99e5ff55945",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/project-escala--1280x800--dark.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. Piso 1 unidad 11600 × 1200Conjunto ·  · rgb(72, 188, 175) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/f04905fb-76f7-4a21-83a8-a99e5ff55945"
+    },
+    {
+      "route": "project-escala",
+      "url": "/projects/f04905fb-76f7-4a21-83a8-a99e5ff55945",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/project-escala--1024x768--light.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. Piso 1 unidad 11600 × 1200Conjunto ·  · rgb(11, 119, 112) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/f04905fb-76f7-4a21-83a8-a99e5ff55945"
+    },
+    {
+      "route": "project-escala",
+      "url": "/projects/f04905fb-76f7-4a21-83a8-a99e5ff55945",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/project-escala--1024x768--dark.png",
+      "findings": [
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · 1. Piso 1 unidad 11600 × 1200Conjunto ·  · rgb(72, 188, 175) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "403 http://127.0.0.1:5173/api/v1/projects/payment-integration/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/f04905fb-76f7-4a21-83a8-a99e5ff55945"
+    },
+    {
+      "route": "project-position-new",
+      "url": "/projects/32e87f7e-d1e0-4857-9b66-6698c39be992/positions/new",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/project-position-new--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/32e87f7e-d1e0-4857-9b66-6698c39be992/positions/new"
+    },
+    {
+      "route": "project-position-new",
+      "url": "/projects/32e87f7e-d1e0-4857-9b66-6698c39be992/positions/new",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/project-position-new--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/32e87f7e-d1e0-4857-9b66-6698c39be992/positions/new"
+    },
+    {
+      "route": "project-position-new",
+      "url": "/projects/32e87f7e-d1e0-4857-9b66-6698c39be992/positions/new",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/project-position-new--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/32e87f7e-d1e0-4857-9b66-6698c39be992/positions/new"
+    },
+    {
+      "route": "project-position-new",
+      "url": "/projects/32e87f7e-d1e0-4857-9b66-6698c39be992/positions/new",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/project-position-new--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/32e87f7e-d1e0-4857-9b66-6698c39be992/positions/new"
+    },
+    {
+      "route": "project-position-new",
+      "url": "/projects/32e87f7e-d1e0-4857-9b66-6698c39be992/positions/new",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/project-position-new--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/32e87f7e-d1e0-4857-9b66-6698c39be992/positions/new"
+    },
+    {
+      "route": "project-position-new",
+      "url": "/projects/32e87f7e-d1e0-4857-9b66-6698c39be992/positions/new",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/project-position-new--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/32e87f7e-d1e0-4857-9b66-6698c39be992/positions/new"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a/positions/b75dcfa7-395b-4051-881b-6553a540077b/edit",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/project-position-edit--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a/positions/b75dcfa7-395b-4051-881b-6553a540077b/edit"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a/positions/b75dcfa7-395b-4051-881b-6553a540077b/edit",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/project-position-edit--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a/positions/b75dcfa7-395b-4051-881b-6553a540077b/edit"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a/positions/b75dcfa7-395b-4051-881b-6553a540077b/edit",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/project-position-edit--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a/positions/b75dcfa7-395b-4051-881b-6553a540077b/edit"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a/positions/b75dcfa7-395b-4051-881b-6553a540077b/edit",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/project-position-edit--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a/positions/b75dcfa7-395b-4051-881b-6553a540077b/edit"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a/positions/b75dcfa7-395b-4051-881b-6553a540077b/edit",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/project-position-edit--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a/positions/b75dcfa7-395b-4051-881b-6553a540077b/edit"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a/positions/b75dcfa7-395b-4051-881b-6553a540077b/edit",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/project-position-edit--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a/positions/b75dcfa7-395b-4051-881b-6553a540077b/edit"
+    },
+    {
+      "route": "project-pricing",
+      "url": "/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a/pricing",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/project-pricing--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a/pricing"
+    },
+    {
+      "route": "project-pricing",
+      "url": "/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a/pricing",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/project-pricing--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a/pricing"
+    },
+    {
+      "route": "project-pricing",
+      "url": "/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a/pricing",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/project-pricing--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a/pricing"
+    },
+    {
+      "route": "project-pricing",
+      "url": "/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a/pricing",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/project-pricing--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a/pricing"
+    },
+    {
+      "route": "project-pricing",
+      "url": "/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a/pricing",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/project-pricing--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a/pricing"
+    },
+    {
+      "route": "project-pricing",
+      "url": "/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a/pricing",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/project-pricing--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/8e44c485-6dd3-4d9e-be39-42884dfa4e1a/pricing"
+    },
+    {
+      "route": "settings-general",
+      "url": "/settings/general",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/settings-general--1440x900--light.png",
+      "findings": [
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "500 http://127.0.0.1:5173/api/v1/organization/branding/logo/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "500 http://127.0.0.1:5173/api/v1/organization/branding/logo/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/settings/general"
+    },
+    {
+      "route": "settings-general",
+      "url": "/settings/general",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/settings-general--1440x900--dark.png",
+      "findings": [
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "500 http://127.0.0.1:5173/api/v1/organization/branding/logo/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "500 http://127.0.0.1:5173/api/v1/organization/branding/logo/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/settings/general"
+    },
+    {
+      "route": "settings-general",
+      "url": "/settings/general",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/settings-general--1280x800--light.png",
+      "findings": [
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "500 http://127.0.0.1:5173/api/v1/organization/branding/logo/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "500 http://127.0.0.1:5173/api/v1/organization/branding/logo/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/settings/general"
+    },
+    {
+      "route": "settings-general",
+      "url": "/settings/general",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/settings-general--1280x800--dark.png",
+      "findings": [
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "500 http://127.0.0.1:5173/api/v1/organization/branding/logo/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "500 http://127.0.0.1:5173/api/v1/organization/branding/logo/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/settings/general"
+    },
+    {
+      "route": "settings-general",
+      "url": "/settings/general",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/settings-general--1024x768--light.png",
+      "findings": [
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "500 http://127.0.0.1:5173/api/v1/organization/branding/logo/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "500 http://127.0.0.1:5173/api/v1/organization/branding/logo/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/settings/general"
+    },
+    {
+      "route": "settings-general",
+      "url": "/settings/general",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/settings-general--1024x768--dark.png",
+      "findings": [
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "500 http://127.0.0.1:5173/api/v1/organization/branding/logo/"
+        },
+        {
+          "kind": "http-error",
+          "detail": "500 http://127.0.0.1:5173/api/v1/organization/branding/logo/"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/settings/general"
+    }
+  ]
+}

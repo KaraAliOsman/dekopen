@@ -29,6 +29,7 @@ def test_openapi_contains_only_authorized_shot_11_paths_and_bearer_security() ->
         "/api/v1/projects/{project_id}/reset-pricing/",
         "/api/v1/projects/{project_id}/positions/",
         "/api/v1/projects/{project_id}/positions/measurement-resolve/",
+        "/api/v1/projects/{project_id}/services/",
         "/api/v1/projects/design-options/{system_id}/",
         "/api/v1/positions/{position_id}/",
         "/api/v1/positions/{position_id}/measurement-confirm/",
@@ -52,7 +53,14 @@ def test_openapi_contains_only_authorized_shot_11_paths_and_bearer_security() ->
         "/api/v1/catalogs/mounting-rules/",
         "/api/v1/catalogs/evidence/",
         "/api/v1/catalogs/evidence/{row_id}/review/",
+        "/api/v1/catalogs/extra-articles/",
+        "/api/v1/catalogs/extra-articles/{row_id}/",
+        "/api/v1/catalogs/extra-articles/{row_id}/review/",
+        "/api/v1/catalogs/service-articles/",
+        "/api/v1/catalogs/service-articles/{row_id}/",
+        "/api/v1/catalogs/service-articles/{row_id}/review/",
         "/api/v1/auth/me/",
+        "/api/v1/organization/extras-config/",
         "/api/v1/engine/calculate/",
         "/api/v1/engine/assembly/calculate/",
         "/api/v1/engine/layout/",
@@ -192,6 +200,7 @@ def test_engine_response_includes_shot06_and_excludes_inspector() -> None:
         "calculation_hash", "profile_cuts", "reinforcements", "glasses",
         "panels", "fittings", "hardware_items", "leaf_weights",
         "finish_class", "finish_key", "finish_label", "color_surcharges",
+        "extra_lines",
     }
 
 

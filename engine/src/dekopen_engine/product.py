@@ -63,6 +63,8 @@ from dekopen_engine.models import (
     EffectiveProfileArticle,
     EngineModel,
     EngineResult,
+    ExtraSelection,
+    ExtraSuggestion,
     FittingPiece,
     GlassPiece,
     MaterialType,
@@ -76,6 +78,13 @@ from dekopen_engine.models import (
     ReinforcementPiece,
     SlidingPanelKind,
     SystemParams,
+    UnitKind,
+)
+from dekopen_engine.models import EdgeSide as EdgeSide
+from dekopen_engine.extras import (
+    ModuleExtraContext,
+    OperableLeaf,
+    evaluate_position_extras,
 )
 from dekopen_engine.technical_facts import (
     GeometryComputation,
@@ -84,6 +93,7 @@ from dekopen_engine.technical_facts import (
 )
 from dekopen_engine.openings import (
     resolve_opening_spec,
+    resolve_unit_kind,
     spec_display_name_es,
 )
 from dekopen_engine.trig import cos_degrees, sin_degrees
@@ -154,13 +164,6 @@ class ConnectionKind(str, Enum):
     STACKED = "STACKED"  # horizontal member — module on top of module
     TEE = "TEE"  # member landing mid-edge (declared; evaluated as unsupported)
     CORNER = "CORNER"  # framed corner assembly (declared; evaluated as unsupported)
-
-
-class EdgeSide(str, Enum):
-    LEFT = "left"
-    RIGHT = "right"
-    TOP = "top"
-    BOTTOM = "bottom"
 
 
 class CouplingDef(EngineModel):
@@ -259,6 +262,9 @@ class CoupledAssembly(EngineModel):
 class ProductModel(EngineModel):
     version: Literal["product-v2"]
     assembly: CoupledAssembly
+    # Declared position extras (D06) — sealed inside the parametric_tree
+    # so issued documents reproduce the accessories exactly.
+    extras: list[ExtraSelection] = Field(default_factory=list)
 
 
 class PlanModule(EngineModel):
@@ -319,6 +325,9 @@ class ModuleEvaluation(EngineModel):
 class ProductEvaluation(EngineModel):
     status: ProductStatus
     issues: list[ProductIssue] = Field(default_factory=list)
+    # Catalogued companions the position qualifies for and has not
+    # selected (D06) — advisory; the user accepts or discards them.
+    extra_suggestions: list[ExtraSuggestion] = Field(default_factory=list)
     plan: PlanGeometry | None = None
     modules: list[ModuleEvaluation] = Field(default_factory=list)
     bom: EngineResult | None = None
@@ -1061,6 +1070,81 @@ def _glass_safety_issues(module_id: str, result: EngineResult) -> list[ProductIs
                 )
             )
     return issues
+
+
+def _operable_leaves(tree: ParametricNode) -> tuple[OperableLeaf, ...]:
+    """Operable leaves a module's tree declares (D06 extra scope).
+
+    Sliding bays count their MOVING panels; hinged bays count their
+    non-FIXED spec leaves. The module's own evaluation already surfaces
+    real opening problems — an unresolvable declaration here just counts
+    no leaves.
+    """
+    leaves: list[OperableLeaf] = []
+
+    def _visit(node: ParametricNode) -> None:
+        if node.type is NodeType.BAY:
+            if _node_is_sliding(node):
+                try:
+                    layout = resolved_sliding_layout(node)
+                except ValueError:
+                    layout = None
+                if layout is not None:
+                    leaves.extend(
+                        OperableLeaf(bay_id=node.id, leaf_id=panel.slot)
+                        for panel in layout.panels
+                        if panel.kind is SlidingPanelKind.MOVING
+                    )
+            else:
+                spec = _resolved_spec_or_none(node)
+                if spec is not None:
+                    leaves.extend(
+                        OperableLeaf(bay_id=node.id, leaf_id=leaf.slot)
+                        for leaf in spec.leaves
+                        if leaf.opening.movement is not OpeningMovement.FIXED
+                    )
+        for child in node.children:
+            _visit(child)
+
+    _visit(tree)
+    return tuple(leaves)
+
+
+def _module_extra_contexts(
+    modules: list[ProductModule],
+    claimed_edges: set[tuple[str, EdgeSide]],
+    column_index: dict[str, int],
+) -> list[ModuleExtraContext]:
+    """Extras scope per module: exterior edges are the sides no coupling
+    claimed; unit kind comes off the unit's top node (ROOT wraps one)."""
+    contexts: list[ModuleExtraContext] = []
+    for module in modules:
+        top = (
+            module.tree.children[0]
+            if module.tree.type is NodeType.ROOT and len(module.tree.children) == 1
+            else module.tree
+        )
+        contexts.append(
+            ModuleExtraContext(
+                module_id=module.id,
+                column=column_index.get(module.id, 0),
+                width_mm=module.width_mm,
+                height_mm=module.height_mm,
+                exterior_sides=frozenset(
+                    side
+                    for side in EdgeSide
+                    if (module.id, side) not in claimed_edges
+                ),
+                operable_leaves=_operable_leaves(module.tree),
+                unit_kind=(
+                    resolve_unit_kind(top)
+                    if isinstance(top, ParametricNode)
+                    else UnitKind.WINDOW
+                ),
+                straight_framed=module.contour is None and module.frameless is None,
+            )
+        )
+    return contexts
 
 
 def _prefix_result(module_id: str, result: EngineResult) -> EngineResult:
@@ -2247,24 +2331,33 @@ def evaluate_product(
                         },
                     )
                 )
+        extras_eval = evaluate_position_extras(
+            product.extras,
+            params.extra_articles,
+            _module_extra_contexts(modules, claimed_edges, column_index),
+            system_family=params.system_family,
+        )
         bom = EngineResult(
             profile_cuts=[
                 cut for r in aggregated for cut in r.profile_cuts
             ]
-            + coupler_cuts,
+            + coupler_cuts
+            + extras_eval.cuts,
             reinforcements=[
                 piece for r in aggregated for piece in r.reinforcements
             ]
             + coupler_reinforcements,
             glasses=[piece for r in aggregated for piece in r.glasses],
             panels=[piece for r in aggregated for piece in r.panels],
-            fittings=[piece for r in aggregated for piece in r.fittings],
+            fittings=[piece for r in aggregated for piece in r.fittings]
+            + extras_eval.fittings,
             hardware_items=[
                 item for r in aggregated for item in r.hardware_items
             ],
             leaf_weights=[
                 weight for r in aggregated for weight in r.leaf_weights
             ],
+            extra_lines=extras_eval.lines,
         )
         if color_selection is not None:
             # D05: stamp the finish pair's identity + declared surcharges
@@ -2278,6 +2371,9 @@ def evaluate_product(
                 bom,
                 area_m2=(plan.width_mm * plan.height_mm) / Decimal("1000000"),
             )
+        extra_suggestions = extras_eval.suggestions
+    else:
+        extra_suggestions = []
 
     if any(issue.severity is Severity.ERROR for issue in issues):
         status = ProductStatus.INVALID
@@ -2292,6 +2388,7 @@ def evaluate_product(
         plan=plan,
         modules=module_evals,
         bom=bom,
+        extra_suggestions=extra_suggestions,
     )
 
 

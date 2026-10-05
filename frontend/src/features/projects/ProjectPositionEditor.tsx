@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   engineSystems,
   mountingRulesList,
+  organizationExtrasConfigRead,
   positionsCreate,
   positionsMeasurementConfirm,
   positionsMeasurementResolve,
@@ -62,8 +63,10 @@ import {
   isProductModel,
   isSingleUnit,
   wrapTreeAsProduct,
+  type ExtraSelectionJson,
   type ProductJson,
 } from "../canvas/productEditing";
+import { PositionExtrasPanel } from "./PositionExtrasPanel";
 
 import "./projects.css";
 
@@ -272,7 +275,11 @@ function designPayload(
     inputs.colorExterior && inputs.colorExterior !== color ? inputs.colorExterior : null;
   if (colorExterior !== null && !allowedColors.includes(colorExterior)) return null;
   const single = isSingleUnit(product) ? product.assembly.modules[0] : undefined;
-  return single !== undefined
+  // D06: the classic single-unit shape is a bare IntentNode — it has nowhere
+  // to carry `product.extras`. A single that declares extras persists as
+  // product-v2 like a coupled one (contoured/frameless singles already do).
+  const hasExtras = (product.extras?.length ?? 0) > 0;
+  return single !== undefined && !hasExtras
     ? {
         system_id: inputs.systemId,
         nominal_width_mm: single.width_mm,
@@ -433,6 +440,18 @@ function PositionWorkspace({
     enabled: !!systemId,
     retry: false,
   });
+  // D06: org default templates — extras preselected into NEW positions,
+  // matched to the system the vano uses. A template only seeds the
+  // selection record; the engine re-measures it like any declaration.
+  const extrasConfig = useQuery({
+    queryKey: ["org-extras-config", orgId],
+    queryFn: async () => {
+      const response = await organizationExtrasConfigRead(requestOptions);
+      if (response.status !== 200) throw new Error("load");
+      return response.data;
+    },
+    retry: false,
+  });
   // Finishes the series declares. A stored finish it stopped offering still
   // displays — the picker lists it once — but can't save: the engine's color
   // contract is the authority, not this list's length.
@@ -577,6 +596,31 @@ function PositionWorkspace({
       useCanvasStore.getState().replaceInputs({ ...inputs, product: resolved });
     }
   }, [inputs, options.data]);
+
+  // Apply org extra templates once the design context exists (new vanos
+  // only — a saved position's sealed tree is authoritative). Templates of
+  // the position's system merge in without touching skus the estimator
+  // already declared, mirroring merge_extra_templates in the engine.
+  const templatesApplied = useRef<string | null>(null);
+  useEffect(() => {
+    if (positionId || copyId || !systemId || !extrasConfig.data) return;
+    if (templatesApplied.current === systemId) return;
+    const product = inputs.product;
+    if (!product || (product.extras?.length ?? 0) > 0) return;
+    const templates = (extrasConfig.data.extra_templates ?? []).filter(
+      (template) => template.system_id === systemId,
+    );
+    templatesApplied.current = systemId;
+    if (templates.length === 0) return;
+    const merged: ExtraSelectionJson[] = templates.map((template) => ({
+      sku: template.sku,
+      sides: template.sides.length ? template.sides : undefined,
+      qty: template.qty ?? undefined,
+    }));
+    // Deterministic preselection is not a user step — no history entry,
+    // same contract as resolveDefaults above.
+    useCanvasStore.getState().replaceInputs({ ...inputs, product: { ...product, extras: merged } });
+  }, [inputs, extrasConfig.data, systemId, positionId, copyId]);
 
   function applyHistory(direction: "undo" | "redo"): void {
     const store = useCanvasStore.getState();
@@ -898,6 +942,9 @@ function PositionWorkspace({
       Math.max(widthMm, nominal.widthMm),
       Math.max(heightMm, nominal.heightMm),
     );
+    // D06: extras declared on the position (templates or by hand) survive a
+    // starter swap — the library replaces geometry, never the declarations.
+    if (product?.extras?.length) nextProduct.extras = product.extras;
     const store = useCanvasStore.getState();
     store.commitInputs({ ...inputs, product: nextProduct });
     // Coupled starters mint fresh module ids — a stale selection would leave
@@ -927,40 +974,63 @@ function PositionWorkspace({
       return `${tDynamic("catalog.option", limit.opening_type)}: ${parts.join(" × ")} (${source})`;
     })
     .join(" · ");
+  const extrasPanel = (
+    <PositionExtrasPanel
+      articles={options.data?.extra_articles ?? []}
+      extras={product?.extras ?? []}
+      suggestions={assemblyEval?.extra_suggestions ?? []}
+      lines={assemblyEval?.bom?.extra_lines ?? []}
+      disabled={busy}
+      onChange={(next) => {
+        if (!product) return;
+        useCanvasStore.getState().commitInputs({
+          ...inputs,
+          product: { ...product, extras: next },
+        });
+        setMessage("");
+      }}
+    />
+  );
   const positionPanel = (
-    <section className="assembly-inspector position-panel" aria-label={t("projects.positionData")}>
-      <header className="assembly-inspector__header">
-        <h4>{t("projects.positionData")}</h4>
-      </header>
-      <dl className="inspector-summary__list">
-        <div className="inspector-summary__row">
-          <dt>{t("projects.location")}</dt>
-          <dd>{location.trim() || "—"}</dd>
-        </div>
-        <div className="inspector-summary__row">
-          <dt>{t("pricing.quantity")}</dt>
-          <dd>{quantity || "1"}</dd>
-        </div>
-        <div className="inspector-summary__row">
-          <dt>{t("projects.system")}</dt>
-          <dd>{systemName}</dd>
-        </div>
-      </dl>
-      <VanoSection
-        draft={vanoDraft}
-        onDraftChange={setVanoDraft}
-        rules={mountingRules.data}
-        rulesPending={mountingRules.isPending}
-        preview={vanoPreview}
-        previewPending={vanoPreviewBusy}
-        previewError={vanoPreviewError}
-        saved={saved?.measurement ?? null}
-        onConfirm={(confirmed) => void confirmMeasurement(confirmed)}
-        confirmBusy={confirmBusy}
-        positionPersisted={saved !== null && !copyId}
-        disabled={busy}
-      />
-    </section>
+    <>
+      <section
+        className="assembly-inspector position-panel"
+        aria-label={t("projects.positionData")}
+      >
+        <header className="assembly-inspector__header">
+          <h4>{t("projects.positionData")}</h4>
+        </header>
+        <dl className="inspector-summary__list">
+          <div className="inspector-summary__row">
+            <dt>{t("projects.location")}</dt>
+            <dd>{location.trim() || "—"}</dd>
+          </div>
+          <div className="inspector-summary__row">
+            <dt>{t("pricing.quantity")}</dt>
+            <dd>{quantity || "1"}</dd>
+          </div>
+          <div className="inspector-summary__row">
+            <dt>{t("projects.system")}</dt>
+            <dd>{systemName}</dd>
+          </div>
+        </dl>
+        <VanoSection
+          draft={vanoDraft}
+          onDraftChange={setVanoDraft}
+          rules={mountingRules.data}
+          rulesPending={mountingRules.isPending}
+          preview={vanoPreview}
+          previewPending={vanoPreviewBusy}
+          previewError={vanoPreviewError}
+          saved={saved?.measurement ?? null}
+          onConfirm={(confirmed) => void confirmMeasurement(confirmed)}
+          confirmBusy={confirmBusy}
+          positionPersisted={saved !== null && !copyId}
+          disabled={busy}
+        />
+      </section>
+      {extrasPanel}
+    </>
   );
   return (
     <section className="projects-page position-editor">
@@ -1268,7 +1338,11 @@ export function ProjectBom({ result }: { result: EngineCalculateResponse }): JSX
               {(result.fittings ?? []).map((item, index) => (
                 <tr key={index}>
                   <td>{item.sku}</td>
-                  <td>{tOptional(`assembly.fittingKind.${item.kind}`) ?? item.kind}</td>
+                  <td>
+                    {tOptional(`assembly.fittingKind.${item.kind}`) ??
+                      tOptional(`catalog.extraKind.${item.kind}`) ??
+                      item.kind}
+                  </td>
                   <td>{item.qty}</td>
                 </tr>
               ))}

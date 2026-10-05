@@ -614,7 +614,7 @@ def test_pricing_http_valid_preview_remains_successful(committed_commercial_rows
                       'project_code','project_name','client_name','pricing_mode','segment',
                       'positions_breakdown','authorities','rules','requested_by_email',
                       'reason','requested_by','approved_by','approved_at','created_at',
-                      'extras','extras_net'}
+                      'extras','extras_net','service_lines'}
     assert body['approved_by'] is None and body['approved_at'] is None
     assert body['state']=='PREVIEW'
     assert body['project_id']==str(project)

@@ -487,3 +487,90 @@ description: Local dev-stack recipe for DEKOPEN E2E testing — Supabase CLI sta
 - **Preview + chip reactivity**: header chip and inspector preview come from a 350 ms-debounced `positionsMeasurementResolve` — they update live on keystrokes, no save needed. Manual lock shows badge "Fijada a mano" + headline lock dims + warnings "La medida fijada no es coherente…" / "El producto no se está fabricando con la medida fijada manualmente."
 - **Fixings/extensions render**: `authority.fixings` seeds use `{label, qty_per_unit, note}` and `frame_extensions` use `{side, label, mm}` — NOT `code`. VanoSection maps label+qty (`"Anclaje perimetral ×8"`). (Bug found & fixed in D07: reading `fixing.code` rendered an always-empty line.)
 - **DB check**: `docker exec supabase_db_dekopen psql -U postgres -d postgres -tA -c "SELECT rough_opening_input, measurement_state, measurement_confirmed_at, fabrication_lock, mounting_rule_id FROM project_positions WHERE id='…';"` — fixture record: `width_points_mm:["1620.00","1700.00"]`, `height_points_mm:["1220.00"]`, CONFIRMED, lock NULL, rule EN_VANO (`d441e283-4005-45a3-be70-5324284327e4`, −10 mm/side).
+
+## D06 extras/servicios inspector notes
+
+## Extras panel ("Extras de la posición") gating
+
+- The right-rail extras panel renders ONLY when the detail level is "Vista general"
+  AND nothing is selected in the tree/canvas. Detail level defaults to "Diseño"
+  (AssemblyEditor.tsx). To reach it: click empty canvas or press Escape (may need
+  two attempts — the first Escape can land on a focused input), then click the
+  "Vista general" tab button, then scroll the `devin-scrollable` rail — the panel
+  sits below "Vano y materiales".
+- Suggestion chips (e.g. "Mosquitero enrollable — Las ventanas practicables suelen
+  llevar mosquitero") appear only when the article isn't already in the extras list
+  and the engine's `extra_suggestions` emit a cause.
+
+## Page layout quirk on /positions/new and /edit
+
+- The editor page does NOT scroll — it's a fixed-height app shell. An expanded
+  "Biblioteca de diseños" `<details>` pushes the canvas+tree+rail row below the
+  viewport with no way to scroll to it. Click the "Biblioteca de diseños" summary
+  to collapse it and reveal the canvas row. The right rail scrolls independently
+  inside `devin-scrollable`.
+
+## Unsaved-change guards (two distinct ones)
+
+- In-app React-Router guard on internal navigation: dialog "Hay cambios sin
+  guardar. ¿Quieres salir y descartarlos?" with Cancelar/Confirmar — Confirmar
+  discards and proceeds.
+- Browser beforeunload "Leave site?" fires on ctrl+l URL-bar navigation with
+  dirty state; clicking "Leave" sometimes reloads in place instead of navigating
+  — prefer in-app links ("Volver al proyecto") and the in-app guard.
+
+## Extras persistence — defect signature and the fixed shape (D06)
+
+- FIXED at 6ae7a3c4 (devin/D06-accesorios-extras): `designPayload()` in
+  ProjectPositionEditor.tsx used to emit `parametric_tree: single.tree` (raw
+  IntentNode) for `isSingleUnit(product)`, dropping `product.extras` on the
+  product-v2 wrapper. Now gated by `hasExtras`: single+extras →
+  `parametric_tree: product` (version "product-v2"); single+NO extras still
+  saves the classic bare tree. `pickStarter()` also copies `product.extras`
+  onto the swapped starter product (template-seeded extras survive a
+  design-library swap).
+- Pre-fix symptom (if it regresses): add extras → Guardar → "Cambios
+  guardados." → reload → "Sin accesorios declarados para este vano." DB check:
+  `parametric_tree->>'version'` NULL, `parametric_tree->'extras'` NULL,
+  `bom_snapshot->'extra_lines'` = [].
+- Post-fix DB shape for a single-unit position WITH extras: `version` =
+  "product-v2", `extras` array (e.g. `[{"sku":"EXT-MOSQ-ENR",...}]`),
+  `extra_lines` populated. Removing all extras + save round-trips back to
+  classic (version/extras NULL) — both directions are worth checking.
+- The extras panel also renders on /positions/new BEFORE first save (org
+  templates pre-merge into the default product) — you can verify template
+  seeding and starter-swap survival without ever saving the position.
+
+## BOM (Despiece y materiales) on the project page
+
+- Select a position row, expand "Despiece y materiales" in the right rail; it
+  contains Perfil cuts, Vidrio, kit, Herrajes (Artículo | Herrajes | Cantidad),
+  Refuerzos tables. Counted extras land as Herrajes rows with the article SKU in
+  the Artículo column and the human name (e.g. "Mosquitero") in the Herrajes
+  column — raw enum values like MOSQUITO_SCREEN must not appear; length extras
+  appear as profile cuts (e.g. ENS-PVC-60).
+- BOM tables also render inside the /edit page below the canvas ("Despiece y
+  materiales" details).
+
+## Interaction traps hit while testing (computer-use)
+
+- Chrome omnibox autocompletes typed paths to history entries — typing a
+  project URL can land on a recently-visited /positions/<id>/edit instead.
+  Prefer in-app links ("Volver al proyecto", breadcrumbs, position rows);
+  reserve URL-bar nav for fresh paths or verify the landed URL afterwards.
+- Label-vs-input misclick: in the position editor form, the "Ubicación del
+  vano" label sits ~20px above its input — clicking the label does nothing and
+  the subsequent typing goes nowhere (looks like a silent failure). Click the
+  rendered field TEXT, not the label; verify via DOM `text=` that the value
+  changed before saving.
+- An in-app link click can silently no-op (no navigation, no dialog) — retry
+  once, then fall back to URL-bar nav + the native beforeunload dialog.
+
+## Coupled-position build recipe (needed to exercise extras persistence)
+
+- /positions/new → pick a coupled starter OR: single module → "Agregar unidad a
+  la derecha" toolbar button. Then every module needs Marco+Hoja+Vidrio assigned
+  and the joint needs an Acoplador article (select the "Acoplador ? · 0.0°" tree
+  node → Acoplador select → COPLE-60 for 0°). Guardar enables at "Geometría
+  válida" even with fabricación-incompleta observations in some builds; fully
+  assigned modules clear all observations.

@@ -13,9 +13,17 @@ from dekopen_engine.commercial import (
     CommercialLine, PricingError, PricingMode, direct_cost, discount_state,
     finish_lines, target_project, unit_price, validate_segment,
 )
+from dekopen_engine.extras import evaluate_service_lines
 from dekopen_engine.glass import exact_glass_area_m2
 from dekopen_engine.glass_pricing import glass_price_lines
-from dekopen_engine.models import GlassSurchargeRate
+from dekopen_engine.models import (
+    GlassSurchargeRate,
+    PieceOrigin,
+    ServiceArticle,
+    ServiceKind,
+    ServicePositionMeasure,
+    ServiceQtyRule,
+)
 from engine_api.adapter import engine_result_from_api
 from engine_api.cutting_repository import CuttingRepository
 from engine_api.repository import SystemParamsRepository
@@ -37,6 +45,7 @@ PRICING_ERROR_DETAILS = {
     'cost_list_not_found': 'no existe la lista de costos indicada',
     'fx_snapshot_immutable': 'la cotización de moneda ya está cerrada',
     'glass_bay_not_found': 'no se encontró su paño de vidrio; revisa el diseño',
+    'extra_price_missing': 'un accesorio seleccionado no declara precio en el catálogo; declara su precio o quita la selección',
     'hardware_option_price_missing': 'una selección de herraje vendible no declara precio en el catálogo; declara su delta o quita la selección',
     'incompatible_cost_unit': 'la unidad de costo de un material no es compatible con su uso; revisa la lista de costos',
     'invalid_admin_fields': 'revisa los campos de configuración',
@@ -55,6 +64,7 @@ PRICING_ERROR_DETAILS = {
     'pricing_rules_not_found': 'no hay reglas de precio configuradas para tu taller; registra margen e impuesto en Ajustes → Costos y precios → Reglas comerciales antes de cotizar',
     'project_has_no_positions': 'el proyecto no tiene vanos para cotizar',
     'project_not_found': 'no se encontró el proyecto; recarga y vuelve a intentar',
+    'service_price_missing': 'un servicio del proyecto no declara precio en el catálogo; declara su precio o quita el servicio',
     'stale_pricing_operation': 'los precios cambiaron desde que preparaste la operación; recarga y vuelve a aplicar',
     'target_margin_already_defines_final_price': 'el margen objetivo ya define el precio final y no admite descuento adicional',
     'unknown_pricing_resource': 'la configuración no está disponible',
@@ -150,6 +160,11 @@ def position_cost(repo, position, rules):
         stock_color = result.finish_key or (
             'WHITE' if color_interior=='WHITE' and color_exterior=='WHITE' else 'FOILED')
         for cut in result.profile_cuts:
+            if cut.origin is PieceOrigin.EXTRA:
+                # D06: a piece an extra mints is costed by the extra's own
+                # declared unit_cost — the stock authority knows nothing of
+                # finishing profiles and must never be asked.
+                continue
             profile_stocks[cut.sku] = stock_repo.profile_stock(position['system_id'],repo.org_id,cut.sku,stock_color)
         for steel in result.reinforcements:
             steel_stocks[(steel.parent_profile_sku,steel.reinforcement_sku)] = stock_repo.reinforcement_stock(
@@ -170,6 +185,8 @@ def position_cost(repo, position, rules):
     composition = []
     selection_delta = D('0')
     for cut in result.profile_cuts:
+        if getattr(cut, 'origin', None) is PieceOrigin.EXTRA:
+            continue
         stock = profile_stocks[cut.sku]
         cost = linear_cost(repo,stock.commercial_sku,cut.length_mm*cut.qty,stock.stock_length_mm)
         materials.append(cost)
@@ -262,6 +279,8 @@ def position_cost(repo, position, rules):
     # Frameless supports/fittings are counted pieces: a declared SKU must
     # resolve a unit price or the quote fails — never silently priced at zero.
     for fitting in result.fittings:
+        if getattr(fitting, 'origin', None) is PieceOrigin.EXTRA:
+            continue
         cost = repo.cost(fitting.sku,'EA') * fitting.qty
         materials.append(cost)
         composition.append({'kind':'FITTING','sku':fitting.sku,
@@ -291,6 +310,21 @@ def position_cost(repo, position, rules):
                 'unit':application.basis_unit,
                 'cost':str(amount.quantize(D('0.0001'))),
                 'label':application.label or application.option_name})
+    # D06: each selected extra is its own sublínea — cantidad × precio
+    # unitario = total at the article's declared price, added to the unit
+    # sell like the D04 hardware deltas. Its material cost is the article's
+    # declared unit_cost; a missing price refuses to quote rather than
+    # silently charge zero.
+    extra_sell = D('0')
+    for line in getattr(result, 'extra_lines', None) or []:
+        if line.total_price is None:
+            raise PricingError('extra_price_missing')
+        extra_sell += line.total_price
+        materials.append(line.total_cost or D('0'))
+        composition.append({'kind':'EXTRA','sku':line.sku,
+                            'quantity':str(line.quantity),'unit':line.unit.value,
+                            'cost':str((line.total_cost or D('0')).quantize(D('0.0001'))),
+                            'label':line.name})
     area = exact_glass_area_m2(position['width_mm'],position['height_mm'])
     total = direct_cost(materials,area,rules['waste_factor_pct'],rules['labor_rate_per_m2'],
                         rules['installation_rate_per_m2'])
@@ -298,11 +332,82 @@ def position_cost(repo, position, rules):
                  'materials_cost':str(sum(materials,D('0')).quantize(D('0.0001'))),
                  'hardware_option_delta':str(selection_delta.quantize(D('0.0001'))),
                  'color_surcharge_delta':str(color_delta.quantize(D('0.0001'))),
+                 'extra_sell_delta':str(extra_sell.quantize(D('0.0001'))),
+                 'extra_lines':[line.model_dump(mode='json')
+                                for line in (getattr(result, 'extra_lines', None) or [])],
                  'waste_pct':str(rules['waste_factor_pct']),
                  'labor_rate_per_m2':str(rules['labor_rate_per_m2']),
                  'installation_rate_per_m2':str(rules['installation_rate_per_m2']),
                  'area_m2':str(area.quantize(D('0.0001')))}
     return total, area, result, formation
+
+
+def _project_service_lines(project_id, org_id, positions):
+    """D06 project services — the selections the project declared resolve
+    against the catalog and the engine measures quantities off the
+    positions' real geometry. Read under the authenticated role so the
+    org-scope RLS policies evaluate on the caller's memberships."""
+    with connection.cursor() as cursor:
+        cursor.execute('SET LOCAL ROLE authenticated')
+    try:
+        selected = rows(
+            'SELECT a.code, a.name, a.kind::text, a.qty_rule::text,'
+            ' a.unit_price, a.unit_price_currency, a.unit_cost, a.unit_cost_currency'
+            ' FROM public.project_service_selections sel'
+            ' JOIN public.service_articles a ON a.id = sel.service_article_id'
+            ' WHERE sel.project_id=%s AND sel.org_id=%s ORDER BY a.code',
+            [project_id, org_id])
+    except DatabaseError:
+        raise
+    except BaseException:
+        if not tx_aborted():
+            with connection.cursor() as cursor:
+                cursor.execute('SET LOCAL ROLE pricing_backend')
+        raise
+    else:
+        if not tx_aborted():
+            with connection.cursor() as cursor:
+                cursor.execute('SET LOCAL ROLE pricing_backend')
+    if not selected:
+        return []
+    articles = [
+        ServiceArticle(
+            code=str(item['code']),
+            name=str(item['name']),
+            kind=ServiceKind(str(item['kind'])),
+            qty_rule=ServiceQtyRule(str(item['qty_rule'])),
+            unit_price=(
+                None if item['unit_price'] is None else D(str(item['unit_price']))
+            ),
+            unit_price_currency=(
+                None
+                if item['unit_price_currency'] is None
+                else str(item['unit_price_currency'])
+            ),
+            unit_cost=(
+                None if item['unit_cost'] is None else D(str(item['unit_cost']))
+            ),
+            unit_cost_currency=(
+                None
+                if item['unit_cost_currency'] is None
+                else str(item['unit_cost_currency'])
+            ),
+        )
+        for item in selected
+    ]
+    measures = [
+        ServicePositionMeasure(
+            width_mm=D(str(position['width_mm'])),
+            height_mm=D(str(position['height_mm'])),
+            quantity=int(position['quantity']),
+        )
+        for position in positions
+    ]
+    lines = evaluate_service_lines(articles, measures)
+    for line in lines:
+        if line.total_price is None:
+            raise PricingError('service_price_missing')
+    return lines
 
 
 def preview(org_id, actor, request):
@@ -355,7 +460,8 @@ def preview(org_id, actor, request):
                 # D04 deltas are sell additions; under a project target margin
                 # they ride as undiscounted additions like project extras.
                 selection_extra += (D(formation['hardware_option_delta'])
-                                    + D(formation['color_surcharge_delta'])) * position['quantity']
+                                    + D(formation['color_surcharge_delta'])
+                                    + D(formation['extra_sell_delta'])) * position['quantity']
                 technical.append({'position_id':position['id'],
                                   'position_index':index,
                                   'unit_cost':str(cost.quantize(D('0.0001'))),
@@ -382,11 +488,12 @@ def preview(org_id, actor, request):
                 exact_price = unit_price(mode,cost=cost,margin=rules['default_margin_pct'],area=area,
                                          width=position['width_mm'],height=position['height_mm'],
                                          foil=position['color_interior']!='WHITE' or position['color_exterior']!='WHITE',**extra)
-                # D04 + D05: declared hardware selections and finish
-                # surcharges add to the unit price as sell deltas —
+                # D04 + D05 + D06: declared selections, finish surcharges
+                # and extras sublines add to the unit price as sell deltas —
                 # discounted with the line like any other sell.
-                exact_price += D(formation['hardware_option_delta']) + D(
-                    formation['color_surcharge_delta'])
+                exact_price += (D(formation['hardware_option_delta'])
+                                + D(formation['color_surcharge_delta'])
+                                + D(formation['extra_sell_delta']))
                 priced_lines.append(CommercialLine(index,position['quantity'],cost,exact_price,discount))
             except PricingError as error:
                 # The estimator fixing this has to know WHICH vano fails —
@@ -394,7 +501,14 @@ def preview(org_id, actor, request):
                 detail = PRICING_ERROR_DETAILS.get(
                     error.code,'la operación comercial requiere revisar sus permisos, datos o configuración')
                 raise contract_error(422,error.code,f'{_position_label(position)}: {detail}.') from error
+        service_lines = _project_service_lines(project['id'], org_id, positions)
         extra_amounts = [D(str(item['amount'])) for item in request.get('extras') or []]
+        # Catalogued services ride the same undiscounted, taxed additions
+        # channel as a manual project charge — their totals are engine-
+        # measured, never free text.
+        extra_amounts.extend(
+            line.total_price for line in service_lines if line.total_price is not None
+        )
         if mode == PricingMode.TARGET_GROSS_MARGIN_PROJECT and selection_extra:
             # Other modes already carry the delta inside each unit price.
             extra_amounts.append(selection_extra)
@@ -428,7 +542,10 @@ def preview(org_id, actor, request):
         [org_id,project['id'],request['_actor_id'],request.get('_actor_email'),
          json_text({key:value for key,value in request.items() if not key.startswith('_')}),
          json_text({'rules':rules,'authorities':repo.authorities,'positions':technical,'cost_lines':cost_lines}),
-         json_text({**asdict(output),'line_detail':line_detail}),source_revision(project,positions),project['current_revision'],
+         json_text({**asdict(output),'line_detail':line_detail,
+                    'service_lines':[line.model_dump(mode='json')
+                                     for line in service_lines]}),
+         source_revision(project,positions),project['current_revision'],
          'PENDING' if state=='PENDING' else 'PREVIEW',request['reason']])
     costs = [(index, D(str(cost))) for index, cost in cost_lines]
     breakdown = [{
@@ -456,6 +573,7 @@ def preview(org_id, actor, request):
             'extras':[{'label':item['label'],'kind':item['kind'],
                        'amount':str(item['amount'])}
                       for item in request.get('extras') or []],
+            'service_lines':[line.model_dump(mode='json') for line in service_lines],
             'cost_lines':[{'position_index':index,'line_cost':str(cost)} for index,cost in costs],
             'total_cost':str(sum((cost for _, cost in costs), D('0'))),
             'positions_breakdown':breakdown,

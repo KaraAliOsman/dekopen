@@ -36,6 +36,10 @@ from projects.views import (
     SiiCertificateView,
     ProjectInvoiceDteEnvioView,
 )
+from projects.extras_api import (
+    OrganizationExtrasConfigView,
+    ProjectServicesView,
+)
 from projects.options import DesignOptionsView
 
 urlpatterns = [
@@ -43,6 +47,11 @@ urlpatterns = [
     path("projects/flow/confirm/<uuid:link_id>/", FlowPaymentConfirmView.as_view()),
     path("organization/branding/", OrganizationBrandingView.as_view()),
     path("organization/branding/logo/", OrganizationBrandingLogoView.as_view()),
+    path("organization/extras-config/", OrganizationExtrasConfigView.as_view()),
+    path(
+        "projects/<uuid:project_id>/services/",
+        ProjectServicesView.as_view(),
+    ),
     path("projects/payment-integration/", ProjectPaymentIntegrationView.as_view()),
     path("clients/", ClientsView.as_view()),
     path("clients/<uuid:client_id>/", ClientView.as_view()),

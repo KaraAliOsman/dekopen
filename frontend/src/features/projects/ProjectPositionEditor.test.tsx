@@ -437,6 +437,31 @@ it("loads a classic position as a compositional product and saves it back unchan
   );
 });
 
+it("saves a single-unit position with declared extras as product-v2", async () => {
+  mount();
+  await ready();
+
+  const inputs = useCanvasStore.getState().inputs;
+  const product = inputs.product!;
+  // D06: extras live on the product-v2 wrapper — the classic single-unit
+  // shape (bare IntentNode) has nowhere to carry them, so declaring one
+  // switches the persisted shape for this save.
+  act(() => {
+    useCanvasStore.getState().commitInputs({
+      ...inputs,
+      product: { ...product, extras: [{ sku: "EXT-MOSQ-ENR" }] },
+    });
+  });
+
+  save();
+  await screen.findByText(t("projects.saved"));
+  const tree = update.mock.calls[0]?.[1].design?.parametric_tree as ProductJson;
+  expect(tree.version).toBe("product-v2");
+  expect(tree.extras).toEqual([{ sku: "EXT-MOSQ-ENR" }]);
+  // The module tree itself is unchanged — only the wrapper shape differs.
+  expect(tree.assembly.modules[0]!.tree).toEqual(position().design.parametric_tree);
+});
+
 it("round-trips a saved assembly as product-v2", async () => {
   retrieve.mockResolvedValue(ok(bowPosition()));
   mount("/projects/project-a/positions/position-bow/edit");

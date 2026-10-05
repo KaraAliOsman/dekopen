@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { ColorSurchargeApplication } from "./colorSurchargeApplication";
+import type { ExtraLine } from "./extraLine";
 import type { FittingPiece } from "./fittingPiece";
 import type { GlassPiece } from "./glassPiece";
 import type { HardwareItem } from "./hardwareItem";
@@ -29,4 +30,5 @@ export interface EngineResultPayload {
   /** @nullable */
   finish_class?: string | null;
   color_surcharges?: ColorSurchargeApplication[];
+  extra_lines?: ExtraLine[];
 }
