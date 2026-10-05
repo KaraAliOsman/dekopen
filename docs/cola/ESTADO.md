@@ -10,7 +10,7 @@
 | D05 | D2 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/15 | 85cf4d6019111c08421c01024b98556e31199934 | CI 6/6 verde; squash mergeado. Catálogo por sistema + bicolor por posición + SKU por acabado + recargos motor + renders por cara. |
 | D06 | D2 | pendiente |  |  |  |
 | D07 | D2 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/14 | 5474798011022008f2ceb31dfefb15813ad24262 | CI 6/6 verde; squash mergeado. Motor rough_opening + reglas de montaje versionadas + estados de medida con sello + gate OT + chip/inspector/cota doble. |
-| IA2 | D2 | pendiente |  |  |  |
+| IA2 | D2 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/16 | e17fb7101fd7f84287cf51e7c3b86fadc6cbd0f7 | CI 6/6 verde; squash mergeado. Registro único 36 ops UI/IA/API + 8 herramientas de motor + clarify tipado + preview+Aplicar deshacible + prompt es-CL versionado. Evals MOCK 0/26 → 26/26. |
 | IA3 | D2 | pendiente |  |  |  |
 | P02 | 1 | pendiente |  |  |  |
 | P25 | 1 | pendiente |  |  |  |
