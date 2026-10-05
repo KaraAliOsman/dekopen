@@ -18,7 +18,8 @@ import {
   roundDecimalToInt,
   type DecimalValue,
 } from "../projects/decimal";
-import { reSkinMembers, type MemberGeometry } from "../canvas/members";
+import { finishFace, type MemberFinish } from "../canvas/finishes";
+import { reSkinMembers, tintMembers, type MemberGeometry } from "../canvas/members";
 import "./portal.css";
 import { formatDate, formatMoney } from "../../format";
 
@@ -33,6 +34,20 @@ const FINISH_SURFACES: [RegExp, string][] = [
 ];
 
 function positionMembers(position: PortalPosition): MemberGeometry {
+  // The sealed per-face finish detail is the authoritative swatch — a bicolor
+  // quote draws its real interior/exterior pair, not a text-guessed skin.
+  const finish: MemberFinish = {
+    exterior: finishFace(position.color_exterior_detail),
+    interior: finishFace(position.color_interior_detail),
+  };
+  if (
+    finish.exterior.color ||
+    finish.interior.color ||
+    finish.exterior.texture ||
+    finish.interior.texture
+  ) {
+    return tintMembers(THUMB_MEMBERS, finish);
+  }
   const text =
     `${position.color_interior ?? ""} ${position.color_exterior ?? ""} ${position.finish ?? ""}`
       .normalize("NFD")

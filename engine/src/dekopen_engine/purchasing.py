@@ -183,7 +183,11 @@ class PositionPurchaseInputV1(EngineModel):
     position_index: int = Field(ge=1)
     system_id: str
     quantity: int = Field(ge=1)
+    # The finish key the position's bars are stocked under (D05: a plain
+    # finish code or the bicolor "EXT/INT" key). Steel carries its own
+    # declared stock colors — `steel_colors` maps resolved sku -> color.
     color: str
+    steel_colors: dict[str, str] = Field(default_factory=dict)
     location_tag: str
     manufacturing_units: list[ManufacturingFactsV1]
     hardware: list[HardwareSelectionV1]
@@ -543,7 +547,11 @@ def project_purchase_requirements_v1(
                     source_kind=PhysicalSourceKind.REINFORCEMENT,
                     workshop_sku=reinforcement.workshop_sku,
                     material=CutMaterial.STEEL,
-                    color=position.color,
+                    # D05: steel is colorless relative to the bar finish —
+                    # its declared stock color rides the sealed input.
+                    color=position.steel_colors.get(
+                        reinforcement.workshop_sku, "WHITE"
+                    ),
                     length_mm=reinforcement.cut_length_mm,
                     position_id=position.position_id,
                     bay_id=parent.bay_id,

@@ -29,6 +29,9 @@ class PortalPositionSerializer(serializers.Serializer):
     height_mm = serializers.CharField(allow_blank=True)
     color_interior = serializers.CharField(allow_null=True, allow_blank=True)
     color_exterior = serializers.CharField(allow_null=True, allow_blank=True)
+    # D05: sealed per-face finish detail (declared render swatch + texture).
+    color_interior_detail = serializers.DictField(allow_null=True)
+    color_exterior_detail = serializers.DictField(allow_null=True)
     glass_specs = serializers.ListField(child=serializers.CharField())
     finish = serializers.CharField(allow_null=True, allow_blank=True)
     price_net = serializers.CharField(allow_null=True)

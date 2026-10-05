@@ -4,6 +4,7 @@ import type {
   KitChoice,
   ProfileSection,
 } from "../../api/generated/models";
+import type { MemberFinish } from "./finishes";
 
 /** Drawing hierarchy resolved from the catalog: member face widths and the
  * system's rebate/overlap geometry. Everything optional — the demo/DOM paths
@@ -20,6 +21,10 @@ export interface MemberSpec {
   /** Declared catalog cross-section; absent means the renderer must stay
    * approximate — never a fabricated declaration. */
   section?: ProfileSection | null;
+  /** D05: the picked finish's per-face render record — exterior swatch on the
+   * street face, interior on the room face. Unstamped specs keep the
+   * material's token colors (binary-era finishes). */
+  finish?: MemberFinish;
 }
 
 export interface MemberGeometry {
@@ -167,6 +172,23 @@ export function reSkinMembers(base: MemberGeometry, material: string): MemberGeo
     ...base,
     frame: { ...base.frame, material },
     sash: { ...base.sash, material },
+    mullionV: spec(base.mullionV),
+    mullionH: spec(base.mullionH),
+    threshold: spec(base.threshold),
+    beadSpecFor: (glassThicknessMm) => spec(base.beadSpecFor(glassThicknessMm)),
+    couplerFor: (sku) => spec(base.couplerFor(sku)),
+  };
+}
+
+/** Same resolved geometry stamped with the picked finish — the position's
+ * one finish applies to every member (frame, sash, mullions, coupler,
+ * threshold, beads), so a shared spec is stamped uniformly. */
+export function tintMembers(base: MemberGeometry, finish: MemberFinish): MemberGeometry {
+  const spec = (item: MemberSpec | null): MemberSpec | null => (item ? { ...item, finish } : item);
+  return {
+    ...base,
+    frame: { ...base.frame, finish },
+    sash: { ...base.sash, finish },
     mullionV: spec(base.mullionV),
     mullionH: spec(base.mullionH),
     threshold: spec(base.threshold),

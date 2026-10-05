@@ -5,6 +5,7 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { ColorSurchargeApplication } from "./colorSurchargeApplication";
 import type { FittingPiece } from "./fittingPiece";
 import type { GlassPiece } from "./glassPiece";
 import type { HardwareItem } from "./hardwareItem";
@@ -21,4 +22,11 @@ export interface EngineResultPayload {
   fittings: FittingPiece[];
   hardware_items: HardwareItem[];
   leaf_weights: LeafWeight[];
+  /** @nullable */
+  finish_key?: string | null;
+  /** @nullable */
+  finish_label?: string | null;
+  /** @nullable */
+  finish_class?: string | null;
+  color_surcharges?: ColorSurchargeApplication[];
 }

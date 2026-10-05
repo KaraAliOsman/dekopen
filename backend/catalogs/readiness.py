@@ -220,13 +220,27 @@ def catalog_readiness(system_id, org_id) -> dict[str, Any]:
                         continue
                     stock, _ = CuttingRepository().reinforcement_stock(
                         system_id, org_id, article["sku"],
-                        article["reinforcement_sku"], "WHITE")
+                        article["reinforcement_sku"])
                     steels.add(stock.workshop_sku)
             glass = rows("SELECT technical_sku FROM public.glass_purchase_mappings "
                          "WHERE system_id=%s AND (org_id IS NULL OR org_id=%s)", [system_id, org_id])
             if not glass:
                 raise DocumentaryError("glass_purchase_mapping_required")
-            load_purchase_authorities(system_id=system_id, org_id=org_id, color="WHITE",
+            # Positions check FOILED at freeze when the face colors
+            # require it; the catalog baseline is the series' base finish —
+            # the first declared mass/base color option ('WHITE' on PVC,
+            # 'NATURAL' on anodized aluminium), falling back to 'WHITE'
+            # for catalogs without declared color options.
+            base_color_rows = rows(
+                "SELECT o.code FROM public.system_color_options o "
+                "JOIN public.profile_systems ps ON ps.id = o.system_id "
+                "WHERE o.system_id=%s AND o.org_id IS NULL "
+                "AND o.finish_class='WHITE' AND o.faces='BOTH' "
+                "AND ps.finishes @> to_jsonb(o.code) "
+                "ORDER BY o.sort_order, o.code LIMIT 1",
+                [system_id])
+            base_color = base_color_rows[0]["code"] if base_color_rows else "WHITE"
+            load_purchase_authorities(system_id=system_id, org_id=org_id, color=base_color,
                 profile_skus={article["sku"] for article in catalogued},
                 reinforcement_skus=steels,
                 glass_skus={row["technical_sku"] for row in glass},

@@ -12,7 +12,7 @@ from uuid import UUID
 
 from documents.renderers import (
     _CATEGORY_ES,
-    _COLOR_ES,
+    finish_key_label,
     _CSS,
     _ROLE_ES,
     _cldate,
@@ -691,7 +691,7 @@ def _pack_html(
         f'Pack de corte · {escape(short_fp)}</div></div>'
         '<div class="rule-stack"></div>'
         '<div class="pack-meta">'
-        f'<span>Color: <strong>{escape(_COLOR_ES.get(str(optimization.get("color")), _value(optimization.get("color"))))}</strong></span>'
+        f'<span>Color: <strong>{escape(finish_key_label(optimization.get("color")))}</strong></span>'
         f'<span>Unidades: <strong>{_value(optimization.get("units"))}</strong></span>'
         f'<span>Estrategia: <strong>{escape(strategy)}</strong></span>'
         f'<span>Barras nuevas: <strong>{_value(stats.get("bars_new", metrics.get("bars")))}</strong></span>'
@@ -724,7 +724,7 @@ def _pack_html(
             material = _MATERIAL_ES.get(
                 str(bar.get("material")), _value(bar.get("material"))
             )
-            color = _COLOR_ES.get(str(bar.get("color")), _value(bar.get("color")))
+            color = finish_key_label(bar.get("color"))
             stock = _mm(bar.get("stock_length_mm"))
             kerf = _mm(bar.get("kerf_mm") or "0")
             head_trim = _mm(bar.get("head_trim_mm") or "0")

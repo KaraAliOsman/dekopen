@@ -35,7 +35,8 @@ import { BowPlanContent, planBounds } from "./BowPlanSvg";
 import { CanvasViewport } from "./CanvasViewport";
 import { ObjectTree } from "./ObjectTreeView";
 import { buildObjectTree } from "./objectTree";
-import { resolveMembers, type MemberGeometry } from "./members";
+import { finishForSelection } from "./finishes";
+import { resolveMembers, tintMembers, type MemberGeometry } from "./members";
 import {
   autoPickKit,
   bayEnvelopeMm,
@@ -2280,7 +2281,21 @@ export function AssemblyEditor({
   const product = inputs.product;
   const { evaluation, isPending, errorCode } = useAssemblyCalculation(organizationId, inputs);
   const issues = evaluation?.issues ?? [];
-  const members = useMemo(() => resolveMembers(options), [options]);
+  // D05: the picked finish's per-face render record tints every member —
+  // binary-era systems without a color catalog keep the material tokens.
+  const finish = useMemo(
+    () =>
+      finishForSelection(
+        options?.color_options,
+        inputs.color,
+        inputs.colorExterior && inputs.colorExterior !== inputs.color ? inputs.colorExterior : null,
+      ),
+    [options?.color_options, inputs.color, inputs.colorExterior],
+  );
+  const members = useMemo(() => {
+    const base = resolveMembers(options);
+    return finish ? tintMembers(base, finish) : base;
+  }, [options, finish]);
   const [tool, setTool] = useState<EditorTool>("select");
   const [treeOpen, setTreeOpen] = useState(true);
   /** Right-rail detail level — overview/design/technical over the same

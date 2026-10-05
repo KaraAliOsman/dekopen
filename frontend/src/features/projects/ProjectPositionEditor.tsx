@@ -28,6 +28,7 @@ import { t, tDynamic, tOptional } from "../../i18n/es-CL";
 import { domainLabel } from "../../i18n/domainLabels";
 import { DeniedState } from "../../ui";
 import { type CanvasDesignInputs, useCanvasStore } from "../canvas/canvasStore";
+import { ColorSelector, combinationIssue } from "./ColorSelector";
 import { useProject } from "./useProject";
 import { AssemblyEditor, issueText } from "../canvas/AssemblyEditor";
 import { useAssistantSurface } from "../assistant/assistantContext";
@@ -127,6 +128,7 @@ function initial(): CanvasDesignInputs {
     nominalWidthMm: "1000.00",
     nominalHeightMm: "1000.00",
     color: "WHITE",
+    colorExterior: "",
     parametricTree: product.assembly.modules[0]?.tree ?? starterTree("FIXED"),
     product,
   };
@@ -263,6 +265,12 @@ function designPayload(
   // silently coerced.
   const color = allowedColors.includes(inputs.color) ? inputs.color : null;
   if (product === null || !inputs.systemId || color === null) return null;
+  // D05: bicolor emits the exterior code only when it differs — the backend
+  // re-derives the canonical preimage the same way; an undeclared exterior
+  // blocks the save just like an undeclared interior.
+  const colorExterior =
+    inputs.colorExterior && inputs.colorExterior !== color ? inputs.colorExterior : null;
+  if (colorExterior !== null && !allowedColors.includes(colorExterior)) return null;
   const single = isSingleUnit(product) ? product.assembly.modules[0] : undefined;
   return single !== undefined
     ? {
@@ -270,6 +278,7 @@ function designPayload(
         nominal_width_mm: single.width_mm,
         nominal_height_mm: single.height_mm,
         color,
+        ...(colorExterior !== null ? { color_exterior: colorExterior } : {}),
         parametric_tree: single.tree,
       }
     : {
@@ -277,6 +286,7 @@ function designPayload(
         nominal_width_mm: elevationEnvelopeMm(product).width.toFixed(2),
         nominal_height_mm: elevationEnvelopeMm(product).height.toFixed(2),
         color,
+        ...(colorExterior !== null ? { color_exterior: colorExterior } : {}),
         parametric_tree: product,
       };
 }
@@ -288,6 +298,10 @@ function designPayload(
 function designIdentity(inputs: CanvasDesignInputs): string {
   return canonicalize({
     color: inputs.color,
+    // Normalized like the save payload — "equal to interior" and "no
+    // exterior" are the same monocolor design.
+    colorExterior:
+      inputs.colorExterior && inputs.colorExterior !== inputs.color ? inputs.colorExterior : "",
     nominalHeightMm: inputs.nominalHeightMm,
     nominalWidthMm: inputs.nominalWidthMm,
     product: inputs.product,
@@ -427,6 +441,10 @@ function PositionWorkspace({
     inputs.color && !declaredColors.includes(inputs.color)
       ? [...declaredColors, inputs.color]
       : declaredColors;
+  // D05: the declared finish catalog drives the swatch picker; the plain
+  // code list remains the fallback for binary-era systems.
+  const colorOptions = options.data?.color_options ?? [];
+  const bicolorAllowed = options.data?.bicolor_allowed === true;
 
   useEffect(() => {
     let active = true;
@@ -487,6 +505,10 @@ function PositionWorkspace({
             // the picker lists it once so the field is honest, while
             // designPayload refuses to save a finish the engine can't map.
             color: item.design.color,
+            colorExterior:
+              item.design.color_exterior && item.design.color_exterior !== item.design.color
+                ? item.design.color_exterior
+                : "",
             parametricTree:
               product.assembly.modules.at(0)?.tree ??
               ({ id: "m1", type: "BAY", opening_type: "FIXED" } as IntentNode),
@@ -678,9 +700,22 @@ function PositionWorkspace({
     assemblyEval?.status === "INVALID" ||
     (assemblyEval?.modules ?? []).some((module) => module.result == null);
   // Only flag once the options payload actually arrived — an empty declared
-  // list pre-load is "unknown", not "undeclared".
+  // list pre-load is "unknown", not "undeclared". Both faces obey the same
+  // contract: an exterior code the system can't map is just as unsaveable.
   const colorUndeclared =
-    options.data !== undefined && inputs.color !== null && !declaredColors.includes(inputs.color);
+    options.data !== undefined &&
+    (!declaredColors.includes(inputs.color) ||
+      (!!inputs.colorExterior &&
+        inputs.colorExterior !== inputs.color &&
+        !declaredColors.includes(inputs.colorExterior)));
+  // The engine's combination rules, previewed — a pair it will refuse is
+  // named before Guardar even enables.
+  const colorPairIssue = combinationIssue(
+    colorOptions,
+    bicolorAllowed,
+    inputs.color,
+    inputs.colorExterior && inputs.colorExterior !== inputs.color ? inputs.colorExterior : "",
+  );
   const quantityInvalid = !/^[1-9]\d*$/.test(quantity) || Number(quantity) > 2147483647;
   // D07 — un registro del vano a medias no se puede guardar: el borrador
   // incompleto bloquea con la misma regla que el backend (un eje sin el
@@ -698,17 +733,19 @@ function PositionWorkspace({
     ? t("projects.qtyInvalid")
     : colorUndeclared
       ? t("projects.colorNotDeclared")
-      : vanoInvalid
-        ? t("projects.vanoInvalid")
-        : fillUnassigned
-          ? t("projects.glazingMissing")
-          : assemblyUnsaveable && assemblyEval !== null && assemblyEval.issues.length > 0
-            ? issueText(
-                assemblyEval.issues[0]!,
-                inputs.product?.assembly.modules ?? [],
-                inputs.product?.assembly.couplings ?? [],
-              )
-            : null;
+      : colorPairIssue
+        ? colorPairIssue
+        : vanoInvalid
+          ? t("projects.vanoInvalid")
+          : fillUnassigned
+            ? t("projects.glazingMissing")
+            : assemblyUnsaveable && assemblyEval !== null && assemblyEval.issues.length > 0
+              ? issueText(
+                  assemblyEval.issues[0]!,
+                  inputs.product?.assembly.modules ?? [],
+                  inputs.product?.assembly.couplings ?? [],
+                )
+              : null;
 
   // D07 — la confirmación es un acto humano separado del guardado: golpea su
   // propio endpoint y refresca la posición persistida (incl. updated_at).
@@ -740,6 +777,10 @@ function PositionWorkspace({
       busy ||
       !options.data ||
       !declaredColors.includes(inputs.color) ||
+      (!!inputs.colorExterior &&
+        inputs.colorExterior !== inputs.color &&
+        !declaredColors.includes(inputs.colorExterior)) ||
+      colorPairIssue !== null ||
       inputs.product === null ||
       !systemId ||
       !/^[1-9]\d*$/.test(quantity) ||
@@ -1077,28 +1118,46 @@ function PositionWorkspace({
               {t("projects.loading")}
             </p>
           )}
-          <label className="position-head__color">
+          <div className="position-head__color">
             <span>{t("projects.color")}</span>
-            <select
-              className="assembly-select"
-              aria-label={t("projects.color")}
-              disabled={busy || declaredColors.length === 0}
-              value={inputs.color}
-              onChange={(event) =>
-                useCanvasStore.getState().commitInputs({
-                  ...inputs,
-                  color: event.target.value as CanvasDesignInputs["color"],
-                })
-              }
-            >
-              {colorChoices.length === 0 && <option value={inputs.color}>{inputs.color}</option>}
-              {colorChoices.map((color) => (
-                <option key={color} value={color}>
-                  {tDynamic("projects.color", color)}
-                </option>
-              ))}
-            </select>
-          </label>
+            {colorOptions.length > 0 ? (
+              <ColorSelector
+                options={colorOptions}
+                bicolorAllowed={bicolorAllowed}
+                colorInterior={inputs.color}
+                colorExterior={inputs.colorExterior}
+                disabled={busy}
+                onChange={(color, colorExterior) =>
+                  useCanvasStore.getState().commitInputs({
+                    ...inputs,
+                    color,
+                    colorExterior,
+                  })
+                }
+              />
+            ) : (
+              <select
+                className="assembly-select"
+                aria-label={t("projects.color")}
+                disabled={busy || declaredColors.length === 0}
+                value={inputs.color}
+                onChange={(event) =>
+                  useCanvasStore.getState().commitInputs({
+                    ...inputs,
+                    color: event.target.value as CanvasDesignInputs["color"],
+                    colorExterior: "",
+                  })
+                }
+              >
+                {colorChoices.length === 0 && <option value={inputs.color}>{inputs.color}</option>}
+                {colorChoices.map((color) => (
+                  <option key={color} value={color}>
+                    {tDynamic("projects.color", color)}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
         </div>
       </fieldset>
       <div className="position-body">

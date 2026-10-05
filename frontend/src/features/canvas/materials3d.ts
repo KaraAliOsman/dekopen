@@ -131,8 +131,42 @@ function grainAxis(solid: Solid3D): "u" | "v" {
   return "v";
 }
 
-export function solidMaterial(solid: Solid3D, mode: MaterialMode): SolidMaterial {
+/** Member-family surfaces a picked finish can recolor — detail surfaces
+ * (gasket, handle, track, steel) keep their own material even on a foiled
+ * window. Matches the stamp pass in buildScene3D. */
+const TINTABLE_SURFACES: ReadonlySet<string> = new Set([
+  "frame",
+  "sash",
+  "mullion",
+  "bead",
+  "coupler",
+  "threshold",
+]);
+
+export type SolidFace = "exterior" | "interior";
+
+export function solidMaterial(
+  solid: Solid3D,
+  mode: MaterialMode,
+  face: SolidFace = "exterior",
+): SolidMaterial {
   const commercial = mode === "commercial";
+  const material = baseMaterial(solid, commercial);
+  // A declared finish overrides the member-material token: the picked
+  // catalog hex is the authoritative swatch, the grain its texture.
+  const tint = face === "interior" ? (solid.tintInterior ?? solid.tint) : solid.tint;
+  const texture = face === "interior" ? (solid.textureInterior ?? solid.texture) : solid.texture;
+  if (tint && TINTABLE_SURFACES.has(solid.surface)) {
+    material.colorToken = "";
+    material.colorFallback = tint;
+  }
+  if (texture === "WOOD_GRAIN" && TINTABLE_SURFACES.has(solid.surface)) {
+    material.grain = grainAxis(solid);
+  }
+  return material;
+}
+
+function baseMaterial(solid: Solid3D, commercial: boolean): SolidMaterial {
   switch (solid.surface) {
     case "glass":
       return {

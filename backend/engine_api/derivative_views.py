@@ -22,8 +22,14 @@ from dekopen_engine.inspection_models import (
 )
 from dekopen_engine.inspector import inspect
 from dekopen_engine.snapshot import calculation_response
-from engine_api.adapter import calculate_from_api, normalized_root_from_api, UnsupportedEngineContract
-from engine_api.cutting_repository import CuttingRepository
+from engine_api.adapter import (
+    calculate_from_api,
+    color_selection_from_api,
+    InvalidColorCombination,
+    normalized_root_from_api,
+    UnsupportedEngineContract,
+)
+from engine_api.cutting_repository import CuttingRepository, steel_color_map
 from engine_api.derivative_serializers import (
     EngineInspectRequestSerializer, EngineInspectResponseSerializer,
     EngineOptimizeRequestSerializer, EngineOptimizeResponseSerializer,
@@ -31,7 +37,7 @@ from engine_api.derivative_serializers import (
 from engine_api.inspection_repository import InspectorRepository
 from engine_api.repository import SystemNotFound, SystemParamsRepository, UnsupportedCatalogContract
 
-_CALC_FIELDS = ("system_id", "parametric_tree", "nominal_width_mm", "nominal_height_mm", "color")
+_CALC_FIELDS = ("system_id", "parametric_tree", "nominal_width_mm", "nominal_height_mm", "color", "color_exterior")
 _ERRORS = {code: OpenApiResponse(ErrorResponseSerializer) for code in (400, 401, 403, 404, 409, 422, 503)}
 
 
@@ -44,6 +50,8 @@ def _execute(request: Request, *, inspection: bool) -> Response:
     data = serializer.validated_data
     technical = {name: data[name] for name in _CALC_FIELDS}
     technical["system_id"] = str(technical["system_id"])
+    if technical.get("color_exterior") in (None, "") or technical["color_exterior"] == technical["color"]:
+        technical.pop("color_exterior", None)
     token = verified_request_token(request)
     try:
         with authenticated_rls_context(token.claims):
@@ -58,17 +66,28 @@ def _execute(request: Request, *, inspection: bool) -> Response:
             stocks = CuttingRepository()
             if not inspection:
                 result = calculate_from_api(**arguments)
-                authorities = stocks.for_result(result, system_id, org_id, data["color"])
-                pieces = pieces_from_result(result, color=data["color"],
-                                            reinforcement_skus=authorities.reinforcement_skus)
+                # D05: bars are stocked under the resolved finish key
+                # (plain code or "EXT/INT"); steel carries its own color.
+                stock_color = result.finish_key or data["color"]
+                authorities = stocks.for_result(result, system_id, org_id, stock_color)
+                pieces = pieces_from_result(
+                    result, color=stock_color,
+                    reinforcement_skus=authorities.reinforcement_skus,
+                    reinforcement_colors=steel_color_map(authorities.stocks),
+                )
                 output = optimize_cut(pieces, authorities.stocks,
                                       stocks.cutting_profile(org_id, data["cutting_profile_code"]))
                 source = calculation_response(technical, result)["calculation_hash"]
                 return Response({**output.model_dump(mode="json"), "source_calculation_hash": source})
             config = InspectorRepository().load(system_id, org_id)
             root = normalized_root_from_api(**arguments)
+            selection = color_selection_from_api(
+                color=data["color"],
+                color_exterior=data.get("color_exterior"),
+                params=params,
+            )
             computation = compute_geometry(
-                root, params, diagnostic=True, is_foiled=data["color"] != "WHITE"
+                root, params, diagnostic=True, color_selection=selection
             )
             annotations = [WorkshopAnnotations.model_validate(item) for item in data["annotations"]]
             targets = {(o.bay_id, None) for o in computation.openings} | {
@@ -76,7 +95,7 @@ def _execute(request: Request, *, inspection: bool) -> Response:
             # A FOILED machining annotation only exists on a foiled design —
             # the finish the design declared is the annotation's ceiling.
             if any((a.bay_id, a.leaf_id) not in targets
-                   or (a.finish_class == "FOILED" and data["color"] == "WHITE")
+                   or (a.finish_class == "FOILED" and selection.finish_class == "WHITE")
                    for a in annotations):
                 raise ValueError("Observation target or finish is outside the active contract")
             structural = [StructuralInput.model_validate(item) for item in data["structural_inputs"]]
@@ -85,8 +104,7 @@ def _execute(request: Request, *, inspection: bool) -> Response:
             inertias = {}
             for span in computation.spans:
                 try:
-                    _, ix = stocks.reinforcement_stock(system_id, org_id, span.parent_profile_sku,
-                                                        None, data["color"])
+                    _, ix = stocks.reinforcement_stock(system_id, org_id, span.parent_profile_sku)
                 except MissingStockAuthority:
                     ix = None
                 inertias[span.target_id] = ix
@@ -105,6 +123,9 @@ def _execute(request: Request, *, inspection: bool) -> Response:
         raise contract_error(422, "inspector_configuration_error", "La configuración técnica del sistema requiere revisión antes de aprobar para taller.") from error
     except InvalidCutContract as error:
         raise contract_error(422, type(error).__name__, "No se puede preparar el pedido de barras: revisa el stock, su correspondencia y la capacidad de corte.") from error
+    except InvalidColorCombination as error:
+        # D05: la razón es-CL del motor ya nombra las caras y la regla.
+        raise contract_error(400, "color_combination_invalid", str(error), error_extra={"reason": error.reason}) from error
     except (UnsupportedEngineContract, UnsupportedCatalogContract, NotImplementedError) as error:
         raise contract_error(422, "unsupported_engine_contract", "Este diseño requiere una capacidad técnica que aún no está disponible.") from error
     except ValueError as error:

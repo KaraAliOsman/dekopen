@@ -159,6 +159,17 @@ def unchanged(row, expected):
         )
 
 
+def _canonical_design(design):
+    """D05 canonical request preimage: ``color_exterior`` rides the design
+    only when it differs from ``color`` — an explicit duplicate would hash
+    differently from the stored legacy contract for the same design."""
+    design = dict(design)
+    exterior = design.get("color_exterior")
+    if exterior is None or str(exterior) == str(design.get("color")):
+        design.pop("color_exterior", None)
+    return design
+
+
 def position_public(row):
     design = {
         "system_id": row["system_id"],
@@ -167,6 +178,8 @@ def position_public(row):
         "color": row["color_interior"],
         "parametric_tree": decoded(row["parametric_tree"]),
     }
+    if str(row["color_exterior"]) != str(row["color_interior"]):
+        design["color_exterior"] = row["color_exterior"]
     stored = decoded(row["bom_snapshot"])
     try:
         payload = {key: value for key, value in stored.items() if key != "calculation_hash"}
@@ -390,6 +403,7 @@ def position_row(org_id, position_id, *, lock=False):
 
 
 def calculate_design(org_id, design):
+    design = _canonical_design(design)
     try:
         repository = SystemParamsRepository()
         params = repository.load_visible(design["system_id"], org_id)
@@ -399,6 +413,7 @@ def calculate_design(org_id, design):
             evaluation = evaluate_assembly_from_api(
                 product=model,
                 color=design["color"],
+                color_exterior=design.get("color_exterior"),
                 params=params,
                 coupler_articles=repository.load_coupler_articles(
                     design["system_id"], org_id
@@ -460,6 +475,7 @@ def calculate_design(org_id, design):
         else:
             result = calculate_from_api(
                 params=params,
+                color_exterior=design.get("color_exterior"),
                 **{
                     key: design[key]
                     for key in (
@@ -530,7 +546,7 @@ def save_position(org_id, project_id, data, *, position_id=None):
         if current["project_id"] != project_id:
             missing()
         unchanged(current, data["expected_updated_at"])
-    design = data["design"]
+    design = _canonical_design(data["design"])
     with connection.cursor() as cursor:
         cursor.execute("SELECT private.reserve_catalog_authority(%s,%s)",
                        [design["system_id"], org_id])
@@ -547,7 +563,7 @@ def save_position(org_id, project_id, data, *, position_id=None):
         design["nominal_width_mm"],
         design["nominal_height_mm"],
         design["color"],
-        design["color"],
+        design.get("color_exterior") or design["color"],
         json_text(design["parametric_tree"]),
         json_text(bom),
         json_text(glass_composition),

@@ -17187,6 +17187,18 @@ components:
       description: |-
         * `PROFILE` - PROFILE
         * `REINFORCEMENT` - REINFORCEMENT
+    BasisUnitEnum:
+      enum:
+      - M
+      - M2
+      - POSITION
+      - MATERIALS_PCT
+      type: string
+      description: |-
+        * `M` - M
+        * `M2` - M2
+        * `POSITION` - POSITION
+        * `MATERIALS_PCT` - MATERIALS_PCT
     BeadList:
       type: object
       properties:
@@ -18288,6 +18300,121 @@ components:
       description: |-
         * `WHITE` - WHITE
         * `FOILED` - FOILED
+    ColorOptionChoice:
+      type: object
+      description: |-
+        D05: a sellable finish — the selector renders its declared swatch,
+        face availability, pair requirement and surcharge hint.
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        kind:
+          type: string
+        manufacturer_code:
+          type: string
+          nullable: true
+        gloss:
+          type: string
+          nullable: true
+        render_color:
+          type: string
+          nullable: true
+        render_texture:
+          type: string
+          nullable: true
+        finish_class:
+          type: string
+        dark:
+          type: boolean
+        faces:
+          type: string
+        pair_code:
+          type: string
+          nullable: true
+        sort_order:
+          type: integer
+        surcharge_kind:
+          type: string
+          nullable: true
+        surcharge_amount:
+          type: string
+          nullable: true
+        surcharge_currency:
+          type: string
+          nullable: true
+        surcharge_label:
+          type: string
+          nullable: true
+      required:
+      - code
+      - dark
+      - faces
+      - finish_class
+      - gloss
+      - kind
+      - manufacturer_code
+      - name
+      - pair_code
+      - render_color
+      - render_texture
+      - sort_order
+      - surcharge_amount
+      - surcharge_currency
+      - surcharge_kind
+      - surcharge_label
+    ColorSurchargeApplication:
+      type: object
+      description: |-
+        D05 declared finish surcharge applied to the BOM: the rate is
+        catalog data; the basis is engine-derived (profile metres, m², unit,
+        or the materials-% rate itself).
+      properties:
+        option_code:
+          type: string
+        option_name:
+          type: string
+        kind:
+          $ref: '#/components/schemas/ColorSurchargeApplicationKindEnum'
+        rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,4})?$
+        currency:
+          type: string
+          nullable: true
+        label:
+          type: string
+          nullable: true
+        basis:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,4})?$
+          nullable: true
+        basis_unit:
+          $ref: '#/components/schemas/BasisUnitEnum'
+      required:
+      - basis
+      - basis_unit
+      - currency
+      - kind
+      - label
+      - option_code
+      - option_name
+      - rate
+    ColorSurchargeApplicationKindEnum:
+      enum:
+      - PER_PROFILE_METER
+      - PER_M2
+      - FIXED_PER_POSITION
+      - PCT_OF_MATERIALS
+      type: string
+      description: |-
+        * `PER_PROFILE_METER` - PER_PROFILE_METER
+        * `PER_M2` - PER_M2
+        * `FIXED_PER_POSITION` - FIXED_PER_POSITION
+        * `PCT_OF_MATERIALS` - PCT_OF_MATERIALS
     Commerce:
       type: object
       properties:
@@ -19195,6 +19322,13 @@ components:
           type: array
           items:
             type: string
+        color_options:
+          type: array
+          items:
+            $ref: '#/components/schemas/ColorOptionChoice'
+        bicolor_allowed:
+          type: boolean
+          default: false
         coupler_skus:
           type: array
           items:
@@ -19613,6 +19747,11 @@ components:
           type: string
           minLength: 1
           maxLength: 50
+        color_exterior:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 50
         parametric_tree: {}
         position_index:
           type: integer
@@ -19815,6 +19954,11 @@ components:
           type: string
           minLength: 1
           maxLength: 50
+        color_exterior:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 50
         product: {}
       required:
       - color
@@ -19881,6 +20025,11 @@ components:
           type: string
           minLength: 1
           maxLength: 50
+        color_exterior:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 50
         parametric_tree: {}
       required:
       - color
@@ -19919,6 +20068,19 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/LeafWeight'
+        finish_key:
+          type: string
+          nullable: true
+        finish_label:
+          type: string
+          nullable: true
+        finish_class:
+          type: string
+          nullable: true
+        color_surcharges:
+          type: array
+          items:
+            $ref: '#/components/schemas/ColorSurchargeApplication'
         calculation_hash:
           type: string
           pattern: ^sha256:[0-9a-f]{64}$
@@ -19947,6 +20109,11 @@ components:
           pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
         color:
           type: string
+          minLength: 1
+          maxLength: 50
+        color_exterior:
+          type: string
+          nullable: true
           minLength: 1
           maxLength: 50
         parametric_tree: {}
@@ -20032,6 +20199,11 @@ components:
           type: string
           minLength: 1
           maxLength: 50
+        color_exterior:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 50
         parametric_tree: {}
         cutting_profile_code:
           type: string
@@ -20091,6 +20263,19 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/LeafWeight'
+        finish_key:
+          type: string
+          nullable: true
+        finish_label:
+          type: string
+          nullable: true
+        finish_class:
+          type: string
+          nullable: true
+        color_surcharges:
+          type: array
+          items:
+            $ref: '#/components/schemas/ColorSurchargeApplication'
       required:
       - fittings
       - glasses
@@ -24373,6 +24558,14 @@ components:
         color_exterior:
           type: string
           nullable: true
+        color_interior_detail:
+          type: object
+          additionalProperties: {}
+          nullable: true
+        color_exterior_detail:
+          type: object
+          additionalProperties: {}
+          nullable: true
         glass_specs:
           type: array
           items:
@@ -24390,7 +24583,9 @@ components:
           nullable: true
       required:
       - color_exterior
+      - color_exterior_detail
       - color_interior
+      - color_interior_detail
       - discount_pct
       - finish
       - glass_specs
@@ -24559,6 +24754,10 @@ components:
         color:
           type: string
           maxLength: 50
+        color_exterior:
+          type: string
+          nullable: true
+          maxLength: 50
         parametric_tree: {}
       required:
       - color
@@ -24582,6 +24781,11 @@ components:
           pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
         color:
           type: string
+          minLength: 1
+          maxLength: 50
+        color_exterior:
+          type: string
+          nullable: true
           minLength: 1
           maxLength: 50
         parametric_tree: {}

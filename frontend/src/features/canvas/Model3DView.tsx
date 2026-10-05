@@ -187,6 +187,7 @@ function tokenColor(token: string, fallback: string): string {
 }
 
 function SolidMesh({
+  face,
   solid,
   selected,
   theme,
@@ -200,6 +201,9 @@ function SolidMesh({
    * flip CSS variables without otherwise re-rendering this subtree. */
   theme: string;
   mode: MaterialMode;
+  /** Which physical face the camera sees — the bicolor pair's exterior or
+   * interior swatch (D05). */
+  face: "exterior" | "interior";
   clipPlane: THREE.Plane | null;
   onPick(owner: string): void;
 }): JSX.Element {
@@ -207,7 +211,7 @@ function SolidMesh({
 
   // eslint-disable-next-line react-hooks/exhaustive-deps -- theme re-resolves
   // the same tokens against the new CSS variable values.
-  const material = useMemo(() => solidMaterial(solid, mode), [solid, mode]);
+  const material = useMemo(() => solidMaterial(solid, mode, face), [solid, mode, face]);
   const color = useMemo(
     () => tokenColor(material.colorToken, material.colorFallback),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -399,6 +403,7 @@ function SceneContent({
       selected={selection === solid.owner}
       theme={theme}
       mode={mode}
+      face={inside ? "interior" : "exterior"}
       clipPlane={clip ? clipPlane : null}
       onPick={onPick}
     />

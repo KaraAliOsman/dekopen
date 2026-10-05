@@ -597,6 +597,8 @@ def test_design_options_emits_structured_glass_products(monkeypatch):
         available_hardware_kits=[],
         available_panel_rules={},
         finishes=("WHITE",),
+        color_options={},
+        bicolor_allowed=False,
         glass_products={"VID-LOWE": product},
         hardware_families={},
         hardware_options={},

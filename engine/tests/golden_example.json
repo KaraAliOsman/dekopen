@@ -28,7 +28,11 @@
     "system_id": "3067da09-3119-5ad0-a1d5-498cd2dfd753"
   },
   "response": {
-    "calculation_hash": "sha256:1cebcaa2ee6fb8b382d43b6aaebb04c338e7ac6517aad1fd57ab98c838ded317",
+    "calculation_hash": "sha256:cc172136360d65a6934ddba85b2e2d4575a0e34890e2cdbf378ee6b343d44024",
+    "color_surcharges": [],
+    "finish_class": null,
+    "finish_key": null,
+    "finish_label": null,
     "fittings": [
       {
         "bay_id": null,

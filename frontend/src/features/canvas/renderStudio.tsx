@@ -59,8 +59,8 @@ function tokenColor(token: string, fallback: string): string {
   return value || fallback;
 }
 
-function solidMesh(solid: Solid3D): THREE.Mesh | null {
-  const material = solidMaterial(solid, "commercial");
+function solidMesh(solid: Solid3D, inside: boolean): THREE.Mesh | null {
+  const material = solidMaterial(solid, "commercial", inside ? "interior" : "exterior");
   const mat = new THREE.MeshStandardMaterial({
     color: tokenColor(material.colorToken, material.colorFallback),
     roughness: material.roughness,
@@ -81,7 +81,7 @@ function solidMesh(solid: Solid3D): THREE.Mesh | null {
   return geo ? new THREE.Mesh(geo, mat) : null;
 }
 
-function buildThreeScene(scene: Scene3D): THREE.Group {
+function buildThreeScene(scene: Scene3D, inside: boolean): THREE.Group {
   const root = new THREE.Group();
   const inner = new THREE.Group();
   inner.position.set(-scene.center[0], -scene.center[1], -scene.center[2]);
@@ -90,13 +90,13 @@ function buildThreeScene(scene: Scene3D): THREE.Group {
     group.position.set(...module.position);
     group.rotation.y = module.rotationY;
     for (const solid of module.solids) {
-      const mesh = solidMesh(solid);
+      const mesh = solidMesh(solid, inside);
       if (mesh) group.add(mesh);
     }
     inner.add(group);
   }
   for (const solid of scene.couplers) {
-    const mesh = solidMesh(solid);
+    const mesh = solidMesh(solid, inside);
     if (mesh) inner.add(mesh);
   }
   root.add(inner);
@@ -187,7 +187,7 @@ export function renderStudioImage(
   rim.position.set(0, -radius * 0.5, radius * 0.8);
   scene.add(rim);
 
-  const root = buildThreeScene(scene3d);
+  const root = buildThreeScene(scene3d, options.inside === true);
   // World +z is the room face; the street view rotates the model 180°.
   if (!options.inside) root.rotation.y = Math.PI;
   scene.add(root);

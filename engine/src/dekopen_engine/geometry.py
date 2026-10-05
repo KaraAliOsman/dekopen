@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from decimal import Decimal, ROUND_CEILING
+from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR
 from typing import Literal
 
 from dekopen_engine.bom import build_engine_result
+from dekopen_engine.finishes import apply_color_surcharges
 from dekopen_engine.glass import (
     build_glass_piece,
     exact_glass_weight,
@@ -60,6 +61,7 @@ from dekopen_engine.weight import (
 from dekopen_engine.models import (
     BayLeaf,
     BayOpeningType,
+    ColorSelection,
     EffectiveProfileArticle,
     EngineResult,
     FittingPiece,
@@ -493,7 +495,7 @@ def resolve_reinforcement_rule(
     params: SystemParams,
     role: ProfileRole,
     *,
-    is_foiled: bool,
+    finish_class: str,
     length_mm: Decimal,
 ) -> ReinforcementRule | None:
     """The declared reinforcement rule covering a member cut (D01).
@@ -501,9 +503,10 @@ def resolve_reinforcement_rule(
     Rules are catalog data: a member is reinforced only when a declared
     rule matches its role, finish class and length. The most specific
     finish class wins (WHITE / NON_WHITE over ALL); ties go to the highest
-    min_length still below the member length.
+    min_length still below the member length. D05 resolves the finish
+    class from the color selection — NON_WHITE finishes (foil, dark,
+    coextruded) get their declared mandatory steel.
     """
-    finish_class = "NON_WHITE" if is_foiled else "WHITE"
     best: ReinforcementRule | None = None
     for rule in params.reinforcement_rules:
         if rule.role is not role:
@@ -609,7 +612,12 @@ class _GeometryAccumulator:
     panels: list[PanelPiece] = field(default_factory=list)
     hardware_items: list[HardwareItem] = field(default_factory=list)
     leaf_weights: list[LeafWeight] = field(default_factory=list)
-    is_foiled: bool = False
+    # D05: the machining finish class (WHITE / NON_WHITE) the resolved
+    # color selection drives; the legacy is_foiled path maps NON_WHITE.
+    finish_class: str = "WHITE"
+    # D05: leaf-envelope multiplier from the declared per-finish size
+    # factors — dark finishes shrink the admissible envelope (≤ 1).
+    envelope_factor: Decimal = Decimal("1")
     semantic_members: list[SemanticMemberTraceV1] = field(default_factory=list)
     semantic_leaves: list[SemanticLeafTraceV1] = field(default_factory=list)
     semantic_infills: list[SemanticInfillTraceV1] = field(default_factory=list)
@@ -763,7 +771,7 @@ def _append_profile(
             resolve_reinforcement_rule(
                 params,
                 article.role,
-                is_foiled=accumulator.is_foiled,
+                finish_class=accumulator.finish_class,
                 length_mm=length_mm,
             )
             if params is not None
@@ -1533,6 +1541,27 @@ def _append_leaf(
     # then the movement-level row, so a direction-specific bound and a
     # generic per-movement bound can coexist.
     limit = _typology_limit_for(params, spec, ctx)
+    # D05: a declared per-finish size factor shrinks the admissible leaf
+    # envelope — the bound scales by the factor, floored so a factor
+    # never widens the declared limit.
+    if limit is not None and accumulator.envelope_factor != Decimal("1"):
+        factor = accumulator.envelope_factor
+        limit = limit.model_copy(
+            update={
+                "max_leaf_width_mm": (
+                    (limit.max_leaf_width_mm * factor).quantize(
+                        Decimal("0.01"), rounding=ROUND_FLOOR)
+                    if limit.max_leaf_width_mm is not None
+                    else None
+                ),
+                "max_leaf_height_mm": (
+                    (limit.max_leaf_height_mm * factor).quantize(
+                        Decimal("0.01"), rounding=ROUND_FLOOR)
+                    if limit.max_leaf_height_mm is not None
+                    else None
+                ),
+            }
+        )
     if limit is not None:
         violations = check_typology_limits(
             limit,
@@ -2464,6 +2493,7 @@ def compute_geometry(
     *,
     is_foiled: bool = False,
     diagnostic: bool = False,
+    color_selection: ColorSelection | None = None,
 ) -> GeometryComputation:
     """Calculate Core geometry, mobile-leaf weights and selected hardware."""
 
@@ -2477,14 +2507,28 @@ def compute_geometry(
     if clear_width_mm <= Decimal("0") or clear_height_mm <= Decimal("0"):
         raise ValueError("FRAME face produces a non-positive clear rectangle")
 
+    # D05: the resolved color selection drives the machining finish
+    # class, the declared glazing clearance and the leaf-envelope factor;
+    # the legacy is_foiled path maps to NON_WHITE + foil clearance.
+    if color_selection is not None:
+        finish_class = color_selection.finish_class
+        envelope_factor = color_selection.envelope_factor()
+        clearance_mm = color_selection.glass_clearance_mm(params)
+    else:
+        finish_class = "NON_WHITE" if is_foiled else "WHITE"
+        envelope_factor = Decimal("1")
+        clearance_mm = (
+            params.glass_clearance_foil_mm if is_foiled else params.glass_clearance_white_mm
+        )
+
     accumulator = _GeometryAccumulator(
         diagnostic=diagnostic,
         top_node_id=top.id,
         nominal_width_mm=nominal_width_mm,
         nominal_height_mm=nominal_height_mm,
-        is_foiled=is_foiled,
+        finish_class=finish_class,
+        envelope_factor=envelope_factor,
     )
-    clearance_mm = params.glass_clearance_foil_mm if is_foiled else params.glass_clearance_white_mm
     top_path = f"root/{top.id}"
     # D02: every pane's situational context comes from the declared tree —
     # opening type, distance of the pane bottom to the module base and
@@ -2571,6 +2615,19 @@ def compute_geometry(
             hardware_items=accumulator.hardware_items,
             leaf_weights=accumulator.leaf_weights,
         )
+        if color_selection is not None:
+            # D05: stamp the finish pair's identity + declared surcharges
+            # onto the BOM — stock, purchases and pricing key on them.
+            result = accumulator.computation.result
+            assert result is not None
+            result.finish_key = color_selection.stock_key()
+            result.finish_label = color_selection.display_name()
+            result.finish_class = color_selection.finish_class
+            result.color_surcharges = apply_color_surcharges(
+                color_selection,
+                result,
+                area_m2=(nominal_width_mm * nominal_height_mm) / Decimal("1000000"),
+            )
     return accumulator.computation
 
 
@@ -2579,8 +2636,14 @@ def calculate_geometry(
     params: SystemParams,
     *,
     is_foiled: bool = False,
+    color_selection: ColorSelection | None = None,
 ) -> EngineResult:
     """Strict public SHOT-06 contract; diagnostic facts never replace a valid BOM."""
-    computation = compute_geometry(root, params, is_foiled=is_foiled)
+    computation = compute_geometry(
+        root,
+        params,
+        is_foiled=is_foiled,
+        color_selection=color_selection,
+    )
     assert computation.result is not None
     return computation.result

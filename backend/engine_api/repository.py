@@ -36,6 +36,9 @@ from dekopen_engine import (
     spec_options_from_capabilities,
 )
 from dekopen_engine.models import (
+    ColorKind,
+    ColorOption,
+    ColorSurcharge,
     LeafRole,
     OpeningCapability,
     OpeningDirection,
@@ -262,7 +265,7 @@ class SystemParamsRepository:
                        sliding_glazing_deduction_width_mm,
                        sliding_glazing_deduction_height_mm, door_leaf_side_clearance_mm,
                        rail_count, rebate_depth_mm, end_milling_overlap_mm,
-                       finishes::text, system_family
+                       finishes::text, system_family, bicolor_allowed
                 FROM public.profile_systems
                 WHERE id = %s AND is_active = TRUE
                   AND (is_global = TRUE OR org_id = %s)
@@ -319,7 +322,61 @@ class SystemParamsRepository:
             opening_capabilities=self._load_opening_capabilities(
                 system_id, active_org_id
             ),
+            color_options=self._load_color_options(system_id, active_org_id),
+            bicolor_allowed=bool(system[23]),
         )
+
+    def _load_color_options(
+        self, system_id: UUID, active_org_id: UUID
+    ) -> dict[str, ColorOption]:
+        """The declared per-system color catalog (D05). An empty map keeps
+        the legacy binary WHITE/FOILED semantics at the engine layer."""
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                SELECT code, name, kind, manufacturer_code, gloss,
+                       render_color, render_texture, finish_class,
+                       film_clearance, glass_clearance_mm, dark, faces,
+                       pair_code, size_factor, surcharge_kind,
+                       surcharge_amount, surcharge_currency, surcharge_label,
+                       sort_order, data_provenance
+                FROM public.system_color_options
+                WHERE {self._SCOPE_SQL}
+                ORDER BY sort_order, code
+                """,
+                [system_id, active_org_id],
+            )
+            rows = cursor.fetchall()
+        options: dict[str, ColorOption] = {}
+        for row in rows:
+            surcharge = None
+            if row[14] is not None and row[15] is not None:
+                surcharge = ColorSurcharge(
+                    kind=cast(str, row[14]),
+                    amount=_decimal(row[15]),
+                    currency=None if row[16] is None else str(row[16]),
+                    label=None if row[17] is None else str(row[17]),
+                )
+            options[str(row[0])] = ColorOption(
+                code=str(row[0]),
+                name=str(row[1]),
+                kind=ColorKind(str(row[2])),
+                manufacturer_code=None if row[3] is None else str(row[3]),
+                gloss=None if row[4] is None else str(row[4]),
+                render_color=None if row[5] is None else str(row[5]),
+                render_texture=None if row[6] is None else str(row[6]),
+                finish_class=cast(str, row[7]),
+                film_clearance=bool(row[8]),
+                glass_clearance_mm=_decimal_or_none(row[9]),
+                dark=bool(row[10]),
+                faces=cast(str, row[11]),
+                pair_code=None if row[12] is None else str(row[12]),
+                size_factor=_decimal_or_none(row[13]),
+                surcharge=surcharge,
+                sort_order=int(row[18]),
+                data_provenance=None if row[19] is None else str(row[19]),
+            )
+        return options
 
     def _load_opening_capabilities(
         self, system_id: UUID, active_org_id: UUID

@@ -139,7 +139,9 @@ def test_save_update_reopen_matches_engine_exactly(manual_pair):
             },
         )
         expected = calculation_response(
-            {**design, "system_id": str(system)},
+            # The stored BOM is hashed over the canonical design preimage
+            # (D05: `color_exterior` absent when it carries no information).
+            {**service._canonical_design(dict(design)), "system_id": str(system)},
             result,
         )
         saved = service.save_position(

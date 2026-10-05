@@ -190,6 +190,7 @@ def test_engine_response_includes_shot06_and_excludes_inspector() -> None:
     assert set(schema["components"]["schemas"]["EngineCalculateResponse"]["properties"]) == {
         "calculation_hash", "profile_cuts", "reinforcements", "glasses",
         "panels", "fittings", "hardware_items", "leaf_weights",
+        "finish_class", "finish_key", "finish_label", "color_surcharges",
     }
 
 

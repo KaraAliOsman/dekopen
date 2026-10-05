@@ -64,7 +64,11 @@ def test_core_response_is_typed_and_complete(
     response = client.post("/api/v1/engine/calculate/", payload, format="json")
     assert response.status_code == 200
     actual = response.json()
-    assert set(actual) == {"profile_cuts", "reinforcements", "glasses", "panels", "hardware_items", "leaf_weights", "fittings", "calculation_hash"}
+    assert set(actual) == {
+        "profile_cuts", "reinforcements", "glasses", "panels", "hardware_items",
+        "leaf_weights", "fittings", "calculation_hash",
+        "finish_class", "finish_key", "finish_label", "color_surcharges",
+    }
     assert actual["hardware_items"][0]["kit_sku"] == kit
     assert actual["leaf_weights"][0]["total_weight_kg"] == weight
     assert all("material" in p and "leaf_id" in p for p in actual["profile_cuts"])
@@ -88,5 +92,6 @@ def test_system_params_contract_accounts_for_every_field() -> None:
         "glass_products", "glass_safety_rules", "glass_type_limits",
         "hardware_families", "hardware_options",
         "opening_capabilities",
+        "color_options", "bicolor_allowed",
     }
-    assert len(demo_60_params().model_dump()) == 36
+    assert len(demo_60_params().model_dump()) == 38

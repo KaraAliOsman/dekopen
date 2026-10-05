@@ -108,3 +108,15 @@ Append-only chronology. Keep newest entries at the bottom.
 - UI: sección "Vano y montaje" en el inspector con preview debounced, chip compuesto en el encabezado de posición, cota doble vano+fabricación en el lienzo con letreros "Holgura"/"Solape" por lado, Ajustes gana "Reglas de taller".
 - Verificado: `make lint|typecheck|test|build` y `make test-db` verdes; 14 goldens engine + pgTAP 177 (16 ok) + integración confirm/gate/revisión; capturas en `docs/redesign/captures/d07-vano-fabricacion/` (pendiente de carga al PR).
 - Decisiones nuevas registradas en `docs/decisions/valores-por-defecto.md` sección D07.
+||||||| parent of 5d17f112 (D05 — Colores y acabados de verdad: catálogo system_color_options por sistema, bicolor por posición (color_exterior), reglas de combinación del motor, SKU por acabado (stock_color EXT/INT), recargos declarados, renders por cara (2D/3D/portal/PDF), selector ColorSelector con swatches reales)
+
+## [2026-10-05] D05 | colores y acabados de verdad
+
+- Catálogo real de color por sistema: `system_color_options` (kind, manufacturer_code, gloss, render_color/texture, finish_class, faces, pair_code, size_factor, dark, surcharge_*, provenance) + `profile_systems.bicolor_allowed`; seed `SEED_SYNTHETIC`, RAL reales vía ingesta D01.
+- Bicolor por posición: `project_positions.color_exterior`; preimagen canónica lo elimina cuando NULL/igual al interior (hash monocolor intacto). Reglas del motor en `finishes.resolve_color_selection`: cara prohibida, bicolor solo si permitido, ANODIZED nunca bicolor, dos colores en masa nunca en una barra, `pair_code` en ambos sentidos — mensajes es-CL nombrando acabado y cara.
+- Reglas por acabado como datos: `film_clearance`/`finish_class` conectan refuerzo obligatorio y mecanizado con D01; `size_factor`/`dark` acotan la envolvente; `surcharge_kind` (metro de perfil / m² / fijo por posición / % materiales) lo computa el motor.
+- SKU por color: `stock_color` clavea código o par `EXT/INT` en `profile_purchase_mappings`; NULL = barra legacy agnóstica; dos barras viables = `AmbiguousStockAuthority`. Seed genera todas las claves válidas vía CROSS JOIN espejando las reglas del motor.
+- Render real por cara en 2D (canvas comercial, SVG técnico), 3D (cara exterior nogal-madera sin rosa / interior blanco), portal y PDF; `finish_label` sellado "Nogal exterior / Blanco interior" viaja en el resultado sellado.
+- Selector `ColorSelector`: swatches reales, "Igual en ambas caras", resumen + recargo, issue con nombre. Fix: el checkbox era indesmarcable (sameFaces se derivaba de la igualdad; desmarcar exige exterior distinto — se inicializa con la primera opción válida).
+- Readiness: la sonda de compra usa el color base declarado (primer finish_class='WHITE' faces='BOTH' del dominio; NATURAL en aluminio) en vez de 'WHITE' fijo.
+- Verificado: lint/typecheck/test/build y `make test-db` verdes (pgTAP 970); 24 capturas en `docs/redesign/captures/d05-colores-acabados/shots/` (selector, bicolor, editor 2D, 3D ambas caras, posición guardada) a 1440/1280/1024 claro+oscuro. Nota: a 1024px el fieldset de cabecera ocluye el botón "Vista 3D" (defecto de layout preexistente, documentado).

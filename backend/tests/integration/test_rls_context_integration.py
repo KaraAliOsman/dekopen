@@ -335,7 +335,11 @@ def test_real_bearer_and_db_adapter_preserve_engine_geometry(
         widths = {piece["bay_id"]: piece["width_mm"] for piece in result["glasses"]}
         assert widths == {"bay_fixed": "830.00", "bay_ob": "696.00"}
     assert [item["kit_sku"] for item in result["hardware_items"]] == ([] if case == "G1" else ["KIT-TILT-TURN"])
-    assert set(result) == {"profile_cuts", "reinforcements", "glasses", "panels", "hardware_items", "leaf_weights", "fittings", "calculation_hash"}
+    assert set(result) == {
+        "profile_cuts", "reinforcements", "glasses", "panels", "hardware_items",
+        "leaf_weights", "fittings", "calculation_hash",
+        "finish_class", "finish_key", "finish_label", "color_surcharges",
+    }
     assert_no_context()
 
 
@@ -492,7 +496,7 @@ def test_shot06_all_28_catalog_fields_reach_typed_engine(real_rows: RLSFixtures)
     expected_fields = expected.model_dump()
     actual_fields["available_hardware_kits"] = sorted(actual_fields["available_hardware_kits"], key=lambda k: k["sku"])
     expected_fields["available_hardware_kits"] = sorted(expected_fields["available_hardware_kits"], key=lambda k: k["sku"])
-    assert len(SystemParams.model_fields) == len(actual_fields) == 36
+    assert len(SystemParams.model_fields) == len(actual_fields) == 38
     # The demo seed declares the same synthetic per-article masses the engine
     # fixture carries — mass authority must reach the typed model
     # field-for-field rather than arriving through a fallback.

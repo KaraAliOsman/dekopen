@@ -653,7 +653,7 @@ function Bay({
     : (OPENING_OPTIONS.find(([value]) => value === opening)?.[1] ?? "intent.fixed");
   const bead = members.beadFor(node.glass_thickness_mm ?? null);
   const insulated = Number(node.glass_thickness_mm ?? "0") >= 12;
-  const sashSurface = memberSurface(members.sash.material);
+  const sashSurface = memberSurface(members.sash.material, members.sash.finish?.exterior);
   const baySelectProps = onSelect
     ? {
         onClick: (event: React.MouseEvent) => {
@@ -983,7 +983,10 @@ function Bay({
           y={region.y + region.h - thresholdH}
           w={region.w}
           h={thresholdH}
-          surface={memberSurface(members.threshold?.material ?? members.frame.material)}
+          surface={memberSurface(
+            members.threshold?.material ?? members.frame.material,
+            (members.threshold ?? members.frame).finish?.exterior,
+          )}
           className="member-threshold"
         />
       )}
@@ -1250,7 +1253,10 @@ function ModuleTree({
           y={bar.y}
           w={Math.max(bar.w, 0)}
           h={Math.max(bar.h, 0)}
-          surface={memberSurface(mullion?.material ?? members.frame.material)}
+          surface={memberSurface(
+            mullion?.material ?? members.frame.material,
+            (mullion ?? members.frame).finish?.exterior,
+          )}
           className={`member-mullion${selectedDivisionId === node.id ? " is-selected" : ""}`}
         />
         {showSplitDims && (
@@ -1764,7 +1770,7 @@ export function ProductFrontContent({
 }): JSX.Element {
   const { couplings } = product.assembly;
   const frameT = members.frame.faceWidthMm;
-  const frameSurface = memberSurface(members.frame.material);
+  const frameSurface = memberSurface(members.frame.material, members.frame.finish?.exterior);
   // Layout derivation runs over every module — memoize so seam/division
   // drags (per-pointermove renders) don't rebuild the whole elevation.
   const { rects, columns, joints, totalW, height, lift } = useMemo(
@@ -2293,9 +2299,10 @@ export function ProductFrontContent({
             : undefined;
           const width =
             members.couplerFor(coupling?.coupler_profile_sku ?? null)?.faceWidthMm ?? 60;
+          const couplerSpec = members.couplerFor(coupling?.coupler_profile_sku ?? null);
           const surface = memberSurface(
-            members.couplerFor(coupling?.coupler_profile_sku ?? null)?.material ??
-              members.frame.material,
+            couplerSpec?.material ?? members.frame.material,
+            (couplerSpec ?? members.frame).finish?.exterior,
           );
           const pickable = interactive && !divideTool && onSelectCoupling && joint.couplingId;
           const jointRect =

@@ -49,13 +49,18 @@ function errorCode(error: unknown, fallback: string): string {
 
 export function requestFromInputs(inputs: CanvasDesignInputs): EngineCalculateRequestRequest {
   if (inputs.systemId === null) throw new Error("Engine system has not been resolved");
-  return {
+  const request: EngineCalculateRequestRequest = {
     system_id: inputs.systemId,
     nominal_width_mm: inputs.nominalWidthMm,
     nominal_height_mm: inputs.nominalHeightMm,
     color: inputs.color,
     parametric_tree: inputs.parametricTree,
   };
+  // Bicolor only when the exterior face carries a distinct code — equal
+  // faces omit the field, matching the backend's canonical preimage.
+  if (inputs.colorExterior && inputs.colorExterior !== inputs.color)
+    request.color_exterior = inputs.colorExterior;
+  return request;
 }
 
 export function calculationKey(
@@ -69,6 +74,7 @@ export function calculationKey(
     inputs.nominalWidthMm,
     inputs.nominalHeightMm,
     inputs.color,
+    inputs.colorExterior,
     inputs.parametricTree,
   ] as const;
 }
