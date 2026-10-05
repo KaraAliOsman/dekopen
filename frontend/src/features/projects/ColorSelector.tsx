@@ -95,8 +95,10 @@ function SwatchChip({
 }): JSX.Element {
   const allowed = optionFaces(option)[face];
   const forbidden = !allowed;
+  // A chip forbidden in this row is only made on the OPPOSITE face — the
+  // tooltip must name the face where the finish exists, not this row's.
   const title = forbidden
-    ? t(face === "interior" ? "projects.colorInteriorOnly" : "projects.colorExteriorOnly")
+    ? t(face === "interior" ? "projects.colorExteriorOnly" : "projects.colorInteriorOnly")
     : option.manufacturer_code || undefined;
   const sheenId = useId();
   return (

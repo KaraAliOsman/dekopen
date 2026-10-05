@@ -736,16 +736,16 @@ function PositionWorkspace({
       : colorPairIssue
         ? colorPairIssue
         : vanoInvalid
-        ? t("projects.vanoInvalid")
-        : fillUnassigned
-          ? t("projects.glazingMissing")
-          : assemblyUnsaveable && assemblyEval !== null && assemblyEval.issues.length > 0
-            ? issueText(
-                assemblyEval.issues[0]!,
-                inputs.product?.assembly.modules ?? [],
-                inputs.product?.assembly.couplings ?? [],
-              )
-            : null;
+          ? t("projects.vanoInvalid")
+          : fillUnassigned
+            ? t("projects.glazingMissing")
+            : assemblyUnsaveable && assemblyEval !== null && assemblyEval.issues.length > 0
+              ? issueText(
+                  assemblyEval.issues[0]!,
+                  inputs.product?.assembly.modules ?? [],
+                  inputs.product?.assembly.couplings ?? [],
+                )
+              : null;
 
   // D07 — la confirmación es un acto humano separado del guardado: golpea su
   // propio endpoint y refresca la posición persistida (incl. updated_at).
