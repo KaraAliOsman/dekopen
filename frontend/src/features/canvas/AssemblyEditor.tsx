@@ -1267,19 +1267,35 @@ function BayInspector({
               </>
             );
           })()}
-          {/* Avanzado: the expanded component list on declared data only —
-              same math as the engine's expand_components. */}
+          {/* Avanzado: the expanded component list. The engine's emitted
+              BOM lines win when the last calculation covers the same kit —
+              they carry the leaf's real qty and cut length. Otherwise the
+              declared-data mirror applies the same rules on the bay
+              envelope (pre-calculation preview). */}
           {(() => {
             const resolvedEval = selectedKitEval ?? autoPickKit(kitEvaluations);
             const span = {
               leafWidthMm: leafEnvelope ? Math.round(leafEnvelope.w * 10) / 10 : null,
               leafHeightMm: leafEnvelope ? Math.round(leafEnvelope.h * 10) / 10 : null,
             };
+            const engineOptionSkus = new Set(
+              (resolvedHardware?.contents ?? [])
+                .map((item) => item.option_sku)
+                .filter((sku): sku is string => typeof sku === "string" && sku.length > 0),
+            );
+            const draftOptionSkus = new Set(bay.hardware_option_skus ?? []);
+            const sameOptions =
+              engineOptionSkus.size === draftOptionSkus.size &&
+              [...draftOptionSkus].every((sku) => engineOptionSkus.has(sku));
+            const engineContents =
+              resolvedHardware && sameOptions && resolvedHardware.kit_sku === resolvedEval?.kit.sku
+                ? resolvedHardware.contents
+                : null;
             const optionContents = hardwareOptions
               .filter((item) => (bay.hardware_option_skus ?? []).includes(item.sku))
               .flatMap((item) => item.contents);
             const contents = [...(resolvedEval?.kit.contents ?? []), ...optionContents];
-            if (contents.length === 0) return null;
+            if (engineContents === null && contents.length === 0) return null;
             return (
               <details className="assembly-kit-advanced">
                 <summary>{t("assembly.kitAdvanced")}</summary>
@@ -1292,28 +1308,50 @@ function BayInspector({
                     </tr>
                   </thead>
                   <tbody>
-                    {contents.map((component, index) => {
-                      const resolved = resolveComponent(component, span);
-                      return (
-                        <tr key={`${component.sku}-${index}`}>
-                          <td>{resolved.qty ?? "—"}</td>
-                          <td>
-                            {resolved.name}
-                            {resolved.machiningCount > 0 && (
-                              <small>
-                                {" "}
-                                · {resolved.machiningCount} {t("assembly.kitComponentMachining")}
-                              </small>
-                            )}
-                          </td>
-                          <td>
-                            {resolved.lengthMm !== null
-                              ? `${fmtMm(String(resolved.lengthMm))} mm`
-                              : "—"}
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    {engineContents !== null
+                      ? engineContents.map((component, index) => (
+                          <tr key={`${component.sku}-${index}`}>
+                            <td>{component.qty}</td>
+                            <td>
+                              {component.name}
+                              {(component.machining?.length ?? 0) > 0 && (
+                                <small>
+                                  {" "}
+                                  · {component.machining!.length}{" "}
+                                  {t("assembly.kitComponentMachining")}
+                                </small>
+                              )}
+                            </td>
+                            <td>
+                              {component.length_mm != null && component.length_mm !== ""
+                                ? `${fmtMm(String(component.length_mm))} mm`
+                                : "—"}
+                            </td>
+                          </tr>
+                        ))
+                      : contents.map((component, index) => {
+                          const resolved = resolveComponent(component, span);
+                          return (
+                            <tr key={`${component.sku}-${index}`}>
+                              <td>{resolved.qty ?? "—"}</td>
+                              <td>
+                                {resolved.name}
+                                {resolved.machiningCount > 0 && (
+                                  <small>
+                                    {" "}
+                                    · {resolved.machiningCount}{" "}
+                                    {t("assembly.kitComponentMachining")}
+                                  </small>
+                                )}
+                              </td>
+                              <td>
+                                {resolved.lengthMm !== null
+                                  ? `${fmtMm(String(resolved.lengthMm))} mm`
+                                  : "—"}
+                              </td>
+                            </tr>
+                          );
+                        })}
                   </tbody>
                 </table>
               </details>
