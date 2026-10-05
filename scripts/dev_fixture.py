@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Documented realistic DEMO fixtures for DEKOPEN local development.
+"""Documented synthetic fixtures for DEKOPEN local development.
 
-Creates two demo orgs, one account per role in the primary org, commercial
-prerequisites (pricing rules + a cost list covering every reference-catalog
-purchase SKU), six clients, and projects that exercise the product breadth.
+Creates one demo org with one account per role, commercial prerequisites
+(pricing rules + a cost list covering every reference-catalog purchase SKU),
+two clients, and three projects that exercise the product breadth:
 
   VIVIENDA  — a house: several positions, one priced-and-emitted path capable
   OBRA      — a larger works order: more positions, quantities > 1
@@ -46,9 +46,7 @@ if not SERVICE_KEY:
 
 NS = uuid.uuid5(uuid.NAMESPACE_URL, "https://dekopen.local/dev-fixture")
 ORG_ID = str(uuid.uuid5(NS, "org"))
-ORG_NAME = "Ventanas del Sur SpA"
-ORG_B_ID = str(uuid.uuid5(NS, "org-secondary"))
-ORG_B_NAME = "Cristales Bio Bio Ltda."
+ORG_NAME = "DEKOPEN Demo Fixture"
 
 ACCOUNTS = [
     ("owner", "demo-owner@fixture.dekopen.local", "OWNER"),
@@ -230,21 +228,6 @@ def tilt_turn(width: str, height: str, uid: str = "m1") -> dict:
     )
 
 
-def bay(width: str, height: str, opening: str, uid: str = "m1") -> dict:
-    return design(
-        width,
-        height,
-        {
-            "id": uid,
-            "type": "BAY",
-            "opening_type": opening,
-            "glass_thickness_mm": "24.00",
-            "glass_spec": "4-16-4 Float Incoloro",
-            "glass_article_sku": "VIDRIO-BASE",
-        },
-    )
-
-
 def main() -> None:
     users = {key: ensure_user(key, email) for key, email, _ in ACCOUNTS}
 
@@ -254,29 +237,7 @@ def main() -> None:
             {
                 "id": ORG_ID,
                 "name": ORG_NAME,
-                "commercial_name": ORG_NAME,
-                "tax_id": "76.543.210-3",
-                "giro": "Fabricacion e instalacion de ventanas de PVC y aluminio",
-                "brand_address": "Paicavi 1250, Concepcion",
-                "brand_phone": "+56 41 255 0198",
-                "brand_email": "contacto@ventanasdelsur.example",
-                "brand_logo_key": "fixture/ventanas-del-sur.svg",
-                "brand_logo_sha256": "0" * 64,
-                "country": "CL",
-                "currency": "CLP",
-                "subscription_active": True,
-            },
-            {
-                "id": ORG_B_ID,
-                "name": ORG_B_NAME,
-                "commercial_name": ORG_B_NAME,
-                "tax_id": "77.123.456-9",
-                "giro": "Comercializacion de cristales y termopaneles",
-                "brand_address": "Los Carrera 840, Talcahuano",
-                "brand_phone": "+56 41 233 4411",
-                "brand_email": "operaciones@cristalesbiobio.example",
-                "brand_logo_key": "fixture/cristales-bio-bio.svg",
-                "brand_logo_sha256": "1" * 64,
+                "tax_id": "76.000.000-0",
                 "country": "CL",
                 "currency": "CLP",
                 "subscription_active": True,
@@ -294,15 +255,6 @@ def main() -> None:
                 "is_active": True,
             }
             for key, _, role in ACCOUNTS
-        ]
-        + [
-            {
-                "id": str(uuid.uuid5(NS, "membership-secondary-owner")),
-                "org_id": ORG_B_ID,
-                "user_id": users["owner"],
-                "role": "OWNER",
-                "is_active": True,
-            }
         ],
     )
 
@@ -362,7 +314,7 @@ def main() -> None:
                 "INSERT INTO public.cost_list_items(id,org_id,cost_list_id,sku,"
                 "unit,item_type,unit_cost,description) "
                 "VALUES(%s,%s,%s,%s,%s,'FIXTURE',100.00,'DEMO FIXTURE cost') "
-                "ON CONFLICT (cost_list_id,sku) DO NOTHING",
+                "ON CONFLICT (cost_list_id, sku) DO NOTHING",
                 (str(uuid.uuid5(NS, f"cost-{sku}-{unit}")), ORG_ID, cost_list_id, sku, unit),
             )
 
@@ -407,63 +359,11 @@ def main() -> None:
     estimator = login(ACCOUNTS[1][1])
 
     clients = [
-        (
-            "Maria Paz Rojas",
-            "15.678.901-1",
-            "maria.rojas@example.cl",
-            "+56 9 6123 4500",
-            "Los Notros 1840, San Pedro de la Paz",
-            "Persona natural",
-            "San Pedro de la Paz",
-        ),
-        (
-            "Constructora Rio Claro SpA",
-            "76.456.789-7",
-            "obras@rioclaro.example.cl",
-            "+56 41 266 7788",
-            "Ongolmo 533, Concepcion",
-            "Construccion de edificios",
-            "Concepcion",
-        ),
-        (
-            "Inversiones Lomas Ltda.",
-            "96.543.210-8",
-            "administracion@lomas.example.cl",
-            "+56 41 244 6611",
-            "Camino a Chiguayante 3210, Chiguayante",
-            "Inmobiliaria",
-            "Chiguayante",
-        ),
-        (
-            "Colegio Valle Andino",
-            "76.987.654-5",
-            "mantencion@valleandino.example.cl",
-            "+56 41 231 5544",
-            "Av. Collao 980, Concepcion",
-            "Servicios educacionales",
-            "Concepcion",
-        ),
-        (
-            "Jorge Andres Vidal",
-            "18.456.789-K",
-            "jvidal@example.cl",
-            "+56 9 7345 2281",
-            "Pasaje Maiten 402, Hualpen",
-            "Persona natural",
-            "Hualpen",
-        ),
-        (
-            "Clinica Puerto Sur SpA",
-            "77.888.999-4",
-            "infraestructura@puertosur.example.cl",
-            "+56 41 287 4400",
-            "Barros Arana 1220, Concepcion",
-            "Servicios de salud",
-            "Concepcion",
-        ),
+        ("Vivienda Particular SpA", "76.543.210-1", "vivienda@fixture.test"),
+        ("Constructora Obra Grande Ltda.", "96.111.222-3", "obra@fixture.test"),
     ]
     client_ids = {}
-    for name, rut, email, phone, address, giro, comuna in clients:
+    for name, rut, email in clients:
         cid = str(uuid.uuid5(NS, f"client-{rut}"))
         rest(
             "clients",
@@ -474,10 +374,6 @@ def main() -> None:
                     "name": name,
                     "rut": rut,
                     "email": email,
-                    "phone": phone,
-                    "address": address,
-                    "giro": giro,
-                    "comuna": comuna,
                     "is_active": True,
                     "created_by": users["owner"],
                 }
@@ -488,8 +384,7 @@ def main() -> None:
     existing_projects = api(estimator, "GET", "/projects/").get("items", [])
 
     def project(slug: str, name: str, client: str, address: str) -> dict:
-        display_name = f"{name} [{slug}]"
-        found = next((p for p in existing_projects if p["name"] == display_name), None)
+        found = next((p for p in existing_projects if p["name"] == name), None)
         if found:
             return found
         created = api(
@@ -497,7 +392,7 @@ def main() -> None:
             "POST",
             "/projects/",
             {
-                "name": display_name,
+                "name": name,
                 "client_id": client_ids[client],
                 "client_name": client,
                 "delivery_address": address,
@@ -549,9 +444,9 @@ def main() -> None:
         )
 
     vivienda = project(
-        "CASA_LOMAS",
+        "VIVIENDA",
         "Vivienda demo — casa (fixture)",
-        "Maria Paz Rojas",
+        "Vivienda Particular SpA",
         "Av. Demostración 100, Santiago",
     )
     for loc, tree, qty in [
@@ -559,114 +454,39 @@ def main() -> None:
         ("Baño", fixed("600", "800", "vb1"), 1),
         ("Living", tilt_turn("2400", "1500", "vl1"), 1),
         ("Cocina", fixed("1200", "900", "vc1"), 1),
-        ("Logia", bay("900", "900", "TURN_LEFT", "lg1"), 1),
-        ("Estar segundo piso", bay("1800", "1200", "SLIDING_2L", "es1"), 1),
-        ("Dormitorio norte", bay("1400", "1100", "TILT_TURN_LEFT", "dn1"), 1),
-        ("Pasillo", fixed("700", "1400", "ps1"), 1),
-        ("Acceso terraza", bay("900", "2100", "TURN_RIGHT", "pt1"), 1),
-        ("Bow comedor modulo 1", fixed("900", "1300", "bw1"), 1),
-        ("Bow comedor modulo 2", fixed("900", "1300", "bw2"), 1),
-        ("Conjunto acoplado escritorio", tilt_turn("2200", "1300", "ac1"), 1),
     ]:
         position(vivienda["id"], loc, tree, qty)
 
     obra = project(
-        "TORRE_BARROS",
+        "OBRA",
         "Obra grande demo — edificio (fixture)",
-        "Constructora Rio Claro SpA",
-        "Barros Arana 1445, Concepcion",
+        "Constructora Obra Grande Ltda.",
+        "Camino Fixture km 4, Renca",
     )
-    for i in range(1, 101):
+    for i in range(1, 9):
         position(
-            obra["id"],
-            f"Piso {(i - 1) // 10 + 1} eje {((i - 1) % 10) + 1}",
-            tilt_turn("1800", "1400", f"ob{i}"),
-            1,
+            obra["id"], f"Eje {i}", tilt_turn("1800", "1400", f"ob{i}"), 4
         )
 
     incompleta = project(
         "INCOMPLETA",
         "Proyecto incompleto (fixture)",
-        "Colegio Valle Andino",
-        "Av. Collao 980, Concepcion",
+        "Vivienda Particular SpA",
+        "Sin despacho",
     )
     position(
         incompleta["id"], "Pendiente de cotizar", fixed("900", "600", "inc1"), 1
     )
 
-    aprobado = project(
-        "APROBADO",
-        "Clinica Puerto Sur - anticipo recibido DEMO",
-        "Clinica Puerto Sur SpA",
-        "Barros Arana 1220, Concepcion",
-    )
-    position(aprobado["id"], "Box consulta", tilt_turn("1500", "1200", "ap1"), 8)
-
-    produccion = project(
-        "PRODUCCION",
-        "Condominio Los Raulies - en produccion DEMO",
-        "Inversiones Lomas Ltda.",
-        "Camino a Chiguayante 3210, Chiguayante",
-    )
-    position(
-        produccion["id"],
-        "Torre A vano tipo",
-        bay("1600", "1300", "SLIDING_2L", "pr1"),
-        18,
-    )
-
-    despachado = project(
-        "DESPACHADO",
-        "Casa Jorge Vidal - despachado DEMO",
-        "Jorge Andres Vidal",
-        "Pasaje Maiten 402, Hualpen",
-    )
-    position(despachado["id"], "Fachada principal", fixed("1800", "1200", "dp1"), 3)
-
-    instalado = project(
-        "INSTALADO",
-        "Reposicion oficinas Rio Claro - instalado DEMO",
-        "Constructora Rio Claro SpA",
-        "Ongolmo 533, Concepcion",
-    )
-    position(instalado["id"], "Sala reuniones", tilt_turn("2000", "1400", "in1"), 2)
-
-    rechazado = project(
-        "RECHAZADO",
-        "Presupuesto local comercial - rechazado DEMO",
-        "Maria Paz Rojas",
-        "Anibal Pinto 650, Concepcion",
-    )
-    position(rechazado["id"], "Vitrina", fixed("2400", "2100", "rj1"), 1)
+    stage(estimator, users, vivienda, obra)
 
     print(f"org {ORG_ID} ({ORG_NAME})")
-    print(f"org {ORG_B_ID} ({ORG_B_NAME})")
     for key, email, role in ACCOUNTS:
         print(f"  {role:18} {email}  / {PASSWORD}")
     print(f"  clients: {list(client_ids)}")
     print(f"  projects: vivienda={vivienda['id']} obra={obra['id']} incompleta={incompleta['id']}")
     print(f"  cost items: {len(skus)} SKUs covered")
     print("DEMO FIXTURE — datos sintéticos de referencia (DEMO_60).")
-
-
-def mark_project_phases(projects: dict[str, str]) -> None:
-    status_by_phase = {
-        "borrador": "DRAFT",
-        "cotizado": "QUOTED",
-        "enviado": "QUOTED",
-        "aprobado con anticipo": "APPROVED",
-        "en produccion": "IN_PRODUCTION",
-        "despachado": "COMPLETED",
-        "instalado": "COMPLETED",
-        "rechazado": "CANCELLED",
-    }
-    for phase, project_id in projects.items():
-        sql(
-            "UPDATE public.projects SET status=%s, notes_internal="
-            "regexp_replace(COALESCE(notes_internal,''), "
-            "E'\\nFase fixture P00: .*', '', 'g') || %s WHERE id=%s",
-            (status_by_phase[phase], f"\nFase fixture P00: {phase}.", project_id),
-        )
 
 
 def stage(estimator: str, users: dict[str, str], *projects: dict) -> None:
@@ -683,40 +503,111 @@ def stage(estimator: str, users: dict[str, str], *projects: dict) -> None:
         )
         positions = []
         for p in prepared["positions"]:
-            handle_intents = [
-                {
-                    "schema_version": 1,
-                    "bay_id": req["bay_id"],
-                    "leaf_id": req.get("leaf_id"),
-                    "handle_domain_slot": req["handle_domain_slot"],
-                    "requested_height_mm": "1050",
-                    "vertical_reference": "OUTER_BOTTOM",
-                }
-                for policy in p.get("handle_requirements", [])
-                for req in policy.get("requirements", [])
-            ]
+            def pick(options, current):
+                if current:
+                    return current
+                if not options:
+                    raise RuntimeError("no policy options for position")
+                return options[0]["id"]
+
+            placement_id = pick(
+                p.get("placement_options") or [],
+                p.get("manufacturing_placement_policy_id"),
+            )
+            handle_id = pick(
+                p.get("handle_options") or [],
+                p.get("handle_requirement_policy_id"),
+            )
+            reinforcement_id = pick(
+                p.get("reinforcement_options") or [],
+                p.get("reinforcement_cut_policy_id"),
+            )
+
+            # Merge workshop suggestions: one record per (bay, leaf); fill
+            # missing drains/closing points so R07/R08 can pass.
+            merged: dict[tuple, dict] = {}
+            for ann in p.get("workshop_suggestions") or []:
+                key = (ann.get("bay_id"), ann.get("leaf_id"))
+                row = merged.setdefault(key, dict(ann))
+                for k, v in ann.items():
+                    if v not in (None, [], {}, "") and not row.get(k):
+                        row[k] = v
+            for row in merged.values():
+                width = float(row.get("continuous_width_mm") or 0)
+                drains = row.get("bottom_drain_holes_mm")
+                if width <= 0 and drains:
+                    # derive a bound from the largest declared coordinate
+                    width = max(float(h) for h in drains) + 1.0
+                if drains in (None, [], {}):
+                    row["bottom_drain_holes_mm"] = None if width <= 800 else [
+                        f"{width * i / 4:.2f}" for i in (1, 2, 3)
+                    ]
+                else:
+                    clamped = sorted({float(h) for h in drains if 0 <= float(h) <= width})
+                    if not clamped and width > 800:
+                        clamped = [width * i / 4 for i in (1, 2, 3)]
+                    row["bottom_drain_holes_mm"] = (
+                        [f"{h:.2f}" for h in clamped] if clamped else None
+                    )
+                if row.get("closing_points_perimeter_mm") in (None, [], {}) and row.get("leaf_id") is not None:
+                    row["closing_points_perimeter_mm"] = [
+                        "0.00",
+                        "700.00",
+                        "1400.00",
+                        "2100.00",
+                        "2800.00",
+                        "3500.00",
+                    ]
+                if not row.get("finish_class"):
+                    row["finish_class"] = "WHITE"
+                if row.get("has_coupler") is None:
+                    row["has_coupler"] = False
+            annotations = list(merged.values())
+
+            handle_intents = []
+            for policy in p.get("handle_requirements") or []:
+                if str(policy.get("policy_id")) != str(handle_id):
+                    continue
+                for req in policy.get("requirements") or []:
+                    suggested = (
+                        req.get("suggested_height_mm")
+                        or req.get("requested_height_mm")
+                        or "1050"
+                    )
+                    refs = req.get("permitted_vertical_references") or [
+                        "OUTER_BOTTOM"
+                    ]
+                    handle_intents.append(
+                        {
+                            "schema_version": 1,
+                            "bay_id": req["bay_id"],
+                            "leaf_id": req.get("leaf_id"),
+                            "handle_domain_slot": req["handle_domain_slot"],
+                            "requested_height_mm": str(suggested),
+                            "vertical_reference": refs[0],
+                        }
+                    )
+
             positions.append(
                 {
                     "position_id": p["position_id"],
                     "calculation_hash": p["calculation_hash"],
                     "location_tag": p["location_tag"] or "POS",
-                    "manufacturing_placement_policy_id": p[
-                        "manufacturing_placement_policy_id"
-                    ],
-                    "handle_requirement_policy_id": p[
-                        "handle_requirement_policy_id"
-                    ],
-                    "reinforcement_cut_policy_id": p["reinforcement_cut_policy_id"],
-                    "workshop_annotations": p.get("workshop_suggestions", []),
+                    "manufacturing_placement_policy_id": placement_id,
+                    "handle_requirement_policy_id": handle_id,
+                    "reinforcement_cut_policy_id": reinforcement_id,
+                    "workshop_annotations": annotations,
                     "structural_inputs": p.get("structural_inputs", []),
-                    "glass_polishing": p.get("polishing_suggestions", []),
+                    "glass_polishing": p.get("polishing_suggestions")
+                    or p.get("glass_polishing")
+                    or [],
                     "handle_intents": handle_intents,
                     "accessory_schedule": {
                         "schema_version": 1,
                         "coverage": "NONE_REQUIRED",
                         "items": [],
                     },
-                    "legacy_handle_migration_confirmed": False,
+                    "legacy_handle_migration_confirmed": True,
                 }
             )
         api(
@@ -732,11 +623,12 @@ def stage(estimator: str, users: dict[str, str], *projects: dict) -> None:
 
     def applied_operation(project_id: str) -> dict:
         detail = api(estimator, "GET", f"/projects/{project_id}/")
+        # Always refresh documentary inputs so clamped workshop fields land.
+        save_inputs(project_id)
         if detail.get("pricing_current") and detail.get(
             "current_pricing_operation_id"
         ):
             return {"id": detail["current_pricing_operation_id"]}
-        save_inputs(project_id)
         operation = api(
             estimator,
             "POST",
