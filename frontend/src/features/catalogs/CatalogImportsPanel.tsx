@@ -714,6 +714,9 @@ export function CatalogImportsPanel({
                               patchRow(row.key, { include: event.target.checked })
                             }
                           />
+                          {row.published && (
+                            <span className="production-chip">{ct("importsPublished")}</span>
+                          )}
                         </td>
                         <td>
                           <input

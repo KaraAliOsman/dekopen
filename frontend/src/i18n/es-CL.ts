@@ -2505,7 +2505,7 @@ export const messages = {
     "El sistema ya tiene un artículo con este rol único; ajusta el rol o el sistema.",
   "catalog.importsErrorInsertFailed": "No se pudo crear el artículo; revisa los datos de la fila.",
   "catalog.importsErrorBeadUnknown":
-    "El junquillo (SKU) no existe en el sistema destino; súbelo primero en la hoja Perfiles.",
+    "El junquillo de la fila no existe en el sistema destino; súbelo primero en la hoja Perfiles.",
   "catalog.importsErrorPriceListRequired":
     "Elegí una lista de costos de destino para las filas de precios.",
   "catalog.importsErrorOpeningType": "La apertura declarada no es reconocida.",
