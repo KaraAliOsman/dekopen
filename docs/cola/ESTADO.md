@@ -9,7 +9,7 @@
 | D04 | D1 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/8 | 388e79bdc0ff111a9c2e76a445260bd9f18b92c3 | CI 6/6 verde; squash mergeado. Kits como clases por envolvente + qty/cut rules como datos + manillas validadas + opciones vendibles + picking/mecanizado en OT. |
 | D05 | D2 | pendiente |  |  |  |
 | D06 | D2 | pendiente |  |  |  |
-| D07 | D2 | pendiente |  |  |  |
+| D07 | D2 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/14 | 5474798011022008f2ceb31dfefb15813ad24262 | CI 6/6 verde; squash mergeado. Motor rough_opening + reglas de montaje versionadas + estados de medida con sello + gate OT + chip/inspector/cota doble. |
 | IA2 | D2 | pendiente |  |  |  |
 | IA3 | D2 | pendiente |  |  |  |
 | P02 | 1 | pendiente |  |  |  |
