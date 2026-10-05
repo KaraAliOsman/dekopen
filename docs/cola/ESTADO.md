@@ -1,0 +1,41 @@
+| ID | Ola | Estado | PR | SHA | Notas |
+|---|---|---|---|---|---|
+| P00 | 0 | en curso |  |  | Fundacion del programa en ejecucion. |
+| P01 | 0b | pendiente |  |  |  |
+| IA1 | 0b | pendiente |  |  |  |
+| D01 | 0b | pendiente |  |  |  |
+| D02 | D1 | pendiente |  |  |  |
+| D03 | D1 | pendiente |  |  |  |
+| D04 | D1 | pendiente |  |  |  |
+| D05 | D2 | pendiente |  |  |  |
+| D06 | D2 | pendiente |  |  |  |
+| D07 | D2 | pendiente |  |  |  |
+| IA2 | D2 | pendiente |  |  |  |
+| IA3 | D2 | pendiente |  |  |  |
+| P02 | 1 | pendiente |  |  |  |
+| P25 | 1 | pendiente |  |  |  |
+| P04 | 1 | pendiente |  |  |  |
+| P05 | 1 | pendiente |  |  |  |
+| P09 | 1 | pendiente |  |  |  |
+| P07 | 1 | pendiente |  |  |  |
+| P03 | 1 | pendiente |  |  |  |
+| P12 | 1 | pendiente |  |  |  |
+| P17 | 1 | pendiente |  |  |  |
+| ED1 | ED1 | pendiente |  |  |  |
+| P06 | 2 | pendiente |  |  |  |
+| P08 | 2 | pendiente |  |  |  |
+| P13 | 2 | pendiente |  |  |  |
+| P15 | 2 | pendiente |  |  |  |
+| P11 | 2 | pendiente |  |  |  |
+| P14 | 2 | pendiente |  |  |  |
+| P16 | 2 | pendiente |  |  |  |
+| ED2 | ED2 | pendiente |  |  |  |
+| P21 | 3 | pendiente |  |  |  |
+| P10 | 3 | pendiente |  |  |  |
+| P22 | 3 | pendiente |  |  |  |
+| P23 | 3 | pendiente |  |  |  |
+| D08 | 3 | pendiente |  |  |  |
+| P19 | 3 | pendiente |  |  |  |
+| P18 | 3 | pendiente |  |  |  |
+| P24 | 4 | pendiente |  |  |  |
+| P20 | 5 | pendiente |  |  |  |
