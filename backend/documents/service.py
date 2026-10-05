@@ -1214,7 +1214,7 @@ def freeze_revision_a(
                     # Inspector violations carry no position identity; without
                     # it the estimator must binary-search the vano list.
                     raise ValueError(
-                        f"Vano «{position['name'] or position['position_index']}»: {error}"
+                        f"Vano «{position.get('name') or position.get('position_index')}»: {error}"
                     ) from error
                 module_allowed = inspection.production_allowed
                 module_complete = not any(
