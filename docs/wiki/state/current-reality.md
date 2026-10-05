@@ -3,11 +3,11 @@ type: state
 status: active
 updated: 2026-10-05
 volatility: high
-verified_ref: __P01_HEAD__
+verified_ref: 9e9941dd1435bfc14c32d03a4cf7ecf2d410207b
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
-  - P01 design-system PR https://github.com/KaraAliOsman/dekopen/pull/__P01_PR__
+  - P01 design-system PR https://github.com/KaraAliOsman/dekopen/pull/4
   - integracion/v1 merge 747c528b67d234d697624929ccbcc7098261ed54
   - open PR metadata observed 2026-09-27/28
   - AGENTS.md
@@ -78,7 +78,7 @@ Baseline findings (2026-10-05, ordered by impact — verified file:line evidence
 
 ## P01 design-system state
 
-P01 lands the design constitution as code (branch `devin/P01-sistema-diseno`, PR head `__P01_HEAD__`):
+P01 lands the design constitution as code (branch `devin/P01-sistema-diseno`, PR head `9e9941dd1435bfc14c32d03a4cf7ecf2d410207b`):
 
 - `frontend/src/styles/tokens.css` is the single token file: ramps, light/dark roles, canvas roles, `--theme-*` compat aliases, IBM Plex Sans/Mono self-hosted latin subsets, type/space/radius/elevation/z/motion scales and `[data-density]` (office/workshop/document). `tokens.test.ts` fails on undefined `var()`, unused-token drift vs `tokens.unused.txt`, and text/background pairs under AA in both themes.
 - `frontend/src/ui/` holds the primitive kit (actions, forms, structure, data, domain state, overlays, states, signature — `SheetSurface`, `DimLoader`, `TraceButton`, `OpeningGlyph` per §3.6) plus `ui/format.tsx` domain formatters (`<Money>`, `<Dims>`, `<Length>`, `<Area>`, `<Weight>`, `<Uvalue>`, `<Qty>`, `<Percent>`, `<EntityCode>`, `<Timestamp>`, `<DateOnly>`).
