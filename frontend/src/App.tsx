@@ -17,7 +17,12 @@ import { SelectOrganizationPage } from "./auth/SelectOrganizationPage";
 import { consumeReturnTo } from "./auth/returnTo";
 import { LandingPage } from "./features/landing/LandingPage";
 
-export const DEV_ONLY_ROUTE_PATHS = ["/projects/demo/positions/g1/edit", "/benchmark"] as const;
+export const DEV_ONLY_ROUTE_PATHS = [
+  "/projects/demo/positions/g1/edit",
+  "/benchmark",
+  "/dev/ui",
+  "/dev/ui/mal",
+] as const;
 
 export function visibleDevOnlyRoutePaths(
   env: Pick<ImportMetaEnv, "DEV"> = import.meta.env,
@@ -96,6 +101,16 @@ const PaymentReturnPage = lazy(async () => {
 const BenchmarkPage = lazy(async () => {
   const module = await import("./features/benchmark/BenchmarkPage");
   return { default: module.BenchmarkPage };
+});
+
+const DevUiPage = lazy(async () => {
+  const module = await import("./dev/DevUiPage");
+  return { default: module.DevUiPage };
+});
+
+const DevUiContrast = lazy(async () => {
+  const module = await import("./dev/DevUiContrast");
+  return { default: module.DevUiContrast };
 });
 
 function isFloorRole(role: string | undefined): boolean {
@@ -200,6 +215,22 @@ export function AppRoutes(): JSX.Element {
               element={
                 <Suspense fallback={<p role="status" />}>
                   <BenchmarkPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/dev/ui"
+              element={
+                <Suspense fallback={<p role="status" />}>
+                  <DevUiPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/dev/ui/mal"
+              element={
+                <Suspense fallback={<p role="status" />}>
+                  <DevUiContrast />
                 </Suspense>
               }
             />

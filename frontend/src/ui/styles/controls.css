@@ -1,0 +1,123 @@
+/* Partición §10 — las reglas viven en este archivo; ui.css solo ordena
+   la cascada entre parciales. */
+/* Canonical primitives — every surface uses these instead of local chrome.
+   Token-driven only: no raw colors, no component-invented shadows. */
+
+/* ---------- buttons / controls ---------- */
+
+.ui-button,
+button.ui-button {
+  align-items: center;
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--theme-text-primary);
+  cursor: pointer;
+  display: inline-flex;
+  font-family: inherit;
+  font-size: var(--text-body);
+  gap: var(--space-8);
+  height: var(--control-height);
+  padding: 0 var(--space-12);
+  transition:
+    background var(--motion-fast) ease,
+    border-color var(--motion-fast) ease;
+}
+
+.ui-button:hover:not(:disabled) {
+  background: var(--theme-surface-hover);
+  border-color: var(--theme-border-strong);
+}
+
+/* Tertiary navigation links ("Volver al proyecto", "Ver todos") — quiet
+ * chrome, never default-browser blue (review m5). */
+a.ui-backlink {
+  align-items: center;
+  color: var(--theme-text-secondary);
+  display: inline-flex;
+  font-size: var(--text-s);
+  font-weight: 600;
+  /* WCAG 2.5.8 — 24 px click box; visual glyphs stay small. */
+  min-height: 24px;
+  text-decoration: none;
+}
+
+a.ui-backlink--back::before {
+  content: "‹";
+  margin-right: 0.125rem;
+}
+
+a.ui-backlink:hover {
+  color: var(--theme-text-primary);
+}
+
+.ui-button--primary {
+  background: var(--theme-accent-strong);
+  border-color: var(--theme-accent-strong);
+  color: var(--theme-surface-panel);
+}
+
+.ui-button--primary:hover:not(:disabled) {
+  background: var(--theme-accent-deep);
+  border-color: var(--theme-accent-deep);
+}
+
+.ui-button--danger {
+  background: var(--theme-danger);
+  border-color: var(--danger-ink);
+  color: var(--theme-surface-panel);
+}
+
+.ui-button--danger:hover:not(:disabled) {
+  background: var(--theme-danger);
+  border-color: var(--danger-ink);
+  filter: brightness(0.92);
+}
+
+.ui-button--ghost {
+  background: transparent;
+  border-color: transparent;
+}
+
+.ui-button--ghost:hover:not(:disabled) {
+  background: var(--theme-surface-hover);
+  border-color: transparent;
+}
+
+.ui-button:disabled,
+button:disabled {
+  background: var(--theme-disabled-bg);
+  border-color: var(--theme-disabled-border);
+  color: var(--theme-disabled-ink);
+  cursor: not-allowed;
+}
+
+.ui-icon-button {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--theme-text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: var(--text-title);
+  height: var(--density-compact);
+  justify-content: center;
+  padding: 0;
+  width: var(--density-compact);
+}
+
+.ui-icon-button:hover {
+  background: var(--theme-surface-hover);
+  color: var(--theme-text-primary);
+}
+
+/* one focus contract for every interactive element in the product */
+:is(a, button, input, select, textarea, [tabindex]):focus-visible {
+  box-shadow: var(--focus-ring);
+  outline: none;
+}
+
+::selection {
+  background: var(--theme-selection);
+}

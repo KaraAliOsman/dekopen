@@ -1,0 +1,26 @@
+/* Global reduced-motion contract: every transition/animation in the app
+   (skeleton shimmer, dialogs, canvas drags, menu reveals) collapses for
+   users who asked the OS to remove it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Checkbox labels sit inline with their box — a bare label {display:grid}
+   stacks the control over its text, which reads as a detached checkbox. */
+label:has(> input[type="checkbox"]),
+label.settings-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+label:has(> input[type="checkbox"]) input[type="checkbox"],
+label.settings-inline input[type="checkbox"] {
+  flex: none;
+}

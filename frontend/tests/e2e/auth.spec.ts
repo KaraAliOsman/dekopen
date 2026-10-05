@@ -1,7 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import * as OTPAuth from "otpauth";
 
-import { formatMoney } from "../../src/features/money";
+import { formatMoney } from "../../src/format";
 import { t } from "../../src/i18n/es-CL";
 import { environment } from "./support/environment";
 import { requireMailpitHealthy, waitForMagicLink } from "./support/mailpit";

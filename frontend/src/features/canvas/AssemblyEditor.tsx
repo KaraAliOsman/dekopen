@@ -12,6 +12,7 @@ import type {
   ProductIssue,
 } from "../../api/generated/models";
 import { t, type TranslationKey } from "../../i18n/es-CL";
+import { Icon } from "../../ui/icons";
 import {
   formatShortcut,
   resolveCommands,
@@ -1136,7 +1137,7 @@ function BayInspector({
                 if (bay.glass_article_sku) toggleFavoriteGlass(bay.glass_article_sku);
               }}
             >
-              ★
+              <Icon name="star" size={13} />
             </button>
           </span>
         </label>

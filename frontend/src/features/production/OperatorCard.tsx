@@ -21,7 +21,7 @@ import {
   stockKindLabel,
 } from "./labels";
 import type { ProductionOrderTrace, ProductionStep } from "../../api/generated/models";
-import { formatDate } from "../money";
+import { formatDate } from "../../format";
 
 type Reservation = {
   kind?: string;

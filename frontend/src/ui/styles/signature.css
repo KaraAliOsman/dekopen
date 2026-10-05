@@ -1,0 +1,130 @@
+/* Partición §10 — las reglas viven en este archivo; ui.css solo ordena
+   la cascada entre parciales. */
+/* ---------- carga con cota ---------- */
+.dim-loader {
+  align-items: center;
+  color: var(--text-secondary);
+  display: flex;
+  gap: var(--space-12);
+}
+.dim-loader__svg {
+  display: block;
+}
+.dim-loader__baseline {
+  stroke: var(--canvas-dim);
+  stroke-width: 0.5;
+}
+.dim-loader__fill {
+  stroke: var(--interactive);
+  stroke-width: 0.5;
+  transition: transform var(--t-state);
+}
+.dim-loader__witness {
+  stroke: var(--canvas-dim);
+  stroke-width: 0.5;
+}
+.dim-loader__arrow {
+  fill: var(--interactive);
+}
+.dim-loader__sweep .dim-loader__fill {
+  animation: dim-loader-sweep 1.2s linear infinite;
+  transform-origin: left center;
+}
+@keyframes dim-loader-sweep {
+  0% {
+    transform: scaleX(0.12);
+  }
+  50% {
+    transform: scaleX(0.7);
+  }
+  100% {
+    transform: scaleX(0.12);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dim-loader__sweep .dim-loader__fill {
+    animation: none;
+    transform: scaleX(0.5);
+  }
+}
+.dim-loader__text {
+  font-size: var(--type-dense);
+}
+
+/* ---------- esqueletos con forma ---------- */
+.ui-skeleton__row {
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  display: block;
+  height: 2.25rem;
+}
+.ui-skeleton__block {
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  display: block;
+}
+.ui-skeleton--table {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-1);
+  display: block;
+  overflow: hidden;
+}
+.ui-skeleton--card .ui-skeleton__block {
+  border-radius: var(--r-1);
+  margin-bottom: var(--space-12);
+}
+
+/* ---------- hoja técnica ---------- */
+.ui-sheet {
+  background: var(--surface-sheet);
+  box-shadow: var(--shadow-sheet);
+  color: var(--text-primary);
+}
+.ui-sheet__head {
+  border-bottom: 1px solid var(--border-subtle);
+  padding: var(--space-12) var(--space-16);
+}
+.ui-sheet__body {
+  padding: var(--space-16);
+}
+
+/* ---------- botón de trazabilidad ---------- */
+.ui-trace {
+  align-items: center;
+  background: none;
+  border: 0;
+  color: var(--interactive);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: var(--type-micro);
+  gap: var(--space-4);
+  padding: 0;
+  text-decoration: none;
+}
+.ui-trace:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.ui-trace__grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  min-width: 14rem;
+}
+.ui-trace__input {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+/* ---------- marca de demo ---------- */
+.ui-demo-badge {
+  background: var(--mark);
+  border-radius: var(--r-1);
+  color: var(--on-mark);
+  font-family: var(--font-mono);
+  font-size: var(--type-micro);
+  letter-spacing: var(--type-label-ls);
+  padding: 1px var(--space-4);
+}

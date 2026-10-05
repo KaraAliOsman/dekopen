@@ -18,6 +18,7 @@ import { AttentionBell } from "./AttentionBell";
 import { OrgSwitcher } from "./OrgSwitcher";
 import { ProjectSwitcher } from "./ProjectSwitcher";
 import { RailIcon } from "./railIcons";
+import { Icon as UiIcon } from "../ui/icons";
 import { ShellCrumbs, crumbsFor, useProjectName } from "./ShellCrumbs";
 import { ShellLeafContext } from "./shellLeaf";
 import { contextItemActive, roleLabel, type ContextNavItem } from "./shellUtils";
@@ -302,7 +303,7 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
                   aria-label={t("theme.toggle")}
                   title={t(theme === "light" ? "theme.toDark" : "theme.toLight")}
                 >
-                  {theme === "light" ? "☾" : "☀"}
+                  <UiIcon name={theme === "light" ? "moon" : "sun"} />
                 </button>
                 <button
                   type="button"
@@ -311,7 +312,7 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
                   aria-label={t("auth.signOut")}
                   title={t("auth.signOut")}
                 >
-                  ⎋
+                  <UiIcon name="logout" />
                 </button>
               </div>
             </div>
@@ -325,7 +326,7 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
                 aria-label={t("shell.menu")}
                 onClick={() => setRailOpen((value) => !value)}
               >
-                ☰
+                <UiIcon name="menu" />
               </button>
               <ShellCrumbs leaf={leaf} />
               <div className="app-topbar__actions">

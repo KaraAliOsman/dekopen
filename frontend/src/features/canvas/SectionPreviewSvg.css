@@ -39,7 +39,7 @@
 }
 
 .section-preview figcaption {
-  font-size: 0.72rem;
+  font-size: var(--type-dense);
   color: var(--ink-3, #6b6b6b);
 }
 

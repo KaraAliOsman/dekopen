@@ -914,6 +914,7 @@ export function AgentBody({
       ) : null}
       {!terminal ? (
         <form
+          noValidate
           className="ask-dock__form"
           onSubmit={(event) => {
             event.preventDefault();

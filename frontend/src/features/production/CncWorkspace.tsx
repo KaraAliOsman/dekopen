@@ -363,6 +363,7 @@ export function CncWorkspace() {
                 )}
                 {machineForm ? (
                   <form
+                    noValidate
                     className="cnc-form"
                     onSubmit={(event) => {
                       event.preventDefault();
@@ -612,6 +613,7 @@ export function CncWorkspace() {
                 )}
                 {toolForm ? (
                   <form
+                    noValidate
                     className="cnc-form"
                     onSubmit={(event) => {
                       event.preventDefault();

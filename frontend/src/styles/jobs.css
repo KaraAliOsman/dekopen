@@ -1,0 +1,61 @@
+/* Jobs workspace — background work as a legible queue. */
+.jobs-filter {
+  min-width: 10rem;
+}
+
+/* The jobs page shares .dashboard's two-lane grid — the queue itself spans
+ * both lanes; a narrow job list would leave most of the page empty. */
+.jobs-list {
+  grid-column: 1 / -1;
+}
+
+.jobs-list {
+  display: grid;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.job-row {
+  align-items: center;
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-2);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  padding: 0.625rem 0.875rem;
+}
+
+.job-row-main {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  gap: 0.625rem;
+  min-width: 12rem;
+}
+
+.job-row-meta {
+  color: var(--theme-text-secondary);
+  display: flex;
+  font-size: 0.75rem;
+  gap: 0.875rem;
+}
+
+.job-row-meta time {
+  font-variant-numeric: tabular-nums;
+}
+
+.job-row-error {
+  color: var(--danger-ink);
+  flex-basis: 100%;
+  font-size: 0.8125rem;
+  margin: 0.125rem 0 0;
+}
+
+.job-row-code {
+  color: var(--theme-text-muted, #66707f);
+  font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
+  font-size: var(--type-micro);
+}

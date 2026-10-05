@@ -5,7 +5,7 @@
   min-height: 100vh;
   display: grid;
   place-items: start center;
-  padding: clamp(1rem, 5vw, 4rem) var(--space-4);
+  padding: clamp(1rem, 5vw, 4rem) var(--space-16);
   background: var(--theme-bg-canvas);
   color: var(--theme-text-primary);
 }
@@ -16,9 +16,9 @@
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-pop);
-  padding: var(--space-6);
+  padding: var(--space-32);
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-16);
 }
 
 .portal-card h1 {
@@ -40,12 +40,12 @@
   margin: 0;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-  gap: var(--space-3) var(--space-4);
+  gap: var(--space-12) var(--space-16);
 }
 
 .portal-facts > div {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-4);
 }
 
 .portal-facts dt {
@@ -68,9 +68,9 @@
 .portal-doc {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-8);
   justify-self: start;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-8) var(--space-12);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-md);
   color: var(--theme-accent-strong);
@@ -87,8 +87,8 @@
   display: inline-flex;
   align-items: center;
   justify-self: start;
-  margin-top: var(--space-3);
-  padding: var(--space-2) var(--space-4);
+  margin-top: var(--space-12);
+  padding: var(--space-8) var(--space-16);
   border-radius: var(--radius-md);
   background: var(--theme-accent-strong);
   color: var(--theme-surface-panel);
@@ -103,19 +103,19 @@
 
 .portal-decision__error {
   margin: 0;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-8) var(--space-12);
   border-radius: var(--radius-md);
   background: var(--theme-danger-soft);
-  color: var(--theme-danger);
+  color: var(--danger-ink);
   font-size: var(--text-s);
 }
 
 .portal-decided {
   margin: 0;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-12) var(--space-16);
   border-radius: var(--radius-md);
   background: var(--theme-accent-soft);
-  color: var(--theme-accent-ink);
+  color: var(--info-ink);
   font-weight: 500;
 }
 
@@ -153,9 +153,9 @@
 
 .portal-decision {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-12);
   border-top: 1px solid var(--theme-border-subtle);
-  padding-top: var(--space-4);
+  padding-top: var(--space-16);
 }
 
 .portal-decision label {
@@ -165,7 +165,7 @@
 }
 
 .portal-decision input {
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-8) var(--space-12);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-md);
   background: var(--theme-surface-panel);
@@ -189,15 +189,15 @@
 .portal-proposal {
   width: min(62rem, 100%);
   display: grid;
-  gap: var(--space-5);
+  gap: var(--space-24);
 }
 
 .portal-proposal__head {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: var(--space-4);
-  padding-bottom: var(--space-4);
+  gap: var(--space-16);
+  padding-bottom: var(--space-16);
   border-bottom: 2px solid var(--theme-accent);
 }
 
@@ -209,7 +209,7 @@
 }
 
 .portal-proposal__taxid {
-  margin: var(--space-1) 0 0;
+  margin: var(--space-4) 0 0;
   font-size: var(--text-xs);
   color: var(--theme-text-muted);
 }
@@ -222,15 +222,15 @@
 }
 
 .portal-proposal__notes {
-  margin: var(--space-5) 0;
-  padding: var(--space-4);
+  margin: var(--space-24) 0;
+  padding: var(--space-16);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-lg);
   background: var(--theme-surface-panel);
 }
 
 .portal-proposal__notes h2 {
-  margin: 0 0 var(--space-2);
+  margin: 0 0 var(--space-8);
   font-size: var(--text-m);
 }
 
@@ -252,7 +252,7 @@
 }
 
 .portal-proposal__ref {
-  margin: var(--space-1) 0 0;
+  margin: var(--space-4) 0 0;
   font-size: var(--text-s);
   color: var(--theme-text-secondary);
 }
@@ -261,14 +261,14 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  gap: var(--space-4);
+  gap: var(--space-16);
   flex-wrap: wrap;
 }
 
 .portal-totals {
   margin: 0;
   display: flex;
-  gap: var(--space-5);
+  gap: var(--space-24);
   text-align: right;
 }
 
@@ -291,7 +291,7 @@
 }
 
 .portal-proposal__positions h2 {
-  margin: 0 0 var(--space-3);
+  margin: 0 0 var(--space-12);
   font-size: var(--text-s);
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -301,14 +301,14 @@
 .portal-positions {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
-  gap: var(--space-3);
+  gap: var(--space-12);
 }
 
 .portal-position {
   display: grid;
   grid-template-columns: minmax(0, 7.5rem) 1fr;
-  gap: var(--space-3);
-  padding: var(--space-3);
+  gap: var(--space-12);
+  padding: var(--space-12);
   background: var(--theme-surface-panel);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-lg);
@@ -341,7 +341,7 @@
   border: 0;
   background: transparent;
   padding: 2px 7px;
-  font-size: 10px;
+  font-size: var(--type-micro);
   font-weight: 600;
   color: var(--theme-text-muted);
   cursor: pointer;
@@ -355,9 +355,9 @@
 .portal-position__count {
   margin-left: 6px;
   padding: 0 6px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--theme-accent-soft);
-  color: var(--theme-accent-ink);
+  color: var(--info-ink);
   font-size: var(--text-xs);
   font-weight: 600;
 }
@@ -383,10 +383,10 @@
 }
 
 .portal-position__facts {
-  margin: var(--space-2) 0;
+  margin: var(--space-8) 0;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
-  gap: var(--space-2) var(--space-4);
+  gap: var(--space-8) var(--space-16);
 }
 
 .portal-position__facts dt {
@@ -403,7 +403,7 @@
   margin: 0;
   display: flex;
   justify-content: space-between;
-  gap: var(--space-2);
+  gap: var(--space-8);
   font-size: var(--text-s);
 }
 
@@ -419,16 +419,16 @@
 .portal-proposal__commercial {
   display: flex;
   justify-content: space-between;
-  gap: var(--space-4);
+  gap: var(--space-16);
   flex-wrap: wrap;
-  padding: var(--space-4);
+  padding: var(--space-16);
   background: var(--theme-surface-panel);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-lg);
 }
 
 .portal-terms h3 {
-  margin: 0 0 var(--space-1);
+  margin: 0 0 var(--space-4);
   font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -442,7 +442,7 @@
 .portal-payment {
   margin: 0;
   display: flex;
-  gap: var(--space-5);
+  gap: var(--space-24);
   text-align: right;
 }
 
@@ -460,7 +460,7 @@
 
 .portal-payment__state {
   display: inline-block;
-  padding: 0 var(--space-2);
+  padding: 0 var(--space-8);
   border-radius: var(--radius-md);
   font-weight: 600;
   font-size: var(--text-s);
@@ -473,16 +473,16 @@
 
 .portal-payment__state--partial {
   background: var(--theme-warning-soft);
-  color: var(--theme-warning);
+  color: var(--warn-ink);
 }
 
 .portal-payment__state--paid {
   background: var(--theme-accent-soft);
-  color: var(--theme-accent-ink);
+  color: var(--info-ink);
 }
 
 .portal-decision textarea {
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-8) var(--space-12);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-md);
   background: var(--theme-surface-panel);
@@ -498,8 +498,8 @@
 }
 
 .portal-proposal__brand {
-  margin-top: var(--space-4);
-  padding-top: var(--space-3);
+  margin-top: var(--space-16);
+  padding-top: var(--space-12);
   border-top: 1px solid var(--theme-border-subtle);
   font-size: var(--text-xs);
   color: var(--theme-text-muted);
@@ -511,7 +511,7 @@
   background: var(--theme-surface-panel);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-lg);
-  padding: var(--space-4);
+  padding: var(--space-16);
 }
 
 /* hero — the customer's own flagship unit rendered large under the masthead */
@@ -519,8 +519,8 @@
   margin: 0;
   display: grid;
   justify-items: center;
-  gap: var(--space-2);
-  padding: var(--space-4);
+  gap: var(--space-8);
+  padding: var(--space-16);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-lg);
   background: var(--theme-surface-panel);
@@ -547,7 +547,7 @@
 }
 
 .portal-decision__recap {
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-12) var(--space-16);
   border: 1px solid var(--theme-border-subtle);
   border-left: 3px solid var(--theme-accent);
   border-radius: var(--radius-md);
@@ -558,7 +558,7 @@
   margin: 0;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-  gap: var(--space-2) var(--space-4);
+  gap: var(--space-8) var(--space-16);
 }
 
 .portal-decision__recap dt {
@@ -573,7 +573,7 @@
 }
 
 .portal-decision__hint {
-  margin: var(--space-2) 0 0;
+  margin: var(--space-8) 0 0;
   font-size: var(--text-s);
   color: var(--theme-text-secondary);
 }
@@ -584,22 +584,22 @@
 
 .portal-decided__state {
   font-weight: 600;
-  margin-bottom: var(--space-1) !important;
+  margin-bottom: var(--space-4) !important;
 }
 
 /* Decision progress — Propuesta → Decisión → Producción */
 .portal-steps {
   display: flex;
-  gap: var(--space-2);
+  gap: var(--space-8);
   list-style: none;
-  margin: var(--space-4) 0;
+  margin: var(--space-16) 0;
   padding: 0;
   counter-reset: portal-step;
 }
 .portal-step {
   flex: 1;
   position: relative;
-  padding: var(--space-2) var(--space-3) var(--space-2) calc(var(--space-4) + 1.4rem);
+  padding: var(--space-8) var(--space-12) var(--space-8) calc(var(--space-16) + 1.4rem);
   border: 1px solid var(--theme-border);
   border-radius: var(--radius-m);
   font-size: var(--text-s);
@@ -609,7 +609,7 @@
 .portal-step::before {
   content: counter(portal-step);
   position: absolute;
-  left: var(--space-2);
+  left: var(--space-8);
   top: 50%;
   transform: translateY(-50%);
   width: 1.4rem;
@@ -656,7 +656,7 @@
 @media (max-width: 640px) {
   .portal-proposal__head {
     flex-direction: column;
-    gap: var(--space-3);
+    gap: var(--space-12);
   }
   .portal-proposal__refs {
     text-align: left;
@@ -664,7 +664,7 @@
   .portal-totals,
   .portal-payment {
     flex-wrap: wrap;
-    gap: var(--space-4);
+    gap: var(--space-16);
     text-align: left;
   }
   .portal-position {
@@ -677,7 +677,7 @@
     flex-direction: column;
   }
   .portal-card {
-    padding: var(--space-4);
+    padding: var(--space-16);
   }
   .portal-proposal__hero svg,
   .portal-proposal__hero img,

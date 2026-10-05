@@ -12,6 +12,7 @@ import type {
   WorkCenterRequestRequest,
 } from "../../api/generated/models";
 import { t } from "../../i18n/es-CL";
+import { Icon } from "../../ui/icons";
 import { fmtMm } from "../../format";
 import { centerKindLabel, opKindLabel, stationCodeLabel } from "../production/labels";
 import { SectionPreviewSvg } from "../canvas/SectionPreviewSvg";
@@ -927,7 +928,7 @@ export function SystemWorkspaceView({
                     ["packaging", process_profile.packaging],
                   ].map(([key, enabled]) => (
                     <li key={String(key)} className={enabled ? "" : "ws-off"}>
-                      {wst(String(key))}: {enabled ? "✓" : "—"}
+                      {wst(String(key))}: {enabled ? <Icon name="check" size={11} /> : "—"}
                     </li>
                   ))}
                 </ul>
@@ -988,6 +989,7 @@ export function SystemWorkspaceView({
             {canEdit &&
               (centerForm ? (
                 <form
+                  noValidate
                   className="ws-center-form"
                   onSubmit={(event) => {
                     event.preventDefault();

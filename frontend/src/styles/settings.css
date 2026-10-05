@@ -1,0 +1,181 @@
+.settings-group {
+  margin-top: 1.25rem;
+}
+
+.settings-group__title {
+  border-bottom: 1px solid var(--theme-border-subtle);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  margin: 0 0 0.75rem;
+  padding-bottom: 0.5rem;
+}
+
+.settings-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+}
+
+.settings-card {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-2);
+  padding: 0.875rem 1rem;
+}
+
+.settings-card h2,
+.settings-card h3 {
+  font-size: var(--type-micro);
+  margin: 0 0 0.625rem;
+}
+
+.settings-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.settings-plain {
+  list-style: none;
+  padding: 0;
+}
+
+.settings-row {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.settings-row dt {
+  color: var(--theme-text-secondary);
+  margin: 0;
+}
+
+.settings-row dd {
+  margin: 0;
+  text-align: right;
+}
+
+.settings-role {
+  color: var(--theme-text-secondary);
+}
+
+.settings-mono {
+  font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
+  font-size: 0.75rem;
+}
+
+.settings-branding-preview {
+  align-items: center;
+  border: 1px dashed var(--theme-border-subtle);
+  border-radius: var(--r-1);
+  display: flex;
+  justify-content: center;
+  margin: 0 0 0.75rem;
+  min-height: 4rem;
+  padding: 0.5rem;
+}
+
+.settings-branding-logo {
+  max-height: 3.5rem;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+/* Shared ledger/credential forms — these classes are used by settings,
+   projects and cobranza surfaces, so they must not live in feature CSS
+   that only loads on one route. */
+.payments-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+.payments-form label {
+  display: grid;
+  gap: 4px;
+  font-size: var(--text-s, 12px);
+  color: var(--ink-muted);
+}
+.payments-form-wide {
+  grid-column: 1 / -1;
+}
+.payments-form-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+}
+.payments-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  font-size: var(--text-s, 13px);
+}
+.payments-table th,
+.payments-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border, #e0deda);
+}
+.payments-table .num {
+  text-align: right;
+  font-family: var(--font-mono, monospace);
+}
+.payments-voided td {
+  opacity: 0.55;
+}
+
+/* File pickers: keep the native input visually hidden and let the
+   translated button + filename text carry the interaction. */
+.file-input-hidden {
+  display: none;
+}
+.file-field {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.file-field__name {
+  color: var(--theme-text-secondary);
+  font-size: var(--text-s, 12px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-theme {
+  border: 1px solid var(--theme-border-strong);
+  border-radius: var(--r-1);
+  display: inline-flex;
+  overflow: hidden;
+}
+
+.settings-theme-option {
+  background: transparent;
+  border: 0;
+  color: var(--theme-text-secondary);
+  padding: 0.375rem 0.875rem;
+}
+
+.settings-theme-option[data-active="true"] {
+  background: var(--theme-accent);
+  color: var(--theme-surface-panel);
+}
+
+.settings-hint {
+  color: var(--theme-text-secondary);
+  margin: 0 0 0.625rem;
+}
+
+.settings-links {
+  display: flex;
+  gap: 1.25rem;
+}
+
+.settings-links a {
+  color: var(--theme-accent);
+  font-weight: 600;
+  text-decoration: none;
+}

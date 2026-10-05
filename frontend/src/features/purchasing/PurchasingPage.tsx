@@ -12,7 +12,7 @@ import { DeniedState } from "../../ui";
 import { fmtMm } from "../../format";
 import { t } from "../../i18n/es-CL";
 import { formatDateTime, formatRevision } from "../../format";
-import { formatDate } from "../money";
+import { formatDate } from "../../format";
 import "./purchasing.css";
 
 type OrderType =
@@ -952,6 +952,7 @@ function RequirementSection({
           />
           {pending.length > 0 && (
             <form
+              noValidate
               className="purchasing-confirm"
               onSubmit={(event) => {
                 event.preventDefault();
@@ -1144,6 +1145,7 @@ function EligibilityForm({
       ))}
       {requirements.length > 0 && (
         <form
+          noValidate
           onSubmit={(event: FormEvent<HTMLFormElement>) => {
             event.preventDefault();
             const data = new FormData(event.currentTarget);
@@ -1340,6 +1342,7 @@ function OrderCard({
       )}
       {order.status === "DRAFT" && canWrite && (
         <form
+          noValidate
           onSubmit={(event) => {
             event.preventDefault();
             void action(
@@ -1740,7 +1743,7 @@ function ReceivingPanel({
       {open && !state && <p>{t("purchasing.receivingLoading")}</p>}
       {formError ? <p role="alert">{formError}</p> : null}
       {open && state && (
-        <form onSubmit={submit}>
+        <form noValidate onSubmit={submit}>
           <div className="purchasing-receiving-scroll">
             <table>
               <thead>

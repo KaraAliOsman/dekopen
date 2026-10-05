@@ -1,0 +1,65 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--type-body);
+  line-height: var(--type-body-lh);
+}
+
+button,
+input {
+  color: inherit;
+  font: inherit;
+}
+
+button,
+input,
+a {
+  border-radius: var(--r-1);
+}
+
+a {
+  color: var(--interactive);
+}
+
+a:hover {
+  color: var(--interactive-hover);
+}
+
+button {
+  border: 1px solid var(--theme-border-subtle);
+  background: var(--theme-surface-card);
+  cursor: pointer;
+  padding: 0.5rem 0.75rem;
+}
+
+button:hover,
+a:hover {
+  background: var(--theme-surface-hover);
+}
+
+button:focus-visible,
+input:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 2px;
+}
+
+/* The light-theme accent reads dim on dark surfaces — use the stronger
+ * accent token so keyboard focus stays visible in the dark theme. */
+:root[data-theme="dark"] button:focus-visible,
+:root[data-theme="dark"] input:focus-visible,
+:root[data-theme="dark"] a:focus-visible {
+  outline-color: var(--theme-accent-strong);
+}

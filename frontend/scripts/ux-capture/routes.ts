@@ -145,4 +145,8 @@ export const ROUTES: CaptureRoute[] = [
   // ---- multi-org selector -------------------------------------------------
   { name: "select-organization", path: "/select-organization", role: "multi" },
   { name: "dashboard-multi", path: "/dashboard", role: "multi" },
+
+  // ---- muestrario del sistema (DEV-only) ----------------------------------
+  { name: "dev-ui", path: "/dev/ui", role: "public", waitFor: ".dev-ui" },
+  { name: "dev-ui-mal", path: "/dev/ui/mal", role: "public", waitFor: ".mal" },
 ];

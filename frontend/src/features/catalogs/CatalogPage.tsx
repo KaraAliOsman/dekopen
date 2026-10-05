@@ -785,7 +785,7 @@ function CatalogEditor({
                   ? "numeric"
                   : undefined
             }
-            pattern={
+            data-pattern={
               field.kind === "decimal"
                 ? `-?[0-9]+([.,][0-9]{1,${field.places ?? 2}})?`
                 : field.kind === "integer"
@@ -808,7 +808,7 @@ function CatalogEditor({
   }
 
   return (
-    <form className="catalog-editor" onSubmit={submit} aria-busy={busy} noValidate>
+    <form noValidate className="catalog-editor" onSubmit={submit} aria-busy={busy}>
       <UnsavedChangesGuard dirty={dirty} message={ct("discard")} />
       <header className="catalog-toolbar">
         <h3 ref={firstControl} tabIndex={-1}>
@@ -899,7 +899,7 @@ function CatalogEditor({
                       type="text"
                       required
                       inputMode="decimal"
-                      pattern="-?[0-9]+([.,][0-9]{1,2})?"
+                      data-pattern="-?[0-9]+([.,][0-9]{1,2})?"
                       value={sectionDraft.depth_mm}
                       onChange={(event) =>
                         changeSection((current) => ({
@@ -994,7 +994,7 @@ function CatalogEditor({
                                 type="text"
                                 required
                                 inputMode="decimal"
-                                pattern="-?[0-9]+([.,][0-9]{1,2})?"
+                                data-pattern="-?[0-9]+([.,][0-9]{1,2})?"
                                 value={vertex[key]}
                                 onChange={(event) => {
                                   const value = event.target.value;
@@ -1080,7 +1080,7 @@ function CatalogEditor({
                               aria-label={`${ct("field.y_mm")} · ${ct("section.axis")} ${index + 1}`}
                               type="text"
                               inputMode="decimal"
-                              pattern="-?[0-9]+([.,][0-9]{1,2})?"
+                              data-pattern="-?[0-9]+([.,][0-9]{1,2})?"
                               value={axis.y_mm}
                               onChange={(event) =>
                                 changeSection((current) => ({
@@ -1162,7 +1162,9 @@ function CatalogEditor({
                             required
                             value={component[key]}
                             inputMode={key === "qty" ? "decimal" : undefined}
-                            pattern={key === "qty" ? "(?=.*[1-9])[0-9]+([.,][0-9]+)?" : ".*\\S.*"}
+                            data-pattern={
+                              key === "qty" ? "(?=.*[1-9])[0-9]+([.,][0-9]+)?" : ".*\\S.*"
+                            }
                             onChange={(event) => {
                               const value = event.target.value;
                               setDirty(true);

@@ -138,7 +138,7 @@ export function MfaPage(): JSX.Element {
                 {t("auth.mfaManual")} <code data-testid="totp-secret">{factor.secret}</code>
               </p>
             ) : null}
-            <form className="auth-form" onSubmit={(event) => void verify(event)}>
+            <form noValidate className="auth-form" onSubmit={(event) => void verify(event)}>
               <label htmlFor="totp-code">{t("auth.mfaCode")}</label>
               <input
                 id="totp-code"

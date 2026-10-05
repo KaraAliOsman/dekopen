@@ -1,0 +1,437 @@
+/* Partición §10 — las reglas viven en este archivo; ui.css solo ordena
+   la cascada entre parciales. */
+.canvas-editor {
+  display: grid;
+  gap: 0.75rem;
+  min-height: 100%;
+}
+
+.canvas-toolbar {
+  align-items: center;
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+}
+
+.canvas-toolbar button.is-active {
+  border-color: var(--theme-accent);
+  color: var(--theme-accent);
+}
+
+.canvas-layout {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  min-height: 0;
+}
+
+.cad-viewport,
+.canvas-technical-results {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+}
+
+.cad-viewport {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: clamp(30rem, calc(100vh - 15rem), 52rem);
+}
+
+.cad-viewport__heading {
+  align-items: center;
+  border-bottom: 1px solid var(--theme-border-subtle);
+  display: flex;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+}
+
+.cad-viewport__heading h1,
+.canvas-technical-results h2 {
+  font-size: 1rem;
+  margin: 0.125rem 0 0;
+}
+
+.cad-viewport__heading p {
+  margin: 0;
+}
+
+.canvas-system {
+  color: var(--theme-text-secondary);
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+}
+
+.cad-svg {
+  background: var(--theme-bg-canvas);
+  height: 100%;
+  min-height: 34rem;
+  touch-action: none;
+  width: 100%;
+}
+
+.frame-outline,
+.glass-pane,
+.resize-preview {
+  vector-effect: non-scaling-stroke;
+}
+
+.frame-outline {
+  fill: var(--theme-surface-card);
+  stroke: var(--theme-text-primary);
+  stroke-width: 5;
+}
+
+.glass-pane {
+  fill: var(--theme-glass-tint);
+  stroke: var(--theme-accent);
+  stroke-width: 3;
+}
+
+.opening-label,
+.glass-dimension {
+  fill: var(--theme-text-primary);
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.glass-dimension {
+  fill: var(--theme-text-secondary);
+  font-size: 22px;
+}
+
+.dimension-line,
+.dimension-tick {
+  stroke: var(--theme-text-secondary);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.dimension-editor {
+  overflow: visible;
+}
+
+.dimension-editor__label {
+  align-items: center;
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  color: var(--theme-text-primary);
+  display: flex;
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  gap: 0.25rem;
+  height: 36px;
+  justify-content: center;
+  padding: 0.25rem;
+}
+
+.dimension-editor input {
+  background: var(--theme-bg-canvas);
+  border: 1px solid transparent;
+  font-variant-numeric: tabular-nums;
+  min-width: 0;
+  padding: 0.25rem;
+  text-align: right;
+  width: 7rem;
+}
+
+.resize-handle {
+  cursor: ew-resize;
+  fill: var(--theme-warning);
+  stroke: var(--theme-surface-panel);
+  stroke-width: 5;
+  vector-effect: non-scaling-stroke;
+}
+
+.resize-handle[data-testid="resize-height"] {
+  cursor: ns-resize;
+}
+
+.resize-handle:focus-visible {
+  outline: none;
+  stroke: var(--theme-accent);
+  stroke-width: 8;
+}
+
+.resize-preview {
+  fill: none;
+  pointer-events: none;
+  stroke: var(--theme-warning);
+  stroke-dasharray: 8 5;
+  stroke-width: 3;
+}
+
+.snap-guide {
+  fill: none;
+  pointer-events: none;
+  stroke: var(--theme-success);
+  stroke-dasharray: 6 4;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.canvas-technical-results {
+  padding: 1rem;
+}
+
+.canvas-technical-results dl {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1.25rem 0 0;
+}
+
+.canvas-technical-results dl div {
+  background: var(--theme-surface-card);
+  border-left: 3px solid var(--theme-accent);
+  padding: 0.75rem;
+}
+
+.canvas-technical-results dt {
+  color: var(--theme-text-secondary);
+  font-size: var(--type-micro);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.canvas-technical-results dd {
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-variant-numeric: tabular-nums;
+  margin: 0.25rem 0 0;
+}
+
+.canvas-error,
+.canvas-progress {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+}
+
+.canvas-progress {
+  color: var(--theme-text-secondary);
+}
+
+.visually-hidden {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+@media (max-width: 72rem) {
+  .canvas-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .cad-viewport {
+    min-height: 32rem;
+  }
+}
+
+.assembly-editor {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.assembly-field {
+  align-items: center;
+  display: flex;
+  gap: 0.35rem;
+}
+
+.assembly-field > span {
+  color: var(--theme-text-secondary);
+  font-size: 0.85rem;
+}
+
+.assembly-field input {
+  background: var(--theme-bg-canvas);
+  border: 1px solid var(--theme-border-subtle);
+  color: var(--theme-text-primary);
+  font-variant-numeric: tabular-nums;
+  padding: 0.25rem 0.4rem;
+  text-align: right;
+  width: 5.5rem;
+}
+
+/* Unit rides inside the input's right edge — in the column-stacked
+ * .position-panel layout a loose unit span would wrap under the field. */
+.assembly-input-wrap {
+  align-items: center;
+  display: inline-flex;
+  position: relative;
+}
+
+.assembly-input-wrap input {
+  padding-right: 1.5rem;
+}
+
+.assembly-unit {
+  color: var(--theme-text-muted);
+  font-size: 0.8rem;
+  pointer-events: none;
+  position: absolute;
+  right: 0.45rem;
+}
+
+.assembly-field--inline {
+  gap: 0.5rem;
+}
+
+.assembly-field--inline input[type="checkbox"] {
+  width: auto;
+}
+
+.inspector-note {
+  color: var(--theme-text-muted);
+  font-size: 0.8rem;
+  margin: 0 0 0.4rem;
+}
+
+.inspector-subhead {
+  color: var(--theme-text-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin: 0.6rem 0 0.3rem;
+  text-transform: uppercase;
+}
+
+.frameless-rows {
+  display: grid;
+  gap: 0.4rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.frameless-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.frameless-row select {
+  background: var(--theme-bg-canvas);
+  border: 1px solid var(--theme-border-subtle);
+  color: var(--theme-text-primary);
+  font-size: 0.8rem;
+  padding: 0.2rem 0.3rem;
+}
+
+.frameless-row input[type="text"] {
+  background: var(--theme-bg-canvas);
+  border: 1px solid var(--theme-border-subtle);
+  color: var(--theme-text-primary);
+  font-size: 0.8rem;
+  min-width: 0;
+  padding: 0.25rem 0.4rem;
+  width: 7rem;
+}
+
+.frameless-row input[type="number"] {
+  background: var(--theme-bg-canvas);
+  border: 1px solid var(--theme-border-subtle);
+  color: var(--theme-text-primary);
+  font-variant-numeric: tabular-nums;
+  padding: 0.25rem 0.4rem;
+  text-align: right;
+  width: 3.5rem;
+}
+
+.frameless-edges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.9rem;
+}
+
+.assembly-canvas {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  padding: 0.5rem 0.75rem;
+}
+
+.bow-plan-svg {
+  background: var(--theme-bg-canvas);
+  display: block;
+  min-height: 16rem;
+  width: 100%;
+}
+
+.plan-module {
+  cursor: pointer;
+  fill: var(--theme-glass-tint);
+  stroke: var(--theme-text-primary);
+  stroke-width: 6;
+  vector-effect: non-scaling-stroke;
+}
+
+.plan-module.is-selected {
+  fill: var(--theme-surface-card);
+  stroke: var(--theme-accent);
+}
+
+.plan-coupling {
+  fill: var(--theme-surface-card);
+  stroke: var(--theme-text-secondary);
+  stroke-width: 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.plan-front-chain {
+  stroke: var(--theme-accent);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.plan-dimension {
+  fill: var(--theme-text-secondary);
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.plan-dimension--total {
+  fill: var(--theme-text-primary);
+}
+
+.assembly-status {
+  border: 1px solid var(--theme-border-subtle);
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+  padding: 0.4rem 0.6rem;
+}
+
+.assembly-status--valid {
+  border-color: var(--ok-ink);
+  color: var(--ok-ink);
+}
+
+.assembly-status--manufacturing_incomplete {
+  border-color: var(--warn-ink);
+  color: var(--warn-ink);
+}
+
+.assembly-status--invalid {
+  border-color: var(--danger-ink);
+  color: var(--danger-ink);
+}
+
+.assembly-status--idle {
+  color: var(--theme-text-secondary);
+}
+
+.assembly-issues {
+  color: var(--theme-text-secondary);
+  font-size: 0.8rem;
+  margin: 0.35rem 0 0;
+  padding-left: 1.2rem;
+}

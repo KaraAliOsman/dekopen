@@ -1,0 +1,189 @@
+/* ——— Responsive ———
+ * Tablet (<1024px): the rail becomes an overlay drawer toggled from the
+ * topbar so the workspace keeps full width. Mobile (<640px): dense chrome —
+ * review/approve/status flows stay usable; the CAD editor is not a phone
+ * surface by design. */
+.rail-toggle {
+  display: none;
+}
+
+.rail-scrim {
+  background: transparent;
+  border: none;
+  cursor: default;
+  display: none;
+  inset: 0;
+  padding: 0;
+  position: fixed;
+  z-index: 40;
+}
+
+@media (max-width: 1024px) {
+  .rail-toggle {
+    align-items: center;
+    border: none;
+    border-radius: var(--radius-md);
+    display: inline-flex;
+    font-size: 1rem;
+    height: 32px;
+    justify-content: center;
+    padding: 0;
+    width: 32px;
+  }
+
+  .rail-scrim {
+    display: block;
+    visibility: hidden;
+  }
+
+  .app-shell.rail-open .rail-scrim {
+    background: rgba(15, 15, 14, 0.45);
+    visibility: visible;
+  }
+
+  .app-rail {
+    box-shadow: none;
+    left: 0;
+    position: fixed;
+    top: 0;
+    transform: translateX(-105%);
+    transition:
+      transform 0.18s ease,
+      visibility 0.18s ease;
+    visibility: hidden;
+    z-index: 50;
+  }
+
+  .app-shell.rail-open .app-rail {
+    box-shadow: 0 0 2rem rgba(15, 15, 14, 0.35);
+    transform: translateX(0);
+    visibility: visible;
+  }
+}
+
+/* Studio compact rail: on the position editor the domain rail contracts to
+ * a 64px icon strip so the canvas owns the viewport. Labels are removed
+ * visually but the links keep aria-label + title, so no affordance is lost;
+ * the desktop drawer behavior below still applies under 1024px. */
+@media (min-width: 1025px) {
+  .app-shell[data-studio] .app-rail {
+    align-items: stretch;
+    padding-inline: 0;
+    width: 4rem;
+  }
+
+  .app-shell[data-studio] .app-rail__brand {
+    padding-inline: 0;
+    text-align: center;
+  }
+
+  /* Compact mark: the wordmark collapses to its square glyph. */
+  .app-shell[data-studio] .app-rail__brand .brand {
+    font-size: 0;
+    justify-content: center;
+  }
+
+  .app-shell[data-studio] .org-switcher,
+  .app-shell[data-studio] .rail-group__title,
+  .app-shell[data-studio] .app-rail__identity,
+  .app-shell[data-studio] .rail-item > span {
+    display: none;
+  }
+
+  .app-shell[data-studio] .rail-item {
+    border-left-width: 2px;
+    border-radius: var(--radius-md);
+    justify-content: center;
+    margin-inline: auto;
+    padding-inline: 0;
+    width: 2.5rem;
+  }
+
+  .app-shell[data-studio] .rail-item__icon {
+    height: 18px;
+    width: 18px;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-topbar {
+    gap: 0.5rem;
+  }
+
+  /* Phone: the header stack puts actions on their own line — no clipped
+     primary action, no page-level horizontal scroll. */
+  .ui-page-header__row {
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .ui-page-header__actions {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .attention-item a {
+    flex-wrap: wrap;
+  }
+
+  .attention-item .attention-cta {
+    margin-left: 0;
+  }
+
+  .topbar-search span {
+    display: none;
+  }
+
+  .workspace {
+    padding: var(--space-12) var(--space-8);
+  }
+
+  .dashboard-cards {
+    grid-template-columns: 1fr;
+  }
+
+  /* Phone: headline KPIs step down a tier so big amounts fit the card —
+     amounts never break mid-figure. */
+  .metric-card strong {
+    font-size: var(--text-title);
+  }
+
+  /* Phone: project rows reflow to two compact lines — name+status, then
+     client+code — instead of four columns squeezed into 390px. */
+  .dashboard-row {
+    gap: 0.125rem 0.5rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding-block: 0.625rem;
+  }
+
+  .dashboard-row-name {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .dashboard-row .status-chip {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  .dashboard-row-client {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .dashboard-row-code {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
+  }
+
+  .dashboard-activity li {
+    flex-wrap: wrap;
+    row-gap: 0.125rem;
+  }
+
+  .onboarding {
+    padding: var(--space-16) var(--space-8);
+  }
+}

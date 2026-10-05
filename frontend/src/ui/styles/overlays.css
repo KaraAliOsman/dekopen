@@ -1,0 +1,70 @@
+/* Partición §10 — las reglas viven en este archivo; ui.css solo ordena
+   la cascada entre parciales. */
+/* ---------- dialog / overlay ---------- */
+
+.ui-overlay {
+  align-items: center;
+  background: rgb(20 25 27 / 0.42);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  position: fixed;
+  z-index: var(--z-modal);
+}
+
+:root[data-theme="dark"] .ui-overlay {
+  background: rgb(0 0 0 / 0.55);
+}
+
+.ui-dialog {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--elevation-3);
+  display: flex;
+  flex-direction: column;
+  max-height: 85vh;
+  max-width: calc(100vw - 2rem);
+  outline: none;
+  width: 34rem;
+}
+
+.ui-dialog--s {
+  width: 24rem;
+}
+.ui-dialog--l {
+  width: 48rem;
+}
+
+.ui-dialog__header {
+  align-items: center;
+  border-bottom: 1px solid var(--theme-border-subtle);
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-12) var(--space-16);
+}
+
+.ui-dialog__title {
+  font-size: var(--text-title);
+  font-weight: 600;
+  margin: 0;
+}
+
+.ui-dialog__body {
+  overflow-y: auto;
+  padding: var(--space-16);
+}
+
+.ui-dialog__text {
+  color: var(--theme-text-secondary);
+  font-size: var(--text-body);
+  margin: 0;
+}
+
+.ui-dialog__footer {
+  border-top: 1px solid var(--theme-border-subtle);
+  display: flex;
+  gap: var(--space-8);
+  justify-content: flex-end;
+  padding: var(--space-12) var(--space-16);
+}

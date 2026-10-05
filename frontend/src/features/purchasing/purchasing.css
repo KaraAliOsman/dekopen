@@ -11,7 +11,7 @@
   color: var(--theme-text-secondary);
 }
 .purchasing-page [role="alert"] {
-  color: var(--theme-danger);
+  color: var(--danger-ink);
 }
 .purchasing-version {
   color: var(--theme-text-secondary);
@@ -27,7 +27,7 @@
   color: var(--theme-text-primary);
   border: 1px solid var(--theme-border-subtle);
   padding: 0.6rem;
-  border-radius: 0.25rem;
+  border-radius: var(--r-2);
   min-width: 0;
 }
 .purchasing-page input[type="checkbox"] {
@@ -44,14 +44,14 @@
 }
 .purchasing-page .purchasing-cancel {
   border: 1px solid var(--theme-danger, #b3261e);
-  color: var(--theme-danger, #b3261e);
+  color: var(--danger-ink);
   background: transparent;
-  border-radius: 0.4rem;
+  border-radius: var(--r-2);
   font-weight: 500;
 }
 .purchasing-blockers {
   border: 1px solid var(--theme-danger);
-  border-radius: 0.5rem;
+  border-radius: var(--r-2);
   padding: 1rem;
   margin: 1rem 0;
 }
@@ -79,7 +79,7 @@
 .purchasing-orders,
 .purchasing-documents {
   border: 1px solid var(--theme-border-subtle);
-  border-radius: 0.5rem;
+  border-radius: var(--r-2);
   padding: 1rem;
   margin: 1rem 0;
   background: var(--theme-surface-panel);
@@ -99,7 +99,7 @@
 .purchasing-badge {
   margin-left: 0.75rem;
   padding: 0.15rem 0.5rem;
-  border-radius: 0.5rem;
+  border-radius: var(--r-2);
   border: 1px solid var(--theme-accent);
   color: var(--theme-accent);
   font-size: 0.8rem;
@@ -137,7 +137,7 @@
 }
 .purchasing-eligibility fieldset {
   border: 1px solid var(--theme-border-subtle);
-  border-radius: 0.25rem;
+  border-radius: var(--r-2);
   display: grid;
   gap: 0.4rem;
 }
@@ -185,11 +185,11 @@
   border-bottom: 1px solid var(--theme-line, #dde2e8);
 }
 .purchasing-coverage-alert {
-  color: var(--theme-danger, #b3261e);
+  color: var(--danger-ink);
   font-weight: 600;
 }
 .purchasing-coverage-short {
-  color: var(--theme-danger, #b3261e);
+  color: var(--danger-ink);
 }
 .purchasing-coverage-unit {
   color: var(--theme-text-secondary, #667085);
@@ -225,7 +225,7 @@
 }
 .inventory-remnant-filter .portal-view-toggle {
   border: 1px solid var(--theme-border-subtle);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   padding: 0.3rem 0.7rem;
 }
 .inventory-remnant-form {
@@ -235,7 +235,7 @@
   align-items: end;
   padding: 0.75rem;
   border: 1px dashed var(--theme-border-subtle);
-  border-radius: 0.4rem;
+  border-radius: var(--r-2);
   margin-bottom: 0.75rem;
 }
 .inventory-remnant-form .purchasing-hint {
@@ -282,7 +282,7 @@
 
 .purchasing-index {
   border: 1px solid var(--theme-border, #e0e0e0);
-  border-radius: 0.75rem;
+  border-radius: var(--r-2);
   padding: 1rem;
   margin: 0.5rem 0 1rem;
   background: var(--theme-surface, #fff);
@@ -301,7 +301,7 @@
 .purchasing-index-filters button {
   border: 1px solid var(--theme-border, #d5d5d5);
   background: var(--theme-surface, #fff);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   padding: 0.2rem 0.7rem;
   font-size: 0.8rem;
 }
@@ -341,8 +341,8 @@
 
 .purchasing-badge--expired {
   background: var(--theme-danger-soft);
-  color: var(--theme-danger);
-  border-color: var(--theme-danger);
+  color: var(--danger-ink);
+  border-color: var(--danger-ink);
 }
 .inventory-label {
   display: flex;
@@ -350,7 +350,7 @@
   gap: 0.9rem;
   padding: 0.6rem 0.9rem;
   border: 2px solid var(--theme-text, #1b1d21);
-  border-radius: 0.35rem;
+  border-radius: var(--r-1);
   background: var(--theme-surface, #fff);
   width: fit-content;
   margin: 0.5rem 0 0.75rem;
@@ -361,7 +361,7 @@
   display: block;
 }
 .inventory-label .inventory-label-id {
-  font-size: 0.72rem;
+  font-size: var(--type-dense);
   letter-spacing: 0.06em;
   color: var(--theme-text-secondary, #667085);
 }
@@ -412,7 +412,7 @@
 }
 .purchasing-glance-cell {
   border: 1px solid var(--theme-border);
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-md, var(--r-2));
   padding: 0.6rem 0.75rem;
   display: flex;
   flex-direction: column;
@@ -428,10 +428,10 @@
   color: var(--theme-text-secondary);
 }
 .purchasing-glance-cell.is-short {
-  border-color: var(--theme-danger, #b3261e);
+  border-color: var(--danger-ink);
 }
 .purchasing-glance-cell.is-short strong {
-  color: var(--theme-danger, #b3261e);
+  color: var(--danger-ink);
 }
 
 .purchasing-directory ul {
@@ -450,7 +450,7 @@
   gap: 0.75rem;
   padding: 0.55rem 0.75rem;
   border: 1px solid var(--theme-border);
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-md, var(--r-2));
   background: var(--theme-surface);
   align-items: center;
   font-size: 0.85rem;
@@ -491,6 +491,6 @@
   }
 }
 .purchasing-order-damaged {
-  color: var(--theme-danger, #b3261e);
+  color: var(--danger-ink);
   font-weight: 600;
 }

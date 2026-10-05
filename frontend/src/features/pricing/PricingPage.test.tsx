@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { apiMutator, ApiError } from "../../api/apiMutator";
 import { t } from "../../i18n/es-CL";
 import { CommercialPricingPage, PricingPage } from "./PricingPage";
-import { formatMoney } from "../money";
+import { formatMoney } from "../../format";
 
 /** Pages under test render router Links (e.g. the demo-design shortcut). */
 const page = (ui: JSX.Element): JSX.Element => <MemoryRouter>{ui}</MemoryRouter>;

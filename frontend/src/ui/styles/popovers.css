@@ -1,0 +1,164 @@
+/* Partición §10 — las reglas viven en este archivo; ui.css solo ordena
+   la cascada entre parciales. */
+/* ---------- superpuestos ---------- */
+.ui-popover {
+  background: var(--surface-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-1);
+  box-shadow: var(--shadow-e2);
+  min-width: 12rem;
+  padding: var(--space-12);
+  position: absolute;
+  z-index: var(--z-popover);
+}
+.ui-menu,
+.ui-context-menu {
+  background: var(--surface-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-1);
+  box-shadow: var(--shadow-e2);
+  list-style: none;
+  margin: 0;
+  min-width: 12rem;
+  padding: var(--space-4) 0;
+  z-index: var(--z-popover);
+}
+.ui-menu__item {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: var(--space-8);
+  justify-content: space-between;
+  padding: var(--space-6) var(--space-12);
+}
+.ui-menu__item.is-active,
+.ui-menu__item:hover {
+  background: var(--surface-selected);
+}
+.ui-menu__item[aria-disabled="true"] {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+.ui-menu__label {
+  flex: 1;
+}
+.ui-menu__key {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--type-micro);
+}
+.ui-context-menu {
+  position: fixed;
+}
+.ui-drawer-scrim {
+  background: var(--scrim);
+  inset: 0;
+  position: fixed;
+  z-index: var(--z-drawer);
+}
+.ui-drawer {
+  background: var(--surface-panel);
+  bottom: 0;
+  box-shadow: var(--shadow-e3);
+  display: flex;
+  flex-direction: column;
+  max-width: 24rem;
+  position: fixed;
+  right: 0;
+  top: 0;
+  width: 100%;
+  z-index: calc(var(--z-drawer) + 1);
+}
+.ui-drawer__head {
+  align-items: center;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  gap: var(--space-8);
+  justify-content: space-between;
+  padding: var(--space-12) var(--space-16);
+}
+.ui-drawer__title {
+  font-size: var(--type-title-m);
+  font-weight: 600;
+  letter-spacing: var(--type-label-ls);
+  margin: 0;
+}
+.ui-drawer__body {
+  flex: 1;
+  overflow: auto;
+  padding: var(--space-16);
+}
+.ui-drawer__foot {
+  border-top: 1px solid var(--border-subtle);
+  padding: var(--space-12) var(--space-16);
+}
+
+/* ---------- paleta de comandos ---------- */
+.ui-palette-scrim {
+  background: var(--scrim);
+  inset: 0;
+  position: fixed;
+  z-index: var(--z-palette);
+}
+.ui-palette {
+  background: var(--surface-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-2);
+  box-shadow: var(--shadow-e3);
+  left: 50%;
+  max-width: 32rem;
+  position: fixed;
+  top: 12vh;
+  transform: translateX(-50%);
+  width: 90%;
+}
+.ui-palette__input {
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--type-body);
+  padding: var(--space-12) var(--space-16);
+  width: 100%;
+}
+.ui-palette__input:focus {
+  outline: none;
+}
+.ui-palette__list {
+  list-style: none;
+  margin: 0;
+  max-height: 22rem;
+  overflow: auto;
+  padding: var(--space-4) 0;
+}
+.ui-palette__item {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-16);
+}
+.ui-palette__item.is-active {
+  background: var(--surface-selected);
+}
+.ui-palette__title {
+  flex: 1;
+}
+.ui-palette__section {
+  color: var(--text-muted);
+  font-size: var(--type-micro);
+}
+.ui-palette__key {
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-1);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--type-micro);
+  padding: 0 var(--space-4);
+}
+.ui-palette__empty {
+  color: var(--text-muted);
+  font-size: var(--type-dense);
+  padding: var(--space-16);
+}

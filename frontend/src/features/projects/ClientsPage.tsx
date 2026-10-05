@@ -18,7 +18,7 @@ import { t } from "../../i18n/es-CL";
 import { Button, DeniedState, Field, PageHeader, useConfirm } from "../../ui";
 import "./projects.css";
 import { isValidEmail, isValidRut } from "../../format";
-import { formatDate } from "../money";
+import { formatDate } from "../../format";
 
 const clientFields = [
   ["name", "clients.name", "text", 255],

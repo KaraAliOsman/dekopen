@@ -5,7 +5,7 @@ import { projectsList, projectsRetrieve } from "../../api/generated/dekopen";
 
 import type { PriceResponse, ProjectResponse } from "../../api/generated/models";
 import { formatDateTime } from "../../format";
-import { formatMoney } from "../money";
+import { formatMoney } from "../../format";
 import { apiMutator, ApiError } from "../../api/apiMutator";
 import { actionErrorDetail } from "../errors";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
@@ -541,6 +541,7 @@ function PricingWorkspace({ orgId }: { orgId: string }): JSX.Element {
         </div>
         {fields[resource] && resource !== "audits" && (
           <form
+            noValidate
             key={`${resource}-${editing?.id ?? "new"}-${revision}`}
             onSubmit={(event) => void save(event)}
             className="pricing-form"
@@ -882,6 +883,7 @@ function ImportCosts({
     <section className="pricing-import">
       <h2>{t("pricing.import")}</h2>
       <form
+        noValidate
         onChange={() => {
           inputRevision.current += 1;
           pendingAuthority.current = null;
@@ -1786,6 +1788,7 @@ function CommercialOperations({
         />
       )}
       <form
+        noValidate
         className="commercial-form"
         onChange={(event) => {
           const target = event.target as HTMLInputElement;
@@ -2197,6 +2200,7 @@ function CommercialDraft({
         {inputs.nominalWidthMm} × {inputs.nominalHeightMm} mm
       </p>
       <form
+        noValidate
         onSubmit={(event) => {
           event.preventDefault();
           const data = Object.fromEntries(new FormData(event.currentTarget));
