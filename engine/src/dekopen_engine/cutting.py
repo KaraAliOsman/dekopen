@@ -185,11 +185,18 @@ class CutOptimizationResult(EngineModel):
 def pieces_from_result(
     result: EngineResult, *, color: str, source_position_id: str | None = None,
     reinforcement_skus: dict[str, str],
+    reinforcement_colors: dict[str, str] | None = None,
     reinforcement_angles: dict[
         tuple[str, str, str, str | None, str | None], tuple[str, str] | None
     ] | None = None,
 ) -> list[CutPiece]:
-    """Project exact cuts; aggregate identical rows before stable quantity expansion."""
+    """Project exact cuts; aggregate identical rows before stable quantity expansion.
+
+    D05: ``color`` is the resolved finish key the profiles are stocked
+    under (plain code or the bicolor ``"EXT/INT"`` key). Steel is
+    colorless relative to the bar finish — ``reinforcement_colors`` maps
+    each resolved steel workshop sku to its declared stock color; absent
+    entries fall back to ``color`` (the pre-D05 single-color behavior)."""
     rows: dict[str, tuple[CutPiece, int]] = {}
     for cut in result.profile_cuts:
         key = "PROFILE:" + cut.model_dump_json(exclude={"qty"})
@@ -219,7 +226,8 @@ def pieces_from_result(
         key = "REINFORCEMENT:" + steel.model_dump_json(exclude={"qty"})
         piece = CutPiece(
             piece_id=sha256(key.encode("utf-8")).hexdigest(), source_kind="REINFORCEMENT",
-            workshop_sku=sku, material=CutMaterial.STEEL, color=color,
+            workshop_sku=sku, material=CutMaterial.STEEL,
+            color=(reinforcement_colors or {}).get(sku, color),
             length_mm=steel.length_mm, source_position_id=source_position_id,
             bay_id=steel.bay_id, leaf_id=steel.leaf_id, role=steel.role.value, unit_index=1,
             angle_left=Decimal(angles[0]) if angles else None,

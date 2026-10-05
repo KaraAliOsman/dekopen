@@ -135,19 +135,25 @@ def position_cost(repo, position, rules):
         profile_stocks = {}
         steel_stocks = {}
         tree = decoded(position['parametric_tree'])
-        color = 'WHITE' if position['color_interior']=='WHITE' and position['color_exterior']=='WHITE' else 'FOILED'
+        color_interior = str(position['color_interior'])
+        color_exterior = str(position['color_exterior'] or color_interior)
         result = engine_result_from_api(
-            tree=tree, color=color, params=params,
+            tree=tree, color=color_interior, color_exterior=color_exterior,
+            params=params,
             nominal_width_mm=position['width_mm'],
             nominal_height_mm=position['height_mm'],
             coupler_articles=SystemParamsRepository().load_coupler_articles(
                 position['system_id'], repo.org_id),
         )
+        # D05: bars are priced under the position's resolved finish key
+        # (plain code or "EXT/INT"); steel resolves color-free.
+        stock_color = result.finish_key or (
+            'WHITE' if color_interior=='WHITE' and color_exterior=='WHITE' else 'FOILED')
         for cut in result.profile_cuts:
-            profile_stocks[cut.sku] = stock_repo.profile_stock(position['system_id'],repo.org_id,cut.sku,color)
+            profile_stocks[cut.sku] = stock_repo.profile_stock(position['system_id'],repo.org_id,cut.sku,stock_color)
         for steel in result.reinforcements:
             steel_stocks[(steel.parent_profile_sku,steel.reinforcement_sku)] = stock_repo.reinforcement_stock(
-                position['system_id'],repo.org_id,steel.parent_profile_sku,steel.reinforcement_sku,color)[0]
+                position['system_id'],repo.org_id,steel.parent_profile_sku,steel.reinforcement_sku)[0]
     except DatabaseError:
         raise
     except BaseException:
@@ -160,7 +166,6 @@ def position_cost(repo, position, rules):
             with connection.cursor() as cursor:
                 cursor.execute('SET LOCAL ROLE pricing_backend')
     tree = decoded(position['parametric_tree'])
-    color = 'WHITE' if position['color_interior']=='WHITE' and position['color_exterior']=='WHITE' else 'FOILED'
     materials = []
     composition = []
     selection_delta = D('0')
@@ -262,12 +267,37 @@ def position_cost(repo, position, rules):
         composition.append({'kind':'FITTING','sku':fitting.sku,
                             'quantity':str(fitting.qty),'unit':'EA',
                             'cost':str(cost.quantize(D('0.0001')))})
+    # D05: declared finish surcharges — the engine resolved each basis;
+    # the pricing boundary converts the declared rate and adds the amount
+    # to the unit sell price (never into materials cost).
+    color_delta = D('0')
+    if result.color_surcharges:
+        org_currency = one(
+            'SELECT currency FROM public.tenancy_organizations WHERE id=%s',
+            [repo.org_id],'organization_not_found')['currency']
+        for application in result.color_surcharges:
+            rate = repo.convert(application.rate, application.currency or org_currency)
+            if application.kind == 'PCT_OF_MATERIALS':
+                amount = rate * sum(materials, D('0'))
+            elif application.kind == 'FIXED_PER_POSITION':
+                amount = rate
+            else:
+                amount = rate * (application.basis or D('0'))
+            color_delta += amount
+            composition.append({
+                'kind':'COLOR_SURCHARGE',
+                'sku':application.option_code,
+                'quantity':str((application.basis or D('1')).quantize(D('0.0001'))),
+                'unit':application.basis_unit,
+                'cost':str(amount.quantize(D('0.0001'))),
+                'label':application.label or application.option_name})
     area = exact_glass_area_m2(position['width_mm'],position['height_mm'])
     total = direct_cost(materials,area,rules['waste_factor_pct'],rules['labor_rate_per_m2'],
                         rules['installation_rate_per_m2'])
     formation = {'composition':composition,
                  'materials_cost':str(sum(materials,D('0')).quantize(D('0.0001'))),
                  'hardware_option_delta':str(selection_delta.quantize(D('0.0001'))),
+                 'color_surcharge_delta':str(color_delta.quantize(D('0.0001'))),
                  'waste_pct':str(rules['waste_factor_pct']),
                  'labor_rate_per_m2':str(rules['labor_rate_per_m2']),
                  'installation_rate_per_m2':str(rules['installation_rate_per_m2']),
@@ -324,7 +354,8 @@ def preview(org_id, actor, request):
                 cost_lines.append((index,cost*position['quantity']))
                 # D04 deltas are sell additions; under a project target margin
                 # they ride as undiscounted additions like project extras.
-                selection_extra += D(formation['hardware_option_delta']) * position['quantity']
+                selection_extra += (D(formation['hardware_option_delta'])
+                                    + D(formation['color_surcharge_delta'])) * position['quantity']
                 technical.append({'position_id':position['id'],
                                   'position_index':index,
                                   'unit_cost':str(cost.quantize(D('0.0001'))),
@@ -351,9 +382,11 @@ def preview(org_id, actor, request):
                 exact_price = unit_price(mode,cost=cost,margin=rules['default_margin_pct'],area=area,
                                          width=position['width_mm'],height=position['height_mm'],
                                          foil=position['color_interior']!='WHITE' or position['color_exterior']!='WHITE',**extra)
-                # D04: declared hardware selections add to the unit price as
-                # sell deltas — discounted with the line like any other sell.
-                exact_price += D(formation['hardware_option_delta'])
+                # D04 + D05: declared hardware selections and finish
+                # surcharges add to the unit price as sell deltas —
+                # discounted with the line like any other sell.
+                exact_price += D(formation['hardware_option_delta']) + D(
+                    formation['color_surcharge_delta'])
                 priced_lines.append(CommercialLine(index,position['quantity'],cost,exact_price,discount))
             except PricingError as error:
                 # The estimator fixing this has to know WHICH vano fails —

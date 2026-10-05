@@ -41,6 +41,7 @@ from dekopen_engine.geometry import (
     resolve_bead_rule,
     resolved_sliding_layout,
 )
+from dekopen_engine.finishes import apply_color_surcharges
 from dekopen_engine.glass import derive_net_glass_thickness
 from dekopen_engine.hardware import (
     HardwareSelectionError,
@@ -58,6 +59,7 @@ from dekopen_engine.manufacturing_trace import (
 )
 from dekopen_engine.models import (
     BayOpeningType,
+    ColorSelection,
     EffectiveProfileArticle,
     EngineModel,
     EngineResult,
@@ -1159,6 +1161,7 @@ def _evaluate_contour_module(
     params: SystemParams,
     *,
     is_foiled: bool,
+    color_selection: ColorSelection | None = None,
 ) -> tuple[EngineResult | None, list[ProductIssue], GeometryComputation | None]:
     """Evaluate a non-rectangular module: frame follows the contour, one
     inward-offset fill region per module.
@@ -1320,7 +1323,14 @@ def _evaluate_contour_module(
             )
         )
 
-    clearance_mm = params.glass_clearance_foil_mm if is_foiled else params.glass_clearance_white_mm
+    # D05: the resolved selection's declared clearance wins over the
+    # legacy foil/white pair.
+    if color_selection is not None:
+        clearance_mm = color_selection.glass_clearance_mm(params)
+    else:
+        clearance_mm = (
+            params.glass_clearance_foil_mm if is_foiled else params.glass_clearance_white_mm
+        )
     # Inward offset that lands exactly on the rect-path pocket math:
     # pocket = finished - 2*face + 2*rebate - 2*clearance.
     inset = frame.face_width_mm - rebate_depth(params) + clearance_mm
@@ -1683,13 +1693,14 @@ def contour_module_computation(
     params: SystemParams,
     *,
     is_foiled: bool = False,
+    color_selection: ColorSelection | None = None,
 ) -> tuple[GeometryComputation | None, list[ProductIssue]]:
     """Documentary-sealing entry for a contour module: the same evaluation
     the BOM path runs, returned as a GeometryComputation whose manufacturing
     trace carries the real contour members, glass polygon and bead sets
     instead of a rectangular approximation."""
     _result, issues, computation = _evaluate_contour_module(
-        module, params, is_foiled=is_foiled
+        module, params, is_foiled=is_foiled, color_selection=color_selection
     )
     return computation, issues
 
@@ -1858,6 +1869,7 @@ def evaluate_product(
     *,
     coupler_articles: dict[str, EffectiveProfileArticle] | None = None,
     is_foiled: bool = False,
+    color_selection: ColorSelection | None = None,
 ) -> ProductEvaluation:
     """Evaluate an assembly: plan geometry, per-module geometry, couplers, BOM."""
     assembly = product.assembly
@@ -1904,12 +1916,18 @@ def evaluate_product(
                 module_issues.extend(frameless_issues)
             elif module.contour is not None:
                 result, contour_issues, _computation = _evaluate_contour_module(
-                    module, params, is_foiled=is_foiled
+                    module,
+                    params,
+                    is_foiled=is_foiled,
+                    color_selection=color_selection,
                 )
                 module_issues.extend(contour_issues)
             else:
                 result = calculate_geometry(
-                    _top_with_module_dims(module), params, is_foiled=is_foiled
+                    _top_with_module_dims(module),
+                    params,
+                    is_foiled=is_foiled,
+                    color_selection=color_selection,
                 )
             if result is not None:
                 module_issues.extend(_glass_safety_issues(module.id, result))
@@ -2248,6 +2266,18 @@ def evaluate_product(
                 weight for r in aggregated for weight in r.leaf_weights
             ],
         )
+        if color_selection is not None:
+            # D05: stamp the finish pair's identity + declared surcharges
+            # onto the merged BOM — the assembly's plan area is the M²
+            # basis (per-module totals are already inside it).
+            bom.finish_key = color_selection.stock_key()
+            bom.finish_label = color_selection.display_name()
+            bom.finish_class = color_selection.finish_class
+            bom.color_surcharges = apply_color_surcharges(
+                color_selection,
+                bom,
+                area_m2=(plan.width_mm * plan.height_mm) / Decimal("1000000"),
+            )
 
     if any(issue.severity is Severity.ERROR for issue in issues):
         status = ProductStatus.INVALID

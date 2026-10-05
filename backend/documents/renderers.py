@@ -530,18 +530,36 @@ _PAL_TECH = {
 }
 
 
+def _darken_hex(value: str, *, amount: float = 0.55) -> str:
+    """Derive the stroke/edge tone from a declared hex — presentation
+    only, the fill stays the declared authority."""
+    digits = value.lstrip("#")
+    r, g, b = (int(digits[i:i + 2], 16) for i in (0, 2, 4))
+    return "#" + "".join(
+        f"{int(channel * amount):02X}" for channel in (r, g, b)
+    )
+
+
 def _commercial_palette(position: dict[str, object]) -> dict[str, str | None]:
-    """Profile finish → rendered face color. The position stores only a
+    """Profile finish → rendered face color. D05 seals the resolved finish
+    option (with its declared linear-sRGB render color) on the position —
+    when it exists, that hex is the authority. Older positions carry only a
     finish label (WHITE/FOILED + org-entered names), so map the common
     material words and stay neutral-grey on anything unrecognized — never
     invent a wood grain or anthracite that wasn't declared."""
-    color = str(position.get("color_exterior") or "").upper()
-    if color == "FOILED" or "FOIL" in color or "WOOD" in color or "MADERA" in color or "ROBLE" in color:
-        fill, edge = "#7B5A3B", "#4E3A24"
-    elif "ANTRAC" in color or "GRIS" in color or "GREY" in color or "NEGRO" in color or "BLACK" in color:
-        fill, edge = "#3B4045", "#20242A"
+    detail = position.get("color_exterior_detail")
+    declared = detail.get("render_color") if isinstance(detail, dict) else None
+    if isinstance(declared, str) and declared.startswith("#"):
+        fill = declared
+        edge = _darken_hex(declared)
     else:
-        fill, edge = "#EEF0ED", "#98A2A5"
+        color = str(position.get("color_exterior") or "").upper()
+        if color == "FOILED" or "FOIL" in color or "WOOD" in color or "MADERA" in color or "ROBLE" in color:
+            fill, edge = "#7B5A3B", "#4E3A24"
+        elif "ANTRAC" in color or "GRIS" in color or "GREY" in color or "NEGRO" in color or "BLACK" in color:
+            fill, edge = "#3B4045", "#20242A"
+        else:
+            fill, edge = "#EEF0ED", "#98A2A5"
     return {
         "frame_fill": fill, "frame_edge": edge,
         "bay_fill": "#DCEBEE", "bay_edge": edge,
@@ -1526,7 +1544,10 @@ def _doc01(snapshot: dict[str, object]) -> str:
             if _value(bucket["ref_position"].get("system_name")) not in ("", "—")
         })
         finishes = sorted({
-            _finish(key[4], key[5]) for key in groups if key[4] or key[5]
+            str(bucket["ref_position"].get("finish") or "")
+            or _finish(key[4], key[5])
+            for key, bucket in groups.items()
+            if key[4] or key[5]
         })
         glass = sorted({bucket["specs"] for bucket in groups.values()})
         stat_cells = [
@@ -1635,7 +1656,7 @@ def _doc01(snapshot: dict[str, object]) -> str:
         spec_items.append(
             f'<li><span class="plabel">Vidrio / relleno</span> {escape(specs)}</li>'
         )
-        finish = _finish(ci, ce)
+        finish = str(ref.get("finish") or "") or _finish(ci, ce)
         if finish and finish != "—":
             spec_items.append(
                 f'<li><span class="plabel">Acabado</span> {escape(finish)}</li>'
@@ -3104,7 +3125,33 @@ _TYPOLOGY_ES = {
 _COLOR_ES = {
     "WHITE": "Blanco",
     "FOILED": "Foliado",
+    # D05 seeded finish codes — newer positions seal the option's declared
+    # `name` directly (`finish`/`color_*_detail` on the position row); this
+    # map is the label fallback for binary-era and seed keys.
+    "NOGAL": "Nogal",
+    "NOGAL-EXT": "Nogal",
+    "ANTRACITA": "Antracita",
+    "COEX-ANTR": "Antracita coextruida",
+    "NATURAL": "Natural anodizado",
+    "PINTADO": "Pintado genérico",
+    "RAL-9016": "Blanco tráfico RAL 9016",
+    "RAL-7016": "Gris antracita RAL 7016",
+    "MADERA": "Efecto madera nogal",
+    "MADERA-EXT": "Efecto madera nogal",
 }
+
+
+def finish_key_label(key: object) -> str:
+    """Label a D05 stock/finish key — a plain code maps through
+    ``_COLOR_ES``; a bicolor ``EXT/INT`` key labels each face."""
+    key = str(key or "")
+    if "/" in key:
+        ext, _, interior = key.partition("/")
+        return (
+            f"{_COLOR_ES.get(ext, ext)} exterior / "
+            f"{_COLOR_ES.get(interior, interior)} interior"
+        )
+    return _COLOR_ES.get(key, key)
 
 _CATEGORY_ES = {
     "PROFILE": "Perfil", "REINFORCEMENT": "Refuerzo", "GLASS": "Vidrio",
@@ -3231,9 +3278,12 @@ _SLOT_ES = {
 
 
 def _finish(ci: object, ce: object) -> str:
+    # Encargo D05 format: «<exterior> exterior / <interior> interior».
     interior = _COLOR_ES.get(ci, ci)
     exterior = _COLOR_ES.get(ce, ce)
-    return interior if interior == exterior else f"{interior} / {exterior}"
+    if interior == exterior:
+        return str(interior)
+    return f"{exterior} exterior / {interior} interior"
 
 
 def finish_label(color_interior: object, color_exterior: object) -> str:

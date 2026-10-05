@@ -174,7 +174,9 @@ export function BowPlanContent({
           className={
             module.module_id === selectedModuleId ? "plan-module is-selected" : "plan-module"
           }
-          style={{ fill: memberSurface(members.frame.material).fill }}
+          style={{
+            fill: memberSurface(members.frame.material, members.frame.finish?.exterior).fill,
+          }}
           points={polygonPoints(module.corners)}
           role="button"
           aria-label={`${t("assembly.module")} ${module.module_id}`}
@@ -198,8 +200,10 @@ export function BowPlanContent({
         const spec = couplings.find((item) => item.id === coupling.coupling_id);
         const flagged = flaggedCouplings.has(coupling.coupling_id);
         const [cx, cy] = centroid(coupling.polygon);
+        const couplerSpec = members.couplerFor(spec?.coupler_profile_sku ?? null);
         const surface = memberSurface(
-          members.couplerFor(spec?.coupler_profile_sku ?? null)?.material ?? members.frame.material,
+          couplerSpec?.material ?? members.frame.material,
+          (couplerSpec ?? members.frame).finish?.exterior,
         );
         return (
           <g

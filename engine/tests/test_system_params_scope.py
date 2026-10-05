@@ -54,7 +54,10 @@ METADATA = {"system_code", "depth_mm"}
 RESERVED = {"sliding_lateral_clearance_mm", "corner_bracket_loss_mm", "hook_depth_mm"}
 # Input-validity authority consumed by the API adapter (finish membership gates
 # `color`), not a formula input — `backend/engine_api/adapter.py` reads it.
-API_BOUNDARY = {"finishes"}
+# D05: the finish catalog + bicolor capability resolve into the
+# `ColorSelection` formula input at the same boundary
+# (`dekopen_engine.finishes.resolve_color_selection`).
+API_BOUNDARY = {"finishes", "color_options", "bicolor_allowed"}
 
 # Names that alias `params` inside a consumer's body (`x = params.<group>`).
 _GROUPED_BINDINGS = ("sliding",)
@@ -75,7 +78,7 @@ def test_every_system_parameter_has_an_explicit_scope() -> None:
         len(CORE_CONSUMERS) == 30
         and len(METADATA) == 2
         and len(RESERVED) == 3
-        and len(API_BOUNDARY) == 1
+        and len(API_BOUNDARY) == 3
     )
     assert (
         set(CORE_CONSUMERS) | METADATA | RESERVED | API_BOUNDARY

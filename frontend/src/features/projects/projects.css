@@ -250,6 +250,101 @@
   color: var(--danger-ink);
 }
 
+/* D05 real finish picker — declared swatches per face; chips use the
+ * catalog's own render hex so the picker shows the manufactured color,
+ * never a generic token. */
+.color-selector {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  flex-basis: 100%;
+  font-size: var(--text-xs);
+}
+
+.color-selector__face {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.color-selector__face-label {
+  color: var(--theme-text-muted);
+}
+
+.color-selector__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.color-chip {
+  align-items: center;
+  background: var(--theme-surface);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-md);
+  color: var(--theme-text-primary);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: var(--text-xs);
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-8);
+}
+
+.color-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.color-chip.is-selected {
+  border-color: var(--theme-accent);
+  box-shadow: 0 0 0 1px var(--theme-accent);
+}
+
+.color-chip.is-undeclared {
+  border-style: dashed;
+}
+
+.color-chip__swatch {
+  block-size: var(--space-12);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-sm);
+  inline-size: var(--space-12);
+  background: var(--theme-surface-panel);
+  overflow: hidden;
+  position: relative;
+}
+
+/* Texture motifs render as inline SVG in the chip — the §10 guard forbids
+ * CSS gradient/rgb literals; a declared catalog texture is geometry, not a
+ * color token. */
+.color-chip__swatch svg {
+  block-size: 100%;
+  display: block;
+  inline-size: 100%;
+  inset: 0;
+  position: absolute;
+}
+
+.color-selector__same {
+  align-items: center;
+  display: flex;
+  gap: var(--space-4);
+}
+
+.color-selector__summary {
+  color: var(--theme-text-primary);
+  margin: 0;
+}
+
+.color-selector__hint {
+  color: var(--theme-text-muted);
+}
+
+.color-selector__issue {
+  color: var(--danger-ink);
+  margin: 0;
+}
+
 .position-workspace {
   display: grid;
   gap: 0.75rem;

@@ -48,6 +48,16 @@ def effective_scope(
     return tenant if tenant else [row for row in rows if row[scope_index] is None]
 
 
+def steel_color_map(stocks: list[StockRule]) -> dict[str, str]:
+    """D05: workshop sku → declared stock color for the steel rules, so
+    cut pieces stamp the reinforcement's own finish, not the bar's."""
+    return {
+        stock.workshop_sku: stock.color
+        for stock in stocks
+        if stock.material is CutMaterial.STEEL
+    }
+
+
 class CuttingRepository:
     def cutting_profile(self, org_id: UUID, code: str | None = None) -> CuttingProfile:
         with connection.cursor() as cursor:
@@ -89,13 +99,20 @@ class CuttingRepository:
             if len(articles) != 1:
                 raise AmbiguousStockAuthority
             article = articles[0]
+            # D05: the stocked bar is finish-keyed — the mapping's declared
+            # stock_color must equal the requested key (plain code or the
+            # bicolor "EXT/INT" key) rather than silently serving the base
+            # white bar for a foliado purchase order. A NULL stock_color is
+            # a legacy color-agnostic bar that serves any finish; two viable
+            # bars for one finish stay ambiguous — never silently preferred.
             cursor.execute(
                 """SELECT id, commercial_sku, manufacturer_name, supplier_name,
                           purchase_unit, org_id
                    FROM public.profile_purchase_mappings
                    WHERE profile_article_id=%s AND is_active
+                     AND (stock_color IS NULL OR stock_color=%s)
                      AND (org_id IS NULL OR org_id=%s) ORDER BY id""",
-                [article[0], org_id],
+                [article[0], color, org_id],
             )
             rows = effective_scope(cursor.fetchall(), org_id, 5)
         if not rows:
@@ -122,8 +139,7 @@ class CuttingRepository:
         system_id: UUID,
         org_id: UUID,
         parent_sku: str,
-        requested_sku: str | None,
-        color: str,
+        requested_sku: str | None = None,
     ) -> tuple[StockRule, Decimal | None]:
         with connection.cursor() as cursor:
             cursor.execute(
@@ -138,7 +154,7 @@ class CuttingRepository:
                 raise AmbiguousStockAuthority
             cursor.execute(
                 """SELECT id, sku, commercial_sku, manufacturer_name, supplier_name,
-                          stock_length_mm, purchase_unit, ix_cm4, org_id
+                          stock_length_mm, purchase_unit, ix_cm4, org_id, stock_color
                    FROM public.reinforcement_articles
                    WHERE system_id=%s AND parent_profile_article_id=%s AND is_active
                      AND (org_id IS NULL OR org_id=%s)
@@ -153,6 +169,9 @@ class CuttingRepository:
         row = rows[0]
         if row[6] != "BAR":
             raise MissingStockAuthority
+        # D05: steel is colorless relative to the bar finish — the rule
+        # carries the steel's own declared stock_color, never the profile's
+        # finish key the caller resolved.
         return StockRule(
             stock_authority_id=str(row[0]),
             workshop_sku=str(row[1]),
@@ -161,7 +180,7 @@ class CuttingRepository:
             supplier_name=None if row[4] is None else str(row[4]),
             purchase_unit="BAR",
             material=CutMaterial.STEEL,
-            color=color,
+            color=str(row[9]) if row[9] else "WHITE",
             stock_length_mm=_positive_stock_length(row[5]),
         ), None if row[7] is None else _decimal(row[7])
 
@@ -184,7 +203,7 @@ class CuttingRepository:
             (cut.parent_profile_sku, cut.reinforcement_sku) for cut in result.reinforcements
         }
         for parent, requested in sorted(identities, key=lambda x: (x[0], x[1] or "")):
-            stock, ix = self.reinforcement_stock(system_id, org_id, parent, requested, color)
+            stock, ix = self.reinforcement_stock(system_id, org_id, parent, requested)
             stocks[stock.stock_authority_id] = stock
             if requested is None:
                 defaults[parent] = stock.workshop_sku

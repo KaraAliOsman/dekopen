@@ -227,6 +227,28 @@ class OpeningOptionSerializer(serializers.Serializer):
     leaves = serializers.ListField(child=serializers.DictField(), required=False)
 
 
+class ColorOptionChoiceSerializer(serializers.Serializer):
+    """D05: a sellable finish — the selector renders its declared swatch,
+    face availability, pair requirement and surcharge hint."""
+
+    code = serializers.CharField()
+    name = serializers.CharField()
+    kind = serializers.CharField()
+    manufacturer_code = serializers.CharField(allow_null=True)
+    gloss = serializers.CharField(allow_null=True)
+    render_color = serializers.CharField(allow_null=True)
+    render_texture = serializers.CharField(allow_null=True)
+    finish_class = serializers.CharField()
+    dark = serializers.BooleanField()
+    faces = serializers.CharField()
+    pair_code = serializers.CharField(allow_null=True)
+    sort_order = serializers.IntegerField()
+    surcharge_kind = serializers.CharField(allow_null=True)
+    surcharge_amount = serializers.CharField(allow_null=True)
+    surcharge_currency = serializers.CharField(allow_null=True)
+    surcharge_label = serializers.CharField(allow_null=True)
+
+
 class DesignOptionsSerializer(serializers.Serializer):
     profiles = ProfileChoiceSerializer(many=True)
     # Concrete opening compositions the system admits (D03): the editor,
@@ -246,6 +268,10 @@ class DesignOptionsSerializer(serializers.Serializer):
     glass_products = GlassProductChoiceSerializer(many=True)
     glass_specs = GlassSpecChoiceSerializer(many=True)
     colors = serializers.ListField(child=serializers.CharField())
+    # D05: the declared finish catalog — rich options when the system
+    # carries system_color_options rows, plus its bicolor capability.
+    color_options = ColorOptionChoiceSerializer(many=True, required=False)
+    bicolor_allowed = serializers.BooleanField(required=False, default=False)
     coupler_skus = serializers.ListField(child=serializers.CharField())
     coupler_profiles = CouplerChoiceSerializer(many=True)
     glazing_beads = GlazingBeadChoiceSerializer(many=True)
@@ -493,6 +519,43 @@ class DesignOptionsView(APIView):
                         for item in glass_rows
                     ],
                     "colors": list(params.finishes),
+                    "bicolor_allowed": params.bicolor_allowed,
+                    "color_options": [
+                        {
+                            "code": option.code,
+                            "name": option.name,
+                            "kind": option.kind.value,
+                            "manufacturer_code": option.manufacturer_code,
+                            "gloss": option.gloss,
+                            "render_color": option.render_color,
+                            "render_texture": option.render_texture,
+                            "finish_class": option.finish_class,
+                            "dark": option.dark,
+                            "faces": option.faces,
+                            "pair_code": option.pair_code,
+                            "sort_order": option.sort_order,
+                            "surcharge_kind": (
+                                None if option.surcharge is None
+                                else option.surcharge.kind
+                            ),
+                            "surcharge_amount": (
+                                None if option.surcharge is None
+                                else str(option.surcharge.amount)
+                            ),
+                            "surcharge_currency": (
+                                None if option.surcharge is None
+                                else option.surcharge.currency
+                            ),
+                            "surcharge_label": (
+                                None if option.surcharge is None
+                                else option.surcharge.label
+                            ),
+                        }
+                        for option in sorted(
+                            params.color_options.values(),
+                            key=lambda option: (option.sort_order, option.code),
+                        )
+                    ],
                     "coupler_skus": sorted(couplers),
                     "coupler_profiles": [
                         {

@@ -588,6 +588,19 @@ export const DOMAIN_LABELS: Record<string, L> = {
     deep: l("Profundo", "neutral"),
     auto: l("Automático", "neutral"),
   },
+  /* ---------- Acabados (D05) ---------- */
+  ColorSurchargeApplicationKindEnum: {
+    PER_PROFILE_METER: l("Por metro de perfil", "neutral"),
+    PER_M2: l("Por m²", "neutral"),
+    FIXED_PER_POSITION: l("Fijo por posición", "neutral"),
+    PCT_OF_MATERIALS: l("% sobre materiales", "neutral"),
+  },
+  BasisUnitEnum: {
+    M: l("Metro lineal", "neutral"),
+    M2: l("m²", "neutral"),
+    POSITION: l("Posición", "neutral"),
+    MATERIALS_PCT: l("% de materiales", "neutral"),
+  },
 };
 
 /** Enums que NUNCA llegan a una pantalla — contratos internos del API.

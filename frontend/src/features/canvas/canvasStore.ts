@@ -21,6 +21,9 @@ export type CanvasDesignInputs = {
   /** Finish code — the series' declared finishes drive the picker; a stored
    * finish the catalog stopped offering still displays but can't save. */
   color: string;
+  /** D05 exterior-face finish code — "" means "same as interior" (monocolor);
+   * a real code only lives here when the position is bicolor. */
+  colorExterior: string;
   parametricTree: IntentNode;
   /** Compositional product (product-v2). null = classic single unit. */
   product: ProductJson | null;
@@ -98,6 +101,7 @@ function initialInputs(): CanvasDesignInputs {
     nominalWidthMm: "1000.00",
     nominalHeightMm: "1000.00",
     color: "WHITE",
+    colorExterior: "",
     parametricTree: G1_TREE,
     product: null,
   };

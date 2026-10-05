@@ -262,7 +262,10 @@ def test_layout_api_binds_to_same_calculation_and_tenant(monkeypatch):
     request["color"] = "NOT_A_DECLARED_FINISH"
     response = client.post("/api/v1/engine/layout/", request, format="json")
     assert response.status_code == 400
-    assert response.json()["error"]["code"] == "validation_error"
+    # D05: an undeclared finish is a colour-combination failure carrying
+    # the engine's structured reason — more precise than validation_error.
+    assert response.json()["error"]["code"] == "color_combination_invalid"
+    assert response.json()["error"]["reason"] == "color_not_declared"
 
 
 def test_repository_loads_glass_products_rules_and_limits(monkeypatch):

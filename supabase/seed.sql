@@ -1617,6 +1617,131 @@ WHERE s.code IN ('DEMO_60','DEMO_70','DEMO_CORREDERA_60')
                     AND r.org_id IS NULL)
 ON CONFLICT (id) DO NOTHING;
 
+-- D05 — real color catalog for the demo systems. DEMO_60 and
+-- DEMO_CORREDERA_60 keep the raw WHITE/FOILED finish domain untouched so
+-- the engine's legacy fallback stays covered; DEMO_70 and
+-- ALU_CORREDERA_70 get declared color options with manufacturer code,
+-- faces, finish class, render color and a declared sell surcharge each.
+DO $d05$
+BEGIN
+IF to_regclass('public.system_color_options') IS NULL
+   OR NOT EXISTS (SELECT 1 FROM information_schema.columns
+                  WHERE table_schema = 'public' AND table_name = 'profile_systems'
+                    AND column_name = 'bicolor_allowed') THEN
+    RETURN;
+END IF;
+
+-- The pickable finish domain keys `system_color_options.code`.
+UPDATE public.profile_systems
+SET finishes = '["WHITE", "FOILED", "NOGAL", "NOGAL-EXT", "ANTRACITA", "COEX-ANTR"]'::jsonb,
+    bicolor_allowed = TRUE
+WHERE code = 'DEMO_70' AND is_global = TRUE;
+
+UPDATE public.profile_systems
+SET finishes = '["NATURAL", "PINTADO", "RAL-9016", "RAL-7016", "MADERA", "MADERA-EXT"]'::jsonb,
+    bicolor_allowed = TRUE
+WHERE code = 'ALU_CORREDERA_70' AND is_global = TRUE;
+
+INSERT INTO public.system_color_options (
+    id, system_id, org_id, code, name, kind, manufacturer_code, gloss,
+    render_color, render_texture, finish_class, film_clearance,
+    glass_clearance_mm, dark, faces, pair_code, size_factor,
+    surcharge_kind, surcharge_amount, surcharge_currency, surcharge_label,
+    sort_order, data_provenance
+)
+SELECT
+    uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/' || s.code || '/color/' || o.code),
+    s.id, NULL, o.code, o.name, o.kind, o.mfr, o.gloss,
+    o.hex, o.tex, o.klass, o.film,
+    o.clearance, o.dark, o.faces, o.pair, o.factor,
+    o.sk, o.sa, 'CLP', o.sl,
+    o.ord, 'SEED_SYNTHETIC'
+FROM public.profile_systems s
+JOIN (VALUES
+    ('DEMO_70', 'WHITE',      'Blanco',                       'MASS',        NULL,             NULL,        '#E9EBE4', NULL,         'WHITE',     FALSE, NULL::numeric, FALSE, 'BOTH',          NULL,        NULL::numeric, NULL::text,            NULL::numeric, NULL::text,                          0),
+    ('DEMO_70', 'FOILED',     'Foliado madera (genérico)',   'FOIL',        NULL,             NULL,        '#7A5A3B', 'WOOD_GRAIN', 'NON_WHITE', TRUE,  NULL,          TRUE,  'BOTH',          NULL,        NULL,          NULL,                  NULL,          NULL,                                  10),
+    ('DEMO_70', 'NOGAL',      'Nogal',                       'FOIL',        'REH 2178-034',   NULL,        '#6B4A2F', 'WOOD_GRAIN', 'NON_WHITE', TRUE,  NULL,          TRUE,  'BOTH',          NULL,        NULL,          'PER_PROFILE_METER',   850.00,        'Recargo foliado por metro de perfil',      20),
+    ('DEMO_70', 'NOGAL-EXT',  'Nogal',                      'FOIL',        'REH 2178-034',   NULL,        '#6B4A2F', 'WOOD_GRAIN', 'NON_WHITE', TRUE,  NULL,          TRUE,  'EXTERIOR_ONLY', 'WHITE',     NULL,          'PER_M2',              4200.00,       'Recargo foliado exterior por m²',        30),
+    ('DEMO_70', 'ANTRACITA',  'Antracita',                   'FOIL',        'REH 701605',     'MATE',      '#3A3F44', NULL,         'NON_WHITE', TRUE,  NULL,          TRUE,  'BOTH',          NULL,        0.900,         'PER_M2',              6800.00,       'Recargo foliado oscuro por m²',          40),
+    ('DEMO_70', 'COEX-ANTR',  'Antracita coextruida',       'COEXTRUDED',  'RAU CX-7016',    NULL,        '#33373C', NULL,         'NON_WHITE', FALSE, NULL,          TRUE,  'EXTERIOR_ONLY', 'WHITE',     NULL,          'FIXED_PER_POSITION',  9500.00,       'Recargo coextruido por posición',      50),
+    ('ALU_CORREDERA_70', 'NATURAL',   'Natural anodizado',          'ANODIZED',   'EN AW-6063 ANOD', NULL,       '#B9BEC4', NULL,         'WHITE',     FALSE, NULL,          FALSE, 'BOTH',          NULL,        NULL,          NULL,                  NULL,          NULL,                                   0),
+    ('ALU_CORREDERA_70', 'PINTADO',   'Pintado genérico',           'POWDER',     NULL,             'SATINADO',  NULL,      NULL,         'NON_WHITE', TRUE,  NULL,          FALSE, 'BOTH',          NULL,        NULL,          'PER_PROFILE_METER',   600.00,        'Recargo lacado por metro de perfil',   10),
+    ('ALU_CORREDERA_70', 'RAL-9016',  'Blanco tráfico RAL 9016',    'POWDER',     'RAL 9016',       'SATINADO',  '#F1F0EA', NULL,         'NON_WHITE', TRUE,  NULL,          FALSE, 'BOTH',          NULL,        NULL,          'PER_PROFILE_METER',   600.00,        'Recargo lacado por metro de perfil',   20),
+    ('ALU_CORREDERA_70', 'RAL-7016',  'Gris antracita RAL 7016',    'POWDER',     'RAL 7016',       'MATE',      '#373D42', NULL,         'NON_WHITE', TRUE,  NULL,          TRUE,  'BOTH',          NULL,        0.900,         'PER_M2',              5400.00,       'Recargo lacado oscuro por m²',         30),
+    ('ALU_CORREDERA_70', 'MADERA',    'Efecto madera nogal',        'WOOD_EFFECT','DECORAL NOGAL 2101', NULL,    '#6B4A2F', 'WOOD_GRAIN', 'NON_WHITE', TRUE,  NULL,          TRUE,  'BOTH',          NULL,        NULL,          'PCT_OF_MATERIALS',    0.1200,        'Recargo sublimado sobre materiales',   40),
+    ('ALU_CORREDERA_70', 'MADERA-EXT','Efecto madera nogal',       'WOOD_EFFECT','DECORAL NOGAL 2101', NULL,    '#6B4A2F', 'WOOD_GRAIN', 'NON_WHITE', TRUE,  NULL,          TRUE,  'EXTERIOR_ONLY', 'RAL-9016',  NULL,          'FIXED_PER_POSITION',  14000.00,      'Recargo sublimado exterior por posición', 50)
+) AS o(sys, code, name, kind, mfr, gloss, hex, tex, klass, film, clearance, dark, faces, pair, factor, sk, sa, sl, ord)
+  ON s.code = o.sys AND s.is_global = TRUE
+ON CONFLICT (system_id, org_id, code) DO NOTHING;
+
+-- Physical bars are sold per finish: every article gets a purchase
+-- mapping per stock key the catalog can emit (bicolor keys use EXT/INT).
+-- The existing 'WHITE' rows are the WHITE stock for DEMO_70; on the
+-- aluminium series the stocked bar is natural anodized, so 'NATURAL'
+-- takes that role and the seeded rows are re-keyed.
+UPDATE public.profile_purchase_mappings AS mapping
+SET stock_color = 'NATURAL'
+FROM public.profile_articles article
+JOIN public.profile_systems s ON s.id = article.system_id
+WHERE mapping.profile_article_id = article.id
+  AND s.code = 'ALU_CORREDERA_70' AND s.is_global = TRUE
+  AND mapping.org_id IS NULL AND mapping.stock_color = 'WHITE';
+
+INSERT INTO public.profile_purchase_mappings
+ (id, profile_article_id, org_id, commercial_sku, manufacturer_name, supplier_name,
+  purchase_unit, physical_stock_identity, stock_color, cutting_profile_id, binding_version)
+SELECT uuid_generate_v5(uuid_ns_url(),
+        'https://dekopen.local/shot07/purchase/' || article.id::text || '/' || k.stock_key),
+ article.id, NULL,
+ 'COMPRA-' || article.sku || '-' || replace(k.stock_key, '/', '-'),
+ 'Referencia DEKOPEN', 'Proveedor de referencia', 'BAR',
+ uuid_generate_v5(uuid_ns_url(),
+        'https://dekopen.local/shot09/physical/profile/' || article.id::text || '/' || k.stock_key),
+ k.stock_key,
+ uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot07/cutting/DEMO'),
+ 1
+FROM public.profile_articles article
+JOIN public.profile_systems s ON s.id = article.system_id
+CROSS JOIN LATERAL (
+    -- Every stock key the catalog can emit gets a bar mapping: each
+    -- face-BOTH option as monocolor, plus every bicolor pair the engine's
+    -- resolve_color_selection would accept (mirrored rules: face
+    -- availability, no whole-bar kind on a two-face pair, no two mass
+    -- colours on one bar, declared pair_code honoured both ways). An
+    -- impossible pair simply has no bar — the engine rejects it upstream.
+    SELECT o.code AS stock_key
+    FROM public.system_color_options o
+    WHERE o.system_id = s.id AND o.org_id IS NULL AND o.faces = 'BOTH'
+    UNION ALL
+    SELECT e.code || '/' || i.code
+    FROM public.system_color_options e
+    JOIN public.system_color_options i
+      ON i.system_id = e.system_id AND i.org_id IS NOT DISTINCT FROM e.org_id
+    WHERE e.system_id = s.id AND e.org_id IS NULL AND s.bicolor_allowed
+      AND e.code <> i.code
+      AND e.faces IN ('BOTH', 'EXTERIOR_ONLY')
+      AND i.faces IN ('BOTH', 'INTERIOR_ONLY')
+      AND e.kind <> 'ANODIZED' AND i.kind <> 'ANODIZED'
+      AND NOT (e.kind = 'MASS' AND i.kind = 'MASS')
+      AND (e.pair_code IS NULL OR i.code = e.pair_code)
+      AND (i.pair_code IS NULL OR e.code = i.pair_code)
+) k
+WHERE s.code IN ('DEMO_70', 'ALU_CORREDERA_70') AND s.is_global = TRUE
+  AND article.org_id IS NULL
+  AND EXISTS (SELECT 1 FROM information_schema.columns
+              WHERE table_schema='public' AND table_name='profile_purchase_mappings'
+                AND column_name='physical_stock_identity')
+  -- The base stocked bar (DEMO_70 'WHITE', ALU 'NATURAL') already exists
+  -- from the coverage insert above; emitting a second mapping for the
+  -- same stock key would trip AmbiguousStockAuthority at freeze.
+  AND NOT EXISTS (SELECT 1 FROM public.profile_purchase_mappings pm
+                  WHERE pm.profile_article_id = article.id
+                    AND pm.org_id IS NULL AND pm.is_active
+                    AND pm.stock_color = k.stock_key)
+ON CONFLICT (id) DO NOTHING;
+END
+$d05$;
+
 INSERT INTO public.hardware_purchase_mappings
  (id, hardware_kit_id, org_id, purchasing_sku, manufacturer_name, purchase_unit, version, provenance)
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/shot09/hardware/' || kit.id::text || '/V1'),

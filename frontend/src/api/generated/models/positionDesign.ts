@@ -14,5 +14,10 @@ export interface PositionDesign {
   nominal_height_mm: string;
   /** @maxLength 50 */
   color: string;
+  /**
+   * @maxLength 50
+   * @nullable
+   */
+  color_exterior?: string | null;
   parametric_tree: unknown;
 }

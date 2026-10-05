@@ -8,6 +8,8 @@ from typing import Literal, cast
 from dekopen_engine import (
     BayLeaf,
     BayOpeningType,
+    ColorCombinationError,
+    ColorSelection,
     CoupledAssembly,
     CouplingDef,
     EffectiveProfileArticle,
@@ -29,6 +31,7 @@ from dekopen_engine import (
     UnitKind,
     calculate_geometry,
     evaluate_product,
+    resolve_color_selection,
 )
 from dekopen_engine.contour import Contour
 from dekopen_engine.glass_composition import composition_from_dict
@@ -450,18 +453,51 @@ def parse_frameless(payload: object) -> FramelessSpec | None:
         raise InvalidEngineRequest("Invalid module frameless spec") from error
 
 
+class InvalidColorCombination(InvalidEngineRequest):
+    """A rejected finish pair — the engine's declared reason (es-CL) is
+    user-facing: it names the faces and the rule, so it flows to the API
+    error detail under its own contract code, never a generic validation."""
+
+    def __init__(self, detail: str, *, reason: str) -> None:
+        super().__init__(detail)
+        self.reason = reason
+
+
+def color_selection_from_api(
+    *,
+    color: str,
+    color_exterior: str | None,
+    params: SystemParams,
+) -> ColorSelection:
+    """The requested finish pair validated against the declared catalog (D05).
+
+    ``color`` is the interior face; ``color_exterior`` defaults to it when
+    absent — a request without the field behaves exactly like the pre-D05
+    single-finish contract. Every impossible combination surfaces the
+    engine's declared reason, never a silent coercion.
+    """
+    try:
+        return resolve_color_selection(
+            params,
+            interior_code=color,
+            exterior_code=color_exterior or color,
+        )
+    except ColorCombinationError as error:
+        raise InvalidColorCombination(str(error), reason=error.code) from error
+
+
 def normalized_root_from_api(
     *,
     parametric_tree: object,
     nominal_width_mm: Decimal,
     nominal_height_mm: Decimal,
     color: str,
+    color_exterior: str | None = None,
     params: SystemParams,
 ) -> ParametricNode:
-    if color not in params.finishes:
-        raise InvalidEngineRequest(
-            f"finish '{color}' is not declared for system {params.system_code}"
-        )
+    color_selection_from_api(
+        color=color, color_exterior=color_exterior, params=params
+    )
 
     root = parse_parametric_node(parametric_tree)
     if root.width_mm is not None and root.width_mm != nominal_width_mm:
@@ -476,14 +512,18 @@ def normalized_root_from_api(
 
 def calculate_from_api(
     *, parametric_tree: object, nominal_width_mm: Decimal, nominal_height_mm: Decimal,
-    color: str, params: SystemParams,
+    color: str, color_exterior: str | None = None, params: SystemParams,
 ) -> EngineResult:
+    selection = color_selection_from_api(
+        color=color, color_exterior=color_exterior, params=params
+    )
     root = normalized_root_from_api(
         parametric_tree=parametric_tree, nominal_width_mm=nominal_width_mm,
-        nominal_height_mm=nominal_height_mm, color=color, params=params,
+        nominal_height_mm=nominal_height_mm, color=color,
+        color_exterior=color_exterior, params=params,
     )
     try:
-        return calculate_geometry(root, params, is_foiled=color != "WHITE")
+        return calculate_geometry(root, params, color_selection=selection)
     except NotImplementedError as error:
         raise UnsupportedEngineContract(str(error)) from error
     except ValueError as error:
@@ -674,20 +714,23 @@ def evaluate_assembly_from_api(
     *,
     product: object,
     color: str,
+    color_exterior: str | None = None,
     params: SystemParams,
     coupler_articles: dict[str, EffectiveProfileArticle] | None = None,
 ) -> ProductEvaluation:
-    if color not in params.finishes:
-        raise InvalidEngineRequest(
-            f"finish '{color}' is not declared for system {params.system_code}"
-        )
+    selection = color_selection_from_api(
+        color=color, color_exterior=color_exterior, params=params
+    )
     model = (
         product
         if isinstance(product, ProductModel)
         else parse_product_model(product)
     )
     return evaluate_product(
-        model, params, coupler_articles=coupler_articles, is_foiled=color != "WHITE"
+        model,
+        params,
+        coupler_articles=coupler_articles,
+        color_selection=selection,
     )
 
 
@@ -702,6 +745,7 @@ def engine_result_from_api(
     *,
     tree: object,
     color: str,
+    color_exterior: str | None = None,
     params: SystemParams,
     nominal_width_mm: Decimal | None = None,
     nominal_height_mm: Decimal | None = None,
@@ -716,6 +760,7 @@ def engine_result_from_api(
         evaluation = evaluate_assembly_from_api(
             product=tree,
             color=color,
+            color_exterior=color_exterior,
             params=params,
             coupler_articles=coupler_articles or {},
         )
@@ -731,5 +776,6 @@ def engine_result_from_api(
         nominal_width_mm=nominal_width_mm,
         nominal_height_mm=nominal_height_mm,
         color=color,
+        color_exterior=color_exterior,
         params=params,
     )

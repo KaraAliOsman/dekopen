@@ -15,13 +15,16 @@ export function assemblyRequestFromInputs(
   if (inputs.systemId === null) throw new Error("Engine system has not been resolved");
   if (inputs.product === null) throw new Error("Product model is not active");
   const envelope = elevationEnvelopeMm(inputs.product);
-  return {
+  const request: EngineAssemblyCalculateRequest = {
     system_id: inputs.systemId,
     nominal_width_mm: envelope.width.toFixed(2),
     nominal_height_mm: envelope.height.toFixed(2),
     color: inputs.color,
     product: inputs.product,
   };
+  if (inputs.colorExterior && inputs.colorExterior !== inputs.color)
+    request.color_exterior = inputs.colorExterior;
+  return request;
 }
 
 export function assemblyCalculationKey(
@@ -33,6 +36,7 @@ export function assemblyCalculationKey(
     organizationId,
     inputs.systemId,
     inputs.color,
+    inputs.colorExterior,
     inputs.product,
   ] as const;
 }

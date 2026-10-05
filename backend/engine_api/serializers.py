@@ -17,6 +17,10 @@ class EngineCalculateRequestSerializer(serializers.Serializer):
     nominal_width_mm = DecimalStringField(max_digits=10, decimal_places=2)
     nominal_height_mm = DecimalStringField(max_digits=10, decimal_places=2)
     color = serializers.CharField(max_length=50)
+    # D05: exterior-face finish; absent means same as `color` (pre-D05 contract).
+    color_exterior = serializers.CharField(
+        max_length=50, required=False, allow_null=True, default=None
+    )
     parametric_tree = serializers.JSONField()
 
 
@@ -282,6 +286,29 @@ class LeafWeightSerializer(serializers.Serializer):
     )
 
 
+class ColorSurchargeApplicationSerializer(serializers.Serializer):
+    """D05 declared finish surcharge applied to the BOM: the rate is
+    catalog data; the basis is engine-derived (profile metres, m², unit,
+    or the materials-% rate itself)."""
+
+    option_code = serializers.CharField()
+    option_name = serializers.CharField()
+    kind = serializers.ChoiceField(
+        choices=["PER_PROFILE_METER", "PER_M2", "FIXED_PER_POSITION", "PCT_OF_MATERIALS"]
+    )
+    rate = serializers.DecimalField(
+        max_digits=12, decimal_places=4, coerce_to_string=True
+    )
+    currency = serializers.CharField(allow_null=True)
+    label = serializers.CharField(allow_null=True)
+    basis = serializers.DecimalField(
+        max_digits=12, decimal_places=4, coerce_to_string=True, allow_null=True
+    )
+    basis_unit = serializers.ChoiceField(
+        choices=["M", "M2", "POSITION", "MATERIALS_PCT"]
+    )
+
+
 class EngineResultPayloadSerializer(serializers.Serializer):
     profile_cuts = ProfileCutSerializer(many=True)
     reinforcements = ReinforcementSerializer(many=True)
@@ -290,6 +317,12 @@ class EngineResultPayloadSerializer(serializers.Serializer):
     fittings = FittingPieceSerializer(many=True)
     hardware_items = HardwareItemSerializer(many=True)
     leaf_weights = LeafWeightSerializer(many=True)
+    # D05 resolved finish pair + its declared surcharges (absent on
+    # legacy-field responses).
+    finish_key = serializers.CharField(allow_null=True, required=False)
+    finish_label = serializers.CharField(allow_null=True, required=False)
+    finish_class = serializers.CharField(allow_null=True, required=False)
+    color_surcharges = ColorSurchargeApplicationSerializer(many=True, required=False)
 
 
 class EngineCalculateResponseSerializer(EngineResultPayloadSerializer):
@@ -301,6 +334,9 @@ class EngineAssemblyCalculateSerializer(serializers.Serializer):
     nominal_width_mm = DecimalStringField(max_digits=10, decimal_places=2)
     nominal_height_mm = DecimalStringField(max_digits=10, decimal_places=2)
     color = serializers.CharField(max_length=50)
+    color_exterior = serializers.CharField(
+        max_length=50, required=False, allow_null=True, default=None
+    )
     product = serializers.JSONField()
 
 

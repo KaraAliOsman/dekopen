@@ -272,7 +272,8 @@ def _sealed_positions(version: dict[str, object]) -> list[dict[str, object]]:
         finish = ""
         try:
             glass_specs = frozen_glass_specs(value)
-            finish = finish_label(value.get("color_interior"), value.get("color_exterior"))
+            finish = str(value.get("finish") or "") or finish_label(
+                value.get("color_interior"), value.get("color_exterior"))
         except DocumentaryError:
             glass_specs = []
             finish = ""
@@ -286,6 +287,10 @@ def _sealed_positions(version: dict[str, object]) -> list[dict[str, object]]:
             "height_mm": str(value.get("height_mm") or ""),
             "color_interior": value.get("color_interior"),
             "color_exterior": value.get("color_exterior"),
+            # D05: sealed per-face finish detail — the portal paints the
+            # declared render swatch, never an invented color.
+            "color_interior_detail": value.get("color_interior_detail"),
+            "color_exterior_detail": value.get("color_exterior_detail"),
             "glass_specs": glass_specs,
             "finish": finish or None,
             # Unpriced legacy lines stay null — a "$0" reads as free, never as

@@ -43,6 +43,11 @@ from dekopen_engine.manufacturing_trace import (
     PlacementDomain,
     SemanticLeafTraceV1,
 )
+from dekopen_engine.finishes import (
+    ColorCombinationError,
+    resolve_color,
+    resolve_color_selection,
+)
 from dekopen_engine.models import BayOpeningType, EngineResult
 from dekopen_engine.openings import leaf_policy_opening_candidates
 from dekopen_engine.product import (
@@ -55,13 +60,13 @@ from dekopen_engine.purchasing import (
     PositionPurchaseInputV1,
     project_purchase_requirements_v1,
 )
-from dekopen_engine.snapshot import calculation_hash, calculation_response, result_payload
+from dekopen_engine.snapshot import calculation_hash, result_payload
 from engine_api.adapter import (
     evaluate_assembly_from_api,
     normalized_root_from_api,
     parse_product_model,
 )
-from engine_api.cutting_repository import CuttingRepository
+from engine_api.cutting_repository import CuttingRepository, steel_color_map
 from engine_api.inspection_repository import InspectorAuthorities, InspectorRepository
 from engine_api.repository import SystemParamsRepository
 from pricing.repository import commercial_backend
@@ -424,7 +429,11 @@ def _same_documentary_value(left: object, right: object) -> bool:
     return same_documentary_value(left, right)
 
 
-_BOM_ADDITIVE_KEYS = frozenset({"fittings"})
+# Output-additive BOM keys: lists/fields the engine emits that a sealed
+# snapshot may predate. D05 adds the finish identity + declared surcharges.
+_BOM_ADDITIVE_KEYS = frozenset(
+    {"fittings", "finish_key", "finish_label", "finish_class", "color_surcharges"}
+)
 _PIECE_ADDITIVE_KEYS = {
     # Output-additive metadata the model gained after BOMs were already
     # sealed — dropping them when a stored snapshot lacks them keeps old
@@ -538,7 +547,8 @@ def _drop_bom_keys(
 
 
 def _calculation_identity_hashes(
-    request: Mapping[str, object], result: EngineResult
+    request: Mapping[str, object], result: EngineResult, *,
+    legacy_request: Mapping[str, object] | None = None,
 ) -> tuple[str, ...]:
     """Current plus prior-era hashes for one engine result. Documentary
     inputs seal ``hash(request, payload-at-save-time)`` — every era that
@@ -546,11 +556,21 @@ def _calculation_identity_hashes(
     shape/sagitta, glass spec/article) must project the current payload back
     to that era's preimage or positions sealed then can never freeze again."""
     payload = result_payload(result)
+    # D05 era: positions sealed before the finish identity + color
+    # surcharges existed never carried them — project back so their
+    # stored hash still validates.
+    era_d05 = _drop_bom_keys(
+        payload,
+        frozenset(
+            {"finish_key", "finish_label", "finish_class", "color_surcharges"}
+        ),
+        {},
+    )
     # D04 era: emitted hardware items before the class/selection/expansion
     # fields existed. Projects the current payload back, then era9 drops
     # `contents.category` on top as before.
     era_d04 = _drop_bom_keys(
-        payload,
+        era_d05,
         frozenset(),
         {"hardware_items": _PIECE_ADDITIVE_KEYS["hardware_items"]},
         {"hardware_items": ("contents", _HARDWARE_CONTENTS_ADDITIVE)},
@@ -578,13 +598,17 @@ def _calculation_identity_hashes(
         frozenset(),
         {"glasses": frozenset({"glass_spec", "article_sku"})},
     )
-    return (
-        calculation_hash(request, payload),
-        calculation_hash(request, era_d04),
-        calculation_hash(request, era9),
-        calculation_hash(request, era94),
-        calculation_hash(request, era92),
-        calculation_hash(request, era86),
+    # D05: positions sealed before per-face colors hashed the binary
+    # request {"color": "WHITE"|"FOILED"}. When the canonical request
+    # differs (real catalog codes or an explicit bicolor exterior), the
+    # legacy form stays a valid alternative preimage.
+    requests = [request]
+    if isinstance(legacy_request, Mapping) and legacy_request != request:
+        requests.append(legacy_request)
+    return tuple(
+        calculation_hash(req, payload_era)
+        for req in requests
+        for payload_era in (payload, era_d05, era_d04, era9, era94, era92, era86)
     )
 
 
@@ -729,12 +753,54 @@ def _unique_by(items: list[T], attribute: str, code: str) -> list[T]:
     return [result[key] for key in sorted(result)]
 
 
+def _color_option_detail(option) -> dict[str, object]:
+    """D05: the resolved finish's sealed render record — what the doc and
+    portal color the faces with, and what the buyer reads on the quote."""
+    return {
+        "code": option.code,
+        "name": option.name,
+        "kind": option.kind.value,
+        "manufacturer_code": option.manufacturer_code,
+        "render_color": option.render_color,
+        "render_texture": option.render_texture,
+        "dark": option.dark,
+    }
+
+
+def _documentary_calculation_requests(
+    *, system_id: object, tree: dict[str, object], width_mm: Decimal,
+    height_mm: Decimal, color_interior: str, color_exterior: str,
+) -> tuple[dict[str, object], dict[str, object]]:
+    """D05: canonical request preimage + the binary-era request a legacy
+    position sealed. The canonical form carries the interior code and the
+    exterior code only when it differs — exactly what the design pipeline
+    hashes on write/read."""
+    request: dict[str, object] = {
+        "system_id": str(system_id),
+        "parametric_tree": tree,
+        "nominal_width_mm": width_mm,
+        "nominal_height_mm": height_mm,
+        "color": color_interior,
+    }
+    if color_exterior != color_interior:
+        request["color_exterior"] = color_exterior
+    legacy = {
+        key: value for key, value in request.items() if key != "color_exterior"
+    }
+    legacy["color"] = (
+        "WHITE" if color_interior == "WHITE" and color_exterior == "WHITE"
+        else "FOILED"
+    )
+    return request, legacy
+
+
 def _position_calculations(
     *,
     tree: dict[str, object],
     width_mm: Decimal,
     height_mm: Decimal,
     color: str,
+    color_exterior: str | None = None,
     params: object,
     system_id: UUID,
     org_id: UUID,
@@ -748,6 +814,15 @@ def _position_calculations(
     """
     calculations: list[tuple[str | None, GeometryComputation, dict[str, object]]] = []
     is_assembly = isinstance(tree, dict) and tree.get("version") == "product-v2"
+    # D05: the persisted interior/exterior codes resolve once here — the
+    # combination rules (bicolor, faces, pair) are the engine's, and an
+    # invalid pair must not freeze into documentary authority.
+    try:
+        color_selection = resolve_color_selection(
+            params, interior_code=color, exterior_code=color_exterior or color
+        )
+    except ColorCombinationError as error:
+        raise DocumentaryError(error.code, detail=str(error)) from error
     coupler_articles = (
         SystemParamsRepository().load_coupler_articles(system_id, org_id)
         if is_assembly
@@ -758,6 +833,7 @@ def _position_calculations(
         evaluation = evaluate_assembly_from_api(
             product=product,
             color=color,
+            color_exterior=color_exterior,
             params=params,
             coupler_articles=coupler_articles,
         )
@@ -770,7 +846,9 @@ def _position_calculations(
         module_specs = [(None, None)]
     for module_id, module in module_specs:
         if module is not None and module.contour is not None:
-            computation, _contour_issues = contour_module_computation(module, params)
+            computation, _contour_issues = contour_module_computation(
+                module, params, color_selection=color_selection
+            )
             if computation is None:
                 raise DocumentaryError("documentary_geometry_incomplete")
         elif module is not None and module.frameless is not None:
@@ -789,9 +867,12 @@ def _position_calculations(
                     module.height_mm if module is not None else height_mm
                 ),
                 color=color,
+                color_exterior=color_exterior,
                 params=params,
             )
-            computation = compute_geometry(module_root, params, diagnostic=True)
+            computation = compute_geometry(
+                module_root, params, diagnostic=True, color_selection=color_selection
+            )
         if computation.result is None or computation.manufacturing_trace is None:
             raise DocumentaryError("documentary_geometry_incomplete")
         module_tree = module.tree.model_dump(mode="json") if module is not None else tree
@@ -1201,21 +1282,27 @@ def freeze_revision_a(
             position_id = str(position["id"])
             tree = _json_object(position["parametric_tree"], "invalid_parametric_tree")
             is_assembly = isinstance(tree, dict) and tree.get("version") == "product-v2"
-            color = (
-                "WHITE"
-                if position["color_interior"] == "WHITE" and position["color_exterior"] == "WHITE"
-                else "FOILED"
-            )
+            color_interior = str(position["color_interior"])
+            color_exterior = str(position["color_exterior"] or color_interior)
             system_id = UUID(str(position["system_id"]))
             params = SystemParamsRepository().load_visible(system_id, org_id)
             calculations, result = _position_calculations(
                 tree=tree,
                 width_mm=D(str(position["width_mm"])),
                 height_mm=D(str(position["height_mm"])),
-                color=color,
+                color=color_interior,
+                color_exterior=color_exterior,
                 params=params,
                 system_id=system_id,
                 org_id=org_id,
+            )
+            # The finish key the position's bars are stocked under — a
+            # plain code or the bicolor "EXT/INT" key; pre-D05 results
+            # fall back to the binary domain they sealed.
+            stock_color = result.finish_key or (
+                "WHITE"
+                if color_interior == "WHITE" and color_exterior == "WHITE"
+                else "FOILED"
             )
             current_bom = result.model_dump(mode="json")
             stored_bom = _json_object(position["bom_snapshot"], "invalid_stored_bom")
@@ -1260,22 +1347,28 @@ def freeze_revision_a(
                 raise DocumentaryError("structural_input_target_invalid")
             # Foiled positions exist now — annotations on one may carry the
             # FOILED machining class; a WHITE design can never claim it.
-            if color == "WHITE" and any(
+            finish_class = result.finish_class or (
+                "WHITE"
+                if color_interior == "WHITE" and color_exterior == "WHITE"
+                else "NON_WHITE"
+            )
+            if finish_class == "WHITE" and any(
                 item.finish_class not in (None, "WHITE") for item in annotations
             ):
                 raise DocumentaryError("unsupported_documentary_color")
 
             inspector_authorities = InspectorRepository().load(system_id, org_id)
-            cutting = stock_repository.for_result(result, system_id, org_id, color)
-            calculation_request = {
-                "system_id": str(system_id),
-                "parametric_tree": tree,
-                "nominal_width_mm": D(str(position["width_mm"])),
-                "nominal_height_mm": D(str(position["height_mm"])),
-                "color": color,
-            }
+            cutting = stock_repository.for_result(
+                result, system_id, org_id, stock_color
+            )
+            calculation_request, legacy_request = _documentary_calculation_requests(
+                system_id=system_id, tree=tree,
+                width_mm=D(str(position["width_mm"])),
+                height_mm=D(str(position["height_mm"])),
+                color_interior=color_interior, color_exterior=color_exterior,
+            )
             identity_hashes = _calculation_identity_hashes(
-                calculation_request, result
+                calculation_request, result, legacy_request=legacy_request
             )
             source_hash = identity_hashes[0]
             stored_identity = position["documentary_calculation_hash"]
@@ -1290,7 +1383,7 @@ def freeze_revision_a(
                 for span in computation.spans:
                     try:
                         _, inertia = stock_repository.reinforcement_stock(
-                            system_id, org_id, span.parent_profile_sku, None, color
+                            system_id, org_id, span.parent_profile_sku
                         )
                     except MissingStockAuthority:
                         inertia = None
@@ -1475,7 +1568,8 @@ def freeze_revision_a(
                     position_index=int(position["position_index"]),
                     system_id=str(system_id),
                     quantity=quantity,
-                    color=color,
+                    color=stock_color,
+                    steel_colors=steel_color_map(cutting.stocks),
                     location_tag=location_tag,
                     manufacturing_units=units,
                     hardware=hardware,
@@ -1500,7 +1594,8 @@ def freeze_revision_a(
             following = load_purchase_authorities(
                 system_id=system_id,
                 org_id=org_id,
-                color=color,
+                color=stock_color,
+                reinforcement_colors=steel_color_map(cutting.stocks),
                 profile_skus=profile_skus,
                 reinforcement_skus=reinforcement_skus,
                 glass_skus=glass_skus,
@@ -1519,8 +1614,16 @@ def freeze_revision_a(
                 "system_id": system_id,
                 "width_mm": D(str(position["width_mm"])),
                 "height_mm": D(str(position["height_mm"])),
-                "color_interior": str(position["color_interior"]),
-                "color_exterior": str(position["color_exterior"]),
+                "color_interior": color_interior,
+                "color_exterior": color_exterior,
+                "finish_key": stock_color,
+                "finish": result.finish_label,
+                "color_interior_detail": _color_option_detail(
+                    resolve_color(params, color_interior)
+                ),
+                "color_exterior_detail": _color_option_detail(
+                    resolve_color(params, color_exterior)
+                ),
                 "location_tag": location_tag,
                 "system_name": str(position["system_name"]),
                 "system_is_demo": bool(position.get("system_is_demo")),
@@ -1889,28 +1992,27 @@ def prepare_documentary_inputs(
         reinforcement_options = reinforcement.get(system_id, [])
 
         tree = _json_object(position["parametric_tree"], "invalid_parametric_tree")
-        color = (
-            "WHITE"
-            if position.get("color_interior") == "WHITE" and position.get("color_exterior") == "WHITE"
-            else "FOILED"
-        )
+        color_interior = str(position["color_interior"])
+        color_exterior = str(position["color_exterior"] or color_interior)
         params = SystemParamsRepository().load_visible(system_id_uuid, org_id)
         calculations, result = _position_calculations(
             tree=tree,
             width_mm=D(str(position["width_mm"])),
             height_mm=D(str(position["height_mm"])),
-            color=color,
+            color=color_interior,
+            color_exterior=color_exterior,
             params=params,
             system_id=system_id_uuid,
             org_id=org_id,
         )
+        calculation_request, legacy_request = _documentary_calculation_requests(
+            system_id=system_id, tree=tree,
+            width_mm=D(str(position["width_mm"])),
+            height_mm=D(str(position["height_mm"])),
+            color_interior=color_interior, color_exterior=color_exterior,
+        )
         identity_hashes = _calculation_identity_hashes(
-            {
-                "system_id": system_id, "parametric_tree": tree,
-                "nominal_width_mm": D(str(position["width_mm"])),
-                "nominal_height_mm": D(str(position["height_mm"])), "color": color,
-            },
-            result,
+            calculation_request, result, legacy_request=legacy_request
         )
         identity_hash = identity_hashes[0]
         # A changed product no longer discards the estimator's work (review
@@ -2016,7 +2118,7 @@ def prepare_documentary_inputs(
             for span in computation.spans:
                 try:
                     _, inertia = stock_repository.reinforcement_stock(
-                        system_id_uuid, org_id, span.parent_profile_sku, None, color
+                        system_id_uuid, org_id, span.parent_profile_sku
                     )
                 except MissingStockAuthority:
                     inertia = None
@@ -2145,26 +2247,28 @@ def save_documentary_inputs(
         pos = positions_by_id[str(item["position_id"])]
         system_id_uuid = UUID(str(pos["system_id"]))
         tree = _json_object(pos["parametric_tree"], "invalid_parametric_tree")
-        color = (
-            "WHITE"
-            if pos.get("color_interior") == "WHITE" and pos.get("color_exterior") == "WHITE"
-            else "FOILED"
-        )
+        color_interior = str(pos["color_interior"])
+        color_exterior = str(pos["color_exterior"] or color_interior)
         params = SystemParamsRepository().load_visible(system_id_uuid, org_id)
         calculations, result = _position_calculations(
             tree=tree,
             width_mm=D(str(pos["width_mm"])),
             height_mm=D(str(pos["height_mm"])),
-            color=color,
+            color=color_interior,
+            color_exterior=color_exterior,
             params=params,
             system_id=system_id_uuid,
             org_id=org_id,
         )
-        identity_hash = calculation_response({
-            "system_id": str(system_id_uuid), "parametric_tree": tree,
-            "nominal_width_mm": D(str(pos["width_mm"])),
-            "nominal_height_mm": D(str(pos["height_mm"])), "color": color,
-        }, result)["calculation_hash"]
+        calculation_request, legacy_request = _documentary_calculation_requests(
+            system_id=system_id_uuid, tree=tree,
+            width_mm=D(str(pos["width_mm"])),
+            height_mm=D(str(pos["height_mm"])),
+            color_interior=color_interior, color_exterior=color_exterior,
+        )
+        identity_hashes = _calculation_identity_hashes(
+            calculation_request, result, legacy_request=legacy_request
+        )
         valid_bays, valid_leaves, valid_spans, valid_glass = _valid_targets(calculations)
         item_workshop = item.get("workshop_annotations") or []
         for w in item_workshop:
@@ -2183,7 +2287,7 @@ def save_documentary_inputs(
         for h in item.get("handle_intents") or []:
             if not isinstance(h, dict) or (h.get("bay_id"), h.get("leaf_id")) not in valid_leaves:
                 raise DocumentaryError("handle_intent_target_invalid")
-        if item.get("calculation_hash") != identity_hash:
+        if item.get("calculation_hash") not in identity_hashes:
             raise DocumentaryError("documentary_calculation_identity_stale")
 
     with documentary_backend():

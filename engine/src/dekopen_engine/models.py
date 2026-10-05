@@ -1143,6 +1143,169 @@ class LeafWeight(EngineModel):
     weight_unknown_reasons: list[str] = Field(default_factory=list)
 
 
+class ColorKind(str, Enum):
+    """Manufacturing process of a declared finish (D05).
+
+    Whole-bar kinds (MASS, ANODIZED) span the complete profile — a bar
+    extruded in one mass colour or anodized through can never carry a
+    different finish on the opposite face. The rest are applied finishes
+    and may pair with another face.
+    """
+
+    MASS = "MASS"  # PVC through-body colour
+    FOIL = "FOIL"  # laminated film on the declared face(s)
+    COEXTRUDED = "COEXTRUDED"  # coextruded skin — needs a declared base face
+    POWDER = "POWDER"  # powder coat (RAL)
+    ANODIZED = "ANODIZED"  # anodized — whole surface treatment
+    WOOD_EFFECT = "WOOD_EFFECT"  # wood-look film / sublimation
+
+
+class ColorSurcharge(EngineModel):
+    """Declared sell surcharge of a finish (D05).
+
+    ``amount`` is the declared rate; the basis it applies to is derived
+    from the BOM (profile metres for ``PER_PROFILE_METER``, position area
+    for ``PER_M2``, one for ``FIXED_PER_POSITION``) or — for
+    ``PCT_OF_MATERIALS`` — from the priced materials total. The rate is
+    catalog data either way: the engine never invents a number.
+    """
+
+    kind: Literal["PER_PROFILE_METER", "PER_M2", "FIXED_PER_POSITION", "PCT_OF_MATERIALS"]
+    amount: Decimal = Field(ge=Decimal("0"))
+    currency: str | None = None
+    label: str | None = None
+
+
+class ColorOption(EngineModel):
+    """A finish the series actually sells for one face of the profile (D05).
+
+    ``code`` keys ``profile_systems.finishes`` — the declared domain.
+    ``faces`` restricts which face may carry it; ``pair_code`` makes a
+    coextruded skin declare the base it needs on the opposite face.
+    ``finish_class`` feeds the reinforcement rules (NON_WHITE members get
+    mandatory steel); ``film_clearance``/``glass_clearance_mm`` pick the
+    declared glazing clearance; ``dark`` + ``size_factor`` shrink the leaf
+    envelope for heat-loaded finishes. ``render_color``/``render_texture``
+    are linear-sRGB render authority — a ``None`` render color means the
+    render stays approximate, never an invented swatch.
+    """
+
+    code: str
+    name: str
+    kind: ColorKind = ColorKind.MASS
+    # Manufacturer reference (RAL code, film ref, anodizing class).
+    manufacturer_code: str | None = None
+    # MATE / SATINADO / BRILLANTE for powder or anodized finishes.
+    gloss: str | None = None
+    # Linear sRGB hex ("#RRGGBB") — the authoritative render swatch.
+    render_color: str | None = None
+    # Declared render texture ("WOOD_GRAIN"); None renders flat.
+    render_texture: str | None = None
+    finish_class: Literal["WHITE", "NON_WHITE"] = "WHITE"
+    # The finish films the glazing rebate → the foil clearance applies.
+    film_clearance: bool = False
+    # Declared per-finish clearance override — wins over kind defaults.
+    glass_clearance_mm: Decimal | None = None
+    # Heat-loaded face (dark finishes warp bigger leaves without steel).
+    dark: bool = False
+    faces: Literal["BOTH", "EXTERIOR_ONLY", "INTERIOR_ONLY"] = "BOTH"
+    # Required code on the opposite face (e.g. coextruded skin over a
+    # white mass base).
+    pair_code: str | None = None
+    # Envelope multiplier for this finish (dark/foil limits ≤ 1).
+    size_factor: Decimal | None = Field(default=None, gt=Decimal("0"), le=Decimal("1"))
+    surcharge: ColorSurcharge | None = None
+    sort_order: int = 0
+    data_provenance: str | None = None
+
+
+class ColorSelection(EngineModel):
+    """Resolved interior+exterior finish pair for one position (D05)."""
+
+    interior: ColorOption
+    exterior: ColorOption
+
+    @property
+    def bicolor(self) -> bool:
+        return self.interior.code != self.exterior.code
+
+    @property
+    def finish_class(self) -> str:
+        """The machining finish domain (reinforcement rules, foil pricing):
+        NON_WHITE when either face is a non-white finish."""
+        if "NON_WHITE" in {self.interior.finish_class, self.exterior.finish_class}:
+            return "NON_WHITE"
+        return "WHITE"
+
+    @property
+    def dark(self) -> bool:
+        return self.interior.dark or self.exterior.dark
+
+    def stock_key(self) -> str:
+        """Physical bar identity for stock/BOM: the finish code, or
+        ``EXTERIOR/INTERIOR`` for a bicolor bar."""
+        if not self.bicolor:
+            return self.exterior.code
+        return f"{self.exterior.code}/{self.interior.code}"
+
+    def display_name(self) -> str:
+        """Quotation text («Nogal exterior / Blanco interior»)."""
+        if not self.bicolor:
+            return self.exterior.name
+        return f"{self.exterior.name} exterior / {self.interior.name} interior"
+
+    def glass_clearance_mm(self, params: "SystemParams") -> Decimal:
+        """Declared glazing clearance for the pair: an explicit per-finish
+        value wins over the film-vs-white declared defaults."""
+        declared = [
+            option.glass_clearance_mm
+            for option in (self.interior, self.exterior)
+            if option.glass_clearance_mm is not None
+        ]
+        if declared:
+            return max(declared)
+        if self.interior.film_clearance or self.exterior.film_clearance:
+            return params.glass_clearance_foil_mm
+        return params.glass_clearance_white_mm
+
+    def envelope_factor(self) -> Decimal:
+        """Leaf-envelope multiplier (≤ 1) from the declared per-finish
+        factors — dark finishes shrink the admissible envelope."""
+        factor = Decimal("1")
+        for option in (self.interior, self.exterior):
+            if option.size_factor is not None:
+                factor *= option.size_factor
+        return factor
+
+    def surcharges(self) -> tuple[tuple["ColorOption", "ColorSurcharge"], ...]:
+        """Every declared surcharge — both faces may carry one on bicolor."""
+        return tuple(
+            (option, option.surcharge)
+            for option in (self.interior, self.exterior)
+            if option.surcharge is not None
+        )
+
+
+class ColorSurchargeApplication(EngineModel):
+    """One declared finish surcharge applied to a BOM (D05).
+
+    The engine owns the basis: profile metres for ``PER_PROFILE_METER``,
+    the position area for ``PER_M2``, the unit for ``FIXED_PER_POSITION``.
+    ``PCT_OF_MATERIALS`` carries its rate with a ``None`` basis — the
+    priced materials total lives at the pricing boundary, never in the
+    pure engine.
+    """
+
+    option_code: str
+    option_name: str
+    kind: Literal["PER_PROFILE_METER", "PER_M2", "FIXED_PER_POSITION", "PCT_OF_MATERIALS"]
+    rate: Decimal
+    currency: str | None = None
+    label: str | None = None
+    basis: Decimal | None = None
+    basis_unit: Literal["M", "M2", "POSITION", "MATERIALS_PCT"]
+
+
 class SystemParams(EngineModel):
     system_code: str
     depth_mm: Decimal
@@ -1177,6 +1340,14 @@ class SystemParams(EngineModel):
     # Finishes the series actually sells — the estimator picks only declared
     # ones; every non-WHITE finish consumes the foil clearances.
     finishes: tuple[str, ...] = ("WHITE",)
+    # D05 finish catalog: the real per-face colors the series sells —
+    # manufacturer code, finish class, render color and declared surcharge
+    # per option. An empty map means the catalog never declared them: the
+    # legacy semantics (code != "WHITE" → foiled) apply unchanged.
+    color_options: dict[str, ColorOption] = Field(default_factory=dict)
+    # Whether two different finishes may pair on one bar (interior face
+    # ≠ exterior face). Combination rules live in finishes.resolve_color_selection.
+    bicolor_allowed: bool = False
     # Sliding/door fabrication data — required only on families that can
     # emit the opening; a facade or pure-casement series may leave them
     # undeclared (None) and the consumer raises when exercised.
@@ -1343,6 +1514,15 @@ class EngineResult(EngineModel):
     reinforcements: list[ReinforcementPiece]
     glasses: list[GlassPiece]
     panels: list[PanelPiece] = Field(default_factory=list)
+    # D05 resolved finish pair: stock identity (`EXTERIOR` or
+    # `EXTERIOR/INTERIOR` for bicolor), the quotation display name, the
+    # machining finish class and the declared sell surcharges with their
+    # BOM-derived basis. Absent on legacy calculations — persisted hash
+    # eras treat them as additive fields.
+    finish_key: str | None = None
+    finish_label: str | None = None
+    finish_class: str | None = None
+    color_surcharges: list[ColorSurchargeApplication] = Field(default_factory=list)
     fittings: list[FittingPiece] = Field(default_factory=list)
     hardware_items: list[HardwareItem] = Field(default_factory=list)
     leaf_weights: list[LeafWeight] = Field(default_factory=list)

@@ -1872,7 +1872,23 @@ function ProjectWorkspace({
                         ? t(typologyKeys[position.typology]!)
                         : position.typology}
                       {position.design.color
-                        ? ` · ${tOptional(`projects.color.${position.design.color}`) ?? position.design.color}`
+                        ? ` · ${
+                            position.design.color_exterior &&
+                            position.design.color_exterior !== position.design.color
+                              ? t("projects.colorSummary")
+                                  .replace(
+                                    "{exterior}",
+                                    tOptional(`projects.color.${position.design.color_exterior}`) ??
+                                      position.design.color_exterior,
+                                  )
+                                  .replace(
+                                    "{interior}",
+                                    tOptional(`projects.color.${position.design.color}`) ??
+                                      position.design.color,
+                                  )
+                              : (tOptional(`projects.color.${position.design.color}`) ??
+                                position.design.color)
+                          }`
                         : ""}
                     </span>
                     {Number(position.price_net) > 0 && (

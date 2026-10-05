@@ -464,6 +464,22 @@ export const messages = {
   "projects.vanoFixings": "Accesorios de fijación",
   "projects.vanoExtensions": "Ensanches",
   "projects.vanoReviewPending": "Regla de taller sin revisión técnica — valores de referencia.",
+  "projects.colorInterior": "Cara interior",
+  "projects.colorExterior": "Cara exterior",
+  "projects.colorFaceInterior": "interior",
+  "projects.colorFaceExterior": "exterior",
+  "projects.colorSameFaces": "Igual en ambas caras",
+  "projects.colorInteriorOnly": "Solo fabricado en la cara interior",
+  "projects.colorExteriorOnly": "Solo fabricado en la cara exterior",
+  "projects.colorSummary": "{exterior} exterior / {interior} interior",
+  "projects.colorFaceForbidden": "El acabado «{name}» no se fabrica en la cara {face}.",
+  "projects.colorBicolorForbidden":
+    "El sistema no admite acabados bicolor («{exterior}» exterior / «{interior}» interior).",
+  "projects.colorWholeBar":
+    "El acabado «{name}» es de barra completa (anodizado) — no admite una cara distinta.",
+  "projects.colorTwoMass":
+    "Los acabados «{exterior}» y «{interior}» son ambos colores de masa — una misma barra no lleva dos.",
+  "projects.colorPairRequires": "El acabado «{name}» exige «{pair}» en la cara opuesta.",
   "projects.calculate": "Validar diseño y materiales",
   "projects.calculationRequired": "Valida el diseño para ver un despiece actualizado.",
   "projects.distribution": "Distribución de paños · esquema de selección",

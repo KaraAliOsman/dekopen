@@ -35,7 +35,17 @@ export type SolidKind =
   | "threshold"
   | "spacer";
 
-export interface BoxSolid {
+/** D05 per-face finish stamped from the picked catalog colors — hex swatch
+ * + optional grain texture name; `*Interior` carries the room face so the
+ * inside view can show the real bicolor pair. */
+export interface SolidFinish {
+  tint?: string | null;
+  tintInterior?: string | null;
+  texture?: string | null;
+  textureInterior?: string | null;
+}
+
+export interface BoxSolid extends SolidFinish {
   kind: "box";
   owner: string;
   surface: SolidKind;
@@ -55,7 +65,7 @@ export interface BoxSolid {
 /** Member ring / pane extruded along the module's depth axis from a
  * module-local outline (x right, y up — the contour space). The extrusion
  * spans z0..z0+depth so glazing can sit inside the profile depth. */
-export interface ShapeSolid {
+export interface ShapeSolid extends SolidFinish {
   kind: "shape";
   owner: string;
   surface: SolidKind;
@@ -77,7 +87,7 @@ export interface ShapeSolid {
  * the direction the member runs in module space ("x" for rails, "y" for
  * posts); the run spans a0..a1 and the (u,v) origin sits at (u0, v0).
  * Never approximate — the polygon IS the manufacturer declaration. */
-export interface ProfileSolid {
+export interface ProfileSolid extends SolidFinish {
   kind: "profile";
   owner: string;
   surface: SolidKind;
@@ -99,7 +109,7 @@ export interface ProfileSolid {
 }
 
 /** Coupler wedge in world space: a plan polygon (x,z) extruded vertically. */
-export interface PrismSolid {
+export interface PrismSolid extends SolidFinish {
   kind: "prism";
   owner: string;
   surface: SolidKind;
@@ -2173,6 +2183,30 @@ export function buildScene3D(
       couplers.push({ ...bar, approximate: true });
       worldPoints.push([joint.x, joint.y, 0], [joint.x + joint.w, joint.y, 0]);
     }
+  }
+
+  // D05: stamp the picked finish on member-family surfaces — the exterior
+  // swatch rides the street face, the interior swatch the room face; the
+  // same stamped pair drives the inside view's bicolor flip.
+  const finish = members.frame.finish;
+  if (finish) {
+    const tintable: ReadonlySet<SolidKind> = new Set([
+      "frame",
+      "sash",
+      "mullion",
+      "bead",
+      "coupler",
+      "threshold",
+    ]);
+    const stamp = (solid: Solid3D): void => {
+      if (!tintable.has(solid.surface)) return;
+      solid.tint = finish.exterior.color ?? null;
+      solid.tintInterior = finish.interior.color ?? null;
+      solid.texture = finish.exterior.texture ?? null;
+      solid.textureInterior = finish.interior.texture ?? null;
+    };
+    moduleScenes.forEach((module) => module.solids.forEach(stamp));
+    couplers.forEach(stamp);
   }
 
   if (worldPoints.length === 0) {

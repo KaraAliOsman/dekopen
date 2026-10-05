@@ -44,7 +44,7 @@ from documents.renderers import (
     _infill_key,
     _piece_labels,
 )
-from engine_api.cutting_repository import CuttingRepository
+from engine_api.cutting_repository import CuttingRepository, steel_color_map
 from inventory import remnants as remnants_service
 from inventory import production_stock
 from production.confirmations import _confirmation_public
@@ -887,14 +887,19 @@ def release_production(*, org_id: UUID, version_id: UUID, actor_id: UUID) -> dic
             for pos in snapshot.get("positions") or []
             if pos.get("id")
         }
-        # The sealed color is what the cut optimizer's stock variants are
-        # named after — WHITE only when both faces are WHITE, else FOILED.
+        # The sealed finish key is what the cut optimizer's stock variants
+        # are named after — the "EXT/INT" bicolor key or plain finish code
+        # (D05); binary-era positions keep WHITE/FOILED.
         color_by_position = {
             str(pos.get("id")): (
-                "WHITE"
-                if pos.get("color_interior") == "WHITE"
-                and pos.get("color_exterior") == "WHITE"
-                else "FOILED"
+                str(pos.get("finish_key"))
+                if pos.get("finish_key")
+                else (
+                    "WHITE"
+                    if pos.get("color_interior") == "WHITE"
+                    and pos.get("color_exterior") == "WHITE"
+                    else "FOILED"
+                )
             )
             for pos in snapshot.get("positions") or []
             if pos.get("id")
@@ -3714,6 +3719,7 @@ def _compute_optimization(
         color=color,
         source_position_id=position_id,
         reinforcement_skus=authorities.reinforcement_skus,
+        reinforcement_colors=steel_color_map(authorities.stocks),
         reinforcement_angles=_reinforcement_angle_map(version_snapshot, position_id),
     )
     # pieces_from_result returns one unit's pieces; unit_index is the

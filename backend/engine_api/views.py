@@ -23,6 +23,7 @@ from authentication.tenancy import (
 )
 from authentication.views import verified_request_token
 from engine_api.adapter import (
+    InvalidColorCombination,
     InvalidEngineRequest,
     parse_product_model,
     UnsupportedEngineContract,
@@ -128,7 +129,15 @@ class EngineCalculateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def build_response(self, data, result, params):
-        return calculation_response({**data, "system_id": str(data["system_id"])}, result)
+        # D05: the hashed preimage is the canonical design form —
+        # `color_exterior` absent when it carries no information (same rule
+        # as projects._canonical_design and the derivative views' technical
+        # dict), so monocolor hashes stay identical to the pre-D05 contract
+        # and derivatives report the same source hash.
+        preimage = {**data, "system_id": str(data["system_id"])}
+        if preimage.get("color_exterior") in (None, "") or preimage["color_exterior"] == preimage["color"]:
+            preimage.pop("color_exterior", None)
+        return calculation_response(preimage, result)
 
     @extend_schema(
         operation_id="engine_calculate",
@@ -174,6 +183,7 @@ class EngineCalculateView(APIView):
                         nominal_width_mm=data["nominal_width_mm"],
                         nominal_height_mm=data["nominal_height_mm"],
                         color=data["color"],
+                        color_exterior=data.get("color_exterior"),
                         params=params,
                     )
                 except IncompatibleTypologyError as error:
@@ -214,6 +224,15 @@ class EngineCalculateView(APIView):
                 body["detail"],
                 extra=body["extra"],
             ) from error
+        except InvalidColorCombination as error:
+            # D05: the engine's es-CL reason names the faces and the rule —
+            # it is the user-facing message the selector was built around.
+            raise contract_error(
+                status.HTTP_400_BAD_REQUEST,
+                "color_combination_invalid",
+                str(error),
+                error_extra={"reason": error.reason},
+            ) from error
         except (InvalidEngineRequest, ValueError) as error:
             raise contract_error(
                 status.HTTP_400_BAD_REQUEST,
@@ -245,7 +264,8 @@ class EngineLayoutView(EngineCalculateView):
         root = normalized_root_from_api(
             parametric_tree=data["parametric_tree"],
             nominal_width_mm=data["nominal_width_mm"],
-            nominal_height_mm=data["nominal_height_mm"], color=data["color"], params=params,
+            nominal_height_mm=data["nominal_height_mm"], color=data["color"],
+            color_exterior=data.get("color_exterior"), params=params,
         )
         return {
             "calculation_hash": super().build_response(data, result, params)["calculation_hash"],
@@ -317,6 +337,7 @@ class EngineAssemblyCalculateView(APIView):
                     evaluation = evaluate_assembly_from_api(
                         product=model,
                         color=data["color"],
+                        color_exterior=data.get("color_exterior"),
                         params=params,
                         coupler_articles=coupler_articles,
                     )
@@ -357,6 +378,13 @@ class EngineAssemblyCalculateView(APIView):
                 "typology_incompatible",
                 body["detail"],
                 extra=body["extra"],
+            ) from error
+        except InvalidColorCombination as error:
+            raise contract_error(
+                status.HTTP_400_BAD_REQUEST,
+                "color_combination_invalid",
+                str(error),
+                error_extra={"reason": error.reason},
             ) from error
         except (InvalidEngineRequest, ValueError) as error:
             raise contract_error(

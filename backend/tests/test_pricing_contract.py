@@ -112,6 +112,7 @@ def test_position_cost_uses_engine_area_for_shaped_glass(monkeypatch):
     result = SimpleNamespace(
         profile_cuts=[], reinforcements=[], glasses=[glass],
         panels=[], hardware_items=[], fittings=[], leaf_weights=[],
+        finish_key=None, color_surcharges=[],
     )
 
     class Cursor:
@@ -179,6 +180,7 @@ def test_position_cost_prices_fittings_as_unit_pieces(monkeypatch):
     result = SimpleNamespace(
         profile_cuts=[], reinforcements=[], glasses=[glass],
         panels=[], hardware_items=[], fittings=[fitting], leaf_weights=[],
+        finish_key=None, color_surcharges=[],
     )
 
     class Cursor:
@@ -494,6 +496,7 @@ def test_position_cost_glass_product_min_area_and_surcharges(monkeypatch):
     result = SimpleNamespace(
         profile_cuts=[], reinforcements=[], glasses=[glass],
         panels=[], hardware_items=[], fittings=[], leaf_weights=[],
+        finish_key=None, color_surcharges=[],
     )
     product = GlassProduct(
         sku="VID-T", name="Templado 6",
