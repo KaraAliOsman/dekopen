@@ -12,6 +12,9 @@ export function SelectOrganizationPage(): JSX.Element {
   const auth = useAuthSession();
   const [pendingId, setPendingId] = useState<string | null>(null);
   if (auth.status === "ready") return <Navigate to={consumeReturnTo()} replace />;
+  // OWNER picks an org → the next /me flips to mfa_required. Without this
+  // redirect the user was stranded on the selector with no path forward.
+  if (auth.status === "mfa_required") return <Navigate to="/auth/mfa" replace />;
 
   return (
     <main className="auth-screen" data-testid="organization-selector">

@@ -1,119 +1,148 @@
-export type UxRole = "OWNER" | "ESTIMATOR" | "WORKSHOP_MANAGER" | "OPERATOR" | "INSTALLER";
+/** Declarative route table for ux:capture.
+ *
+ * `path` templates interpolate `{{projects.<slug>.id}}`, `{{orders.<k>}}`,
+ * `{{portal.<state>}}`, `{{vitrina_position_ids.<tag>}}` and
+ * `{{system_id}}` against `.fixture-state.json`.
+ *
+ * roles: which fixture account drives the session ("public" = no login).
+ * extraMobile: route also captures the 390×844 operator/portal viewport.
+ * touchAudit: the <44px target detector runs (floor and field roles).
+ */
 
-export type FixtureRefs = {
-  projectId: string;
-  positionId: string;
-  clientId: string;
-  quoteTokens: {
-    vigente: string;
-    aprobada: string;
-    revocada: string;
-    expirada: string;
-    reemplazada: string;
-  };
-};
+export type RouteRole =
+  "public" | "owner" | "estimator" | "manager" | "operator" | "installer" | "multi";
 
-export type RouteDefinition = {
-  id: string;
+export type CaptureRoute = {
+  name: string;
   path: string;
-  roles: UxRole[];
-  public?: boolean;
-  workshop?: boolean;
+  role: RouteRole;
+  extraMobile?: boolean;
+  touchAudit?: boolean;
+  /** settle hint: css selector to wait for before snapshotting */
+  waitFor?: string;
 };
 
-export const VIEWPORTS = [
-  { id: "1440x900", width: 1440, height: 900 },
-  { id: "1280x800", width: 1280, height: 800 },
-  { id: "1024x768", width: 1024, height: 768 },
-  { id: "390x844", width: 390, height: 844 },
-] as const;
-
-export const THEMES = ["light", "dark"] as const;
-
-export const FIXTURE_USERS: Record<UxRole, { email: string; password: string }> = {
-  OWNER: { email: "demo-owner@fixture.dekopen.local", password: "Demo-Fixture-2026!" },
-  ESTIMATOR: { email: "demo-estimator@fixture.dekopen.local", password: "Demo-Fixture-2026!" },
-  WORKSHOP_MANAGER: {
-    email: "demo-manager@fixture.dekopen.local",
-    password: "Demo-Fixture-2026!",
+export const ROUTES: CaptureRoute[] = [
+  // ---- public surfaces --------------------------------------------------
+  { name: "login", path: "/login", role: "public", waitFor: '[data-testid="login-page"]' },
+  {
+    name: "portal-vigente",
+    path: "/cotizacion/{{portal.vigente}}",
+    role: "public",
+    extraMobile: true,
   },
-  OPERATOR: { email: "demo-operator@fixture.dekopen.local", password: "Demo-Fixture-2026!" },
-  INSTALLER: { email: "demo-installer@fixture.dekopen.local", password: "Demo-Fixture-2026!" },
-};
+  {
+    name: "portal-aprobada",
+    path: "/cotizacion/{{portal.aprobada}}",
+    role: "public",
+    extraMobile: true,
+  },
+  {
+    name: "portal-revocada",
+    path: "/cotizacion/{{portal.revocada}}",
+    role: "public",
+    extraMobile: true,
+  },
+  {
+    name: "portal-expirada",
+    path: "/cotizacion/{{portal.expirada}}",
+    role: "public",
+    extraMobile: true,
+  },
+  {
+    name: "portal-reemplazada",
+    path: "/cotizacion/{{portal.reemplazada}}",
+    role: "public",
+    extraMobile: true,
+  },
+  { name: "pago-retorno", path: "/pago/retorno", role: "public" },
 
-export function routesForFixture(refs: FixtureRefs): RouteDefinition[] {
-  return [
-    { id: "inicio", path: "/", roles: ["ESTIMATOR"] },
-    { id: "login", path: "/login", roles: ["ESTIMATOR"], public: true },
-    { id: "panel", path: "/dashboard", roles: ["OWNER", "ESTIMATOR", "WORKSHOP_MANAGER"] },
-    { id: "proyectos", path: "/projects", roles: ["OWNER", "ESTIMATOR", "WORKSHOP_MANAGER"] },
-    {
-      id: "proyecto-detalle",
-      path: `/projects/${refs.projectId}`,
-      roles: ["OWNER", "ESTIMATOR", "WORKSHOP_MANAGER"],
-    },
-    {
-      id: "posicion-nueva",
-      path: `/projects/${refs.projectId}/positions/new`,
-      roles: ["ESTIMATOR"],
-    },
-    {
-      id: "posicion-edicion",
-      path: `/projects/${refs.projectId}/positions/${refs.positionId}/edit`,
-      roles: ["ESTIMATOR"],
-    },
-    {
-      id: "precios-proyecto",
-      path: `/projects/${refs.projectId}/pricing`,
-      roles: ["OWNER", "ESTIMATOR"],
-    },
-    { id: "precios-comercial", path: "/pricing/commercial", roles: ["OWNER", "ESTIMATOR"] },
-    { id: "costos", path: "/pricing/cost-lists", roles: ["OWNER"] },
-    { id: "clientes", path: "/clients", roles: ["OWNER", "ESTIMATOR"] },
-    { id: "cliente-detalle", path: `/clients/${refs.clientId}`, roles: ["OWNER", "ESTIMATOR"] },
-    { id: "catalogo", path: "/catalogs/systems", roles: ["OWNER", "WORKSHOP_MANAGER"] },
-    { id: "asistente", path: "/assistant", roles: ["OWNER", "ESTIMATOR", "WORKSHOP_MANAGER"] },
-    { id: "trabajos", path: "/jobs", roles: ["OWNER", "ESTIMATOR", "WORKSHOP_MANAGER"] },
-    { id: "ajustes", path: "/settings/general", roles: ["OWNER"] },
-    { id: "billetera", path: "/settings/wallet", roles: ["OWNER"] },
-    { id: "facturacion", path: "/settings/billing", roles: ["OWNER"] },
-    { id: "compras", path: "/purchasing", roles: ["OWNER", "WORKSHOP_MANAGER"] },
-    {
-      id: "produccion",
-      path: "/production",
-      roles: ["WORKSHOP_MANAGER", "OPERATOR", "INSTALLER"],
-      workshop: true,
-    },
-    {
-      id: "portal-vigente",
-      path: `/cotizacion/${refs.quoteTokens.vigente}`,
-      roles: ["ESTIMATOR"],
-      public: true,
-    },
-    {
-      id: "portal-aprobada",
-      path: `/cotizacion/${refs.quoteTokens.aprobada}`,
-      roles: ["ESTIMATOR"],
-      public: true,
-    },
-    {
-      id: "portal-revocada",
-      path: `/cotizacion/${refs.quoteTokens.revocada}`,
-      roles: ["ESTIMATOR"],
-      public: true,
-    },
-    {
-      id: "portal-expirada",
-      path: `/cotizacion/${refs.quoteTokens.expirada}`,
-      roles: ["ESTIMATOR"],
-      public: true,
-    },
-    {
-      id: "portal-reemplazada",
-      path: `/cotizacion/${refs.quoteTokens.reemplazada}`,
-      roles: ["ESTIMATOR"],
-      public: true,
-    },
-    { id: "pago-retorno", path: "/pago/retorno", roles: ["ESTIMATOR"], public: true },
-  ];
-}
+  // ---- owner (aal2) ------------------------------------------------------
+  {
+    name: "dashboard-owner",
+    path: "/dashboard",
+    role: "owner",
+    waitFor: '[data-testid="app-shell"]',
+    extraMobile: true,
+  },
+  { name: "settings-general", path: "/settings/general", role: "owner" },
+  { name: "settings-billing", path: "/settings/billing", role: "owner" },
+  { name: "settings-wallet", path: "/settings/wallet", role: "owner" },
+
+  // ---- estimator ---------------------------------------------------------
+  {
+    name: "dashboard",
+    path: "/dashboard",
+    role: "estimator",
+    waitFor: '[data-testid="app-shell"]',
+  },
+  { name: "projects", path: "/projects", role: "estimator" },
+  { name: "project-borrador", path: "/projects/{{projects.borrador.id}}", role: "estimator" },
+  { name: "project-cotizado", path: "/projects/{{projects.cotizado.id}}", role: "estimator" },
+  { name: "project-vitrina", path: "/projects/{{projects.vitrina.id}}", role: "estimator" },
+  { name: "project-conjuntos", path: "/projects/{{projects.conjuntos.id}}", role: "estimator" },
+  { name: "project-escala", path: "/projects/{{projects.escala.id}}", role: "estimator" },
+  {
+    name: "project-position-new",
+    path: "/projects/{{projects.borrador.id}}/positions/new",
+    role: "estimator",
+  },
+  {
+    name: "project-position-edit",
+    path: "/projects/{{projects.vitrina.id}}/positions/{{vitrina_position_ids.V01 Fijo living}}/edit",
+    role: "estimator",
+  },
+  { name: "project-pricing", path: "/projects/{{projects.vitrina.id}}/pricing", role: "estimator" },
+  { name: "pricing-commercial", path: "/pricing/commercial", role: "estimator" },
+  { name: "pricing-cost-lists", path: "/pricing/cost-lists", role: "estimator" },
+  { name: "clients-list", path: "/clients", role: "estimator" },
+  { name: "catalogs-systems", path: "/catalogs/systems", role: "estimator" },
+  { name: "catalogs-alias", path: "/catalogs", role: "estimator" },
+  { name: "assistant", path: "/assistant", role: "estimator" },
+  { name: "onboarding", path: "/onboarding", role: "estimator" },
+  { name: "demo-editor", path: "/projects/demo/positions/g1/edit", role: "estimator" },
+  { name: "benchmark", path: "/benchmark", role: "estimator" },
+
+  // ---- workshop manager --------------------------------------------------
+  {
+    name: "production-manager",
+    path: "/production",
+    role: "manager",
+    extraMobile: true,
+    touchAudit: true,
+  },
+  { name: "purchasing", path: "/purchasing", role: "manager" },
+  { name: "inventory-alias", path: "/inventory", role: "manager" },
+  { name: "jobs-manager", path: "/jobs", role: "manager" },
+
+  // ---- operator ----------------------------------------------------------
+  {
+    name: "production-operator",
+    path: "/production",
+    role: "operator",
+    extraMobile: true,
+    touchAudit: true,
+  },
+  {
+    name: "dashboard-operator",
+    path: "/dashboard",
+    role: "operator",
+    extraMobile: true,
+    touchAudit: true,
+  },
+  { name: "jobs-operator", path: "/jobs", role: "operator", extraMobile: true, touchAudit: true },
+
+  // ---- installer ----------------------------------------------------------
+  { name: "jobs-installer", path: "/jobs", role: "installer", extraMobile: true, touchAudit: true },
+  {
+    name: "production-installer",
+    path: "/production",
+    role: "installer",
+    extraMobile: true,
+    touchAudit: true,
+  },
+
+  // ---- multi-org selector -------------------------------------------------
+  { name: "select-organization", path: "/select-organization", role: "multi" },
+  { name: "dashboard-multi", path: "/dashboard", role: "multi" },
+];

@@ -1,360 +1,169 @@
-import { chromium, type Browser, type BrowserContext, type Page } from "@playwright/test";
-import { spawn, type ChildProcess } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
+#!/usr/bin/env node
+/** ux:capture — screenshot + leak/noise audit across every declared route.
+ *
+ *   npm run ux:capture -- --out docs/redesign/captures/baseline-2026-10-05 \
+ *       [--routes <glob>] [--roles owner,estimator,...] [--base http://127.0.0.1:5173]
+ *
+ * Requires: Vite dev server, Django API, Supabase stack + Mailpit, and a
+ * seeded .fixture-state.json (scripts/dev_fixture.py).
+ */
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { chromium } from "@playwright/test";
 
-import { detectTextFindings, summarizeFindings } from "./detectors.ts";
-import {
-  FIXTURE_USERS,
-  THEMES,
-  VIEWPORTS,
-  routesForFixture,
-  type FixtureRefs,
-  type RouteDefinition,
-  type UxRole,
-} from "./routes.ts";
+import { loginAs, type TotpVault } from "./auth.ts";
+import { runCaptures } from "./capture.ts";
+import { writeReport } from "./report.ts";
+import { ROUTES, type RouteRole } from "./routes.ts";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const REPO = resolve(HERE, "../../..");
+const STATE_PATH = process.env.FIXTURE_STATE ?? join(REPO, ".fixture-state.json");
+const DEFAULT_OUT = join(
+  REPO,
+  "docs/redesign/captures",
+  `baseline-${new Date().toISOString().slice(0, 10)}`,
+);
 
 type Args = {
   out: string;
   routes?: string;
-  roles?: UxRole[];
+  roles?: string[];
+  base: string;
 };
 
-type AuthSession = {
-  access_token: string;
-  refresh_token: string;
-  expires_in: number;
-  expires_at?: number;
-  token_type: string;
-  user: { id: string };
-};
-
-type CaptureRecord = {
-  routeId: string;
-  path: string;
-  role: string;
-  theme: string;
-  viewport: string;
-  screenshot: string;
-  overflowX: boolean;
-  consoleErrors: string[];
-  httpErrors: { url: string; status: number }[];
-  findings: { kind: string; match?: string; sample?: string }[];
-};
-
-const baseUrl = process.env.UX_CAPTURE_BASE_URL ?? "http://127.0.0.1:5173";
-const supabaseUrl =
-  process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? "http://127.0.0.1:25321";
-const anonKey = process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY ?? "";
-const djangoUrl = process.env.DJANGO_URL ?? "http://127.0.0.1:8000";
-const organizationId = process.env.DEKOPEN_FIXTURE_ORG_ID ?? "548b9ce5-746b-5a4a-9127-733c4dcd0582";
-
-function parseArgs(argv: string[]): Args {
-  const args: Args = { out: "docs/redesign/captures/ux-run" };
-  for (let index = 0; index < argv.length; index += 1) {
-    const item = argv[index];
-    if (item === "--out") args.out = argv[++index] ?? args.out;
-    else if (item === "--routes") args.routes = argv[++index];
-    else if (item === "--roles") {
-      args.roles = (argv[++index] ?? "")
+function parseArgs(): Args {
+  const args = process.argv.slice(2);
+  const out: Args = {
+    out: DEFAULT_OUT,
+    base: process.env.UX_BASE_URL ?? "http://127.0.0.1:5173",
+  };
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    const next = () => args[++i];
+    if (arg === "--out") out.out = resolve(next());
+    else if (arg === "--routes") out.routes = next();
+    else if (arg === "--roles")
+      out.roles = next()
         .split(",")
-        .map((role) => role.trim())
-        .filter((role): role is UxRole => role in FIXTURE_USERS);
+        .map((r) => r.trim());
+    else if (arg === "--base") out.base = next();
+    else {
+      console.error(`unknown arg: ${arg}`);
+      process.exit(2);
     }
   }
-  return args;
+  return out;
 }
 
-async function waitForHttp(url: string, timeoutMs = 30_000): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(2_000) });
-      if (response.status < 500) return true;
-    } catch {
-      await new Promise((resolve) => setTimeout(resolve, 500));
+/** {{a.b.c}} interpolation into .fixture-state.json values. */
+function resolvePath(template: string, state: Record<string, unknown>): string {
+  return template.replace(/\{\{([^}]+)\}\}/g, (_, keyPath: string) => {
+    const parts = keyPath.trim().split(".");
+    let node: unknown = state;
+    for (const part of parts) {
+      node = (node as Record<string, unknown>)?.[part];
     }
-  }
-  return false;
-}
-
-async function ensureVite(): Promise<ChildProcess | null> {
-  if (await waitForHttp(baseUrl, 2_000)) return null;
-  const npmCli = path.join(
-    path.dirname(process.execPath),
-    "node_modules",
-    "npm",
-    "bin",
-    "npm-cli.js",
-  );
-  const child = spawn(process.execPath, [npmCli, "run", "dev", "--", "--host", "127.0.0.1"], {
-    cwd: process.cwd(),
-    env: {
-      ...process.env,
-      VITE_SUPABASE_URL: supabaseUrl,
-      VITE_SUPABASE_ANON_KEY: anonKey,
-    },
-    stdio: "ignore",
+    if (typeof node !== "string" || !node) {
+      throw new Error(`fixture state has no value for {{${keyPath}}}`);
+    }
+    return node;
   });
-  if (!(await waitForHttp(baseUrl, 45_000))) {
-    child.kill();
-    throw new Error(`Vite did not become ready at ${baseUrl}`);
+}
+
+function globToRegExp(glob: string): RegExp {
+  const escaped = glob.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
+  return new RegExp(`^${escaped}$`);
+}
+
+async function main() {
+  const args = parseArgs();
+  if (!existsSync(STATE_PATH)) {
+    console.error(`fixture state not found at ${STATE_PATH} — run scripts/dev_fixture.py first`);
+    process.exit(1);
   }
-  return child;
-}
+  const state = JSON.parse(readFileSync(STATE_PATH, "utf8")) as Record<string, unknown>;
+  const accounts = state.accounts as Record<string, { email: string; role: string }>;
+  const totp = (state.totp ?? {}) as TotpVault;
+  state.totp = totp;
 
-async function signIn(role: UxRole): Promise<AuthSession> {
-  const user = FIXTURE_USERS[role];
-  const response = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
-    method: "POST",
-    headers: { apikey: anonKey, "Content-Type": "application/json" },
-    body: JSON.stringify({ email: user.email, password: user.password }),
-  });
-  if (!response.ok) {
-    throw new Error(`Could not sign in ${role}: HTTP ${response.status} ${await response.text()}`);
+  const routeFilter = args.routes ? globToRegExp(args.routes) : null;
+  const roleFilter = args.roles ? new Set(args.roles) : null;
+  const jobs = ROUTES.filter(
+    (r) =>
+      (!routeFilter || routeFilter.test(r.name) || routeFilter.test(r.path)) &&
+      (!roleFilter || roleFilter.has(r.role)),
+  ).map((r) => ({
+    route: r.name,
+    url: resolvePath(r.path, state),
+    role: r.role,
+    waitFor: r.waitFor,
+    extraMobile: r.extraMobile,
+    touchAudit: r.touchAudit,
+  }));
+  if (jobs.length === 0) {
+    console.error("no routes matched the filters");
+    process.exit(2);
   }
-  return (await response.json()) as AuthSession;
-}
 
-async function authenticatedFetch<T>(session: AuthSession, apiPath: string): Promise<T> {
-  const response = await fetch(`${djangoUrl}/api/v1${apiPath}`, {
-    headers: {
-      Authorization: `Bearer ${session.access_token}`,
-      "X-Organization-ID": organizationId,
-    },
-  });
-  if (!response.ok) throw new Error(`GET ${apiPath} -> ${response.status}`);
-  return (await response.json()) as T;
-}
+  mkdirSync(join(args.out, "shots"), { recursive: true });
+  // Sessions carry live tokens — keep them inside the gitignored harness dir,
+  // never under --out (which may be committed).
+  const authDir = join(HERE, ".auth");
+  mkdirSync(authDir, { recursive: true });
 
-async function discoverFixture(session: AuthSession): Promise<FixtureRefs> {
-  const projects = await authenticatedFetch<{ items: { id: string; name: string }[] }>(
-    session,
-    "/projects/",
+  // One real login per role — session persists as a playwright storageState.
+  const needed = [...new Set(jobs.map((j) => j.role))].filter(
+    (r): r is RouteRole => r !== "public",
   );
-  const project =
-    projects.items.find((item) => /casa|vivienda|fixture/i.test(item.name)) ?? projects.items[0];
-  if (!project) throw new Error("Fixture has no project; run scripts/dev_fixture.py first");
-  const detail = await authenticatedFetch<{
-    positions?: { id: string }[];
-    items?: { id: string }[];
-  }>(session, `/projects/${project.id}/`);
-  const positionId = detail.positions?.[0]?.id ?? detail.items?.[0]?.id ?? "missing-position";
-  let clientId = process.env.DEKOPEN_UX_CLIENT_ID ?? "missing-client";
-  try {
-    const clients = await authenticatedFetch<{ items: { id: string }[] }>(session, "/clients/");
-    clientId = clients.items[0]?.id ?? clientId;
-  } catch {
-    // Clients are still covered by /clients when detail discovery is unavailable.
-  }
-  return {
-    projectId: process.env.DEKOPEN_UX_PROJECT_ID ?? project.id,
-    positionId: process.env.DEKOPEN_UX_POSITION_ID ?? positionId,
-    clientId,
-    quoteTokens: {
-      vigente: process.env.DEKOPEN_UX_QUOTE_VIGENTE ?? "fixture-vigente",
-      aprobada: process.env.DEKOPEN_UX_QUOTE_APROBADA ?? "fixture-aprobada",
-      revocada: process.env.DEKOPEN_UX_QUOTE_REVOCADA ?? "fixture-revocada",
-      expirada: process.env.DEKOPEN_UX_QUOTE_EXPIRADA ?? "fixture-expirada",
-      reemplazada: process.env.DEKOPEN_UX_QUOTE_REEMPLAZADA ?? "fixture-reemplazada",
-    },
-  };
-}
-
-function globMatches(value: string, glob?: string): boolean {
-  if (!glob) return true;
-  const pattern = new RegExp(
-    `^${glob
-      .split("*")
-      .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-      .join(".*")}$`,
-  );
-  return pattern.test(value);
-}
-
-async function prepareContext(
-  browser: Browser,
-  role: UxRole,
-  theme: string,
-  viewport: { width: number; height: number },
-  publicRoute: boolean,
-): Promise<BrowserContext> {
-  const context = await browser.newContext({ baseURL: baseUrl, viewport });
-  await context.addInitScript(
-    ({ selectedTheme }) => {
-      window.localStorage.setItem("dekopen.theme", selectedTheme);
-    },
-    { selectedTheme: theme },
-  );
-  if (!publicRoute) {
-    const session = await signIn(role);
-    await context.addInitScript(
-      ({ authSession, orgId }) => {
-        window.localStorage.setItem(`dekopen.active_org.${authSession.user.id}`, orgId);
-        window.location.hash = "";
-      },
-      { authSession: session, orgId: organizationId },
-    );
+  const storageStates: Record<string, string> = {};
+  const browser = await chromium.launch();
+  for (const role of needed) {
+    const email = accounts[role]?.email;
+    if (!email) {
+      console.error(`fixture state has no account for role ${role}`);
+      continue;
+    }
+    const statePath = join(authDir, `${role}.json`);
+    const context = await browser.newContext({ baseURL: args.base });
     const page = await context.newPage();
-    const expiresAt = session.expires_at ?? Math.floor(Date.now() / 1000) + session.expires_in;
-    await page.goto(
-      `/auth/callback#access_token=${session.access_token}&refresh_token=${session.refresh_token}&expires_in=${session.expires_in}&expires_at=${expiresAt}&token_type=${session.token_type}&type=magiclink`,
-    );
-    await page.waitForFunction(() =>
-      Object.keys(window.localStorage).some(
-        (key) => key.startsWith("sb-") && key.endsWith("-auth-token"),
-      ),
-    );
-    await page.close();
+    try {
+      await loginAs(page, email, {
+        totp,
+
+        orgName: (state.org_name as string | undefined) ?? undefined,
+      });
+      await context.storageState({ path: statePath });
+      storageStates[role] = statePath;
+      console.log(`login ${role}: ${email} ok`);
+    } catch (error) {
+      console.error(`login ${role} FAILED: ${String(error).slice(0, 300)}`);
+    } finally {
+      await context.close();
+    }
   }
-  return context;
-}
+  await browser.close();
+  writeFileSync(STATE_PATH, JSON.stringify(state, null, 2) + "\n");
 
-async function collectPresentationFindings(
-  page: Page,
-  workshop: boolean,
-): Promise<{ kind: string; sample: string }[]> {
-  return page.evaluate((needsTouchTargets) => {
-    function visible(element: Element): boolean {
-      const style = window.getComputedStyle(element);
-      const box = element.getBoundingClientRect();
-      return (
-        style.visibility !== "hidden" && style.display !== "none" && box.width > 0 && box.height > 0
-      );
-    }
-    const findings: { kind: string; sample: string }[] = [];
-    for (const element of Array.from(document.body.querySelectorAll("*"))) {
-      if (!visible(element)) continue;
-      const text = (element.textContent ?? "").trim();
-      if (text && Number.parseFloat(window.getComputedStyle(element).fontSize) < 11) {
-        findings.push({ kind: "font-under-11", sample: text.slice(0, 120) });
-      }
-      if (
-        needsTouchTargets &&
-        element instanceof HTMLElement &&
-        (element.matches("button,a,input,select,textarea,[role='button']") || element.tabIndex >= 0)
-      ) {
-        const box = element.getBoundingClientRect();
-        if (box.width < 44 || box.height < 44) {
-          findings.push({
-            kind: "touch-target-under-44",
-            sample: `${element.tagName.toLowerCase()} ${text.slice(0, 80)}`,
-          });
-        }
-      }
-    }
-    return findings;
-  }, workshop);
-}
-
-async function captureRoute(
-  context: BrowserContext,
-  route: RouteDefinition,
-  role: UxRole,
-  theme: string,
-  viewportId: string,
-  outDir: string,
-): Promise<CaptureRecord> {
-  const page = await context.newPage();
-  const consoleErrors: string[] = [];
-  const httpErrors: { url: string; status: number }[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
+  console.log(`capturing ${jobs.length} routes…`);
+  const results = await runCaptures({
+    baseUrl: args.base,
+    jobs,
+    storageStates,
+    outDir: args.out,
   });
-  page.on("response", (response) => {
-    if (response.status() >= 400) {
-      httpErrors.push({ url: response.url(), status: response.status() });
-    }
-  });
-  await page.goto(route.path, { waitUntil: "networkidle", timeout: 45_000 });
-  await page.waitForTimeout(350);
-  const text = await page
-    .locator("body")
-    .innerText({ timeout: 5_000 })
-    .catch(() => "");
-  const overflowX = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
-  const findings = [
-    ...detectTextFindings(text),
-    ...(await collectPresentationFindings(
-      page,
-      route.workshop || role === "OPERATOR" || role === "INSTALLER",
-    )),
-  ];
-  const screenshot = `${route.id}__${role}__${theme}__${viewportId}.png`;
-  await page.screenshot({ path: path.join(outDir, screenshot), fullPage: true });
-  await page.close();
-  return {
-    routeId: route.id,
-    path: route.path,
-    role,
-    theme,
-    viewport: viewportId,
-    screenshot,
-    overflowX,
-    consoleErrors,
-    httpErrors,
-    findings,
-  };
-}
+  writeReport(args.out, results);
 
-function htmlReport(records: readonly CaptureRecord[]): string {
-  const items = records
-    .map(
-      (record) => `<article>
-<h2>${record.routeId} · ${record.role} · ${record.theme} · ${record.viewport}</h2>
-<img src="./${record.screenshot}" loading="lazy" width="240">
-<p>${record.path}</p>
-<p>Hallazgos: ${record.findings.length} · HTTP >=400: ${record.httpErrors.length} · consola: ${record.consoleErrors.length} · overflow: ${record.overflowX}</p>
-</article>`,
-    )
-    .join("\n");
-  return `<!doctype html><meta charset="utf-8"><title>DEKOPEN ux:capture</title><style>body{font-family:system-ui;margin:24px}main{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}article{border:1px solid #ccc;padding:12px}img{max-width:100%;border:1px solid #ddd}</style><main>${items}</main>`;
-}
-
-async function main(): Promise<void> {
-  const args = parseArgs(process.argv.slice(2));
-  const outDir = path.resolve(args.out);
-  await mkdir(outDir, { recursive: true });
-  const vite = await ensureVite();
-  const browser = await chromium.launch({ headless: true });
-  const estimator = await signIn("ESTIMATOR");
-  const refs = await discoverFixture(estimator);
-  const selectedRoles = new Set(args.roles ?? Object.keys(FIXTURE_USERS));
-  const routes = routesForFixture(refs).filter(
-    (route) => globMatches(route.id, args.routes) || globMatches(route.path, args.routes),
-  );
-  const records: CaptureRecord[] = [];
-  try {
-    for (const route of routes) {
-      const roles = route.public ? [route.roles[0] ?? "ESTIMATOR"] : route.roles;
-      for (const role of roles.filter((item) => selectedRoles.has(item))) {
-        for (const theme of THEMES) {
-          for (const viewport of VIEWPORTS) {
-            const context = await prepareContext(
-              browser,
-              role,
-              theme,
-              viewport,
-              Boolean(route.public),
-            );
-            records.push(await captureRoute(context, route, role, theme, viewport.id, outDir));
-            await context.close();
-          }
-        }
-      }
-    }
-  } finally {
-    await browser.close();
-    if (vite) vite.kill();
+  const findings = results.reduce((n, r) => n + r.findings.length, 0);
+  console.log(`done: ${results.length} captures, ${findings} findings → ${args.out}`);
+  if (findings > 0) {
+    const top = results
+      .filter((r) => r.findings.length)
+      .slice(0, 10)
+      .map((r) => `  ${r.route}: ${r.findings.length} (${r.role})`);
+    console.log(`top findings:\n${top.join("\n")}`);
   }
-  const report = {
-    generatedAt: new Date().toISOString(),
-    baseUrl,
-    records,
-    topFindings: summarizeFindings(records).slice(0, 30),
-  };
-  await writeFile(path.join(outDir, "report.json"), JSON.stringify(report, null, 2));
-  await writeFile(path.join(outDir, "index.html"), htmlReport(records));
 }
 
 await main();
