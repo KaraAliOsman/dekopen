@@ -142,6 +142,7 @@ def _seed_project(
                 ("COMPRA-MARCO", "BAR"),
                 ("COMPRA-JQ-10", "BAR"),
                 ("COMPRA-ACERO-MARCO", "BAR"),
+                ("TORNILLO-4X16", "EA"),
                 ("VIDRIO-BASE", "M2"),
             ):
                 admin_write(

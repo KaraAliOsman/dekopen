@@ -13,6 +13,7 @@ from documents.serializers import StrictSerializer
 from engine_api.serializers import DecimalStringField
 from ingest.catalog_parser import ROLES
 from ingest.parser import _OPENING_TYPES
+from ingest.spreadsheet import ENTITIES
 
 
 class ExtractPayloadSerializer(StrictSerializer):
@@ -135,10 +136,17 @@ CatalogImportCreateResponseSerializer = type(
 
 class CatalogItemSerializer(StrictSerializer):
     key = serializers.CharField(max_length=40)
-    sku = serializers.CharField(max_length=100)
+    entity = serializers.ChoiceField(
+        choices=sorted(ENTITIES), required=False, default="PROFILE"
+    )
+    fields = serializers.DictField(required=False, default=dict)
+    sku = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
     name = serializers.CharField(max_length=255, allow_blank=True, default="")
-    role = serializers.ChoiceField(choices=sorted(ROLES))
-    face_width_mm = DecimalStringField(max_digits=10, decimal_places=2, min_value=Decimal("0.5"))
+    role = serializers.ChoiceField(choices=sorted(ROLES), required=False, default="ADDITIONAL")
+    face_width_mm = DecimalStringField(
+        max_digits=10, decimal_places=2, min_value=Decimal("0.5"),
+        required=False, allow_null=True,
+    )
     # UNKNOWN is a state: parser-extracted candidates may carry None for any
     # fabrication field the supplier document never stated.
     commercial_length_mm = DecimalStringField(
@@ -174,9 +182,31 @@ class CatalogItemSerializer(StrictSerializer):
     )
 
 
+class NewSystemSerializer(StrictSerializer):
+    code = serializers.CharField(max_length=100)
+    name = serializers.CharField(max_length=255, allow_blank=True, default="")
+    depth_mm = DecimalStringField(max_digits=10, decimal_places=2, min_value=Decimal("1"))
+    material = serializers.ChoiceField(choices=["PVC", "ALUMINIUM"])
+    system_family = serializers.ChoiceField(
+        choices=["CASEMENT", "SLIDING", "LIFT_SLIDE", "DOOR", "FACADE_FIXED"]
+    )
+    finishes = serializers.ListField(
+        child=serializers.CharField(max_length=50), required=False, default=list
+    )
+
+
 class CatalogImportConfirmSerializer(StrictSerializer):
-    system_id = serializers.UUIDField()
+    system_id = serializers.UUIDField(required=False)
+    new_system = NewSystemSerializer(required=False)
+    cost_list_id = serializers.UUIDField(required=False)
     items = CatalogItemSerializer(many=True, min_length=1, max_length=200)
+
+    def validate(self, data):
+        if not data.get("system_id") and not data.get("new_system"):
+            raise serializers.ValidationError(
+                {"system_id": "catalog_system_required"}
+            )
+        return data
 
     def validate_items(self, value):
         # One candidate seeds at most one article per request — duplicate keys

@@ -510,15 +510,20 @@ def test_module_geometry_failure_refuses_to_save(monkeypatch):
 def test_sliding_openings_survive_save_typology(opening, expected, monkeypatch):
     """New sliding openings must reach persistence: a successful calculation
     whose typology previously fell to 422 now derives a real label."""
+    from engine.tests.catalog import demo_corredera_60_params
+
     monkeypatch.setattr(
-        SystemParamsRepository, "load_visible", lambda *_: demo_60_params()
+        SystemParamsRepository,
+        "load_visible",
+        lambda *_: demo_corredera_60_params(),
     )
     monkeypatch.setattr(
         SystemParamsRepository, "load_coupler_articles", lambda *_: {}
     )
     design = g1_request()
     # Wide enough that every preset's leaf lands inside the sliding kit's
-    # 400–1500 mm range (KIT-SLIDING on DEMO_60).
+    # envelope (KIT-SLIDING-CORR on DEMO_CORREDERA_60 — a sliding-family
+    # system, since D01 families reject sliding openings on DEMO_60).
     design["nominal_width_mm"] = Decimal("2400.00")
     design["nominal_height_mm"] = Decimal("1400.00")
     design["parametric_tree"]["opening_type"] = opening

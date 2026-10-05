@@ -6,9 +6,14 @@ from rest_framework.test import APIClient
 
 from backend.tests.test_engine_api import configure_api
 from dekopen_engine import SystemParams
-from engine.tests.catalog import demo_60_params
+from engine.tests.catalog import demo_60_params, demo_corredera_60_params
 from engine.tests.test_shot06_core import core_node
-from engine_api.repository import UnsupportedCatalogContract, _decimal, _hardware_contents
+from engine_api.repository import (
+    SystemParamsRepository,
+    UnsupportedCatalogContract,
+    _decimal,
+    _hardware_contents,
+)
 
 
 def test_json_hardware_quantities_never_pass_through_binary_float() -> None:
@@ -36,8 +41,8 @@ def test_loader_cannot_invent_or_approximate_numeric_authority(value: object) ->
 
 
 @pytest.mark.parametrize("case,kit,weight", [
-    ("G5", "KIT-SLIDING", "48.89"), ("G6", "KIT-AWNING-16", "23.96"),
-    ("G7", "KIT-DOOR-MULTIPOINT", "32.35"),
+    ("G5", "KIT-SLIDING-CORR", "49.98"), ("G6", "KIT-AWNING-16", "21.70"),
+    ("G7", "KIT-DOOR-MULTIPOINT", "35.81"),
 ])
 def test_core_response_is_typed_and_complete(
     monkeypatch: pytest.MonkeyPatch, case: str, kit: str, weight: str,
@@ -50,6 +55,12 @@ def test_core_response_is_typed_and_complete(
     }
     client = APIClient()
     configure_api(client, monkeypatch)
+    if case == "G5":
+        # Sliding openings need a sliding-family system since D01.
+        monkeypatch.setattr(
+            SystemParamsRepository, "load_visible",
+            lambda self, system_id, active_org_id: demo_corredera_60_params(),
+        )
     response = client.post("/api/v1/engine/calculate/", payload, format="json")
     assert response.status_code == 200
     actual = response.json()
@@ -73,5 +84,6 @@ def test_system_params_contract_accounts_for_every_field() -> None:
         "sliding_glazing_deduction_width_mm",
         "sliding_glazing_deduction_height_mm", "door_leaf_side_clearance_mm", "available_panel_rules",
         "rail_count", "finishes",
+        "system_family", "cut_rules", "reinforcement_rules", "typology_limits",
     }
-    assert len(demo_60_params().model_dump()) == 26
+    assert len(demo_60_params().model_dump()) == 30

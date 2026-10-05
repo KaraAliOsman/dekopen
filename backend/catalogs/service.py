@@ -339,10 +339,18 @@ def _stamp_section(values, current, actor_id):
 SINGLETON_ROLES = {
     "FRAME",
     "SASH",
+    "SLIDING_SASH",
+    "DOOR_SASH",
     "MULLION_V",
     "MULLION_H",
     "INVERSOR",
     "ADDITIONAL",
+    "INTERLOCK",
+    "RAIL",
+    "FRAME_EXTENSION",
+    "SILL",
+    "COVER_TRIM",
+    "SKIRT",
     "THRESHOLD",
 }
 

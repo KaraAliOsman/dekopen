@@ -98,6 +98,9 @@ SVC = {
 }
 
 DEMO_60 = "3067da09-3119-5ad0-a1d5-498cd2dfd753"
+# The sliding family sibling (D01): sliding typologies only compute against
+# a SLIDING-family system — the casement demo series refuses them.
+CORREDERA_60 = "f9398347-bd56-555c-b9d3-81b3d6b4af1a"
 DEMO_MARK = "DEMO FIXTURE — datos sintéticos, no fabricar"
 
 
@@ -335,9 +338,9 @@ GLASS = {
 }
 
 
-def design(width: str, height: str, tree: dict) -> dict:
+def design(width: str, height: str, tree: dict, system_id: str = DEMO_60) -> dict:
     return {
-        "system_id": DEMO_60,
+        "system_id": system_id,
         "nominal_width_mm": width,
         "nominal_height_mm": height,
         "color": "WHITE",
@@ -393,8 +396,8 @@ def tilt_turn_single(width: str, height: str, uid: str = "m1") -> dict:
 
 def sliding_2l(width: str, height: str, uid: str = "m1") -> dict:
     return design(
-        width, height,
-        {
+        width, height, system_id=CORREDERA_60,
+        tree={
             "id": uid, "type": "BAY",
             "opening_type": "SLIDING_2L", **GLASS,
         },
@@ -404,8 +407,8 @@ def sliding_2l(width: str, height: str, uid: str = "m1") -> dict:
 def sliding_oxoxo(width: str, height: str, uid: str = "m1") -> dict:
     """Corredera O/X/X/O — four slots on two rails, fixed-leaf bookends."""
     return design(
-        width, height,
-        {
+        width, height, system_id=CORREDERA_60,
+        tree={
             "id": uid, "type": "BAY",
             "opening_type": "SLIDING", **GLASS,
             "sliding_layout": {
@@ -545,7 +548,7 @@ def acoplado(width: str, height: str, uid: str = "aco") -> dict:
     """Conjunto acoplado — corredera + fijo at 0° on one coupler."""
     w = str(Decimal(width) / 2)
     return {
-        "system_id": DEMO_60,
+        "system_id": CORREDERA_60,
         "nominal_width_mm": width,
         "nominal_height_mm": height,
         "color": "WHITE",
@@ -570,7 +573,7 @@ def acoplado(width: str, height: str, uid: str = "aco") -> dict:
                     {
                         "id": f"{uid}-c1",
                         "angle_deg": "0.00",
-                        "coupler_profile_sku": "COPLE-60",
+                        "coupler_profile_sku": "COPLE-CORR",
                     },
                 ],
             },
@@ -773,8 +776,13 @@ def main() -> None:
                         f"{row[column]}::{row['physical_stock_identity']}"
                     )
         unit_identities = sorted(sku for (sku, _) in skus)
+        # Fastening fittings are bulk consumables: the sealed BOM emits
+        # aggregated REINFORCEMENT_SCREW counts that run into the hundreds per
+        # project — 500 units covers kits and glass, not screws.
+        fitting_skus = {sku for (sku, _), kind in skus.items() if kind == "FITTING"}
         for identity in sorted({*bar_identities, *unit_identities}):
             sku, _, variant = identity.partition("::")
+            receipt_qty = 50000 if sku in fitting_skus else 500
             item_id = str(uuid.uuid5(NS, f"stock-{identity}"))
             connection.execute(
                 "INSERT INTO public.inventory_items(id,org_id,sku,name,category,"
@@ -791,8 +799,8 @@ def main() -> None:
                 connection.execute(
                     "INSERT INTO public.inventory_movements(org_id,item_id,"
                     "movement_type,quantity,note,actor_id) "
-                    "VALUES(%s,%s,'RECEIPT',500,'fixture stock',%s)",
-                    (ORG_ID, item_id, users["owner"]),
+                    "VALUES(%s,%s,'RECEIPT',%s,'fixture stock',%s)",
+                    (ORG_ID, item_id, receipt_qty, users["owner"]),
                 )
 
     api(wm, "POST", "/production/work-centers/seed-defaults/")

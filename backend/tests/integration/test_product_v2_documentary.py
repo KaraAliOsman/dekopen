@@ -145,6 +145,7 @@ def _seed_bow_project(
             ("COMPRA-COPLE-60", "BAR"),
             ("COMPRA-HOJA", "BAR"),
             ("COMPRA-ACERO-HOJA", "BAR"),
+            ("TORNILLO-4X16", "EA"),
             ("KIT-TURN", "KIT"),
             ("VIDRIO-BASE", "M2"),
         ):

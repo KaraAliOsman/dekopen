@@ -1404,13 +1404,19 @@ def _doc01(snapshot: dict[str, object]) -> str:
             + "</li>"
         ]
         if system_name not in ("", "—"):
+            demo = " · DEMO" if ref.get("system_is_demo") else ""
             spec_items.append(
-                f'<li><span class="plabel">Sistema</span> {escape(system_name)}</li>'
+                f'<li><span class="plabel">Sistema</span> {escape(system_name + demo)}</li>'
             )
         openings = _opening_labels(ref.get("parametric_tree") or {})
         if openings:
             spec_items.append(
                 f'<li><span class="plabel">Apertura</span> {escape(", ".join(openings))}</li>'
+            )
+        limits_line = _limits_labels(ref.get("system_limits"))
+        if limits_line:
+            spec_items.append(
+                f'<li><span class="plabel">Límites</span> {escape(limits_line)}</li>'
             )
         spec_items.append(
             '<li><span class="plabel">Vista</span> Exterior</li>'
@@ -2886,6 +2892,40 @@ _CATEGORY_ES = {
     "HARDWARE_KIT": "Kit herraje", "PANEL": "Panel",
     "ACCESSORY": "Accesorio", "FITTING": "Fijación",
 }
+
+_LIMIT_SOURCE_LABEL = {
+    "SEED_SYNTHETIC": "catálogo demo",
+    "MANUAL": "ficha del fabricante",
+    "IMPORT": "importación revisada",
+    "LEGACY_UNVERIFIED": "catálogo heredado",
+}
+
+
+def _limits_labels(limits: object) -> str:
+    """Declared leaf envelope per typology, with its provenance as the source."""
+    if not isinstance(limits, list) or not limits:
+        return ""
+    parts: list[str] = []
+    for entry in limits:
+        if not isinstance(entry, dict):
+            continue
+        opening = str(entry.get("opening_type") or "").replace("_", " ").title()
+        low_w = entry.get("min_leaf_width_mm")
+        high_w = entry.get("max_leaf_width_mm")
+        low_h = entry.get("min_leaf_height_mm")
+        high_h = entry.get("max_leaf_height_mm")
+        span = ""
+        if low_w or high_w or low_h or high_h:
+            span = (
+                f" {low_w or '—'}–{high_w or '—'} × "
+                f"{low_h or '—'}–{high_h or '—'} mm"
+            )
+        source = _LIMIT_SOURCE_LABEL.get(
+            str(entry.get("data_provenance") or ""), "catálogo"
+        )
+        parts.append(f"{opening or '—'}{span} (fuente: {source})")
+    return " · ".join(parts)
+
 
 def _opening_labels(tree: dict[str, object]) -> list[str]:
     """Distinct human opening names declared in the sealed tree (e.g.

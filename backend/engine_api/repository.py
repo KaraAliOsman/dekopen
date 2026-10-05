@@ -19,9 +19,14 @@ from dekopen_engine import (
     HardwareComponent,
     PanelRule,
     MaterialType,
+    ProfileCutRule,
     ProfileRole,
     RailType,
+    ReinforcementRule,
+    SystemFamily,
     SystemParams,
+    TypologyLimit,
+    openings_for_family,
 )
 from dekopen_engine.manufacturing import HandleRequirementPolicyV1, handle_policy_from_json
 
@@ -40,6 +45,8 @@ class VisibleProfileSystem:
     code: str
     name: str
     is_demo: bool
+    system_family: SystemFamily
+    typology_limits: tuple[dict[str, object], ...] = ()
 
     def public_dict(self) -> dict[str, object]:
         return {
@@ -47,6 +54,14 @@ class VisibleProfileSystem:
             "code": self.code,
             "name": self.name,
             "is_demo": self.is_demo,
+            "system_family": self.system_family.value,
+            # The editor only offers typologies the family can cut.
+            "allowed_openings": sorted(
+                opening.value for opening in openings_for_family(self.system_family)
+            ),
+            # Declared leaf envelope per typology with its provenance — the
+            # editor and quotation show it next to the chosen system.
+            "typology_limits": list(self.typology_limits),
         }
 
 
@@ -106,7 +121,7 @@ class SystemParamsRepository:
         with connection.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT id, code, name, is_demo
+                SELECT id, code, name, is_demo, system_family
                 FROM public.profile_systems
                 WHERE is_active = TRUE
                   AND (is_global = TRUE OR org_id = %s)
@@ -114,13 +129,42 @@ class SystemParamsRepository:
                 """,
                 [active_org_id],
             )
-            rows: Sequence[tuple[object, object, object, object]] = cursor.fetchall()
+            rows = cursor.fetchall()
+            cursor.execute(
+                """
+                SELECT system_id, opening_type, min_leaf_width_mm,
+                       max_leaf_width_mm, min_leaf_height_mm,
+                       max_leaf_height_mm, max_leaf_weight_kg,
+                       max_aspect_ratio, data_provenance
+                FROM public.system_typology_limits
+                WHERE org_id IS NULL OR org_id = %s
+                ORDER BY opening_type
+                """,
+                [active_org_id],
+            )
+            limit_rows = cursor.fetchall()
+        limits_by_system: dict[str, list[dict[str, object]]] = {}
+        for row in limit_rows:
+            limits_by_system.setdefault(str(row[0]), []).append({
+                "opening_type": str(row[1]),
+                "min_leaf_width_mm": None if row[2] is None else str(row[2]),
+                "max_leaf_width_mm": None if row[3] is None else str(row[3]),
+                "min_leaf_height_mm": None if row[4] is None else str(row[4]),
+                "max_leaf_height_mm": None if row[5] is None else str(row[5]),
+                "max_leaf_weight_kg": None if row[6] is None else str(row[6]),
+                "max_aspect_ratio": None if row[7] is None else str(row[7]),
+                "source": str(row[8]),
+            })
         return tuple(
             VisibleProfileSystem(
                 id=row[0] if isinstance(row[0], UUID) else UUID(str(row[0])),
                 code=str(row[1]),
                 name=str(row[2]),
                 is_demo=bool(row[3]),
+                system_family=SystemFamily(str(row[4])),
+                typology_limits=tuple(
+                    limits_by_system.get(str(row[0]), [])
+                ),
             )
             for row in rows
         )
@@ -138,7 +182,7 @@ class SystemParamsRepository:
                        sliding_glazing_deduction_width_mm,
                        sliding_glazing_deduction_height_mm, door_leaf_side_clearance_mm,
                        rail_count, rebate_depth_mm, end_milling_overlap_mm,
-                       finishes::text
+                       finishes::text, system_family
                 FROM public.profile_systems
                 WHERE id = %s AND is_active = TRUE
                   AND (is_global = TRUE OR org_id = %s)
@@ -183,7 +227,102 @@ class SystemParamsRepository:
             finishes=tuple(json.loads(system[21])) if system[21] else ("WHITE",),
             available_panel_rules=self._load_panel_rules(system_id, active_org_id),
             available_hardware_kits=kits,
+            system_family=SystemFamily(str(system[22])),
+            cut_rules=self._load_cut_rules(system_id, active_org_id),
+            reinforcement_rules=self._load_reinforcement_rules(system_id, active_org_id),
+            typology_limits=self._load_typology_limits(system_id, active_org_id),
         )
+
+    _SCOPE_SQL = (
+        "system_id = %s AND (org_id = %s OR (org_id IS NULL AND system_id IN "
+        "(SELECT id FROM public.profile_systems WHERE org_id IS NULL AND is_global)))"
+    )
+
+    def _load_cut_rules(
+        self, system_id: UUID, active_org_id: UUID
+    ) -> dict[ProfileRole, ProfileCutRule]:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                SELECT role::text, cut_angle_deg, welded_ends,
+                       interlock_deduction_mm, rounding_mm, reinforcement_sku
+                FROM public.profile_cut_rules
+                WHERE {self._SCOPE_SQL}
+                ORDER BY role
+                """,
+                [system_id, active_org_id],
+            )
+            rows = cursor.fetchall()
+        return {
+            ProfileRole(str(row[0])): ProfileCutRule(
+                role=ProfileRole(str(row[0])),
+                cut_angle_deg=_decimal(row[1]),
+                welded_ends=None if row[2] is None else int(row[2]),
+                interlock_deduction_mm=_decimal(row[3]),
+                rounding_mm=_decimal(row[4]),
+                reinforcement_sku=str(row[5]) if row[5] is not None else None,
+            )
+            for row in rows
+        }
+
+    def _load_reinforcement_rules(
+        self, system_id: UUID, active_org_id: UUID
+    ) -> list[ReinforcementRule]:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                SELECT role::text, finish_class, min_length_mm, mandatory,
+                       reinforcement_sku, cut_deduction_mm,
+                       screws_per_m, screw_sku
+                FROM public.profile_reinforcement_rules
+                WHERE {self._SCOPE_SQL}
+                ORDER BY role, finish_class, min_length_mm
+                """,
+                [system_id, active_org_id],
+            )
+            rows = cursor.fetchall()
+        return [
+            ReinforcementRule(
+                role=ProfileRole(str(row[0])),
+                finish_class=cast(str, row[1]),
+                min_length_mm=_decimal(row[2]),
+                mandatory=bool(row[3]),
+                reinforcement_sku=str(row[4]) if row[4] is not None else None,
+                cut_deduction_mm=_decimal(row[5]),
+                screws_per_m=_decimal_or_none(row[6]),
+                screw_sku=str(row[7]) if row[7] is not None else None,
+            )
+            for row in rows
+        ]
+
+    def _load_typology_limits(
+        self, system_id: UUID, active_org_id: UUID
+    ) -> dict[str, TypologyLimit]:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                SELECT opening_type, min_leaf_width_mm, max_leaf_width_mm,
+                       min_leaf_height_mm, max_leaf_height_mm,
+                       max_leaf_weight_kg, max_aspect_ratio
+                FROM public.system_typology_limits
+                WHERE {self._SCOPE_SQL}
+                ORDER BY opening_type
+                """,
+                [system_id, active_org_id],
+            )
+            rows = cursor.fetchall()
+        return {
+            str(row[0]): TypologyLimit(
+                opening_type=str(row[0]),
+                min_leaf_width_mm=_decimal_or_none(row[1]),
+                max_leaf_width_mm=_decimal_or_none(row[2]),
+                min_leaf_height_mm=_decimal_or_none(row[3]),
+                max_leaf_height_mm=_decimal_or_none(row[4]),
+                max_leaf_weight_kg=_decimal_or_none(row[5]),
+                max_aspect_ratio=_decimal_or_none(row[6]),
+            )
+            for row in rows
+        }
 
     def _load_articles(
         self, system_id: UUID, active_org_id: UUID

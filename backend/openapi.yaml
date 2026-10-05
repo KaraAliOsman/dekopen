@@ -2115,6 +2115,49 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/catalog-imports/template/:
+    get:
+      operationId: catalog_import_template
+      description: Official XLSX template — the manual ingestion path's contract.
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - catalogs
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          description: Plantilla XLSX
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/catalogs/articles/:
     get:
       operationId: catalog_article_list
@@ -17017,13 +17060,17 @@ components:
         system_id:
           type: string
           format: uuid
+        new_system:
+          $ref: '#/components/schemas/NewSystemRequest'
+        cost_list_id:
+          type: string
+          format: uuid
         items:
           type: array
           items:
             $ref: '#/components/schemas/CatalogItemRequest'
       required:
       - items
-      - system_id
     CatalogImportConfirmResponse:
       type: object
       properties:
@@ -17128,20 +17175,30 @@ components:
           type: string
           minLength: 1
           maxLength: 40
+        entity:
+          allOf:
+          - $ref: '#/components/schemas/EntityEnum'
+          default: PROFILE
+        fields:
+          type: object
+          additionalProperties: {}
         sku:
           type: string
-          minLength: 1
+          default: ''
           maxLength: 100
         name:
           type: string
           default: ''
           maxLength: 255
         role:
-          $ref: '#/components/schemas/CatalogProfileRoleEnum'
+          allOf:
+          - $ref: '#/components/schemas/CatalogItemRoleEnum'
+          default: ADDITIONAL
         face_width_mm:
           type: string
           format: decimal
           pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
         commercial_length_mm:
           type: string
           format: decimal
@@ -17167,10 +17224,45 @@ components:
           pattern: ^-?\d{0,4}(?:\.\d{0,4})?$
           nullable: true
       required:
-      - face_width_mm
       - key
-      - role
-      - sku
+    CatalogItemRoleEnum:
+      enum:
+      - ADDITIONAL
+      - COUPLER
+      - COVER_TRIM
+      - DOOR_SASH
+      - FRAME
+      - FRAME_EXTENSION
+      - GLAZING_BEAD
+      - INTERLOCK
+      - INVERSOR
+      - MULLION_H
+      - MULLION_V
+      - RAIL
+      - SASH
+      - SILL
+      - SKIRT
+      - SLIDING_SASH
+      - THRESHOLD
+      type: string
+      description: |-
+        * `ADDITIONAL` - ADDITIONAL
+        * `COUPLER` - COUPLER
+        * `COVER_TRIM` - COVER_TRIM
+        * `DOOR_SASH` - DOOR_SASH
+        * `FRAME` - FRAME
+        * `FRAME_EXTENSION` - FRAME_EXTENSION
+        * `GLAZING_BEAD` - GLAZING_BEAD
+        * `INTERLOCK` - INTERLOCK
+        * `INVERSOR` - INVERSOR
+        * `MULLION_H` - MULLION_H
+        * `MULLION_V` - MULLION_V
+        * `RAIL` - RAIL
+        * `SASH` - SASH
+        * `SILL` - SILL
+        * `SKIRT` - SKIRT
+        * `SLIDING_SASH` - SLIDING_SASH
+        * `THRESHOLD` - THRESHOLD
     CatalogProfileRoleEnum:
       enum:
       - FRAME
@@ -19551,6 +19643,28 @@ components:
             $ref: '#/components/schemas/ProfileSystemSummary'
       required:
       - systems
+    EntityEnum:
+      enum:
+      - CUT_RULE
+      - FINISH
+      - GLAZING_RULE
+      - HARDWARE_KIT
+      - PRICE
+      - PROFILE
+      - REINFORCEMENT_RULE
+      - SYSTEM
+      - TYPOLOGY_LIMIT
+      type: string
+      description: |-
+        * `CUT_RULE` - CUT_RULE
+        * `FINISH` - FINISH
+        * `GLAZING_RULE` - GLAZING_RULE
+        * `HARDWARE_KIT` - HARDWARE_KIT
+        * `PRICE` - PRICE
+        * `PROFILE` - PROFILE
+        * `REINFORCEMENT_RULE` - REINFORCEMENT_RULE
+        * `SYSTEM` - SYSTEM
+        * `TYPOLOGY_LIMIT` - TYPOLOGY_LIMIT
     EnvironmentEnum:
       enum:
       - sandbox
@@ -21311,6 +21425,36 @@ components:
       - module_id
       - result
       - sliding
+    NewSystemRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 100
+        name:
+          type: string
+          default: ''
+          maxLength: 255
+        depth_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        material:
+          $ref: '#/components/schemas/MaterialEnum'
+        system_family:
+          $ref: '#/components/schemas/SystemFamilyEnum'
+        finishes:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 50
+      required:
+      - code
+      - depth_mm
+      - material
+      - system_family
     NodeLayout:
       type: object
       properties:
@@ -24259,6 +24403,16 @@ components:
           type: string
         is_demo:
           type: boolean
+        system_family:
+          type: string
+        allowed_openings:
+          type: array
+          items:
+            type: string
+        typology_limits:
+          type: array
+          items:
+            $ref: '#/components/schemas/TypologyLimit'
         quote_ready:
           type: boolean
         readiness_reasons:
@@ -24266,12 +24420,14 @@ components:
           items:
             type: string
       required:
+      - allowed_openings
       - code
       - id
       - is_demo
       - name
       - quote_ready
       - readiness_reasons
+      - system_family
     ProjectCreditNote:
       type: object
       properties:
@@ -26171,6 +26327,20 @@ components:
             $ref: '#/components/schemas/Supplier'
       required:
       - suppliers
+    SystemFamilyEnum:
+      enum:
+      - CASEMENT
+      - SLIDING
+      - LIFT_SLIDE
+      - DOOR
+      - FACADE_FIXED
+      type: string
+      description: |-
+        * `CASEMENT` - CASEMENT
+        * `SLIDING` - SLIDING
+        * `LIFT_SLIDE` - LIFT_SLIDE
+        * `DOOR` - DOOR
+        * `FACADE_FIXED` - FACADE_FIXED
     SystemList:
       type: object
       properties:
@@ -26567,6 +26737,34 @@ components:
         * `AM` - AM
         * `PM` - PM
         * `JORNADA` - JORNADA
+    TypologyLimit:
+      type: object
+      properties:
+        opening_type:
+          type: string
+        min_leaf_width_mm:
+          type: string
+          nullable: true
+        max_leaf_width_mm:
+          type: string
+          nullable: true
+        min_leaf_height_mm:
+          type: string
+          nullable: true
+        max_leaf_height_mm:
+          type: string
+          nullable: true
+        max_leaf_weight_kg:
+          type: string
+          nullable: true
+        max_aspect_ratio:
+          type: string
+          nullable: true
+        source:
+          type: string
+      required:
+      - opening_type
+      - source
     UnitEnum:
       enum:
       - kit

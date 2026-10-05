@@ -295,6 +295,7 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
     ["COMPRA-ACERO-MARCO", "BAR"],
     ["COMPRA-ACERO-POSTE-V", "BAR"],
     ["VIDRIO-BASE", "M2"],
+    ["TORNILLO-4X16", "EA"],
   ]) {
     await api("admin/cost-items/", {
       values: { cost_list_id: listId, sku, unit, item_type: "PROFILE", unit_cost: "100" },
@@ -407,7 +408,12 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   await page.getByLabel("Cotización válida hasta", { exact: true }).fill("2026-10-19");
   await expect(page.getByLabel("Criterio de fabricación", { exact: true })).not.toHaveValue("");
   await expect(page.getByLabel("Criterio de manillas", { exact: true })).not.toHaveValue("");
-  await expect(page.getByLabel("Criterio de refuerzos", { exact: true })).not.toHaveValue("");
+  // DEMO_60 ships two reinforcement authorities since D01 (V2 adds the
+  // DOOR_SASH role): the freeze requires an explicit pick when several
+  // versions compete, so select the current one.
+  await page
+    .getByLabel("Criterio de refuerzos", { exact: true })
+    .selectOption({ label: "DEMO_60_REINFORCEMENT_CUT_V2 · v2" });
   await page.getByLabel(/Confirmo la emisión: esta revisión/).check();
   const freezeA = page.waitForResponse(
     (response) =>

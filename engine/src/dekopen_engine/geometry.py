@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from decimal import Decimal
+from decimal import Decimal, ROUND_CEILING
 from typing import Literal
 
 from dekopen_engine.bom import build_engine_result
@@ -39,6 +39,8 @@ from dekopen_engine.models import (
     BayOpeningType,
     EffectiveProfileArticle,
     EngineResult,
+    FAMILY_OPENINGS,
+    FittingPiece,
     GlassPiece,
     GlazingBeadRule,
     HardwareItem,
@@ -51,10 +53,12 @@ from dekopen_engine.models import (
     ProfileRole,
     RailType,
     ReinforcementPiece,
+    ReinforcementRule,
     SlidingLayout,
     SlidingPanel,
     SlidingPanelKind,
     SystemParams,
+    TypologyLimit,
 )
 
 _TWO = Decimal("2")
@@ -87,14 +91,55 @@ _SLIDING_OPENING_TYPES = frozenset(
 )
 
 
-class SlidingLayoutError(ValueError):
-    """Domain rejection of a sliding topology — carries the issue code and
-    params the product evaluator surfaces verbatim."""
+class DomainRejection(ValueError):
+    """A domain-level refusal carrying the issue code and params the
+    product evaluator surfaces verbatim."""
 
     def __init__(self, code: str, message: str, params: dict[str, str]) -> None:
         super().__init__(message)
         self.code = code
         self.params = params
+
+
+class SlidingLayoutError(DomainRejection):
+    """Domain rejection of a sliding topology."""
+
+
+class IncompatibleTypologyError(DomainRejection):
+    """The opening typology does not belong to the system's fabrication
+    family — the engine refuses instead of cutting a leaf the series
+    cannot physically produce (D01)."""
+
+
+class DimensionalLimitError(DomainRejection):
+    """A leaf violated a declared dimensional limit of its typology (D01)."""
+
+
+def assert_opening_allowed(node: ParametricNode, params: SystemParams) -> None:
+    """Reject a typology the system's fabrication family cannot make (D01)."""
+    opening = node.opening_type
+    if opening is None:
+        return
+    allowed = FAMILY_OPENINGS[params.system_family]
+    if opening not in allowed:
+        compatible = [
+            family.value
+            for family, openings in FAMILY_OPENINGS.items()
+            if opening in openings
+        ]
+        raise IncompatibleTypologyError(
+            "typology_family_incompatible",
+            f"tipología {opening.value} incompatible con un sistema de familia "
+            f"{params.system_family.value}; "
+            f"sistemas compatibles: {', '.join(compatible) or 'ninguno declarado'}",
+            {
+                "system": params.system_code,
+                "family": params.system_family.value,
+                "opening": opening.value,
+                "allowed": ",".join(sorted(o.value for o in allowed)),
+                "compatible_families": ",".join(compatible),
+            },
+        )
 
 
 def _moving_panel(index: int, track: int) -> SlidingPanel:
@@ -232,6 +277,109 @@ _OPERABLE_OPENING_TYPES = frozenset(
     }
 )
 
+_DOOR_OPENING_TYPES = frozenset(
+    {BayOpeningType.DOOR_ENTRY, BayOpeningType.DOOR_DOUBLE}
+)
+
+
+def _optional_article(
+    params: SystemParams, role: ProfileRole
+) -> EffectiveProfileArticle | None:
+    """Catalog-declared article for a role, or None — never invented."""
+    article = params.effective_profile_articles.get(role)
+    if article is not None and article.role is not role:
+        raise ValueError(
+            f"Effective profile article key {role.value} has role {article.role.value}"
+        )
+    return article
+
+
+def _leaf_sash_role(params: SystemParams, opening_type: BayOpeningType) -> ProfileRole:
+    """Which profile role a leaf is cut from (D01).
+
+    Dedicated roles win when the catalog declares them: a sliding leaf rides
+    on SLIDING_SASH, a door leaf on DOOR_SASH. When the series carries no
+    dedicated article the honest answer is the standard sash profile — the
+    catalog declared that the leaf uses it.
+    """
+    if opening_type in _SLIDING_OPENING_TYPES:
+        if _optional_article(params, ProfileRole.SLIDING_SASH) is not None:
+            return ProfileRole.SLIDING_SASH
+        return ProfileRole.SASH
+    if opening_type in _DOOR_OPENING_TYPES:
+        if _optional_article(params, ProfileRole.DOOR_SASH) is not None:
+            return ProfileRole.DOOR_SASH
+        return ProfileRole.SASH
+    return ProfileRole.SASH
+
+
+def resolve_reinforcement_rule(
+    params: SystemParams,
+    role: ProfileRole,
+    *,
+    is_foiled: bool,
+    length_mm: Decimal,
+) -> ReinforcementRule | None:
+    """The declared reinforcement rule covering a member cut (D01).
+
+    Rules are catalog data: a member is reinforced only when a declared
+    rule matches its role, finish class and length. The most specific
+    finish class wins (WHITE / NON_WHITE over ALL); ties go to the highest
+    min_length still below the member length.
+    """
+    finish_class = "NON_WHITE" if is_foiled else "WHITE"
+    best: ReinforcementRule | None = None
+    for rule in params.reinforcement_rules:
+        if rule.role is not role:
+            continue
+        if rule.finish_class not in ("ALL", finish_class):
+            continue
+        if length_mm < rule.min_length_mm:
+            continue
+        if best is None:
+            best = rule
+            continue
+        specific = rule.finish_class == finish_class
+        best_specific = best.finish_class == finish_class
+        if specific and not best_specific:
+            best = rule
+        elif specific == best_specific and rule.min_length_mm >= best.min_length_mm:
+            best = rule
+    return best
+
+
+def check_typology_limits(
+    limit: TypologyLimit,
+    *,
+    width_mm: Decimal,
+    height_mm: Decimal,
+    weight_kg: Decimal | None,
+) -> list[str]:
+    """Violated dimensional bounds (D01) — only declared bounds enforce;
+    a null bound or an unknown weight reports nothing."""
+    violations: list[str] = []
+    if limit.min_leaf_width_mm is not None and width_mm < limit.min_leaf_width_mm:
+        violations.append("min_leaf_width_mm")
+    if limit.max_leaf_width_mm is not None and width_mm > limit.max_leaf_width_mm:
+        violations.append("max_leaf_width_mm")
+    if limit.min_leaf_height_mm is not None and height_mm < limit.min_leaf_height_mm:
+        violations.append("min_leaf_height_mm")
+    if limit.max_leaf_height_mm is not None and height_mm > limit.max_leaf_height_mm:
+        violations.append("max_leaf_height_mm")
+    if (
+        limit.max_leaf_weight_kg is not None
+        and weight_kg is not None
+        and weight_kg > limit.max_leaf_weight_kg
+    ):
+        violations.append("max_leaf_weight_kg")
+    if (
+        limit.max_aspect_ratio is not None
+        and width_mm > Decimal("0")
+        and height_mm / width_mm > limit.max_aspect_ratio
+    ):
+        violations.append("max_aspect_ratio")
+    return violations
+
 
 @dataclass(frozen=True, slots=True)
 class _Rect:
@@ -275,10 +423,17 @@ class _GeometryAccumulator:
     nominal_height_mm: Decimal = Decimal("0")
     profile_cuts: list[ProfileCut] = field(default_factory=list)
     reinforcements: list[ReinforcementPiece] = field(default_factory=list)
+    fittings: list[FittingPiece] = field(default_factory=list)
+    # Screws declared per reinforced member aggregate per (sku, bay, leaf):
+    # the BOM reports one counted line per fastening point set, so the
+    # purchase projection sees each fitting source exactly once.
+    screw_fittings: dict[tuple[str, str | None, str | None], int] = field(
+        default_factory=dict)
     glasses: list[GlassPiece] = field(default_factory=list)
     panels: list[PanelPiece] = field(default_factory=list)
     hardware_items: list[HardwareItem] = field(default_factory=list)
     leaf_weights: list[LeafWeight] = field(default_factory=list)
+    is_foiled: bool = False
     semantic_members: list[SemanticMemberTraceV1] = field(default_factory=list)
     semantic_leaves: list[SemanticLeafTraceV1] = field(default_factory=list)
     semantic_infills: list[SemanticInfillTraceV1] = field(default_factory=list)
@@ -391,11 +546,24 @@ def _append_profile(
     angle_right: Decimal = _ANGLE_WELDED,
     bay_id: str | None = None,
     leaf_id: str | None = None,
+    params: SystemParams | None = None,
 ) -> None:
     if length_mm <= Decimal("0"):
         raise ValueError("Profile cut must be positive")
     if qty != len(placements) or len({item.semantic_member_id for item in placements}) != qty:
         raise ValueError("Every physical profile requires one semantic placement")
+    cut_rule = (
+        params.cut_rules.get(article.role) if params is not None else None
+    )
+    if cut_rule is not None and cut_rule.rounding_mm > Decimal("0.01"):
+        # Declared cut rounding: the saw only promises the rule's quantum —
+        # the cut rounds UP to it rather than trusting finer fractions.
+        length_mm = (
+            (length_mm / cut_rule.rounding_mm).to_integral_value(
+                rounding=ROUND_CEILING
+            )
+            * cut_rule.rounding_mm
+        )
     accumulator.profile_cuts.append(
         ProfileCut(
             sku=article.sku,
@@ -410,21 +578,62 @@ def _append_profile(
         )
     )
     steel_length: Decimal | None = None
+    steel_sku = article.reinforcement_sku
     if welded_ends is not None and article.material is MaterialType.PVC:
-        steel_length = reinforcement_cut_length(length_mm, article, welded_ends)
-        if steel_length <= Decimal("0"):
-            raise ValueError("Reinforcement cut must be positive")
-        accumulator.reinforcements.append(
-            ReinforcementPiece(
-                parent_profile_sku=article.sku,
-                reinforcement_sku=article.reinforcement_sku,
-                role=article.role,
-                length_mm=steel_length,
-                qty=qty,
-                bay_id=bay_id,
-                leaf_id=leaf_id,
+        reinf_rule = (
+            resolve_reinforcement_rule(
+                params,
+                article.role,
+                is_foiled=accumulator.is_foiled,
+                length_mm=length_mm,
             )
+            if params is not None
+            else None
         )
+        if params is not None and params.reinforcement_rules:
+            # Declared rule table owns the decision (D01): a member is
+            # reinforced only when a matching mandatory rule fires — the
+            # catalog stated the requirement, the engine never invents it.
+            if reinf_rule is not None and reinf_rule.mandatory:
+                steel_length = (
+                    reinforcement_cut_length(length_mm, article, welded_ends)
+                    - reinf_rule.cut_deduction_mm
+                )
+                steel_sku = (
+                    reinf_rule.reinforcement_sku
+                    or (cut_rule.reinforcement_sku if cut_rule is not None else None)
+                    or article.reinforcement_sku
+                )
+        else:
+            # No declared rules: welded PVC members keep the canonical
+            # unconditional steel — the catalog never stated otherwise.
+            steel_length = reinforcement_cut_length(length_mm, article, welded_ends)
+        if steel_length is not None:
+            if steel_length <= Decimal("0"):
+                raise ValueError("Reinforcement cut must be positive")
+            accumulator.reinforcements.append(
+                ReinforcementPiece(
+                    parent_profile_sku=article.sku,
+                    reinforcement_sku=steel_sku,
+                    role=article.role,
+                    length_mm=steel_length,
+                    qty=qty,
+                    bay_id=bay_id,
+                    leaf_id=leaf_id,
+                )
+            )
+            if reinf_rule is not None and reinf_rule.screws_per_m is not None:
+                screws = (
+                    length_mm
+                    / Decimal("1000")
+                    * reinf_rule.screws_per_m
+                ).to_integral_value(rounding=ROUND_CEILING)
+                if screws > 0:
+                    assert reinf_rule.screw_sku is not None
+                    key = (reinf_rule.screw_sku, bay_id, leaf_id)
+                    accumulator.screw_fittings[key] = (
+                        accumulator.screw_fittings.get(key, 0) + int(screws) * qty
+                    )
     for placement in placements:
         accumulator.semantic_members.append(
             SemanticMemberTraceV1(
@@ -447,7 +656,7 @@ def _append_profile(
                 parent_leaf_id=placement.parent_leaf_id,
                 parent_infill_id=placement.parent_infill_id,
                 reinforcement_required=steel_length is not None,
-                reinforcement_sku=(article.reinforcement_sku if steel_length is not None else None),
+                reinforcement_sku=(steel_sku if steel_length is not None else None),
                 reinforcement_length_mm=steel_length,
             )
         )
@@ -460,6 +669,7 @@ def _append_frame(
     params: SystemParams,
     nominal_width_mm: Decimal,
     nominal_height_mm: Decimal,
+    bottom_article: EffectiveProfileArticle | None = None,
 ) -> None:
     horizontal = [
         _MemberPlacement(
@@ -505,14 +715,37 @@ def _append_frame(
             _trace_segment(nominal_width_mm, Decimal("0"), nominal_width_mm, nominal_height_mm),
         ),
     ]
-    _append_profile(
-        accumulator,
-        article=frame_article,
-        length_mm=nominal_width_mm + _TWO * joint_adjustment_per_end(params, frame_article),
-        qty=2,
-        welded_ends=2,
-        placements=horizontal,
-    )
+    if bottom_article is None:
+        _append_profile(
+            accumulator,
+            article=frame_article,
+            length_mm=nominal_width_mm + _TWO * joint_adjustment_per_end(params, frame_article),
+            qty=2,
+            welded_ends=2,
+            placements=horizontal,
+            params=params,
+        )
+    else:
+        # The sliding frame separates its bottom member as the rail/guide
+        # article — only the horizontal members split then.
+        _append_profile(
+            accumulator,
+            article=frame_article,
+            length_mm=nominal_width_mm + _TWO * joint_adjustment_per_end(params, frame_article),
+            qty=1,
+            welded_ends=2,
+            placements=horizontal[:1],
+            params=params,
+        )
+        _append_profile(
+            accumulator,
+            article=bottom_article,
+            length_mm=nominal_width_mm + _TWO * joint_adjustment_per_end(params, bottom_article),
+            qty=1,
+            welded_ends=2,
+            placements=horizontal[1:],
+            params=params,
+        )
     _append_profile(
         accumulator,
         article=frame_article,
@@ -520,6 +753,7 @@ def _append_frame(
         qty=2,
         welded_ends=2,
         placements=vertical,
+        params=params,
     )
 
 
@@ -607,6 +841,7 @@ def _append_glazing_beads(
         placements=horizontal,
         bay_id=bay_id,
         leaf_id=leaf_id,
+        params=params,
     )
     _append_profile(
         accumulator,
@@ -617,6 +852,7 @@ def _append_glazing_beads(
         placements=vertical,
         bay_id=bay_id,
         leaf_id=leaf_id,
+        params=params,
     )
 
 
@@ -673,10 +909,17 @@ def _pocket_dimension(
     article: EffectiveProfileArticle,
     params: SystemParams,
     clearance_mm: Decimal,
+    edge_faces: tuple[Decimal, Decimal] | None = None,
 ) -> Decimal:
+    """Glazed pocket inside a frame; `edge_faces` overrides the two face widths
+    when a member has asymmetric stiles (e.g. sash + encuentro)."""
+    face_left, face_right = (
+        edge_faces if edge_faces is not None else (article.face_width_mm, article.face_width_mm)
+    )
     return (
         finished_mm
-        - _TWO * article.face_width_mm
+        - face_left
+        - face_right
         + _TWO * rebate_depth(params)
         - _TWO * clearance_mm
     )
@@ -695,10 +938,36 @@ def _append_leaf(
     params: SystemParams,
     clearance_mm: Decimal,
     slot_pitch_mm: Decimal | None = None,
+    interlock_edges: frozenset[str] = frozenset(),
 ) -> None:
     if node.opening_type is None:
         raise ValueError("Physical leaf requires an opening type")
-    article = _article(params, ProfileRole.SASH)
+    sash_role = _leaf_sash_role(params, node.opening_type)
+    article = _article(params, sash_role)
+    # A meeting stile is cut from the INTERLOCK profile when the catalog
+    # carries one; its declared deduction shortens it at the meeting.
+    interlock_article = (
+        _optional_article(params, ProfileRole.INTERLOCK)
+        if interlock_edges
+        else None
+    )
+    interlock_deduction = Decimal("0")
+    if interlock_article is not None:
+        interlock_rule = params.cut_rules.get(ProfileRole.INTERLOCK)
+        if interlock_rule is not None:
+            interlock_deduction = interlock_rule.interlock_deduction_mm
+    # The pocket's width faces follow the real stiles: an edge that took the
+    # encuentro profile pockets with its face, not the sash's.
+    pocket_faces: tuple[Decimal, Decimal] | None = None
+    if interlock_article is not None:
+        pocket_faces = (
+            interlock_article.face_width_mm
+            if "LEFT" in interlock_edges
+            else article.face_width_mm,
+            interlock_article.face_width_mm
+            if "RIGHT" in interlock_edges
+            else article.face_width_mm,
+        )
     cut_start = len(accumulator.profile_cuts)
     steel_start = len(accumulator.reinforcements)
     semantic_leaf_id = f"{topology_path}/leaf/{leaf_slot}"
@@ -777,22 +1046,76 @@ def _append_leaf(
         placements=[member("TOP", Axis.HORIZONTAL), member("BOTTOM", Axis.HORIZONTAL)],
         bay_id=node.id,
         leaf_id=leaf_id,
+        params=params,
     )
-    _append_profile(
-        accumulator,
-        article=article,
-        length_mm=sash.cut_height_mm,
-        qty=2,
-        welded_ends=2,
-        placements=[member("LEFT", Axis.VERTICAL), member("RIGHT", Axis.VERTICAL)],
-        bay_id=node.id,
-        leaf_id=leaf_id,
+    if interlock_article is not None and (
+        ("LEFT" in interlock_edges) != ("RIGHT" in interlock_edges)
+    ):
+        # Mixed stiles: the meeting edge takes the interlock profile with
+        # its declared deduction; the other edge stays a sash member.
+        meeting = "LEFT" if "LEFT" in interlock_edges else "RIGHT"
+        plain = "RIGHT" if meeting == "LEFT" else "LEFT"
+        _append_profile(
+            accumulator,
+            article=interlock_article,
+            length_mm=sash.cut_height_mm - interlock_deduction,
+            qty=1,
+            welded_ends=2,
+            placements=[member(meeting, Axis.VERTICAL)],
+            bay_id=node.id,
+            leaf_id=leaf_id,
+            params=params,
+        )
+        _append_profile(
+            accumulator,
+            article=article,
+            length_mm=sash.cut_height_mm,
+            qty=1,
+            welded_ends=2,
+            placements=[member(plain, Axis.VERTICAL)],
+            bay_id=node.id,
+            leaf_id=leaf_id,
+            params=params,
+        )
+    elif interlock_article is not None and interlock_edges == {"LEFT", "RIGHT"}:
+        _append_profile(
+            accumulator,
+            article=interlock_article,
+            length_mm=sash.cut_height_mm - interlock_deduction,
+            qty=2,
+            welded_ends=2,
+            placements=[member("LEFT", Axis.VERTICAL), member("RIGHT", Axis.VERTICAL)],
+            bay_id=node.id,
+            leaf_id=leaf_id,
+            params=params,
+        )
+    else:
+        _append_profile(
+            accumulator,
+            article=article,
+            length_mm=sash.cut_height_mm,
+            qty=2,
+            welded_ends=2,
+            placements=[member("LEFT", Axis.VERTICAL), member("RIGHT", Axis.VERTICAL)],
+            bay_id=node.id,
+            leaf_id=leaf_id,
+            params=params,
+        )
+    width = _pocket_dimension(
+        sash.finished_width_mm, article, params, clearance_mm, pocket_faces
     )
-    width = _pocket_dimension(sash.finished_width_mm, article, params, clearance_mm)
     height = _pocket_dimension(sash.finished_height_mm, article, params, clearance_mm)
     if node.opening_type in _SLIDING_OPENING_TYPES:
-        width -= params.sliding_glazing_deduction_width_mm
-        height -= params.sliding_glazing_deduction_height_mm
+        sliding = params.sliding
+        if (
+            sliding.sliding_glazing_deduction_width_mm is None
+            or sliding.sliding_glazing_deduction_height_mm is None
+        ):
+            raise MissingFabricationAuthority(
+                "Missing sliding authority: sliding_glazing_deduction_*"
+            )
+        width -= sliding.sliding_glazing_deduction_width_mm
+        height -= sliding.sliding_glazing_deduction_height_mm
     infill_kind: Literal["GLASS", "PANEL"]
     if node.opening_type is BayOpeningType.DOOR_ENTRY:
         if node.panel_article_sku is None:
@@ -927,6 +1250,31 @@ def _append_leaf(
             raise
         accumulator.contract_valid = False
         kit, exact_weight = None, None
+    # Declared dimensional limits per typology (D01): the leaf envelope is
+    # validated against the catalog bounds — the editor and quotation read
+    # the same table, so a violation names the bound that failed.
+    limit = params.typology_limits.get(node.opening_type.value)
+    if limit is not None:
+        violations = check_typology_limits(
+            limit,
+            width_mm=sash.finished_width_mm,
+            height_mm=sash.finished_height_mm,
+            weight_kg=(
+                exact_weight.total_weight_kg if exact_weight is not None else None
+            ),
+        )
+        if violations:
+            raise DimensionalLimitError(
+                "leaf_dimensional_limit",
+                f"hoja {node.opening_type.value} fuera de los límites "
+                f"declarados del sistema ({', '.join(violations)})",
+                {
+                    "opening": node.opening_type.value,
+                    "violations": ",".join(violations),
+                    "leaf_width_mm": str(sash.finished_width_mm),
+                    "leaf_height_mm": str(sash.finished_height_mm),
+                },
+            )
     accumulator.computation.leaves.append(
         LeafTechnicalFacts(
             bay_id=node.id,
@@ -1059,30 +1407,44 @@ def _append_sliding(
     """
     layout = resolved_sliding_layout(node)
     validate_sliding_layout(layout, params)
-    article = _article(params, ProfileRole.SASH)
+    article = _article(params, _leaf_sash_role(params, node.opening_type or BayOpeningType.SLIDING))
+    sliding = params.sliding
     count = len(layout.panels)
     # Equal pitches floored to the canonical 0.01 mm grid; the last slot
     # absorbs the remainder so the slots tile the frame exactly and every
     # derived measure stays serializable (a raw n-division can repeat).
     pitch = (
-        (rect.width_mm - params.central_overlap_mm) / count
+        (rect.width_mm - sliding.central_overlap_mm) / count
     ).quantize(Decimal("0.01"))
     pitches = [pitch] * (count - 1) + [
-        rect.width_mm - params.central_overlap_mm - pitch * (count - 1)
+        rect.width_mm - sliding.central_overlap_mm - pitch * (count - 1)
     ]
-    cut_height = rect.height_mm - _TWO * params.pulley_height_mm
+    cut_height = rect.height_mm - _TWO * sliding.pulley_height_mm
     adjustment = joint_adjustment_per_end(params, article)
     slot_x = rect.x_mm
     for index, panel in enumerate(layout.panels):
-        finished_width = pitches[index] + params.central_overlap_mm
+        finished_width = pitches[index] + sliding.central_overlap_mm
         if panel.kind is SlidingPanelKind.MOVING:
             leaf_slot = f"L{index + 1}"
-            cut_width = finished_width + params.sliding_end_add_mm
+            cut_width = finished_width + sliding.sliding_end_add_mm
             sash = SashGeometry(
                 finished_width_mm=cut_width - _TWO * adjustment,
                 finished_height_mm=cut_height - _TWO * adjustment,
                 cut_width_mm=cut_width,
                 cut_height_mm=cut_height,
+            )
+            # Meeting stiles: an edge of a moving panel interlocks when the
+            # neighbouring slot is another moving panel on the other rail.
+            interlock_edges = frozenset(
+                edge
+                for edge, neighbour in (
+                    ("LEFT", layout.panels[index - 1] if index > 0 else None),
+                    (
+                        "RIGHT",
+                        layout.panels[index + 1] if index + 1 < count else None,
+                    ),
+                )
+                if neighbour is not None and neighbour.kind is SlidingPanelKind.MOVING
             )
             _append_leaf(
                 accumulator,
@@ -1096,6 +1458,7 @@ def _append_sliding(
                 params=params,
                 clearance_mm=clearance_mm,
                 slot_pitch_mm=pitch,
+                interlock_edges=interlock_edges,
             )
         else:
             slot_rect = _Rect(
@@ -1130,6 +1493,7 @@ def _append_bay(
     opening = node.opening_type
     if opening is None:
         raise ValueError(f"BAY {node.id} requires opening_type")
+    assert_opening_allowed(node, params)
     if opening not in SUPPORTED_OPENING_TYPES:
         raise NotImplementedError(f"{opening.value} geometry is outside SHOT-06 Core")
     if opening is BayOpeningType.DOOR_ENTRY:
@@ -1162,7 +1526,7 @@ def _append_bay(
             clearance_mm=clearance_mm,
         )
         return
-    article = _article(params, ProfileRole.SASH)
+    article = _article(params, _leaf_sash_role(params, opening))
     if opening in _OPERABLE_OPENING_TYPES:
         sash = single_rectangular_sash_geometry(rect.width_mm, rect.height_mm, article, params)
         direct_rect = _Rect(
@@ -1231,6 +1595,7 @@ def _append_door(
                 _trace_segment(Decimal("0"), Decimal("0"), nominal_width_mm, Decimal("0")),
             )
         ],
+        params=params,
     )
     _append_profile(
         accumulator,
@@ -1261,6 +1626,7 @@ def _append_door(
                 _trace_segment(nominal_width_mm, Decimal("0"), nominal_width_mm, nominal_height_mm),
             ),
         ],
+        params=params,
     )
     clear_width = nominal_width_mm - _TWO * frame.face_width_mm
     threshold_y = nominal_height_mm - params.door_threshold_mm
@@ -1290,7 +1656,12 @@ def _append_door(
                 ),
             )
         ],
+        params=params,
     )
+    if params.door_leaf_side_clearance_mm is None:
+        raise MissingFabricationAuthority(
+            "Missing door authority: door_leaf_side_clearance_mm"
+        )
     outer_width = clear_width - _TWO * params.door_leaf_side_clearance_mm
     outer_height = (
         nominal_height_mm
@@ -1299,7 +1670,12 @@ def _append_door(
         - params.door_bottom_clearance_mm
         + params.sash_overlap_mm
     )
-    sash = _jointed_sash(outer_width, outer_height, _article(params, ProfileRole.SASH), params)
+    sash = _jointed_sash(
+        outer_width,
+        outer_height,
+        _article(params, _leaf_sash_role(params, node.opening_type or BayOpeningType.DOOR_ENTRY)),
+        params,
+    )
     reference_rect = _Rect(
         frame.face_width_mm,
         frame.face_width_mm,
@@ -1333,6 +1709,7 @@ def _append_mullion(
     length_mm: Decimal,
     topology_path: str,
     segment: TraceSegmentV1,
+    params: SystemParams,
 ) -> None:
     _append_profile(
         accumulator,
@@ -1342,6 +1719,7 @@ def _append_mullion(
         welded_ends=0,
         angle_left=_ANGLE_SQUARE,
         angle_right=_ANGLE_SQUARE,
+        params=params,
         placements=[
             _MemberPlacement(
                 semantic_member_id=f"{topology_path}/mullion",
@@ -1441,6 +1819,7 @@ def _walk_node(
         length_mm=mullion_length_mm,
         topology_path=topology_path,
         segment=mullion_segment,
+        params=params,
     )
     accumulator.computation.spans.append(
         SpanTechnicalFacts(
@@ -1497,9 +1876,14 @@ def compute_geometry(
         top_node_id=top.id,
         nominal_width_mm=nominal_width_mm,
         nominal_height_mm=nominal_height_mm,
+        is_foiled=is_foiled,
     )
     clearance_mm = params.glass_clearance_foil_mm if is_foiled else params.glass_clearance_white_mm
     top_path = f"root/{top.id}"
+    # Family gate (D01): a top-level BAY never reaches math its system's
+    # fabrication family cannot produce — nested bays check per-node below.
+    if top.type is NodeType.BAY:
+        assert_opening_allowed(top, params)
     if top.type is NodeType.BAY and top.opening_type is BayOpeningType.DOOR_ENTRY:
         accumulator.computation.node_dimensions[top.id] = (nominal_width_mm, nominal_height_mm)
         _append_door(
@@ -1512,12 +1896,21 @@ def compute_geometry(
             clearance_mm=clearance_mm,
         )
     else:
+        # When the frame of a sliding unit separates its bottom rail as a
+        # dedicated RAIL article, that member is cut from it (D01).
+        bottom_article = None
+        if (
+            top.type is NodeType.BAY
+            and top.opening_type in _SLIDING_OPENING_TYPES
+        ):
+            bottom_article = _optional_article(params, ProfileRole.RAIL)
         _append_frame(
             accumulator,
             frame_article=frame_article,
             params=params,
             nominal_width_mm=nominal_width_mm,
             nominal_height_mm=nominal_height_mm,
+            bottom_article=bottom_article,
         )
         frame_clear_rect = _Rect(
             x_mm=frame_article.face_width_mm,
@@ -1543,12 +1936,26 @@ def compute_geometry(
         leaves=accumulator.semantic_leaves,
         infills=accumulator.semantic_infills,
     )
+    for (screw_sku, bay_id, leaf_id), screw_qty in sorted(
+        accumulator.screw_fittings.items(),
+        key=lambda item: (item[0][0], item[0][1] or "", item[0][2] or ""),
+    ):
+        accumulator.fittings.append(
+            FittingPiece(
+                kind="REINFORCEMENT_SCREW",
+                sku=screw_sku,
+                qty=screw_qty,
+                bay_id=bay_id,
+                leaf_id=leaf_id,
+            )
+        )
     if accumulator.contract_valid:
         accumulator.computation.result = build_engine_result(
             profile_cuts=accumulator.profile_cuts,
             reinforcements=accumulator.reinforcements,
             glasses=accumulator.glasses,
             panels=accumulator.panels,
+            fittings=accumulator.fittings,
             hardware_items=accumulator.hardware_items,
             leaf_weights=accumulator.leaf_weights,
         )

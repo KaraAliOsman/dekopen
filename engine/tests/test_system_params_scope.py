@@ -1,4 +1,4 @@
-"""Canonical SHOT-06 scope: 25 mapped, 20 consumed, 2 metadata, 3 reserved."""
+"""Canonical SHOT-06 scope: 29 mapped, 24 consumed, 2 metadata, 3 reserved."""
 
 import ast
 from collections.abc import Callable
@@ -11,8 +11,12 @@ from dekopen_engine import ParametricNode, SystemParams, calculate_geometry
 from dekopen_engine import geometry, hardware
 from engine.tests.test_shot06_core import core_node
 
+# Sliding-geometry fields are consumed through the grouped `params.sliding`
+# view (D01): the consumer binds `sliding = params.sliding` and reads
+# `sliding.<field>` — the AST check below counts those reads too.
 CORE_CONSUMERS: dict[str, Callable[..., object]] = {
     "material": geometry.compute_geometry,
+    "system_family": geometry.assert_opening_allowed,
     "effective_profile_articles": geometry._article,
     "glazing_bead_rules": geometry.resolve_bead_rule,
     "rebate_depth_mm": geometry.rebate_depth,
@@ -32,6 +36,9 @@ CORE_CONSUMERS: dict[str, Callable[..., object]] = {
     "door_leaf_side_clearance_mm": geometry._append_door,
     "available_panel_rules": geometry._append_leaf,
     "rail_count": geometry.rail_count,
+    "cut_rules": geometry._append_leaf,
+    "reinforcement_rules": geometry._append_profile,
+    "typology_limits": geometry._append_leaf,
 }
 METADATA = {"system_code", "depth_mm"}
 RESERVED = {"sliding_lateral_clearance_mm", "corner_bracket_loss_mm", "hook_depth_mm"}
@@ -39,10 +46,23 @@ RESERVED = {"sliding_lateral_clearance_mm", "corner_bracket_loss_mm", "hook_dept
 # `color`), not a formula input — `backend/engine_api/adapter.py` reads it.
 API_BOUNDARY = {"finishes"}
 
+# Names that alias `params` inside a consumer's body (`x = params.<group>`).
+_GROUPED_BINDINGS = ("sliding",)
+
+
+def _param_reads(consumer: Callable[..., object]) -> set[str]:
+    tree = ast.parse(inspect.getsource(consumer))
+    bound = {"params"} | set(_GROUPED_BINDINGS)
+    return {
+        node.attr for node in ast.walk(tree)
+        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
+        and node.value.id in bound and isinstance(node.ctx, ast.Load)
+    }
+
 
 def test_every_system_parameter_has_an_explicit_scope() -> None:
     assert (
-        len(CORE_CONSUMERS) == 20
+        len(CORE_CONSUMERS) == 24
         and len(METADATA) == 2
         and len(RESERVED) == 3
         and len(API_BOUNDARY) == 1
@@ -52,20 +72,19 @@ def test_every_system_parameter_has_an_explicit_scope() -> None:
         == set(SystemParams.model_fields)
     )
     for field, consumer in CORE_CONSUMERS.items():
-        reads = {
-            node.attr for node in ast.walk(ast.parse(inspect.getsource(consumer)))
-            if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
-            and node.value.id == "params" and isinstance(node.ctx, ast.Load)
-        }
-        assert field in reads, f"{field} has lost its real consumer {consumer.__name__}"
+        assert field in _param_reads(consumer), (
+            f"{field} has lost its real consumer {consumer.__name__}"
+        )
 
 
 @pytest.mark.parametrize("field", sorted(RESERVED))
 @pytest.mark.parametrize("case", ["G3", "G5", "G6", "G7"])
 def test_reserved_parameters_do_not_change_core_results(
-    field: str, case: str, demo_60_params: SystemParams, g3_node: ParametricNode,
+    field: str, case: str, demo_60_params: SystemParams,
+    demo_corredera_60_params: SystemParams, g3_node: ParametricNode,
 ) -> None:
     node = g3_node if case == "G3" else core_node(case)
-    before = calculate_geometry(node, demo_60_params)
-    changed = demo_60_params.model_copy(update={field: Decimal("123.45")})
+    params = demo_corredera_60_params if case == "G5" else demo_60_params
+    before = calculate_geometry(node, params)
+    changed = params.model_copy(update={field: Decimal("123.45")})
     assert calculate_geometry(node, changed) == before

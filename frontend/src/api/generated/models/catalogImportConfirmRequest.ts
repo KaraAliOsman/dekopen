@@ -6,8 +6,11 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { CatalogItemRequest } from "./catalogItemRequest";
+import type { NewSystemRequest } from "./newSystemRequest";
 
 export interface CatalogImportConfirmRequest {
-  system_id: string;
+  system_id?: string;
+  new_system?: NewSystemRequest;
+  cost_list_id?: string;
   items: CatalogItemRequest[];
 }

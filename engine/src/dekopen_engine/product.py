@@ -33,7 +33,7 @@ from dekopen_engine.contour import (
     validate_contour,
 )
 from dekopen_engine.geometry import (
-    SlidingLayoutError,
+    DomainRejection,
     calculate_geometry,
     joint_adjustment_per_end,
     rebate_depth,
@@ -126,6 +126,8 @@ class IssueCode(str, Enum):
     HARDWARE_KIT_INCOMPATIBLE = "hardware_kit_incompatible"
     HARDWARE_KIT_OVERWEIGHT = "hardware_kit_overweight"
     HARDWARE_UNDECIDABLE = "hardware_undecidable"
+    TYPOLOGY_FAMILY_INCOMPATIBLE = "typology_family_incompatible"
+    LEAF_DIMENSIONAL_LIMIT = "leaf_dimensional_limit"
 
 
 class ConnectionKind(str, Enum):
@@ -1848,7 +1850,7 @@ def evaluate_product(
                     params=issue_params,
                 )
             )
-        except SlidingLayoutError as error:
+        except DomainRejection as error:
             module_issues.append(
                 ProductIssue(
                     code=error.code,

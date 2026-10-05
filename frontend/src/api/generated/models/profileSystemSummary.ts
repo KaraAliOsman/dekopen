@@ -5,12 +5,16 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { TypologyLimit } from "./typologyLimit";
 
 export interface ProfileSystemSummary {
   id: string;
   code: string;
   name: string;
   is_demo: boolean;
+  system_family: string;
+  allowed_openings: string[];
+  typology_limits?: TypologyLimit[];
   quote_ready: boolean;
   readiness_reasons: string[];
 }

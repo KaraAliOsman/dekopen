@@ -2633,6 +2633,62 @@ export const catalogImportConfirm = async (
   });
 };
 
+export type catalogImportTemplateResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type catalogImportTemplateResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type catalogImportTemplateResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type catalogImportTemplateResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type catalogImportTemplateResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type catalogImportTemplateResponseSuccess = catalogImportTemplateResponse200 & {
+  headers: Headers;
+};
+export type catalogImportTemplateResponseError = (
+  | catalogImportTemplateResponse400
+  | catalogImportTemplateResponse401
+  | catalogImportTemplateResponse403
+  | catalogImportTemplateResponse409
+) & {
+  headers: Headers;
+};
+
+export type catalogImportTemplateResponse =
+  catalogImportTemplateResponseSuccess | catalogImportTemplateResponseError;
+
+export const getCatalogImportTemplateUrl = () => {
+  return `/api/v1/catalog-imports/template/`;
+};
+
+/**
+ * Official XLSX template — the manual ingestion path's contract.
+ */
+export const catalogImportTemplate = async (
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<catalogImportTemplateResponse> => {
+  return apiMutator<catalogImportTemplateResponse>(getCatalogImportTemplateUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
 export type catalogArticleListResponse200 = {
   data: ArticleList;
   status: 200;

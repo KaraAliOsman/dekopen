@@ -50,6 +50,16 @@ Hard invariants documented by the repo include:
 - workshop-language validation;
 - Oknosoft/WindowBuilder as a domain reference.
 
+## D01 state (pendiente de merge en `integracion/v1`)
+
+On branch `devin/D01-sistemas-perfiles`, pending review/merge:
+
+- `profile_systems.system_family` (CASEMENT / SLIDING / SPECIALIZED) separates fabrication families; `allowed_openings` maps each family to its typologies and the engine raises `IncompatibleTypologyError` when a design's typology does not belong to the system's family.
+- Profile roles now cover sliding/door hardware (SLIDING_SASH, INTERLOCK, RAIL, DOOR_SASH, FRAME_EXTENSION, SILL, COVER_TRIM, SKIRT); cut rules and reinforcement (incl. `screws_per_meter` → TORNILLO-4X16 BOM fittings) are data, not code.
+- `typology_limits` declares dimensional limits per system × typology with a `source` column (SEED_SYNTHETIC / MANUAL / AI_GENERATED); a missing row means unchecked, never rejected.
+- Catalog ingestion has two converging paths — manual XLSX/CSV template (`backend/ingest/spreadsheet.py`) and AI candidates — both landing on the same human review before publication.
+- The global catalog grew: DEMO_70 (PVC abatir), ALU_CORREDERA_70 (aluminio corredera), DEMO_CORREDERA_60 (PVC corredera, split out of DEMO_60's sliding rows by migration `20261229000002`); all carry `is_demo` and the fourteen inspector rule configs + `chamber_clearance_mm` required by the documentary freeze.
+
 ## P00 foundation state
 
 P00 is complete across dekopen PR #1 (squash 747c528b; a partial first landing on framedex PR #114 carried over): it adds the v1 integration foundation:

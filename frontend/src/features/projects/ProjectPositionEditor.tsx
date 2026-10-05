@@ -704,6 +704,23 @@ function PositionWorkspace({
   // Overview-level position facts — the editable fields live in the
   // .position-head strip; this card answers "what is this vano" at a glance.
   const systemName = systems.data?.find((system) => system.id === inputs.systemId)?.name ?? "—";
+  const selectedSystem = systems.data?.find((system) => system.id === inputs.systemId);
+  const limitsLine = (selectedSystem?.typology_limits ?? [])
+    .map((limit) => {
+      const parts: string[] = [];
+      if (limit.min_leaf_width_mm || limit.max_leaf_width_mm) {
+        parts.push(`${limit.min_leaf_width_mm ?? "—"}–${limit.max_leaf_width_mm ?? "—"} mm ancho`);
+      }
+      if (limit.min_leaf_height_mm || limit.max_leaf_height_mm) {
+        parts.push(`${limit.min_leaf_height_mm ?? "—"}–${limit.max_leaf_height_mm ?? "—"} mm alto`);
+      }
+      if (limit.max_leaf_weight_kg) {
+        parts.push(`≤ ${limit.max_leaf_weight_kg} kg`);
+      }
+      const source = tDynamic("projects.limitSource", limit.source);
+      return `${limit.opening_type.replace(/_/g, " ").toLowerCase()}: ${parts.join(" × ")} (${source})`;
+    })
+    .join(" · ");
   const positionPanel = (
     <section className="assembly-inspector position-panel" aria-label={t("projects.positionData")}>
       <header className="assembly-inspector__header">
@@ -862,6 +879,11 @@ function PositionWorkspace({
                 ))}
             </select>
           </label>
+          {limitsLine && (
+            <p className="position-head__limits">
+              {t("projects.systemLimits")}: {limitsLine}
+            </p>
+          )}
           {(systems.isError || options.isError) && (
             <p className="position-head__alert" role="alert">
               {t("projects.catalogError")}

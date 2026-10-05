@@ -14,6 +14,7 @@ from backend.tests.factories import (
     demo_60_params,
     membership,
 )
+from dekopen_engine import SystemFamily
 from engine_api.repository import (
     SystemNotFound,
     SystemParamsRepository,
@@ -182,6 +183,7 @@ def test_engine_systems_returns_only_the_minimal_contract(
                 code="DEMO_60",
                 name="Sistema Demo 60mm PVC",
                 is_demo=True,
+                system_family=SystemFamily.CASEMENT,
             ),
         ),
     )
@@ -198,6 +200,13 @@ def test_engine_systems_returns_only_the_minimal_contract(
                 "code": "DEMO_60",
                 "name": "Sistema Demo 60mm PVC",
                 "is_demo": True,
+                "system_family": "CASEMENT",
+                "allowed_openings": [
+                    "AWNING", "DOOR_DOUBLE", "DOOR_ENTRY", "FIXED",
+                    "TILT_TURN_LEFT", "TILT_TURN_RIGHT",
+                    "TURN_LEFT", "TURN_RIGHT",
+                ],
+                "typology_limits": [],
                 "quote_ready": False,
                 "readiness_reasons": ["manufacturing"],
             }

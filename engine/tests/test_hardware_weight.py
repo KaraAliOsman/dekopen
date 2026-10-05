@@ -35,7 +35,7 @@ def test_explicit_sku_and_ambiguity_are_order_independent(
             calculate_geometry(g3_node, params)
         result = calculate_geometry(g3_node.model_copy(update={"hardware_set_sku": "OTHER-OB"}), params)
         assert result.hardware_items[0].kit_sku == "OTHER-OB"
-    for sku in ("ABSENT", "KIT-SLIDING"):
+    for sku in ("ABSENT", "KIT-AWNING-16"):
         with pytest.raises(NoCompatibleHardwareKit):
             calculate_geometry(g3_node.model_copy(update={"hardware_set_sku": sku}), demo_60_params)
 
@@ -43,7 +43,7 @@ def test_explicit_sku_and_ambiguity_are_order_independent(
 @pytest.mark.parametrize("updates", [
     {"min_leaf_width_mm": D("896.01")}, {"max_leaf_width_mm": D("895.99")},
     {"min_leaf_height_mm": D("1296.01")}, {"max_leaf_height_mm": D("1295.99")},
-    {"max_leaf_weight_kg": D("33.28")}, {"rail_type": RailType.MONO},
+    {"max_leaf_weight_kg": D("30.34")}, {"rail_type": RailType.MONO},
     {"opening_type": "TURN"},
 ])
 def test_rejects_each_incompatible_criterion_even_with_explicit_sku(
@@ -56,14 +56,19 @@ def test_rejects_each_incompatible_criterion_even_with_explicit_sku(
             calculate_geometry(node, params)
 
 
-def test_finished_dimensions_and_weight_limits_are_inclusive(demo_60_params: SystemParams) -> None:
-    kit = next(k for k in demo_60_params.available_hardware_kits if k.sku == "KIT-SLIDING")
+def test_finished_dimensions_and_weight_limits_are_inclusive(
+    demo_corredera_60_params: SystemParams,
+) -> None:
+    kit = next(
+        k for k in demo_corredera_60_params.available_hardware_kits
+        if k.sku == "KIT-SLIDING-CORR"
+    )
     exact_kit = kit.model_copy(update={
-        "min_leaf_width_mm": D("960"), "max_leaf_width_mm": D("960"),
-        "min_leaf_height_mm": D("1950"), "max_leaf_height_mm": D("1950"),
-        "max_leaf_weight_kg": D("48.8868"),
+        "min_leaf_width_mm": D("972.50"), "max_leaf_width_mm": D("972.50"),
+        "min_leaf_height_mm": D("1966"), "max_leaf_height_mm": D("1966"),
+        "max_leaf_weight_kg": D("49.98305"),
     })
-    params = demo_60_params.model_copy(update={"available_hardware_kits": [exact_kit]})
+    params = demo_corredera_60_params.model_copy(update={"available_hardware_kits": [exact_kit]})
     assert len(calculate_geometry(core_node("G5"), params).hardware_items) == 2
     with pytest.raises(NoCompatibleHardwareKit):
         calculate_geometry(core_node("G5"), params.model_copy(update={"available_hardware_kits": []}))
@@ -72,16 +77,18 @@ def test_finished_dimensions_and_weight_limits_are_inclusive(demo_60_params: Sys
 def test_capacity_uses_exact_mass_before_rounding(demo_60_params: SystemParams) -> None:
     kit = next(k for k in demo_60_params.available_hardware_kits if k.sku == "KIT-AWNING-16")
     params = demo_60_params.model_copy(update={"available_hardware_kits": [
-        kit.model_copy(update={"max_leaf_weight_kg": D("23.96")}),
+        kit.model_copy(update={"max_leaf_weight_kg": D("21.69")}),
     ]})
-    # G6 displays 23.96 but weighs exactly 23.96192, which exceeds this capacity.
+    # G6 displays 21.70 but weighs exactly 21.69752, which exceeds this capacity.
     with pytest.raises(NoCompatibleHardwareKit):
         calculate_geometry(core_node("G6"), params)
 
 
 def test_each_candidate_contributes_its_own_hardware_mass(demo_60_params: SystemParams) -> None:
     kit = next(k for k in demo_60_params.available_hardware_kits if k.sku == "KIT-AWNING-16")
-    heavy = kit.model_copy(update={"sku": "HEAVY", "weight_kg": D("24.00")})
+    # 19.20 kg leaf + 26 kg of hardware exceeds the 45 kg kit capacity; the
+    # 2.50 kg kit alone stays compatible.
+    heavy = kit.model_copy(update={"sku": "HEAVY", "weight_kg": D("26.00")})
     params = demo_60_params.model_copy(update={"available_hardware_kits": [heavy, kit]})
     assert calculate_geometry(core_node("G6"), params).hardware_items[0].kit_sku == kit.sku
 
@@ -101,7 +108,8 @@ def test_article_weights_report_missing_authority_as_unknown(
     mass = base_leaf_weight(profile_cuts=result.profile_cuts, reinforcements=result.reinforcements,
                             infill_weight_kg=D("18.251520"), params=params)
     assert mass.pvc_weight_kg == (None if profile_missing else D("8.8160"))
-    assert mass.steel_weight_kg == (None if steel_missing else D("12.7920"))
+    # Only the ≥1000 mm member is reinforced under the declared rule.
+    assert mass.steel_weight_kg == (None if steel_missing else D("7.5960"))
     expected_reasons = ([f"missing_profile_mass:{articles[ProfileRole.SASH].sku}"] * profile_missing +
                         [f"missing_steel_mass:{articles[ProfileRole.SASH].sku}"] * steel_missing)
     assert list(mass.weight_unknown_reasons) == expected_reasons
@@ -166,8 +174,14 @@ def test_total_rounds_once_half_up_and_excludes_static_bom(demo_60_params: Syste
         D("0"),
     ) == D("10.00")
     baseline = calculate_geometry(core_node("G7"), demo_60_params)
+    # Frame/bead/threshold masses are static-BOM facts and never enter the
+    # leaf total — leaf roles (SASH/DOOR_SASH here) do, by definition.
+    _leaf_roles = {
+        ProfileRole.SASH, ProfileRole.SLIDING_SASH,
+        ProfileRole.INTERLOCK, ProfileRole.DOOR_SASH,
+    }
     articles = {role: article.model_copy(update={"weight_kg_m": D("9999")})
-                if role is not ProfileRole.SASH else article
+                if role not in _leaf_roles else article
                 for role, article in demo_60_params.effective_profile_articles.items()}
     beads = {t: rule.model_copy(update={"bead_article": rule.bead_article.model_copy(update={"weight_kg_m": D("9999")})})
              for t, rule in demo_60_params.glazing_bead_rules.items()}
@@ -175,12 +189,25 @@ def test_total_rounds_once_half_up_and_excludes_static_bom(demo_60_params: Syste
     assert changed.leaf_weights == baseline.leaf_weights
 
 
-@pytest.mark.parametrize("field", ["sliding_glazing_deduction_width_mm", "sliding_glazing_deduction_height_mm", "door_leaf_side_clearance_mm"])
-def test_missing_geometry_authority_is_rejected(demo_60_params: SystemParams, field: str) -> None:
-    values = demo_60_params.model_dump()
+@pytest.mark.parametrize("field", ["sliding_glazing_deduction_width_mm", "sliding_glazing_deduction_height_mm"])
+def test_missing_sliding_authority_is_rejected(
+    demo_corredera_60_params: SystemParams, field: str,
+) -> None:
+    # Sliding families cannot be constructed without their deductions (D01).
+    values = demo_corredera_60_params.model_dump()
     del values[field]
-    with pytest.raises(ValidationError, match=field):
+    with pytest.raises(ValidationError, match="sliding_glazing_deduction"):
         SystemParams.model_validate(values)
+
+
+def test_missing_door_authority_is_rejected(demo_60_params: SystemParams) -> None:
+    # Optional on the contract (casement-only series never declare it); the
+    # engine refuses when a door actually needs the value.
+    from dekopen_engine.weight import MissingFabricationAuthority
+
+    params = demo_60_params.model_copy(update={"door_leaf_side_clearance_mm": None})
+    with pytest.raises(MissingFabricationAuthority, match="door_leaf_side_clearance_mm"):
+        calculate_geometry(core_node("G7"), params)
 
 
 def _assembly_product(width_mm: str, opening: BayOpeningType) -> ProductModel:
