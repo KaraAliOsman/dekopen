@@ -27,9 +27,12 @@ describe("SectionPreviewSvg", () => {
     expect(container.querySelector("polygon")).not.toBeNull();
     expect(container.querySelector(".section-preview__shape--approx")).toBeNull();
     expect(container.querySelector("figure")?.getAttribute("data-provenance")).toBe("POLYGON");
-    expect(screen.getByText(t("assembly.sectionDeclared"))).toBeTruthy();
+    // Las cotas viven en el figcaption HTML (fuera del SVG) para no escalar
+    // con el viewBox — se afirma el texto completo del caption.
+    const caption = container.querySelector("figcaption");
+    expect(caption?.textContent).toContain(t("assembly.sectionDeclared"));
+    expect(caption?.textContent).toContain("60 × 60 mm");
     expect(screen.getByText("GLAZING")).toBeTruthy();
-    expect(screen.getByText("60 × 60 mm")).toBeTruthy();
   });
 
   it("falls back to a dashed box labeled approximate when no section exists", () => {
@@ -39,7 +42,9 @@ describe("SectionPreviewSvg", () => {
     expect(container.querySelector("polygon")).toBeNull();
     expect(container.querySelector(".section-preview__shape--approx")).not.toBeNull();
     expect(container.querySelector("figure")?.getAttribute("data-provenance")).toBe("APPROXIMATE");
-    expect(screen.getByText(t("assembly.sectionApproximate"))).toBeTruthy();
+    expect(container.querySelector("figcaption")?.textContent).toContain(
+      t("assembly.sectionApproximate"),
+    );
   });
 
   it("marks a manufacturer-drawing reference as exact", () => {
@@ -50,6 +55,6 @@ describe("SectionPreviewSvg", () => {
         material="PVC"
       />,
     );
-    expect(screen.getByText(t("assembly.sectionExact"))).toBeTruthy();
+    expect(screen.getByText(t("assembly.sectionExact"), { exact: false })).toBeTruthy();
   });
 });
