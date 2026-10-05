@@ -6,12 +6,18 @@ from decimal import Decimal, InvalidOperation
 from typing import Literal, cast
 
 from dekopen_engine import (
+    BayLeaf,
     BayOpeningType,
     CoupledAssembly,
     CouplingDef,
     EffectiveProfileArticle,
     EngineResult,
+    HingeSide,
+    LeafRole,
     NodeType,
+    Opening,
+    OpeningDirection,
+    OpeningMovement,
     ParametricNode,
     ProductEvaluation,
     ProductModel,
@@ -20,6 +26,7 @@ from dekopen_engine import (
     SlidingPanel,
     SlidingPanelKind,
     SystemParams,
+    UnitKind,
     calculate_geometry,
     evaluate_product,
 )
@@ -68,6 +75,11 @@ _NODE_FIELDS = {
     "hardware_option_skus",
     "door_handedness",
     "sliding_layout",
+    # D03 — the opening spec is the new source of truth; opening_type
+    # stays accepted for one version.
+    "opening",
+    "leaves",
+    "unit_kind",
 }
 _DECIMAL_NODE_FIELDS = {
     "width_mm",
@@ -160,6 +172,22 @@ def parse_parametric_node(payload: object) -> ParametricNode:
         except (ValueError, TypeError) as error:
             raise InvalidEngineRequest("Invalid glass_options") from error
 
+    if "opening" in raw and raw["opening"] is not None:
+        values["opening"] = _parse_opening(raw["opening"])
+    # An empty leaf list is the unset form — pydantic serializes the
+    # default as [], so the wire contract treats it as absent.
+    if raw.get("leaves"):
+        values["leaves"] = _parse_leaves(raw["leaves"])
+    if "unit_kind" in raw and raw["unit_kind"] is not None:
+        if not isinstance(raw["unit_kind"], str):
+            raise InvalidEngineRequest("unit_kind must be a string")
+        try:
+            values["unit_kind"] = UnitKind(cast(str, raw["unit_kind"]))
+        except ValueError as error:
+            raise InvalidEngineRequest(
+                "unit_kind must be WINDOW or DOOR"
+            ) from error
+
     if "door_handedness" in raw and raw["door_handedness"] is not None:
         if raw["door_handedness"] not in ("LEFT", "RIGHT"):
             raise InvalidEngineRequest("door_handedness must be LEFT or RIGHT")
@@ -173,6 +201,73 @@ def parse_parametric_node(payload: object) -> ParametricNode:
         return ParametricNode(**values)
     except ValueError as error:
         raise InvalidEngineRequest("Invalid parametric_tree") from error
+
+
+_OPENING_FIELDS = {"movement", "hinge_side", "direction", "leaf_role", "fixed_in_sash"}
+_LEAF_FIELDS = {"slot", "opening"}
+
+
+def _parse_opening(payload: object) -> Opening:
+    """Deserialize a leaf's kinematics (D03): movement × hinge × direction
+    × role; the engine's own validators reject incoherent combinations."""
+    raw = _require_dict(payload, "opening")
+    unexpected = set(raw) - _OPENING_FIELDS
+    if unexpected:
+        raise InvalidEngineRequest(
+            f"opening contains unsupported fields: {sorted(unexpected)}"
+        )
+    values: dict[str, object] = {}
+    movement_raw = _require_str(raw.get("movement"), "opening.movement")
+    try:
+        values["movement"] = OpeningMovement(movement_raw)
+    except ValueError as error:
+        raise InvalidEngineRequest(
+            "opening.movement must be one of "
+            + ", ".join(member.value for member in OpeningMovement)
+        ) from error
+    for field_name, enum in (
+        ("hinge_side", HingeSide),
+        ("direction", OpeningDirection),
+        ("leaf_role", LeafRole),
+    ):
+        if field_name in raw and raw[field_name] is not None:
+            text = _require_str(raw[field_name], f"opening.{field_name}")
+            try:
+                values[field_name] = enum(text)
+            except ValueError as error:
+                raise InvalidEngineRequest(
+                    f"opening.{field_name} must be one of "
+                    + ", ".join(member.value for member in enum)
+                ) from error
+    if raw.get("fixed_in_sash") is not None:
+        if not isinstance(raw["fixed_in_sash"], bool):
+            raise InvalidEngineRequest("opening.fixed_in_sash must be a boolean")
+        values["fixed_in_sash"] = raw["fixed_in_sash"]
+    try:
+        return Opening(**values)
+    except ValueError as error:
+        raise InvalidEngineRequest(f"invalid opening: {error}") from error
+
+
+def _parse_leaves(payload: object) -> list[BayLeaf]:
+    if not isinstance(payload, list) or not payload:
+        raise InvalidEngineRequest("leaves must be a non-empty array")
+    leaves: list[BayLeaf] = []
+    for index, item in enumerate(payload):
+        raw = _require_dict(item, f"leaves[{index}]")
+        unexpected = set(raw) - _LEAF_FIELDS
+        if unexpected:
+            raise InvalidEngineRequest(
+                f"leaves[{index}] contains unsupported fields: "
+                f"{sorted(unexpected)}"
+            )
+        leaves.append(
+            BayLeaf(
+                slot=_require_str(raw.get("slot"), f"leaves[{index}].slot"),
+                opening=_parse_opening(raw.get("opening")),
+            )
+        )
+    return leaves
 
 
 def _parse_sliding_layout(payload: object) -> SlidingLayout:

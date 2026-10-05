@@ -14,10 +14,11 @@ from dekopen_engine import (
 from dekopen_engine.models import ParametricNode
 
 
-def test_system_params_contract_has_exactly_35_fields() -> None:
+def test_system_params_contract_has_exactly_36_fields() -> None:
     # D02 added glass_products / glass_safety_rules / glass_type_limits;
-    # D04 added hardware_families / hardware_options.
-    assert len(SystemParams.model_fields) == 35
+    # D03 added opening_capabilities; D04 added hardware_families /
+    # hardware_options.
+    assert len(SystemParams.model_fields) == 36
     assert "frame_face_width_mm" not in SystemParams.model_fields
     assert "sash_face_width_mm" not in SystemParams.model_fields
     assert "mullion_face_width_mm" not in SystemParams.model_fields

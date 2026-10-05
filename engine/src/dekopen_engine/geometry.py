@@ -29,10 +29,10 @@ from dekopen_engine.models import (
 )
 from dekopen_engine.hardware import (
     HardwareSelectionError,
+    HardwareCandidateEvaluation,
     NoCompatibleHardwareKit,
     build_hardware_item,
     evaluate_hardware_candidates,
-    normalize_opening_type,
     resolve_hardware_evaluations,
 )
 from dekopen_engine.manufacturing_trace import (
@@ -55,22 +55,27 @@ from dekopen_engine.technical_facts import (
 )
 from dekopen_engine.panel import build_panel_piece, exact_panel_weight
 from dekopen_engine.weight import (
-    MissingFabricationAuthority, base_leaf_weight,
+    ExactLeafWeight, MissingFabricationAuthority, base_leaf_weight,
 )
 from dekopen_engine.models import (
+    BayLeaf,
     BayOpeningType,
     EffectiveProfileArticle,
     EngineResult,
-    FAMILY_OPENINGS,
     FittingPiece,
     GlassPiece,
     GlazingBeadRule,
     HardwareComponent,
     HardwareItem,
+    HardwareKitRule,
+    LeafRole,
     LeafWeight,
     PanelPiece,
     MaterialType,
     NodeType,
+    Opening,
+    OpeningMovement,
+    OpeningSpec,
     ParametricNode,
     ProfileCut,
     ProfileRole,
@@ -82,6 +87,24 @@ from dekopen_engine.models import (
     SlidingPanelKind,
     SystemParams,
     TypologyLimit,
+    UnitKind,
+)
+from dekopen_engine.openings import (
+    UNIMPLEMENTED_MOVEMENTS,
+    admitted_capabilities,
+    declared_unit_kind,
+    families_admitting_movement,
+    families_admitting_spec,
+    families_admitting_unit,
+    leaf_hardware_group,
+    leaf_hinge_handedness,
+    leaf_sash_role_candidates,
+    leaf_trace_opening,
+    resolve_opening_spec,
+    resolve_unit_kind,
+    spec_display_name_es,
+    spec_is_admitted,
+    spec_movement_is_family_compatible,
 )
 
 _TWO = Decimal("2")
@@ -101,6 +124,7 @@ SUPPORTED_OPENING_TYPES = frozenset(
         BayOpeningType.SLIDING,
         BayOpeningType.AWNING,
         BayOpeningType.DOOR_ENTRY,
+        BayOpeningType.DOOR_DOUBLE,
     }
 )
 
@@ -138,31 +162,121 @@ class DimensionalLimitError(DomainRejection):
     """A leaf violated a declared dimensional limit of its typology (D01)."""
 
 
-def assert_opening_allowed(node: ParametricNode, params: SystemParams) -> None:
-    """Reject a typology the system's fabrication family cannot make (D01)."""
-    opening = node.opening_type
-    if opening is None:
-        return
-    allowed = FAMILY_OPENINGS[params.system_family]
-    if opening not in allowed:
-        compatible = [
-            family.value
-            for family, openings in FAMILY_OPENINGS.items()
-            if opening in openings
-        ]
+def assert_opening_allowed(
+    node: ParametricNode,
+    params: SystemParams,
+    *,
+    unit: UnitKind = UnitKind.WINDOW,
+) -> OpeningSpec:
+    """Reject a typology the system's fabrication family cannot make (D01).
+
+    D03 resolves the node's opening spec first: the gate then applies at
+    movement level (the family's physical repertoire) and at composition
+    level (the system's declared capabilities, or the legacy-expressible
+    fallback). `unit` is the enclosing unit kind — a nested bay's spec
+    inherits it and may never contradict it. Returns the resolved spec
+    for the caller."""
+    declared = declared_unit_kind(node)
+    if declared is not None and declared is not unit:
         raise IncompatibleTypologyError(
             "typology_family_incompatible",
-            f"tipología {opening.value} incompatible con un sistema de familia "
+            f"la bahía {node.id} declara unidad {declared.value} pero vive "
+            f"dentro de una unidad {unit.value}",
+            {
+                "system": params.system_code,
+                "family": params.system_family.value,
+                "bay": node.id,
+                "declared_unit": declared.value,
+                "unit": unit.value,
+            },
+        )
+    spec = resolve_opening_spec(node, default_unit=unit)
+    for leaf in spec.leaves:
+        if leaf.opening.movement in UNIMPLEMENTED_MOVEMENTS:
+            raise NotImplementedError(
+                f"{spec_display_name_es(spec)} usa movimiento "
+                f"{leaf.opening.movement.value} — declarado en D03, fabricación en D08"
+            )
+    if not spec_movement_is_family_compatible(spec, params):
+        failed = [
+            leaf.opening.movement
+            for leaf in spec.leaves
+            if not spec_movement_is_family_compatible(
+                OpeningSpec(unit_kind=spec.unit_kind, leaves=[leaf]), params
+            )
+        ]
+        compatible: list[str] = []
+        for movement in failed:
+            for family in families_admitting_movement(movement):
+                if family not in compatible:
+                    compatible.append(family)
+        if spec.unit_kind not in families_admitting_unit(spec.unit_kind):
+            compatible = families_admitting_unit(spec.unit_kind)
+        raise IncompatibleTypologyError(
+            "typology_family_incompatible",
+            f"tipología {spec_display_name_es(spec)} incompatible con un sistema de familia "
             f"{params.system_family.value}; "
             f"sistemas compatibles: {', '.join(compatible) or 'ninguno declarado'}",
             {
                 "system": params.system_code,
                 "family": params.system_family.value,
-                "opening": opening.value,
-                "allowed": ",".join(sorted(o.value for o in allowed)),
+                "opening": node.opening_type.value if node.opening_type else spec_display_name_es(spec),
                 "compatible_families": ",".join(compatible),
             },
         )
+    if not spec_is_admitted(spec, params):
+        reasons = capability_rejection_reasons(spec, params)
+        # The rejection names which fabrication families physically cover
+        # this composition — the catalog edge then names concrete systems.
+        admitting = families_admitting_spec(spec)
+        raise IncompatibleTypologyError(
+            "opening_capability_incompatible",
+            f"apertura {spec_display_name_es(spec)} incompatible con el sistema "
+            f"{params.system_code}: {', '.join(reasons)}; "
+            f"familias que sí la admiten: {', '.join(admitting) or 'ninguna'}",
+            {
+                "system": params.system_code,
+                "family": params.system_family.value,
+                "opening": spec_display_name_es(spec),
+                "reasons": ",".join(reasons),
+                "compatible_families": ",".join(admitting),
+            },
+        )
+    return spec
+
+
+def capability_rejection_reasons(spec: OpeningSpec, params: SystemParams) -> list[str]:
+    """Why a spec fails the system's declared capabilities — each leaf's
+    first uncovered axis, so the estimator reads exactly which part of
+    the combination the catalog does not sell."""
+    reasons: list[str] = []
+    for leaf in spec.leaves:
+        opening = leaf.opening
+        rows = admitted_capabilities(params)
+        movement_rows = [cap for cap in rows if cap.movement is opening.movement]
+        if not movement_rows:
+            reason = f"{opening.movement.value} no está declarado"
+        else:
+            unit_rows = [cap for cap in movement_rows if spec.unit_kind in cap.unit_kinds]
+            if not unit_rows:
+                reason = f"unidad {spec.unit_kind.value} no admitida para {opening.movement.value}"
+            else:
+                reason = ""
+                if opening.direction is not None and all(
+                    opening.direction not in cap.directions for cap in unit_rows
+                ):
+                    reason = f"dirección {opening.direction.value} no admitida para {opening.movement.value}"
+                elif all(opening.leaf_role not in cap.leaf_roles for cap in unit_rows):
+                    reason = f"rol {opening.leaf_role.value} no admitido para {opening.movement.value}"
+                elif all(len(spec.leaves) > cap.max_leaves for cap in unit_rows):
+                    reason = f"composición de {len(spec.leaves)} hojas supera el máximo declarado"
+                elif opening.fixed_in_sash and not any(cap.fixed_in_sash for cap in unit_rows):
+                    reason = "fijo en hoja no declarado"
+        if reason and reason not in reasons:
+            reasons.append(reason)
+    if not reasons:
+        reasons.append("combinación no admitida")
+    return reasons
 
 
 def _moving_panel(index: int, track: int) -> SlidingPanel:
@@ -317,23 +431,62 @@ def _optional_article(
     return article
 
 
-def _leaf_sash_role(params: SystemParams, opening_type: BayOpeningType) -> ProfileRole:
-    """Which profile role a leaf is cut from (D01).
+def _leaf_sash_role(
+    params: SystemParams, spec: OpeningSpec, leaf: BayLeaf
+) -> ProfileRole:
+    """Which profile role a leaf is cut from (D01/D03).
 
     Dedicated roles win when the catalog declares them: a sliding leaf rides
     on SLIDING_SASH, a door leaf on DOOR_SASH. When the series carries no
     dedicated article the honest answer is the standard sash profile — the
     catalog declared that the leaf uses it.
     """
-    if opening_type in _SLIDING_OPENING_TYPES:
-        if _optional_article(params, ProfileRole.SLIDING_SASH) is not None:
-            return ProfileRole.SLIDING_SASH
-        return ProfileRole.SASH
-    if opening_type in _DOOR_OPENING_TYPES:
-        if _optional_article(params, ProfileRole.DOOR_SASH) is not None:
-            return ProfileRole.DOOR_SASH
-        return ProfileRole.SASH
-    return ProfileRole.SASH
+    dedicated, fallback = leaf_sash_role_candidates(spec, leaf)
+    if _optional_article(params, dedicated) is not None:
+        return dedicated
+    return fallback
+
+
+def _meeting_stile_article(
+    params: SystemParams, role: ProfileRole
+) -> EffectiveProfileArticle | None:
+    """The catalog-declared meeting-stile article for a role, or None —
+    the leaf keeps its standard sash stile instead."""
+    return _optional_article(params, role)
+
+
+def _meeting_deduction(
+    params: SystemParams, article: EffectiveProfileArticle
+) -> Decimal:
+    """Declared meeting-stile length deduction for the article's role
+    (`cut_rules[role].interlock_deduction_mm`, 0 when undeclared)."""
+    rule = params.cut_rules.get(article.role)
+    return rule.interlock_deduction_mm if rule is not None else Decimal("0")
+
+
+@dataclass(frozen=True, slots=True)
+class _LeafCtx:
+    """A physical leaf's resolved fabrication context (D03): which opening
+    kinematics it has, which unit it lives in and what it emits as its
+    trace identity. Built once per leaf; shared by every member, infill,
+    kit and fact the leaf produces."""
+
+    node: ParametricNode
+    leaf: BayLeaf
+    spec: OpeningSpec
+    trace_opening: str
+    handle_expected: bool
+
+
+def _handle_expected(leaf: BayLeaf) -> bool:
+    """Whether the leaf takes a user-operated handle (D03): a PASSIVE leaf
+    closes with its falleba and a fixed-in-sash leaf never opens — the
+    handle policy skips both instead of mounting phantom handles."""
+    if leaf.opening.leaf_role is LeafRole.PASSIVE:
+        return False
+    if leaf.opening.movement is OpeningMovement.FIXED:
+        return False
+    return True
 
 
 def resolve_reinforcement_rule(
@@ -954,9 +1107,8 @@ def _pocket_dimension(
 def _append_leaf(
     accumulator: _GeometryAccumulator,
     *,
-    node: ParametricNode,
+    ctx: _LeafCtx,
     leaf_id: str | None,
-    leaf_slot: str,
     topology_path: str,
     reference_rect: _Rect,
     direct_rect: _Rect | None,
@@ -964,34 +1116,33 @@ def _append_leaf(
     params: SystemParams,
     clearance_mm: Decimal,
     slot_pitch_mm: Decimal | None = None,
-    interlock_edges: frozenset[str] = frozenset(),
+    meeting_articles: dict[str, EffectiveProfileArticle] | None = None,
 ) -> None:
-    if node.opening_type is None:
-        raise ValueError("Physical leaf requires an opening type")
-    sash_role = _leaf_sash_role(params, node.opening_type)
+    node = ctx.node
+    leaf = ctx.leaf
+    leaf_slot = leaf.slot
+    spec = ctx.spec
+    sash_role = _leaf_sash_role(params, spec, leaf)
     article = _article(params, sash_role)
-    # A meeting stile is cut from the INTERLOCK profile when the catalog
-    # carries one; its declared deduction shortens it at the meeting.
-    interlock_article = (
-        _optional_article(params, ProfileRole.INTERLOCK)
-        if interlock_edges
-        else None
-    )
-    interlock_deduction = Decimal("0")
-    if interlock_article is not None:
-        interlock_rule = params.cut_rules.get(ProfileRole.INTERLOCK)
-        if interlock_rule is not None:
-            interlock_deduction = interlock_rule.interlock_deduction_mm
+    # Meeting stiles (encuentro on sliding pairs, inversor on the passive
+    # leaf of a hinged pair) are cut from their dedicated article when the
+    # catalog carries one; its declared deduction shortens the member at
+    # the meeting. `meeting_articles` maps physical edge → article.
+    meetings = meeting_articles or {}
+    meeting_deduction = {
+        edge: _meeting_deduction(params, meeting_article)
+        for edge, meeting_article in meetings.items()
+    }
     # The pocket's width faces follow the real stiles: an edge that took the
-    # encuentro profile pockets with its face, not the sash's.
+    # encuentro/inversor profile pockets with its face, not the sash's.
     pocket_faces: tuple[Decimal, Decimal] | None = None
-    if interlock_article is not None:
+    if meetings:
         pocket_faces = (
-            interlock_article.face_width_mm
-            if "LEFT" in interlock_edges
+            meetings["LEFT"].face_width_mm
+            if "LEFT" in meetings
             else article.face_width_mm,
-            interlock_article.face_width_mm
-            if "RIGHT" in interlock_edges
+            meetings["RIGHT"].face_width_mm
+            if "RIGHT" in meetings
             else article.face_width_mm,
         )
     cut_start = len(accumulator.profile_cuts)
@@ -1000,7 +1151,7 @@ def _append_leaf(
     assembly = f"BAY:{node.id}:LEAF:{leaf_slot}"
     placement_domain: Literal[PlacementDomain.DIRECT, PlacementDomain.SLIDING_LEAF] = (
         PlacementDomain.SLIDING_LEAF
-        if node.opening_type in _SLIDING_OPENING_TYPES
+        if leaf.opening.movement is OpeningMovement.SLIDE
         else PlacementDomain.DIRECT
     )
     accumulator.semantic_leaves.append(
@@ -1011,12 +1162,25 @@ def _append_leaf(
             bay_id=node.id,
             leaf_id=leaf_id,
             leaf_slot=leaf_slot,
-            opening_type=node.opening_type,
+            opening_type=ctx.trace_opening,
             door_handedness=(
-                node.door_handedness
-                if node.opening_type is BayOpeningType.DOOR_ENTRY
+                (
+                    # Single-leaf doors take the node's declared handedness;
+                    # a legacy door enum leaves it undeclared so the policy
+                    # keeps failing closed. Multi-leaf doors and new-form
+                    # leaves always carry their own hinge side.
+                    node.door_handedness
+                    if len(spec.leaves) == 1
+                    else leaf_hinge_handedness(leaf)
+                    if node.door_handedness is not None
+                    else leaf_hinge_handedness(leaf)
+                    if node.opening is not None or node.leaves
+                    else None
+                )
+                if spec.unit_kind is UnitKind.DOOR
                 else None
             ),
+            handle_expected=ctx.handle_expected,
             placement_domain=placement_domain,
             reference_rect=_trace_rect(reference_rect),
             slot_pitch_mm=slot_pitch_mm,
@@ -1074,17 +1238,19 @@ def _append_leaf(
         leaf_id=leaf_id,
         params=params,
     )
-    if interlock_article is not None and (
-        ("LEFT" in interlock_edges) != ("RIGHT" in interlock_edges)
-    ):
-        # Mixed stiles: the meeting edge takes the interlock profile with
-        # its declared deduction; the other edge stays a sash member.
-        meeting = "LEFT" if "LEFT" in interlock_edges else "RIGHT"
+    meeting_edges = {edge for edge in meetings if edge in ("LEFT", "RIGHT")}
+    if meetings and len(meeting_edges) == 1:
+        # Mixed stiles: the meeting edge takes the encuentro/inversor
+        # profile with its declared deduction; the other edge stays a
+        # sash member.
+        meeting = next(iter(meeting_edges))
+        meeting_article = meetings[meeting]
+        deduction = meeting_deduction[meeting]
         plain = "RIGHT" if meeting == "LEFT" else "LEFT"
         _append_profile(
             accumulator,
-            article=interlock_article,
-            length_mm=sash.cut_height_mm - interlock_deduction,
+            article=meeting_article,
+            length_mm=sash.cut_height_mm - deduction,
             qty=1,
             welded_ends=2,
             placements=[member(meeting, Axis.VERTICAL)],
@@ -1103,14 +1269,25 @@ def _append_leaf(
             leaf_id=leaf_id,
             params=params,
         )
-    elif interlock_article is not None and interlock_edges == {"LEFT", "RIGHT"}:
+    elif meeting_edges == {"LEFT", "RIGHT"}:
         _append_profile(
             accumulator,
-            article=interlock_article,
-            length_mm=sash.cut_height_mm - interlock_deduction,
-            qty=2,
+            article=meetings["LEFT"],
+            length_mm=sash.cut_height_mm - meeting_deduction["LEFT"],
+            qty=1,
             welded_ends=2,
-            placements=[member("LEFT", Axis.VERTICAL), member("RIGHT", Axis.VERTICAL)],
+            placements=[member("LEFT", Axis.VERTICAL)],
+            bay_id=node.id,
+            leaf_id=leaf_id,
+            params=params,
+        )
+        _append_profile(
+            accumulator,
+            article=meetings["RIGHT"],
+            length_mm=sash.cut_height_mm - meeting_deduction["RIGHT"],
+            qty=1,
+            welded_ends=2,
+            placements=[member("RIGHT", Axis.VERTICAL)],
             bay_id=node.id,
             leaf_id=leaf_id,
             params=params,
@@ -1131,7 +1308,7 @@ def _append_leaf(
         sash.finished_width_mm, article, params, clearance_mm, pocket_faces
     )
     height = _pocket_dimension(sash.finished_height_mm, article, params, clearance_mm)
-    if node.opening_type in _SLIDING_OPENING_TYPES:
+    if leaf.opening.movement is OpeningMovement.SLIDE:
         sliding = params.sliding
         if (
             sliding.sliding_glazing_deduction_width_mm is None
@@ -1146,9 +1323,9 @@ def _append_leaf(
     thickness_source: str | None = None
     thickness_declared_mm: Decimal | None = None
     glass_spec_text = node.glass_spec
-    if node.opening_type is BayOpeningType.DOOR_ENTRY:
+    if spec.unit_kind is UnitKind.DOOR:
         if node.panel_article_sku is None:
-            raise ValueError(f"DOOR_ENTRY {node.id} requires panel_article_sku")
+            raise ValueError(f"door leaf BAY {node.id} requires panel_article_sku")
         try:
             rule = params.available_panel_rules[node.panel_article_sku]
         except KeyError as error:
@@ -1259,7 +1436,7 @@ def _append_leaf(
         )
     )
     semantic_infill_id = f"{semantic_leaf_id}/infill"
-    sliding_infill = node.opening_type in _SLIDING_OPENING_TYPES
+    sliding_infill = leaf.opening.movement is OpeningMovement.SLIDE
     direct_infill_rect = None
     if not sliding_infill:
         assert direct_rect is not None
@@ -1309,47 +1486,53 @@ def _append_leaf(
         params=params,
         infill_unknown_reason=infill_reason,
     )
-    assert node.opening_type is not None
-    # D04: the leaf's declared sellable options ride the weight axis — a
-    # microventilación or an antipalanca point adds real mass, so kit
-    # compatibility is evaluated with them in place.
-    family_key = normalize_opening_type(node.opening_type)
-    option_components: list[HardwareComponent] = []
-    for option_sku in dict.fromkeys(node.hardware_option_skus or []):
-        option = params.hardware_options.get(option_sku)
-        if option is None or option.opening_type != family_key:
-            raise HardwareSelectionError(
-                "hardware_selection_unknown",
-                f"Opción de herraje {option_sku} no declarada para la familia {family_key}",
-                {"field": "hardware_option_skus", "sku": option_sku, "opening": family_key},
-            )
-        option_components.extend(option.components)
-    candidates = evaluate_hardware_candidates(
-        opening=node.opening_type,
-        width_mm=sash.finished_width_mm,
-        height_mm=sash.finished_height_mm,
-        base_weight=base,
-        params=params,
-        explicit_sku=node.hardware_set_sku,
-        option_components=option_components,
-    )
-    try:
-        kit, exact_weight = resolve_hardware_evaluations(
-            candidates,
-            opening=node.opening_type,
+    hardware_group = leaf_hardware_group(spec, leaf)
+    candidates: list[HardwareCandidateEvaluation] = []
+    kit: HardwareKitRule | None = None
+    exact_weight: ExactLeafWeight | None = None
+    if hardware_group is not None:
+        # D04: the leaf's declared sellable options ride the weight axis — a
+        # microventilación or an antipalanca point adds real mass, so kit
+        # compatibility is evaluated with them in place.
+        option_components: list[HardwareComponent] = []
+        for option_sku in dict.fromkeys(node.hardware_option_skus or []):
+            option = params.hardware_options.get(option_sku)
+            if option is None or option.opening_type != hardware_group:
+                raise HardwareSelectionError(
+                    "hardware_selection_unknown",
+                    f"Opción de herraje {option_sku} no declarada para la familia {hardware_group}",
+                    {"field": "hardware_option_skus", "sku": option_sku, "opening": hardware_group},
+                )
+            option_components.extend(option.components)
+        candidates = evaluate_hardware_candidates(
+            opening_group=hardware_group,
+            opening_label=ctx.trace_opening,
+            width_mm=sash.finished_width_mm,
+            height_mm=sash.finished_height_mm,
+            base_weight=base,
+            params=params,
             explicit_sku=node.hardware_set_sku,
-            leaf_width_mm=sash.finished_width_mm,
-            leaf_height_mm=sash.finished_height_mm,
+            option_components=option_components,
         )
-    except NoCompatibleHardwareKit:
-        if not accumulator.diagnostic:
-            raise
-        accumulator.contract_valid = False
-        kit, exact_weight = None, None
-    # Declared dimensional limits per typology (D01): the leaf envelope is
-    # validated against the catalog bounds — the editor and quotation read
-    # the same table, so a violation names the bound that failed.
-    limit = params.typology_limits.get(node.opening_type.value)
+        try:
+            kit, exact_weight = resolve_hardware_evaluations(
+                candidates,
+                opening_group=hardware_group,
+                opening_label=ctx.trace_opening,
+                explicit_sku=node.hardware_set_sku,
+                leaf_width_mm=sash.finished_width_mm,
+                leaf_height_mm=sash.finished_height_mm,
+            )
+        except NoCompatibleHardwareKit:
+            if not accumulator.diagnostic:
+                raise
+            accumulator.contract_valid = False
+            kit, exact_weight = None, None
+    # Declared dimensional limits per typology (D01/D03): the leaf envelope
+    # is validated against the catalog bounds — the leaf's own key wins,
+    # then the movement-level row, so a direction-specific bound and a
+    # generic per-movement bound can coexist.
+    limit = _typology_limit_for(params, spec, ctx)
     if limit is not None:
         violations = check_typology_limits(
             limit,
@@ -1362,10 +1545,10 @@ def _append_leaf(
         if violations:
             raise DimensionalLimitError(
                 "leaf_dimensional_limit",
-                f"hoja {node.opening_type.value} fuera de los límites "
+                f"hoja {ctx.trace_opening} fuera de los límites "
                 f"declarados del sistema ({', '.join(violations)})",
                 {
-                    "opening": node.opening_type.value,
+                    "opening": ctx.trace_opening,
                     "violations": ",".join(violations),
                     "leaf_width_mm": str(sash.finished_width_mm),
                     "leaf_height_mm": str(sash.finished_height_mm),
@@ -1375,7 +1558,8 @@ def _append_leaf(
         LeafTechnicalFacts(
             bay_id=node.id,
             leaf_id=leaf_id,
-            opening_type=node.opening_type,
+            opening_type=ctx.trace_opening,
+            leaf_role=leaf.opening.leaf_role,
             rail_type=params.rail_type,
             finished_width_mm=sash.finished_width_mm,
             finished_height_mm=sash.finished_height_mm,
@@ -1387,11 +1571,14 @@ def _append_leaf(
     )
     if kit is None or exact_weight is None:
         return
+    # A resolved kit means the leaf had a hardware group — fixed lites
+    # with hardware_group None return above with kit/exact_weight unset.
+    assert hardware_group is not None
     accumulator.hardware_items.append(
         build_hardware_item(
             kit=kit,
             exact_weight=exact_weight,
-            opening=node.opening_type,
+            opening=hardware_group,
             bay_id=node.id,
             leaf_id=leaf_id,
             leaf_width_mm=sash.finished_width_mm,
@@ -1450,6 +1637,24 @@ def _evaluate_glass(
         requires_exact_cut(composition, params.glass_type_limits),
         list(node.glass_options.surcharges) if node.glass_options else [],
     )
+
+
+def _typology_limit_for(
+    params: SystemParams, spec: OpeningSpec, ctx: _LeafCtx
+) -> TypologyLimit | None:
+    """The declared bound applying to this leaf (D03): the leaf's emitted
+    key first, then the door-prefixed movement row on door units, then
+    the bare movement row — the most specific bound wins."""
+    candidates = [ctx.trace_opening]
+    movement = ctx.leaf.opening.movement.value
+    if spec.unit_kind is UnitKind.DOOR:
+        candidates.append(f"DOOR:{movement}")
+    candidates.append(movement)
+    for key in candidates:
+        limit = params.typology_limits.get(key)
+        if limit is not None:
+            return limit
+    return None
 
 
 def _append_frame_glazed_pane(
@@ -1590,6 +1795,7 @@ def _append_sliding(
     accumulator: _GeometryAccumulator,
     *,
     node: ParametricNode,
+    spec: OpeningSpec,
     topology_path: str,
     rect: _Rect,
     params: SystemParams,
@@ -1604,7 +1810,9 @@ def _append_sliding(
     """
     layout = resolved_sliding_layout(node)
     validate_sliding_layout(layout, params)
-    article = _article(params, _leaf_sash_role(params, node.opening_type or BayOpeningType.SLIDING))
+    sliding_leaf = BayLeaf(slot="PRIMARY", opening=Opening(movement=OpeningMovement.SLIDE))
+    sliding_spec = OpeningSpec(unit_kind=spec.unit_kind, leaves=[sliding_leaf])
+    article = _article(params, _leaf_sash_role(params, sliding_spec, sliding_leaf))
     sliding = params.sliding
     count = len(layout.panels)
     # Equal pitches floored to the canonical 0.01 mm grid; the last slot
@@ -1643,11 +1851,28 @@ def _append_sliding(
                 )
                 if neighbour is not None and neighbour.kind is SlidingPanelKind.MOVING
             )
+            panel_leaf = BayLeaf(
+                slot=leaf_slot,
+                opening=Opening(movement=OpeningMovement.SLIDE),
+            )
+            meeting_articles: dict[str, EffectiveProfileArticle] = {}
+            interlock_article = _meeting_stile_article(params, ProfileRole.INTERLOCK)
+            if interlock_article is not None:
+                meeting_articles = {
+                    edge: interlock_article for edge in interlock_edges
+                }
             _append_leaf(
                 accumulator,
-                node=node,
+                ctx=_LeafCtx(
+                    node=node,
+                    leaf=panel_leaf,
+                    spec=sliding_spec,
+                    trace_opening=leaf_trace_opening(
+                        sliding_spec, panel_leaf, node.opening_type
+                    ),
+                    handle_expected=True,
+                ),
                 leaf_id=f"{node.id}:{leaf_slot}",
-                leaf_slot=leaf_slot,
                 topology_path=topology_path,
                 reference_rect=rect,
                 direct_rect=None,
@@ -1655,7 +1880,7 @@ def _append_sliding(
                 params=params,
                 clearance_mm=clearance_mm,
                 slot_pitch_mm=pitch,
-                interlock_edges=interlock_edges,
+                meeting_articles=meeting_articles,
             )
         else:
             slot_rect = _Rect(
@@ -1686,15 +1911,11 @@ def _append_bay(
     topology_path: str,
     params: SystemParams,
     clearance_mm: Decimal,
+    unit_kind: UnitKind,
 ) -> None:
-    opening = node.opening_type
-    if opening is None:
-        raise ValueError(f"BAY {node.id} requires opening_type")
-    assert_opening_allowed(node, params)
-    if opening not in SUPPORTED_OPENING_TYPES:
-        raise NotImplementedError(f"{opening.value} geometry is outside SHOT-06 Core")
-    if opening is BayOpeningType.DOOR_ENTRY:
-        raise NotImplementedError("DOOR_ENTRY requires a top-level BAY in SHOT-06 Core")
+    """A bay inside its enclosing unit (D03): resolve the opening spec,
+    gate it against family and capability, then fabricate its leaves."""
+    spec = assert_opening_allowed(node, params, unit=unit_kind)
     accumulator.computation.openings.append(
         OpeningTechnicalFacts(
             bay_id=node.id,
@@ -1710,22 +1931,52 @@ def _append_bay(
             ),
         )
     )
-    if opening is BayOpeningType.FIXED:
-        _append_frame_glazed_pane(
-            accumulator,
-            node=node,
-            topology_path=topology_path,
-            rect=rect,
-            assembly=f"BAY:{node.id}:FIXED",
-            semantic_infill_id=f"{topology_path}/infill",
-            leaf_slot=None,
-            params=params,
-            clearance_mm=clearance_mm,
+    first = spec.leaves[0]
+    if len(spec.leaves) == 1:
+        movement = first.opening.movement
+        if movement is OpeningMovement.SLIDE:
+            _append_sliding(
+                accumulator,
+                node=node,
+                spec=spec,
+                topology_path=topology_path,
+                rect=rect,
+                params=params,
+                clearance_mm=clearance_mm,
+            )
+            return
+        if unit_kind is UnitKind.DOOR and movement is not OpeningMovement.FIXED:
+            _append_door_leaf(
+                accumulator,
+                node=node,
+                spec=spec,
+                leaf=first,
+                rect=rect,
+                topology_path=topology_path,
+                params=params,
+                clearance_mm=clearance_mm,
+            )
+            return
+        if movement is OpeningMovement.FIXED and not first.opening.fixed_in_sash:
+            _append_frame_glazed_pane(
+                accumulator,
+                node=node,
+                topology_path=topology_path,
+                rect=rect,
+                assembly=f"BAY:{node.id}:FIXED",
+                semantic_infill_id=f"{topology_path}/infill",
+                leaf_slot=None,
+                params=params,
+                clearance_mm=clearance_mm,
+            )
+            return
+        # Operable hinged leaf (TURN/TILT/TILT_TURN/TOP_HUNG/BOTTOM_HUNG)
+        # or a fixed-in-sash lite — both wear the same rectangular sash
+        # ring; fixed_in_sash only skips hardware and the handle.
+        article = _article(params, _leaf_sash_role(params, spec, first))
+        sash = single_rectangular_sash_geometry(
+            rect.width_mm, rect.height_mm, article, params
         )
-        return
-    article = _article(params, _leaf_sash_role(params, opening))
-    if opening in _OPERABLE_OPENING_TYPES:
-        sash = single_rectangular_sash_geometry(rect.width_mm, rect.height_mm, article, params)
         direct_rect = _Rect(
             rect.x_mm - params.sash_overlap_mm,
             rect.y_mm - params.sash_overlap_mm,
@@ -1734,9 +1985,14 @@ def _append_bay(
         )
         _append_leaf(
             accumulator,
-            node=node,
+            ctx=_LeafCtx(
+                node=node,
+                leaf=first,
+                spec=spec,
+                trace_opening=leaf_trace_opening(spec, first, node.opening_type),
+                handle_expected=_handle_expected(first),
+            ),
             leaf_id=None,
-            leaf_slot="PRIMARY",
             topology_path=topology_path,
             reference_rect=rect,
             direct_rect=direct_rect,
@@ -1744,34 +2000,196 @@ def _append_bay(
             params=params,
             clearance_mm=clearance_mm,
         )
-    elif opening in _SLIDING_OPENING_TYPES:
-        _append_sliding(
-            accumulator,
-            node=node,
-            topology_path=topology_path,
-            rect=rect,
-            params=params,
-            clearance_mm=clearance_mm,
-        )
+        return
+    _append_hinged_pair(
+        accumulator,
+        node=node,
+        spec=spec,
+        rect=rect,
+        topology_path=topology_path,
+        params=params,
+        clearance_mm=clearance_mm,
+        unit_kind=unit_kind,
+    )
 
 
-def _append_door(
+def _append_door_leaf(
     accumulator: _GeometryAccumulator,
     *,
     node: ParametricNode,
+    spec: OpeningSpec,
+    leaf: BayLeaf,
+    rect: _Rect,
+    topology_path: str,
+    params: SystemParams,
+    clearance_mm: Decimal,
+) -> None:
+    """One hinged leaf of a door unit (D03): the leaf clears its reveal
+    sides by `door_leaf_side_clearance_mm`, overlaps the member above by
+    `sash_overlap_mm` and keeps `door_bottom_clearance_mm` over the
+    threshold. Rect is the leaf's reveal inside the door interior."""
+    if params.door_leaf_side_clearance_mm is None:
+        raise MissingFabricationAuthority(
+            "Missing door authority: door_leaf_side_clearance_mm"
+        )
+    side = params.door_leaf_side_clearance_mm
+    overlap = params.sash_overlap_mm
+    outer_width = rect.width_mm - _TWO * side
+    outer_height = rect.height_mm - params.door_bottom_clearance_mm + overlap
+    sash = _jointed_sash(
+        outer_width,
+        outer_height,
+        _article(params, _leaf_sash_role(params, spec, leaf)),
+        params,
+    )
+    direct_rect = _Rect(
+        rect.x_mm + side,
+        rect.y_mm - overlap,
+        sash.finished_width_mm,
+        sash.finished_height_mm,
+    )
+    _append_leaf(
+        accumulator,
+        ctx=_LeafCtx(
+            node=node,
+            leaf=leaf,
+            spec=spec,
+            trace_opening=leaf_trace_opening(spec, leaf, node.opening_type),
+            handle_expected=_handle_expected(leaf),
+        ),
+        leaf_id=None if leaf.slot == "PRIMARY" else f"{node.id}:{leaf.slot}",
+        topology_path=topology_path,
+        reference_rect=rect,
+        direct_rect=direct_rect,
+        sash=sash,
+        params=params,
+        clearance_mm=clearance_mm,
+    )
+
+
+def _append_hinged_pair(
+    accumulator: _GeometryAccumulator,
+    *,
+    node: ParametricNode,
+    spec: OpeningSpec,
+    rect: _Rect,
+    topology_path: str,
+    params: SystemParams,
+    clearance_mm: Decimal,
+    unit_kind: UnitKind,
+) -> None:
+    """Two side-hinged leaves meeting inside one bay (D03): the french
+    window and the double door.
+
+    The reveal splits into equal pitches on the 0.01 mm grid (the last
+    leaf absorbs the remainder). Meeting-edge offsets from each leaf's
+    reveal boundary — positive means the finished edge covers into the
+    neighbour's territory:
+
+    * window: outer edges lap `sash_overlap_mm` onto the frame; the
+      passive leaf's meeting edge is flush at the boundary; the active
+      leaf covers the passive's edge by `sash_overlap_mm`.
+    * door: outer edges and the passive meeting edge retract
+      `door_leaf_side_clearance_mm`; the active covers the passive's
+      finished edge by `sash_overlap_mm`.
+
+    The passive leaf's meeting stile takes the INVERSOR article when the
+    catalog declares one (SASH otherwise) and mounts the falleba kit —
+    it carries no handle."""
+    overlap = params.sash_overlap_mm
+    if unit_kind is UnitKind.DOOR:
+        if params.door_leaf_side_clearance_mm is None:
+            raise MissingFabricationAuthority(
+                "Missing door authority: door_leaf_side_clearance_mm"
+            )
+        side_clearance = params.door_leaf_side_clearance_mm
+        bottom_clearance = params.door_bottom_clearance_mm
+    else:
+        side_clearance = Decimal("0")
+        bottom_clearance = Decimal("0")
+    count = len(spec.leaves)
+    pitch = (rect.width_mm / count).quantize(Decimal("0.01"))
+    pitches = [pitch] * (count - 1) + [
+        rect.width_mm - pitch * (count - 1)
+    ]
+    inversor = _meeting_stile_article(params, ProfileRole.INVERSOR)
+    x = rect.x_mm
+    for index, leaf in enumerate(spec.leaves):
+        reveal_x = x
+        reveal_w = pitches[index]
+        x += pitches[index]
+        active = leaf.opening.leaf_role is LeafRole.ACTIVE
+        if index == 0:
+            left_ext = -side_clearance if unit_kind is UnitKind.DOOR else overlap
+        else:
+            # Meeting edge on the left: the passive leaf stops at its
+            # clearance, the active covers the passive's finished edge by
+            # the overlap.
+            if unit_kind is UnitKind.DOOR:
+                left_ext = (side_clearance + overlap) if active else -side_clearance
+            else:
+                left_ext = overlap if active else Decimal("0")
+        if index == count - 1:
+            right_ext = -side_clearance if unit_kind is UnitKind.DOOR else overlap
+        else:
+            if unit_kind is UnitKind.DOOR:
+                right_ext = (side_clearance + overlap) if active else -side_clearance
+            else:
+                right_ext = overlap if active else Decimal("0")
+        finished_left = reveal_x - left_ext
+        finished_w = reveal_w + left_ext + right_ext
+        finished_h = rect.height_mm - bottom_clearance + overlap
+        leaf_rect = _Rect(reveal_x, rect.y_mm, reveal_w, rect.height_mm)
+        direct_rect = _Rect(
+            finished_left,
+            rect.y_mm - overlap,
+            finished_w,
+            finished_h,
+        )
+        # The passive leaf's meeting stile is the inversor.
+        meetings: dict[str, EffectiveProfileArticle] = {}
+        if not active and inversor is not None:
+            meetings["RIGHT" if index == 0 else "LEFT"] = inversor
+        sash_role = _leaf_sash_role(params, spec, leaf)
+        sash = _jointed_sash(
+            finished_w,
+            finished_h,
+            _article(params, sash_role),
+            params,
+        )
+        _append_leaf(
+            accumulator,
+            ctx=_LeafCtx(
+                node=node,
+                leaf=leaf,
+                spec=spec,
+                trace_opening=leaf_trace_opening(spec, leaf, node.opening_type),
+                handle_expected=_handle_expected(leaf),
+            ),
+            leaf_id=f"{node.id}:{leaf.slot}",
+            topology_path=topology_path,
+            reference_rect=leaf_rect,
+            direct_rect=direct_rect,
+            sash=sash,
+            params=params,
+            clearance_mm=clearance_mm,
+            meeting_articles=meetings,
+        )
+
+
+def _append_door_unit(
+    accumulator: _GeometryAccumulator,
+    *,
+    top: ParametricNode,
     topology_path: str,
     params: SystemParams,
     nominal_width_mm: Decimal,
     nominal_height_mm: Decimal,
     clearance_mm: Decimal,
 ) -> None:
-    accumulator.computation.openings.append(
-        OpeningTechnicalFacts(
-            bay_id=node.id,
-            width_mm=nominal_width_mm,
-            height_mm=nominal_height_mm,
-        )
-    )
+    """A door unit's frame (D03): three-sided frame plus a full-width
+    threshold, then its bays — door leaves and fixed sidelights — are
+    walked inside the door interior like any split tree."""
     frame = _article(params, ProfileRole.FRAME)
     per_end = joint_adjustment_per_end(params, frame)
     _append_profile(
@@ -1835,12 +2253,12 @@ def _append_door(
         welded_ends=None,
         angle_left=_ANGLE_SQUARE,
         angle_right=_ANGLE_SQUARE,
-        bay_id=node.id,
+        bay_id=top.id,
         placements=[
             _MemberPlacement(
                 f"{topology_path}/threshold",
                 topology_path,
-                f"BAY:{node.id}",
+                f"BAY:{top.id}",
                 None,
                 "THRESHOLD",
                 Axis.HORIZONTAL,
@@ -1855,47 +2273,34 @@ def _append_door(
         ],
         params=params,
     )
-    if params.door_leaf_side_clearance_mm is None:
-        raise MissingFabricationAuthority(
-            "Missing door authority: door_leaf_side_clearance_mm"
-        )
-    outer_width = clear_width - _TWO * params.door_leaf_side_clearance_mm
-    outer_height = (
-        nominal_height_mm
-        - frame.face_width_mm
-        - params.door_threshold_mm
-        - params.door_bottom_clearance_mm
-        + params.sash_overlap_mm
-    )
-    sash = _jointed_sash(
-        outer_width,
-        outer_height,
-        _article(params, _leaf_sash_role(params, node.opening_type or BayOpeningType.DOOR_ENTRY)),
-        params,
-    )
-    reference_rect = _Rect(
+    interior = _Rect(
         frame.face_width_mm,
         frame.face_width_mm,
         clear_width,
         nominal_height_mm - frame.face_width_mm - params.door_threshold_mm,
     )
-    direct_rect = _Rect(
-        frame.face_width_mm + params.door_leaf_side_clearance_mm,
-        frame.face_width_mm - params.sash_overlap_mm,
-        sash.finished_width_mm,
-        sash.finished_height_mm,
-    )
-    _append_leaf(
+    if top.type is NodeType.BAY:
+        _append_bay(
+            accumulator,
+            node=top,
+            rect=interior,
+            topology_path=topology_path,
+            params=params,
+            clearance_mm=clearance_mm,
+            unit_kind=UnitKind.DOOR,
+        )
+        return
+    _walk_node(
         accumulator,
-        node=node,
-        leaf_id=None,
-        leaf_slot="PRIMARY",
+        node=top,
+        rect=interior,
+        local_origin_x_mm=Decimal("0"),
+        local_origin_y_mm=Decimal("0"),
         topology_path=topology_path,
-        reference_rect=reference_rect,
-        direct_rect=direct_rect,
-        sash=sash,
         params=params,
         clearance_mm=clearance_mm,
+        is_top=True,
+        unit_kind=UnitKind.DOOR,
     )
 
 
@@ -1943,6 +2348,7 @@ def _walk_node(
     params: SystemParams,
     clearance_mm: Decimal,
     is_top: bool,
+    unit_kind: UnitKind,
 ) -> None:
     if not is_top and (node.width_mm is not None or node.height_mm is not None):
         raise ValueError("Child node dimensions are derived and must not be supplied")
@@ -1961,6 +2367,7 @@ def _walk_node(
             topology_path=topology_path,
             params=params,
             clearance_mm=clearance_mm,
+            unit_kind=unit_kind,
         )
         return
 
@@ -2035,6 +2442,7 @@ def _walk_node(
         params=params,
         clearance_mm=clearance_mm,
         is_top=False,
+        unit_kind=unit_kind,
     )
     _walk_node(
         accumulator,
@@ -2046,6 +2454,7 @@ def _walk_node(
         params=params,
         clearance_mm=clearance_mm,
         is_top=False,
+        unit_kind=unit_kind,
     )
 
 
@@ -2081,15 +2490,17 @@ def compute_geometry(
     # opening type, distance of the pane bottom to the module base and
     # whether a door leaf sits beside it.
     accumulator.glass_contexts = bay_glass_contexts(top, nominal_height_mm)
-    # Family gate (D01): a top-level BAY never reaches math its system's
-    # fabrication family cannot produce — nested bays check per-node below.
-    if top.type is NodeType.BAY:
-        assert_opening_allowed(top, params)
-    if top.type is NodeType.BAY and top.opening_type is BayOpeningType.DOOR_ENTRY:
+    # D03: the top node declares the unit kind — a DOOR unit gets the
+    # three-sided frame plus threshold and its bays fabricate door
+    # leaves; everything else is a window unit on a four-sided frame.
+    # Legacy DOOR_ENTRY/DOOR_DOUBLE top bays resolve to DOOR via
+    # `resolve_unit_kind`.
+    unit_kind = resolve_unit_kind(top)
+    if unit_kind is UnitKind.DOOR:
         accumulator.computation.node_dimensions[top.id] = (nominal_width_mm, nominal_height_mm)
-        _append_door(
+        _append_door_unit(
             accumulator,
-            node=top,
+            top=top,
             topology_path=top_path,
             params=params,
             nominal_width_mm=nominal_width_mm,
@@ -2100,11 +2511,10 @@ def compute_geometry(
         # When the frame of a sliding unit separates its bottom rail as a
         # dedicated RAIL article, that member is cut from it (D01).
         bottom_article = None
-        if (
-            top.type is NodeType.BAY
-            and top.opening_type in _SLIDING_OPENING_TYPES
-        ):
-            bottom_article = _optional_article(params, ProfileRole.RAIL)
+        if top.type is NodeType.BAY:
+            top_spec = assert_opening_allowed(top, params, unit=unit_kind)
+            if top_spec.leaves[0].opening.movement is OpeningMovement.SLIDE:
+                bottom_article = _optional_article(params, ProfileRole.RAIL)
         _append_frame(
             accumulator,
             frame_article=frame_article,
@@ -2129,6 +2539,7 @@ def compute_geometry(
             params=params,
             clearance_mm=clearance_mm,
             is_top=True,
+            unit_kind=unit_kind,
         )
     accumulator.computation.manufacturing_trace = GeometryManufacturingTraceV1(
         nominal_width_mm=nominal_width_mm,

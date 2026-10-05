@@ -15,6 +15,10 @@ from backend.tests.factories import (
     membership,
 )
 from dekopen_engine import SystemFamily
+from dekopen_engine.openings import (
+    default_capabilities_for_family,
+    spec_options_from_capabilities,
+)
 from engine_api.repository import (
     SystemNotFound,
     SystemParamsRepository,
@@ -131,7 +135,10 @@ def test_deferred_opening_returns_422(monkeypatch: pytest.MonkeyPatch) -> None:
     client = APIClient()
     configure_api(client, monkeypatch)
     payload = g1_request()
-    payload["parametric_tree"]["opening_type"] = "DOOR_DOUBLE"
+    # A movement declared on the spec axis whose fabrication D08 owns
+    # still surfaces the deferred-opening contract.
+    del payload["parametric_tree"]["opening_type"]
+    payload["parametric_tree"]["opening"] = {"movement": "PIVOT_V"}
 
     response = client.post("/api/v1/engine/calculate/", payload, format="json")
 
@@ -207,6 +214,11 @@ def test_engine_systems_returns_only_the_minimal_contract(
                     "TURN_LEFT", "TURN_RIGHT",
                 ],
                 "typology_limits": [],
+                # D03: the systems list advertises the concrete opening
+                # compositions the system's capabilities admit.
+                "opening_options": spec_options_from_capabilities(
+                    default_capabilities_for_family(SystemFamily.CASEMENT)
+                ),
                 "quote_ready": False,
                 "readiness_reasons": ["manufacturing"],
             }

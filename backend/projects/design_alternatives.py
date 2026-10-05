@@ -18,6 +18,11 @@ from uuid import UUID
 
 from ai_gateway import service as gateway
 from authentication.errors import contract_error
+from dekopen_engine.openings import (
+    leaf_trace_opening,
+    resolve_opening_spec,
+    resolve_unit_kind,
+)
 from engine_api.adapter import evaluate_assembly_from_api, parse_product_model
 from engine_api.repository import SystemParamsRepository
 from projects.design_assist import OPENINGS, _catalog
@@ -245,6 +250,19 @@ def _build_product(
     return {"version": "product-v2", "assembly": {"modules": modules, "couplings": couplings}}, None
 
 
+def _module_opening_traces(tree) -> list[str]:
+    """The opening identity a module emits — the leaf trace string
+    (legacy enum or canonical key), the same identity documents and
+    handle policies resolve against (D03)."""
+    try:
+        spec = resolve_opening_spec(tree, default_unit=resolve_unit_kind(tree))
+    except ValueError:
+        return [str(tree.opening_type)]
+    return [
+        leaf_trace_opening(spec, leaf, tree.opening_type) for leaf in spec.leaves
+    ]
+
+
 def _metrics(evaluation, model) -> dict:
     """The card surface — every figure comes from the engine's own BOM and
     evaluation, never from the provider document."""
@@ -253,7 +271,9 @@ def _metrics(evaluation, model) -> dict:
     metrics = {
         "module_count": len(modules),
         "openings": [
-            str(module.tree.opening_type.value) for module in modules
+            trace
+            for module in modules
+            for trace in _module_opening_traces(module.tree)
         ],
         "plan_width_mm": str(evaluation.plan.width_mm) if evaluation.plan else None,
         "plan_height_mm": str(evaluation.plan.height_mm) if evaluation.plan else None,

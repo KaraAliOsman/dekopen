@@ -53,7 +53,12 @@ class HardwareSelectionError(ValueError):
         self.params = params or {}
 
 
-def normalize_opening_type(opening: BayOpeningType) -> str:
+def normalize_opening_type(opening: BayOpeningType | str) -> str:
+    """The hardware family a leaf evaluates against (D03): a leaf's
+    `Opening` resolves to its group in `leaf_hardware_group`; a legacy
+    enum still decodes here for callers that kept it."""
+    if not isinstance(opening, BayOpeningType):
+        return opening
     if opening in (BayOpeningType.TURN_LEFT, BayOpeningType.TURN_RIGHT):
         return "TURN"
     if opening in (BayOpeningType.TILT_TURN_LEFT, BayOpeningType.TILT_TURN_RIGHT):
@@ -63,7 +68,7 @@ def normalize_opening_type(opening: BayOpeningType) -> str:
         return "SLIDING"
     if opening in (BayOpeningType.DOOR_ENTRY, BayOpeningType.DOOR_DOUBLE):
         return "DOOR"
-    return opening.value
+    return str(opening.value)
 
 
 def expand_components(
@@ -153,7 +158,8 @@ class HardwareCandidateEvaluation:
 
 
 def evaluate_hardware_candidates(
-    *, opening: BayOpeningType, width_mm: Decimal, height_mm: Decimal,
+    *, opening_group: str, opening_label: str | None = None,
+    width_mm: Decimal, height_mm: Decimal,
     base_weight: ExactLeafWeight, params: SystemParams, explicit_sku: str | None = None,
     option_components: list[HardwareComponent] | None = None,
 ) -> list[HardwareCandidateEvaluation]:
@@ -170,7 +176,7 @@ def evaluate_hardware_candidates(
         )
         total = exact.total_weight_kg
         candidates.append(HardwareCandidateEvaluation(
-            kit=kit, opening_match=kit.opening_type == normalize_opening_type(opening),
+            kit=kit, opening_match=kit.opening_type == opening_group,
             rail_match=kit.rail_type is params.rail_type,
             width_match=kit.min_leaf_width_mm <= width_mm <= kit.max_leaf_width_mm,
             height_match=kit.min_leaf_height_mm <= height_mm <= kit.max_leaf_height_mm,
@@ -202,11 +208,13 @@ def _class_tightness(candidate: HardwareCandidateEvaluation) -> tuple[Decimal, D
 
 
 def resolve_hardware_evaluations(
-    evaluations: list[HardwareCandidateEvaluation], *, opening: BayOpeningType,
+    evaluations: list[HardwareCandidateEvaluation], *, opening_group: str,
+    opening_label: str | None = None,
     explicit_sku: str | None = None,
     leaf_width_mm: Decimal | None = None,
     leaf_height_mm: Decimal | None = None,
 ) -> tuple[HardwareKitRule, ExactLeafWeight]:
+    label = explicit_sku or opening_label or opening_group
     candidates = [candidate for candidate in evaluations if candidate.compatible]
     if explicit_sku is not None:
         # The leaf pinned a class — resolution honours that pick only.
@@ -219,7 +227,7 @@ def resolve_hardware_evaluations(
     ]
 
     def failure_context(axis: str) -> dict[str, str]:
-        context: dict[str, str] = {"axis": axis, "opening": explicit_sku or opening.value}
+        context: dict[str, str] = {"axis": axis, "opening": label}
         if leaf_width_mm is not None and leaf_height_mm is not None:
             context["leaf_width_mm"] = str(leaf_width_mm)
             context["leaf_height_mm"] = str(leaf_height_mm)
@@ -367,7 +375,7 @@ def resolve_hardware_evaluations(
             if bounds:
                 context["stay_min_height_mm"] = str(min(bounds))
         raise NoCompatibleHardwareKit(
-            f"No compatible hardware kit: {explicit_sku or opening.value}", context=context,
+            f"No compatible hardware kit: {label}", context=context,
         )
     # D04: several compatible classes resolve to the tightest one — the
     # class whose envelope most closely admits the leaf. Identical
@@ -376,18 +384,20 @@ def resolve_hardware_evaluations(
     if len(candidates) > 1 and _class_tightness(candidates[0]) == _class_tightness(
         candidates[1]
     ):
-        raise AmbiguousHardwareKit(f"Ambiguous hardware kits: {opening.value}")
+        raise AmbiguousHardwareKit(f"Ambiguous hardware kits: {label}")
     return candidates[0].kit, candidates[0].exact_total_weight
 
 
 def resolve_hardware_kit(
-    *, opening: BayOpeningType, width_mm: Decimal, height_mm: Decimal,
+    *, opening_group: str, opening_label: str | None = None,
+    width_mm: Decimal, height_mm: Decimal,
     base_weight: ExactLeafWeight, params: SystemParams, explicit_sku: str | None = None,
 ) -> tuple[HardwareKitRule, ExactLeafWeight]:
     return resolve_hardware_evaluations(evaluate_hardware_candidates(
-        opening=opening, width_mm=width_mm, height_mm=height_mm, base_weight=base_weight,
+        opening_group=opening_group, opening_label=opening_label,
+        width_mm=width_mm, height_mm=height_mm, base_weight=base_weight,
         params=params, explicit_sku=explicit_sku,
-    ), opening=opening, explicit_sku=explicit_sku)
+    ), opening_group=opening_group, opening_label=opening_label, explicit_sku=explicit_sku)
 
 
 def resolved_handle_height_mm(
@@ -413,7 +423,7 @@ def build_hardware_item(
     *,
     kit: HardwareKitRule,
     exact_weight: ExactLeafWeight,
-    opening: BayOpeningType,
+    opening: BayOpeningType | str,
     bay_id: str,
     leaf_id: str | None,
     leaf_width_mm: Decimal,

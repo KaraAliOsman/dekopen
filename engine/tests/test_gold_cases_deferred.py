@@ -84,12 +84,8 @@ def test_g10_monorail_evaluates_a_single_track_layout(
     assert len(result.glasses) == 3  # 2 fixed panes + 1 leaf glass
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="G11 double-door geometry not yet supported",
-)
-def test_g11_double_door_is_declared_deferred() -> None:
-    raise NotImplementedError("G11 double-door is not yet supported")
+# G11 double-door geometry landed in D03 (test_openings_d03.py covers the
+# real golden: door unit, active+passive pair, falleba kit, thresholds).
 
 
 @pytest.mark.xfail(

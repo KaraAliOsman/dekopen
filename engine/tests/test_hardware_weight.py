@@ -126,7 +126,7 @@ def test_persisted_and_missing_hardware_weights(demo_60_params: SystemParams) ->
     assert missing.weight_unknown_reasons == (f"missing_hardware_mass:{kit.sku}",)
     cap_kit = kit.model_copy(update={"max_leaf_weight_kg": D("32.60"), "weight_kg": None})
     with pytest.raises(NoCompatibleHardwareKit):
-        resolve_hardware_kit(opening=BayOpeningType.TURN_LEFT, width_mm=D("800"), height_mm=D("1200"),
+        resolve_hardware_kit(opening_group="TURN", opening_label="TURN_LEFT", width_mm=D("800"), height_mm=D("1200"),
                              base_weight=base, params=demo_60_params.model_copy(update={"available_hardware_kits": [cap_kit]}))
 
 

@@ -25,6 +25,8 @@ from authentication.tenancy import MembershipRepository, resolve_tenant_context
 from authentication.types import VerifiedSupabaseToken
 from backend.tests.test_engine_api import g1_request, g4_request
 from dekopen_engine import IncompatibleTypologyError, ProfileRole
+from dekopen_engine.openings import spec_options_from_capabilities
+from engine.tests.catalog import demo_60_params
 from engine_api.repository import SystemNotFound, SystemParamsRepository
 
 pytestmark = pytest.mark.rls_integration
@@ -382,19 +384,52 @@ def test_engine_system_discovery_is_rls_visible_and_deterministic(
              "max_leaf_width_mm": "1800.00", "min_leaf_height_mm": "350.00",
              "max_leaf_height_mm": "1200.00", "max_leaf_weight_kg": "45.00",
              "max_aspect_ratio": None, "source": "SEED_SYNTHETIC"},
+            {"opening_type": "BOTTOM_HUNG", "min_leaf_width_mm": "400.00",
+             "max_leaf_width_mm": "1400.00", "min_leaf_height_mm": "500.00",
+             "max_leaf_height_mm": "1600.00", "max_leaf_weight_kg": "80.00",
+             "max_aspect_ratio": None, "source": "SEED_SYNTHETIC"},
+            {"opening_type": "DOOR_DOUBLE", "min_leaf_width_mm": "500.00",
+             "max_leaf_width_mm": "900.00", "min_leaf_height_mm": "1700.00",
+             "max_leaf_height_mm": "2500.00", "max_leaf_weight_kg": "120.00",
+             "max_aspect_ratio": None, "source": "SEED_SYNTHETIC"},
             {"opening_type": "DOOR_ENTRY", "min_leaf_width_mm": "600.00",
              "max_leaf_width_mm": "1100.00", "min_leaf_height_mm": "1700.00",
              "max_leaf_height_mm": "2500.00", "max_leaf_weight_kg": "120.00",
+             "max_aspect_ratio": None, "source": "SEED_SYNTHETIC"},
+            {"opening_type": "DOOR:TURN", "min_leaf_width_mm": "600.00",
+             "max_leaf_width_mm": "1100.00", "min_leaf_height_mm": "1700.00",
+             "max_leaf_height_mm": "2500.00", "max_leaf_weight_kg": "120.00",
+             "max_aspect_ratio": None, "source": "SEED_SYNTHETIC"},
+            {"opening_type": "TILT", "min_leaf_width_mm": "400.00",
+             "max_leaf_width_mm": "1600.00", "min_leaf_height_mm": "400.00",
+             "max_leaf_height_mm": "1200.00", "max_leaf_weight_kg": "60.00",
+             "max_aspect_ratio": None, "source": "SEED_SYNTHETIC"},
+            {"opening_type": "TILT_TURN", "min_leaf_width_mm": "450.00",
+             "max_leaf_width_mm": "1600.00", "min_leaf_height_mm": "450.00",
+             "max_leaf_height_mm": "2500.00", "max_leaf_weight_kg": "130.00",
              "max_aspect_ratio": None, "source": "SEED_SYNTHETIC"},
             {"opening_type": "TILT_TURN_RIGHT", "min_leaf_width_mm": "450.00",
              "max_leaf_width_mm": "1600.00", "min_leaf_height_mm": "450.00",
              "max_leaf_height_mm": "2500.00", "max_leaf_weight_kg": "130.00",
              "max_aspect_ratio": None, "source": "SEED_SYNTHETIC"},
+            {"opening_type": "TOP_HUNG", "min_leaf_width_mm": "400.00",
+             "max_leaf_width_mm": "1800.00", "min_leaf_height_mm": "350.00",
+             "max_leaf_height_mm": "1200.00", "max_leaf_weight_kg": "45.00",
+             "max_aspect_ratio": None, "source": "SEED_SYNTHETIC"},
+            {"opening_type": "TURN", "min_leaf_width_mm": "350.00",
+             "max_leaf_width_mm": "1400.00", "min_leaf_height_mm": "400.00",
+             "max_leaf_height_mm": "2500.00", "max_leaf_weight_kg": "100.00",
+             "max_aspect_ratio": "2.800", "source": "SEED_SYNTHETIC"},
             {"opening_type": "TURN_LEFT", "min_leaf_width_mm": "350.00",
              "max_leaf_width_mm": "1400.00", "min_leaf_height_mm": "400.00",
              "max_leaf_height_mm": "2500.00", "max_leaf_weight_kg": "100.00",
              "max_aspect_ratio": "2.800", "source": "SEED_SYNTHETIC"},
         ],
+        # The seeded DEMO_60 capability rows emit this exact offer; the
+        # option contract itself is unit-tested in engine tests.
+        "opening_options": spec_options_from_capabilities(
+            demo_60_params().opening_capabilities
+        ),
         "quote_ready": True,
         "readiness_reasons": [],
     }
@@ -405,6 +440,7 @@ def test_engine_system_discovery_is_rls_visible_and_deterministic(
     assert all(set(system) == {
         "id", "code", "name", "is_demo", "system_family", "allowed_openings",
         "typology_limits", "quote_ready", "readiness_reasons",
+        "opening_options",
     } for system in systems)
     own = next(system for system in systems if system["id"] == str(real_rows.systems[tenant]))
     assert own["quote_ready"] is False
@@ -456,7 +492,7 @@ def test_shot06_all_28_catalog_fields_reach_typed_engine(real_rows: RLSFixtures)
     expected_fields = expected.model_dump()
     actual_fields["available_hardware_kits"] = sorted(actual_fields["available_hardware_kits"], key=lambda k: k["sku"])
     expected_fields["available_hardware_kits"] = sorted(expected_fields["available_hardware_kits"], key=lambda k: k["sku"])
-    assert len(SystemParams.model_fields) == len(actual_fields) == 35
+    assert len(SystemParams.model_fields) == len(actual_fields) == 36
     # The demo seed declares the same synthetic per-article masses the engine
     # fixture carries — mass authority must reach the typed model
     # field-for-field rather than arriving through a fallback.

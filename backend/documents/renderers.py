@@ -11,10 +11,16 @@ from html import escape
 from pathlib import Path
 
 from dekopen_engine.contour import Contour, contour_points
-from dekopen_engine.models import PlanPoint
+from dekopen_engine.models import Opening, OpeningSpec, PlanPoint, UnitKind
+from dekopen_engine.openings import opening_leaf_name_es, spec_display_name_es
 from dekopen_engine.product import ElevationMember, elevation_layout
 from documents.repository import DocumentaryError
-from engine_api.adapter import parse_product_model
+from engine_api.adapter import (
+    InvalidEngineRequest,
+    _parse_leaves,
+    _parse_opening,
+    parse_product_model,
+)
 
 _PDF_MEDIA = "application/pdf"
 _FONTS_DIR = Path(__file__).resolve().parent / "fonts"
@@ -603,13 +609,108 @@ def _hardware_marks(opening: str, handedness: str, ix: Decimal, iy: Decimal,
         )
 
 
+def _spec_leaf_glyphs(
+    leaves: list[tuple[Decimal, Decimal, "Opening"]],
+    unit: "UnitKind",
+    iy: Decimal,
+    ih: Decimal,
+    out: list[str],
+    pal: dict[str, str | None],
+    stroke: str,
+    stroke_mm: Decimal,
+    marker: str,
+) -> None:
+    """DIN symbology per spec-declared leaf (D03) — the same vocabulary the
+    legacy `opening_type` branch draws, resolved per leaf so a french pair,
+    a banderola or a proyectante reads correctly. Interior view convention:
+    continuous = opens toward the viewer (INWARD), dashed = OUTWARD. Door
+    leaves keep the issued-door convention (swing arc + sill accent)."""
+    top_y, bottom_y = iy, iy + ih
+    for index, (lx, lw, leaf) in enumerate(leaves):
+        dash_attr = ""
+        if leaf.direction is not None and leaf.direction.value == "OUTWARD":
+            dash = f'{_pt(stroke_mm * Decimal("2.4"))} {_pt(stroke_mm * Decimal("2"))}'
+            dash_attr = f' stroke-dasharray="{dash}"'
+        movement = leaf.movement.value
+        if movement == "FIXED":
+            # A fixed leaf (incl. fijo en hoja and door sidelights) opens
+            # nowhere — no glyph, no swing arc, whatever the unit is.
+            continue
+        hinge = leaf.hinge_side.value if leaf.hinge_side is not None else None
+        cx, right_x = lx + lw / 2, lx + lw
+        if movement.endswith("SLIDE"):
+            # Sliding leaf: same figure as the legacy panels — leaf outline
+            # plus the travel arrow toward its neighbouring slot.
+            out.append(
+                f'<rect x="{_pt(lx)}" y="{_pt(top_y)}" width="{_pt(lw)}" '
+                f'height="{_pt(ih)}" fill="none" stroke="{pal["bay_edge"]}" '
+                f'stroke-width="{stroke}"/>'
+            )
+            forward = index * 2 < len(leaves)
+            ax1 = lx + lw / 4 if forward else lx + lw * Decimal("3") / 4
+            ax2 = lx + lw * Decimal("3") / 4 if forward else lx + lw / 4
+            out.append(
+                f'<line x1="{_pt(ax1)}" y1="{_pt(top_y + ih / 2)}" '
+                f'x2="{_pt(ax2)}" y2="{_pt(top_y + ih / 2)}" stroke="{pal["glyph"]}" '
+                f'stroke-width="{stroke}" marker-end="url(#{marker})"/>'
+            )
+            continue
+        if unit == UnitKind.DOOR:
+            # Door figure: swing arc anchored on the hinge-side top corner.
+            radius = lw
+            if hinge == "RIGHT":
+                out.append(
+                    f'<path d="M {_pt(lx)} {_pt(top_y)} '
+                    f'A {_pt(radius)} {_pt(radius)} 0 0 0 {_pt(right_x)} '
+                    f'{_pt(top_y + radius)}" fill="none" stroke="{pal["glyph"]}" '
+                    f'stroke-width="{stroke}"{dash_attr}/>'
+                )
+            else:
+                out.append(
+                    f'<path d="M {_pt(right_x)} {_pt(top_y)} '
+                    f'A {_pt(radius)} {_pt(radius)} 0 0 1 {_pt(lx)} '
+                    f'{_pt(top_y + radius)}" fill="none" stroke="{pal["glyph"]}" '
+                    f'stroke-width="{stroke}"{dash_attr}/>'
+                )
+            continue
+        if hinge == "RIGHT":
+            out.append(
+                f'<polygon points="{_pt(right_x)},{_pt(top_y)} {_pt(right_x)},{_pt(bottom_y)} '
+                f'{_pt(lx)},{_pt(top_y + ih / 2)}" fill="none" stroke="{pal["glyph"]}" '
+                f'stroke-width="{stroke}"{dash_attr}/>'
+            )
+        elif hinge == "LEFT":
+            out.append(
+                f'<polygon points="{_pt(lx)},{_pt(top_y)} {_pt(lx)},{_pt(bottom_y)} '
+                f'{_pt(right_x)},{_pt(top_y + ih / 2)}" fill="none" stroke="{pal["glyph"]}" '
+                f'stroke-width="{stroke}"{dash_attr}/>'
+            )
+        if movement in ("TILT_TURN", "BOTTOM_HUNG") or hinge == "BOTTOM":
+            out.append(
+                f'<polygon points="{_pt(lx)},{_pt(bottom_y)} {_pt(right_x)},{_pt(bottom_y)} '
+                f'{_pt(cx)},{_pt(top_y)}" fill="none" stroke="{pal["glyph"]}" '
+                f'stroke-width="{stroke}"{dash_attr}/>'
+            )
+        elif movement == "TOP_HUNG" or hinge == "TOP":
+            out.append(
+                f'<polygon points="{_pt(lx)},{_pt(top_y)} {_pt(right_x)},{_pt(top_y)} '
+                f'{_pt(cx)},{_pt(bottom_y)}" fill="none" stroke="{pal["glyph"]}" '
+                f'stroke-width="{stroke}"{dash_attr}/>'
+            )
+
+
 def _svg_elements(node: dict[str, object], x: Decimal, y: Decimal,
                   width: Decimal, height: Decimal, out: list[str],
                   marker: str, glyph_only: bool = False,
-                  pal: dict[str, str | None] | None = None) -> None:
+                  pal: dict[str, str | None] | None = None,
+                  unit: "UnitKind" = UnitKind.WINDOW) -> None:
     if pal is None:
         pal = _PAL_TECH
     node_type = str(node.get("type"))
+    try:
+        unit = UnitKind(str(node.get("unit_kind") or unit.value))
+    except ValueError:
+        pass
     children = node.get("children")
     if children is None:
         children = []
@@ -618,7 +719,7 @@ def _svg_elements(node: dict[str, object], x: Decimal, y: Decimal,
     if node_type == "ROOT":
         if len(children) != 1 or not isinstance(children[0], dict):
             raise DocumentaryError("invalid_frozen_parametric_tree")
-        _svg_elements(children[0], x, y, width, height, out, marker, glyph_only)
+        _svg_elements(children[0], x, y, width, height, out, marker, glyph_only, unit=unit)
         return
     if node_type in ("SPLIT_V", "SPLIT_H"):
         offset = node.get("split_offset_mm")
@@ -634,16 +735,16 @@ def _svg_elements(node: dict[str, object], x: Decimal, y: Decimal,
                 f'y2="{_pt(y + height)}" stroke="{pal["split"]}" stroke-width="'
                 f'{_pt(height / Decimal("60"))}"/>'
             )
-            _svg_elements(first, x, y, split, height, out, marker, glyph_only, pal)
-            _svg_elements(second, x + split, y, width - split, height, out, marker, glyph_only, pal)
+            _svg_elements(first, x, y, split, height, out, marker, glyph_only, pal, unit)
+            _svg_elements(second, x + split, y, width - split, height, out, marker, glyph_only, pal, unit)
         else:
             out.append(
                 f'<line x1="{_pt(x)}" y1="{_pt(y + split)}" x2="{_pt(x + width)}" '
                 f'y2="{_pt(y + split)}" stroke="{pal["split"]}" stroke-width="'
                 f'{_pt(width / Decimal("60"))}"/>'
             )
-            _svg_elements(first, x, y, width, split, out, marker, glyph_only, pal)
-            _svg_elements(second, x, y + split, width, height - split, out, marker, glyph_only, pal)
+            _svg_elements(first, x, y, width, split, out, marker, glyph_only, pal, unit)
+            _svg_elements(second, x, y + split, width, height - split, out, marker, glyph_only, pal, unit)
         return
     if node_type != "BAY":
         raise DocumentaryError("invalid_frozen_parametric_tree")
@@ -672,6 +773,69 @@ def _svg_elements(node: dict[str, object], x: Decimal, y: Decimal,
             )
     opening = node.get("opening_type")
     mx, my = ix + iw / 2, iy + ih / 2
+    if opening is None:
+        # D03 spec form — `opening`/`leaves`/`unit_kind` instead of the
+        # legacy enum: resolve each leaf and draw the same DIN vocabulary
+        # per leaf (interior view; dashed when it opens away).
+        spec_leaves: list[tuple[Decimal, Decimal, Opening]] = []
+        raw_leaves = node.get("leaves")
+        if isinstance(raw_leaves, list) and raw_leaves:
+            try:
+                spec = OpeningSpec(
+                    unit_kind=unit, leaves=_parse_leaves(raw_leaves)
+                )
+            except (InvalidEngineRequest, ValueError):
+                spec = None
+            if spec is not None and spec.leaves:
+                leaf_w = iw / len(spec.leaves)
+                spec_leaves = [
+                    (ix + leaf_w * index, leaf_w, leaf.opening)
+                    for index, leaf in enumerate(spec.leaves)
+                ]
+        raw_opening = node.get("opening")
+        if not spec_leaves and isinstance(raw_opening, dict):
+            try:
+                spec_leaves = [(ix, iw, _parse_opening(raw_opening))]
+            except InvalidEngineRequest:
+                spec_leaves = []
+        if spec_leaves:
+            if unit == UnitKind.DOOR:
+                # Threshold accent runs under operable leaves only — a fixed
+                # sidelight keeps its frame bottom, not a walkable sill.
+                for leaf_x, leaf_w, leaf in spec_leaves:
+                    if leaf.movement.value == "FIXED":
+                        continue
+                    out.append(
+                        f'<line x1="{_pt(leaf_x)}" y1="{_pt(iy + ih)}" '
+                        f'x2="{_pt(leaf_x + leaf_w)}" y2="{_pt(iy + ih)}" '
+                        f'stroke="{pal["accent"]}" stroke-width="{stroke}"/>'
+                    )
+            # Meeting stile between leaves (inversor / encuentro) — a real
+            # vertical member on hinged pairs, whether window or door.
+            for leaf_x, _leaf_w, _leaf in spec_leaves[1:]:
+                out.append(
+                    f'<line x1="{_pt(leaf_x)}" y1="{_pt(iy)}" x2="{_pt(leaf_x)}" '
+                    f'y2="{_pt(iy + ih)}" stroke="{pal["glyph"]}" '
+                    f'stroke-width="{stroke}"/>'
+                )
+            _spec_leaf_glyphs(
+                spec_leaves, unit, iy, ih, out, pal, stroke, stroke_mm, marker
+            )
+            if pal.get("hardware"):
+                for leaf_x, leaf_w, leaf in spec_leaves:
+                    hinge = leaf.hinge_side.value if leaf.hinge_side else None
+                    pseudo = {
+                        "TILT_TURN": {"LEFT": "TILT_TURN_LEFT", "RIGHT": "TILT_TURN_RIGHT"},
+                        "TURN": {"LEFT": "TURN_LEFT", "RIGHT": "TURN_RIGHT"},
+                        "TOP_HUNG": {"TOP": "AWNING"},
+                    }.get(leaf.movement.value, {}).get(hinge or "")
+                    if unit == UnitKind.DOOR and pseudo:
+                        pseudo = "DOOR_ENTRY"
+                    if pseudo:
+                        _hardware_marks(
+                            pseudo, "RIGHT" if hinge == "RIGHT" else "",
+                            leaf_x, iy, leaf_w, ih, out, pal,
+                        )
     if opening in ("TURN_LEFT", "TILT_TURN_LEFT"):
         out.append(
             f'<polygon points="{_pt(ix)},{_pt(iy)} {_pt(ix)},{_pt(iy + ih)} '
@@ -2901,8 +3065,11 @@ def render_dispatch_note(
 
 _TYPOLOGY_ES = {
     "FIXED": "Fijo",
+    "FIXED_SASH": "Fijo en hoja",
     "TURN": "Abatible",
-    "TILT": "Oscilante",
+    "TILT": "Solo abatimiento (banderola)",
+    "BOTTOM_HUNG": "Abatimiento",
+    "TOP_HUNG": "Proyectante",
     "TILT_TURN": "Oscilobatiente",
     "TURN_LEFT": "Abatible izquierda",
     "TURN_RIGHT": "Abatible derecha",
@@ -2969,12 +3136,38 @@ def _limits_labels(limits: object) -> str:
 def _opening_labels(tree: dict[str, object]) -> list[str]:
     """Distinct human opening names declared in the sealed tree (e.g.
     "Oscilobatiente · izquierda") — the card reads what the product
-    actually does, not only its typology bucket."""
+    actually does, not only its typology bucket. Spec-form payloads
+    (D03 `opening`/`leaves`/`unit_kind`) resolve through the engine's
+    own glossary so the document and the editor name them identically."""
     labels: list[str] = []
 
-    def walk(node: object) -> None:
+    def walk(node: object, unit: UnitKind = UnitKind.WINDOW) -> None:
         if not isinstance(node, dict):
             return
+        try:
+            kind = UnitKind(str(node.get("unit_kind") or unit.value))
+        except ValueError:
+            kind = unit
+        if isinstance(node.get("leaves"), list):
+            try:
+                spec = OpeningSpec(
+                    unit_kind=kind, leaves=_parse_leaves(node["leaves"])
+                )
+            except (InvalidEngineRequest, ValueError):
+                spec = None
+            if spec is not None:
+                label = spec_display_name_es(spec)
+                if label not in labels:
+                    labels.append(label)
+        elif isinstance(node.get("opening"), dict):
+            try:
+                leaf = _parse_opening(node["opening"])
+            except InvalidEngineRequest:
+                leaf = None
+            if leaf is not None:
+                label = opening_leaf_name_es(leaf, kind)
+                if label not in labels:
+                    labels.append(label)
         opening = str(node.get("opening_type") or "")
         if opening and opening != "FIXED":
             label = _TYPOLOGY_ES.get(opening, opening)
@@ -2988,7 +3181,7 @@ def _opening_labels(tree: dict[str, object]) -> list[str]:
         children = node.get("children")
         if isinstance(children, list):
             for child in children:
-                walk(child)
+                walk(child, kind)
 
     assembly = tree.get("assembly")
     if isinstance(assembly, dict):

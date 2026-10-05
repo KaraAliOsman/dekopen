@@ -65,6 +65,8 @@ from dekopen_engine.models import (
     GlassPiece,
     MaterialType,
     NodeType,
+    OpeningMovement,
+    OpeningSpec,
     ParametricNode,
     PlanPoint,
     ProfileCut,
@@ -77,6 +79,10 @@ from dekopen_engine.technical_facts import (
     GeometryComputation,
     InfillTechnicalFacts,
     OpeningTechnicalFacts,
+)
+from dekopen_engine.openings import (
+    resolve_opening_spec,
+    spec_display_name_es,
 )
 from dekopen_engine.trig import cos_degrees, sin_degrees
 
@@ -940,13 +946,49 @@ _SLIDING_OPENINGS = {
 }
 
 
+def _resolved_spec_or_none(node: ParametricNode) -> "OpeningSpec | None":
+    """The node's resolved opening spec, or None when it declares none.
+
+    D03: product checks run on the canonical spec so nodes declared via
+    `opening`/`leaves` behave identically to legacy `opening_type`."""
+    try:
+        return resolve_opening_spec(node)
+    except ValueError:
+        return None
+
+
+def _node_is_fixed(node: ParametricNode) -> bool:
+    spec = _resolved_spec_or_none(node)
+    if spec is None:
+        return True
+    return all(
+        leaf.opening.movement is OpeningMovement.FIXED for leaf in spec.leaves
+    )
+
+
+def _node_is_sliding(node: ParametricNode) -> bool:
+    spec = _resolved_spec_or_none(node)
+    if spec is None:
+        return False
+    return any(
+        leaf.opening.movement is OpeningMovement.SLIDE for leaf in spec.leaves
+    )
+
+
+def _node_opening_label(node: ParametricNode) -> str:
+    spec = _resolved_spec_or_none(node)
+    if spec is not None:
+        return spec_display_name_es(spec)
+    return node.opening_type.value if node.opening_type is not None else ""
+
+
 def _sliding_facts(module: ProductModule) -> list[SlidingLayoutFacts]:
     """Resolved sliding topology per sliding bay — the editor's rail/panel
     inspector facts, independent of whether the BOM evaluated."""
     facts: list[SlidingLayoutFacts] = []
 
     def _visit(node: ParametricNode) -> None:
-        if node.type is NodeType.BAY and node.opening_type in _SLIDING_OPENINGS:
+        if node.type is NodeType.BAY and _node_is_sliding(node):
             try:
                 layout = resolved_sliding_layout(node)
             except ValueError:
@@ -1155,14 +1197,13 @@ def _evaluate_contour_module(
         )
         return None, issues, None
 
-    opening = leaf.opening_type or BayOpeningType.FIXED
-    if opening is not BayOpeningType.FIXED:
+    if not _node_is_fixed(leaf):
         issues.append(
             ProductIssue(
                 code=IssueCode.CONTOUR_OPENING_UNSUPPORTED.value,
                 severity=Severity.WARNING,
                 target=target,
-                params={"opening": opening.value},
+                params={"opening": _node_opening_label(leaf)},
             )
         )
         # The frame is still buildable; the operable leaf is not (v1).
@@ -1517,14 +1558,13 @@ def _evaluate_frameless_module(
         )
         return None, issues
 
-    opening = leaf.opening_type or BayOpeningType.FIXED
-    if opening is not BayOpeningType.FIXED:
+    if not _node_is_fixed(leaf):
         issues.append(
             ProductIssue(
                 code=IssueCode.FRAMELESS_OPENING_UNSUPPORTED.value,
                 severity=Severity.WARNING,
                 target=target,
-                params={"opening": opening.value},
+                params={"opening": _node_opening_label(leaf)},
             )
         )
     if leaf.panel_article_sku is not None:

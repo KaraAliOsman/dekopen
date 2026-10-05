@@ -42,8 +42,8 @@ SELECT is(
     (SELECT count(*) FROM public.profile_articles WHERE system_id = (
         SELECT id FROM public.profile_systems WHERE code = 'DEMO_60'
     )),
-    12::BIGINT,
-    'DEMO_60 contains twelve canonical profile articles'
+    13::BIGINT,
+    'DEMO_60 contains thirteen canonical profile articles'
 );
 SELECT is(
     (SELECT count(*) FROM public.glazing_bead_matrix WHERE system_id = (
@@ -95,8 +95,8 @@ SELECT set_config(
 );
 
 SELECT is((SELECT count(*) FROM public.profile_systems), 6::BIGINT, 'tenant A sees the six reference families');
-SELECT is((SELECT count(*) FROM public.profile_articles), 59::BIGINT, 'tenant A sees profiles');
-SELECT is((SELECT count(*) FROM public.hardware_kits), 25::BIGINT, 'tenant A sees hardware');
+SELECT is((SELECT count(*) FROM public.profile_articles), 61::BIGINT, 'tenant A sees profiles');
+SELECT is((SELECT count(*) FROM public.hardware_kits), 31::BIGINT, 'tenant A sees hardware');
 SELECT is((SELECT count(*) FROM public.glazing_bead_matrix), 20::BIGINT, 'tenant A sees beads');
 
 RESET ROLE;
@@ -113,8 +113,8 @@ SELECT set_config(
 );
 
 SELECT is((SELECT count(*) FROM public.profile_systems), 6::BIGINT, 'tenant B sees the six reference families');
-SELECT is((SELECT count(*) FROM public.profile_articles), 59::BIGINT, 'tenant B sees profiles');
-SELECT is((SELECT count(*) FROM public.hardware_kits), 25::BIGINT, 'tenant B sees hardware');
+SELECT is((SELECT count(*) FROM public.profile_articles), 61::BIGINT, 'tenant B sees profiles');
+SELECT is((SELECT count(*) FROM public.hardware_kits), 31::BIGINT, 'tenant B sees hardware');
 SELECT is((SELECT count(*) FROM public.glazing_bead_matrix), 20::BIGINT, 'tenant B sees beads');
 
 RESET ROLE;

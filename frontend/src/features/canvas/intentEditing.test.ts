@@ -216,6 +216,8 @@ describe("rectangular intent", () => {
     );
     expect(baySpec(bay)).toEqual({
       opening_type: "FIXED",
+      opening: null,
+      leaves: null,
       sliding_layout: null,
       door_handedness: null,
       glass_thickness_mm: "24.00",

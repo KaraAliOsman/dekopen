@@ -1,10 +1,23 @@
-import type { IntentNode, Opening, SlidingLayout, SplitType } from "./intentEditing";
-import { SLIDING_PRESETS } from "./intentEditing";
+import type {
+  IntentNode,
+  Opening,
+  OpeningChoice,
+  SlidingLayout,
+  SpecOptionId,
+  SplitType,
+} from "./intentEditing";
+import {
+  OPTION_SPECS,
+  OPTION_SPEC_KEY,
+  SPEC_KEY_TO_OPTION,
+  SLIDING_PRESETS,
+} from "./intentEditing";
 import {
   findNode,
   intentBays,
   moveDivision,
   parentSplitOf,
+  primaryOpeningKey,
   removeDivision,
   splitBay,
   updateBay,
@@ -1185,35 +1198,90 @@ export function setModuleTree(
 export function setModuleOpening(
   product: ProductJson,
   moduleId: string,
-  opening: Opening,
+  opening: OpeningChoice | string,
 ): ProductJson {
   const module = product.assembly.modules.find((item) => item.id === moduleId);
   if (!module) return product;
+  // Accept the AI-facing emitted key ("PRIMARY:TURN:LEFT:OUTWARD",
+  // "DOOR:...", "PRIMARY:SLIDE") as well as the editor option id and the
+  // legacy enum — the catalog's opening_options keys are the contract.
+  const optionId =
+    (OPTION_SPEC_KEY as Record<string, string>)[opening] !== undefined
+      ? (opening as OpeningChoice)
+      : SPEC_KEY_TO_OPTION[opening];
+  if (!optionId) return product;
+  const spec = OPTION_SPECS[optionId as SpecOptionId] ?? null;
+  const unitKind = spec?.unit_kind;
   function withOpening(node: IntentNode): IntentNode {
     if (node.type === "BAY") {
+      if (spec) {
+        // Spec option: declare opening/leaves on the bay; the unit kind
+        // lands on the unit root below. A panel sku only survives on a
+        // door leaf.
+        const cleared: IntentNode = {
+          ...node,
+          opening_type: null,
+          opening: spec.opening ? { ...spec.opening } : null,
+          leaves:
+            spec.leaves?.map((leaf) => ({
+              slot: leaf.slot,
+              opening: { ...leaf.opening },
+            })) ?? null,
+          door_handedness: null,
+          sliding_layout: null,
+        };
+        if (spec.unit_kind !== "DOOR") cleared.panel_article_sku = null;
+        return cleared;
+      }
       // Panels are only an engine input for DOOR_ENTRY; a stale panel sku on a
       // non-door bay would linger invisibly after switching back. Doors carry
       // declared handedness (DIN: hinges LEFT unless stated) — a stale value
       // on a non-door bay is likewise cleared.
       const cleared =
         opening === "DOOR_ENTRY"
-          ? { ...node, opening_type: opening, door_handedness: node.door_handedness ?? "LEFT" }
-          : { ...node, opening_type: opening, panel_article_sku: null, door_handedness: null };
+          ? {
+              ...node,
+              opening_type: optionId as Opening,
+              opening: null,
+              leaves: null,
+              door_handedness: node.door_handedness ?? "LEFT",
+            }
+          : {
+              ...node,
+              opening_type: optionId as Opening,
+              opening: null,
+              leaves: null,
+              panel_article_sku: null,
+              door_handedness: null,
+            };
       // The opening picker selects presets — a stale declared layout would
       // keep winning over the new preset. "SLIDING" alone needs a layout to
       // evaluate, so it seeds the 2-leaf topology the user then edits.
       return {
         ...cleared,
-        sliding_layout: opening === "SLIDING" ? structuredClone(SLIDING_PRESETS.SLIDING_2L!) : null,
+        sliding_layout:
+          optionId === "SLIDING" ? structuredClone(SLIDING_PRESETS.SLIDING_2L!) : null,
       };
     }
     return { ...node, children: node.children?.map(withOpening) };
   }
   const singleChild = module.tree.children?.at(0);
-  const tree =
+  let tree =
     module.tree.type === "ROOT" && singleChild && module.tree.children?.length === 1
       ? { ...module.tree, children: [withOpening(singleChild)] }
       : withOpening(module.tree);
+  // The unit kind is a declaration on the unit root — the node directly
+  // under ROOT — so door leaf specs inside a split still compose.
+  if (unitKind) {
+    const top = tree.type === "ROOT" ? tree.children?.at(0) : tree;
+    if (top) {
+      const patched = { ...top, unit_kind: unitKind };
+      tree =
+        tree.type === "ROOT"
+          ? { ...tree, children: tree.children?.map((child) => (child === top ? patched : child)) }
+          : patched;
+    }
+  }
   return replaceModule(product, moduleId, { ...module, tree });
 }
 
@@ -1252,9 +1320,12 @@ export function modulePrimaryBay(module: ProductModuleJson): IntentNode | null {
   return bays[0] ?? null;
 }
 
-export function moduleOpening(module: ProductModuleJson): Opening {
+/** The module's leading opening: the legacy enum for enum bays, the
+ * emitted spec key (e.g. "TURN:LEFT:OUTWARD") for spec bays. */
+export function moduleOpening(module: ProductModuleJson): string {
   const bay = modulePrimaryBay(module);
-  return bay?.opening_type ?? "FIXED";
+  if (!bay) return "FIXED";
+  return primaryOpeningKey(bay);
 }
 
 /** Commercial glass SKU on every bay of a module — pricing authority. */
@@ -1438,7 +1509,9 @@ export function splitModuleBay(
   const bay = division.bayId
     ? (intentBays(root).find((item) => item.id === division.bayId) ?? null)
     : modulePrimaryBay(module);
-  if (!bay || moduleOpening(module) === "DOOR_ENTRY") return product;
+  if (!bay || moduleOpening(module) === "DOOR_ENTRY" || moduleOpening(module).startsWith("DOOR:")) {
+    return product;
+  }
   const size = division.type === "SPLIT_V" ? Number(module.width_mm) : Number(module.height_mm);
   if (!Number.isFinite(size) || size <= 0) return product;
   const region = baySpanOnAxis(root, bay.id, division.type === "SPLIT_V", size, members);

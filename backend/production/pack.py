@@ -207,6 +207,20 @@ _VERTICAL_REFERENCE_LABELS = {
 
 _OPENING_LABELS = {
     "FIXED": "Fijo",
+    # Spec-form keys (D03): the trace emits the canonical leaf key when no
+    # legacy enum covers the composition.
+    "FIXED_SASH": "Fijo en hoja",
+    "TURN:LEFT:INWARD": "Abatir izq.",
+    "TURN:RIGHT:INWARD": "Abatir der.",
+    "TURN:LEFT:OUTWARD": "Abatir afuera izq.",
+    "TURN:RIGHT:OUTWARD": "Abatir afuera der.",
+    "TILT_TURN:LEFT:INWARD": "Oscilobatiente izq.",
+    "TILT_TURN:RIGHT:INWARD": "Oscilobatiente der.",
+    "TILT:BOTTOM:INWARD": "Banderola",
+    "TOP_HUNG:TOP:OUTWARD": "Proyectante",
+    "BOTTOM_HUNG:BOTTOM:INWARD": "Abatimiento inf.",
+    "BOTTOM_HUNG:BOTTOM:OUTWARD": "Abatimiento afuera inf.",
+    "SLIDE": "Corredera",
     "TURN_LEFT": "Abatir izq.",
     "TURN_RIGHT": "Abatir der.",
     "TILT_TURN_LEFT": "Oscilobatiente izq.",
@@ -352,8 +366,15 @@ def _unit_map_svg(
         rect = leaf.rect
         x, y = _mm(rect.x_mm), _mm(rect.y_mm)
         w, h = _mm(rect.width_mm), _mm(rect.height_mm)
+        opening_key = str(leaf.opening_type)
+        # Door-unit leaf keys carry a "DOOR:" prefix — fall back to the
+        # window-form label before rendering the raw key.
         opening = _OPENING_LABELS.get(
-            str(leaf.opening_type.value), str(leaf.opening_type.value)
+            opening_key,
+            _OPENING_LABELS.get(
+                opening_key.split(":", 1)[1] if opening_key.startswith("DOOR:") else "",
+                opening_key,
+            ),
         )
         svg.append(
             f'<rect x="{x}" y="{y}" width="{w}" height="{h}" fill="none" '

@@ -14,7 +14,7 @@ from dekopen_engine.inspection_models import (
     InspectorRuleId, InspectorSeverity, InspectorTarget, RuleEvaluation, RuleEvaluationStatus,
     WorkshopAnnotations,
 )
-from dekopen_engine.models import BayOpeningType, RailType
+from dekopen_engine.models import RailType
 
 _D = Decimal
 _PASS = RuleEvaluationStatus.PASS
@@ -118,6 +118,11 @@ def inspect(data: InspectorInput, config: InspectorConfig) -> InspectorResult:
 
     for leaf in data.computation.leaves:
         bay, leaf_id = leaf.bay_id, leaf.leaf_id
+        # A fixed-in-sash lite wears a sash ring but never opens — it takes
+        # no hardware kit by design (D03), so leaf-level workshop rules do
+        # not apply; its glazing is still checked as an infill (R04/R06).
+        if leaf.opening_type.rsplit(":", 1)[-1] == "FIXED_SASH":
+            continue
         kit = leaf.selected_kit
         weight = leaf.exact_weight
         candidates = [c for c in leaf.candidates if c.opening_match and c.rail_match]
@@ -157,13 +162,13 @@ def inspect(data: InspectorInput, config: InspectorConfig) -> InspectorResult:
         clearance = data.chamber_clearance_mm
         record("R11", _MISSING if clearance is None else _FAIL if
                abs(clearance - config.R11.expected_mm) > config.R11.tolerance_mm else _PASS, bay, leaf_id)
-        if leaf.opening_type is BayOpeningType.SLIDING_3L:
+        if leaf.opening_type == "SLIDING_3L":
             opening = next((o for o in data.computation.openings if o.bay_id == bay), None)
             ix = data.reinforcement_ix_by_target.get(bay)
             state = (_MISSING if opening is None else _NA if opening.width_mm <= config.R12.width_trigger_mm
                      else _MISSING if ix is None else _FAIL if ix < config.R12.minimum_ix_cm4 else _PASS)
             record("R12", state, bay, leaf_id)
-        if leaf.opening_type is BayOpeningType.AWNING:
+        if leaf.opening_type == "AWNING":
             state = (_PASS if h <= config.R13.height_trigger_mm else _MISSING if kit is None else
                      _FAIL if kit.stay_arms_qty < config.R13.required_stay_arms else _PASS)
             record("R13", state, bay, leaf_id)

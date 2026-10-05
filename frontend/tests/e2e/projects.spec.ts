@@ -166,7 +166,10 @@ test("SHOT-10 real project core path and visual evidence", async ({ page, manual
       () =>
         page
           .locator(".opening-grid")
-          .getByRole("button", { name: "Abatible derecha", exact: true })
+          .getByRole("button", {
+            name: "Abatible hacia adentro — bisagras a la derecha",
+            exact: true,
+          })
           .click(),
     )
   ).bom!;
@@ -265,7 +268,10 @@ test("SHOT-10 real project core path and visual evidence", async ({ page, manual
   await expect(page.getByRole("textbox", { name: "Ancho mm" })).toHaveValue("1100.25");
   await expect(page.getByRole("textbox", { name: "Alto mm" })).toHaveValue("1050.50");
   await expect(
-    page.locator(".opening-grid").getByRole("button", { name: "Abatible derecha", exact: true }),
+    page.locator(".opening-grid").getByRole("button", {
+      name: "Abatible hacia adentro — bisagras a la derecha",
+      exact: true,
+    }),
   ).toHaveAttribute("aria-pressed", "true");
   // The canvas sheet overlays the summary on this layout; open the details
   // declaratively instead of clicking through the overlay.

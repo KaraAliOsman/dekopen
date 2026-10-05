@@ -16,6 +16,7 @@ from dekopen_engine.hardware import (
     expand_components,
     hardware_picking_list,
     kit_cost_clp,
+    normalize_opening_type,
     resolve_hardware_evaluations,
 )
 from dekopen_engine.models import (
@@ -318,7 +319,7 @@ def _resolve(
             components.extend(option.components)
     return resolve_hardware_evaluations(
         evaluate_hardware_candidates(
-            opening=opening,
+            opening_group=normalize_opening_type(opening),
             width_mm=D(width),
             height_mm=D(height),
             base_weight=BASE,
@@ -326,7 +327,7 @@ def _resolve(
             explicit_sku=sku,
             option_components=components,
         ),
-        opening=opening,
+        opening_group=normalize_opening_type(opening),
         explicit_sku=sku,
         leaf_width_mm=D(width),
         leaf_height_mm=D(height),
@@ -399,11 +400,11 @@ def test_heavier_leaf_picks_heavy_class() -> None:
     heavy = ExactLeafWeight(D("20"), D("25"), D("60"))  # 105 kg + kit
     kit, _ = resolve_hardware_evaluations(
         evaluate_hardware_candidates(
-            opening=BayOpeningType.TILT_TURN_LEFT,
+            opening_group=normalize_opening_type(BayOpeningType.TILT_TURN_LEFT),
             width_mm=D("1200"), height_mm=D("2100"),
             base_weight=heavy, params=params,
         ),
-        opening=BayOpeningType.TILT_TURN_LEFT,
+        opening_group=normalize_opening_type(BayOpeningType.TILT_TURN_LEFT),
         leaf_width_mm=D("1200"), leaf_height_mm=D("2100"),
     )
     assert kit.sku == "KIT-OB-PESADA" and kit.class_label == "pesada"
@@ -430,12 +431,12 @@ def test_weight_restriction_names_class_and_suggests_next() -> None:
     with pytest.raises(NoCompatibleHardwareKit) as error:
         resolve_hardware_evaluations(
             evaluate_hardware_candidates(
-                opening=BayOpeningType.TILT_TURN_LEFT,
+                opening_group=normalize_opening_type(BayOpeningType.TILT_TURN_LEFT),
                 width_mm=D("900"), height_mm=D("1400"),
                 base_weight=heavy, params=params,
                 explicit_sku="KIT-OB-ESTANDAR",
             ),
-            opening=BayOpeningType.TILT_TURN_LEFT,
+            opening_group=normalize_opening_type(BayOpeningType.TILT_TURN_LEFT),
             explicit_sku="KIT-OB-ESTANDAR",
             leaf_width_mm=D("900"), leaf_height_mm=D("1400"),
         )
@@ -455,11 +456,11 @@ def test_size_restriction_suggests_split_bay() -> None:
     with pytest.raises(NoCompatibleHardwareKit) as error:
         resolve_hardware_evaluations(
             evaluate_hardware_candidates(
-                opening=BayOpeningType.TILT_TURN_LEFT,
+                opening_group=normalize_opening_type(BayOpeningType.TILT_TURN_LEFT),
                 width_mm=D("1450"), height_mm=D("2300"),
                 base_weight=huge, params=params,
             ),
-            opening=BayOpeningType.TILT_TURN_LEFT,
+            opening_group=normalize_opening_type(BayOpeningType.TILT_TURN_LEFT),
             leaf_width_mm=D("1450"), leaf_height_mm=D("2300"),
         )
     context = error.value.context
@@ -474,11 +475,11 @@ def test_ratio_restriction_names_real_values() -> None:
     with pytest.raises(NoCompatibleHardwareKit) as error:
         resolve_hardware_evaluations(
             evaluate_hardware_candidates(
-                opening=BayOpeningType.AWNING,
+                opening_group=normalize_opening_type(BayOpeningType.AWNING),
                 width_mm=D("400"), height_mm=D("1500"),  # ratio 3.75 > 3.00
                 base_weight=BASE, params=params,
             ),
-            opening=BayOpeningType.AWNING,
+            opening_group=normalize_opening_type(BayOpeningType.AWNING),
             leaf_width_mm=D("400"), leaf_height_mm=D("1500"),
         )
     context = error.value.context
@@ -492,11 +493,11 @@ def test_stay_height_restriction_names_minimum() -> None:
     with pytest.raises(NoCompatibleHardwareKit) as error:
         resolve_hardware_evaluations(
             evaluate_hardware_candidates(
-                opening=BayOpeningType.AWNING,
+                opening_group=normalize_opening_type(BayOpeningType.AWNING),
                 width_mm=D("800"), height_mm=D("450"),  # < 500 mm min compás
                 base_weight=BASE, params=params,
             ),
-            opening=BayOpeningType.AWNING,
+            opening_group=normalize_opening_type(BayOpeningType.AWNING),
             leaf_width_mm=D("800"), leaf_height_mm=D("450"),
         )
     context = error.value.context
@@ -738,12 +739,12 @@ def test_explicit_failed_class_delta_to_suggested() -> None:
     with pytest.raises(NoCompatibleHardwareKit) as error:
         resolve_hardware_evaluations(
             evaluate_hardware_candidates(
-                opening=BayOpeningType.TILT_TURN_LEFT,
+                opening_group=normalize_opening_type(BayOpeningType.TILT_TURN_LEFT),
                 width_mm=D("900"), height_mm=D("1400"),
                 base_weight=heavy, params=params,
                 explicit_sku="KIT-OB-ESTANDAR",
             ),
-            opening=BayOpeningType.TILT_TURN_LEFT,
+            opening_group=normalize_opening_type(BayOpeningType.TILT_TURN_LEFT),
             explicit_sku="KIT-OB-ESTANDAR",
             leaf_width_mm=D("900"), leaf_height_mm=D("1400"),
         )

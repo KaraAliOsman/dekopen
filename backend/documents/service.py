@@ -44,6 +44,7 @@ from dekopen_engine.manufacturing_trace import (
     SemanticLeafTraceV1,
 )
 from dekopen_engine.models import BayOpeningType, EngineResult
+from dekopen_engine.openings import leaf_policy_opening_candidates
 from dekopen_engine.product import (
     contour_module_computation,
     frameless_module_computation,
@@ -182,6 +183,13 @@ def _module_scoped(
     return scoped
 
 
+def _opening_trace_key(leaf) -> str:
+    """The leaf's emitted opening key — an enum member on the legacy path,
+    a canonical string on the spec path (D03)."""
+    opening = leaf.opening_type
+    return str(opening.value) if isinstance(opening, BayOpeningType) else str(opening)
+
+
 def _handle_rules_for_leaf(
     slots: list,
     leaf,
@@ -192,10 +200,11 @@ def _handle_rules_for_leaf(
     handedness matches, and pinned rules win over wildcards when both
     match. Keeping the predicate in one place keeps the preparation UI and
     the freeze-time projection agreeing on which intents are required."""
+    candidates = leaf_policy_opening_candidates(_opening_trace_key(leaf))
     matching = [
         rule
         for rule in slots
-        if rule.opening_type is leaf.opening_type
+        if str(rule.opening_type) in candidates
         and (rule.leaf_slot is None or rule.leaf_slot == leaf.leaf_slot)
         and (rule.leaf_handedness is None or rule.leaf_handedness == leaf.door_handedness)
     ]
@@ -225,12 +234,12 @@ def _missing_handle_intents(
         (item.bay_id, item.leaf_id, item.handle_domain_slot) for item in intents
     }
     door_rules_exist = any(
-        rule.opening_type is BayOpeningType.DOOR_ENTRY for rule in handle_policy.slots
+        str(rule.opening_type).startswith("DOOR") for rule in handle_policy.slots
     )
     for leaf in trace.leaves:
         if (
             door_rules_exist
-            and leaf.opening_type is BayOpeningType.DOOR_ENTRY
+            and _opening_trace_key(leaf).startswith("DOOR")
             and leaf.door_handedness is None
         ):
             # A door without declared handedness is incomplete — the
@@ -289,13 +298,15 @@ def _handle_policy_requirements(
     policy bounds that govern it before a position can freeze completely."""
     requirements: list[dict[str, object]] = []
     door_rules = [
-        rule for rule in handle_policy.slots if rule.opening_type is BayOpeningType.DOOR_ENTRY
+        rule
+        for rule in handle_policy.slots
+        if str(rule.opening_type).startswith("DOOR")
     ]
     for item in trace_leaves:
         leaf = item["leaf"]
         if (
             door_rules
-            and leaf.opening_type is BayOpeningType.DOOR_ENTRY
+            and _opening_trace_key(leaf).startswith("DOOR")
             and leaf.door_handedness is None
         ):
             # The door leaf needs handedness before any height intent can
@@ -307,7 +318,7 @@ def _handle_policy_requirements(
                     "bay_id": item["bay_id"],
                     "leaf_id": item["leaf_id"],
                     "leaf_label": item["leaf_label"],
-                    "opening_type": leaf.opening_type.value,
+                    "opening_type": _opening_trace_key(leaf),
                     "handle_domain_slot": door_rules[0].handle_domain_slot,
                     "host_member_side": None,
                     "requires_handedness": True,
@@ -335,7 +346,7 @@ def _handle_policy_requirements(
                     "bay_id": item["bay_id"],
                     "leaf_id": item["leaf_id"],
                     "leaf_label": item["leaf_label"],
-                    "opening_type": leaf.opening_type.value,
+                    "opening_type": _opening_trace_key(leaf),
                     "handle_domain_slot": rule.handle_domain_slot,
                     "host_member_side": rule.host_member_side.value,
                     "requires_handedness": False,

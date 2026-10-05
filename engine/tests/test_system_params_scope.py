@@ -1,4 +1,4 @@
-"""Canonical SHOT-06 scope: 34 mapped, 29 consumed, 2 metadata, 3 reserved."""
+"""Canonical SHOT-06 scope: 35 mapped, 30 consumed, 2 metadata, 3 reserved."""
 
 import ast
 from collections.abc import Callable
@@ -8,7 +8,7 @@ import inspect
 import pytest
 
 from dekopen_engine import ParametricNode, SystemParams, calculate_geometry
-from dekopen_engine import geometry, hardware
+from dekopen_engine import geometry, hardware, openings
 from engine.tests.test_shot06_core import core_node
 
 # Sliding-geometry fields are consumed through the grouped `params.sliding`
@@ -27,25 +27,28 @@ CORE_CONSUMERS: dict[str, Callable[..., object]] = {
     "pulley_height_mm": geometry._append_sliding,
     "central_overlap_mm": geometry._append_sliding,
     "sliding_end_add_mm": geometry._append_sliding,
-    "door_threshold_mm": geometry._append_door,
-    "door_bottom_clearance_mm": geometry._append_door,
+    "door_threshold_mm": geometry._append_door_unit,
+    "door_bottom_clearance_mm": geometry._append_door_leaf,
     "rail_type": hardware.evaluate_hardware_candidates,
     "available_hardware_kits": hardware.evaluate_hardware_candidates,
     "sliding_glazing_deduction_width_mm": geometry._append_leaf,
     "sliding_glazing_deduction_height_mm": geometry._append_leaf,
-    "door_leaf_side_clearance_mm": geometry._append_door,
+    "door_leaf_side_clearance_mm": geometry._append_door_leaf,
     "available_panel_rules": geometry._append_leaf,
     "rail_count": geometry.rail_count,
-    "cut_rules": geometry._append_leaf,
+    "cut_rules": geometry._meeting_deduction,
     "reinforcement_rules": geometry._append_profile,
-    "typology_limits": geometry._append_leaf,
+    # D03: leaf-level bounds resolve through the leaf's emitted key —
+    # the most specific declared row wins per leaf.
+    "typology_limits": geometry._typology_limit_for,
     # D02 glass authorities: products, safety rules and type limits are
     # consumed inside the per-piece glass evaluation pass.
     "glass_products": geometry._evaluate_glass,
     "glass_safety_rules": geometry._evaluate_glass,
     "glass_type_limits": geometry._evaluate_glass,
-    "hardware_families": hardware.build_hardware_item,
+        "hardware_families": hardware.build_hardware_item,
     "hardware_options": hardware.build_hardware_item,
+    "opening_capabilities": openings.admitted_capabilities,
 }
 METADATA = {"system_code", "depth_mm"}
 RESERVED = {"sliding_lateral_clearance_mm", "corner_bracket_loss_mm", "hook_depth_mm"}
@@ -69,7 +72,7 @@ def _param_reads(consumer: Callable[..., object]) -> set[str]:
 
 def test_every_system_parameter_has_an_explicit_scope() -> None:
     assert (
-        len(CORE_CONSUMERS) == 29
+        len(CORE_CONSUMERS) == 30
         and len(METADATA) == 2
         and len(RESERVED) == 3
         and len(API_BOUNDARY) == 1

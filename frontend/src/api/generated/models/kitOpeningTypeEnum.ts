@@ -8,8 +8,11 @@
 
 /**
  * * `AWNING` - AWNING
+ * * `BOTTOM_HUNG` - BOTTOM_HUNG
  * * `DOOR` - DOOR
+ * * `FALLEBA` - FALLEBA
  * * `SLIDING` - SLIDING
+ * * `TILT` - TILT
  * * `TILT_TURN` - TILT_TURN
  * * `TURN` - TURN
  */
@@ -17,8 +20,11 @@ export type KitOpeningTypeEnum = (typeof KitOpeningTypeEnum)[keyof typeof KitOpe
 
 export const KitOpeningTypeEnum = {
   AWNING: "AWNING",
+  BOTTOM_HUNG: "BOTTOM_HUNG",
   DOOR: "DOOR",
+  FALLEBA: "FALLEBA",
   SLIDING: "SLIDING",
+  TILT: "TILT",
   TILT_TURN: "TILT_TURN",
   TURN: "TURN",
 } as const;

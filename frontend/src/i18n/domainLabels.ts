@@ -62,8 +62,11 @@ export const DOMAIN_LABELS: Record<string, L> = {
   },
   KitOpeningTypeEnum: {
     AWNING: l("Proyectante", "info", "open-awning"),
+    BOTTOM_HUNG: l("Abatimiento inferior", "info", "open-tilt-turn"),
     DOOR: l("Puerta", "info", "open-door"),
+    FALLEBA: l("Falleba hoja pasiva", "info"),
     SLIDING: l("Corredera", "info", "open-sliding"),
+    TILT: l("Banderola", "info", "open-tilt-turn"),
     TILT_TURN: l("Oscilobatiente", "info", "open-tilt-turn"),
     TURN: l("Abatible", "info", "open-turn"),
   },

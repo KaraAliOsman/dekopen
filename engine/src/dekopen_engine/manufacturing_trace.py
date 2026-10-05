@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from dekopen_engine.models import BayOpeningType, EngineModel, MaterialType, ProfileRole
+from dekopen_engine.models import EngineModel, MaterialType, ProfileRole
 
 
 class PlacementDomain(str, Enum):
@@ -56,11 +56,19 @@ class SemanticLeafTraceV1(EngineModel):
     bay_id: str
     leaf_id: str | None
     leaf_slot: str
-    opening_type: BayOpeningType
+    # D03: the leaf's opening identity — the legacy enum value when the
+    # spec maps to one, otherwise the canonical key (``TURN:LEFT:OUTWARD``,
+    # ``DOOR:``-prefixed inside a door unit). String, not the enum: the new
+    # vocabulary is wider than the legacy values.
+    opening_type: str
     # Declared hinge side for door leaves — handle slot rules can pin
     # themselves to a handedness so a mirrored door mounts its handle on
     # the correct free stile.
     door_handedness: Literal["LEFT", "RIGHT"] | None = None
+    # D03: a PASSIVE leaf closes with its falleba and a fixed-in-sash leaf
+    # never opens — the handle policy skips leaves flagged False instead
+    # of mounting phantom handles.
+    handle_expected: bool = True
     placement_domain: Literal[PlacementDomain.DIRECT, PlacementDomain.SLIDING_LEAF]
     reference_rect: TraceRectV1
     # Sliding bays only: the floored slot pitch the geometry walk assigned,

@@ -301,6 +301,60 @@ def test_client_quote_renders_door_openings() -> None:
         assert "stroke-dasharray" in html
 
 
+def test_client_quote_renders_spec_openings_din() -> None:
+    """D03 spec form (`opening`/`leaves`/`unit_kind`) draws the same DIN
+    vocabulary as the legacy enum — dashed when the leaf opens away, a
+    meeting stile on a hinged pair, and the door sill accent only under
+    operable leaves (never under a fixed sidelight)."""
+    outward = revision_snapshot()
+    outward["positions"][0]["parametric_tree"] = {  # type: ignore[index]
+        "id": "B1", "type": "BAY",
+        "opening": {"movement": "TURN", "hinge_side": "RIGHT",
+                    "direction": "OUTWARD"},
+        "glass_spec": "4-12-4 Float Incoloro", "children": [],
+    }
+    outward_html = _doc01(outward)
+    assert "stroke-dasharray" in outward_html
+
+    french = revision_snapshot()
+    french["positions"][0]["parametric_tree"] = {  # type: ignore[index]
+        "id": "B1", "type": "BAY",
+        "leaves": [
+            {"slot": "L1", "opening": {"movement": "TURN", "hinge_side": "LEFT",
+                                       "direction": "INWARD", "leaf_role": "ACTIVE"}},
+            {"slot": "L2", "opening": {"movement": "TURN", "hinge_side": "RIGHT",
+                                       "direction": "INWARD", "leaf_role": "PASSIVE"}},
+        ],
+        "glass_spec": "4-12-4 Float Incoloro", "children": [],
+    }
+    french_html = _doc01(french)
+    # Glass overlay + one triangle per leaf + the meeting-stile separator.
+    assert french_html.count("<polygon") == 3
+    assert '<line x1="500" y1="72" x2="500" y2="1128"' in french_html
+    assert "stroke-dasharray" not in french_html
+
+    door_side = revision_snapshot()
+    door_side["positions"][0]["parametric_tree"] = {  # type: ignore[index]
+        "id": "S1", "type": "SPLIT_V", "unit_kind": "DOOR",
+        "split_offset_mm": "900.00",
+        "children": [
+            {"id": "door", "type": "BAY",
+             "opening": {"movement": "TURN", "hinge_side": "LEFT",
+                         "direction": "INWARD"},
+             "children": []},
+            {"id": "side", "type": "BAY",
+             "opening": {"movement": "FIXED"},
+             "glass_spec": "4-12-4 Float Incoloro", "children": []},
+        ],
+    }
+    door_html = _doc01(door_side)
+    # One swing arc (`d="M `, the marker def uses `d="M0,0`); the sill accent
+    # runs under the door leaf only — the FIXED sidelight draws nothing.
+    assert door_html.count('d="M ') == 1
+    assert door_html.count('stroke="#E56A32"') == 1
+    assert "stroke-dasharray" not in door_html
+
+
 def test_client_quote_renders_discount_fraction_as_percent() -> None:
     """discount_pct is a fraction (0.10 = 10%) — the proposal must print the
     percent the customer negotiated, never the raw fraction."""

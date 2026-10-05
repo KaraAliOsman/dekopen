@@ -85,6 +85,21 @@ def test_r03_system_and_kit_intersection(config: InspectorConfig, w: str, h: str
     assert state(data_with_leaf(item), config, "R03") == "FAIL"
 
 
+@pytest.mark.parametrize("opening_type", ["FIXED_SASH", "DOOR:FIXED_SASH"])
+def test_fixed_in_sash_leaf_takes_no_kit(config: InspectorConfig, opening_type: str) -> None:
+    """A fixed-in-sash lite takes no hardware kit by design (D03): the
+    inspector must not demand a kit nor apply leaf-level rules to it —
+    its glazing is checked as an infill instead."""
+    facts = GeometryComputation(leaves=[
+        LeafTechnicalFacts("B", None, opening_type, RailType.DUAL,
+                           D("600"), D("1400"), ExactLeafWeight(D("0"), D("0"), D("10")),
+                           [], None, None)
+    ])
+    result = inspect(InspectorInput(facts, D("12")), config)
+    assert not any(e.bay_id == "B" for e in result.evaluations)
+    assert not any(f.bay_id == "B" for f in result.findings)
+
+
 @pytest.mark.parametrize("spec,area,expected", [("4", "1.8", "PASS"), ("4", "1.800001", "FAIL"),
     ("4-12-4", "2.6", "PASS"), ("4-16-4", "2.600001", "FAIL"), ("6", "1", "MISSING_INPUT")])
 def test_r04_exact_area_class(config: InspectorConfig, spec: str, area: str, expected: str) -> None:

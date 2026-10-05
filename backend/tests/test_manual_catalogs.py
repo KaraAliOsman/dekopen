@@ -69,6 +69,9 @@ def test_kit_opening_choices_match_current_operable_engine():
         "SLIDING",
         "AWNING",
         "DOOR",
+        "TILT",
+        "BOTTOM_HUNG",
+        "FALLEBA",
     }
 
 

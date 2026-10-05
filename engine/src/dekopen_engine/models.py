@@ -76,6 +76,242 @@ class BayOpeningType(str, Enum):
     DOOR_DOUBLE = "DOOR_DOUBLE"
 
 
+class OpeningMovement(str, Enum):
+    """How a leaf physically travels (D03).
+
+    The axis the legacy `BayOpeningType` flattened into per-variant enum
+    values. The last six movements are declared for D08 — catalogs and
+    capability rows may name them today, but geometry refuses them until
+    their fabrication is implemented."""
+
+    FIXED = "FIXED"
+    TURN = "TURN"  # abatible
+    TILT = "TILT"  # solo abatimiento — banderola (bisagras abajo, hacia adentro)
+    TILT_TURN = "TILT_TURN"  # oscilobatiente
+    TOP_HUNG = "TOP_HUNG"  # proyectante (bisagras arriba, hacia afuera)
+    BOTTOM_HUNG = "BOTTOM_HUNG"  # abatimiento
+    SLIDE = "SLIDE"  # corredera
+    LIFT_SLIDE = "LIFT_SLIDE"  # elevable — D08
+    PARALLEL_SLIDE = "PARALLEL_SLIDE"  # osciloparalela — D08
+    FOLD = "FOLD"  # plegable — D08
+    PIVOT_V = "PIVOT_V"  # pivotante vertical — D08
+    PIVOT_H = "PIVOT_H"  # pivotante horizontal — D08
+    VERTICAL_SLIDE = "VERTICAL_SLIDE"  # guillotina — D08
+
+
+class HingeSide(str, Enum):
+    """Edge that carries the leaf's hinges in the interior-view elevation."""
+
+    LEFT = "LEFT"
+    RIGHT = "RIGHT"
+    TOP = "TOP"
+    BOTTOM = "BOTTOM"
+    NONE = "NONE"
+
+
+class OpeningDirection(str, Enum):
+    """Which way the leaf opens, seen from the interior (DIN convention)."""
+
+    INWARD = "INWARD"
+    OUTWARD = "OUTWARD"
+
+
+class LeafRole(str, Enum):
+    """A leaf's role inside its bay (D03).
+
+    SINGLE is the bay's only leaf. A multi-leaf bay carries exactly one
+    ACTIVE leaf — it holds the handle — while every other leaf is PASSIVE
+    (inversor meeting stile + falleba, no handle)."""
+
+    SINGLE = "SINGLE"
+    ACTIVE = "ACTIVE"
+    PASSIVE = "PASSIVE"
+
+
+class UnitKind(str, Enum):
+    """What kind of perimeter frame the unit builds (D03).
+
+    A WINDOW frame is a closed rectangle; a DOOR unit drops its bottom
+    member for a walkable threshold and sizes leaves with door
+    clearances. The kind is declared on the unit's top node; door leaves
+    and fixed sidelights live inside the same door frame."""
+
+    WINDOW = "WINDOW"
+    DOOR = "DOOR"
+
+
+class Opening(EngineModel):
+    """One leaf's kinematics (D03): movement × hinge side × direction ×
+    leaf role — the model that replaces the enum as source of truth.
+
+    `fixed_in_sash` marks the non-opening sash look-alike (fijo en hoja):
+    it cuts and glazes a sash frame in place but takes no hardware and no
+    handle.
+    """
+
+    movement: OpeningMovement
+    hinge_side: HingeSide = HingeSide.NONE
+    direction: OpeningDirection | None = None
+    leaf_role: LeafRole = LeafRole.SINGLE
+    fixed_in_sash: bool = False
+
+    @model_validator(mode="after")
+    def _kinematics_are_coherent(self) -> "Opening":
+        movement = self.movement
+        if self.fixed_in_sash and movement is not OpeningMovement.FIXED:
+            raise ValueError("fixed_in_sash only applies to movement FIXED")
+        if movement is OpeningMovement.FIXED:
+            if self.hinge_side is not HingeSide.NONE:
+                raise ValueError("FIXED carries no hinge side")
+            if self.direction is not None:
+                raise ValueError("FIXED carries no direction")
+            if self.leaf_role is not LeafRole.SINGLE:
+                raise ValueError("A fixed lite takes no leaf role")
+        elif movement in (
+            OpeningMovement.SLIDE,
+            OpeningMovement.LIFT_SLIDE,
+            OpeningMovement.PARALLEL_SLIDE,
+            OpeningMovement.VERTICAL_SLIDE,
+        ):
+            if self.hinge_side is not HingeSide.NONE:
+                raise ValueError(f"{movement.value} carries no hinge side")
+            if self.direction is not None:
+                raise ValueError(f"{movement.value} carries no direction")
+            if self.leaf_role is not LeafRole.SINGLE:
+                raise ValueError("Sliding leaves compose via sliding_layout, not roles")
+        elif movement is OpeningMovement.TURN:
+            if self.hinge_side not in (HingeSide.LEFT, HingeSide.RIGHT):
+                raise ValueError("TURN requires hinge_side LEFT or RIGHT")
+            if self.direction is None:
+                raise ValueError("TURN requires a direction")
+        elif movement is OpeningMovement.TILT:
+            if self.hinge_side is not HingeSide.BOTTOM:
+                raise ValueError("TILT (banderola) requires hinge_side BOTTOM")
+            if self.direction is not OpeningDirection.INWARD:
+                raise ValueError("TILT (banderola) only opens INWARD")
+        elif movement is OpeningMovement.TILT_TURN:
+            if self.hinge_side not in (HingeSide.LEFT, HingeSide.RIGHT):
+                raise ValueError("TILT_TURN requires hinge_side LEFT or RIGHT")
+            if self.direction is not OpeningDirection.INWARD:
+                raise ValueError("TILT_TURN only opens INWARD")
+        elif movement is OpeningMovement.TOP_HUNG:
+            if self.hinge_side is not HingeSide.TOP:
+                raise ValueError("TOP_HUNG (proyectante) requires hinge_side TOP")
+            if self.direction is not OpeningDirection.OUTWARD:
+                raise ValueError("TOP_HUNG (proyectante) only opens OUTWARD")
+        elif movement is OpeningMovement.BOTTOM_HUNG:
+            if self.hinge_side is not HingeSide.BOTTOM:
+                raise ValueError("BOTTOM_HUNG requires hinge_side BOTTOM")
+            if self.direction is None:
+                raise ValueError("BOTTOM_HUNG requires a direction")
+        elif movement in (OpeningMovement.PIVOT_V, OpeningMovement.PIVOT_H):
+            if self.hinge_side is not HingeSide.NONE:
+                raise ValueError(f"{movement.value} rotates on an axis, not a hinge edge")
+        elif movement is OpeningMovement.FOLD:
+            if self.hinge_side not in (HingeSide.LEFT, HingeSide.RIGHT, HingeSide.NONE):
+                raise ValueError("FOLD hinges on a side edge or none")
+        return self
+
+    def key(self) -> str:
+        """Canonical stable key for this leaf spec (D03).
+
+        Capability rows, handle policies, typology limits and emitted leaf
+        traces all name leaf specs with this key — e.g. ``TURN:LEFT:OUTWARD``
+        or ``TURN:RIGHT:INWARD:PASSIVE``. The legacy enum value is emitted
+        instead whenever a whole-unit mapping exists."""
+        if self.movement is OpeningMovement.FIXED:
+            return "FIXED_SASH" if self.fixed_in_sash else "FIXED"
+        parts = [self.movement.value]
+        if self.hinge_side is not HingeSide.NONE:
+            parts.append(self.hinge_side.value)
+        if self.direction is not None:
+            parts.append(self.direction.value)
+        if self.leaf_role is not LeafRole.SINGLE:
+            parts.append(self.leaf_role.value)
+        return ":".join(parts)
+
+
+class BayLeaf(EngineModel):
+    """One operable leaf of a bay (D03).
+
+    Slot order is left→right in the interior-view elevation: L1..LN for a
+    multi-leaf bay, PRIMARY for a single-leaf one."""
+
+    slot: str
+    opening: Opening
+
+
+# Hinged movements a multi-leaf bay can compose — the meeting stile of a
+# side-hinged pair is the inversor/encuentro a sliding layout cannot give.
+_HINGED_MULTI_LEAF_MOVEMENTS = frozenset(
+    {OpeningMovement.TURN, OpeningMovement.TILT_TURN}
+)
+
+
+class OpeningSpec(EngineModel):
+    """A bay's resolved opening declaration (D03): the unit kind plus the
+    leaves it physically fabricates, in slot order."""
+
+    unit_kind: UnitKind = UnitKind.WINDOW
+    leaves: list[BayLeaf] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _composition_is_buildable(self) -> "OpeningSpec":
+        slots = [leaf.slot for leaf in self.leaves]
+        if len(set(slots)) != len(slots):
+            raise ValueError("Leaf slots repeat inside a bay")
+        if len(self.leaves) == 1:
+            leaf = self.leaves[0]
+            if leaf.opening.leaf_role is not LeafRole.SINGLE:
+                raise ValueError("A single-leaf bay takes leaf_role SINGLE")
+            return self
+        # Multi-leaf composition (D03 scope: the 2-leaf hinged pair —
+        # french window / double door; wider hinged runs need posts and
+        # belong to splits).
+        if len(self.leaves) > 2:
+            raise ValueError("Hinged bays compose at most two leaves")
+        movements = {leaf.opening.movement for leaf in self.leaves}
+        if len(movements) != 1:
+            raise ValueError("Multi-leaf bays share one movement")
+        movement = next(iter(movements))
+        if movement not in _HINGED_MULTI_LEAF_MOVEMENTS:
+            raise ValueError(
+                f"{movement.value} does not compose a hinged multi-leaf bay"
+            )
+        directions = {leaf.opening.direction for leaf in self.leaves}
+        if len(directions) != 1:
+            raise ValueError("Multi-leaf bays share one direction")
+        roles = [leaf.opening.leaf_role for leaf in self.leaves]
+        if roles.count(LeafRole.ACTIVE) != 1:
+            raise ValueError("A multi-leaf bay needs exactly one ACTIVE leaf")
+        if any(role is LeafRole.SINGLE for role in roles):
+            raise ValueError("Multi-leaf bays take ACTIVE/PASSIVE roles only")
+        # Side-hinged pairs hinge on their outer edges: the left leaf on
+        # the left, the right leaf on the right.
+        left, right = self.leaves[0], self.leaves[1]
+        if left.opening.hinge_side is not HingeSide.LEFT:
+            raise ValueError("The left leaf of a pair hinges LEFT")
+        if right.opening.hinge_side is not HingeSide.RIGHT:
+            raise ValueError("The right leaf of a pair hinges RIGHT")
+        return self
+
+
+class OpeningCapability(EngineModel):
+    """One composition class a system declares it can fabricate (D03).
+
+    A bay's spec is admitted when every leaf is covered: movement matches
+    a row, the leaf's direction (when it has one) is listed, its role is
+    listed, the unit kind is listed and the leaf count fits `max_leaves`.
+    A FIXED row with `fixed_in_sash` also admits the sash-glazed lite."""
+
+    movement: OpeningMovement
+    directions: tuple[OpeningDirection, ...] = ()
+    leaf_roles: tuple[LeafRole, ...] = (LeafRole.SINGLE,)
+    unit_kinds: tuple[UnitKind, ...] = (UnitKind.WINDOW,)
+    max_leaves: int = Field(default=1, ge=1, le=2)
+    fixed_in_sash: bool = False
+
+
 class SlidingPanelKind(str, Enum):
     MOVING = "MOVING"  # rides a rail — a sliding sash leaf
     FIXED = "FIXED"  # glazed in-frame — an "O" panel
@@ -969,6 +1205,12 @@ class SystemParams(EngineModel):
     # maps mean the catalog declared none — a leaf selecting one is refused.
     hardware_families: dict[str, HardwareFamily] = Field(default_factory=dict)
     hardware_options: dict[str, HardwareOption] = Field(default_factory=dict)
+    # Opening compositions the system declares it can fabricate (D03):
+    # movement × direction × role × unit kind, plus the leaf count a bay
+    # may compose. An empty list means the catalog never declared them —
+    # the engine falls back to the family's legacy-expressible openings,
+    # so undeclared rows never admit more than the enum already could.
+    opening_capabilities: tuple[OpeningCapability, ...] = ()
 
     @model_validator(mode="after")
     def _family_data_coherence(self) -> "SystemParams":
@@ -1035,6 +1277,25 @@ class ParametricNode(EngineModel):
     glass_composition: GlassComposition | None = None
     # Declared per-bay extras (edge polish, drills, palillaje grid).
     glass_options: GlassOptions | None = None
+    # D03 opening declaration — the canonical model replacing
+    # `opening_type`. `opening` is the single-leaf form; `leaves`
+    # composes a hinged multi-leaf bay (french window, double door) in
+    # slot order L1..LN. `unit_kind` marks the whole unit a DOOR on the
+    # top node (3-sided frame + threshold; door bays and sidelights live
+    # inside it). The legacy `opening_type` stays accepted for one
+    # version; when both forms are present they must agree — the engine
+    # resolves the conflict rather than picking a winner.
+    opening: Opening | None = None
+    leaves: list[BayLeaf] = Field(default_factory=list)
+    unit_kind: UnitKind | None = None
+
+    @model_validator(mode="after")
+    def _opening_forms_are_coherent(self) -> "ParametricNode":
+        if self.leaves and self.opening is not None:
+            raise ValueError("Declare `opening` or `leaves`, not both")
+        if self.unit_kind is not None and self.type is NodeType.ROOT:
+            raise ValueError("unit_kind belongs to the unit's top node, not ROOT")
+        return self
 
 
 class ProfileCut(EngineModel):
