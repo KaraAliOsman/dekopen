@@ -1833,6 +1833,17 @@ def stage(
         if frozen:
             emit_doc01(frozen["id"])
             links = approvals(projects["enviado"]["id"])
+            # El .fixture-state.json puede sobrevivir a un wipe de la base
+            # (supabase stop --no-backup): las marcas solo se respetan si
+            # la fila existe de verdad en customer_approvals.
+            if state["portal"].get("revocada") and not any(
+                link.get("status") == "REVOKED" for link in links
+            ):
+                del state["portal"]["revocada"]
+            if state["portal"].get("vigente") and not any(
+                link.get("status") == "PENDING" for link in links
+            ):
+                del state["portal"]["vigente"]
             if not state["portal"].get("revocada"):
                 # Un link revocado deja historial — el portal muestra su
                 # estado explícito al cliente que lo abra. Se emite y se
@@ -1855,6 +1866,7 @@ def stage(
                         tolerate=(404, 409),
                     )
                     state["portal"]["revocada"] = doomed["token"]
+            links = approvals(projects["enviado"]["id"])
             if not state["portal"].get("vigente"):
                 # Siempre un único link vigente: el token solo existe en la
                 # respuesta de emisión — si el state se perdió pero quedaron

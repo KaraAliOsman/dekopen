@@ -906,6 +906,11 @@ div:has(> table.production-plan) {
   margin: 0.4rem 0 0;
 }
 
+.production-stock-reserve {
+  /* Reserve/purchase tables can exceed a phone's width — scroll inside the
+     section like the packing and glass blocks. */
+  overflow-x: auto;
+}
 .production-stock-reserve h4 {
   margin: 0 0 0.5em;
   font-size: 0.95em;
@@ -928,6 +933,12 @@ div:has(> table.production-plan) {
   margin: 0 0 0.75rem;
   font-variant-numeric: tabular-nums;
   color: var(--text-dim, #5a6270);
+}
+.production-trace-body,
+.production-trace-stock {
+  /* Long ledger notes (wo-reserve:*, remnant ids) overflow on phones —
+     scroll inside the trace block instead of widening the page. */
+  overflow-x: auto;
 }
 .production-trace-plan table,
 .production-trace-stock table {

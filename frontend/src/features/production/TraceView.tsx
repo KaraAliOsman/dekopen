@@ -12,6 +12,7 @@ import {
   opReferenceLabel,
   remnantStatusLabel,
   stockKindLabel,
+  traceNoteLabel,
 } from "./labels";
 import type {
   ProductionOrderTracePlan,
@@ -181,7 +182,7 @@ export function TraceStock({ stock }: { stock: ProductionOrderTraceStock }) {
                 <td>{movement.movement_type}</td>
                 <td>{movement.sku}</td>
                 <td>{movement.quantity}</td>
-                <td>{movement.note ?? "—"}</td>
+                <td title={movement.note ?? undefined}>{traceNoteLabel(movement.note)}</td>
               </tr>
             ))}
           </tbody>

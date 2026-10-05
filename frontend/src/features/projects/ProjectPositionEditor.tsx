@@ -718,7 +718,7 @@ function PositionWorkspace({
         parts.push(`≤ ${limit.max_leaf_weight_kg} kg`);
       }
       const source = tDynamic("projects.limitSource", limit.source);
-      return `${limit.opening_type.replace(/_/g, " ").toLowerCase()}: ${parts.join(" × ")} (${source})`;
+      return `${tDynamic("catalog.option", limit.opening_type)}: ${parts.join(" × ")} (${source})`;
     })
     .join(" · ");
   const positionPanel = (

@@ -65,7 +65,9 @@ const STOCK_KINDS: ReadonlySet<string> = new Set([
   "BAR",
   "SHEET",
   "KIT",
+  "HARDWARE_KIT",
   "FITTING",
+  "PANEL",
   "OFFCUT",
   "REMNANT",
 ]);
@@ -75,6 +77,27 @@ export function stockKindLabel(kind: string | null | undefined): string {
   return STOCK_KINDS.has(kind)
     ? t(`production.stockKindValue.${kind}` as Parameters<typeof t>[0])
     : kind;
+}
+
+/** Ledger notes carry machine references (wo-reserve:KIND, wo-consume…) —
+ * render them as readable Spanish; the raw value stays in the cell title. */
+export function traceNoteLabel(note: string | null | undefined): string {
+  if (note === null || note === undefined || note === "") return "—";
+  const prefixed = /^wo-(reserve|recheck):(.+)$/.exec(note);
+  if (prefixed) {
+    const kind = prefixed[2]!;
+    const kindLabel = STOCK_KINDS.has(kind)
+      ? t(`production.stockKindValue.${kind}` as Parameters<typeof t>[0])
+      : kind;
+    const action =
+      prefixed[1] === "reserve"
+        ? t("production.traceNoteWoReserve")
+        : t("production.traceNoteWoRecheck");
+    return `${action} ${kindLabel}`;
+  }
+  if (note === "wo-consume") return t("production.traceNoteWoConsume");
+  if (note === "wo-replan-release") return t("production.traceNoteWoReplanRelease");
+  return note;
 }
 
 const CENTER_KINDS: ReadonlySet<string> = new Set([
