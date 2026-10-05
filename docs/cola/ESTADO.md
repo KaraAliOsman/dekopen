@@ -4,7 +4,7 @@
 | P01 | 0b | mergeado | https://github.com/KaraAliOsman/dekopen/pull/4 | 9e9941dd1435bfc14c32d03a4cf7ecf2d410207b | CI 6/6 verde; squash mergeado. Tokens v2 + primitivas + domainLabels + validación es-CL + guards + detectores en ux:capture + muestrario /dev/ui. -30% CSS difiere a P03+. |
 | IA1 | 0b | mergeado | https://github.com/KaraAliOsman/dekopen/pull/3 | f7b33d2e4e4855ce39e989c25b697fcf86ec5268 | CI 6/6 verde. Arnés evals 26 casos + taxonomía + línea base MOCK/MIMO + 5 causas raíz. |
 | D01 | 0b | mergeado | https://github.com/KaraAliOsman/dekopen/pull/6 | bc7ed09ed2df41df838f19ffdd3346326e646c4f | CI 6/6 verde; squash mergeado. Familias de sistema + rechazo del motor + roles completos + límites con fuente + ingesta dual con revisión humana + split DEMO_60. |
-| D02 | D1 | pendiente |  |  |  |
+| D02 | D1 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/10 | b623a067fe3db3872138c036e24c39a631ed947c | CI 6/6 verde; squash mergeado. GlassComposition + derivados motor + NCh 135 como datos + recargos + pedido al vidriero PDF/CSV+QR + selector Básico/Avanzado. |
 | D03 | D1 | pendiente |  |  |  |
 | D04 | D1 | pendiente |  |  |  |
 | D05 | D2 | pendiente |  |  |  |

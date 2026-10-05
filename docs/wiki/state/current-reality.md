@@ -3,12 +3,13 @@ type: state
 status: active
 updated: 2026-10-05
 volatility: high
-verified_ref: bc7ed09ed2df41df838f19ffdd3346326e646c4f
+verified_ref: b623a067fe3db3872138c036e24c39a631ed947c
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
   - P01 design-system PR https://github.com/KaraAliOsman/dekopen/pull/4
   - D01 systems/profiles PR https://github.com/KaraAliOsman/dekopen/pull/6
+  - D02 glass PR https://github.com/KaraAliOsman/dekopen/pull/10
   - integracion/v1 merge 747c528b67d234d697624929ccbcc7098261ed54
   - open PR metadata observed 2026-09-27/28
   - AGENTS.md
@@ -61,9 +62,9 @@ Merged into `integracion/v1` as squash `bc7ed09ed2df41df838f19ffdd3346326e646c4f
 - Catalog ingestion has two converging paths — manual XLSX/CSV template (`backend/ingest/spreadsheet.py`) and AI candidates — both landing on the same human review before publication.
 - The global catalog grew: DEMO_70 (PVC abatir), ALU_CORREDERA_70 (aluminio corredera), DEMO_CORREDERA_60 (PVC corredera, split out of DEMO_60's sliding rows by migration `20261229000002`); all carry `is_demo` and the fourteen inspector rule configs + `chamber_clearance_mm` required by the documentary freeze.
 
-## D02 state (pendiente de merge en `integracion/v1`)
+## D02 state
 
-On branch `devin/D02-vidrios-verdad`, pending review/merge:
+Merged into `integracion/v1` as squash `b623a067fe3db3872138c036e24c39a631ed947c` (dekopen PR #10):
 
 - `GlassComposition` is a structured exterior→interior layer model (láminas, PVB `+`, cámaras con gas) with round-trip notation (`parse_glass_notation`/`format_glass_notation`); `glass_products` stores the parsed stack as JSONB and `project_positions.glass_composition` persists the resolved map with `glass_review_pending` for UNKNOWN specs.
 - Thickness authority: the parsed `glass_composition` always owns the package thickness when it resolves (`thickness_source="COMPOSITION"`); a declared `glass_thickness_mm` that disagrees is recorded as `thickness_declared_mm` and flagged with a `GLASS-THICKNESS-MISMATCH` warning — drift worth review, never a silent override. Engine derives total/net thickness, weight (2.50 kg/m²·mm panes + 1.07 PVB), bead selection, cut size and minimum billable area.
