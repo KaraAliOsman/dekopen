@@ -14,6 +14,8 @@ from dekopen_engine.commercial import (
     finish_lines, target_project, unit_price, validate_segment,
 )
 from dekopen_engine.glass import exact_glass_area_m2
+from dekopen_engine.glass_pricing import glass_price_lines
+from dekopen_engine.models import GlassSurchargeRate
 from engine_api.adapter import engine_result_from_api
 from engine_api.cutting_repository import CuttingRepository
 from engine_api.repository import SystemParamsRepository
@@ -184,11 +186,51 @@ def position_cost(repo, position, rules):
             if getattr(glass, "shape", None)
             else exact_glass_area_m2(glass.width_mm, glass.height_mm)
         )
-        cost = repo.cost(sku,'M2') * glass_area
-        materials.append(cost)
-        composition.append({'kind':'GLASS','sku':sku,
-                            'quantity':str(glass_area.quantize(D('0.0001'))),
-                            'unit':'M2','cost':str(cost.quantize(D('0.0001')))})
+        # D02: a registered glass product bills its declared minimum cut area
+        # and emits a line per applicable surcharge (tempering, polished
+        # edges, drills, georgian-bar grids). Without a product row the
+        # legacy flat-m² line stands — the cost list is the money authority
+        # either way.
+        product = (getattr(params, "glass_products", None) or {}).get(sku)
+        if product is None:
+            cost = repo.cost(sku,'M2') * glass_area
+            materials.append(cost)
+            composition.append({'kind':'GLASS','sku':sku,
+                                'quantity':str(glass_area.quantize(D('0.0001'))),
+                                'unit':'M2','cost':str(cost.quantize(D('0.0001')))})
+        else:
+            cost_per_m2 = repo.cost(sku,'M2')
+            if product.surcharges:
+                # Rate currency follows the org's declared currency — the
+                # catalog row names it; never a silent CLP assumption.
+                org_currency = one(
+                    'SELECT currency FROM public.tenancy_organizations WHERE id=%s',
+                    [repo.org_id],'organization_not_found')['currency']
+            converted_rates = [
+                GlassSurchargeRate(
+                    kind=rate.kind, unit=rate.unit,
+                    amount=repo.convert(
+                        rate.amount, rate.currency or org_currency),
+                    currency=None, label=rate.label)
+                for rate in product.surcharges
+            ]
+            for line in glass_price_lines(
+                sku=sku,
+                cost_per_m2=cost_per_m2,
+                exact_area_m2=glass_area,
+                min_area_m2=product.min_area_m2,
+                surcharges=converted_rates,
+                selections=glass.surcharge_selections,
+                composition=glass.composition,
+                width_mm=glass.width_mm,
+                height_mm=glass.height_mm,
+                exposed_edges=glass.exposed_edges,
+            ):
+                materials.append(line.cost)
+                composition.append({'kind':line.kind,'sku':line.sku,
+                                    'quantity':str(line.quantity.quantize(D('0.0001'))),
+                                    'unit':line.unit,'cost':str(line.cost.quantize(D('0.0001'))),
+                                    'label':line.label})
     for panel in result.panels:
         panel_area = exact_glass_area_m2(panel.width_mm,panel.height_mm)
         cost = repo.cost(panel.sku,'M2') * panel_area

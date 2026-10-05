@@ -61,3 +61,23 @@ Este indice no contiene secretos. Los valores reales se cargan como variables de
 | Variables    | `AI_GATEWAY_MIMO_API_KEY`, `AI_GATEWAY_MIMO_BASE_URL`, `AI_GATEWAY_MIMO_MODEL`, `AI_GATEWAY_ROUTE_PROVIDER`.                  |
 | Activacion   | Cargar variables en backend y worker, seleccionar proveedor MIMO en rutas IA y ejecutar una consulta controlada.              |
 | Verificacion | Job IA termina con proveedor real, auditoria queda registrada y ningun valor secreto aparece en logs, HTML o bundle frontend. |
+
+## Reglas de seguridad de vidrio (NCh 135/2)
+
+| Campo        | Detalle                                                                                                                                                                                     |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Estado       | Pendiente de texto oficial: las reglas y limites del seed son `SEED_SYNTHETIC` con `review_pending=TRUE` y `source_ref` marcado; son ejemplos de aviso, no norma.                              |
+| Adaptador    | `glass_safety_rules` + `glass_type_limits` (datos por org, RLS) evaluados por el motor; severidad `WARNING` avisa y `MANDATORY` bloquea con ERROR.                                            |
+| Variables    | Ninguna externa. Las hojas "Seguridad vidrio" y "Limites vidrio" de la plantilla de catalogo (`make` ingesta D01) cargan las reglas oficiales con `data_provenance='IMPORT'`.                 |
+| Activacion   | Revisar las reglas semilla contra la norma oficial, corregir o reemplazar via ingesta/catalogo, bajar `review_pending` y subir severidad a `MANDATORY` solo donde la org lo exija.            |
+| Verificacion | pgTAP `176_d02_glass.test.sql`, test de regla de seguridad en `engine/tests/test_glass.py` y finding `GLASS-THICKNESS-MISMATCH` en BOM de posiciones con especificacion heredada ambigua.      |
+
+## Pedido al vidriero (documento de corte)
+
+| Campo        | Detalle                                                                                                                                                       |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Estado       | Descarga local; el envio al vidriero (correo/portal) queda fuera de alcance y es un click humano futuro, igual que el resto de integraciones externas.         |
+| Adaptador    | `GET /api/v1/production/orders/{order_id}/glass-order/?output=pdf|csv`; `?orders=<uuid,...>` fusiona OT de la misma version de proyecto.                       |
+| Variables    | Ninguna externa; comparte `DATABASE_URL` y las credenciales de plataforma del documento.                                                                        |
+| Activacion   | Ninguna: opera sobre OT confirmadas (`order_type='WORKSHOP_OT'`). El formato CSV abre en Excel/hojas del vidriero con medidas en mm enteros.                   |
+| Verificacion | Integracion `test_glazier_order.py` (OT de 12 posiciones == motor), PDF con composicion+recargos+QR de etiqueta, piezas `review_pending` separadas del corte. |

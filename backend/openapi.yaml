@@ -10185,6 +10185,99 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/production/orders/{order_id}/glass-order/:
+    get:
+      operationId: production_order_glazier_order
+      description: |-
+        D02 pedido al vidriero: cut list + per-piece QR labels rendered from
+        sealed evidence. ``?output=csv`` switches to the flat CSV export
+        (``format`` would collide with DRF's reserved format-override query
+        param and 404 before the view runs);
+        ``?orders=<uuid,uuid>`` merges sibling work orders of the same frozen
+        version into one batch (the 'lote').
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: order_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: orders
+        schema:
+          type: string
+        description: UUIDs adicionales de órdenes de la misma versión (lote).
+      - in: query
+        name: output
+        schema:
+          type: string
+          enum:
+          - csv
+          - pdf
+          default: pdf
+      tags:
+      - production
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/pdf:
+              schema:
+                type: string
+            text/csv:
+              schema:
+                type: string
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/production/orders/{order_id}/install/:
     post:
       operationId: production_order_install
@@ -18737,6 +18830,10 @@ components:
           type: array
           items:
             type: string
+        glass_products:
+          type: array
+          items:
+            $ref: '#/components/schemas/GlassProductChoice'
         glass_specs:
           type: array
           items:
@@ -18776,6 +18873,7 @@ components:
       - coupler_profiles
       - coupler_skus
       - depth_mm
+      - glass_products
       - glass_skus
       - glass_specs
       - glazing_beads
@@ -19266,6 +19364,18 @@ components:
       - files
       - order_code
       - order_id
+    EdgesEnum:
+      enum:
+      - top
+      - right
+      - bottom
+      - left
+      type: string
+      description: |-
+        * `top` - top
+        * `right` - right
+        * `bottom` - bottom
+        * `left` - left
     EligibilityEvidenceRequest:
       type: object
       properties:
@@ -19647,6 +19757,10 @@ components:
       enum:
       - CUT_RULE
       - FINISH
+      - GLASS_PRODUCT
+      - GLASS_SAFETY_RULE
+      - GLASS_SURCHARGE
+      - GLASS_TYPE_LIMIT
       - GLAZING_RULE
       - HARDWARE_KIT
       - PRICE
@@ -19658,6 +19772,10 @@ components:
       description: |-
         * `CUT_RULE` - CUT_RULE
         * `FINISH` - FINISH
+        * `GLASS_PRODUCT` - GLASS_PRODUCT
+        * `GLASS_SAFETY_RULE` - GLASS_SAFETY_RULE
+        * `GLASS_SURCHARGE` - GLASS_SURCHARGE
+        * `GLASS_TYPE_LIMIT` - GLASS_TYPE_LIMIT
         * `GLAZING_RULE` - GLAZING_RULE
         * `HARDWARE_KIT` - HARDWARE_KIT
         * `PRICE` - PRICE
@@ -20041,6 +20159,25 @@ components:
           items:
             type: string
           nullable: true
+        composition:
+          type: object
+          additionalProperties: {}
+          nullable: true
+        thickness_total_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        requires_exact_cut:
+          type: boolean
+        surcharge_selections:
+          type: array
+          items:
+            $ref: '#/components/schemas/GlassSurchargeSelection'
+        safety_findings:
+          type: array
+          items:
+            $ref: '#/components/schemas/GlassSafetyFinding'
       required:
       - area_m2
       - article_sku
@@ -20095,6 +20232,98 @@ components:
       required:
       - bay_id
       - edges
+    GlassProductChoice:
+      type: object
+      description: D02 structured glass product for the selector cards/composer.
+      properties:
+        sku:
+          type: string
+        name:
+          type: string
+        notation:
+          type: string
+          nullable: true
+        composition:
+          type: object
+          additionalProperties: {}
+          nullable: true
+        total_thickness_mm:
+          type: string
+          nullable: true
+        safety_class:
+          type: string
+          nullable: true
+        ug_w_m2k:
+          type: string
+          nullable: true
+        g_value:
+          type: string
+          nullable: true
+        light_transmission_pct:
+          type: string
+          nullable: true
+        weight_kg_m2:
+          type: string
+          nullable: true
+        min_billable_area_m2:
+          type: string
+          nullable: true
+        price_tier:
+          type: integer
+          nullable: true
+        surcharges:
+          type: array
+          items:
+            $ref: '#/components/schemas/GlassSurchargeChoice'
+        review_pending:
+          type: boolean
+      required:
+      - composition
+      - g_value
+      - light_transmission_pct
+      - min_billable_area_m2
+      - name
+      - notation
+      - price_tier
+      - review_pending
+      - safety_class
+      - sku
+      - surcharges
+      - total_thickness_mm
+      - ug_w_m2k
+      - weight_kg_m2
+    GlassSafetyFinding:
+      type: object
+      properties:
+        rule_code:
+          type: string
+        severity:
+          $ref: '#/components/schemas/GlassSafetyFindingSeverityEnum'
+        required_safety:
+          type: string
+          nullable: true
+        message:
+          type: string
+        source_ref:
+          type: string
+          nullable: true
+        review_pending:
+          type: boolean
+      required:
+      - message
+      - required_safety
+      - review_pending
+      - rule_code
+      - severity
+      - source_ref
+    GlassSafetyFindingSeverityEnum:
+      enum:
+      - WARNING
+      - MANDATORY
+      type: string
+      description: |-
+        * `WARNING` - WARNING
+        * `MANDATORY` - MANDATORY
     GlassSpecChoice:
       type: object
       properties:
@@ -20106,6 +20335,58 @@ components:
       required:
       - sku
       - spec
+    GlassSurchargeChoice:
+      type: object
+      properties:
+        kind:
+          type: string
+        unit:
+          type: string
+        amount:
+          type: string
+        currency:
+          type: string
+          nullable: true
+        label:
+          type: string
+          nullable: true
+      required:
+      - amount
+      - currency
+      - kind
+      - label
+      - unit
+    GlassSurchargeSelection:
+      type: object
+      properties:
+        kind:
+          $ref: '#/components/schemas/GlassSurchargeSelectionKindEnum'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/EdgesEnum'
+          nullable: true
+        count:
+          type: integer
+          nullable: true
+        columns:
+          type: integer
+          nullable: true
+        rows:
+          type: integer
+          nullable: true
+      required:
+      - kind
+    GlassSurchargeSelectionKindEnum:
+      enum:
+      - EDGE_POLISH
+      - DRILL
+      - PALILLAJE
+      type: string
+      description: |-
+        * `EDGE_POLISH` - EDGE_POLISH
+        * `DRILL` - DRILL
+        * `PALILLAJE` - PALILLAJE
     GlazingBeadChoice:
       type: object
       properties:

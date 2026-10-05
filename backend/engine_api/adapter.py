@@ -24,7 +24,8 @@ from dekopen_engine import (
     evaluate_product,
 )
 from dekopen_engine.contour import Contour
-from dekopen_engine.models import PlanPoint
+from dekopen_engine.glass_composition import composition_from_dict
+from dekopen_engine.models import GlassOptions, PlanPoint
 from dekopen_engine.product import (
     ConnectionKind,
     EdgeSide,
@@ -56,6 +57,8 @@ _NODE_FIELDS = {
     "opening_type",
     "glass_thickness_mm",
     "glass_spec",
+    "glass_composition",
+    "glass_options",
     "glass_article_sku",
     "panel_article_sku",
     "hardware_set_sku",
@@ -121,6 +124,26 @@ def parse_parametric_node(payload: object) -> ParametricNode:
 
     if "sliding_layout" in raw and raw["sliding_layout"] is not None:
         values["sliding_layout"] = _parse_sliding_layout(raw["sliding_layout"])
+
+    if "glass_composition" in raw and raw["glass_composition"] is not None:
+        if not isinstance(raw["glass_composition"], dict):
+            raise InvalidEngineRequest("glass_composition must be an object")
+        try:
+            values["glass_composition"] = composition_from_dict(
+                cast(dict[str, object], raw["glass_composition"])
+            )
+        except (ValueError, TypeError, KeyError) as error:
+            raise InvalidEngineRequest("Invalid glass_composition") from error
+
+    if "glass_options" in raw and raw["glass_options"] is not None:
+        if not isinstance(raw["glass_options"], dict):
+            raise InvalidEngineRequest("glass_options must be an object")
+        try:
+            values["glass_options"] = GlassOptions(
+                **cast(dict[str, object], raw["glass_options"])
+            )
+        except (ValueError, TypeError) as error:
+            raise InvalidEngineRequest("Invalid glass_options") from error
 
     if "door_handedness" in raw and raw["door_handedness"] is not None:
         if raw["door_handedness"] not in ("LEFT", "RIGHT"):

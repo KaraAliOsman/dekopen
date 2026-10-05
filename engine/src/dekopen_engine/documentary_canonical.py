@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from datetime import date, datetime, timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from enum import Enum
 from hashlib import sha256
 import json
@@ -61,6 +61,36 @@ def _documentary_value(value: object) -> DocumentaryValue:
     raise ValueError(f"Unsupported documentary value: {type(value).__name__}")
 
 
+def numeric_collapsed(value: object) -> object:
+    """Numeric strings and Decimals collapse to a scale-free Decimal.
+
+    One write path stores ``"1400.00"`` where another persists ``"1400"``;
+    the measurement is identical and must not read as binding drift. The
+    canonical 2dp output and the raw ``model_dump`` of the same engine
+    result compare equal under this collapse.
+    """
+    if isinstance(value, Decimal):
+        return value.normalize() if value.is_finite() else value
+    if isinstance(value, str):
+        try:
+            parsed = Decimal(value)
+        except InvalidOperation:
+            return value
+        return parsed.normalize() if parsed.is_finite() else value
+    if isinstance(value, dict):
+        return {key: numeric_collapsed(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [numeric_collapsed(item) for item in value]
+    return value
+
+
+def same_documentary_value(left: object, right: object) -> bool:
+    """Scale-free equality for documentary comparisons (frozen vs live)."""
+    return documentary_canonical_json_v1(numeric_collapsed(left)) == (
+        documentary_canonical_json_v1(numeric_collapsed(right))
+    )
+
+
 def documentary_canonical_json_v1(value: object) -> bytes:
     return json.dumps(
         _documentary_value(value),
@@ -99,3 +129,4 @@ def snapshot_sha256_v1(snapshot: Mapping[str, object]) -> str:
 
 def file_sha256(content: bytes) -> str:
     return sha256(content).hexdigest()
+

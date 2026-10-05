@@ -61,6 +61,16 @@ Merged into `integracion/v1` as squash `bc7ed09ed2df41df838f19ffdd3346326e646c4f
 - Catalog ingestion has two converging paths — manual XLSX/CSV template (`backend/ingest/spreadsheet.py`) and AI candidates — both landing on the same human review before publication.
 - The global catalog grew: DEMO_70 (PVC abatir), ALU_CORREDERA_70 (aluminio corredera), DEMO_CORREDERA_60 (PVC corredera, split out of DEMO_60's sliding rows by migration `20261229000002`); all carry `is_demo` and the fourteen inspector rule configs + `chamber_clearance_mm` required by the documentary freeze.
 
+## D02 state (pendiente de merge en `integracion/v1`)
+
+On branch `devin/D02-vidrios-verdad`, pending review/merge:
+
+- `GlassComposition` is a structured exterior→interior layer model (láminas, PVB `+`, cámaras con gas) with round-trip notation (`parse_glass_notation`/`format_glass_notation`); `glass_products` stores the parsed stack as JSONB and `project_positions.glass_composition` persists the resolved map with `glass_review_pending` for UNKNOWN specs.
+- Thickness authority: the parsed `glass_composition` always owns the package thickness when it resolves (`thickness_source="COMPOSITION"`); a declared `glass_thickness_mm` that disagrees is recorded as `thickness_declared_mm` and flagged with a `GLASS-THICKNESS-MISMATCH` warning — drift worth review, never a silent override. Engine derives total/net thickness, weight (2.50 kg/m²·mm panes + 1.07 PVB), bead selection, cut size and minimum billable area.
+- NCh 135-family safety rules are org data (`glass_safety_rules`/`glass_type_limits`): WARNING advises, MANDATORY blocks; seed rules are `SEED_SYNTHETIC` + `review_pending` and the official text arrives via the D01 ingest sheets "Seguridad vidrio"/"Límites vidrio".
+- Glazier cutting order: `GET /api/v1/production/orders/{id}/glass-order/?output=pdf|csv` (integer mm, `P{pos}-U{u}-I{i}` labels, QR, `?orders=` batch merge of same-version OTs); `review_pending` pieces list separately.
+- Canvas glass selector: basic mode lists compatible product cards; advanced mode composes layers with live validation and a to-scale section; safety warnings attach to the bay with a one-click compatible alternative.
+
 ## P00 foundation state
 
 P00 is complete across dekopen PR #1 (squash 747c528b; a partial first landing on framedex PR #114 carried over): it adds the v1 integration foundation:

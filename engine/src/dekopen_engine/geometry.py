@@ -7,7 +7,26 @@ from decimal import Decimal, ROUND_CEILING
 from typing import Literal
 
 from dekopen_engine.bom import build_engine_result
-from dekopen_engine.glass import build_glass_piece, exact_glass_weight, exact_glass_area_m2
+from dekopen_engine.glass import (
+    build_glass_piece,
+    exact_glass_weight,
+    exact_glass_area_m2,
+    resolve_composition,
+)
+from dekopen_engine.glass_composition import format_glass_notation
+from dekopen_engine.glass_safety import (
+    GlassPieceContext,
+    bay_glass_contexts,
+    evaluate_glass_limits,
+    evaluate_glass_safety,
+    requires_exact_cut,
+)
+from dekopen_engine.models import (
+    GlassBayContext,
+    GlassComposition,
+    GlassSafetyFinding,
+    GlassSurchargeSelection,
+)
 from dekopen_engine.hardware import (
     NoCompatibleHardwareKit,
     evaluate_hardware_candidates,
@@ -437,6 +456,9 @@ class _GeometryAccumulator:
     semantic_members: list[SemanticMemberTraceV1] = field(default_factory=list)
     semantic_leaves: list[SemanticLeafTraceV1] = field(default_factory=list)
     semantic_infills: list[SemanticInfillTraceV1] = field(default_factory=list)
+    # Per-BAY safety context (opening type, sill height, door adjacency)
+    # derived once from the declared tree for the D02 glass rule pass.
+    glass_contexts: dict[str, GlassBayContext] = field(default_factory=dict)
 
 
 def _trace_point(x_mm: Decimal, y_mm: Decimal) -> TracePointV1:
@@ -1117,6 +1139,9 @@ def _append_leaf(
         width -= sliding.sliding_glazing_deduction_width_mm
         height -= sliding.sliding_glazing_deduction_height_mm
     infill_kind: Literal["GLASS", "PANEL"]
+    thickness_source: str | None = None
+    thickness_declared_mm: Decimal | None = None
+    glass_spec_text = node.glass_spec
     if node.opening_type is BayOpeningType.DOOR_ENTRY:
         if node.panel_article_sku is None:
             raise ValueError(f"DOOR_ENTRY {node.id} requires panel_article_sku")
@@ -1125,6 +1150,7 @@ def _append_leaf(
         except KeyError as error:
             raise ValueError(f"Missing panel article: {node.panel_article_sku}") from error
         infill_thickness = rule.thickness_mm
+        thickness_source = "PANEL"
         infill_weight = exact_panel_weight(width, height, rule)
         infill_reason = (
             None if infill_weight is not None
@@ -1143,16 +1169,61 @@ def _append_leaf(
             )
         )
     else:
-        if node.glass_thickness_mm is None or node.glass_spec is None:
+        resolved = resolve_composition(node.glass_spec, node.glass_composition)
+        # A bay carrying only the structured composition still names its
+        # glass — the canonical notation regenerates from the stack.
+        glass_spec_text = node.glass_spec or (
+            format_glass_notation(resolved) if resolved else None
+        )
+        if glass_spec_text is None or (
+            node.glass_thickness_mm is None and resolved is None
+        ):
             raise ValueError(f"BAY {node.id} requires glass_thickness_mm and glass_spec")
-        infill_thickness = node.glass_thickness_mm
-        infill_weight = exact_glass_weight(width, height, node.glass_spec)
+        if resolved is not None:
+            # The structured composition owns the package thickness — the
+            # glazing bead keys off what is physically ordered, not off a
+            # declaration that may drift. A declared thickness that disagrees
+            # is drift worth a review warning, not a silent override.
+            infill_thickness = resolved.total_thickness_mm()
+            thickness_source = "COMPOSITION"
+            if (
+                node.glass_thickness_mm is not None
+                and node.glass_thickness_mm != infill_thickness
+            ):
+                thickness_declared_mm = node.glass_thickness_mm
+        else:
+            assert node.glass_thickness_mm is not None
+            infill_thickness = node.glass_thickness_mm
+            thickness_source = "DECLARED"
+        findings, exact_cut, selections = _evaluate_glass(
+            accumulator,
+            node=node,
+            params=params,
+            leaf_id=leaf_id,
+            width_mm=width,
+            height_mm=height,
+            composition=resolved,
+        )
+        if thickness_declared_mm is not None:
+            findings.append(
+                GlassSafetyFinding(
+                    rule_code="GLASS-THICKNESS-MISMATCH",
+                    severity="WARNING",
+                    message=(
+                        f"El espesor declarado ({thickness_declared_mm} mm) "
+                        f"no coincide con la composición ({infill_thickness} mm)."
+                    ),
+                )
+            )
+        infill_weight = exact_glass_weight(
+            width, height, node.glass_spec, composition=resolved
+        )
         infill_reason = (
             None if infill_weight is not None
-            else f"missing_glass_composition:{node.glass_spec}"
+            else f"missing_glass_composition:{glass_spec_text}"
         )
         technical_sku = node.glass_article_sku or ""
-        composition = node.glass_spec
+        composition = glass_spec_text
         infill_kind = "GLASS"
         accumulator.glasses.append(
             build_glass_piece(
@@ -1160,8 +1231,12 @@ def _append_leaf(
                 leaf_id=leaf_id,
                 width_mm=width,
                 height_mm=height,
-                glass_spec=node.glass_spec,
+                glass_spec=glass_spec_text,
                 article_sku=technical_sku or None,
+                composition=resolved,
+                surcharge_selections=selections,
+                safety_findings=findings,
+                requires_exact_cut=exact_cut,
             )
         )
     accumulator.computation.infills.append(
@@ -1170,11 +1245,13 @@ def _append_leaf(
             leaf_id=leaf_id,
             kind=infill_kind,
             thickness_mm=infill_thickness,
-            glass_spec=node.glass_spec,
+            glass_spec=glass_spec_text,
             width_mm=width,
             height_mm=height,
             exact_area_m2=exact_glass_area_m2(width, height),
             bead_supported=infill_thickness in params.glazing_bead_rules,
+            thickness_source=thickness_source,
+            thickness_declared_mm=thickness_declared_mm,
         )
     )
     semantic_infill_id = f"{semantic_leaf_id}/infill"
@@ -1303,6 +1380,52 @@ def _append_leaf(
     accumulator.leaf_weights.append(exact_weight.public_result(node.id, leaf_id))
 
 
+def _evaluate_glass(
+    accumulator: _GeometryAccumulator,
+    *,
+    node: ParametricNode,
+    params: SystemParams,
+    leaf_id: str | None,
+    width_mm: Decimal,
+    height_mm: Decimal,
+    composition: GlassComposition | None,
+) -> tuple[list[GlassSafetyFinding], bool, list[GlassSurchargeSelection]]:
+    """D02 glass rule pass for one resolved pane: situational safety
+    rules, dimensional limits, the exact-cut flag and the declared extras
+    — all derived once and attached to the piece."""
+    context_data = accumulator.glass_contexts.get(node.id, GlassBayContext())
+    context = GlassPieceContext(
+        bay_id=node.id,
+        leaf_id=leaf_id,
+        opening_type=context_data.opening_type,
+        sill_mm=context_data.sill_mm,
+        adjacent_door=context_data.adjacent_door,
+        width_mm=width_mm,
+        height_mm=height_mm,
+        area_m2=exact_glass_area_m2(width_mm, height_mm),
+    )
+    product = (
+        params.glass_products.get(node.glass_article_sku)
+        if node.glass_article_sku
+        else None
+    )
+    declared_class = product.safety_class if product is not None else None
+    findings = [
+        *evaluate_glass_safety(
+            context,
+            composition,
+            params.glass_safety_rules,
+            declared_safety_class=declared_class,
+        ),
+        *evaluate_glass_limits(context, composition, params.glass_type_limits),
+    ]
+    return (
+        findings,
+        requires_exact_cut(composition, params.glass_type_limits),
+        list(node.glass_options.surcharges) if node.glass_options else [],
+    )
+
+
 def _append_frame_glazed_pane(
     accumulator: _GeometryAccumulator,
     *,
@@ -1323,19 +1446,65 @@ def _append_frame_glazed_pane(
     Sliding "O" slots share the bay id, so the pane takes the slot-scoped
     leaf identity moving leaves already use — downstream targets
     (polishing, workshop annotations) can address each fixed pane."""
-    if node.glass_thickness_mm is None or node.glass_spec is None:
+    resolved = resolve_composition(node.glass_spec, node.glass_composition)
+    glass_spec_text = node.glass_spec or (
+        format_glass_notation(resolved) if resolved else None
+    )
+    if glass_spec_text is None or (
+        node.glass_thickness_mm is None and resolved is None
+    ):
         raise ValueError(f"BAY {node.id} requires glass_thickness_mm and glass_spec")
     leaf_id = f"{node.id}:{leaf_slot}" if leaf_slot is not None else None
     width = rect.width_mm + _TWO * rebate_depth(params) - _TWO * clearance_mm
     height = rect.height_mm + _TWO * rebate_depth(params) - _TWO * clearance_mm
+    if resolved is not None:
+        # Same authority rule as the fixed-bay path: the composition owns the
+        # thickness; a disagreeing declaration is review drift, not override.
+        infill_thickness = resolved.total_thickness_mm()
+        thickness_source = "COMPOSITION"
+        thickness_declared_mm = (
+            node.glass_thickness_mm
+            if node.glass_thickness_mm is not None
+            and node.glass_thickness_mm != infill_thickness
+            else None
+        )
+    else:
+        assert node.glass_thickness_mm is not None
+        infill_thickness = node.glass_thickness_mm
+        thickness_source = "DECLARED"
+        thickness_declared_mm = None
+    findings, exact_cut, selections = _evaluate_glass(
+        accumulator,
+        node=node,
+        params=params,
+        leaf_id=leaf_id,
+        width_mm=width,
+        height_mm=height,
+        composition=resolved,
+    )
+    if thickness_declared_mm is not None:
+        findings.append(
+            GlassSafetyFinding(
+                rule_code="GLASS-THICKNESS-MISMATCH",
+                severity="WARNING",
+                message=(
+                    f"El espesor declarado ({thickness_declared_mm} mm) no "
+                    f"coincide con la composición ({infill_thickness} mm)."
+                ),
+            )
+        )
     accumulator.glasses.append(
         build_glass_piece(
             bay_id=node.id,
             leaf_id=leaf_id,
             width_mm=width,
             height_mm=height,
-            glass_spec=node.glass_spec,
+            glass_spec=glass_spec_text,
             article_sku=node.glass_article_sku or None,
+            composition=resolved,
+            surcharge_selections=selections,
+            safety_findings=findings,
+            requires_exact_cut=exact_cut,
         )
     )
     accumulator.computation.infills.append(
@@ -1343,12 +1512,14 @@ def _append_frame_glazed_pane(
             bay_id=node.id,
             leaf_id=leaf_id,
             kind="GLASS",
-            thickness_mm=node.glass_thickness_mm,
-            glass_spec=node.glass_spec,
+            thickness_mm=infill_thickness,
+            glass_spec=glass_spec_text,
             width_mm=width,
             height_mm=height,
             exact_area_m2=exact_glass_area_m2(width, height),
-            bead_supported=node.glass_thickness_mm in params.glazing_bead_rules,
+            bead_supported=infill_thickness in params.glazing_bead_rules,
+            thickness_source=thickness_source,
+            thickness_declared_mm=thickness_declared_mm,
         )
     )
     infill_rect = _Rect(
@@ -1367,7 +1538,7 @@ def _append_frame_glazed_pane(
             leaf_slot=leaf_slot,
             kind="GLASS",
             technical_sku=node.glass_article_sku or "",
-            composition=node.glass_spec,
+            composition=glass_spec_text,
             width_mm=width,
             height_mm=height,
             placement_domain=PlacementDomain.DIRECT,
@@ -1383,7 +1554,7 @@ def _append_frame_glazed_pane(
         topology_path=topology_path,
         assembly=assembly,
         semantic_infill_id=semantic_infill_id,
-        infill_thickness_mm=node.glass_thickness_mm,
+        infill_thickness_mm=infill_thickness,
         width_mm=width,
         height_mm=height,
     )
@@ -1880,6 +2051,10 @@ def compute_geometry(
     )
     clearance_mm = params.glass_clearance_foil_mm if is_foiled else params.glass_clearance_white_mm
     top_path = f"root/{top.id}"
+    # D02: every pane's situational context comes from the declared tree —
+    # opening type, distance of the pane bottom to the module base and
+    # whether a door leaf sits beside it.
+    accumulator.glass_contexts = bay_glass_contexts(top, nominal_height_mm)
     # Family gate (D01): a top-level BAY never reaches math its system's
     # fabrication family cannot produce — nested bays check per-node below.
     if top.type is NodeType.BAY:

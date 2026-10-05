@@ -28,6 +28,16 @@ from dekopen_engine import (
     TypologyLimit,
     openings_for_family,
 )
+from dekopen_engine.glass_composition import (
+    GlassComposition,
+    composition_from_dict,
+)
+from dekopen_engine.models import (
+    GlassProduct,
+    GlassSafetyRule,
+    GlassSurchargeRate,
+    GlassTypeLimit,
+)
 from dekopen_engine.manufacturing import HandleRequirementPolicyV1, handle_policy_from_json
 
 
@@ -76,6 +86,18 @@ def _decimal(value: object) -> Decimal:
 
 def _decimal_or_none(value: object) -> Decimal | None:
     return None if value is None else _decimal(value)
+
+
+def _glass_composition(raw: object) -> GlassComposition | None:
+    """Stored composition JSONB → engine model. An unparsable payload keeps
+    ``None`` (UNKNOWN product — never a fabricated stack)."""
+    if raw is None:
+        return None
+    try:
+        payload = raw if isinstance(raw, dict) else json.loads(str(raw))
+        return composition_from_dict(payload)
+    except (ValueError, TypeError, KeyError):
+        return None
 
 
 def _section(value: object) -> ProfileSection | None:
@@ -231,6 +253,9 @@ class SystemParamsRepository:
             cut_rules=self._load_cut_rules(system_id, active_org_id),
             reinforcement_rules=self._load_reinforcement_rules(system_id, active_org_id),
             typology_limits=self._load_typology_limits(system_id, active_org_id),
+            glass_products=self._load_glass_products(system_id, active_org_id),
+            glass_safety_rules=self._load_glass_safety_rules(active_org_id),
+            glass_type_limits=self._load_glass_type_limits(active_org_id),
         )
 
     _SCOPE_SQL = (
@@ -503,6 +528,150 @@ class SystemParamsRepository:
             )
             for row in rows
         ]
+
+    def _load_glass_products(
+        self, system_id: UUID, active_org_id: UUID
+    ) -> dict[str, GlassProduct]:
+        """Glass products visible to the org for this system: org-scoped rows
+        beat global ones and system-scoped rows beat cross-system ones for
+        the same SKU (DISTINCT ON + NULLS LAST, the purchase-mapping
+        resolution)."""
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT DISTINCT ON (p.sku)
+                       p.sku, p.commercial_name, p.composition::text,
+                       p.safety_class, p.ug_w_m2k::text, p.g_value::text,
+                       p.light_transmission_pct::text, p.weight_kg_m2::text,
+                       p.min_billable_area_m2::text, p.review_pending, p.id,
+                       p.price_tier
+                FROM public.glass_products p
+                WHERE p.is_active = TRUE
+                  AND (p.org_id = %s OR p.org_id IS NULL)
+                  AND (p.system_id = %s OR p.system_id IS NULL)
+                ORDER BY p.sku, p.org_id NULLS LAST, p.system_id NULLS LAST
+                """,
+                [active_org_id, system_id],
+            )
+            product_rows = cursor.fetchall()
+            if not product_rows:
+                return {}
+            cursor.execute(
+                """
+                SELECT s.product_id::text, s.kind, s.unit, s.unit_cost::text,
+                       s.label, s.currency::text
+                FROM public.glass_product_surcharges s
+                WHERE s.is_active = TRUE
+                  AND (s.org_id = %s OR s.org_id IS NULL)
+                  AND s.product_id = ANY(%s)
+                ORDER BY s.product_id, s.kind, s.unit
+                """,
+                [active_org_id, [str(row[10]) for row in product_rows]],
+            )
+            surcharge_rows = cursor.fetchall()
+        surcharges: dict[str, list[GlassSurchargeRate]] = {}
+        for row in surcharge_rows:
+            surcharges.setdefault(str(row[0]), []).append(
+                GlassSurchargeRate(
+                    kind=str(row[1]),
+                    unit=str(row[2]),
+                    amount=_decimal(row[3]),
+                    label=str(row[4]) if row[4] is not None else None,
+                    currency=str(row[5]) if row[5] is not None else None,
+                )
+            )
+        products: dict[str, GlassProduct] = {}
+        for row in product_rows:
+            composition = _glass_composition(row[2])
+            products[str(row[0])] = GlassProduct(
+                sku=str(row[0]),
+                name=str(row[1]),
+                composition=composition,
+                safety_class=str(row[3]) if row[3] is not None else None,
+                ug_w_m2k=_decimal_or_none(row[4]),
+                g_value=_decimal_or_none(row[5]),
+                light_transmission_pct=_decimal_or_none(row[6]),
+                weight_kg_m2=_decimal_or_none(row[7]),
+                min_area_m2=_decimal_or_none(row[8]),
+                review_pending=bool(row[9]),
+                surcharges=surcharges.get(str(row[10]), []),
+                price_tier=int(row[11]) if row[11] is not None else None,
+            )
+        return products
+
+    def _load_glass_safety_rules(
+        self, active_org_id: UUID
+    ) -> list[GlassSafetyRule]:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT code, title, message, applies_openings, sill_below_mm::text,
+                       min_area_m2::text, requires_door, requires_adjacent_door,
+                       required_safety, severity, source_ref, review_pending
+                FROM public.glass_safety_rules
+                WHERE is_active = TRUE
+                  AND (org_id = %s OR org_id IS NULL)
+                ORDER BY code, org_id NULLS LAST
+                """,
+                [active_org_id],
+            )
+            rows = cursor.fetchall()
+        # Org-scoped row overrides the global rule carrying the same code.
+        rules: dict[str, GlassSafetyRule] = {}
+        for row in rows:
+            rules[str(row[0])] = GlassSafetyRule(
+                code=str(row[0]),
+                title=str(row[1]),
+                message=str(row[2]) if row[2] is not None else None,
+                applies_openings=list(row[3]) if row[3] is not None else None,
+                sill_below_mm=_decimal_or_none(row[4]),
+                min_area_m2=_decimal_or_none(row[5]),
+                requires_door=row[6],
+                requires_adjacent_door=row[7],
+                required_safety=str(row[8]),
+                severity=str(row[9]),
+                source_ref=str(row[10]) if row[10] is not None else None,
+                review_pending=bool(row[11]),
+            )
+        return list(rules.values())
+
+    def _load_glass_type_limits(
+        self, active_org_id: UUID
+    ) -> list[GlassTypeLimit]:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT code, lamina_kind, thickness_min_mm::text,
+                       thickness_max_mm::text, min_side_mm::text,
+                       max_side_mm::text, min_area_m2::text, max_area_m2::text,
+                       max_aspect_ratio::text, requires_exact_cut, severity,
+                       source_ref, review_pending
+                FROM public.glass_type_limits
+                WHERE is_active = TRUE
+                  AND (org_id = %s OR org_id IS NULL)
+                ORDER BY code, org_id NULLS LAST
+                """,
+                [active_org_id],
+            )
+            rows = cursor.fetchall()
+        limits: dict[str, GlassTypeLimit] = {}
+        for row in rows:
+            limits[str(row[0])] = GlassTypeLimit(
+                code=str(row[0]),
+                lamina_kind=str(row[1]),
+                thickness_min_mm=_decimal_or_none(row[2]),
+                thickness_max_mm=_decimal_or_none(row[3]),
+                min_side_mm=_decimal_or_none(row[4]),
+                max_side_mm=_decimal_or_none(row[5]),
+                min_area_m2=_decimal_or_none(row[6]),
+                max_area_m2=_decimal_or_none(row[7]),
+                max_aspect_ratio=_decimal_or_none(row[8]),
+                requires_exact_cut=bool(row[9]),
+                severity=str(row[10]),
+                source_ref=str(row[11]) if row[11] is not None else None,
+                review_pending=bool(row[12]),
+            )
+        return list(limits.values())
 
     def _load_panel_rules(self, system_id: UUID, active_org_id: UUID) -> dict[str, PanelRule]:
         with connection.cursor() as cursor:

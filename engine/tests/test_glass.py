@@ -80,8 +80,8 @@ def test_weight_uses_exact_area_instead_of_published_area() -> None:
     glass = build_glass_piece(
         bay_id="anti_double_rounding",
         width_mm=Decimal("100.00"),
-        height_mm=Decimal("61.90"),
-        glass_spec="4-12-3+3",
+        height_mm=Decimal("76.50"),
+        glass_spec="6",
     )
 
     assert glass.thickness_net_mm is not None
@@ -91,8 +91,22 @@ def test_weight_uses_exact_area_instead_of_published_area() -> None:
         * GLASS_WEIGHT_FACTOR_KG_M2_PER_MM
     ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-    assert exact_glass_area_m2(glass.width_mm, glass.height_mm) == Decimal("0.00619")
-    assert glass.area_m2 == Decimal("0.0062")
-    assert glass.weight_kg == Decimal("0.15")
-    assert incorrectly_double_rounded == Decimal("0.16")
+    assert exact_glass_area_m2(glass.width_mm, glass.height_mm) == Decimal("0.00765")
+    assert glass.area_m2 == Decimal("0.0077")
+    assert glass.weight_kg == Decimal("0.11")
+    assert incorrectly_double_rounded == Decimal("0.12")
     assert glass.weight_kg != incorrectly_double_rounded
+
+
+def test_weight_includes_the_pvb_interlayer() -> None:
+    # D02: a laminate's mass counts its PVB film — 10 mm of glass at
+    # 2.50 kg/m²·mm plus 0.38 mm of PVB at 1.07 kg/m²·mm.
+    glass = build_glass_piece(
+        bay_id="laminate_weight",
+        width_mm=Decimal("100.00"),
+        height_mm=Decimal("61.90"),
+        glass_spec="4-12-3+3",
+    )
+    assert glass.thickness_net_mm == Decimal("10.00")
+    assert glass.thickness_total_mm == Decimal("22.38")
+    assert glass.weight_kg == Decimal("0.16")

@@ -251,3 +251,123 @@ def test_layout_api_binds_to_same_calculation_and_tenant(monkeypatch):
     response = client.post("/api/v1/engine/layout/", request, format="json")
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "validation_error"
+
+
+def test_repository_loads_glass_products_rules_and_limits(monkeypatch):
+    """D02 loaders: product rows (system-scoped first), per-product
+    surcharges, safety rules and type limits — parsed into engine models."""
+    from decimal import Decimal
+    from uuid import uuid4
+
+    from engine_api import repository as repo_module
+
+    product_id = uuid4()
+    product_row = (
+        "VID-T", "Templado 6",
+        '{"layers":[{"type":"lamina","panes":["6"],"interlayer":null,'
+        '"tint":"CLEAR","treatment":"TEMPERED","coating":null,'
+        '"coating_face":null,"supplier_sku":null}]}',
+        "B", "1.400", "0.630", "80.00", "15.00", "0.50", False,
+        product_id, 3,
+    )
+    surcharge_row = (str(product_id), "TEMPERED", "M2", "5500", "Recargo templado", "CLP")
+    rule_row = (
+        "GLASS-SAFETY-DOOR", "Paño vidriado en puerta", "usa vidrio de seguridad",
+        None, None, None, True, None, "SAFETY_GLASS", "WARNING",
+        "NCh 135/2 — sintético", True,
+    )
+    limit_row = (
+        "GLASS-LIMIT-TEMPERED-EXACT-CUT", "TEMPERED", None, None, None, "3200",
+        None, None, None, True, "WARNING", "sintético", True,
+    )
+
+    class FakeCursor:
+        def __init__(self):
+            self._rows = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def execute(self, sql, params=()):
+            if "FROM public.glass_products" in sql:
+                self._rows = [product_row]
+            elif "FROM public.glass_product_surcharges" in sql:
+                self._rows = [surcharge_row]
+            elif "FROM public.glass_safety_rules" in sql:
+                self._rows = [rule_row]
+            elif "FROM public.glass_type_limits" in sql:
+                self._rows = [limit_row]
+            else:
+                self._rows = []
+
+        def fetchall(self):
+            return self._rows
+
+        def fetchone(self):
+            return self._rows[0] if self._rows else None
+
+    cursor = FakeCursor()
+    monkeypatch.setattr(
+        repo_module.connection, "cursor", lambda: cursor
+    )
+    repo = repo_module.SystemParamsRepository()
+    org_id = uuid4()
+    products = repo._load_glass_products(uuid4(), org_id)
+    product = products["VID-T"]
+    assert product.safety_class == "B"
+    assert product.ug_w_m2k == Decimal("1.400")
+    assert product.min_area_m2 == Decimal("0.50")
+    assert product.price_tier == 3
+    assert product.composition is not None
+    assert product.surcharges[0].kind == "TEMPERED"
+    assert product.surcharges[0].amount == Decimal("5500")
+    assert product.surcharges[0].currency == "CLP"
+    rules = repo._load_glass_safety_rules(org_id)
+    assert rules[0].code == "GLASS-SAFETY-DOOR"
+    assert rules[0].required_safety == "SAFETY_GLASS"
+    assert rules[0].severity == "WARNING"
+    assert rules[0].source_ref.startswith("NCh 135")
+    limits = repo._load_glass_type_limits(org_id)
+    assert limits[0].requires_exact_cut is True
+    assert limits[0].max_side_mm == Decimal("3200")
+
+
+def test_repository_glass_product_with_broken_composition_stays_unknown(monkeypatch):
+    """An unparsable stored composition keeps composition=None — the product
+    is selectable but derived numbers report unknown instead of guessing."""
+    from uuid import uuid4
+
+    from engine_api import repository as repo_module
+
+    class FakeCursor:
+        def __init__(self):
+            self._rows = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def execute(self, sql, params=()):
+            if "FROM public.glass_products" in sql:
+                self._rows = [
+                    ("VID-X", "Exótico", '{"layers":[{"type":"weird"}]}',
+                     None, None, None, None, None, None, True, uuid4(), None),
+                ]
+            else:
+                self._rows = []
+
+        def fetchall(self):
+            return self._rows
+
+    cursor = FakeCursor()
+    monkeypatch.setattr(repo_module.connection, "cursor", lambda: cursor)
+    repo = repo_module.SystemParamsRepository()
+    products = repo._load_glass_products(uuid4(), uuid4())
+    assert products["VID-X"].composition is None
+    assert products["VID-X"].review_pending is True
+    assert products["VID-X"].price_tier is None

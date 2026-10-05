@@ -54,6 +54,11 @@ def test_r06_preflight_does_not_make_invalid_calculate_successful(monkeypatch: p
                                                                config: InspectorConfig) -> None:
     client = client_with_inspector(monkeypatch, config)
     request = g1_request()
+    # D02: a parseable glass_spec resolves to a structured composition whose
+    # own thickness wins over a drifting declaration (kept as a WARNING). To
+    # keep this case's "25 mm has no bead rule" premise, the spec stays
+    # unparseable so the declared thickness remains the effective infill.
+    request["parametric_tree"]["glass_spec"] = "vidrio sin especificar"
     request["parametric_tree"]["glass_thickness_mm"] = "25.00"
     assert client.post("/api/v1/engine/calculate/", request, format="json").status_code == 400
     response = client.post("/api/v1/engine/inspect/", request, format="json")

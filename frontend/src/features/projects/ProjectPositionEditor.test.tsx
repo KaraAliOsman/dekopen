@@ -338,6 +338,7 @@ beforeEach(() => {
       ],
       glazing_thicknesses: ["24.00", "28.00"],
       glass_skus: ["GLASS-A", "GLASS-B"],
+      glass_products: [],
       glass_specs: [
         { sku: "GLASS-A", spec: "4-16-4" },
         { sku: "GLASS-B", spec: null },
@@ -508,6 +509,7 @@ it("fills glass defaults when the catalog has a single glazing thickness", async
       handle_policy: null,
       hardware_kits: [],
       glass_skus: ["GLASS-A"],
+      glass_products: [],
       glass_specs: [{ sku: "GLASS-A", spec: "4" }],
       coupler_skus: [],
       coupler_profiles: [],

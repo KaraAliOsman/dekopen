@@ -6,13 +6,14 @@ import "./canvas.css";
 import type {
   DesignOptions,
   EngineAssemblyCalculateResponse,
+  GlassProductChoice,
+  GlassSafetyFinding,
   GlassSpecChoice,
   KitChoice,
   PanelChoice,
   ProductIssue,
 } from "../../api/generated/models";
 import { t, type TranslationKey } from "../../i18n/es-CL";
-import { Icon } from "../../ui/icons";
 import {
   formatShortcut,
   resolveCommands,
@@ -35,6 +36,7 @@ import { resolveMembers, type MemberGeometry } from "./members";
 import { bayEnvelopeMm, rankKits } from "./kitCompatibility";
 import { SectionView } from "./SectionView";
 import { SectionPreviewSvg } from "./SectionPreviewSvg";
+import { GlazingPicker, type GlazingPatch } from "./GlazingPicker";
 import {
   frontBounds,
   frontLayout,
@@ -75,6 +77,7 @@ import {
   setContourVertex,
   setModuleGlass,
   setModuleGlassThickness,
+  setModuleGlazing,
   setModulePanel,
   setCouplerSku,
   setCouplingAngle,
@@ -133,6 +136,7 @@ const ISSUE_KEYS: Record<string, TranslationKey> = {
   hardware_kit_incompatible: "assembly.issue.hardwareKitIncompatible",
   hardware_kit_overweight: "assembly.issue.hardwareKitOverweight",
   hardware_undecidable: "assembly.issue.hardwareUndecidable",
+  glass_safety_finding: "assembly.issue.glassSafetyFinding",
 };
 
 /** Engine failure reasons arrive as `str(error)` — member ids and field
@@ -862,6 +866,8 @@ function BayInspector({
   product,
   glassSkus,
   glassSpecs,
+  glassProducts,
+  glassFindings,
   glazingThicknesses,
   panelSkus,
   panelChoices,
@@ -877,6 +883,10 @@ function BayInspector({
   product: ProductJson;
   glassSkus: string[];
   glassSpecs: GlassSpecChoice[];
+  glassProducts: GlassProductChoice[];
+  /** Engine safety/type-limit findings the BOM resolved for this bay —
+   * shown in the glazing section with the rule's own source_ref. */
+  glassFindings: GlassSafetyFinding[];
   glazingThicknesses: string[];
   panelSkus: string[];
   panelChoices: PanelChoice[];
@@ -904,13 +914,9 @@ function BayInspector({
     commit(setModuleTree(product, module.id, updateBay(module.tree, bay.id, patch)));
   }
 
-  function pickGlass(sku: string | null): void {
-    if (sku) pushRecentGlass(sku);
-    patchBay({
-      glass_article_sku: sku,
-      glass_spec:
-        sku == null ? bay.glass_spec : (glassSpecs.find((item) => item.sku === sku)?.spec ?? null),
-    });
+  function pickGlazing(patch: GlazingPatch): void {
+    if (patch.glass_article_sku) pushRecentGlass(patch.glass_article_sku);
+    patchBay(patch);
   }
 
   function pickOpening(next: Opening): void {
@@ -1109,14 +1115,34 @@ function BayInspector({
             ))}
           </select>
         </label>
-        <label className="assembly-field">
-          <span>{t("assembly.glass")}</span>
-          <span className="assembly-field__row">
+        {glassProducts.length > 0 ? (
+          <GlazingPicker
+            value={bay}
+            products={glassProducts}
+            glazingThicknesses={glazingThicknesses}
+            findings={glassFindings}
+            busy={busy}
+            favoriteGlass={favoriteGlass}
+            recentGlass={recentGlass}
+            onPick={pickGlazing}
+            onToggleFavorite={toggleFavoriteGlass}
+          />
+        ) : (
+          <label className="assembly-field">
+            <span>{t("assembly.glass")}</span>
             <select
               aria-label={t("assembly.glass")}
               disabled={busy}
               value={bay.glass_article_sku ?? ""}
-              onChange={(event) => pickGlass(event.target.value || null)}
+              onChange={(event) =>
+                pickGlazing({
+                  glass_article_sku: event.target.value || null,
+                  glass_spec:
+                    event.target.value == null || event.target.value === ""
+                      ? bay.glass_spec
+                      : (glassSpecs.find((item) => item.sku === event.target.value)?.spec ?? null),
+                })
+              }
             >
               <option value="">{t("assembly.noGlass")}</option>
               {glassSkus.map((sku) => (
@@ -1125,59 +1151,7 @@ function BayInspector({
                 </option>
               ))}
             </select>
-            <button
-              type="button"
-              className={`star-toggle${
-                favoriteGlass.includes(bay.glass_article_sku ?? "") ? " is-active" : ""
-              }`}
-              aria-label={t("assembly.favoriteGlass")}
-              aria-pressed={favoriteGlass.includes(bay.glass_article_sku ?? "")}
-              disabled={busy || bay.glass_article_sku == null}
-              onClick={() => {
-                if (bay.glass_article_sku) toggleFavoriteGlass(bay.glass_article_sku);
-              }}
-            >
-              <Icon name="star" size={13} />
-            </button>
-          </span>
-        </label>
-        {favoriteGlass.some((sku) => glassSkus.includes(sku)) && (
-          <div className="recents" aria-label={t("assembly.favoriteGlass")}>
-            <span className="recents__label">{t("assembly.favoriteGlass")}</span>
-            {favoriteGlass
-              .filter((sku) => sku !== bay.glass_article_sku && glassSkus.includes(sku))
-              .map((sku) => (
-                <button
-                  key={sku}
-                  type="button"
-                  className="recents__chip recents__chip--favorite"
-                  disabled={busy}
-                  title={sku}
-                  onClick={() => pickGlass(sku)}
-                >
-                  {sku}
-                </button>
-              ))}
-          </div>
-        )}
-        {recentGlass.some((sku) => glassSkus.includes(sku)) && (
-          <div className="recents" aria-label={t("assembly.recentGlass")}>
-            <span className="recents__label">{t("assembly.recentGlass")}</span>
-            {recentGlass
-              .filter((sku) => sku !== bay.glass_article_sku && glassSkus.includes(sku))
-              .map((sku) => (
-                <button
-                  key={sku}
-                  type="button"
-                  className="recents__chip"
-                  disabled={busy}
-                  title={sku}
-                  onClick={() => pickGlass(sku)}
-                >
-                  {sku}
-                </button>
-              ))}
-          </div>
+          </label>
         )}
         {isDoor && (
           <label className="assembly-field">
@@ -1532,6 +1506,8 @@ function ModuleInspector({
   members,
   glassSkus,
   glassSpecs,
+  glassProducts,
+  glassFindings,
   glazingThicknesses,
   panelSkus,
   panelChoices,
@@ -1546,6 +1522,8 @@ function ModuleInspector({
   members: MemberGeometry;
   glassSkus: string[];
   glassSpecs: GlassSpecChoice[];
+  glassProducts: GlassProductChoice[];
+  glassFindings: GlassSafetyFinding[];
   glazingThicknesses: string[];
   panelSkus: string[];
   panelChoices: PanelChoice[];
@@ -1556,6 +1534,10 @@ function ModuleInspector({
   onAskAssistant?(): void;
 }): JSX.Element {
   const opening = moduleOpening(module);
+  const favoriteGlass = useCanvasStore((state) => state.favoriteGlass);
+  const recentGlass = useCanvasStore((state) => state.recentGlass);
+  const toggleFavoriteGlass = useCanvasStore((state) => state.toggleFavoriteGlass);
+  const pushRecentGlass = useCanvasStore((state) => state.pushRecentGlass);
   const isDoor = opening === "DOOR_ENTRY";
   const slidingBay = isSlidingOpening(opening) ? modulePrimaryBay(module) : null;
   const slidingLayout = slidingBay ? resolvedSlidingLayout(slidingBay) : null;
@@ -1733,34 +1715,51 @@ function ModuleInspector({
             ))}
           </select>
         </label>
-        <label className="assembly-field">
-          <span>{t("assembly.glass")}</span>
-          <select
-            aria-label={t("assembly.glass")}
-            disabled={busy}
-            value={moduleGlassSku(module) ?? ""}
-            onChange={(event) => {
-              const sku = event.target.value || null;
-              commit(
-                setModuleGlass(
-                  product,
-                  module.id,
-                  sku,
-                  sku == null
-                    ? undefined
-                    : (glassSpecs.find((item) => item.sku === sku)?.spec ?? null),
-                ),
-              );
+        {glassProducts.length > 0 ? (
+          <GlazingPicker
+            value={modulePrimaryBay(module) ?? {}}
+            products={glassProducts}
+            glazingThicknesses={glazingThicknesses}
+            findings={glassFindings}
+            busy={busy}
+            favoriteGlass={favoriteGlass}
+            recentGlass={recentGlass}
+            onPick={(patch) => {
+              if (patch.glass_article_sku) pushRecentGlass(patch.glass_article_sku);
+              commit(setModuleGlazing(product, module.id, patch));
             }}
-          >
-            <option value="">{t("assembly.noGlass")}</option>
-            {glassSkus.map((sku) => (
-              <option key={sku} value={sku}>
-                {glassLabel(sku, glassSpecs)}
-              </option>
-            ))}
-          </select>
-        </label>
+            onToggleFavorite={toggleFavoriteGlass}
+          />
+        ) : (
+          <label className="assembly-field">
+            <span>{t("assembly.glass")}</span>
+            <select
+              aria-label={t("assembly.glass")}
+              disabled={busy}
+              value={moduleGlassSku(module) ?? ""}
+              onChange={(event) => {
+                const sku = event.target.value || null;
+                commit(
+                  setModuleGlass(
+                    product,
+                    module.id,
+                    sku,
+                    sku == null
+                      ? undefined
+                      : (glassSpecs.find((item) => item.sku === sku)?.spec ?? null),
+                  ),
+                );
+              }}
+            >
+              <option value="">{t("assembly.noGlass")}</option>
+              {glassSkus.map((sku) => (
+                <option key={sku} value={sku}>
+                  {glassLabel(sku, glassSpecs)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         {isDoor && (
           <label className="assembly-field">
             <span>{t("assembly.panel")}</span>
@@ -2711,6 +2710,12 @@ export function AssemblyEditor({
             members={members}
             glassSkus={glassSkus}
             glassSpecs={options?.glass_specs ?? []}
+            glassProducts={options?.glass_products ?? []}
+            glassFindings={
+              evaluation?.modules
+                ?.find((item) => item.module_id === selectedModule.id)
+                ?.result?.glasses?.flatMap((glass) => glass.safety_findings ?? []) ?? []
+            }
             glazingThicknesses={options?.glazing_thicknesses ?? []}
             panelSkus={panelSkus}
             panelChoices={options?.panel_choices ?? []}
@@ -2746,6 +2751,13 @@ export function AssemblyEditor({
             }
             glassSkus={glassSkus}
             glassSpecs={options?.glass_specs ?? []}
+            glassProducts={options?.glass_products ?? []}
+            glassFindings={
+              evaluation?.modules
+                ?.find((item) => item.module_id === selectedBayModule.id)
+                ?.result?.glasses?.filter((glass) => glass.bay_id === selectedBayNode.id)
+                ?.flatMap((glass) => glass.safety_findings ?? []) ?? []
+            }
             glazingThicknesses={options?.glazing_thicknesses ?? []}
             panelSkus={panelSkus}
             panelChoices={options?.panel_choices ?? []}

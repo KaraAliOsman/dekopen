@@ -181,6 +181,21 @@ export const DOMAIN_LABELS: Record<string, L> = {
     error: l("Error", "danger", "cross"),
     warning: l("Advertencia", "warn", "warn"),
   },
+  EdgesEnum: {
+    top: l("superior", "neutral"),
+    right: l("derecho", "neutral"),
+    bottom: l("inferior", "neutral"),
+    left: l("izquierdo", "neutral"),
+  },
+  GlassSafetyFindingSeverityEnum: {
+    WARNING: l("Advertencia", "warn", "warn"),
+    MANDATORY: l("Obligatorio", "danger", "cross"),
+  },
+  GlassSurchargeSelectionKindEnum: {
+    EDGE_POLISH: l("Canto pulido", "neutral"),
+    DRILL: l("Perforación", "neutral"),
+    PALILLAJE: l("Palillaje", "neutral"),
+  },
 
   /* ---------- Órdenes de compra / pagos ---------- */
   OrderStatusEnum: {
@@ -321,6 +336,10 @@ export const DOMAIN_LABELS: Record<string, L> = {
     GLAZING_RULE: l("Vidrio", "neutral"),
     HARDWARE_KIT: l("Kit de herrajes", "neutral"),
     PRICE: l("Precio", "neutral"),
+    GLASS_PRODUCT: l("Producto de vidrio", "neutral"),
+    GLASS_SURCHARGE: l("Recargo de vidrio", "neutral"),
+    GLASS_SAFETY_RULE: l("Seguridad de vidrio", "neutral"),
+    GLASS_TYPE_LIMIT: l("Límite de vidrio", "neutral"),
   },
   CategoryEnum: {
     HANDLE: l("Manilla", "neutral"),

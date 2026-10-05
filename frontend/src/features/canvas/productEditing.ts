@@ -1285,6 +1285,32 @@ export function moduleGlassSku(module: ProductModuleJson): string | null {
   return modulePrimaryBay(module)?.glass_article_sku ?? null;
 }
 
+/** Module-level glazing patch — the structured-composition/surcharge
+ * counterpart of setModuleGlass: every bay of the module takes the patch's
+ * declared keys (absent keys leave the bay's values untouched). */
+export function setModuleGlazing(
+  product: ProductJson,
+  moduleId: string,
+  patch: Partial<
+    Pick<
+      IntentNode,
+      | "glass_article_sku"
+      | "glass_spec"
+      | "glass_thickness_mm"
+      | "glass_composition"
+      | "glass_options"
+    >
+  >,
+): ProductJson {
+  const module = product.assembly.modules.find((item) => item.id === moduleId);
+  if (!module) return product;
+  function withGlazing(node: IntentNode): IntentNode {
+    if (node.type === "BAY") return { ...node, ...patch };
+    return { ...node, children: node.children?.map(withGlazing) };
+  }
+  return replaceModule(product, moduleId, { ...module, tree: withGlazing(module.tree) });
+}
+
 /** Glazing thickness on every bay of a module (the physical bead slot).
  * The composition spec is a separate authority — setModuleGlass writes it. */
 export function setModuleGlassThickness(

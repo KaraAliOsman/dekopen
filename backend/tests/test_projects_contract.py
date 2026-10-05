@@ -538,3 +538,137 @@ def test_sliding_openings_survive_save_typology(opening, expected, monkeypatch):
     result = calculate_design(ORG_A_ID, design)
     assert result["calculation_hash"].startswith("sha256:")
     assert service._typology(design["parametric_tree"]) == expected
+
+
+def test_design_options_emits_structured_glass_products(monkeypatch):
+    """D02: the options endpoint exposes glass products with the fields the
+    selector cards need — notation, structured composition, declared specs,
+    price tier, surcharges — and never a computed price."""
+    from decimal import Decimal
+    from types import SimpleNamespace
+    from contextlib import contextmanager
+    from uuid import uuid4
+
+    from dekopen_engine.glass_composition import parse_glass_notation
+    from dekopen_engine.models import GlassProduct, GlassSurchargeRate
+    from projects import options as options_module
+    from rest_framework.test import APIClient
+
+    org_id = uuid4()
+
+    @contextmanager
+    def fake_scope(request, allowed):
+        yield (
+            SimpleNamespace(user_id=uuid4(), claims={}, aal="aal1"),
+            SimpleNamespace(
+                active_organization=SimpleNamespace(
+                    organization_id=org_id, role="ESTIMATOR"
+                )
+            ),
+            org_id,
+        )
+
+    product = GlassProduct(
+        sku="VID-LOWE",
+        name="Termopanel Low-E 4·16·4",
+        composition=parse_glass_notation("4 / 16 Ar / 4 Low-E (c3)"),
+        safety_class="B",
+        ug_w_m2k=Decimal("1.400"),
+        g_value=Decimal("0.630"),
+        light_transmission_pct=Decimal("80.00"),
+        weight_kg_m2=Decimal("20.00"),
+        min_area_m2=Decimal("0.30"),
+        price_tier=4,
+        review_pending=True,
+        surcharges=[
+            GlassSurchargeRate(
+                kind="DRILL", unit="EA", amount=Decimal("3500"),
+                currency="CLP", label="Perforación",
+            ),
+        ],
+    )
+    params = SimpleNamespace(
+        effective_profile_articles={},
+        glazing_bead_rules={},
+        available_hardware_kits=[],
+        available_panel_rules={},
+        finishes=("WHITE",),
+        glass_products={"VID-LOWE": product},
+        rebate_depth_mm=Decimal("18.00"),
+        sash_overlap_mm=Decimal("6.00"),
+        depth_mm=Decimal("70.00"),
+    )
+    repository = SimpleNamespace(
+        load_visible=lambda *a, **k: params,
+        load_article_names=lambda *a, **k: {},
+        load_coupler_articles=lambda *a, **k: {},
+        load_handle_policy=lambda *a, **k: None,
+    )
+    monkeypatch.setattr(options_module, "scope", fake_scope)
+    monkeypatch.setattr(
+        options_module, "SystemParamsRepository", lambda: repository
+    )
+    monkeypatch.setattr(options_module, "rows", lambda *a, **k: [])
+    client = APIClient()
+    client.force_authenticate(
+        user=SimpleNamespace(is_authenticated=True), token=object()
+    )
+    response = client.get(
+        f"/api/v1/projects/design-options/{uuid4()}/"
+    )
+    assert response.status_code == 200
+    choices = response.data["glass_products"]
+    assert len(choices) == 1
+    choice = choices[0]
+    assert choice["sku"] == "VID-LOWE"
+    assert choice["notation"] == "4 / 16 Ar / 4 Low-E (c3)"
+    assert choice["total_thickness_mm"] == "24.00"
+    assert choice["composition"]["layers"][1]["type"] == "chamber"
+    assert choice["safety_class"] == "B"
+    assert choice["ug_w_m2k"] == "1.400"
+    assert choice["weight_kg_m2"] == "20.00"
+    assert choice["price_tier"] == 4
+    assert choice["review_pending"] is True
+    assert choice["surcharges"] == [
+        {"kind": "DRILL", "unit": "EA", "amount": "3500",
+         "currency": "CLP", "label": "Perforación"}
+    ]
+
+
+def test_glass_resolution_maps_compositions_and_flags_unparseable_specs():
+    """D02: the position row carries a per-bay structured composition map;
+    a glass whose spec never parsed stays UNKNOWN and marks the position
+    for review — data is never invented for it."""
+    from projects.service import _glass_resolution
+
+    bom = {
+        "glasses": [
+            {
+                "bay_id": "b1", "leaf_id": None,
+                "composition": {"layers": [{"type": "lamina"}]},
+                "glass_spec": "4",
+            },
+            {
+                "bay_id": "b2", "leaf_id": "h1",
+                "composition": None,
+                "glass_spec": "laminate elite",
+            },
+            {"bay_id": "b3", "leaf_id": None,
+             "composition": None, "glass_spec": None},
+        ]
+    }
+    compositions, pending = _glass_resolution(bom)
+    assert compositions["b1:"] == {"layers": [{"type": "lamina"}]}
+    assert compositions["b2:h1"] == {
+        "status": "UNKNOWN", "spec": "laminate elite"
+    }
+    assert compositions["b3:"] == {"status": "UNKNOWN", "spec": None}
+    assert pending is True
+
+
+def test_glass_resolution_without_glasses_is_empty_and_clean():
+    from projects.service import _glass_resolution
+
+    compositions, pending = _glass_resolution({"glasses": []})
+    assert compositions == {}
+    assert pending is False

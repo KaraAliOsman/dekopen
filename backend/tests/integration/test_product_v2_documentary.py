@@ -73,7 +73,7 @@ def _bow_tree(
                 "id": "B1",
                 "type": "BAY",
                 "opening_type": "TURN_LEFT" if operable and index == 2 else "FIXED",
-                "glass_spec": "4-12-4 Float Incoloro",
+                "glass_spec": "4-16-4 Float Incoloro",
                 "glass_thickness_mm": "24.00",
                 "glass_article_sku": "VIDRIO-BASE",
             },

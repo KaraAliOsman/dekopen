@@ -128,6 +128,10 @@ class IssueCode(str, Enum):
     HARDWARE_UNDECIDABLE = "hardware_undecidable"
     TYPOLOGY_FAMILY_INCOMPATIBLE = "typology_family_incompatible"
     LEAF_DIMENSIONAL_LIMIT = "leaf_dimensional_limit"
+    # D02 structured-glass rule findings surfaced on the bay that carries
+    # them — rule_code/severity live in params (rules are org data, so the
+    # finding's own code is the constant).
+    GLASS_SAFETY_FINDING = "glass_safety_finding"
 
 
 class ConnectionKind(str, Enum):
@@ -967,6 +971,47 @@ def _sliding_facts(module: ProductModule) -> list[SlidingLayoutFacts]:
 
     _visit(module.tree)
     return facts
+
+
+def _glass_safety_issues(module_id: str, result: EngineResult) -> list[ProductIssue]:
+    """BOM glass findings → one deduplicated issue per (rule, bay, leaf).
+
+    The piece keeps the full GlassSafetyFinding; the issue is the readable
+    pointer — a MANDATORY severity escalates to an error so a rule the org
+    made mandatory actually blocks, while the default NCh-135 WARNING stays
+    advisory."""
+    seen: set[tuple[str, str, str]] = set()
+    issues: list[ProductIssue] = []
+    for glass in result.glasses:
+        for finding in glass.safety_findings:
+            key = (finding.rule_code, glass.bay_id, glass.leaf_id or "")
+            if key in seen:
+                continue
+            seen.add(key)
+            params: dict[str, str] = {
+                "rule_code": finding.rule_code,
+                "bay_id": glass.bay_id,
+                "message": finding.message,
+            }
+            if glass.leaf_id is not None:
+                params["leaf_id"] = glass.leaf_id
+            if finding.required_safety is not None:
+                params["required_safety"] = finding.required_safety
+            if finding.source_ref is not None:
+                params["source_ref"] = finding.source_ref
+            issues.append(
+                ProductIssue(
+                    code=IssueCode.GLASS_SAFETY_FINDING.value,
+                    severity=(
+                        Severity.ERROR
+                        if finding.severity == "MANDATORY"
+                        else Severity.WARNING
+                    ),
+                    target=f"module:{module_id}",
+                    params=params,
+                )
+            )
+    return issues
 
 
 def _prefix_result(module_id: str, result: EngineResult) -> EngineResult:
@@ -1822,6 +1867,7 @@ def evaluate_product(
                     _top_with_module_dims(module), params, is_foiled=is_foiled
                 )
             if result is not None:
+                module_issues.extend(_glass_safety_issues(module.id, result))
                 aggregated.append(_prefix_result(module.id, result))
         except NoCompatibleHardwareKit as error:
             # The exception carries the failing envelope (leaf size vs kit

@@ -20,6 +20,12 @@ class InfillTechnicalFacts:
     height_mm: Decimal
     exact_area_m2: Decimal
     bead_supported: bool
+    # D02: which authority produced `thickness_mm` — the bay's declared
+    # package value ("DECLARED"), the structured composition's computed
+    # total ("COMPOSITION") or a panel rule ("PANEL") — and the declared
+    # value when it differs, so a divergence is visible instead of silent.
+    thickness_source: str | None = None
+    thickness_declared_mm: Decimal | None = None
 
 
 @dataclass(frozen=True, slots=True)

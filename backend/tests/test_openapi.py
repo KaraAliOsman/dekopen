@@ -132,6 +132,7 @@ def test_openapi_contains_only_authorized_shot_11_paths_and_bearer_security() ->
         "/api/v1/production/pieces/{piece_id}/trace/",
         "/api/v1/production/orders/{order_id}/cnc-export/",
         "/api/v1/production/orders/{order_id}/cnc-export/{filename}",
+        "/api/v1/production/orders/{order_id}/glass-order/",
         "/api/v1/production/cnc/machines/",
         "/api/v1/production/cnc/machines/{machine_id}/",
         "/api/v1/production/cnc/programs/{program_id}/file/{filename}",

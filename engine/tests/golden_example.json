@@ -28,7 +28,7 @@
     "system_id": "3067da09-3119-5ad0-a1d5-498cd2dfd753"
   },
   "response": {
-    "calculation_hash": "sha256:20d958181e11b6c24f9262fca78e510556f8a068118dd3913621ce7e05ba74ad",
+    "calculation_hash": "sha256:9752a06c916bb94ea6f716b66e73ce7d2319c0727bdf7727cf3da5acac8489fd",
     "fittings": [
       {
         "bay_id": null,
@@ -50,12 +50,48 @@
         "area_m2": "0.8908",
         "article_sku": null,
         "bay_id": "bay_1",
+        "composition": {
+          "layers": [
+            {
+              "coating": null,
+              "coating_face": null,
+              "interlayer": null,
+              "panes": [
+                "4"
+              ],
+              "supplier_sku": null,
+              "tint": "CLEAR",
+              "treatment": null
+            },
+            {
+              "gas": "AIR",
+              "sealant": null,
+              "spacer": "ALUMINIUM",
+              "width_mm": "16.00"
+            },
+            {
+              "coating": null,
+              "coating_face": null,
+              "interlayer": null,
+              "panes": [
+                "4"
+              ],
+              "supplier_sku": null,
+              "tint": "CLEAR",
+              "treatment": null
+            }
+          ]
+        },
         "exposed_edges": null,
         "glass_spec": "4-16-4 Float Incoloro",
         "height_mm": "1310.00",
         "leaf_id": null,
+        "requires_exact_cut": false,
+        "safety_findings": [],
         "shape": null,
+        "surcharge_selections": [],
         "thickness_net_mm": "8.00",
+        "thickness_total_mm": "24.00",
         "weight_kg": "17.82",
         "width_mm": "680.00"
       },
@@ -63,12 +99,48 @@
         "area_m2": "0.6421",
         "article_sku": null,
         "bay_id": "bay_2",
+        "composition": {
+          "layers": [
+            {
+              "coating": null,
+              "coating_face": null,
+              "interlayer": null,
+              "panes": [
+                "4"
+              ],
+              "supplier_sku": null,
+              "tint": "CLEAR",
+              "treatment": null
+            },
+            {
+              "gas": "AIR",
+              "sealant": null,
+              "spacer": "ALUMINIUM",
+              "width_mm": "12.00"
+            },
+            {
+              "coating": null,
+              "coating_face": null,
+              "interlayer": null,
+              "panes": [
+                "4"
+              ],
+              "supplier_sku": null,
+              "tint": "CLEAR",
+              "treatment": null
+            }
+          ]
+        },
         "exposed_edges": null,
         "glass_spec": "4-12-4 Float Incoloro",
         "height_mm": "1176.00",
         "leaf_id": null,
+        "requires_exact_cut": false,
+        "safety_findings": [],
         "shape": null,
+        "surcharge_selections": [],
         "thickness_net_mm": "8.00",
+        "thickness_total_mm": "20.00",
         "weight_kg": "12.84",
         "width_mm": "546.00"
       }

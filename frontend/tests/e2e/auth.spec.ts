@@ -291,6 +291,8 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   for (const [sku, unit] of [
     ["COMPRA-MARCO", "BAR"],
     ["COMPRA-JQ-24", "BAR"],
+    // D02: la tarjeta VIDRIO-BASE fija la composición 4·16·4 (24 mm) → junquillo JQ-10.
+    ["COMPRA-JQ-10", "BAR"],
     ["COMPRA-POSTE-V", "BAR"],
     ["COMPRA-ACERO-MARCO", "BAR"],
     ["COMPRA-ACERO-POSTE-V", "BAR"],
@@ -335,7 +337,9 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   // Canvas-first editor: the single module is already selected on the drawing;
   // glazing choices live in its contextual inspector, not a separate form.
   await page.getByRole("combobox", { name: "Espesor de vidrio", exact: true }).selectOption("4.00");
-  await page.getByRole("combobox", { name: "Vidrio", exact: true }).selectOption("VIDRIO-BASE");
+  // D02: el catálogo de vidrios ahora se elige por tarjeta (su nombre comercial
+  // es el aria-label), no por un combobox de SKUs.
+  await page.getByRole("button", { name: "Termopanel incoloro 4·16·4", exact: true }).click();
   await expect(page.getByRole("button", { name: "Guardar", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "Guardar", exact: true }).click();
   await expect(page.getByText("Guardado", { exact: true })).toBeVisible();
@@ -538,7 +542,9 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
     label: "Sistema Demo 60mm PVC — referencia sintética · Catálogo de demostración",
   });
   await page.getByRole("combobox", { name: "Espesor de vidrio", exact: true }).selectOption("4.00");
-  await page.getByRole("combobox", { name: "Vidrio", exact: true }).selectOption("VIDRIO-BASE");
+  // D02: el catálogo de vidrios ahora se elige por tarjeta (su nombre comercial
+  // es el aria-label), no por un combobox de SKUs.
+  await page.getByRole("button", { name: "Termopanel incoloro 4·16·4", exact: true }).click();
   const dividedCalculation = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&

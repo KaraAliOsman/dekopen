@@ -16,6 +16,8 @@ from dekopen_engine.documentary_canonical import (
     DOCUMENTARY_CANONICAL_VERSION,
     bom_hash_v1,
     documentary_canonical_json_v1,
+    numeric_collapsed,
+    same_documentary_value,
     snapshot_sha256_v1,
 )
 from dekopen_engine.geometry import GeometryComputation, compute_geometry
@@ -399,30 +401,15 @@ def _synthesized_handle_intents(
     return merged
 
 
-def _numeric_collapsed(value: object) -> object:
-    """Numeric strings and Decimals collapse to a scale-free Decimal.
-
-    One write path stores ``"1400.00"`` where another persists ``"1400"``;
-    the measurement is identical and must not read as binding drift."""
-    if isinstance(value, Decimal):
-        return value.normalize() if value.is_finite() else value
-    if isinstance(value, str):
-        try:
-            parsed = Decimal(value)
-        except InvalidOperation:
-            return value
-        return parsed.normalize() if parsed.is_finite() else value
-    if isinstance(value, dict):
-        return {key: _numeric_collapsed(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_numeric_collapsed(item) for item in value]
-    return value
+# Scale-free numeric collapse lives in
+# `dekopen_engine.documentary_canonical` — the live-vs-frozen compare in
+# projects.service applies the same normalization, so a canonical "16.00"
+# BOM and a raw "16" dump of the same measurement never read as drift.
+_numeric_collapsed = numeric_collapsed
 
 
 def _same_documentary_value(left: object, right: object) -> bool:
-    return documentary_canonical_json_v1(
-        _numeric_collapsed(left)
-    ) == documentary_canonical_json_v1(_numeric_collapsed(right))
+    return same_documentary_value(left, right)
 
 
 _BOM_ADDITIVE_KEYS = frozenset({"fittings"})

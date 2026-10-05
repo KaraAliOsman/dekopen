@@ -46,7 +46,7 @@ def position_data(system_id, width="1000.00"):
                     "id": "B1",
                     "type": "BAY",
                     "opening_type": "FIXED",
-                    "glass_spec": "4-12-4 Float Incoloro",
+                    "glass_spec": "4-16-4 Float Incoloro",
                     "glass_thickness_mm": "24.00",
                     "glass_article_sku": "VIDRIO-BASE",
                 },

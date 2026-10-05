@@ -85,5 +85,6 @@ def test_system_params_contract_accounts_for_every_field() -> None:
         "sliding_glazing_deduction_height_mm", "door_leaf_side_clearance_mm", "available_panel_rules",
         "rail_count", "finishes",
         "system_family", "cut_rules", "reinforcement_rules", "typology_limits",
+        "glass_products", "glass_safety_rules", "glass_type_limits",
     }
-    assert len(demo_60_params().model_dump()) == 30
+    assert len(demo_60_params().model_dump()) == 33
