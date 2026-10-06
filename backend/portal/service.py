@@ -88,15 +88,18 @@ def share_quote(
             raise DocumentaryError("version_not_found")
     token = secrets.token_urlsafe(_TOKEN_BYTES)
     expires_at = datetime.now(timezone.utc) + timedelta(days=_APPROVAL_TTL_DAYS)
-    approval_url = f"{_frontend_origin()}/cotizacion/{token}"
-    minted_id = None
+    minted_ids: list[UUID] = []
     with transaction.atomic(), documentary_backend():
-        # A fresh share supersedes every outstanding link for this revision —
-        # otherwise pending tokens accumulate and stay concurrently valid.
+        # A fresh share supersedes every outstanding EMAIL link for this
+        # revision — otherwise pending tokens accumulate and stay
+        # concurrently valid. DOCUMENT-channel approvals survive: the QR
+        # sealed inside the stored DOC-01 names that token, and the PDF is
+        # immutable evidence that must keep resolving.
         rows(
             "UPDATE public.customer_approvals SET status='REVOKED',revoked_at=%s,"
             "revoked_by=%s WHERE org_id=%s AND project_id=%s "
-            "AND project_version_id=%s AND status='PENDING' RETURNING id",
+            "AND project_version_id=%s AND status='PENDING' AND channel='EMAIL' "
+            "RETURNING id",
             [
                 datetime.now(timezone.utc),
                 str(actor_id),
@@ -118,30 +121,64 @@ def share_quote(
                 str(actor_id),
             ],
         )
-        minted_id = minted["id"]
-    # The client-facing quotation is DOC-01: it now carries this exact link
-    # in its acceptance block (QR + URL), so it generates AFTER minting. If
-    # the render fails the fresh approval is revoked — no stranded token
-    # whose document nobody can produce.
-    try:
-        generate_artifact(
-            org_id=org_id,
-            actor_id=actor_id,
-            role=role,
-            project_version_id=versions[0]["id"],
-            order_id=None,
-            document_type="DOC-01",
-            file_format="PDF",
-            render_context={"approval_url": approval_url},
+        minted_ids.append(minted["id"])
+        # The document's acceptance QR needs a link that outlives re-shares:
+        # an EMAIL token dies on the next share, so the sealed PDF embeds a
+        # DOCUMENT-channel approval minted the first time its artifact is
+        # produced. The slot is immutable — when the PDF already exists we
+        # mint nothing (its QR, if any, belongs to the original share).
+        slot_taken = rows(
+            "SELECT id FROM public.document_artifacts "
+            "WHERE org_id=%s AND project_version_id=%s "
+            "AND artifact_scope='PROJECT_REVISION' AND artifact_scope_id=%s "
+            "AND document_type='DOC-01' AND format='PDF'",
+            [org_id, versions[0]["id"], versions[0]["id"]],
         )
-    except Exception:
-        with documentary_backend():
-            rows(
-                "UPDATE public.customer_approvals SET status='REVOKED',"
-                "revoked_at=%s,revoked_by=%s WHERE id=%s AND status='PENDING'",
-                [datetime.now(timezone.utc), str(actor_id), str(minted_id)],
+        if not slot_taken:
+            document_token = secrets.token_urlsafe(_TOKEN_BYTES)
+            document_approval = one(
+                "INSERT INTO public.customer_approvals "
+                "(org_id,project_id,project_version_id,token_hash,expires_at,"
+                "created_by,channel) VALUES (%s,%s,%s,%s,%s,%s,'DOCUMENT') "
+                "RETURNING id",
+                [
+                    str(org_id),
+                    str(project_id),
+                    str(versions[0]["id"]),
+                    hashlib.sha256(document_token.encode()).hexdigest(),
+                    expires_at,
+                    str(actor_id),
+                ],
             )
-        raise
+            minted_ids.append(document_approval["id"])
+    # DOC-01 generates AFTER minting so the acceptance block can carry the
+    # document link (QR + URL). A render failure revokes every approval
+    # minted above — no stranded token whose document nobody can produce.
+    if not slot_taken:
+        try:
+            generate_artifact(
+                org_id=org_id,
+                actor_id=actor_id,
+                role=role,
+                project_version_id=versions[0]["id"],
+                order_id=None,
+                document_type="DOC-01",
+                file_format="PDF",
+                render_context={
+                    "approval_url": (
+                        f"{_frontend_origin()}/cotizacion/{document_token}"
+                    )
+                },
+            )
+        except Exception:
+            with documentary_backend():
+                rows(
+                    "UPDATE public.customer_approvals SET status='REVOKED',"
+                    "revoked_at=%s,revoked_by=%s WHERE id = ANY(%s::uuid[]) "
+                    "AND status='PENDING'",
+                    [datetime.now(timezone.utc), str(actor_id), minted_ids],
+                )
+            raise
     with documentary_backend():
         # P25: enlace de cotización al cliente por correo — el handler renderiza
         # white-label con la marca del org y registra mail_messages vía outbox.
@@ -151,7 +188,7 @@ def share_quote(
             "mail.quote_sent",
             org_id=org_id,
             actor_id=actor_id,
-            idempotency_key=f"mail:quote-sent:{minted_id}",
+            idempotency_key=f"mail:quote-sent:{minted_ids[0]}",
             project_id=str(project_id),
             token=token,
         )

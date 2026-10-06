@@ -113,11 +113,12 @@ def generate_artifact(
     """Slot-idempotent artifact generation.
 
     ``render_context`` carries live, non-sealed display values (today only
-    ``approval_url`` on DOC-01 — the acceptance QR must encode the link
-    that was just minted). Passing it for a document whose stored artifact
-    predates the link re-renders the slot under the same lock: the sealed
-    snapshot never changes, so the swap only refreshes the QR/link, and
-    the replaced object's bytes are still content-addressed by sha256."""
+    ``approval_url`` on DOC-01 — the acceptance QR encodes the document
+    channel approval minted by the share that produced the file). The
+    stored artifact is immutable evidence: an occupied slot is returned
+    as-is even when a render_context arrives — the QR the document
+    carries belongs to the share that generated it, and re-shares rotate
+    only the email-channel links."""
     _require_document_role(document_type, role)
     if document_type in _REVISION_DOCUMENTS:
         if order_id is not None or file_format != "PDF":
@@ -137,7 +138,6 @@ def generate_artifact(
     slot = f"{scope_id}:{document_type}:{file_format}"
     storage: SupabaseDocumentStorage | None = None
     object_key: str | None = None
-    stale_object_key: str | None = None
     try:
         with transaction.atomic(), documentary_backend():
             with connection.cursor() as cursor:
@@ -166,16 +166,10 @@ def generate_artifact(
             if existing:
                 if len(existing) != 1:
                     raise DocumentaryError("artifact_slot_ambiguous")
-                if not render_context:
-                    return _metadata(existing[0]), False
-                # A fresh share supersedes the stored PDF: the approval
-                # link it embeds is about to be revoked. Re-render under
-                # the lock; the old row/object go once the new one lands.
-                stale_object_key = str(existing[0]["storage_object_key"])
-                rows(
-                    "DELETE FROM public.document_artifacts WHERE id=%s",
-                    [existing[0]["id"]],
-                )
+                # Immutable evidence: the sealed document of record wins
+                # over any re-render request — re-shares rotate the email
+                # link, never the stored PDF.
+                return _metadata(existing[0]), False
             identifier = (
                 str(version["snapshot_sha256"])
                 if order is None else str(order["order_snapshot_hash"])
@@ -209,15 +203,6 @@ def generate_artifact(
                  document_type, file_format, version["bom_hash"], version["snapshot_sha256"],
                  object_key, content_hash, media_type, len(content), actor_id],
             )
-        if stale_object_key is not None and storage is not None:
-            # Post-commit cleanup of the superseded object; the new row is
-            # already the slot's authority, so a cleanup miss only orphans
-            # bytes — never the record.
-            _delete_unreferenced_object(
-                org_id=org_id, storage=storage, object_key=stale_object_key,
-                slot=slot,
-            )
-            stale_object_key = None
         return _metadata(artifact), True
     except Exception:
         if storage is not None and object_key is not None:
