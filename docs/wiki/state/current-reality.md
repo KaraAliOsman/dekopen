@@ -3,7 +3,7 @@ type: state
 status: active
 updated: 2026-10-06
 volatility: high
-verified_ref: 301ebfb65f75489ea3f4c2f444a8f625c189db3d
+verified_ref: REBASED-P15-FEAT-SHA
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
@@ -29,6 +29,7 @@ sources:
   - ED1 pase editorial PR https://github.com/KaraAliOsman/dekopen/pull/42
   - P13 pack corte etiquetas PR https://github.com/KaraAliOsman/dekopen/pull/44
   - P06 bow acoplados PR https://github.com/KaraAliOsman/dekopen/pull/46
+  - P15 compras/inventario branch devin/P15-compras-inventario
   - P17 asistente IA/trabajos/Orb branch devin/P17-asistente-orb
   - integracion/v1 merge 747c528b67d234d697624929ccbcc7098261ed54
   - open PR metadata observed 2026-09-27/28
@@ -375,6 +376,7 @@ PR sobre `integracion/v1` (branch `devin/ED1-pase-editorial-ola1`); encargo sin 
 - **Limpieza**: alias muerto `--shadow-lg` eliminado de `tokens.css`; baseline de guardas regenerada sólo a la baja (`raw-status`, `font<11`, `hex-inline`, `shadow-off` → 0; `ui-tofixed` 87→2).
 - Verificado: `make lint|typecheck|test|build` verdes; ux:capture antes/después en `docs/redesign/captures/ed1/`; decisiones en sección ED1 de `valores-por-defecto.md`.
 
+
 ## P13 pack de corte, etiquetas e identidad entre artefactos state
 
 Merged into `integracion/v1` as squash `3f3cf8a66169efb31a0afaa04c657b9c71981d99` (dekopen PR #44):
@@ -402,3 +404,16 @@ Open PR (branch `devin/P06-bow-acoplados`, on `integracion/v1` post-ED1):
 - Precio por módulo en el chip vivo: `module_net_after` de `design_batch_preview` reparte el neto por costo de material atribuido (`module_id` en líneas de composición); chip muestra «M1 $x · M2 $y» bajo el neto unitario.
 - Biblioteca: Bow ×3 canónico (centro fijo, laterales oscilobatiente, 2×22,5°), Bow ×5, Bay 45°, Puerta + lateral, Ventana + sobreluz, Esquina 90° — todas plantillas sobre la misma composición.
 - e2e `bow-acoplados.spec.ts` (dentro de `make test-db`): bow 600/1200/600 @2×22,5° en 5 gestos ≤10 + guardar/reabrir idéntico, selección plan↔frente, proyectada más corta que desarrollada.
+
+
+## P15 compras, recepción, inventario y retazos state
+
+PR sobre `integracion/v1` (branch `devin/P15-compras-inventario`):
+
+- **Separación Compras/Inventario**: `/inventory` es superficie propia (stock por SKU con reservado-por-OT y en tránsito, retazos, libro de movimientos); `/purchasing` queda solo de compras (necesidades → propuesta por proveedor → OC → envío → recepción) y ya no monta el panel de stock.
+- **Compras**: propuesta editable con `unit_price` por línea (columna nueva en `purchase_allocations`; el precio se sella al confirmar la OC y alimenta `total_net`); `send_order` envía correo al proveedor (`mail.order_sent` con audiencia `SUPPLIER` + adjunto PDF generado por `jobs`) sólo tras clic humano, idempotente, sin romper la transición si el outbox falla; recepción por línea con `supplier_delivery_ref`/`supplier_delivery_date`, `damaged`, lote y rack; sobre-recepción rechaza 422 `receipt_over_received` salvo `allow_over_receipt:true` (la UI pide confirmación explícita); el stock se actualiza dentro de la misma tx.
+- **Inventario**: `inventory_movements` acepta sujeto `remnant_id` (CHECK `num_nonnulls(item_id, remnant_id) = 1`; `quantity` requerido sólo para sujeto item — migración separada porque el enum `MOVE` no puede usarse en la misma tx que `ADD VALUE`). Acciones de retazo `move`/`reserve`/`scrap` escriben al libro con actor humano; `scrap` exige `reason`; `remnant_label` devuelve SVG QR `DEKOPEN|REMNANT|RT-######`. `list_movements` enriquece cada fila con código de documento (OC/REC/OT/RT) y `actor_label`.
+- **Alerta de retazos viejos**: `tenancy_organizations.remnant_alert_days` (default 30, editable en Ajustes › Organización, grant UPDATE restringido a esa columna); los retazos `AVAILABLE` más viejos que el umbral se marcan `is_old` y se destacan.
+- **Compatibilidad retazo↔faltante**: el motor decide — `coverage` devuelve `remnant_pool{kind,key,count,total_mm}` por línea de faltante; la UI (`RemnantOffer`) sólo ofrece y pide elegir la OT destino. Los retazos producidos almacenan ahora `physical_stock_identity` resuelta vía `stock_authority_id` (psi de la barra que los originó) y `bar_remnants`/`list_remnants` resuelven psi por COALESCE con las autoridades; migración `20270212000000` hace backfill — antes quedaban psi NULL y el pool devolvía 0.
+- **Causa raíz «error al cargar el stock»**: lectura de `order_requirement_lines` bajo el rol lector sin grant SELECT (42501→409) — ya corregido en la base (`a1b08c07`); regresión cubierta con test de acceso 200 de los 3 roles + pgTAP de grants en `182_p15_receiving_remnants.test.sql` (16 aserciones).
+- Integraciones: correo y PDF por proveedor sandbox + «No conectado» en Ajustes › Integraciones + `docs/operations/ACTIVACION.md`. Verificado: `make lint|typecheck|test|build|test-db` verdes; ux:capture 0 hallazgos en `/purchasing` e `/inventory`; capturas en `docs/redesign/captures/p15-compras-inventario/`; decisiones en sección P15 de `valores-por-defecto.md`.

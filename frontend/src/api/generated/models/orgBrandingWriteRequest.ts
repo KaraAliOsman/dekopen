@@ -48,6 +48,11 @@ export interface OrgBrandingWriteRequest {
   workshop_label_format?:
     | (typeof OrgBrandingWriteRequestWorkshopLabelFormat)[keyof typeof OrgBrandingWriteRequestWorkshopLabelFormat]
     | null;
+  /**
+   * @minimum 1
+   * @maximum 365
+   */
+  remnant_alert_days?: number;
   /** @nullable */
   doc_terms?: OrgBrandingWriteRequestDocTerms;
 }

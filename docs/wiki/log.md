@@ -243,6 +243,7 @@ Append-only chronology. Keep newest entries at the bottom.
 - Glosario: estados de operación de precio en femenino (la operación); `importStatus.ts` único para chips de importación; alias `--shadow-lg` muerto fuera; baseline de guardas regenerada a la baja (Δ −11).
 - Decisiones durables en `docs/decisions/valores-por-defecto.md` sección ED1; verificación `make lint|typecheck|test|build` verde con `PY=.venv/bin/python`.
 
+
 ## [2026-10-06] P13 | pack de corte imprimible, etiquetas de pieza e identidad entre artefactos
 
 - `cut_pack.py` se reescribe para el operario de sierra: origen por barra (barra nueva / retazo RT-…), cortes en secuencia con largo+ángulos+etiqueta por instancia, cierre exacto Decimal y remanente→destino con el folio `RT-` real de `inventory_remnants`; secciones agrupados-manual, refuerzos/junquillos con pieza padre, vidrios con destino y no-ubicados con acción de catálogo.
@@ -259,3 +260,12 @@ Append-only chronology. Keep newest entries at the bottom.
 - Plantillas de biblioteca nuevas: Bay 45°, Puerta + lateral, Ventana + sobreluz, Esquina 90°; Bow ×3 pasa a canónico (fijo central + oscilobatientes laterales a 22,5°) — el e2e arma el diseño del encargo en 5 gestos.
 - Aprendizajes: `CouplingJson.kind` ausente = INLINE por contrato — `moduleHeadingsDeg` necesitaba `?? "INLINE"` o el rumbo quedaba 0°; FittingPiece.bay_id es opcional (getattr); `--type-caption` no existe en tokens (vitest guarda tokens usados sin definir).
 - Corrección post-verificación UI: el escorzo proyectado usaba `cos` con signo → anchos negativos y floats sin redondear a rumbo ≥ 90° (ahora `|cos|` + redondeo 0,01 mm en la cota), y las cotas del alzado proyectado eran editables y reescribían el ancho declarado con el valor escorzado (ahora solo-lectura; el ancho se edita en desarrollada). El reparto del chip sigue el orden de alzado (`moduleIds`), no el del payload.
+
+
+## [2026-10-06] P15 | compras, recepción, inventario y retazos
+
+- `/inventory` nace como superficie propia: stock por SKU (en bodega, reservado con la OT que reserva, en tránsito, ubicación), retazos `RT-######` (tipo, identidad, medidas, rack, OT origen, edad, destino) con acciones Mover/Reservar/Desechar+Etiqueta QR, alerta de retazos viejos por `remnant_alert_days` (Ajustes › Organización) y libro de movimientos con actor/lote/documento/rack. `/purchasing` queda sólo de compras.
+- Compras: propuesta por proveedor editable con precios sellados en la OC (`purchase_allocations.unit_price` → `total_net`); `send_order` = clic humano → correo `order_sent` a audiencia `SUPPLIER` + job de PDF por tipo (perfil DOC-04, vidrio DOC-02, herraje/panel DOC-08), idempotente y tolerante a fallos del outbox; recepción por línea con guía/fecha del proveedor, dañados, lote y rack; sobre-recepción bloquea con 422 hasta `allow_over_receipt`.
+- Retazos como stock de primera clase: `inventory_movements.remnant_id` + tipo `MOVE`; `scrap` exige motivo y reserva/movimiento escriben actor real; los retazos de producción guardan `physical_stock_identity` (vía `stock_authority`); `remnant_pool` en coverage y el filtro `stock_identity` resuelven autoridades — la UI sólo ofrece el retazo compatible que el motor calcula cuando una OT tiene faltante.
+- Causa raíz del 409 al cargar stock ya estaba corregida en la base (`a1b08c07`, lectura bajo `documentary_backend`); se agregan tests de regresión (acceso por rol + grants pgTAP).
+- Migraciones `20270210/11/12`; pgTAP `182` (16 aserciones); `make lint|typecheck|test|build|test-db` verdes (`PY=.venv/bin/python`); ux:capture 0 hallazgos `/purchasing`+`/inventory` tras llevar objetivos táctiles a 44 px (`.inventory-page` min-height incl. `summary` y `.fmt-code`); 14 capturas en `docs/redesign/captures/p15-compras-inventario/`; decisiones en `valores-por-defecto.md` §P15.
