@@ -242,6 +242,10 @@ export function makeBowProduct(options: {
   heightMm: number;
   angleDeg: number;
   opening?: Opening;
+  /** P06 — opening per module slot (index 0..moduleCount-1); entries
+   * missing or null fall back to `opening`. A canonical bow opens its
+   * lateral panes and keeps the center fixed. */
+  moduleOpenings?: (Opening | null)[];
   glassThicknessMm?: string;
   glassSpec?: string;
   glassArticleSku?: string | null;
@@ -252,6 +256,7 @@ export function makeBowProduct(options: {
     heightMm,
     angleDeg,
     opening = "FIXED",
+    moduleOpenings = [],
     glassThicknessMm = "4.00",
     glassSpec = "4",
     glassArticleSku = null,
@@ -267,7 +272,13 @@ export function makeBowProduct(options: {
       id: `m${index}`,
       width_mm: mmStr(width),
       height_mm: mmStr(heightMm),
-      tree: makeBayTree(`m${index}`, opening, glassThicknessMm, glassSpec, glassArticleSku),
+      tree: makeBayTree(
+        `m${index}`,
+        moduleOpenings[index - 1] ?? opening,
+        glassThicknessMm,
+        glassSpec,
+        glassArticleSku,
+      ),
     });
     if (index > 1) {
       couplings.push({
@@ -361,14 +372,64 @@ export interface ElevationLayoutMm {
   columns: ElevationColumnMm[];
 }
 
+/** Plan headings mirroring the engine's `_plan_geometry` walk exactly:
+ * front-chain roots advance in declaration order; each INLINE coupling
+ * between consecutive roots adds its signed deflection (positive turns the
+ * next module counterclockwise). Stacked members inherit their column's
+ * heading. */
+export function moduleHeadingsDeg(product: ProductJson): Map<string, number> {
+  const modules = product.assembly.modules;
+  const { pairs, stackRoot } = resolveStacks(product);
+  const pairCoupling = new Map<string, CouplingJson>();
+  for (const { coupling, pair } of pairs) {
+    const rootA = stackRoot.get(pair[0]) ?? pair[0];
+    const rootB = stackRoot.get(pair[1]) ?? pair[1];
+    if (rootA === rootB) continue;
+    const key = [rootA, rootB].sort().join("|");
+    if (!pairCoupling.has(key)) pairCoupling.set(key, coupling);
+  }
+  const headings = new Map<string, number>();
+  let heading = 0;
+  let previousId: string | null = null;
+  for (const module of modules) {
+    if (stackRoot.has(module.id)) continue;
+    if (previousId !== null) {
+      const coupling = pairCoupling.get([previousId, module.id].sort().join("|"));
+      // kind absent = the inline chain default (CouplingJson contract).
+      if (coupling && (coupling.kind ?? "INLINE") === "INLINE") {
+        heading += Number(coupling.angle_deg);
+      }
+    }
+    headings.set(module.id, heading);
+    previousId = module.id;
+  }
+  return headings;
+}
+
 /** Member placement mirroring the engine's `elevation_layout` exactly:
  * non-stacked roots become front columns in declaration order at their
  * declared widths; a stacked member projects into its root column centred,
- * sill = partner's top edge (cycle-safe, degrades to the baseline). */
-export function elevationLayoutMm(product: ProductJson): ElevationLayoutMm {
+ * sill = partner's top edge (cycle-safe, degrades to the baseline).
+ *
+ * `projected` is the bow/bay orthographic front view ("vista real de
+ * frente"): every column foreshortens to `w·|cos(heading)|` — the bow's
+ * angled wings draw with their escorzo instead of unrolled widths. A
+ * heading past ±90° means the module folds back (the plan strip is the
+ * authoritative view for direction); its apparent front width is still
+ * the projection's absolute extent, never a negative dimension. */
+export function elevationLayoutMm(
+  product: ProductJson,
+  options?: { projected?: boolean },
+): ElevationLayoutMm {
   const modules = product.assembly.modules;
   const { stackParent, stackRoot } = resolveStacks(product);
   const byId = new Map(modules.map((module) => [module.id, module]));
+  const headings = options?.projected ? moduleHeadingsDeg(product) : null;
+  const foreshorten = (moduleId: string): number => {
+    if (!headings) return 1;
+    const heading = headings.get(moduleId) ?? 0;
+    return Math.abs(Math.cos((heading * Math.PI) / 180));
+  };
   const sills = new Map<string, number>();
   const memberSill = (id: string, seen: Set<string>): number => {
     const cached = sills.get(id);
@@ -386,11 +447,15 @@ export function elevationLayoutMm(product: ProductJson): ElevationLayoutMm {
   let cursor = 0;
   for (const root of modules) {
     if (stackRoot.has(root.id)) continue;
-    const columnW = Number(root.width_mm);
+    const columnW = Number(root.width_mm) * foreshorten(root.id);
     let top = 0;
     for (const member of modules) {
       if (member.id !== root.id && stackRoot.get(member.id) !== root.id) continue;
-      const w = Number(member.width_mm);
+      // A stacked member shares its column's plan heading — it foreshortens
+      // by the root's cosine, not by its own (stacked members hold no plan
+      // heading of their own).
+      const anchor = stackRoot.get(member.id) ?? member.id;
+      const w = Number(member.width_mm) * foreshorten(anchor);
       const h = Number(member.height_mm);
       const sill = memberSill(member.id, new Set([member.id]));
       top = Math.max(top, sill + h);

@@ -58,12 +58,12 @@ import type { StarterDefinition } from "./designLibrary";
 import type { ViewTransform } from "./viewport";
 import { useRegisterDesignOpsBridge } from "../assistant/assistantContext";
 import type { DesignOp } from "../commands/types";
-import { BowPlanContent, planBounds } from "./BowPlanSvg";
+import { BowPlanContent, planBounds, planMeasures } from "./BowPlanSvg";
 import { CanvasViewport } from "./CanvasViewport";
 import { ObjectTree } from "./ObjectTreeView";
 import { buildObjectTree } from "./objectTree";
 import { finishForSelection } from "./finishes";
-import { resolveMembers, tintMembers, type MemberGeometry } from "./members";
+import { couplerFitsAngle, resolveMembers, tintMembers, type MemberGeometry } from "./members";
 import {
   autoPickKit,
   bayEnvelopeMm,
@@ -172,6 +172,7 @@ const ISSUE_KEYS: Record<string, TranslationKey> = {
   coupler_module_unknown: "assembly.issue.couplerModuleUnknown",
   coupler_edge_invalid: "assembly.issue.couplerEdgeInvalid",
   coupler_edge_conflict: "assembly.issue.couplerEdgeConflict",
+  coupler_angle_incompatible: "assembly.issue.couplerAngleIncompatible",
   connection_type_unsupported: "assembly.issue.connectionTypeUnsupported",
   assembly_disconnected: "assembly.issue.assemblyDisconnected",
   stacked_cycle: "assembly.issue.stackedCycle",
@@ -279,7 +280,9 @@ function normalizeMm(candidate: string): string | null {
 
 function normalizeAngle(candidate: string): string | null {
   const value = parseLocaleNumber(candidate);
-  if (value === null || Math.abs(value) >= 90) return null;
+  // P06 — el rango llega hasta ±90° inclusive (esquina cuadrada); más allá
+  // el módulo se repliega hacia atrás y el plano deja de ser legible.
+  if (value === null || Math.abs(value) > 90) return null;
   return fmtWire(value, 1);
 }
 
@@ -2137,6 +2140,7 @@ function CouplingInspector({
   product,
   ordinal,
   couplerSkus,
+  members,
   busy,
   commit,
   onAskAssistant,
@@ -2145,10 +2149,23 @@ function CouplingInspector({
   product: ProductJson;
   ordinal: number;
   couplerSkus: string[];
+  members: MemberGeometry;
   busy: boolean;
   commit(next: ProductJson): void;
   onAskAssistant?(): void;
 }): JSX.Element {
+  // P06 — la lista se filtra por la envolvente de ángulo que el catálogo
+  // declara (|ángulo|); el cople asignado siempre aparece aunque el motor
+  // ya lo esté marcando incompatible — la UI nunca esconde el dato real.
+  const angleDeg = Number(coupling.angle_deg);
+  const couplerLabel = (sku: string): string => {
+    const spec = members.couplerFor(sku);
+    return spec?.name ? `${spec.name} · ${sku}` : sku;
+  };
+  const shownSkus = couplerSkus.filter(
+    (sku) =>
+      sku === coupling.coupler_profile_sku || couplerFitsAngle(members.couplerFor(sku), angleDeg),
+  );
   return (
     <section className="assembly-inspector" aria-label={t("assembly.coupling")}>
       <header className="assembly-inspector__header">
@@ -2186,13 +2203,21 @@ function CouplingInspector({
           }
         >
           <option value="">{t("assembly.noCoupler")}</option>
-          {couplerSkus.map((sku) => (
+          {shownSkus.map((sku) => (
             <option key={sku} value={sku}>
-              {sku}
+              {couplerLabel(sku)}
             </option>
           ))}
         </select>
       </label>
+      {shownSkus.length < couplerSkus.length && (
+        <p className="inspector-note">
+          {t("assembly.couplerFilteredNote").replace(
+            "{count}",
+            String(couplerSkus.length - shownSkus.length),
+          )}
+        </p>
+      )}
       <div className="inspector-actions">
         <button
           type="button"
@@ -2334,7 +2359,16 @@ export function AssemblyEditor({
   const [detail, setDetail] = useState<DetailLevel>("design");
   // P05 — vista declarada del alzado (interior/exterior).
   const [frontView, setFrontView] = useState<"interior" | "exterior">("interior");
+  // P06 — la planta acoplada vive en una franja inferior del lienzo con
+  // altura arrastrable; cuando el conjunto tiene uniones en ángulo, la
+  // elevación puede leerse Desarrollada (un módulo tras otro) o Proyectada
+  // (cada columna con su escorzo w·cos(rumbo)).
   const [planOpen, setPlanOpen] = useState(true);
+  const [planStripHeight, setPlanStripHeight] = useState(168);
+  // La franja plegada deja solo el encabezado (~2rem): el cuerpo flotante del
+  // dock flota por encima de la franja usando --plan-strip-height (ver CSS).
+  const PLAN_STRIP_COLLAPSED_H = 32;
+  const [projected, setProjected] = useState(false);
   const [view3dOpen, setView3dOpen] = useState(false);
   /** Interior/Exterior view selector — the 2D front is DIN-interior by
    * convention; Exterior flips the 3D inset open on its outside side. */
@@ -2471,7 +2505,10 @@ export function AssemblyEditor({
 
   // One layout pass per product commit — bounds/selection boxes derive from
   // the memo instead of recomputing the elevation four times per render.
-  const front = useMemo(() => (product ? frontLayout(product) : null), [product]);
+  const front = useMemo(
+    () => (product ? frontLayout(product, { projected }) : null),
+    [product, projected],
+  );
   const frontBox = useMemo(
     () =>
       front
@@ -3228,6 +3265,7 @@ export function AssemblyEditor({
           product={product}
           ordinal={couplings.findIndex((item) => item.id === selectedCoupling.id) + 1}
           couplerSkus={couplerSkus}
+          members={members}
           busy={busy}
           commit={commit}
           onAskAssistant={
@@ -3278,6 +3316,13 @@ export function AssemblyEditor({
       )}
     </>
   );
+
+  const planStripOffset =
+    couplings.length > 0 && evaluation?.plan && planBox
+      ? planOpen
+        ? planStripHeight
+        : PLAN_STRIP_COLLAPSED_H
+      : 0;
 
   return (
     <div
@@ -3532,6 +3577,7 @@ export function AssemblyEditor({
             onResizeSeam={(index, deltaMm) => commit(resizeModuleSeam(product, index, deltaMm))}
             vano={vano}
             view={frontView}
+            projected={projected}
           />
           {tool === "measure" && (
             <MeasureLayer
@@ -3549,50 +3595,135 @@ export function AssemblyEditor({
             />
           )}
         </CanvasViewport>
-        {couplings.length > 0 && evaluation?.plan && planBox && planOpen && (
-          <div className="plan-inset" role="complementary" aria-label={t("assembly.planView")}>
-            <div className="plan-inset__header">
-              <span>{t("assembly.planView")}</span>
+        {couplings.length > 0 && evaluation?.plan && planBox && (
+          <div
+            className={`plan-strip${planOpen ? "" : " plan-strip--collapsed"}`}
+            role="complementary"
+            aria-label={t("assembly.planView")}
+            style={planOpen ? { height: planStripHeight } : undefined}
+          >
+            {planOpen && (
+              <div
+                className="plan-strip__resize"
+                role="separator"
+                aria-orientation="horizontal"
+                aria-label={t("assembly.planStripHint")}
+                title={t("assembly.planStripHint")}
+                onPointerDown={(event) => {
+                  // Altura arrastrable: el borde superior de la franja se
+                  // toma y la altura sigue el puntero hasta soltar. El
+                  // anclaje es el borde inferior (pegado al pie del lienzo),
+                  // por eso la altura es bottom − y del puntero.
+                  event.preventDefault();
+                  const stripEl = event.currentTarget.parentElement;
+                  const canvasEl = canvasRef.current;
+                  if (!stripEl || !canvasEl) return;
+                  const pointerId = event.pointerId;
+                  const canvasRect = canvasEl.getBoundingClientRect();
+                  const minH = 96;
+                  const maxH = Math.max(minH, canvasRect.height * 0.45);
+                  const onMove = (move: PointerEvent) => {
+                    if (move.pointerId !== pointerId) return;
+                    const next = canvasRect.bottom - move.clientY;
+                    setPlanStripHeight(Math.max(minH, Math.min(maxH, next)));
+                  };
+                  const detach = () => {
+                    window.removeEventListener("pointermove", onMove);
+                    window.removeEventListener("pointerup", detach);
+                    window.removeEventListener("pointercancel", detach);
+                  };
+                  window.addEventListener("pointermove", onMove);
+                  window.addEventListener("pointerup", detach);
+                  window.addEventListener("pointercancel", detach);
+                }}
+              />
+            )}
+            <div className="plan-strip__header">
               <button
                 type="button"
-                aria-label={t("assembly.hidePlan")}
-                onClick={() => setPlanOpen(false)}
-              >
-                ×
-              </button>
-            </div>
-            <svg
-              className="plan-inset__svg"
-              viewBox={`${planBox.x} ${planBox.y} ${planBox.w} ${planBox.h}`}
-              preserveAspectRatio="xMidYMid meet"
-              role="img"
-              aria-label={t("assembly.planView")}
-            >
-              <BowPlanContent
-                plan={evaluation.plan}
-                couplings={couplings}
-                members={members}
-                selectedModuleId={selectedModule?.id ?? null}
-                selectedCouplingId={selectedCoupling?.id ?? null}
-                issues={issues}
-                disabled={busy}
-                onSelectModule={pickModule}
-                onSelectCoupling={select}
-                onContextMenuElement={(elementId, pos) => {
-                  select(elementId);
-                  setContextMenu(pos);
-                }}
-                onCommitAngle={(couplingId, angleDeg) =>
-                  commit(setCouplingAngle(product, couplingId, angleDeg))
+                className="plan-strip__fold"
+                aria-expanded={planOpen}
+                aria-label={
+                  planOpen ? t("assembly.planStripCollapse") : t("assembly.planStripExpand")
                 }
-              />
-            </svg>
+                onClick={() => setPlanOpen((value) => !value)}
+              >
+                {t("assembly.planView")}
+                <span aria-hidden="true" className="plan-strip__chevron">
+                  {planOpen ? "▾" : "▴"}
+                </span>
+              </button>
+              {planOpen && (
+                <>
+                  <span className="plan-strip__measures" aria-label={t("assembly.elevationLabel")}>
+                    <span>
+                      {t("assembly.developedLength")}{" "}
+                      {Math.round(planMeasures(evaluation.plan).developedMm)}
+                    </span>
+                    <span>
+                      {t("assembly.chordLength")}{" "}
+                      {Math.round(planMeasures(evaluation.plan).chordMm)}
+                    </span>
+                    <span>
+                      {t("assembly.projection")}{" "}
+                      {Math.round(planMeasures(evaluation.plan).projectionMm)}
+                    </span>
+                  </span>
+                  <div className="view-seg plan-strip__elevation" role="group">
+                    <button
+                      type="button"
+                      className={projected ? "" : "is-active"}
+                      aria-pressed={!projected}
+                      onClick={() => setProjected(false)}
+                    >
+                      {t("assembly.elevationDeveloped")}
+                    </button>
+                    <button
+                      type="button"
+                      className={projected ? "is-active" : ""}
+                      aria-pressed={projected}
+                      onClick={() => setProjected(true)}
+                    >
+                      {t("assembly.elevationProjected")}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+            {planOpen && (
+              <svg
+                className="plan-strip__svg"
+                viewBox={`${planBox.x} ${planBox.y} ${planBox.w} ${planBox.h}`}
+                preserveAspectRatio="xMidYMid meet"
+                role="img"
+                aria-label={t("assembly.planView")}
+              >
+                <BowPlanContent
+                  plan={evaluation.plan}
+                  couplings={couplings}
+                  members={members}
+                  selectedModuleId={
+                    selectedModule?.id ??
+                    selectedBayModule?.id ??
+                    selectedDivisionModule?.id ??
+                    null
+                  }
+                  selectedCouplingId={selectedCoupling?.id ?? null}
+                  issues={issues}
+                  disabled={busy}
+                  onSelectModule={pickModule}
+                  onSelectCoupling={select}
+                  onContextMenuElement={(elementId, pos) => {
+                    select(elementId);
+                    setContextMenu(pos);
+                  }}
+                  onCommitAngle={(couplingId, angleDeg) =>
+                    commit(setCouplingAngle(product, couplingId, angleDeg))
+                  }
+                />
+              </svg>
+            )}
           </div>
-        )}
-        {couplings.length > 0 && evaluation?.plan && !planOpen && (
-          <button type="button" className="plan-toggle" onClick={() => setPlanOpen(true)}>
-            {t("assembly.planView")}
-          </button>
         )}
         {view3dOpen ? (
           <div className="model3d-inset" role="complementary" aria-label={t("assembly.view3d")}>
@@ -3950,7 +4081,15 @@ export function AssemblyEditor({
           </button>
         </div>
         {dockOpen && (
-          <div className="editor-dock__body" role="tabpanel">
+          <div
+            className="editor-dock__body"
+            role="tabpanel"
+            style={
+              planStripOffset > 0
+                ? { bottom: `calc(100% + 0.85rem + ${planStripOffset}px)` }
+                : undefined
+            }
+          >
             {/* Every tab body stays mounted (hidden when inactive): fresh
                 data on switch, and the BOM is always in the DOM for tests. */}
             <div className="dock-tree" hidden={dockTab !== "tree"}>

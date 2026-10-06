@@ -125,6 +125,16 @@ def decoded(value):
     return json.loads(value, parse_float=Decimal) if isinstance(value,str) else value
 
 
+def _composition_module(bay_id):
+    """P06 — module attribution of a costed piece: assembly BOM ids are
+    'module_id|inner_id'; a piece without that prefix (coupler cuts carry
+    the coupling id, set-level surcharges carry none) stays unattributed —
+    it prices into the set's shared bucket, never into a wrong module."""
+    if isinstance(bay_id, str) and '|' in bay_id:
+        return bay_id.partition('|')[0]
+    return None
+
+
 def source_revision(project, positions):
     # Full technical input plus stored commercial values detects edits and applies.
     return sha256(json_text({'project':project,'positions':positions}).encode()).hexdigest()
@@ -196,6 +206,7 @@ def position_cost(repo, position, rules):
         cost = linear_cost(repo,stock.commercial_sku,cut.length_mm*cut.qty,stock.stock_length_mm)
         materials.append(cost)
         composition.append({'kind':'PROFILE','sku':stock.commercial_sku,
+                            'module_id':_composition_module(cut.bay_id),
                             'quantity':str((cut.length_mm*cut.qty/D('1000')).quantize(D('0.001'))),
                             'unit':'M','cost':str(cost.quantize(D('0.0001')))})
     for steel in result.reinforcements:
@@ -203,6 +214,7 @@ def position_cost(repo, position, rules):
         cost = linear_cost(repo,stock.commercial_sku,steel.length_mm*steel.qty,stock.stock_length_mm)
         materials.append(cost)
         composition.append({'kind':'REINFORCEMENT','sku':stock.commercial_sku,
+                            'module_id':_composition_module(steel.bay_id),
                             'quantity':str((steel.length_mm*steel.qty/D('1000')).quantize(D('0.001'))),
                             'unit':'M','cost':str(cost.quantize(D('0.0001')))})
     for glass in result.glasses:
@@ -225,6 +237,7 @@ def position_cost(repo, position, rules):
             cost = repo.cost(sku,'M2') * glass_area
             materials.append(cost)
             composition.append({'kind':'GLASS','sku':sku,
+                                'module_id':_composition_module(glass.bay_id),
                                 'quantity':str(glass_area.quantize(D('0.0001'))),
                                 'unit':'M2','cost':str(cost.quantize(D('0.0001')))})
         else:
@@ -257,6 +270,7 @@ def position_cost(repo, position, rules):
             ):
                 materials.append(line.cost)
                 composition.append({'kind':line.kind,'sku':line.sku,
+                                    'module_id':_composition_module(glass.bay_id),
                                     'quantity':str(line.quantity.quantize(D('0.0001'))),
                                     'unit':line.unit,'cost':str(line.cost.quantize(D('0.0001'))),
                                     'label':line.label})
@@ -265,12 +279,14 @@ def position_cost(repo, position, rules):
         cost = repo.cost(panel.sku,'M2') * panel_area
         materials.append(cost)
         composition.append({'kind':'PANEL','sku':panel.sku,
+                            'module_id':_composition_module(panel.bay_id),
                             'quantity':str(panel_area.quantize(D('0.0001'))),
                             'unit':'M2','cost':str(cost.quantize(D('0.0001')))})
     for kit in result.hardware_items:
         cost = repo.cost(kit.kit_sku,'KIT') * kit.qty
         materials.append(cost)
         composition.append({'kind':'HARDWARE','sku':kit.kit_sku,
+                            'module_id':_composition_module(kit.bay_id),
                             'quantity':str(kit.qty),'unit':'KIT',
                             'cost':str(cost.quantize(D('0.0001')))})
         # D04 sell-side deltas: the catalog declares each selection's price
@@ -289,6 +305,7 @@ def position_cost(repo, position, rules):
         cost = repo.cost(fitting.sku,'EA') * fitting.qty
         materials.append(cost)
         composition.append({'kind':'FITTING','sku':fitting.sku,
+                            'module_id':_composition_module(getattr(fitting,'bay_id',None)),
                             'quantity':str(fitting.qty),'unit':'EA',
                             'cost':str(cost.quantize(D('0.0001')))})
     # D05: declared finish surcharges — the engine resolved each basis;
@@ -643,6 +660,46 @@ def preview(org_id, actor, request):
             'requested_by_email':request.get('_actor_email'),
             'approved_by':None,'approved_at':None,
             'created_at':record['created_at'].isoformat()}
+
+
+def _module_net_split(unit_net, formation, design):
+    """P06 — precio por módulo: reparte el neto unitario del conjunto en
+    proporción al costo de material que el motor atribuyó a cada módulo
+    (composition lines carry module_id). El total cuadra al peso — el
+    último módulo cierra la diferencia de redondeo — y las líneas sin dueño
+    (acopladores, recargos del conjunto) se reparten en la misma
+    proporción: nunca desaparecen del precio ni caen en un módulo ajeno.
+    Devuelve None cuando el diseño no es un conjunto product-v2 o el modo
+    de precio no puede declarar neto honesto."""
+    if unit_net is None or not formation:
+        return None
+    modules = (
+        (design.get('parametric_tree') or {}).get('assembly', {}).get('modules', [])
+        if isinstance(design.get('parametric_tree'), dict) else []
+    )
+    order = [m.get('id') for m in modules if isinstance(m, dict) and m.get('id')]
+    if not order:
+        return None
+    shares = {mid: D('0') for mid in order}
+    for line in formation.get('composition', []):
+        mid = line.get('module_id')
+        if mid in shares:
+            shares[mid] += D(line['cost'])
+    total = sum(shares.values())
+    if total <= 0:
+        return None
+    net = D(str(unit_net))
+    split = []
+    running = D('0')
+    for index, mid in enumerate(order):
+        part = (
+            (net * shares[mid] / total).quantize(D('0.0001'))
+            if index < len(order) - 1
+            else net - running
+        )
+        running += part
+        split.append({'module_id': mid, 'unit_net': str(part)})
+    return split
 
 
 def _design_net_price(cost, area, formation, rules, *, width, height, foil):
@@ -1103,6 +1160,7 @@ def design_batch_preview(org_id, _actor, request):
                 'unit_net_after':str(after_net) if after_net is not None else None,
                 'line_net_before':str(before_net*quantity) if before_net is not None else None,
                 'line_net_after':str(after_net*quantity) if after_net is not None else None,
+                'module_net_after':_module_net_split(after_net, after_formation, design),
             })
     return {'currency':organization['currency'],'items':items}
 

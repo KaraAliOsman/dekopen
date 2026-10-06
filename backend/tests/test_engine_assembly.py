@@ -493,3 +493,135 @@ class TestSlidingLayoutParse:
         )
         with pytest.raises(InvalidEngineRequest):
             parse_product_model(product)
+
+
+def envelope_coupler(min_deg: str | None, max_deg: str | None) -> EffectiveProfileArticle:
+    """P06 fixture: a catalog coupler with a declared angle envelope (or an
+    undeclared one when both bounds are None — the UNKNOWN state)."""
+    return COUPLER_ARTICLE.model_copy(
+        update={
+            "coupler_angle_min_deg": Decimal(min_deg) if min_deg is not None else None,
+            "coupler_angle_max_deg": Decimal(max_deg) if max_deg is not None else None,
+        }
+    )
+
+
+class TestCouplerAngleEnvelope:
+    """P06 — the catalog, not the engine code, declares which joint angles a
+    coupler can close. The check compares over |angle_deg| (a mirrored mount
+    serves the ± case) and only fires when the envelope is declared."""
+
+    def test_declared_envelope_in_range_is_clean(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        client = APIClient()
+        configure_assembly_api(
+            client,
+            monkeypatch,
+            couplers={"ACOPLE-60": envelope_coupler("0", "60")},
+        )
+        response = client.post(
+            "/api/v1/engine/assembly/calculate/",
+            bow_request(bow_product(angle="22.5", coupler_sku="ACOPLE-60")),
+            format="json",
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["status"] == "VALID"
+        assert payload["issues"] == []
+
+    def test_declared_envelope_out_of_range_flags_the_joint(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        client = APIClient()
+        configure_assembly_api(
+            client,
+            monkeypatch,
+            couplers={"ACOPLE-60": envelope_coupler("0", "60")},
+        )
+        product = bow_product(angle="89", coupler_sku="ACOPLE-60")
+        response = client.post(
+            "/api/v1/engine/assembly/calculate/",
+            bow_request(product),
+            format="json",
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        angle_issues = [
+            issue
+            for issue in payload["issues"]
+            if issue["code"] == "coupler_angle_incompatible"
+        ]
+        # Both joints share the same coupler and the same angle — both flag.
+        assert [issue["target"] for issue in angle_issues] == [
+            "coupling:c1",
+            "coupling:c2",
+        ]
+        assert angle_issues[0]["severity"] == "warning"
+        params = angle_issues[0]["params"]
+        assert params["sku"] == "ACOPLE-60"
+        assert Decimal(params["angle_deg"]) == Decimal("89")
+        assert Decimal(params["min_deg"]) == Decimal("0")
+        assert Decimal(params["max_deg"]) == Decimal("60")
+
+    def test_envelope_compares_over_absolute_angle(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        client = APIClient()
+        configure_assembly_api(
+            client,
+            monkeypatch,
+            couplers={"ACOPLE-60": envelope_coupler("85", "95")},
+        )
+        for sign in ("90", "-90"):
+            product = bow_product(angle=sign, coupler_sku="ACOPLE-60")
+            response = client.post(
+                "/api/v1/engine/assembly/calculate/",
+                bow_request(product),
+                format="json",
+            )
+            assert response.status_code == 200
+            assert not any(
+                issue["code"] == "coupler_angle_incompatible"
+                for issue in response.json()["issues"]
+            ), sign
+
+    def test_undeclared_envelope_stays_unknown_not_rejected(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        client = APIClient()
+        configure_assembly_api(
+            client,
+            monkeypatch,
+            couplers={"ACOPLE-60": envelope_coupler(None, None)},
+        )
+        response = client.post(
+            "/api/v1/engine/assembly/calculate/",
+            bow_request(bow_product(angle="45", coupler_sku="ACOPLE-60")),
+            format="json",
+        )
+        assert response.status_code == 200
+        assert not any(
+            issue["code"] == "coupler_angle_incompatible"
+            for issue in response.json()["issues"]
+        )
+
+    def test_envelope_boundary_is_inclusive(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        client = APIClient()
+        configure_assembly_api(
+            client,
+            monkeypatch,
+            couplers={"ACOPLE-60": envelope_coupler("60", "120")},
+        )
+        response = client.post(
+            "/api/v1/engine/assembly/calculate/",
+            bow_request(bow_product(angle="60", coupler_sku="ACOPLE-60")),
+            format="json",
+        )
+        assert response.status_code == 200
+        assert not any(
+            issue["code"] == "coupler_angle_incompatible"
+            for issue in response.json()["issues"]
+        )

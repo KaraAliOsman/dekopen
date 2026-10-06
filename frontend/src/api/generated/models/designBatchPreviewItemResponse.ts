@@ -5,6 +5,7 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { ModuleNetSplit } from "./moduleNetSplit";
 
 export interface DesignBatchPreviewItemResponse {
   /** @nullable */
@@ -33,4 +34,6 @@ export interface DesignBatchPreviewItemResponse {
   line_net_before?: string | null;
   /** @nullable */
   line_net_after?: string | null;
+  /** @nullable */
+  module_net_after?: ModuleNetSplit[] | null;
 }

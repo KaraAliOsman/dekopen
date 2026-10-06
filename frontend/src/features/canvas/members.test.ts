@@ -1,7 +1,7 @@
-import { expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import type { DesignOptions } from "../../api/generated/models";
-import { resolveMembers } from "./members";
+import { couplerFitsAngle, nearestCompatibleAngle, resolveMembers } from "./members";
 
 const CATALOG: DesignOptions = {
   profiles: [
@@ -199,4 +199,55 @@ it("signature invalidates on kit contents and handle-policy changes, not on shap
   expect(base.signature).toBe(same.signature);
   expect(base.signature).not.toBe(moreHinges.signature);
   expect(base.signature).not.toBe(withPolicy.signature);
+});
+
+describe("couplerFitsAngle", () => {
+  const cpl = (min: number | null, max: number | null) =>
+    resolveMembers({
+      ...CATALOG,
+      coupler_profiles: [
+        {
+          sku: "CPL-90",
+          name: "Coplana",
+          material: "PVC",
+          face_width_mm: "90.00",
+          angle_min_deg: min == null ? null : String(min),
+          angle_max_deg: max == null ? null : String(max),
+        },
+      ],
+    }).couplerFor("CPL-90");
+
+  it("admite el ángulo dentro de la envolvente declarada (sobre |ángulo|)", () => {
+    expect(couplerFitsAngle(cpl(0, 45), 22.5)).toBe(true);
+    expect(couplerFitsAngle(cpl(0, 45), -22.5)).toBe(true);
+    expect(couplerFitsAngle(cpl(15, 45), -45)).toBe(true);
+  });
+
+  it("rechaza fuera de la envolvente", () => {
+    expect(couplerFitsAngle(cpl(0, 30), 45)).toBe(false);
+    expect(couplerFitsAngle(cpl(20, 90), 10)).toBe(false);
+  });
+
+  it("envolvente no declarada = desconocida: nunca rechaza", () => {
+    expect(couplerFitsAngle(cpl(null, null), 89)).toBe(true);
+    expect(couplerFitsAngle(undefined, 45)).toBe(true);
+  });
+});
+
+describe("nearestCompatibleAngle", () => {
+  it("devuelve el borde admisible más cercano", () => {
+    const spec = {
+      sku: "C",
+      name: "C",
+      material: "PVC",
+      faceWidthMm: 90,
+      section: null,
+      angleMinDeg: 15,
+      angleMaxDeg: 45,
+    };
+    expect(nearestCompatibleAngle(spec, 60)).toBe(45);
+    expect(nearestCompatibleAngle(spec, 5)).toBe(15);
+    expect(nearestCompatibleAngle(spec, 30)).toBe(30);
+    expect(nearestCompatibleAngle(spec, -60)).toBe(45);
+  });
 });

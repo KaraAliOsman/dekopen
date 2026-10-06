@@ -297,6 +297,11 @@ class DesignBatchPreviewRequestSerializer(StrictSerializer):
     items = DesignBatchPreviewItemSerializer(many=True,allow_empty=False,max_length=15)
 
 
+class ModuleNetSplitSerializer(serializers.Serializer):
+    module_id = serializers.CharField()
+    unit_net = serializers.CharField()
+
+
 class DesignBatchPreviewItemResponseSerializer(serializers.Serializer):
     position_id = serializers.UUIDField(allow_null=True)
     index = serializers.IntegerField(required=False,allow_null=True)
@@ -316,6 +321,11 @@ class DesignBatchPreviewItemResponseSerializer(serializers.Serializer):
     unit_net_after = serializers.CharField(required=False,allow_null=True)
     line_net_before = serializers.CharField(required=False,allow_null=True)
     line_net_after = serializers.CharField(required=False,allow_null=True)
+    # P06 — per-module net split for assembly designs: unit_net shares of
+    # the set attributed by engine-cost proportion (couplers/set charges
+    # distributed across modules). Null for single designs or when the
+    # pricing mode can't declare a net (see unit_net_*).
+    module_net_after = ModuleNetSplitSerializer(many=True,required=False,allow_null=True)
 
 
 class DesignBatchPreviewResponseSerializer(serializers.Serializer):

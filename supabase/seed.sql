@@ -428,17 +428,20 @@ ON CONFLICT (id) DO UPDATE SET
 INSERT INTO public.profile_articles (
     id, system_id, org_id, sku, name, role, material,
     face_width_mm, commercial_length_mm, welding_loss_mm, reinforcement_gap_mm,
-    weight_kg_m, steel_weight_kg_m
+    weight_kg_m, steel_weight_kg_m, coupler_angle_min_deg, coupler_angle_max_deg
 )
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/DEMO_60/' || coupler.sku),
     system.id, NULL, coupler.sku, coupler.name, 'COUPLER', 'PVC',
-    coupler.face_mm, 6000.00, 6.00, 15.00, coupler.weight, 1.7000
+    coupler.face_mm, 6000.00, 6.00, 15.00, coupler.weight, 1.7000,
+    coupler.angle_min, coupler.angle_max
 FROM public.profile_systems AS system
 CROSS JOIN (VALUES
-    ('COPLE-60', 'Acoplador Angular Demo 60/30', 30.00::numeric, 0.9000::numeric),
-    ('COPLE-90', 'Acoplador Angular Demo 60/34', 34.00::numeric, 1.1000::numeric),
-    ('CANAL-U', 'Canal U vidrio sin marco 60/24', 24.00::numeric, 0.7000::numeric)
-) AS coupler(sku, name, face_mm, weight)
+    -- P06: envolvente de ángulo declarada (sobre |angle_deg|) — la unión
+    -- solo se ofrece con un cople que el catálogo marca compatible.
+    ('COPLE-60', 'Acoplador Angular Demo 60/30', 30.00::numeric, 0.9000::numeric, 0.0::numeric, 60.0::numeric),
+    ('COPLE-90', 'Acoplador Angular Demo 60/34', 34.00::numeric, 1.1000::numeric, 60.0::numeric, 120.0::numeric),
+    ('CANAL-U', 'Canal U vidrio sin marco 60/24', 24.00::numeric, 0.7000::numeric, 0.0::numeric, 0.0::numeric)
+) AS coupler(sku, name, face_mm, weight, angle_min, angle_max)
 WHERE system.code = 'DEMO_60' AND system.is_global = TRUE
 ON CONFLICT (system_id, sku) DO UPDATE SET
     name = EXCLUDED.name, role = EXCLUDED.role, material = EXCLUDED.material,
@@ -447,7 +450,9 @@ ON CONFLICT (system_id, sku) DO UPDATE SET
     welding_loss_mm = EXCLUDED.welding_loss_mm,
     reinforcement_gap_mm = EXCLUDED.reinforcement_gap_mm,
     weight_kg_m = EXCLUDED.weight_kg_m,
-    steel_weight_kg_m = EXCLUDED.steel_weight_kg_m;
+    steel_weight_kg_m = EXCLUDED.steel_weight_kg_m,
+    coupler_angle_min_deg = EXCLUDED.coupler_angle_min_deg,
+    coupler_angle_max_deg = EXCLUDED.coupler_angle_max_deg;
 
 INSERT INTO public.infill_articles (
     id, system_id, org_id, sku, name, kind, thickness_mm, weight_kg_m2
@@ -690,55 +695,61 @@ ON CONFLICT (id) DO UPDATE SET
 
 INSERT INTO public.profile_articles (
     id, system_id, org_id, sku, name, role, material, face_width_mm,
-    commercial_length_mm, welding_loss_mm, reinforcement_gap_mm, weight_kg_m
+    commercial_length_mm, welding_loss_mm, reinforcement_gap_mm, weight_kg_m,
+    coupler_angle_min_deg, coupler_angle_max_deg
 )
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/ALU_65/' || a.sku), s.id, NULL,
  a.sku, a.name, a.role::public.profile_role, 'ALUMINIUM'::public.material_type,
- a.face_mm, 6000.00, 0.00, 0.00, a.weight
+ a.face_mm, 6000.00, 0.00, 0.00, a.weight, a.angle_min, a.angle_max
 FROM public.profile_systems s CROSS JOIN (VALUES
-    ('MARCO-A','Marco Aluminio 65','FRAME',55.00,1.4000),
-    ('HOJA-A','Hoja Aluminio 65','SASH',62.00,1.5500),
-    ('POSTE-A-V','Poste vertical Aluminio 65','MULLION_V',70.00,1.7000),
-    ('POSTE-A-H','Travesaño Aluminio 65','MULLION_H',70.00,1.7000),
-    ('JQ-A-24','Junquillo Aluminio 24','GLAZING_BEAD',24.00,0.3500),
-    ('JQ-A-16','Junquillo Aluminio 16','GLAZING_BEAD',16.00,0.2800),
-    ('JQ-A-8','Junquillo Aluminio 8','GLAZING_BEAD',8.00,0.2000),
-    ('UMBRAL-A','Umbral Aluminio 65','THRESHOLD',28.00,0.9000),
-    ('COPLE-A-30','Acoplador Aluminio 30','COUPLER',30.00,0.8500),
-    ('COPLE-A-90','Acoplador Aluminio 90','COUPLER',34.00,1.0000),
-    ('CANAL-A-U','Canal U vidrio sin marco Aluminio 26','COUPLER',26.00,0.7200)
-) AS a(sku, name, role, face_mm, weight)
+    ('MARCO-A','Marco Aluminio 65','FRAME',55.00,1.4000,NULL,NULL),
+    ('HOJA-A','Hoja Aluminio 65','SASH',62.00,1.5500,NULL,NULL),
+    ('POSTE-A-V','Poste vertical Aluminio 65','MULLION_V',70.00,1.7000,NULL,NULL),
+    ('POSTE-A-H','Travesaño Aluminio 65','MULLION_H',70.00,1.7000,NULL,NULL),
+    ('JQ-A-24','Junquillo Aluminio 24','GLAZING_BEAD',24.00,0.3500,NULL,NULL),
+    ('JQ-A-16','Junquillo Aluminio 16','GLAZING_BEAD',16.00,0.2800,NULL,NULL),
+    ('JQ-A-8','Junquillo Aluminio 8','GLAZING_BEAD',8.00,0.2000,NULL,NULL),
+    ('UMBRAL-A','Umbral Aluminio 65','THRESHOLD',28.00,0.9000,NULL,NULL),
+    ('COPLE-A-30','Acoplador Aluminio 30','COUPLER',30.00,0.8500,0.0,30.0),
+    ('COPLE-A-90','Acoplador Aluminio 90','COUPLER',34.00,1.0000,85.0,95.0),
+    ('CANAL-A-U','Canal U vidrio sin marco Aluminio 26','COUPLER',26.00,0.7200,0.0,0.0)
+) AS a(sku, name, role, face_mm, weight, angle_min, angle_max)
 WHERE s.code = 'ALU_65' AND s.is_global = TRUE
 ON CONFLICT (system_id, sku) DO UPDATE SET
     name = EXCLUDED.name, role = EXCLUDED.role, material = EXCLUDED.material,
     face_width_mm = EXCLUDED.face_width_mm, welding_loss_mm = EXCLUDED.welding_loss_mm,
-    reinforcement_gap_mm = EXCLUDED.reinforcement_gap_mm, weight_kg_m = EXCLUDED.weight_kg_m;
+    reinforcement_gap_mm = EXCLUDED.reinforcement_gap_mm, weight_kg_m = EXCLUDED.weight_kg_m,
+    coupler_angle_min_deg = EXCLUDED.coupler_angle_min_deg,
+    coupler_angle_max_deg = EXCLUDED.coupler_angle_max_deg;
 
 INSERT INTO public.profile_articles (
     id, system_id, org_id, sku, name, role, material, face_width_mm,
-    commercial_length_mm, welding_loss_mm, reinforcement_gap_mm, weight_kg_m
+    commercial_length_mm, welding_loss_mm, reinforcement_gap_mm, weight_kg_m,
+    coupler_angle_min_deg, coupler_angle_max_deg
 )
 SELECT uuid_generate_v5(uuid_ns_url(), 'https://dekopen.local/catalog/GLASS_45/' || a.sku), s.id, NULL,
  a.sku, a.name, a.role::public.profile_role, 'ALUMINIUM'::public.material_type,
- a.face_mm, 6000.00, 0.00, 0.00, a.weight
+ a.face_mm, 6000.00, 0.00, 0.00, a.weight, a.angle_min, a.angle_max
 FROM public.profile_systems s CROSS JOIN (VALUES
-    ('MARCO-G','Marco Vidrio 45','FRAME',34.00,0.9500),
-    ('HOJA-G','Hoja Vidrio 45','SASH',42.00,1.1500),
-    ('POSTE-G-V','Poste vertical Vidrio 45','MULLION_V',38.00,1.2500),
-    ('POSTE-G-H','Travesaño Vidrio 45','MULLION_H',38.00,1.2500),
-    ('JQ-G-10','Junquillo Vidrio 10','GLAZING_BEAD',10.00,0.2200),
-    ('JQ-G-6','Junquillo Vidrio 6','GLAZING_BEAD',6.00,0.1800),
-    ('UMBRAL-G','Umbral Vidrio 45','THRESHOLD',18.00,0.6000),
-    ('COPLE-G-30','Acoplador Vidrio 30','COUPLER',26.00,0.7000),
-    ('COPLE-G-90','Acoplador Vidrio 90','COUPLER',28.00,0.7800),
-    ('REMATE-G','Remate estructural Vidrio 45','COUPLER',20.00,0.5500),
-    ('CANAL-G-U','Canal U estructural Vidrio 45/24','COUPLER',24.00,0.6400)
-) AS a(sku, name, role, face_mm, weight)
+    ('MARCO-G','Marco Vidrio 45','FRAME',34.00,0.9500,NULL,NULL),
+    ('HOJA-G','Hoja Vidrio 45','SASH',42.00,1.1500,NULL,NULL),
+    ('POSTE-G-V','Poste vertical Vidrio 45','MULLION_V',38.00,1.2500,NULL,NULL),
+    ('POSTE-G-H','Travesaño Vidrio 45','MULLION_H',38.00,1.2500,NULL,NULL),
+    ('JQ-G-10','Junquillo Vidrio 10','GLAZING_BEAD',10.00,0.2200,NULL,NULL),
+    ('JQ-G-6','Junquillo Vidrio 6','GLAZING_BEAD',6.00,0.1800,NULL,NULL),
+    ('UMBRAL-G','Umbral Vidrio 45','THRESHOLD',18.00,0.6000,NULL,NULL),
+    ('COPLE-G-30','Acoplador Vidrio 30','COUPLER',26.00,0.7000,0.0,30.0),
+    ('COPLE-G-90','Acoplador Vidrio 90','COUPLER',28.00,0.7800,85.0,95.0),
+    ('REMATE-G','Remate estructural Vidrio 45','COUPLER',20.00,0.5500,0.0,0.0),
+    ('CANAL-G-U','Canal U estructural Vidrio 45/24','COUPLER',24.00,0.6400,0.0,0.0)
+) AS a(sku, name, role, face_mm, weight, angle_min, angle_max)
 WHERE s.code = 'GLASS_45' AND s.is_global = TRUE
 ON CONFLICT (system_id, sku) DO UPDATE SET
     name = EXCLUDED.name, role = EXCLUDED.role, material = EXCLUDED.material,
     face_width_mm = EXCLUDED.face_width_mm, welding_loss_mm = EXCLUDED.welding_loss_mm,
-    reinforcement_gap_mm = EXCLUDED.reinforcement_gap_mm, weight_kg_m = EXCLUDED.weight_kg_m;
+    reinforcement_gap_mm = EXCLUDED.reinforcement_gap_mm, weight_kg_m = EXCLUDED.weight_kg_m,
+    coupler_angle_min_deg = EXCLUDED.coupler_angle_min_deg,
+    coupler_angle_max_deg = EXCLUDED.coupler_angle_max_deg;
 
 INSERT INTO public.glazing_bead_matrix (
     id, system_id, org_id, glass_thickness_mm, bead_article_id, bead_width_mm,

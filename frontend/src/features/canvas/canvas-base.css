@@ -386,6 +386,9 @@
 }
 
 .plan-front-chain {
+  /* Decorative edge line painted over modules/couplings/hinges — it must not
+   * steal their pointer hits (the hinge handle sits exactly on the chain). */
+  pointer-events: none;
   stroke: var(--theme-accent);
   stroke-width: 2;
   stroke-dasharray: 6 4;

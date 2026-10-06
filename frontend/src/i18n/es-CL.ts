@@ -3024,6 +3024,20 @@ export const messages = {
   "assembly.equalizeAngles": "Igualar ángulos",
   "assembly.planView": "Vista en planta",
   "assembly.frontView": "Vista frontal",
+  // P06 — planta acoplada bajo el lienzo: franja ajustable, cotas del
+  // conjunto y selector de elevación Desarrollada/Proyectada.
+  "assembly.planStripExpand": "Planta",
+  "assembly.planStripCollapse": "Ocultar planta",
+  "assembly.planStripHint": "arrastra el borde para ajustar la altura",
+  "assembly.elevationLabel": "Elevación",
+  "assembly.elevationDeveloped": "Desarrollada",
+  "assembly.elevationProjected": "Proyectada",
+  "assembly.developedLength": "Ancho desarrollado",
+  "assembly.chordLength": "Frente/cuerda",
+  "assembly.projection": "Proyección",
+  "assembly.couplerFilteredNote":
+    "{count} acopladores no admiten este ángulo — no aparecen en la lista.",
+  "assembly.pricePerModule": "Precio por módulo",
   // P05 — vista declarada del alzado y simbología de apertura.
   "assembly.viewLabel": "Vista",
   "assembly.viewInterior": "Vista interior",
@@ -3086,6 +3100,8 @@ export const messages = {
   "assembly.issue.couplerEdgeInvalid": "La unión {target} declara caras incompatibles con su tipo.",
   "assembly.issue.couplerEdgeConflict":
     "La unión {target} reclama una cara ya ocupada por otra unión.",
+  "assembly.issue.couplerAngleIncompatible":
+    "El cople {sku} admite de {min_deg}° a {max_deg}°; con {angle_deg}° elige un cople de ese ángulo o ajusta la unión.",
   "assembly.issue.connectionTypeUnsupported":
     "La unión tipo {kind} en {target} se declara pero aún no es fabricable.",
   "assembly.issue.assemblyDisconnected":
@@ -3285,6 +3301,12 @@ export const messages = {
   "assembly.starter.slidingFixedHint": "Corredera acoplada a fijo",
   "assembly.starter.bow3": "Bow ×3",
   "assembly.starter.bow3Hint": "Tres vanos en ángulo",
+  "assembly.starter.bay45": "Bay 45°",
+  "assembly.starter.bay45Hint": "Tres vanos a 45° (bay clásica)",
+  "assembly.starter.corner90": "Esquina 90°",
+  "assembly.starter.corner90Hint": "Dos vanos unidos en ángulo recto",
+  "assembly.starter.windowTransom": "Ventana + sobreluz",
+  "assembly.starter.windowTransomHint": "Hoja abatible con fijo superior",
   "assembly.starter.bow5": "Bow ×5",
   "assembly.starter.bow5Hint": "Cinco vanos en ángulo",
   "assembly.starter.trapezoid": "Trapecio",

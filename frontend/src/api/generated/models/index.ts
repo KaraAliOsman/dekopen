@@ -404,6 +404,7 @@ export * from "./membership";
 export * from "./membershipRoleEnum";
 export * from "./methodEnum";
 export * from "./moduleEvaluation";
+export * from "./moduleNetSplit";
 export * from "./mountingRuleListResponse";
 export * from "./mountingRuleResponse";
 export * from "./mountingRuleResponseAuthority";

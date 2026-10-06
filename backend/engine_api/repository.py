@@ -140,7 +140,13 @@ def _section(value: object) -> ProfileSection | None:
     )
 
 
-def _article_from_row(row: Sequence[object], *, offset: int = 0) -> EffectiveProfileArticle:
+def _article_from_row(
+    row: Sequence[object],
+    *,
+    offset: int = 0,
+    coupler_angle_min_deg: object = None,
+    coupler_angle_max_deg: object = None,
+) -> EffectiveProfileArticle:
     return EffectiveProfileArticle(
         sku=str(row[offset]),
         role=ProfileRole(str(row[offset + 1])),
@@ -155,6 +161,10 @@ def _article_from_row(row: Sequence[object], *, offset: int = 0) -> EffectivePro
         steel_weight_kg_m=_decimal_or_none(row[offset + 6]),
         reinforcement_sku=(str(row[offset + 7]) if row[offset + 7] is not None else None),
         commercial_length_mm=_decimal_or_none(row[offset + 10]),
+        # P06 — declared deflection envelope over |angle_deg|; only the
+        # coupler loader reads these columns, other loaders leave them NULL.
+        coupler_angle_min_deg=_decimal_or_none(coupler_angle_min_deg),
+        coupler_angle_max_deg=_decimal_or_none(coupler_angle_max_deg),
     )
 
 
@@ -535,7 +545,8 @@ class SystemParamsRepository:
                 SELECT sku, role::text, face_width_mm, welding_loss_mm,
                        reinforcement_gap_mm, weight_kg_m, steel_weight_kg_m,
                        reinforcement_sku, material::text, section::text,
-                       commercial_length_mm
+                       commercial_length_mm, coupler_angle_min_deg,
+                       coupler_angle_max_deg
                 FROM public.profile_articles
                 WHERE system_id = %s AND (org_id = %s OR (org_id IS NULL AND system_id IN (SELECT id FROM public.profile_systems WHERE org_id IS NULL AND is_global)))
                   AND role = 'COUPLER'
@@ -544,7 +555,12 @@ class SystemParamsRepository:
                 [system_id, active_org_id],
             )
             rows = cursor.fetchall()
-        return {cast(str, row[0]): _article_from_row(row) for row in rows}
+        return {
+            cast(str, row[0]): _article_from_row(
+                row, coupler_angle_min_deg=row[11], coupler_angle_max_deg=row[12]
+            )
+            for row in rows
+        }
 
     def load_article_names(self, system_id: UUID, active_org_id: UUID) -> dict[str, str]:
         """Display names for every catalog profile article of a system.

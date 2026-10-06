@@ -883,6 +883,30 @@
   fill: var(--theme-accent);
 }
 
+/* P06 — la etiqueta lee el candidato del arrastre en vivo: acento mientras
+ * el dedo decide dónde aterriza la junta. */
+.plan-angle.is-live {
+  fill: var(--theme-accent);
+  font-weight: 600;
+}
+
+/* P06 — pivote de la bisagra: el punto donde un arrastre gira la cola de la
+ * cadena. Grab afforance, anillo en reposo para no gritar sobre la planta. */
+.plan-joint-handle {
+  cursor: grab;
+  fill: var(--theme-surface-card);
+  stroke: var(--theme-text-secondary);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.plan-joint-handle:hover,
+.plan-joint-handle.is-dragging {
+  cursor: grabbing;
+  fill: var(--theme-accent);
+  stroke: var(--theme-accent);
+}
+
 .plan-coupling {
   cursor: pointer;
 }

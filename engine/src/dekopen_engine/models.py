@@ -1050,6 +1050,12 @@ class EffectiveProfileArticle(EngineModel):
     # Bar length the article sells in — None means the catalog never
     # declared one and no stock-length check can run (UNKNOWN, not infinite).
     commercial_length_mm: Decimal | None = None
+    # P06 — coupler angle envelope: admissible deflection range over
+    # |angle_deg| of the joint (a coupler mounted mirrored serves ± equally).
+    # The pair is declared or absent together; absent means the catalog never
+    # stated the range and no angle check can run — UNKNOWN, not universal.
+    coupler_angle_min_deg: Decimal | None = None
+    coupler_angle_max_deg: Decimal | None = None
 
 
 class GlazingBeadRule(EngineModel):
