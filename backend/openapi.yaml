@@ -21098,20 +21098,25 @@ components:
         position_id:
           type: string
           format: uuid
+          nullable: true
+        quantity:
+          type: integer
+          minimum: 1
         design:
           type: object
           additionalProperties: {}
       required:
       - design
-      - position_id
     DesignBatchPreviewItemResponse:
       type: object
       properties:
         position_id:
           type: string
           format: uuid
+          nullable: true
         index:
           type: integer
+          nullable: true
         ok:
           type: boolean
         error_code:
@@ -21132,6 +21137,18 @@ components:
           type: string
           nullable: true
         line_cost_after:
+          type: string
+          nullable: true
+        unit_net_before:
+          type: string
+          nullable: true
+        unit_net_after:
+          type: string
+          nullable: true
+        line_net_before:
+          type: string
+          nullable: true
+        line_net_after:
           type: string
           nullable: true
       required:

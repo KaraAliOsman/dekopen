@@ -8,6 +8,9 @@
 import type { DesignBatchPreviewItemRequestDesign } from "./designBatchPreviewItemRequestDesign";
 
 export interface DesignBatchPreviewItemRequest {
-  position_id: string;
+  /** @nullable */
+  position_id?: string | null;
+  /** @minimum 1 */
+  quantity?: number;
   design: DesignBatchPreviewItemRequestDesign;
 }

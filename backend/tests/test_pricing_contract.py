@@ -285,6 +285,8 @@ def test_design_batch_preview_prices_before_and_after(monkeypatch):
         }],
         'project_versions': [],
         'pricing_rules': [{
+            'pricing_mode': 'COST_PLUS_MARGIN',
+            'default_margin_pct': Decimal('0.25'),
             'waste_factor_pct': Decimal('0'),
             'labor_rate_per_m2': Decimal('0'),
             'installation_rate_per_m2': Decimal('0'),
@@ -344,7 +346,15 @@ def test_design_batch_preview_prices_before_and_after(monkeypatch):
 
     def fake_cost(repo, position, rules):
         priced.append(position)
-        return (Decimal('100') if len(priced) == 1 else Decimal('120'), None, None)
+        formation = {
+            'hardware_option_delta': '0',
+            'color_surcharge_delta': '0',
+            'extra_sell_delta': '0',
+        }
+        return (
+            Decimal('100') if len(priced) == 1 else Decimal('120'),
+            Decimal('1'), None, formation,
+        )
 
     monkeypatch.setattr(service, 'position_cost', fake_cost)
 
@@ -370,7 +380,118 @@ def test_design_batch_preview_prices_before_and_after(monkeypatch):
     assert item['unit_cost_before'] == '100'
     assert item['unit_cost_after'] == '120'
     assert item['line_cost_after'] == '240'
+    # COST_PLUS_MARGIN net sell = cost / (1 - margin)
+    assert item['unit_net_before'] == '133.3333'
+    assert item['unit_net_after'] == '160.0000'
     assert result['currency'] == 'CLP'
+
+
+def test_design_batch_preview_unsaved_position_prices_after_only(monkeypatch):
+    """P04 live-price chip — a null position_id carries no stored row: the
+    proposed design alone is gated + priced, before fields stay null."""
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    import pricing.service as service
+    import projects.service as projects_service
+
+    org_id, project_id, system_id = uuid4(), uuid4(), uuid4()
+    tables = {
+        'projects': [{'id': project_id, 'status': 'DRAFT', 'current_revision': 1}],
+        'project_versions': [],
+        'pricing_rules': [{
+            'pricing_mode': 'COST_PLUS_MARGIN',
+            'default_margin_pct': Decimal('0.25'),
+            'waste_factor_pct': Decimal('0'),
+            'labor_rate_per_m2': Decimal('0'),
+            'installation_rate_per_m2': Decimal('0'),
+        }],
+        'tenancy_organizations': [{'currency': 'CLP'}],
+        'project_positions': [],
+    }
+
+    def _table(query):
+        return next(key for key in tables if f'public.{key}' in query)
+
+    monkeypatch.setattr(
+        service, 'one',
+        lambda query, params=(), code='missing': tables[_table(query)][0],
+    )
+    monkeypatch.setattr(
+        service, 'rows',
+        lambda query, params=(): tables[_table(query)],
+    )
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def execute(self, sql):
+            return None
+
+    class Conn:
+        def cursor(self):
+            return Cursor()
+
+    monkeypatch.setattr(service, 'connection', Conn())
+    from contextlib import nullcontext
+
+    import documents.repository as documents_repository
+    monkeypatch.setattr(documents_repository, 'documentary_backend', nullcontext)
+    monkeypatch.setattr(
+        service, 'PricingRepository',
+        lambda *a: SimpleNamespace(authorities=[], convert=lambda value, c: value),
+    )
+    checked = []
+    monkeypatch.setattr(
+        projects_service, 'calculate_design',
+        lambda oid, design: checked.append(design),
+    )
+    priced = []
+
+    def fake_cost(repo, position, rules):
+        priced.append(position)
+        return (Decimal('120'), Decimal('1'), None, {
+            'hardware_option_delta': '0',
+            'color_surcharge_delta': '0',
+            'extra_sell_delta': '0',
+        })
+
+    monkeypatch.setattr(service, 'position_cost', fake_cost)
+
+    result = service.design_batch_preview(org_id, None, {
+        'project_id': str(project_id),
+        'effective_date': '2026-01-01',
+        'items': [{
+            'position_id': None,
+            'quantity': 3,
+            'design': {
+                'system_id': str(system_id),
+                'nominal_width_mm': '1500',
+                'nominal_height_mm': '1200',
+                'color': 'WHITE',
+                'parametric_tree': {'version': 'product-v2'},
+            },
+        }],
+    })
+
+    assert len(checked) == 1
+    assert len(priced) == 1  # only the proposed design — no stored row
+    item = result['items'][0]
+    assert item['ok'] is True
+    assert item['position_id'] is None
+    assert item['index'] is None
+    assert item['quantity'] == 3
+    assert item['unit_cost_before'] is None
+    assert item['line_cost_before'] is None
+    assert item['unit_cost_after'] == '120'
+    assert item['line_cost_after'] == '360'
+    assert item['unit_net_after'] == '160.0000'
+    assert item['line_net_after'] == '480.0000'
+    assert item['unit_net_before'] is None
 
 
 def test_design_batch_preview_refuses_sealed_revision(monkeypatch):

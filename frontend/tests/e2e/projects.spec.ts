@@ -100,6 +100,8 @@ test("SHOT-10 real project core path and visual evidence", async ({ page, manual
   await page.getByLabel("Ubicación del vano", { exact: true }).fill("Cocina original");
   await page.getByLabel("Cantidad", { exact: true }).fill("2");
 
+  // The series field lives in the strip's Serie chip popover (P04).
+  await page.getByRole("button", { name: "Serie de perfiles", exact: true }).click();
   await responseTo(page, "GET", `/api/v1/projects/design-options/${manual.systemId}/`, 200, () =>
     page
       .getByRole("combobox", { name: "Serie de perfiles", exact: true })
@@ -201,6 +203,8 @@ test("SHOT-10 real project core path and visual evidence", async ({ page, manual
   expect(saved.bom?.hardware_items?.[0]?.kit_sku).toBe("KIT-TURN");
   await expect(page.getByText("Guardado", { exact: true })).toBeVisible();
 
+  // The BOM lives in the dock's "Materiales" tab (P04 canvas-first layout).
+  await page.getByRole("tab", { name: "Materiales", exact: true }).click();
   const bom = page.locator("details.project-bom");
   await bom.waitFor({ state: "attached" });
   await bom.evaluate((element) => {
@@ -274,7 +278,9 @@ test("SHOT-10 real project core path and visual evidence", async ({ page, manual
     }),
   ).toHaveAttribute("aria-pressed", "true");
   // The canvas sheet overlays the summary on this layout; open the details
-  // declaratively instead of clicking through the overlay.
+  // declaratively instead of clicking through the overlay. The save remounts
+  // the editor (new position id), so the dock tab must be re-opened here.
+  await page.getByRole("tab", { name: "Materiales", exact: true }).click();
   await bom.waitFor({ state: "attached" });
   await bom.evaluate((element) => {
     (element as HTMLDetailsElement).open = true;

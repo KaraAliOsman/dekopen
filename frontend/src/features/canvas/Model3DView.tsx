@@ -483,6 +483,8 @@ export default function Model3DView({
   onSelectModule,
   onSelectBay,
   onSelectCoupling,
+  inside: insideProp,
+  onInsideChange,
 }: {
   product: ProductJson;
   members: MemberGeometry;
@@ -492,10 +494,19 @@ export default function Model3DView({
   onSelectModule(moduleId: string): void;
   onSelectBay(moduleId: string, bayId: string): void;
   onSelectCoupling(couplingId: string): void;
+  /** Controlled inside/outside override — the editor's Interior/Exterior
+   * selector drives the same state (uncontrolled falls back to internal). */
+  inside?: boolean;
+  onInsideChange?(inside: boolean): void;
 }): JSX.Element {
   const { theme } = useTheme();
   const [mode, setMode] = useState<MaterialMode>("commercial");
-  const [inside, setInside] = useState(false);
+  const [insideState, setInsideState] = useState(false);
+  const inside = insideProp ?? insideState;
+  const setInside = (value: boolean): void => {
+    setInsideState(value);
+    onInsideChange?.(value);
+  };
   const [open, setOpen] = useState(false);
   const [tiltPose, setTiltPose] = useState(false);
   const [clip, setClip] = useState(false);

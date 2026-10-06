@@ -587,12 +587,33 @@ def preview(org_id, actor, request):
             'created_at':record['created_at'].isoformat()}
 
 
+def _design_net_price(cost, area, formation, rules, *, width, height, foil):
+    """Net unit sell price for a priced design: the declared margin applied to
+    engine cost plus the declared sell deltas (hardware selections, finish
+    surcharges, extras) — the same composition `preview` applies per line.
+    Only COST_PLUS_MARGIN can be computed honestly for a single design: the
+    catalogue modes (m²-by-typology, dimensional matrix, price list) need
+    project context and authorities this preview does not have — for those
+    the net fields stay None and the UI shows an honest dash."""
+    if rules.get('pricing_mode') != PricingMode.COST_PLUS_MARGIN.value:
+        return None
+    if formation is None:
+        return None
+    price = unit_price(PricingMode.COST_PLUS_MARGIN,cost=cost,
+        margin=rules['default_margin_pct'],area=area,width=width,height=height,foil=foil)
+    return (price + (D(formation['hardware_option_delta'])
+                     + D(formation['color_surcharge_delta'])
+                     + D(formation['extra_sell_delta']))).quantize(D('0.0001'))
+
+
 def design_batch_preview(org_id, _actor, request):
     """§08-WC — honest money diff for a proposed batch design edit. Each
     item's proposed design passes the same engine gate a save would
     (calculate_design), then position_cost prices the stored position and
     the proposed product under the same rules — the count + Δ the human
-    confirms is the real unit cost, never a model estimate."""
+    confirms is the real unit cost, never a model estimate. A null
+    `position_id` prices the proposed design after-only — the position
+    editor's live-price chip rides this path for an unsaved draft."""
     from authentication.errors import ContractAPIException
     from projects.service import calculate_design
 
@@ -625,17 +646,19 @@ def design_batch_preview(org_id, _actor, request):
     with localcontext() as context:
         context.prec = 80
         for entry in request['items']:
-            position_id = entry['position_id']
+            position_id = entry.get('position_id')
             design = entry['design']
-            found = rows(
-                'SELECT * FROM public.project_positions WHERE id=%s AND org_id=%s AND project_id=%s',
-                [position_id,org_id,project['id']],
-            )
-            if not found:
-                items.append({'position_id':position_id,'ok':False,
-                              'error_code':'position_not_found','error':'La posición no existe en este proyecto.'})
-                continue
-            position = found[0]
+            position = None
+            if position_id is not None:
+                found = rows(
+                    'SELECT * FROM public.project_positions WHERE id=%s AND org_id=%s AND project_id=%s',
+                    [position_id,org_id,project['id']],
+                )
+                if not found:
+                    items.append({'position_id':position_id,'ok':False,
+                                  'error_code':'position_not_found','error':'La posición no existe en este proyecto.'})
+                    continue
+                position = found[0]
             try:
                 # Engine validity under the member-facing role, exactly like
                 # a save; cost reads swap roles internally as position_cost
@@ -647,16 +670,29 @@ def design_batch_preview(org_id, _actor, request):
                 finally:
                     with connection.cursor() as cursor:
                         cursor.execute('SET LOCAL ROLE pricing_backend')
-                before, *_ = position_cost(repo,position,calculation_rules)
+                before = before_net = None
+                if position is not None:
+                    before, before_area, _, before_formation = position_cost(
+                        repo,position,calculation_rules)
+                    before_net = _design_net_price(
+                        before,before_area,before_formation,rules,
+                        width=position['width_mm'],height=position['height_mm'],
+                        foil=position['color_interior']!='WHITE'
+                             or position['color_exterior']!='WHITE')
                 pseudo = {
                     'system_id':design['system_id'],
                     'parametric_tree':design['parametric_tree'],
                     'width_mm':D(str(design['nominal_width_mm'])),
                     'height_mm':D(str(design['nominal_height_mm'])),
                     'color_interior':design['color'],
-                    'color_exterior':design['color'],
+                    'color_exterior':design.get('color_exterior') or design['color'],
                 }
-                after, *_ = position_cost(repo,pseudo,calculation_rules)
+                after, after_area, _, after_formation = position_cost(repo,pseudo,calculation_rules)
+                after_net = _design_net_price(
+                    after,after_area,after_formation,rules,
+                    width=pseudo['width_mm'],height=pseudo['height_mm'],
+                    foil=design['color']!='WHITE'
+                         or pseudo['color_exterior']!='WHITE')
             except ContractAPIException as error:
                 items.append({'position_id':position_id,'ok':False,
                               'error_code':error.contract_code,'error':error.public_detail})
@@ -668,17 +704,23 @@ def design_batch_preview(org_id, _actor, request):
                 continue
             # IA2 — a proposed quantity change is part of the design the
             # client prices (batch ops may carry set_quantity); the stored
-            # quantity stays the fallback.
-            quantity = design.get('quantity') or position['quantity']
+            # quantity stays the fallback. An unsaved design has no stored
+            # position either, so quantity defaults to 1.
+            quantity = (entry.get('quantity') or design.get('quantity')
+                        or (position['quantity'] if position else 1))
             items.append({
                 'position_id':position_id,
-                'index':position['position_index'],
+                'index':position['position_index'] if position is not None else None,
                 'ok':True,
                 'quantity':quantity,
-                'unit_cost_before':str(before),
+                'unit_cost_before':str(before) if before is not None else None,
                 'unit_cost_after':str(after),
-                'line_cost_before':str(before*quantity),
+                'line_cost_before':str(before*quantity) if before is not None else None,
                 'line_cost_after':str(after*quantity),
+                'unit_net_before':str(before_net) if before_net is not None else None,
+                'unit_net_after':str(after_net) if after_net is not None else None,
+                'line_net_before':str(before_net*quantity) if before_net is not None else None,
+                'line_net_after':str(after_net*quantity) if after_net is not None else None,
             })
     return {'currency':organization['currency'],'items':items}
 

@@ -80,6 +80,10 @@ function SvgDim({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const [invalid, setInvalid] = useState(false);
+  // Escape must discard the typed draft, but `setState` hasn't flushed when
+  // `blur()` fires — the onBlur below would commit the stale value. A ref
+  // flag lets the blur branch tell a cancel apart from a commit.
+  const cancelRef = useRef(false);
   useEffect(() => {
     if (!editing) {
       setDraft(value);
@@ -144,6 +148,11 @@ function SvgDim({
         }}
         onFocus={(event) => event.target.select()}
         onBlur={() => {
+          if (cancelRef.current) {
+            cancelRef.current = false;
+            setEditing(false);
+            return;
+          }
           const normalized = normalizeDimension(draft);
           if (normalized === null) {
             // Reject like Enter does — flag the editor and stay open so a
@@ -166,7 +175,7 @@ function SvgDim({
             }
           }
           if (event.key === "Escape") {
-            setDraft(value);
+            cancelRef.current = true;
             event.currentTarget.blur();
           }
         }}
