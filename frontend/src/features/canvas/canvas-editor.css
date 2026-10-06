@@ -692,7 +692,13 @@
   z-index: var(--z-sticky);
 }
 
-/* Typed-command ghost proposal — the §8 orange preview. */
+/* Typed-command ghost proposal — the §8 orange preview. The layer is a
+ * passive overlay: without pointer-events:none its shapes swallow the
+ * measure/bay clicks aimed at the drawing beneath. */
+.canvas-ghost {
+  pointer-events: none;
+}
+
 .canvas-ghost .module-frame,
 .canvas-ghost .bay-leaf,
 .canvas-ghost path,
@@ -705,20 +711,19 @@
   stroke: var(--warn-ink);
 }
 
+/* The proposal bar lives inside .editor-dock as a normal-flow row: anchored
+ * to the canvas bottom it sat under the dock's floating body and its apply/
+ * discard buttons were unreachable while the tree was open. */
 .proposal-bar {
   align-items: center;
   background: var(--theme-surface-panel);
   border: 1px solid var(--warn-ink);
   border-radius: var(--radius-md);
-  bottom: 0.6rem;
-  box-shadow: var(--shadow-raise);
   display: flex;
   gap: 0.6rem;
-  left: 50%;
+  justify-content: center;
+  margin: 0.3rem 0.4rem 0;
   padding: 0.35rem 0.7rem;
-  position: absolute;
-  transform: translateX(-50%);
-  z-index: var(--z-sticky);
 }
 
 .proposal-bar__label {

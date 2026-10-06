@@ -83,14 +83,17 @@
     justify-content: center;
   }
 
-  .app-shell[data-studio] .org-switcher,
-  .app-shell[data-studio] .rail-group__title,
-  .app-shell[data-studio] .app-rail__identity,
-  .app-shell[data-studio] .rail-item > span {
+  /* Scoped to .app-rail: the position editor renders its own tool rail with
+   * .rail-item elements that keep their labels at this width — the studio
+   * compaction must only touch the domain navigation rail. */
+  .app-shell[data-studio] .app-rail .org-switcher,
+  .app-shell[data-studio] .app-rail .rail-group__title,
+  .app-shell[data-studio] .app-rail .app-rail__identity,
+  .app-shell[data-studio] .app-rail .rail-item > span {
     display: none;
   }
 
-  .app-shell[data-studio] .rail-item {
+  .app-shell[data-studio] .app-rail .rail-item {
     border-left-width: 2px;
     border-radius: var(--radius-md);
     justify-content: center;
@@ -99,7 +102,7 @@
     width: 2.5rem;
   }
 
-  .app-shell[data-studio] .rail-item__icon {
+  .app-shell[data-studio] .app-rail .rail-item__icon {
     height: 18px;
     width: 18px;
   }

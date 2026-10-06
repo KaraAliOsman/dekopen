@@ -3708,19 +3708,6 @@ export function AssemblyEditor({
             }
           />
         )}
-        {proposal && (
-          <ProposalBar
-            delta={proposalDelta}
-            pending={proposalQuote.pending}
-            currency={currency}
-            onApply={() => {
-              const staged = proposal;
-              setProposal(null);
-              staged.apply();
-            }}
-            onDiscard={() => setProposal(null)}
-          />
-        )}
         {readOnly && (
           <p className="canvas-readonly" role="note">
             {t("assembly.readonlyNotice")}
@@ -3848,6 +3835,22 @@ export function AssemblyEditor({
         </Drawer>
       ) : null}
       <footer className="editor-dock" data-open={dockOpen || undefined}>
+        {/* In-flow row inside the dock: an absolute bar over the canvas bottom
+            is covered by the dock's floating body whenever it is open — the
+            proposal actions must stay reachable with the tree expanded. */}
+        {proposal && (
+          <ProposalBar
+            delta={proposalDelta}
+            pending={proposalQuote.pending}
+            currency={currency}
+            onApply={() => {
+              const staged = proposal;
+              setProposal(null);
+              staged.apply();
+            }}
+            onDiscard={() => setProposal(null)}
+          />
+        )}
         <div className="editor-dock__bar" role="tablist" aria-label={t("assembly.dockTree")}>
           <button
             type="button"

@@ -3636,6 +3636,7 @@ export const messages = {
   "shortcut.toolOpening": "Herramienta de apertura",
   "shortcut.toolGlazing": "Herramienta de vidrio",
   "shortcut.toolMeasure": "Medir distancia",
+  "shortcut.toolCouple": "Acoplar unidad",
   "shortcut.starterLibrary": "Biblioteca de diseños",
   "shortcut.descend": "Bajar un nivel (módulo → vano → apertura)",
   "shortcut.ascend": "Subir un nivel / cancelar",
