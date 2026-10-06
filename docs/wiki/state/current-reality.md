@@ -20,6 +20,7 @@ sources:
   - P25 marca/identidad PR https://github.com/KaraAliOsman/dekopen/pull/26
   - P05 dibujo técnico PR https://github.com/KaraAliOsman/dekopen/pull/25
   - P02 identificadores/formato PR https://github.com/KaraAliOsman/dekopen/pull/27
+  - P04 editor canvas-first PR https://github.com/KaraAliOsman/dekopen/pull/24
   - integracion/v1 merge 747c528b67d234d697624929ccbcc7098261ed54
   - open PR metadata observed 2026-09-27/28
   - AGENTS.md
@@ -277,6 +278,8 @@ Merged into `integracion/v1` as squash `acc90900e872e10cd93167f98d3911fbda19c61f
 - Verificado: `make lint|typecheck|test|build` verdes (`PY=.venv/bin/python`); `make test-db` verde (pgTAP 1034 incl. `179_p02` 21 aserciones, integración 275 incl. 2 tests de concurrencia de folios, e2e Playwright); e2e `canvas.spec.ts` actualizado a expectativa `1 006 mm`.
 
 ## P04 editor canvas-first state
+
+Merged into `integracion/v1` as squash `970ecbfc548800eaae19367e3294567d3863d39a` (dekopen PR #24):
 
 P04 rebuilds the position editor into a CAD-like, canvas-first surface (branch `devin/1791248623-p04-editor-canvas`):
 
