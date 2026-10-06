@@ -566,6 +566,10 @@
 .inventory-remnant-old td:first-child {
   border-left: 3px solid var(--theme-warning, #b26a00);
 }
+.inventory-age-alert {
+  color: var(--theme-warning, #b26a00);
+  font-weight: 600;
+}
 .inventory-remnant-rack input,
 .inventory-remnant-order select,
 .inventory-scrap input {
