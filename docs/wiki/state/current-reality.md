@@ -3,7 +3,7 @@ type: state
 status: active
 updated: 2026-10-05
 volatility: high
-verified_ref: 80860f3ef9fe1cf94abf1c564ff00506ef6686b0
+verified_ref: 2c04dcd64afb7cea16effb899ecaf33fe9e7aa67
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
@@ -18,6 +18,7 @@ sources:
   - D06 accesorios/extras PR https://github.com/KaraAliOsman/dekopen/pull/17
   - IA3 proveedor real PR https://github.com/KaraAliOsman/dekopen/pull/22
   - P25 marca/identidad PR https://github.com/KaraAliOsman/dekopen/pull/26
+  - P05 dibujo técnico PR https://github.com/KaraAliOsman/dekopen/pull/25
   - integracion/v1 merge 747c528b67d234d697624929ccbcc7098261ed54
   - open PR metadata observed 2026-09-27/28
   - AGENTS.md
@@ -252,6 +253,8 @@ A fuller capability-by-capability reality map should be added only after a fresh
 
 
 ## [2026-10-06] P05 | dibujo técnico: geometría de glifos y cotas
+
+Merged into `integracion/v1` as squash `2c04dcd64afb7cea16effb899ecaf33fe9e7aa67` (dekopen PR #25):
 
 - Contrato de simbología único: `engine/src/dekopen_engine/opening_symbols.py` (autoridad) + `frontend/src/features/canvas/openingSymbols.ts` (gemelo estricto). `leaf_primitives`/`sliding_primitives` emiten primitivas simbólicas (`tri`/`arrow`/`handle`/`sill`/`none`); `glyph_paths`/`glyphPaths` las convierten a paths SVG canónicos; 14 fixtures JSON en `engine/tests/fixtures/symbols/` congelan primitivas y `d` por caso × vista — paridad exacta (20+29 tests).
 - `SlidingPanel.travel` (`LEFT`/`RIGHT`) declarado por hoja móvil; `SlidingLayoutError` si una hoja viaja a jamba sin espacio o dos móviles adyacentes comparten riel; paneles sin `travel` dibujan la convención documentada marcada "dirección inferida" (opacidad/dash en flecha, badge en editor).
