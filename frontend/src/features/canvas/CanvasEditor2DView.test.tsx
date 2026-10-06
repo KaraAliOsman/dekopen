@@ -177,7 +177,7 @@ describe("SHOT-05 transactional G1 editor", () => {
     expect(screen.getByLabelText("Alto nominal (mm)")).toHaveValue("1000.00");
     expect(screen.getByText("FIXED")).toBeInTheDocument();
     expect(screen.getByTestId("canvas-glass-dimension")).toHaveTextContent("910 × 910 mm");
-    expect(screen.getByTestId("technical-frame")).toHaveTextContent("1006 mm");
+    expect(screen.getByTestId("technical-frame")).toHaveTextContent("1 006 mm");
     expect(screen.getByTestId("technical-reinforcement")).toHaveTextContent("970 mm");
     expect(screen.getByTestId("technical-glass")).toHaveTextContent("910 × 910 mm");
     expect(screen.getByTestId("technical-bead")).toHaveTextContent("919 mm");

@@ -25548,6 +25548,8 @@ components:
           format: uuid
         receipt_key:
           type: string
+        receipt_code:
+          type: string
         note:
           type: string
           nullable: true
@@ -25561,6 +25563,7 @@ components:
       - created_at
       - id
       - note
+      - receipt_code
       - receipt_key
       - received_by
     OrderReceiptRequestRequest:
@@ -29262,6 +29265,8 @@ components:
         id:
           type: string
           format: uuid
+        remnant_code:
+          type: string
         kind:
           $ref: '#/components/schemas/StockKindEnum'
         stock_authority_id:
@@ -29347,6 +29352,7 @@ components:
       - origin_order_id
       - physical_stock_identity
       - rack_location
+      - remnant_code
       - reserved_order_id
       - sheet_workshop_sku
       - status

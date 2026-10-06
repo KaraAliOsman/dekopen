@@ -18,12 +18,13 @@ from django.db import transaction
 
 from dekopen_engine.cutting import RemnantBar
 from dekopen_engine.nesting import SheetRemnant
-from documents.repository import DocumentaryError, documentary_backend, one, rows
+from documents.repository import DocumentaryError, documentary_backend, next_human_code, one, rows
 
 
 def _remnant_row(row: dict[str, object]) -> dict[str, object]:
     return {
         "id": str(row["id"]),
+        "remnant_code": row["remnant_code"],
         "kind": row["kind"],
         "stock_authority_id": (
             str(row["stock_authority_id"]) if row["stock_authority_id"] else None
@@ -58,7 +59,7 @@ def _remnant_row(row: dict[str, object]) -> dict[str, object]:
 
 
 _SELECT = """
-    SELECT id, kind, stock_authority_id, sheet_workshop_sku,
+    SELECT id, remnant_code, kind, stock_authority_id, sheet_workshop_sku,
            physical_stock_identity, material, color,
            length_mm, width_mm, height_mm, status, origin,
            origin_order_id, reserved_order_id, consumed_order_id,
@@ -216,8 +217,8 @@ def create_remnant(
                 org_id, kind, stock_authority_id, sheet_workshop_sku,
                 physical_stock_identity, material, color,
                 length_mm, width_mm, height_mm,
-                origin, origin_order_id, rack_location, notes
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                origin, origin_order_id, rack_location, notes, remnant_code
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
             [
@@ -232,6 +233,7 @@ def create_remnant(
                 origin,
                 str(origin_order_id) if origin_order_id else None,
                 rack_location, notes,
+                next_human_code(org_id, "inventory_remnants"),
             ],
             "remnant_create_failed",
         )
@@ -419,6 +421,7 @@ def unreserve_remnant(
                 org_id=org_id,
                 order_id=UUID(str(order_id)),
                 remnant_id=remnant_id,
+                remnant_code=str(row["remnant_code"]),
             )
         refreshed = one(
             f"{_SELECT} WHERE id = %s AND org_id = %s",
@@ -429,7 +432,7 @@ def unreserve_remnant(
 
 
 def _evict_remnant_claim(
-    *, org_id: UUID, order_id: UUID, remnant_id: UUID
+    *, org_id: UUID, order_id: UUID, remnant_id: UUID, remnant_code: str
 ) -> None:
     """Rewrite the reserving order's plan so it no longer claims the released
     drop: the layout rows keep their cut positions but now need fresh stock
@@ -451,9 +454,9 @@ def _evict_remnant_claim(
     # refuses until a fresh optimize re-reserves — and drop the machine
     # exports rendered from the old plan, whose fingerprints are now stale.
     optimization["invalidated"] = True
-    # The UI names the offending drop in the alert banner — the raw id is the
-    # only identity left (the remnant row is already scrapped/released).
-    optimization["invalidated_by"] = str(remnant_id)
+    # The UI names the offending drop in the alert banner by its folio — the
+    # operator reads 'RT-000045', not a UUID.
+    optimization["invalidated_by"] = remnant_code
     for export_key in ("cnc_export", "dxf_export", "operations_export"):
         payload.pop(export_key, None)
     remnant_key = str(remnant_id)
@@ -496,18 +499,21 @@ def record_produced_remnants(
     the producing order — ``origin='PRODUCTION'`` keeps them traceable to the
     cut plan that made them."""
     inserted = 0
+    # next_human_code takes the org lock once per tx — repeated calls inside
+    # this loop are cheap and keep every produced drop foliated in order.
     for bar in produced_bars:
         rows(
             """
             INSERT INTO public.inventory_remnants(
                 org_id, kind, stock_authority_id, length_mm,
-                origin, origin_order_id
-            ) VALUES (%s, 'BAR', %s::uuid, %s, 'PRODUCTION', %s)
+                origin, origin_order_id, remnant_code
+            ) VALUES (%s, 'BAR', %s::uuid, %s, 'PRODUCTION', %s, %s)
             RETURNING id
             """,
             [
                 str(org_id), str(bar["stock_authority_id"]),
                 str(bar["remainder_mm"]), str(order_id),
+                next_human_code(org_id, "inventory_remnants"),
             ],
         )
         inserted += 1
@@ -516,14 +522,15 @@ def record_produced_remnants(
             """
             INSERT INTO public.inventory_remnants(
                 org_id, kind, sheet_workshop_sku, width_mm, height_mm,
-                origin, origin_order_id
-            ) VALUES (%s, 'SHEET', %s, %s, %s, 'PRODUCTION', %s)
+                origin, origin_order_id, remnant_code
+            ) VALUES (%s, 'SHEET', %s, %s, %s, 'PRODUCTION', %s, %s)
             RETURNING id
             """,
             [
                 str(org_id), sheet["workshop_sku"],
                 str(sheet["width_mm"]), str(sheet["height_mm"]),
                 str(order_id),
+                next_human_code(org_id, "inventory_remnants"),
             ],
         )
         inserted += 1
@@ -566,7 +573,9 @@ def remnant_label(*, org_id: UUID, remnant_id: UUID) -> dict[str, object]:
             or remnant["physical_stock_identity"]
             or "—"
         )
-    payload = f"DEKOPEN|REMNANT|{remnant['id']}"
+    # El QR codifica el folio humano: escanearlo nombra la misma pieza que
+    # la etiqueta impresa (ID estable + etiqueta humana son la misma cosa).
+    payload = f"DEKOPEN|REMNANT|{remnant['remnant_code']}"
     return {
         "remnant": remnant,
         "identity": identity,

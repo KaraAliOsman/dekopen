@@ -147,6 +147,8 @@ def test_receive_order_rejects_unknown_line() -> None:
 
     with patch("inventory.service.rows", return_value=[]), patch(
         "inventory.service.one", side_effect=fake_one
+    ), patch(
+        "inventory.service.next_human_code", return_value="REC-000001"
     ), patch("inventory.service.transaction.atomic", return_value=_atomic()), patch(
         "inventory.service.documentary_backend", return_value=_atomic()
     ):
@@ -195,6 +197,8 @@ def test_receive_order_takes_receipt_key_lock() -> None:
     with patch("inventory.service.rows", side_effect=fake_rows), patch(
         "inventory.service.one",
         return_value={"id": order_id, "status": "DRAFT"},
+    ), patch(
+        "inventory.service.next_human_code", return_value="REC-000001"
     ), patch("inventory.service.transaction.atomic", return_value=_atomic()), patch(
         "inventory.service.documentary_backend", return_value=_atomic()
     ):
@@ -370,6 +374,7 @@ def _remnant_row(remnant_id, order_id):
 
     return {
         "id": remnant_id,
+        "remnant_code": "RT-000001",
         "kind": "BAR",
         "stock_authority_id": uuid4(),
         "sheet_workshop_sku": None,
@@ -986,7 +991,7 @@ def test_remnant_label_returns_qr_and_identity() -> None:
 
     # Identity is the authority's commercial SKU, not the internal psi UUID.
     assert output["identity"] == "PROF-60-W"
-    assert f"DEKOPEN|REMNANT|{remnant_id}" == output["qr_payload"]
+    assert "DEKOPEN|REMNANT|RT-000001" == output["qr_payload"]
     assert "<svg" in output["qr_svg"]
     assert output["remnant"]["id"] == str(remnant_id)
 

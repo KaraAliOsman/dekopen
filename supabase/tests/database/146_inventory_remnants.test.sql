@@ -62,8 +62,9 @@ INSERT INTO public.tenancy_organizations (name, tax_id)
 SELECT throws_ok(
     format(
         $fmt$INSERT INTO public.inventory_remnants(
-            org_id, kind, length_mm, width_mm, height_mm, stock_authority_id)
-          VALUES (%L, 'BAR', 700, 100, 100, gen_random_uuid())$fmt$,
+            org_id, kind, length_mm, width_mm, height_mm, stock_authority_id,
+            remnant_code)
+          VALUES (%L, 'BAR', 700, 100, 100, gen_random_uuid(), 'RT-990001')$fmt$,
         :'remnant_id'
     ),
     '23514',
@@ -73,8 +74,9 @@ SELECT throws_ok(
 SELECT throws_ok(
     format(
         $fmt$INSERT INTO public.inventory_remnants(
-            org_id, kind, width_mm, height_mm, stock_authority_id, sheet_workshop_sku)
-          VALUES (%L, 'SHEET', 800, 600, gen_random_uuid(), 'GLASS-4')$fmt$,
+            org_id, kind, width_mm, height_mm, stock_authority_id, sheet_workshop_sku,
+            remnant_code)
+          VALUES (%L, 'SHEET', 800, 600, gen_random_uuid(), 'GLASS-4', 'RT-990002')$fmt$,
         :'remnant_id'
     ),
     '23514',
@@ -84,8 +86,8 @@ SELECT throws_ok(
 SELECT throws_ok(
     format(
         $fmt$INSERT INTO public.inventory_remnants(
-            org_id, kind, length_mm, stock_authority_id)
-          VALUES (%L, 'BAR', -10, gen_random_uuid())$fmt$,
+            org_id, kind, length_mm, stock_authority_id, remnant_code)
+          VALUES (%L, 'BAR', -10, gen_random_uuid(), 'RT-990003')$fmt$,
         :'remnant_id'
     ),
     '23514',
@@ -95,8 +97,10 @@ SELECT throws_ok(
 SELECT lives_ok(
     format(
         $fmt$INSERT INTO public.inventory_remnants(
-            org_id, kind, length_mm, stock_authority_id, status, origin)
-          VALUES (%L, 'BAR', 700, gen_random_uuid(), 'AVAILABLE', 'MANUAL')$fmt$,
+            org_id, kind, length_mm, stock_authority_id, status, origin,
+            remnant_code)
+          VALUES (%L, 'BAR', 700, gen_random_uuid(), 'AVAILABLE', 'MANUAL',
+                  'RT-990004')$fmt$,
         :'remnant_id'
     ),
     'a well-formed BAR remnant inserts'
@@ -104,8 +108,10 @@ SELECT lives_ok(
 SELECT lives_ok(
     format(
         $fmt$INSERT INTO public.inventory_remnants(
-            org_id, kind, width_mm, height_mm, sheet_workshop_sku, status, origin)
-          VALUES (%L, 'SHEET', 900, 500, 'GLASS-4', 'AVAILABLE', 'PRODUCTION')$fmt$,
+            org_id, kind, width_mm, height_mm, sheet_workshop_sku, status, origin,
+            remnant_code)
+          VALUES (%L, 'SHEET', 900, 500, 'GLASS-4', 'AVAILABLE', 'PRODUCTION',
+                  'RT-990005')$fmt$,
         :'remnant_id'
     ),
     'a well-formed SHEET remnant inserts'
@@ -122,8 +128,8 @@ SELECT is(
 SELECT throws_ok(
     format(
         $fmt$INSERT INTO public.inventory_remnants(
-            org_id, kind, length_mm, stock_authority_id, status)
-          VALUES (%L, 'BAR', 700, gen_random_uuid(), 'RETURNED')$fmt$,
+            org_id, kind, length_mm, stock_authority_id, status, remnant_code)
+          VALUES (%L, 'BAR', 700, gen_random_uuid(), 'RETURNED', 'RT-990006')$fmt$,
         :'remnant_id'
     ),
     '23514',

@@ -333,23 +333,51 @@ def _hardware_sellable_line(position_ref: object) -> str:
     return "; ".join(dict.fromkeys(parts))
 
 
+def _group(digits: str, sep: str) -> str:
+    """Agrupa de a tres la parte entera — 2400 → '2\u2009400' (mm) o
+    1435471 → '1.435.471' (pesos)."""
+    groups: list[str] = []
+    while len(digits) > 3:
+        groups.append(digits[-3:])
+        digits = digits[:-3]
+    groups.append(digits)
+    return sep.join(reversed(groups))
+
+
+def _es_decimal(number: Decimal, decimals: int) -> str:
+    """Formato es-CL: separador de miles punto y decimal coma —
+    1234.5 con 2 decimales → '1.234,50'."""
+    quant = Decimal(1).scaleb(-decimals)
+    text = format(number.quantize(quant), f",.{decimals}f")
+    return text.replace(",", "\x00").replace(".", ",").replace("\x00", ".")
+
+
+def _fmt_mm(number: Decimal) -> str:
+    """§3.3: milímetros agrupados con espacio fino (U+2009) — '2 400';
+    con precisión declarada el decimal va con coma — '1 249,5'."""
+    text = format(number, "f")
+    int_part, _, frac = text.partition(".")
+    grouped = _group(int_part, "\u2009")
+    return f"{grouped},{frac}" if frac else grouped
+
+
 def _pct(value: object) -> str:
-    """Yield percentages print at one decimal — 93.5%, not 93.4667%."""
+    """Porcentajes imprimen a un decimal con coma — '93,5', no '93.4667'."""
     if value is None:
         return "—"
     try:
-        return format(Decimal(str(value)).quantize(Decimal("0.1")), "f")
+        return _es_decimal(Decimal(str(value)).quantize(Decimal("0.1")), 1)
     except (InvalidOperation, ValueError):
         return _value(value)
 
 
 def _dim(value: object) -> str:
-    """Millimetre display — strips stored trailing zeros so a dimension
-    never prints as `1200.00 mm` or a coordinate as `750.0000`."""
+    """Millimetre display §3.3 — strips stored trailing zeros so a dimension
+    never prints as `1200.00 mm`, then groups with thin space: `1 200`."""
     if value is None:
         return "—"
     try:
-        return format(Decimal(str(value)).normalize(), "f")
+        return _fmt_mm(Decimal(str(value)).normalize())
     except InvalidOperation:
         return _value(value)
 
@@ -507,12 +535,17 @@ _SVG_INSET = Decimal("0.06")
 
 
 def _money(amount: object, currency: object) -> str:
+    """§3.3: CLP sin decimales '$1.435.471', USD 'US$ 1.234,50',
+    UF 'UF 38,4521'. Otras monedas conservan su código con 2 decimales."""
     value = _num(amount)
     code = _value(currency)
     if code == "CLP":
-        grouped = f"{value:,.0f}".replace(",", ".")
-        return f"$\u00a0{grouped}"
-    return f"{code}\u00a0{value:,.2f}"
+        return f"${_es_decimal(value, 0)}"
+    if code == "USD":
+        return f"US$ {_es_decimal(value, 2)}"
+    if code == "UF":
+        return f"UF {_es_decimal(value, 4)}"
+    return f"{code} {_es_decimal(value, 2)}"
 
 
 def _cldate(raw: object) -> str:
@@ -527,7 +560,7 @@ def _discount_label(raw: object) -> str:
     value = _num(raw)
     if value <= 1:
         value = value * 100
-    return f"{value.normalize():f}%"
+    return f"{_pct(value)} %"
 
 
 def _rev_display(raw: object) -> str:
@@ -1486,7 +1519,7 @@ def _revision_header(
     # meaningless hex chunk.
     fingerprint = (
         '<div class="tb-cell tb-wide"><span class="tb-label">Huella BOM</span>'
-        f'<span class="tb-value">{escape(bom_hash[:24] + "…")}</span></div>'
+        f'<span class="tb-value">{escape(bom_hash[:8])}</span></div>'
         if workshop and bom_hash != "—"
         else ""
     )
@@ -1580,7 +1613,7 @@ def _qty_price_total(line: dict[str, object]) -> str:
     price = line.get("unit_price")
     total = line.get("total_price")
     currency = line.get("unit_price_currency") or "CLP"
-    qty_text = format(qty.normalize(), "f")
+    qty_text = _fmt_mm(qty)
     if price is None or total is None:
         return f"{qty_text} {unit} · Sin dato"
     return (
@@ -2209,8 +2242,8 @@ def _doc03(snapshot: dict[str, object]) -> str:
                 [[labels["infill"].get(item.get("infill_id"), item.get("infill_id")),
                   _location(labels, item.get("bay_id"), item.get("leaf_id")),
                   item.get("composition"),
-                  f"{_value(_object(item.get('rect'), 'invalid_infill_rect').get('width_mm'))} × "
-                  f"{_value(_object(item.get('rect'), 'invalid_infill_rect').get('height_mm'))}",
+                  f"{_dim(_object(item.get('rect'), 'invalid_infill_rect').get('width_mm'))} × "
+                  f"{_dim(_object(item.get('rect'), 'invalid_infill_rect').get('height_mm'))}",
                   (f"Perfilado {len(item['shape'])} vértices" if item.get("shape") else "Rectangular"),
                   "Junquillos identificados en matriz"] for item in infills],
                 ["hash", "", "", "dimension", "", ""],
@@ -2222,9 +2255,9 @@ def _doc03(snapshot: dict[str, object]) -> str:
                 [[labels["handle"].get(item.get("handle_id"), item.get("handle_id")),
                   _location(labels, item.get("bay_id"), item.get("leaf_id")),
                   labels["member"].get(item.get("host_member_id"), item.get("host_member_id")),
-                  f"{_value(_object(item.get('point'), 'invalid_handle_point').get('x_mm'))} / "
-                  f"{_value(_object(item.get('point'), 'invalid_handle_point').get('y_mm'))}",
-                  item.get("requested_height_mm"),
+                  f"{_dim(_object(item.get('point'), 'invalid_handle_point').get('x_mm'))} / "
+                  f"{_dim(_object(item.get('point'), 'invalid_handle_point').get('y_mm'))}",
+                  _dim(item.get("requested_height_mm")),
                   _SLOT_ES.get(
                       _value(item.get("vertical_reference")),
                       item.get("vertical_reference"),
@@ -2253,14 +2286,14 @@ def _doc03(snapshot: dict[str, object]) -> str:
                      "Ancho continuo mm", "Acabado", "Coplador"],
                     [[
                         item.get("bay_id"), item.get("leaf_id"),
-                        ", ".join(_value(number) for number in _array(
+                        ", ".join(_dim(number) for number in _array(
                             item.get("bottom_drain_holes_mm"), "invalid_workshop_annotations"
                         )) if item.get("bottom_drain_holes_mm") is not None else "—",
-                        ", ".join(_value(number) for number in _array(
+                        ", ".join(_dim(number) for number in _array(
                             item.get("closing_points_perimeter_mm"),
                             "invalid_workshop_annotations",
                         )) if item.get("closing_points_perimeter_mm") is not None else "—",
-                        item.get("continuous_width_mm"), item.get("finish_class"),
+                        _dim(item.get("continuous_width_mm")), item.get("finish_class"),
                         item.get("has_coupler"),
                     ] for item in annotations],
                     ["", "", "dimension", "dimension", "dimension", "", ""],
@@ -2407,9 +2440,15 @@ def _piece_labels(
 
 
 def _short_id(value: object) -> str:
-    """Raw 64-hex/UUID identities dump a full hash cell — truncate for
-    display while staying recognizably unique to the shop."""
+    """Technical-id fallback for a missing human label — a corrupted
+    UUID/hash identity never prints hex; it surfaces as '#8f3a', a tag
+    short enough to be unmistakably not a folio."""
     text = _value(value)
+    clean = text.replace("-", "")
+    if len(clean) > 8 and all(
+        ch in "0123456789abcdefABCDEF" for ch in clean
+    ):
+        return "#" + clean[-4:].lower()
     if len(text) > 20:
         return text[:12] + "…"
     return text
@@ -2692,10 +2731,10 @@ def _infill_key(piece: dict[str, object]) -> tuple[str, str, str]:
 
 
 def _location(labels: dict[str, dict[object, str]], bay_id: object, leaf_id: object) -> str:
-    bay = labels["bay"].get(bay_id, _value(bay_id))
+    bay = labels["bay"].get(bay_id, _short_id(bay_id))
     if leaf_id is None:
         return str(bay)
-    return f"{bay} / {labels['leaf'].get(leaf_id, _value(leaf_id))}"
+    return f"{bay} / {labels['leaf'].get(leaf_id, _short_id(leaf_id))}"
 
 
 def _doc05(snapshot: dict[str, object]) -> str:
@@ -2713,9 +2752,8 @@ def _doc05(snapshot: dict[str, object]) -> str:
         body += (
             f"<h2>{escape(_value(group.get('purchasing_sku')))} · "
             f"{escape(_CATEGORY_ES.get(_value(group.get('source_kind')), _value(group.get('source_kind'))))}</h2>"
-            f"<p><strong>Largo:</strong> {escape(_value(group.get('stock_length_mm')))} mm · "
-            f"<strong>Barras:</strong> {escape(_value(group.get('purchased_bar_count')))} · "
-            f'<span class="hash">stock {escape(_value(group.get("physical_stock_identity")))}</span></p>'
+            f"<p><strong>Largo:</strong> {escape(_dim(group.get('stock_length_mm')))} mm · "
+            f"<strong>Barras:</strong> {escape(_value(group.get('purchased_bar_count')))}</p>"
         )
         for bar_value in _array(group.get("bars"), "invalid_stock_group"):
             bar = _object(bar_value, "invalid_cut_bar")
@@ -2733,10 +2771,10 @@ def _doc05(snapshot: dict[str, object]) -> str:
             body += (
                 f"<h3>Barra {escape(_value(bar.get('bar_index')))} · "
                 f"{escape(_value(bar.get('commercial_sku')))} · "
-                f"{escape(_value(bar.get('stock_length_mm')))} mm · "
-                f"{remainder_label} {escape(_value(bar.get('remainder_mm')))} mm"
+                f"{escape(_dim(bar.get('stock_length_mm')))} mm · "
+                f"{remainder_label} {escape(_dim(bar.get('remainder_mm')))} mm"
                 + (
-                    f" · aprovechamiento {_pct(bar.get('yield_pct'))}%"
+                    f" · aprovechamiento {_pct(bar.get('yield_pct'))} %"
                     if bar.get("yield_pct") is not None
                     else ""
                 )
@@ -2777,7 +2815,7 @@ def _doc06(snapshot: dict[str, object]) -> str:
         config = _object(inspector[0].get("config"), "invalid_inspector_evidence")
         r10 = config.get("R10")
         if isinstance(r10, dict) and r10.get("tolerance_mm") is not None:
-            tolerance = _value(r10.get("tolerance_mm"))
+            tolerance = _dim(r10.get("tolerance_mm"))
     # The checklist must bind to the physical units it covers — a QC hold has
     # to name the position it stops, not float over "the revision".
     units_rows = []
@@ -2788,7 +2826,7 @@ def _doc06(snapshot: dict[str, object]) -> str:
             _value(position.get("location_tag")),
             _TYPOLOGY_ES.get(_value(position.get("typology")), _value(position.get("typology"))),
             _value(position.get("quantity")),
-            f"{_value(position.get('width_mm'))} × {_value(position.get('height_mm'))} mm",
+            f"{_dim(position.get('width_mm'))} × {_dim(position.get('height_mm'))} mm",
         ])
     if units_rows:
         body += _table(
@@ -3012,7 +3050,7 @@ def _doc02(snapshot: dict[str, object]) -> str:
             spec.get("composition"),
             ", ".join(_value(item) for item in _array(
                 line.get("technical_skus"), "invalid_order_line")),
-            f"{_value(spec.get('oriented_width_mm'))} × {_value(spec.get('oriented_height_mm'))}",
+            f"{_dim(spec.get('oriented_width_mm'))} × {_dim(spec.get('oriented_height_mm'))}",
             quantity,
             line.get("unit"),
             "/".join(
@@ -3024,11 +3062,11 @@ def _doc02(snapshot: dict[str, object]) -> str:
                 if polishing.get(edge) is True
             ) or "SIN PULIDO",
             spec.get("location_tag"),
-            format(area.normalize(), "f"),
+            _es_decimal(area, 2),
         ])
     rows_data.append(
         ["TOTAL", "—", "—", "—", "—", "—", "—", "—",
-         format(total_area.normalize(), "f")]
+         _es_decimal(total_area, 2)]
     )
     body, _ = _revision_header(pseudo_revision, "Pedido de vidrios", "DOC-02", workshop=True)
     body += (
@@ -3659,8 +3697,8 @@ def _invoice_body(payload: dict[str, object]) -> str:
                             _value(position.get("typology")),
                             _value(position.get("typology")),
                         ),
-                        f"{_value(position.get('width_mm'))}\u00a0×\u00a0"
-                        f"{_value(position.get('height_mm'))}"
+                        f"{_dim(position.get('width_mm'))}\u00a0×\u00a0"
+                        f"{_dim(position.get('height_mm'))}"
                         + (
                             f" · {_value(position.get('location_tag'))}"
                             if _value(position.get("location_tag")) != "—"
@@ -3796,8 +3834,8 @@ def _credit_note_body(payload: dict[str, object]) -> str:
                             _value(position.get("typology")),
                             _value(position.get("typology")),
                         ),
-                        f"{_value(position.get('width_mm'))}\u00a0×\u00a0"
-                        f"{_value(position.get('height_mm'))}"
+                        f"{_dim(position.get('width_mm'))}\u00a0×\u00a0"
+                        f"{_dim(position.get('height_mm'))}"
                         + (
                             f" · {_value(position.get('location_tag'))}"
                             if _value(position.get("location_tag")) != "—"

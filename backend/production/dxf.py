@@ -107,12 +107,15 @@ def _dxf(entities: str, extmax_x: Decimal, extmax_y: Decimal) -> str:
 
 def _placement_code(piece: dict, codes: dict[str, str] | None) -> str:
     """Printed piece identity: the member/infill code when the caller
-    resolved one, else a short id — never the raw 64-hex hash wall."""
+    resolved one — already unit-scoped (``P01-U01-M01``) so it matches the
+    pack and the CSV row for row — else a short id, never the raw
+    64-hex hash wall."""
     piece_id = str(piece.get("piece_id") or "?")
-    code = piece_id if len(piece_id) <= 12 else piece_id[:10]
-    if codes:
-        code = codes.get(str(piece.get("piece_id") or ""), code)
-    if piece.get("unit_index") is not None:
+    resolved = (codes or {}).get(piece_id)
+    code = resolved or (piece_id if len(piece_id) <= 12 else piece_id[:10])
+    # -U{unit} only when the code itself does not carry the unit scope —
+    # resolved human codes (P01-U02-M03) already do; a bare fallback id does not.
+    if piece.get("unit_index") is not None and "-U" not in code:
         code += f"-U{piece['unit_index']}"
     return code
 

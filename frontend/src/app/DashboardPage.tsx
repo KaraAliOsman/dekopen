@@ -5,7 +5,7 @@ import { ApiError } from "../api/apiMutator";
 import { analyticsOperationalSummary, projectsList } from "../api/generated/dekopen";
 import type { OperationalSummary, ProjectResponse } from "../api/generated/models";
 import { useAuthSession } from "../auth/AuthSessionProvider";
-import { formatDateTime } from "../format";
+import { formatDateTime, fmtPct } from "../format";
 import { formatMoney } from "../format";
 import { t, type TranslationKey } from "../i18n/es-CL";
 import { PageHeader } from "../ui";
@@ -206,7 +206,7 @@ export function DashboardPage(): JSX.Element {
               <span className="eyebrow">{t("dashboard.leadHours")}</span>
               <strong>
                 {opsQuery.data.avg_release_to_dispatch_hours !== null
-                  ? `${opsQuery.data.avg_release_to_dispatch_hours} h`
+                  ? `${fmtPct(opsQuery.data.avg_release_to_dispatch_hours)} h`
                   : "—"}
               </strong>
             </div>

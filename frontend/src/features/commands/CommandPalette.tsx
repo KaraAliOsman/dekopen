@@ -43,6 +43,8 @@ const SEARCH_GROUP_LABEL: Record<string, TranslationKey> = {
   systems: "search.groupSystems",
   articles: "search.groupArticles",
   orders: "search.groupOrders",
+  remnants: "search.groupRemnants",
+  receipts: "search.groupReceipts",
   documents: "search.groupDocuments",
   inventory: "search.groupInventory",
 };

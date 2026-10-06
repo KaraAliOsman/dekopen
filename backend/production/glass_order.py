@@ -21,6 +21,7 @@ from documents.renderers import (
     _CSS,
     _Raw,
     _cldate,
+    _fmt_mm as _eng_fmt_mm,
     _piece_labels,
     _table,
     _url_fetcher,
@@ -62,10 +63,18 @@ def _mm(value: object) -> Decimal:
 
 
 def _fmt_mm(value: object) -> str:
+    """Printed mm per §3.3 — thin-space grouping, comma decimal."""
     number = _mm(value).quantize(Decimal("0.01"))
     if number == number.to_integral_value():
-        return str(number.quantize(Decimal("1")))
-    return format(number, "f")
+        return _eng_fmt_mm(number.quantize(Decimal("1")))
+    return _eng_fmt_mm(number.normalize())
+
+
+def _csv_mm(value: object) -> str:
+    """Machine-facing mm — the CSV feeds cutting software, so it keeps
+    the canonical decimal form, not the §3.3 print glyph."""
+    number = _mm(value).quantize(Decimal("0.01"))
+    return format(number.normalize(), "f")
 
 
 def _order_row(org_id: UUID, order_id: UUID) -> dict[str, object]:
@@ -490,7 +499,7 @@ def _order_csv(context: dict[str, object]) -> bytes:
         writer.writerow([
             piece["order_code"], piece["position_label"], piece["piece_code"],
             piece["purchasing_sku"], piece["technical_sku"], piece["notation"],
-            _fmt_mm(piece["width_mm"]), _fmt_mm(piece["height_mm"]), 1,
+            _csv_mm(piece["width_mm"]), _csv_mm(piece["height_mm"]), 1,
             "; ".join(piece["surcharges"]), "; ".join(piece["safety"]),
             piece["manufacturer"],
         ])

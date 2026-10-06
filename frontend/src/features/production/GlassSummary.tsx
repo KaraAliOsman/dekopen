@@ -1,4 +1,4 @@
-import { fmtMm } from "../../format";
+import { fmtMm, formatAreaM2, formatWeightKg } from "../../format";
 import { t } from "../../i18n/es-CL";
 
 export type GlassPiece = {
@@ -239,19 +239,23 @@ export function GlassSummary({
                 <tr key={`${group.spec}-${group.sku}-${row.dims}-${row.edges}`}>
                   {rowIndex === 0 ? <td rowSpan={rows.length}>{group.spec}</td> : null}
                   {rowIndex === 0 ? <td rowSpan={rows.length}>{group.sku}</td> : null}
-                  {rowIndex === 0 ? <td rowSpan={rows.length}>{group.thickness} mm</td> : null}
+                  {rowIndex === 0 ? (
+                    <td rowSpan={rows.length}>
+                      {group.thickness === "—" ? "—" : `${fmtMm(group.thickness)} mm`}
+                    </td>
+                  ) : null}
                   <td>{row.dims} mm</td>
                   <td>{row.count * quantity}</td>
                   {rowIndex === 0 ? (
                     <td rowSpan={rows.length}>
-                      {fmtScaled(group.areaScaled * BigInt(quantity), 4)} m²
+                      {formatAreaM2(fmtScaled(group.areaScaled * BigInt(quantity), 4))} m²
                     </td>
                   ) : null}
                   {rowIndex === 0 ? (
                     <td rowSpan={rows.length}>
                       {group.weightUnknown
                         ? t("production.glassWeightUnknown")
-                        : `${fmtScaled(group.weightScaled * BigInt(quantity), 2)} kg`}
+                        : `${formatWeightKg(fmtScaled(group.weightScaled * BigInt(quantity), 4))} kg`}
                     </td>
                   ) : null}
                   <td>{row.edges}</td>
@@ -261,11 +265,11 @@ export function GlassSummary({
             <tr className="production-glass-total">
               <td colSpan={4}>{t("production.glassTotals")}</td>
               <td>{totalQty * quantity}</td>
-              <td>{fmtScaled(totalArea * BigInt(quantity), 4)} m²</td>
+              <td>{formatAreaM2(fmtScaled(totalArea * BigInt(quantity), 4))} m²</td>
               <td>
                 {totalUnknown
                   ? t("production.glassWeightUnknown")
-                  : `${fmtScaled(totalWeight * BigInt(quantity), 2)} kg`}
+                  : `${formatWeightKg(fmtScaled(totalWeight * BigInt(quantity), 4))} kg`}
               </td>
               <td />
             </tr>

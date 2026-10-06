@@ -14,7 +14,7 @@ import type {
 import { t } from "../../i18n/es-CL";
 import { domainLabel } from "../../i18n/domainLabels";
 import { Icon } from "../../ui/icons";
-import { fmtMm } from "../../format";
+import { fmtMm, shortTechnicalId } from "../../format";
 import { centerKindLabel, opKindLabel, stationCodeLabel } from "../production/labels";
 import { SectionPreviewSvg } from "../canvas/SectionPreviewSvg";
 import type { Resource, Row, catalogApi } from "./catalogModel";
@@ -196,7 +196,7 @@ function ReadinessLadder({
    * this very record, so name it instead of showing a hex fragment. */
   const labelFor = (text: string) =>
     text.replace(UUID_RE, (id) =>
-      id.toLowerCase() === String(system.id).toLowerCase() ? system.name : id.slice(0, 8),
+      id.toLowerCase() === String(system.id).toLowerCase() ? system.name : shortTechnicalId(id),
     );
   // Levels carry cumulative blocker lists — attribute each blocker to the
   // first level that reports it so nothing repeats down the ladder.
@@ -484,8 +484,8 @@ export function SystemWorkspaceView({
     const kit = kits.find((k) => k.id === row.row_id);
     if (kit) return kit.name;
     const reinforcement = reinforcements.find((r) => r.id === row.row_id);
-    if (reinforcement) return reinforcement.id.slice(0, 8);
-    return `${row.authority_table} · ${row.row_id.slice(0, 8)}`;
+    if (reinforcement) return shortTechnicalId(reinforcement.id);
+    return `${row.authority_table} · ${shortTechnicalId(row.row_id)}`;
   };
   const reviewEvidence = (row: EvidenceRow, state: "REVIEWED" | "REJECTED") => {
     void api.reviewEvidence(row.id, state).then((updated) => {

@@ -2530,12 +2530,19 @@ def _cnc_bars_csv(
     return "\n".join(rows_out) + "\n"
 
 
-def _cnc_sheets_csv(optimization: dict[str, object]) -> str:
+def _cnc_sheets_csv(
+    optimization: dict[str, object],
+    *,
+    infill_map: dict[tuple[str, str, str], str] | None = None,
+) -> str:
     """DEKOPEN-CNC-SHEETS-V1: one row per nested placement, ordered by sheet
-    then Y then X — deterministic input for a panel saw / glass table."""
+    then Y then X — deterministic input for a panel saw / glass table.
+    ``piece_label`` carries the same printed code the pack/DXF/labels carry,
+    so the nesting file reconciles without a second document."""
     rows_out = [
         "sheet_index,purchasing_sku,sheet_width_mm,sheet_height_mm,"
-        "x_mm,y_mm,width_mm,height_mm,rotated,piece_id,unit_index,bay_id,leaf_id"
+        "x_mm,y_mm,width_mm,height_mm,rotated,piece_id,unit_index,bay_id,leaf_id,"
+        "piece_label"
     ]
     for sheet in sorted(
         optimization.get("sheets") or [], key=lambda s: int(s.get("sheet_index") or 0)
@@ -2560,6 +2567,7 @@ def _cnc_sheets_csv(optimization: dict[str, object]) -> str:
                 placement.get("unit_index"),
                 placement.get("bay_id"),
                 placement.get("leaf_id"),
+                (infill_map or {}).get(_infill_key(placement), ""),
             )))
     return "\n".join(rows_out) + "\n"
 
@@ -2628,6 +2636,7 @@ def export_cnc_files(
         # Printed piece codes join the saw rows so a labeled stick finds its
         # program line without a second file.
         cnc_cut_map: dict[tuple[str, ...], str] = {}
+        cnc_infill_map: dict[tuple[str, str, str], str] = {}
         if order.get("project_version_id"):
             version_row = one(
                 """
@@ -2641,8 +2650,10 @@ def export_cnc_files(
             try:
                 cnc_labels = _piece_labels(cnc_snapshot)
                 cnc_cut_map = _cut_member_map(cnc_snapshot, cnc_labels)
+                cnc_infill_map = _infill_code_map(cnc_snapshot, cnc_labels)
             except DocumentaryError:
                 cnc_cut_map = {}
+                cnc_infill_map = {}
         fingerprint = _optimization_fingerprint(optimization)
         header = (
             f"# dekopen order={order['order_code']} plan={fingerprint[:12]}"
@@ -2650,7 +2661,9 @@ def export_cnc_files(
         )
         files = {"bars.csv": header + _cnc_bars_csv(optimization, cut_map=cnc_cut_map)}
         if optimization.get("sheets"):
-            files["sheets.csv"] = header + _cnc_sheets_csv(optimization)
+            files["sheets.csv"] = header + _cnc_sheets_csv(
+                optimization, infill_map=cnc_infill_map
+            )
         export = {
             "schema": "work_order_cnc_export_v2",
             "optimization_fingerprint": fingerprint,
@@ -3892,19 +3905,32 @@ def _compute_optimization(
         if sheet.get("source") == "REMNANT" and sheet.get("remnant_id")
     ]
     # The plan names each physical drop it claims — the operator matches
-    # the printed remnant id to the rack tag without opening the ledger.
+    # the printed RT- folio to the rack tag without opening the ledger.
     consumed_ids = [entry["id"] for entry in consumed_bars + consumed_sheets]
     if consumed_ids:
-        consumed_locations = {
-            str(r["id"]): r["rack_location"]
+        consumed_meta = {
+            str(r["id"]): r
             for r in rows(
-                "SELECT id, rack_location FROM public.inventory_remnants"
+                "SELECT id, rack_location, remnant_code"
+                " FROM public.inventory_remnants"
                 " WHERE org_id = %s AND id = ANY(%s::uuid[])",
                 [str(org_id), consumed_ids],
             )
         }
         for entry in consumed_bars + consumed_sheets:
-            entry["rack_location"] = consumed_locations.get(entry["id"])
+            meta = consumed_meta.get(entry["id"]) or {}
+            entry["rack_location"] = meta.get("rack_location")
+            entry["remnant_code"] = meta.get("remnant_code")
+        # The folio also stamps onto the plan rows — the banner and the
+        # printed pack read 'RT-000045', not a UUID fragment.
+        for bar in bars.get("workshop_cut_plan") or []:
+            meta = consumed_meta.get(str(bar.get("remnant_id") or ""))
+            if meta:
+                bar["remnant_code"] = meta.get("remnant_code")
+        for sheet in sheets:
+            meta = consumed_meta.get(str(sheet.get("remnant_id") or ""))
+            if meta:
+                sheet["remnant_code"] = meta.get("remnant_code")
     produced_bars = [
         {
             "stock_authority_id": bar["stock_authority_id"],

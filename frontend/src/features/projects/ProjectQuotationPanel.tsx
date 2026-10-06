@@ -1,4 +1,4 @@
-import { fmtMm } from "../../format";
+import { fmtMm, fmtMmCanonical } from "../../format";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
@@ -275,7 +275,7 @@ function CsvMmField({
   disabled: boolean;
   onCommit(value: string[] | null): void;
 }): JSX.Element {
-  const canonical = (values ?? []).map(fmtMm).join(", ");
+  const canonical = (values ?? []).map(fmtMmCanonical).join(", ");
   const [draft, setDraft] = useState(canonical);
   useEffect(() => setDraft(canonical), [canonical]);
   return (
@@ -292,7 +292,7 @@ function CsvMmField({
           const parsed = parseMmList(draft);
           if (parsed === null) {
             setDraft(canonical);
-          } else if (parsed.join(",") !== (values ?? []).map(fmtMm).join(",")) {
+          } else if (parsed.join(",") !== (values ?? []).map(fmtMmCanonical).join(",")) {
             onCommit(parsed.length > 0 ? parsed : null);
           }
         }}
@@ -308,24 +308,28 @@ function CsvMmField({
 
 /** Stored decimals arrive as "300.0000" — the workshop inputs are edited by
  * people, so display strings normalize to business precision once at load
- * (fmtMm trims trailing zeros; the field stays editable). */
+ * (fmtMmCanonical trims trailing zeros; the field stays editable). */
 function normalizePreparationMm(
   position: DocumentaryPreparationPosition,
 ): DocumentaryPreparationPosition {
   const annotations = position.workshop_annotations.map((annotation) => ({
     ...annotation,
-    bottom_drain_holes_mm: annotation.bottom_drain_holes_mm?.map(fmtMm) ?? null,
-    closing_points_perimeter_mm: annotation.closing_points_perimeter_mm?.map(fmtMm) ?? null,
+    bottom_drain_holes_mm: annotation.bottom_drain_holes_mm?.map(fmtMmCanonical) ?? null,
+    closing_points_perimeter_mm:
+      annotation.closing_points_perimeter_mm?.map(fmtMmCanonical) ?? null,
     continuous_width_mm:
-      annotation.continuous_width_mm == null ? null : fmtMm(annotation.continuous_width_mm),
+      annotation.continuous_width_mm == null
+        ? null
+        : fmtMmCanonical(annotation.continuous_width_mm),
   }));
   const structural = position.structural_inputs.map((input) => ({
     ...input,
-    required_ix_cm4: input.required_ix_cm4 == null ? null : fmtMm(input.required_ix_cm4),
+    required_ix_cm4: input.required_ix_cm4 == null ? null : fmtMmCanonical(input.required_ix_cm4),
   }));
   const intents = position.handle_intents.map((intent) => ({
     ...intent,
-    requested_height_mm: intent.requested_height_mm === "" ? "" : fmtMm(intent.requested_height_mm),
+    requested_height_mm:
+      intent.requested_height_mm === "" ? "" : fmtMmCanonical(intent.requested_height_mm),
   }));
   return {
     ...position,

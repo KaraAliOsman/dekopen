@@ -5,7 +5,7 @@ import { ApiError } from "../../api/apiMutator";
 import { aiProviderCheck, aiSettings, aiSettingsUpdate } from "../../api/generated/dekopen";
 import type { AiProviderCheck } from "../../api/generated/models/aiProviderCheck";
 import type { AiSettings } from "../../api/generated/models/aiSettings";
-import { formatMoney, parseLocaleNumber } from "../../format";
+import { formatMoney, parseLocaleNumber, shortTechnicalId } from "../../format";
 import { domainLabel } from "../../i18n/domainLabels";
 import { t, type TranslationKey } from "../../i18n/es-CL";
 
@@ -304,8 +304,8 @@ export function AiSettingsCard({ orgId }: { orgId: string }): JSX.Element {
                     {row.user_id === null
                       ? t("settings.aiSystemUser")
                       : row.member_role
-                        ? `${domainLabel("MembershipRoleEnum", row.member_role).label} · ${row.user_id.slice(0, 8)}`
-                        : row.user_id.slice(0, 8)}
+                        ? `${domainLabel("MembershipRoleEnum", row.member_role).label} · ${shortTechnicalId(row.user_id)}`
+                        : shortTechnicalId(row.user_id)}
                   </td>
                   <td>{row.calls}</td>
                   <td>{row.credits}</td>

@@ -9,7 +9,7 @@ import { InventorySection } from "./InventorySection";
 import { runJob } from "../jobs/runJob";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
 import { DeniedState } from "../../ui";
-import { fmtMm } from "../../format";
+import { fmtMm, fmtQty, shortTechnicalId } from "../../format";
 import { t } from "../../i18n/es-CL";
 import { formatDateTime, formatRevision } from "../../format";
 import { formatDate } from "../../format";
@@ -154,7 +154,7 @@ type ReceivingState = {
   lines: ReceivingLine[];
   receipts: Array<{
     id: string;
-    receipt_key: string;
+    receipt_code: string;
     created_at: string;
     note: string | null;
   }>;
@@ -697,17 +697,17 @@ function PurchasingWorkspace({
                       {purchaseUnitLabel(line.unit, 2)}
                     </span>
                   </td>
-                  <td>{line.required}</td>
-                  <td>{line.on_hand}</td>
-                  <td>{line.reserved}</td>
-                  <td>{line.open_ordered}</td>
+                  <td>{fmtQty(line.required)}</td>
+                  <td>{fmtQty(line.on_hand)}</td>
+                  <td>{fmtQty(line.reserved)}</td>
+                  <td>{fmtQty(line.open_ordered)}</td>
                   <td>
                     {line.received !== "0" ? (
                       <strong className="purchasing-coverage-received">
-                        {line.received} · {t("purchasing.receivedMark")}
+                        {fmtQty(line.received)} · {t("purchasing.receivedMark")}
                       </strong>
                     ) : (
-                      line.received
+                      fmtQty(line.received)
                     )}
                   </td>
                   <td>
@@ -721,12 +721,12 @@ function PurchasingWorkspace({
                   </td>
                   <td>
                     {line.shortage !== "0" ? (
-                      <strong className="purchasing-coverage-short">{line.shortage}</strong>
+                      <strong className="purchasing-coverage-short">{fmtQty(line.shortage)}</strong>
                     ) : (
                       "0"
                     )}
                   </td>
-                  <td>{line.recommended_purchase}</td>
+                  <td>{fmtQty(line.recommended_purchase)}</td>
                 </tr>
               ))}
             </tbody>
@@ -812,13 +812,13 @@ function PurchasingWorkspace({
                     <td>
                       {item.name} · {purchaseUnitLabel(item.unit, 2)}
                     </td>
-                    <td>{item.on_hand_qty}</td>
-                    <td>{item.reserved_qty}</td>
-                    <td>{item.available_qty}</td>
+                    <td>{fmtQty(item.on_hand_qty)}</td>
+                    <td>{fmtQty(item.reserved_qty)}</td>
+                    <td>{fmtQty(item.available_qty)}</td>
                     <td>
                       {item.incoming_qty && item.incoming_qty !== "0" ? (
                         <strong className="purchasing-coverage-received">
-                          {item.incoming_qty}
+                          {fmtQty(item.incoming_qty)}
                         </strong>
                       ) : (
                         "0"
@@ -1026,15 +1026,16 @@ function RequirementRow({
         requirement.open_qty > 0 &&
         requirement.open_qty < (qtyNumber(requirement.quantity) ?? requirement.open_qty) ? (
           <>
-            {requirement.open_qty} {purchaseUnitLabel(requirement.unit, requirement.open_qty)}
+            {fmtQty(requirement.open_qty)}{" "}
+            {purchaseUnitLabel(requirement.unit, requirement.open_qty)}
             <br />
             <small>
-              {t("purchasing.pendingOf")} {requirement.quantity}
+              {t("purchasing.pendingOf")} {fmtQty(requirement.quantity)}
             </small>
           </>
         ) : (
           <>
-            {requirement.quantity}{" "}
+            {fmtQty(requirement.quantity)}{" "}
             {purchaseUnitLabel(requirement.unit, qtyNumber(requirement.quantity))}
           </>
         )}
@@ -1092,7 +1093,7 @@ function RequirementRow({
             {requirement.source_trace.map((entry, index) => {
               const raw = typeof entry === "string" ? entry : traceLine(entry);
               const label = requirement.source_trace_labels?.[index];
-              const shown = label ?? (raw.length > 20 ? `${raw.slice(0, 12)}…` : raw);
+              const shown = label ?? shortTechnicalId(raw);
               return (
                 <li key={index} title={shown === raw ? undefined : raw}>
                   {shown}
@@ -1248,7 +1249,8 @@ function EligibilityForm({
               <label key={item.id}>
                 <input type="checkbox" name={`key_${item.id}`} defaultChecked />
                 {categoryLabel(item.category)} ·{" "}
-                {item.purchasing_sku ?? item.requirement_key.slice(0, 12)}
+                {item.purchasing_sku ??
+                  (item.technical_skus.join(", ") || shortTechnicalId(item.requirement_key))}
               </label>
             ))}
           </fieldset>
@@ -1296,7 +1298,7 @@ function OrderCard({
         <ul className="purchasing-order-lines">
           {order.lines_preview.map((line, index) => (
             <li key={index}>
-              {line.sku} × {line.qty} {line.unit}
+              {line.sku} × {fmtQty(line.qty)} {line.unit}
             </li>
           ))}
         </ul>
@@ -1314,7 +1316,7 @@ function OrderCard({
           {order.released_qty && order.released_qty !== "0" && (
             <>
               {" · "}
-              {t("purchasing.cancelledReleased")}: {order.released_qty}
+              {t("purchasing.cancelledReleased")}: {fmtQty(order.released_qty)}
             </>
           )}
         </p>
@@ -1337,7 +1339,7 @@ function OrderCard({
       )}
       {Number(order.damaged_qty ?? "0") > 0 && (
         <p className="purchasing-order-damaged" role="alert">
-          {t("purchasing.damagedIncidence")}: {order.damaged_qty}
+          {t("purchasing.damagedIncidence")}: {fmtQty(order.damaged_qty)}
         </p>
       )}
       {order.status === "DRAFT" && canWrite && (
@@ -1589,11 +1591,11 @@ function OrdersIndex({
                 {Number(order.damaged_qty ?? 0) > 0 && (
                   <span className="purchasing-coverage-short">
                     {" "}
-                    {t("purchasing.indexDamaged")}: {order.damaged_qty}
+                    {t("purchasing.indexDamaged")}: {fmtQty(order.damaged_qty)}
                   </span>
                 )}
               </td>
-              <td>{order.status === "CANCELLED" ? "—" : order.outstanding_qty}</td>
+              <td>{order.status === "CANCELLED" ? "—" : fmtQty(order.outstanding_qty)}</td>
             </tr>
           ))}
         </tbody>
@@ -1763,15 +1765,16 @@ function ReceivingPanel({
                   <tr key={line.id}>
                     <td>{line.purchasing_sku ?? line.category}</td>
                     <td>
-                      {line.ordered_qty} {purchaseUnitLabel(line.unit, qtyNumber(line.ordered_qty))}
+                      {fmtQty(line.ordered_qty)}{" "}
+                      {purchaseUnitLabel(line.unit, qtyNumber(line.ordered_qty))}
                     </td>
-                    <td>{line.received_qty}</td>
+                    <td>{fmtQty(line.received_qty)}</td>
                     <td>
-                      {Number(line.outstanding_qty) < 0 ? "0" : line.outstanding_qty}
+                      {Number(line.outstanding_qty) < 0 ? "0" : fmtQty(line.outstanding_qty)}
                       {Number(line.outstanding_qty) < 0 ? (
                         <small className="purchasing-hint">
                           {" "}
-                          (+{Math.abs(Number(line.outstanding_qty))}{" "}
+                          (+{fmtQty(Math.abs(Number(line.outstanding_qty)))}{" "}
                           {t("purchasing.receiveSurplus")})
                         </small>
                       ) : null}
@@ -1911,7 +1914,7 @@ function ReceivingPanel({
               <caption>{t("purchasing.receiveHistory")}</caption>
               <thead>
                 <tr>
-                  <th>{t("purchasing.receiptKey")}</th>
+                  <th>{t("purchasing.receiptCode")}</th>
                   <th>{t("purchasing.receiptDate")}</th>
                   <th>{t("purchasing.receiptNote")}</th>
                 </tr>
@@ -1919,7 +1922,7 @@ function ReceivingPanel({
               <tbody>
                 {state.receipts.map((receipt) => (
                   <tr key={receipt.id}>
-                    <td>{receipt.receipt_key}</td>
+                    <td>{receipt.receipt_code}</td>
                     <td>{formatDateTime(receipt.created_at)}</td>
                     <td>{receipt.note || "—"}</td>
                   </tr>

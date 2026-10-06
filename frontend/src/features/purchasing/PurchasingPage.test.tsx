@@ -262,9 +262,10 @@ it("renders trace labels with a short digest fallback for unlabelled ids", async
   renderPage();
   const cell = (await screen.findByText("4 unidades")).closest("tr")!;
   // "5".repeat(64) carries the I-01 label; "6".repeat(64) has none and renders
-  // as a truncated digest — never char-by-char enumeration.
+  // as a technical digest (#últimos4) — never char-by-char enumeration or a
+  // hex fragment.
   expect(within(cell).getByText("I-01")).toBeInTheDocument();
-  expect(within(cell).getByText(`${"6".repeat(12)}…`)).toBeInTheDocument();
+  expect(within(cell).getByText("#6666")).toBeInTheDocument();
   expect(within(cell).queryByText(/^0=/)).not.toBeInTheDocument();
 });
 

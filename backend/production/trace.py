@@ -233,7 +233,7 @@ def trace_work_order(*, org_id: UUID, order_id: UUID) -> dict[str, Any]:
 
     remnants = rows(
         """
-        SELECT id::text, kind, status, material, color,
+        SELECT id::text, remnant_code, kind, status, material, color,
                stock_authority_id::text, sheet_workshop_sku,
                physical_stock_identity::text,
                length_mm, width_mm, height_mm, origin,

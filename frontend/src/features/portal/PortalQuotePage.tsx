@@ -100,7 +100,7 @@ function pctLabel(raw: string | null | undefined): string {
   const fraction = Number(raw);
   if (!Number.isFinite(fraction)) return `${raw}%`;
   const pct = fraction <= 1 ? fraction * 100 : fraction;
-  return `${pct.toFixed(2).replace(/\.?0+$/, "")}%`;
+  return `${pct.toFixed(1).replace(".", ",")} %`;
 }
 
 function typologyLabel(raw: string | null | undefined): string {

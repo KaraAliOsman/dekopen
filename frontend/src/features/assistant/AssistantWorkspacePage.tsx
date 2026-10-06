@@ -31,7 +31,7 @@ import { Orb, orbStateFor } from "./Orb";
 import { STATE_LABELS } from "./states";
 import { SURFACE_LABELS } from "./surfaces";
 import { jobErrorKey } from "../jobs/jobError";
-import { formatMoney } from "../../format";
+import { formatMoney, shortTechnicalId } from "../../format";
 import { t, type TranslationKey } from "../../i18n/es-CL";
 
 /* ------------------------------------------------------------------ */
@@ -534,7 +534,7 @@ function AgentTurnView({
                             {" "}
                             · {t("aiws.evidence")}:{" "}
                             {claim.evidence
-                              .map((ref) => turn.evidence_labels?.[ref] ?? `${ref.slice(0, 8)}…`)
+                              .map((ref) => turn.evidence_labels?.[ref] ?? shortTechnicalId(ref))
                               .join(", ")}
                           </small>
                         ) : null}
@@ -1095,7 +1095,7 @@ export function AssistantWorkspacePage(): JSX.Element {
               <p className="aiws-evidence">
                 {t("aiws.evidence")}:{" "}
                 {artifact.references
-                  .map((ref) => evidenceLabels[ref] ?? `${ref.slice(0, 8)}…`)
+                  .map((ref) => evidenceLabels[ref] ?? shortTechnicalId(ref))
                   .join(", ")}
               </p>
             ) : null}

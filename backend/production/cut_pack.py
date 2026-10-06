@@ -16,6 +16,7 @@ from documents.renderers import (
     _CSS,
     _ROLE_ES,
     _cldate,
+    _fmt_mm as _eng_fmt_mm,
     _cut_key,
     _cut_member_map,
     _cut_piece_ids,
@@ -96,9 +97,9 @@ _ORIENTATION_ES = {
 
 
 def _fmt_mm(value: object) -> str:
-    """Printed mm without decorative decimals: 6000.00 → '6000',
-    1319.50 → '1319.5'. Internal data stays Decimal — only the glyph
-    is shortened."""
+    """Printed mm per §3.3 — thin-space grouping, comma decimal:
+    6000.00 → '6 000', 1319.50 → '1 319,5'. Internal data stays
+    Decimal — only the glyph changes."""
     text = _value(value)
     if text in ("", "—"):
         return "—"
@@ -106,7 +107,7 @@ def _fmt_mm(value: object) -> str:
         number = Decimal(str(value))
     except Exception:
         return text
-    out = format(number.normalize(), "f")
+    out = _eng_fmt_mm(number.normalize())
     return out if out else "0"
 
 
@@ -299,7 +300,7 @@ def _bar_svg(
                 f'{escape(location)}{" " if position else ""}'
                 f'{escape(str(position))}</text>'
             )
-            dim_label = f'{_value(cut.get("length_mm"))} mm · {angles}'
+            dim_label = f'{_fmt_mm(cut.get("length_mm"))} mm · {angles}'
             dim_half = _est(dim_label, fs_dim) / 2
             dim_lane = next(
                 (
@@ -327,7 +328,7 @@ def _bar_svg(
                     f'font-weight="600">{seq}</text>'
                 )
             side = "above" if index % 2 == 0 else "below"
-            label = f"{seq} · {code} · {_value(cut.get('length_mm'))}"
+            label = f"{seq} · {code} · {_fmt_mm(cut.get('length_mm'))}"
             half = _est(label, fs_code) / 2
             lane = 0
             while (
@@ -387,7 +388,7 @@ def _bar_svg(
             # The full label only goes inside when the remainder can hold it —
             # a narrow tail otherwise bleeds its text over the last segment.
             # The mm value already prints in the bar's h3 line.
-            inside_label = f"{tag} {_value(remainder)} mm"
+            inside_label = f"{tag} {_fmt_mm(remainder)} mm"
             fits = _est(inside_label, fs_dim) <= remainder - u
             label = inside_label if fits else tag
             if fits:
@@ -399,7 +400,7 @@ def _bar_svg(
                     f'<text x="{cx}" y="{pad_top + bar_h / 2}" '
                     'text-anchor="middle" dominant-baseline="middle" '
                     f'fill="#161C1F" font-size="{fs_dim}">'
-                    f'{tag} {escape(_value(remainder))} mm</text>'
+                    f'{tag} {escape(_fmt_mm(remainder))} mm</text>'
                 )
             elif _est(label, fs_dim) <= remainder - u * Decimal("0.5"):
                 svg.append(
@@ -621,7 +622,7 @@ def _sheet_svg(
             f'<text x="{x + w / 2}" y="{y + h / 2 + fs_dim}" text-anchor="middle" '
             'fill="#161C1F" '
             f'font-size="{fs_dim}">'
-            f'{_value(w)}×{_value(h)}</text>'
+            f'{_fmt_mm(w)}×{_fmt_mm(h)}</text>'
             f'<text x="{x + w / 2}" y="{y + h / 2 + gap + fs_dim}" '
             'text-anchor="middle" '
             f'fill="#4A5559" font-size="{fs_loc}">{escape(location)}</text>'
@@ -652,8 +653,11 @@ def _pack_html(
     fingerprint: str,
 ) -> str:
     order_code = _value(order["order_code"])
-    short_fp = fingerprint[:16]
-    qr_payload = f"DEKOPEN|{order_code}|CUTPACK|{short_fp}"
+    # El QR lleva 16 hex de huella — suficiente colisión cero para verificar
+    # el plan en taller; el pie imprime 8, la forma "abreviada" §3.3.
+    qr_fp = fingerprint[:16]
+    short_fp = fingerprint[:8]
+    qr_payload = f"DEKOPEN|{order_code}|CUTPACK|{qr_fp}"
     import segno
 
     qr_svg = segno.make(qr_payload, error="m").svg_inline(border=2, scale=6)
@@ -688,7 +692,7 @@ def _pack_html(
         '<div class="masthead"><span class="brand">DEKOPEN<span class="mark">'
         "</span></span>"
         f'<div class="meta"><strong>{escape(order_code)}</strong><br/>'
-        f'Pack de corte · {escape(short_fp)}</div></div>'
+        'Pack de corte</div></div>'
         '<div class="rule-stack"></div>'
         '<div class="pack-meta">'
         f'<span>Color: <strong>{escape(finish_key_label(optimization.get("color")))}</strong></span>'
@@ -709,9 +713,10 @@ def _pack_html(
             source = str(bar.get("source") or "NEW")
             remnant_id = str(bar.get("remnant_id") or "")
             rack = remnant_racks.get(remnant_id)
+            remnant_folio = _value(bar.get("remnant_code"))
             badge = (
-                '<span class="badge badge-remnant">retazo RET-'
-                + escape(remnant_id[:8].upper())
+                '<span class="badge badge-remnant">retazo'
+                + (f" {escape(remnant_folio)}" if remnant_folio != "—" else "")
                 + (f" · rack {escape(rack)}" if rack else "")
                 + "</span>"
                 if source == "REMNANT"
@@ -814,7 +819,7 @@ def _pack_html(
                 f"{escape(material)} · {escape(color)} · "
                 f"{_fmt_mm(stock)} mm</h3>{badge}"
                 f'<span class="muted">aprovechamiento '
-                f"{_pct(bar.get('yield_pct'))}%</span></div>"
+                f"{_pct(bar.get('yield_pct'))} %</span></div>"
                 + f'<div class="bar-orient">{section}'
                 f'<span class="conv">{escape(" ".join(orient_bits))}</span>'
                 "</div>"
@@ -857,6 +862,7 @@ def _pack_html(
             # The h2 rides inside the first block — break-after:avoid is
             # unreliable across pages in WeasyPrint, while an inline-level
             # box is atomic by construction.
+            sheet_folio = _value(sheet.get("remnant_code"))
             body += (
                 '<div class="bar-block">'
                 + ("<h2>Plan de láminas</h2>" if first else "")
@@ -864,7 +870,13 @@ def _pack_html(
                 f"{escape(_value(sheet.get('purchasing_sku')))} · "
                 f"{_fmt_mm(sheet.get('sheet_width_mm'))}×"
                 f"{_fmt_mm(sheet.get('sheet_height_mm'))} mm · "
-                f"aprovechamiento {_pct(sheet.get('yield_pct'))}%</h3>"
+                f"aprovechamiento {_pct(sheet.get('yield_pct'))} %"
+                + (
+                    f" · retazo {escape(sheet_folio)}"
+                    if sheet_folio != "—"
+                    else ""
+                )
+                + "</h3>"
                 + _sheet_svg(sheet, labels, infills)
                 + "</div>"
             )
@@ -904,8 +916,8 @@ def _pack_html(
                       + _location(labels, item.get("bay_id"), item.get("leaf_id")),
                   ),
                   item.get("group"),
-                  f"{_value(item.get('width_mm'))}×{_value(item.get('height_mm'))}"
-                  if item.get("width_mm") else _value(item.get("length_mm")),
+                  f"{_fmt_mm(item.get('width_mm'))}×{_fmt_mm(item.get('height_mm'))}"
+                  if item.get("width_mm") else _fmt_mm(item.get("length_mm")),
                   _UNNEST_REASONS.get(str(item.get("reason") or ""),
                                       _value(item.get("reason")))]
                  for item in unnested],
@@ -917,7 +929,7 @@ def _pack_html(
         '<div class="sign-cell sign-date"><span class="sign-label">Fecha</span></div>'
         '<div class="sign-cell"><span class="sign-label">Operario</span></div>'
         '<div class="sign-cell"><span class="sign-label">Verificado por</span></div>'
-        f"</div><p class=\"muted\">Huella completa: {escape(fingerprint)}</p></main>"
+        "</div></main>"
     )
     return (
         '<!doctype html><html lang="es-CL"><head><meta charset="utf-8">'

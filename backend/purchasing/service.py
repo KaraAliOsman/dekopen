@@ -17,7 +17,7 @@ from dekopen_engine.documentary_canonical import (
 )
 
 from documents.renderers import _piece_labels
-from documents.repository import DocumentaryError, decoded, documentary_backend, json_text, one, rows, write
+from documents.repository import DocumentaryError, decoded, documentary_backend, json_text, next_human_code, one, rows, write
 from inventory.production_stock import coverage_for_version
 from inventory.service import stock_variant_key
 from projects import org_branding
@@ -590,7 +590,11 @@ def confirm_order_type_batch(
                 NAMESPACE_URL,
                 f"https://dekopen.local/order/{batch_id}/{eligibility_id}",
             )
-            order_code = f"PO-{order_id.hex[:12].upper()}"
+            # Folio humano OC- por org — private.next_human_code serializa
+            # con advisory lock, así que órdenes concurrentes del mismo
+            # batch obtienen folios consecutivos. Las órdenes ya emitidas
+            # conservan su folio PO-… sellado (order_snapshot_hash).
+            order_code = next_human_code(org_id, "orders")
             allocation_identity = documentary_sha256_v1({
                 "batch_allocation_hash": allocation_hash,
                 "supplier_eligibility_id": eligibility_id,

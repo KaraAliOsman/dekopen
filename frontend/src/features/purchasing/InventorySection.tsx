@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 import { ApiError } from "../../api/apiMutator";
-import { fmtMm } from "../../format";
+import { fmtMm, fmtQty, shortTechnicalId } from "../../format";
 import { t } from "../../i18n/es-CL";
 import { formatDateTime } from "../../format";
 import { useConfirm } from "../../ui";
@@ -11,6 +11,7 @@ type RequestFn = <T>(path: string, method?: string, body?: unknown) => Promise<T
 
 type Remnant = {
   id: string;
+  remnant_code: string;
   kind: "BAR" | "SHEET";
   stock_authority_id: string | null;
   article_sku?: string | null;
@@ -157,7 +158,7 @@ export function InventorySection({
   });
   const [authorities, setAuthorities] = useState<BarAuthority[]>([]);
   const [label, setLabel] = useState<{
-    remnant_id: string;
+    remnant_code: string;
     identity: string;
     qr_svg: string;
     dims: string;
@@ -211,7 +212,7 @@ export function InventorySection({
     const q = remnantQuery.trim().toLowerCase();
     if (!q) return true;
     return [
-      `RET-${r.id.slice(0, 8).toUpperCase()}`,
+      r.remnant_code,
       r.sheet_workshop_sku ?? "",
       r.article_sku ?? "",
       authorityNames.get(r.stock_authority_id ?? "") ?? "",
@@ -280,7 +281,7 @@ export function InventorySection({
     }>(`inventory/remnants/${remnant.id}/label/`)
       .then((data) =>
         setLabel({
-          remnant_id: remnant.id.slice(0, 8).toUpperCase(),
+          remnant_code: remnant.remnant_code,
           identity: data.identity,
           qr_svg: data.qr_svg,
           dims: remnantDims(remnant),
@@ -522,9 +523,7 @@ export function InventorySection({
           <tbody>
             {visible.map((r) => (
               <tr key={r.id}>
-                <td className="inventory-remnant-code">
-                  {`RET-${r.id.slice(0, 8).toUpperCase()}`}
-                </td>
+                <td className="inventory-remnant-code">{r.remnant_code}</td>
                 <td>{remnantKindLabel(r.kind)}</td>
                 <td>
                   {r.kind === "SHEET"
@@ -540,11 +539,7 @@ export function InventorySection({
                   {remnantOriginLabel(r.origin)}
                   {r.origin_order_code ? ` · ${r.origin_order_code}` : ""}
                 </td>
-                <td>
-                  {r.status === "RESERVED"
-                    ? (r.reserved_order_code ?? r.reserved_order_id?.slice(0, 8) ?? "—")
-                    : "—"}
-                </td>
+                <td>{r.status === "RESERVED" ? (r.reserved_order_code ?? "—") : "—"}</td>
                 <td>
                   {remnantAge(r.created_at)}
                   <span className="purchasing-hint"> · {formatDateTime(r.created_at)}</span>
@@ -603,7 +598,7 @@ export function InventorySection({
         <div className="inventory-label" role="figure" aria-label={t("inventory.label")}>
           <div className="qr" dangerouslySetInnerHTML={{ __html: label.qr_svg }} />
           <div>
-            <p className="inventory-label-id">RET-{label.remnant_id}</p>
+            <p className="inventory-label-id">{label.remnant_code}</p>
             <p className="inventory-label-name">{label.identity}</p>
             <p className="inventory-label-dims">{label.dims}</p>
             <p className="inventory-label-rack">
@@ -640,8 +635,8 @@ export function InventorySection({
                 <tr key={m.id}>
                   <td>{formatDateTime(m.created_at)}</td>
                   <td>{movementLabel(m.movement_type)}</td>
-                  <td>{itemNames.get(m.item_id) ?? m.item_id.slice(0, 8)}</td>
-                  <td>{m.quantity}</td>
+                  <td>{itemNames.get(m.item_id) ?? shortTechnicalId(m.item_id)}</td>
+                  <td>{fmtQty(m.quantity)}</td>
                   <td>{m.rack_location ?? "—"}</td>
                   <td>{m.actor_label ?? "—"}</td>
                   <td title={m.note ?? undefined}>

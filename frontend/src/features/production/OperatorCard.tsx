@@ -7,7 +7,7 @@
 
 import { useState } from "react";
 
-import { fmtMm, formatDateTime } from "../../format";
+import { fmtMm, fmtQty, formatDateTime } from "../../format";
 import { t, tOptional } from "../../i18n/es-CL";
 import {
   STEP_STOCK_KINDS,
@@ -146,7 +146,7 @@ function MemberOpsStrip({
           return (
             <g key={op.operation_id ?? index}>
               <title>
-                {`${index + 1} · ${opLabel(op)} · u=${op.u_mm ?? "—"} · ${opFaceLabel(op.face)}`}
+                {`${index + 1} · ${opLabel(op)} · u=${fmtMm(op.u_mm)} · ${opFaceLabel(op.face)}`}
               </title>
               <line
                 x1={x}
@@ -503,9 +503,11 @@ export function OperatorStepCard({
                         {sawOps.map((op) => (
                           <tr key={op.operation_id}>
                             <td>{String(op.host ?? "").replace("bar:", "")}</td>
-                            <td>{op.x_mm ?? "—"}</td>
+                            <td>{fmtMm(op.x_mm)}</td>
                             <td>
-                              {op.angle_left_deg ?? "—"}° / {op.angle_right_deg ?? "—"}°
+                              {op.angle_left_deg ? `${fmtQty(op.angle_left_deg)}°` : "—"}
+                              {" / "}
+                              {op.angle_right_deg ? `${fmtQty(op.angle_right_deg)}°` : "—"}
                             </td>
                             <td>
                               {op.detail?.boundary
@@ -652,11 +654,13 @@ export function OperatorStepCard({
                         <td>{piece.workshop_sku ?? "—"}</td>
                         <td>{cutRoleLabel(piece.role)}</td>
                         <td>
-                          {piece.length_mm ?? "—"}
+                          {fmtMm(piece.length_mm)}
                           {piece.sagitta_mm ? ` · f ${fmtMm(piece.sagitta_mm)}` : ""}
                         </td>
                         <td>
-                          {piece.angle_left ?? "—"}° / {piece.angle_right ?? "—"}°
+                          {piece.angle_left ? `${fmtQty(piece.angle_left)}°` : "—"}
+                          {" / "}
+                          {piece.angle_right ? `${fmtQty(piece.angle_right)}°` : "—"}
                         </td>
                         <td>{_loc(labels, piece)}</td>
                         <td>

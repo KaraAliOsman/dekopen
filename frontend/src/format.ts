@@ -31,18 +31,58 @@ export function parseLocaleNumber(candidate: string): number | null {
 /** Display a decimal millimetre string at business precision: "1200.0000" →
  * "1200", "235.50" → "235.5". Non-decimal text passes through untouched. */
 /** Yield/utilization percentages display at one decimal (93.5, not 93.4667). */
+/** Porcentaje a un decimal con coma — 85.9 → "85,9". El glifo % lo pone
+ * el llamador (`{fmtPct(x)} %`) o `formatPercent`, que lo incluye. */
 export function fmtPct(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === "") return "—";
   const num = Number(value);
   if (!Number.isFinite(num)) return String(value);
-  return num.toFixed(1);
+  return num.toFixed(1).replace(".", ",");
 }
 
-export function fmtMm(value: string | number | null | undefined): string {
+/** Identificador técnico cuando falta la etiqueta humana — un UUID/hash
+ * nunca imprime su hex: queda como "#8f3a", inequívoco de folio. */
+export function shortTechnicalId(value: string | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const clean = value.replaceAll("-", "");
+  if (clean.length > 8 && /^[0-9a-fA-F]+$/.test(clean)) {
+    return `#${clean.slice(-4).toLowerCase()}`;
+  }
+  return value;
+}
+
+/** Decimal canónico para INPUTS — sin agrupar ni coma: un valor editable o
+ * persistido jamás lleva glifos §3.3 ("1000.35" se edita, "1 000,35" se lee). */
+export function fmtMmCanonical(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === "") return "—";
   const text = String(value);
   if (!/^[+-]?\d+(\.\d+)?$/.test(text)) return text;
   return text.includes(".") ? text.replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "") : text;
+}
+
+/** Milímetros §3.3 — agrupa con espacio fino y decimal con coma:
+ * "2400" → "2 400", "1249.50" → "1 249,5". */
+export function fmtMm(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const text = String(value);
+  if (!/^[+-]?\d+(\.\d+)?$/.test(text)) return text;
+  const [intPart = "", fracRaw] = text.split(".");
+  const frac = (fracRaw ?? "").replace(/0+$/, "");
+  const grouped = groupThin(intPart);
+  return frac ? `${grouped},${frac}` : grouped;
+}
+
+/** Cantidad §3.3 — sin escala forzada: recorta ceros sobrantes del NUMERIC
+ * ("476.0000" → "476", "2.5000" → "2,5"), hasta 3 decimales reales con coma
+ * ("0.125" → "0,125"). Precisión mayor se recorta a 3 — una cantidad con más
+ * decimales es error del emisor, no detalle que se lee. */
+export function fmtQty(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const text = String(value);
+  if (!/^[+-]?\d+(\.\d+)?$/.test(text)) return text;
+  const [intPart = "", fracRaw = ""] = text.split(".");
+  const frac = fracRaw.replace(/0+$/, "").slice(0, 3);
+  return frac ? `${intPart},${frac}` : intPart;
 }
 
 /** Chilean RUT — módulo-11 check digit. Accepts "12.345.678-5", "12345678-5",

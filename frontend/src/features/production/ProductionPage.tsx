@@ -53,7 +53,7 @@ import { ApiError, apiFetchBlob } from "../../api/apiMutator";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
 import { formatDateTime } from "../../format";
 import { DeniedState, EmptyState, PageHeader, usePrompt } from "../../ui";
-import { fmtMm, fmtPct } from "../../format";
+import { fmtMm, fmtQty, formatPercent } from "../../format";
 import { formatDate } from "../../format";
 import { t, tDynamic, tOptional } from "../../i18n/es-CL";
 import { useAssistantSurface } from "../assistant/assistantContext";
@@ -2257,7 +2257,7 @@ export function ProductionPage(): JSX.Element {
                           <p className="production-invalidated" role="alert">
                             {t("production.planInvalidated")}
                             {optimization.invalidated_by ? (
-                              <code>{String(optimization.invalidated_by).slice(0, 8)}</code>
+                              <code>{String(optimization.invalidated_by)}</code>
                             ) : null}
                           </p>
                         ) : null}
@@ -2291,9 +2291,7 @@ export function ProductionPage(): JSX.Element {
                                       <span className="production-remnant-tag">
                                         {" "}
                                         {t("production.optimizeRemnantBar")}
-                                        {bar.remnant_id
-                                          ? ` · REM-${String(bar.remnant_id).slice(0, 8)}`
-                                          : ""}
+                                        {bar.remnant_id ? ` · ${bar.remnant_code ?? ""}` : ""}
                                         {consumedLocations.get(String(bar.remnant_id ?? ""))
                                           ? ` · ${consumedLocations.get(String(bar.remnant_id ?? ""))}`
                                           : ""}
@@ -2318,7 +2316,7 @@ export function ProductionPage(): JSX.Element {
                                       </span>
                                     ) : null}
                                   </td>
-                                  <td>{fmtPct(bar.yield_pct)}%</td>
+                                  <td>{formatPercent(bar.yield_pct, "points")}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -2401,13 +2399,13 @@ export function ProductionPage(): JSX.Element {
                                         <td>
                                           {row.sku ?? "—"} · {row.unit ?? ""}
                                         </td>
-                                        <td>{row.on_hand ?? "0"}</td>
-                                        <td>{row.needed ?? "0"}</td>
-                                        <td>{row.reserved ?? "0"}</td>
+                                        <td>{fmtQty(row.on_hand)}</td>
+                                        <td>{fmtQty(row.needed)}</td>
+                                        <td>{fmtQty(row.reserved)}</td>
                                         <td>
                                           {row.short && row.short !== "0" ? (
                                             <strong className="production-stock-short">
-                                              {row.short}
+                                              {fmtQty(row.short)}
                                             </strong>
                                           ) : (
                                             "0"
@@ -2466,8 +2464,8 @@ export function ProductionPage(): JSX.Element {
                                     `${metrics.bars ?? 0} barras`,
                                     `${metrics.purchased_bars ?? 0} compra`,
                                     `${metrics.remnant_bars ?? 0} barras retazo`,
-                                    `${metrics.process_waste_mm ?? "0"} mm merma de proceso`,
-                                    `${metrics.reusable_remnant_mm ?? "0"} mm retazo reutilizable`,
+                                    `${fmtMm(metrics.process_waste_mm)} mm merma de proceso`,
+                                    `${fmtMm(metrics.reusable_remnant_mm)} mm retazo reutilizable`,
                                     `${metrics.cuts ?? 0} cortes`,
                                   ].join(" · ")}
                                 </p>
@@ -2484,7 +2482,7 @@ export function ProductionPage(): JSX.Element {
                                               typeof t
                                             >[0],
                                           ) || key
-                                        }${comparison?.chosen === key ? " ← " + t("production.optimizeChosen") : ""}: ${m?.purchased_bars ?? 0} barras · ${m?.process_waste_mm ?? "0"} mm`,
+                                        }${comparison?.chosen === key ? " ← " + t("production.optimizeChosen") : ""}: ${m?.purchased_bars ?? 0} barras · ${fmtMm(m?.process_waste_mm)} mm`,
                                     )
                                     .join("  ·  ")}
                                 </p>
@@ -2527,9 +2525,7 @@ export function ProductionPage(): JSX.Element {
                                     {layout.source === "REMNANT" ? (
                                       <span className="production-remnant-tag">
                                         {t("production.optimizeRemnantBar")}
-                                        {layout.remnant_id
-                                          ? ` · REM-${String(layout.remnant_id).slice(0, 8)}`
-                                          : ""}
+                                        {layout.remnant_id ? ` · ${layout.remnant_code ?? ""}` : ""}
                                         {consumedLocations.get(String(layout.remnant_id ?? ""))
                                           ? ` · ${consumedLocations.get(String(layout.remnant_id ?? ""))}`
                                           : ""}{" "}
@@ -2542,7 +2538,7 @@ export function ProductionPage(): JSX.Element {
                                       )
                                       .join(" · ")}
                                   </td>
-                                  <td>{fmtPct(layout.yield_pct)}%</td>
+                                  <td>{formatPercent(layout.yield_pct, "points")}</td>
                                 </tr>
                               ))}
                             </tbody>

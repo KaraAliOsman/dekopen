@@ -102,6 +102,7 @@ class OrderReceivingLineSerializer(serializers.Serializer):
 class OrderReceiptSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     receipt_key = serializers.CharField()
+    receipt_code = serializers.CharField()
     note = serializers.CharField(allow_null=True)
     received_by = serializers.CharField(allow_null=True)
     created_at = serializers.DateTimeField()
@@ -124,6 +125,7 @@ class InventoryMovementRequestSerializer(StrictSerializer):
 
 class RemnantSerializer(serializers.Serializer):
     id = serializers.UUIDField()
+    remnant_code = serializers.CharField()
     kind = serializers.ChoiceField(choices=("BAR", "SHEET"))
     stock_authority_id = serializers.UUIDField(allow_null=True)
     sheet_workshop_sku = serializers.CharField(allow_null=True)

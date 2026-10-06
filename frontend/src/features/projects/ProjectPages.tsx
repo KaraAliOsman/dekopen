@@ -32,7 +32,14 @@ import type {
 import { useAuthSession } from "../../auth/AuthSessionProvider";
 import { t, tOptional, type TranslationKey } from "../../i18n/es-CL";
 import { formatDate, formatMoney } from "../../format";
-import { fmtMm, formatDateTime, formatRevision, isValidEmail, isValidRut } from "../../format";
+import {
+  fmtMm,
+  formatDateTime,
+  formatPercent,
+  formatRevision,
+  isValidEmail,
+  isValidRut,
+} from "../../format";
 import { projectNameWrite } from "./projectNames";
 import { useProjectView } from "./useProject";
 import "./projects.css";
@@ -432,10 +439,7 @@ function formatCompareValue(field: string, value: string, currency: string): str
   if (field === "width_mm" || field === "height_mm") return fmtMm(value);
   // discount_pct persists as a fraction (0.10 = 10 %) — percent-format it.
   if (field === "discount_pct") {
-    const fraction = Number(value);
-    if (!Number.isFinite(fraction)) return `${value}%`;
-    const pct = fraction <= 1 ? fraction * 100 : fraction;
-    return `${pct.toFixed(2).replace(/\.?0+$/, "")}%`;
+    return formatPercent(value, "fraction");
   }
   return value;
 }
@@ -1983,7 +1987,7 @@ function ProjectWorkspace({
                         <dd>
                           {formatMoney(selected.price_net ?? "0", project.currency)}
                           {Number(selected.discount_pct) > 0 &&
-                            ` · ${t("portal.discount")} ${(Number(selected.discount_pct) * 100).toFixed(2).replace(/\.?0+$/, "")}%`}
+                            ` · ${t("portal.discount")} ${formatPercent(selected.discount_pct, "fraction")}`}
                         </dd>
                       </div>
                     )}
