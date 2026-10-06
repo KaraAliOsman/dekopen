@@ -30,9 +30,18 @@ def _where(columns: tuple[str, ...]) -> str:
 
 
 # Groups an installer must never see: the client registry carries fiscal PII
-# (RUT) and the documents group mixes invoices into the result set. Projects
-# still surface (dispatch/installation context) minus the commercial subtitle.
-_INSTALLER_EXCLUDED_GROUPS = {"clients", "documents"}
+# (RUT), quotations leak the commercial margin surface, the documents
+# group mixes invoices into the result set, and inventory/remnant/receipt
+# rows are floor stock the field role has no surface for. Projects still
+# surface (dispatch/installation context) minus the commercial subtitle.
+_INSTALLER_EXCLUDED_GROUPS = {
+    "clients",
+    "documents",
+    "quotations",
+    "inventory",
+    "remnants",
+    "receipts",
+}
 
 
 def search(org_id: UUID, query: str, role: str = "OWNER") -> dict:
@@ -81,6 +90,29 @@ def search(org_id: UUID, query: str, role: str = "OWNER") -> dict:
                 "title": row["name"],
                 "subtitle": row.get("rut"),
                 "path": "/clients",
+            }
+        )
+
+    for row in org(
+        "SELECT p.id, p.code, p.name, p.client_name, p.current_revision"
+        " FROM public.projects p"
+        " WHERE p.org_id=%s AND (__WHERE__)"
+        " AND EXISTS ("
+        "     SELECT 1 FROM public.project_versions v"
+        "     WHERE v.project_id = p.id AND v.org_id = p.org_id"
+        " )"
+        f" ORDER BY p.updated_at DESC LIMIT {GROUP_LIMIT}",
+        "p.name",
+        "p.code",
+        "p.client_name",
+    ):
+        results.append(
+            {
+                "group": "quotations",
+                "id": str(row["id"]),
+                "title": f"{row['code']} · {row['current_revision']}",
+                "subtitle": f"{row['name']} · {row['client_name']}",
+                "path": f"/projects/{row['id']}",
             }
         )
 
@@ -194,15 +226,21 @@ def search(org_id: UUID, query: str, role: str = "OWNER") -> dict:
             }
         )
 
-    # §8 — el folio es una dirección: teclear 'RT-000045' o 'REC-000012'
-    # en la paleta lleva directo a la entidad, igual que escanear su QR.
+    # §8 — el folio es una dirección: teclear 'RT-000045' en la paleta lleva
+    # directo al retazo, igual que escanear su QR; también lo encuentra su
+    # rack, material, la nota de etiqueta o el SKU del artículo origen
+    # (P03: «retazos por código o nombre»).
     for row in org(
-        "SELECT id, remnant_code, kind::text, status::text, sheet_workshop_sku"
+        "SELECT id, remnant_code, kind::text, status::text, sheet_workshop_sku,"
+        " rack_location"
         " FROM public.inventory_remnants"
         " WHERE org_id=%s AND (__WHERE__)"
         f" ORDER BY remnant_code LIMIT {GROUP_LIMIT}",
         "remnant_code",
         "sheet_workshop_sku",
+        "rack_location",
+        "material",
+        "notes",
     ):
         results.append(
             {
@@ -210,8 +248,9 @@ def search(org_id: UUID, query: str, role: str = "OWNER") -> dict:
                 "id": str(row["id"]),
                 "title": row["remnant_code"],
                 "subtitle": f"{row['kind']} · {row['status']}"
-                + (f" · {row['sheet_workshop_sku']}" if row["sheet_workshop_sku"] else ""),
-                "path": "/purchasing",
+                + (f" · {row['sheet_workshop_sku']}" if row["sheet_workshop_sku"] else "")
+                + (f" · {row['rack_location']}" if row["rack_location"] else ""),
+                "path": "/inventory",
             }
         )
 
@@ -287,7 +326,7 @@ def search(org_id: UUID, query: str, role: str = "OWNER") -> dict:
                 "id": str(row["id"]),
                 "title": row["sku"],
                 "subtitle": row["name"],
-                "path": "/purchasing",
+                "path": "/inventory",
             }
         )
 

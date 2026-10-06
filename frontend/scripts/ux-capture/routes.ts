@@ -75,6 +75,7 @@ export const ROUTES: CaptureRoute[] = [
     path: "/dashboard",
     role: "estimator",
     waitFor: '[data-testid="app-shell"]',
+    extraMobile: true,
   },
   { name: "projects", path: "/projects", role: "estimator" },
   { name: "project-borrador", path: "/projects/{{projects.borrador.id}}", role: "estimator" },
@@ -105,6 +106,13 @@ export const ROUTES: CaptureRoute[] = [
 
   // ---- workshop manager --------------------------------------------------
   {
+    name: "dashboard-manager",
+    path: "/dashboard",
+    role: "manager",
+    waitFor: '[data-testid="app-shell"]',
+    extraMobile: true,
+  },
+  {
     name: "production-manager",
     path: "/production",
     role: "manager",
@@ -133,6 +141,14 @@ export const ROUTES: CaptureRoute[] = [
   { name: "jobs-operator", path: "/jobs", role: "operator", extraMobile: true, touchAudit: true },
 
   // ---- installer ----------------------------------------------------------
+  {
+    name: "dashboard-installer",
+    path: "/dashboard",
+    role: "installer",
+    waitFor: '[data-testid="app-shell"]',
+    extraMobile: true,
+    touchAudit: true,
+  },
   { name: "jobs-installer", path: "/jobs", role: "installer", extraMobile: true, touchAudit: true },
   {
     name: "production-installer",

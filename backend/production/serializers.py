@@ -449,6 +449,32 @@ class DeliveryConfirmResponseSerializer(serializers.Serializer):
     delivery = DeliverySerializer()
 
 
+class DeliveryListItemSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    order_id = serializers.UUIDField()
+    order_code = serializers.CharField()
+    order_status = serializers.CharField()
+    project_id = serializers.UUIDField()
+    project_code = serializers.CharField()
+    project_name = serializers.CharField()
+    client_name = serializers.CharField()
+    scheduled_date = serializers.CharField()
+    time_window = serializers.CharField()
+    status = serializers.CharField()
+    address = serializers.CharField()
+    contact_name = serializers.CharField(allow_null=True)
+    contact_phone = serializers.CharField(allow_null=True)
+    installer_name = serializers.CharField(allow_null=True)
+    notes = serializers.CharField(allow_null=True)
+    unit_indexes = serializers.ListField(allow_null=True)
+    created_at = serializers.DateTimeField()
+    updated_at = serializers.DateTimeField()
+
+
+class DeliveryListResponseSerializer(serializers.Serializer):
+    items = DeliveryListItemSerializer(many=True)
+
+
 class ProductionOrderTraceSerializer(serializers.Serializer):
     work_order = serializers.DictField()
     project = serializers.DictField(allow_null=True)

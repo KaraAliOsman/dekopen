@@ -272,6 +272,38 @@ class ProjectListResponseSerializer(serializers.Serializer):
     items = ProjectResponseSerializer(many=True)
 
 
+class QuotationApprovalSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    status = serializers.CharField()
+    expires_at = serializers.DateTimeField(allow_null=True)
+    view_count = serializers.IntegerField()
+    first_viewed_at = serializers.DateTimeField(allow_null=True)
+    last_viewed_at = serializers.DateTimeField(allow_null=True)
+    decided_by = serializers.CharField(allow_null=True)
+    decided_at = serializers.DateTimeField(allow_null=True)
+    decided_note = serializers.CharField(allow_null=True)
+    created_at = serializers.DateTimeField()
+
+
+class QuotationItemSerializer(serializers.Serializer):
+    project_id = serializers.UUIDField()
+    project_code = serializers.CharField()
+    project_name = serializers.CharField()
+    client_name = serializers.CharField()
+    project_status = serializers.CharField()
+    current_revision = serializers.CharField()
+    currency = serializers.CharField()
+    total_price_gross = serializers.CharField()
+    versions_count = serializers.IntegerField()
+    last_sealed_at = serializers.DateTimeField(allow_null=True)
+    approval = QuotationApprovalSerializer(allow_null=True)
+    quote_state = serializers.CharField()
+
+
+class QuotationListResponseSerializer(serializers.Serializer):
+    items = QuotationItemSerializer(many=True)
+
+
 class CloneProjectSerializer(StrictSerializer):
     name = serializers.CharField(max_length=255, required=False)
     expected_updated_at = serializers.DateTimeField()

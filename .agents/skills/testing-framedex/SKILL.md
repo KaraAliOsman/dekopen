@@ -639,3 +639,14 @@ description: Local dev-stack recipe for DEKOPEN E2E testing — Supabase CLI sta
   fields together; empty/whitespace `doc_terms` values are stripped
   client-side before POST and land as absent keys (verify with
   `SELECT doc_paper_size, doc_terms FROM tenancy_organizations`).
+
+## P03 shell/stack learnings (2026-10-06)
+
+- `supabase status -o env` emits `KEY="VALUE"` shell lines, NOT JSON — extract with `grep -o 'SERVICE_ROLE_KEY="[^"]*"' | cut -d'"' -f2`. A JSON-shaped grep returns empty silently → `invalid_token` 401 everywhere and magic links never reaching Mailpit.
+- Fixture `scripts/dev_fixture.py` orgs: "Ventanas del Sur SpA" (6 miembros) + "Cristales del Norte Ltda." (2, casi sin datos — `demo-multi` es ESTIMATOR en ambas y es el único camino fiable al estado vacío «Todo al día»). Cuentas `demo-{owner,estimator,manager,operator,installer,multi}@fixture.dekopen.local`; estado en `.fixture-state.json` (incluye la semilla TOTP del OWNER aal2 — TOTP se deriva con hmac-sha1 sobre el base32, counter=time//30, sin pyotp).
+- Códigos del fixture que existen: `P-000001..13`, `OC-000001..4`, `RT-000001..72`, OTs de taller solo `OT-P-000007/8/9-REV-A-*` (no existe `OT-P-000005*`); cliente «Inmobiliaria Los Alerces Ltda.».
+- `GET /api/v1/analytics/today/` es la cola «Hoy» (no `/api/v1/today/`). Destinos de búsqueda Ctrl K: proyectos→`/projects/{id}`, clientes→`/clients`, OC→`/purchasing`, RT→`/inventory`, OT→`/production`.
+- Superficie IA (orb, AskDekopen, badge «Modo de prueba», /assistant, /jobs) monta SOLO para OWNER/ESTIMATOR/WORKSHOP_MANAGER — OPERATOR/INSTALLER deben emitir 0 requests `/api/v1/ai/*` (verificar con `performance.getEntriesByType('resource')` + log de Django).
+- StrictMode firma de bug: página monta directo en estado de error con los GETs 200 — el doble-montaje aborta el primer fetch y `.catch→setFailed` gana la carrera contra el segundo fetch. Todo `useRef(new AbortController())` reemplazado en effect + precedencia `failed` sobre datos es sospechoso también en remontajes por cambio de org.
+- `?` no se puede teclear vía xdotool (`key "?"`/`type "?"` llegan como `\u0000`) — usar `key shift+slash`. `wmctrl -r :ACTIVE: -e 0,x,y,w,h` redimensiona la ventana. Para 390px usar DevTools device toolbar con preset iPhone y verificar `document.documentElement.clientWidth` (innerWidth miente). Overflow horizontal: `scrollWidth` vs `clientWidth` — `scrollLeft` se clampa a 0 cuando el overflow viene de elementos fijos.
+- Node real del box: `~/.nvm/versions/node/v24.19.0/bin` (la referencia vieja a `~/node22` puede no existir — comprobar).

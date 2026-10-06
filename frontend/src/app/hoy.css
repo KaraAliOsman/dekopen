@@ -1,0 +1,168 @@
+/* §8 «Hoy» — la cola ordenada por consecuencia. Una fila = una acción con
+   su razón; naranja solo donde una persona tiene que intervenir ya. */
+
+.hoy-layout {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 64rem) {
+  .hoy-layout {
+    grid-template-columns: minmax(0, 1fr) 18rem;
+  }
+}
+
+.hoy-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.hoy-item__link {
+  align-items: baseline;
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-1);
+  color: inherit;
+  column-gap: 0.875rem;
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr) auto;
+  padding: 0.75rem 0.875rem;
+  text-decoration: none;
+  transition: border-color 0.15s ease;
+}
+
+.hoy-item__link:hover,
+.hoy-item__link:focus-visible {
+  border-color: var(--theme-accent);
+}
+
+.hoy-item__urgency {
+  color: var(--theme-text-secondary);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* «Requiere persona» — el único uso de naranja de la página (≤3 %). */
+.hoy-item--overdue .hoy-item__urgency {
+  color: var(--person-ink);
+}
+
+.hoy-item--overdue .hoy-item__link {
+  border-left: 2px solid var(--person);
+}
+
+.hoy-item__main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.hoy-item__phrase {
+  color: var(--theme-text-primary);
+  font-weight: 600;
+}
+
+.hoy-item__entity {
+  color: var(--theme-text-primary);
+  font-family: var(--font-mono, "IBM Plex Mono", monospace);
+  font-size: 0.78rem;
+}
+
+.hoy-item__reason {
+  color: var(--theme-text-secondary);
+  font-size: 0.82rem;
+}
+
+.hoy-item__count {
+  align-self: center;
+  color: var(--theme-text-primary);
+  font-family: var(--font-mono, "IBM Plex Mono", monospace);
+  font-size: 1.1rem;
+  font-weight: 600;
+  min-width: 1.75rem;
+  text-align: center;
+}
+
+.hoy-item__cta {
+  align-self: center;
+  color: var(--theme-text-secondary);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.hoy-item__link:hover .hoy-item__cta,
+.hoy-item__link:focus-visible .hoy-item__cta {
+  color: var(--theme-accent);
+}
+
+.hoy-panels {
+  align-content: start;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.hoy-panel {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-1);
+  padding: 0.875rem;
+}
+
+.hoy-panel h2 {
+  margin: 0 0 0.625rem;
+}
+
+.hoy-panel ul {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.hoy-panel li {
+  align-items: baseline;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.625rem;
+}
+
+.hoy-panel__label {
+  color: var(--theme-text-secondary);
+  font-size: 0.82rem;
+}
+
+.hoy-panel__value {
+  color: var(--theme-text-primary);
+  font-family: var(--font-mono, "IBM Plex Mono", monospace);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.hoy-panel__count {
+  color: var(--theme-text-secondary);
+  font-family: var(--font-mono, "IBM Plex Mono", monospace);
+  font-size: 0.78rem;
+  min-width: 1.5rem;
+  text-align: right;
+}
+
+@media (max-width: 40rem) {
+  .hoy-item__link {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .hoy-item__urgency {
+    display: none;
+  }
+}

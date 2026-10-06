@@ -23,7 +23,6 @@ Append-only chronology. Keep newest entries at the bottom.
 - Confirmed the four required GitHub checks passed: Lint & Typecheck, Test Suite, Frontend Build and Database Gate.
 - Updated the queue state and current-reality verification ref so the next session can advance from P00.
 
-
 ## [2026-10-05] P00 | evidence harness completed end-to-end
 
 - Replaced the login-only smoke baseline with the full authenticated harness: per-role Mailpit magic-link logins, org selection and TOTP aal2 for the OWNER, declarative route table over all App.tsx routes (41 capture jobs), and report.json + index.html output.
@@ -31,7 +30,6 @@ Append-only chronology. Keep newest entries at the bottom.
 - Realistic fixture: two tenant orgs, 12 lifecycle projects, 5 portal token states and `.fixture-state.json` for route interpolation; idempotency proven by `frontend/tests/e2e/fixture.spec.ts` under `make test-db`.
 - Fixed a real dead-end found by the harness: `/select-organization` did not redirect `mfa_required` sessions to `/auth/mfa`, stranding multi-org OWNER logins.
 - Local jammy VM needed a self-built `libharfbuzz-subset.so.0` (harfbuzz 2.7.4) for WeasyPrint PDF tests; CI already installs `libharfbuzz-subset0`.
-
 
 ## [2026-10-05] IA1 | AI evaluation harness + baseline diagnosis
 
@@ -42,7 +40,6 @@ Append-only chronology. Keep newest entries at the bottom.
 - Non-blocking hook: `make test-ai-evals` + CI job `AI Evals (MOCK, non-blocking)` uploading `ci-mock.json` (gitignored).
 - Harness does not fix the IA — IA2/IA3 correct against this same vara.
 
-
 ## [2026-10-05] P01 | sistema de diseño v2 — Constitución como código
 
 - Implemented `docs/design/CONSTITUCION.md` as enforceable code: token architecture with light/dark/canvas/density roles, IBM Plex self-hosted fonts, primitive kit in `frontend/src/ui/` (incl. signature components: SheetSurface, DimLoader, TraceButton, OpeningGlyph), domain formatters, exhaustive `domainLabels` vs orval enums, and global Spanish form validation with RUT módulo-11.
@@ -50,7 +47,6 @@ Append-only chronology. Keep newest entries at the bottom.
 - Added §10 static guards in `scripts/check_guards.py` with committed ratchet baseline, and live slop detectors in `ux:capture` (multi-primary per region, radius/shadow/gradient/blur, WCAG contrast, emoji/exclamations, English, workshop touch targets, bare interactives) with unit tests.
 - Built DEV-only `/dev/ui` muestrario (both themes × 3 densities) and `/dev/ui/mal` reproducing the board-06 forbidden-pattern contrast; fixed chips showing raw enum text and the prohibited «Algo salió mal» title found during the editorial pass.
 - Replaced prohibited voice strings in `es-CL.ts`; committed PR template at `.github/pull_request_template.md`; before/after captures under `docs/redesign/captures/p01-antes|p01-despues/`.
-
 
 ## [2026-10-05] D01 | sistemas y perfiles de verdad
 
@@ -85,7 +81,6 @@ Append-only chronology. Keep newest entries at the bottom.
 - UI: inspector "Herrajes" muestra clase resuelta + "¿Por qué este kit?" + kit override + manilla (modelo/color/altura con aviso fuera de rango) + opciones vendibles + tabla de componentes en "Avanzado"; documento al cliente solo lo vendible.
 - Verificado: `make lint/typecheck/test/build` y `make test-db` verdes; OT real `OT-P-000014-REV-A-01` liberada en local con picking expandido (cierres ×3 por PER_HEIGHT, cremona cortada 1326 mm); capturas antes/después en `docs/redesign/captures/d04-herrajes/`; ux:capture scoped en rutas tocadas sin hallazgos nuevos.
 
-
 ## [2026-10-05] D03 | aperturas y tipologías de verdad
 
 - Modelo real de apertura: `Opening{movement × hinge_side × direction × leaf_role × fixed_in_sash}`, `BayLeaf{slot, opening}` y `OpeningSpec{unit_kind, leaves}` en `models.py`/`openings.py`. El enum `opening_type` sigue aceptado una versión y mapea totalmente (`spec_for_legacy`/`legacy_openings_for_spec`); goldens migrados idénticos.
@@ -96,7 +91,6 @@ Append-only chronology. Keep newest entries at the bottom.
 - Simbología DIN por vista según `_contrato.md` §9 en `documents/renderers.py` (`_spec_leaf_glyphs`), `ProductFrontSvg` y `OpeningGlyph`: continuo = hacia el observador, discontinuo = se aleja; puerta = arco desde la esquina de bisagras + umbral bajo hojas operables; fijo sin glifo.
 - Nombres es-CL "<movimiento> hacia <dirección> — bisagras a la <lado>" + propios ("Francesa 2 hojas — activa derecha", "Solo abatimiento (banderola)"), generados por el motor y espejados en `domainLabels`.
 - Verificado: `make lint|typecheck|test|build` y `make test-db` verdes (`PY=.venv/bin/python`); goldens idénticos al migrar + goldens nuevos por tipología; test de capacidades nombrando sistemas; 18 capturas técnicas 1440×900 en `docs/redesign/captures/d03-aperturas-tipologias/`.
-
 
 ## [2026-10-05] D07 | del vano de obra a la medida de fabricación
 
@@ -120,7 +114,6 @@ Append-only chronology. Keep newest entries at the bottom.
 - Readiness: la sonda de compra usa el color base declarado (primer finish_class='WHITE' faces='BOTH' del dominio; NATURAL en aluminio) en vez de 'WHITE' fijo.
 - Verificado: lint/typecheck/test/build y `make test-db` verdes (pgTAP 970); 24 capturas en `docs/redesign/captures/d05-colores-acabados/shots/` (selector, bicolor, editor 2D, 3D ambas caras, posición guardada) a 1440/1280/1024 claro+oscuro. Nota: a 1024px el fieldset de cabecera ocluye el botón "Vista 3D" (defecto de layout preexistente, documentado).
 
-
 ## [2026-10-05] IA2 | operaciones y herramientas de la IA
 
 - `ops_registry.py` (36 ops tipadas product/position/project + `prepare_*`) es la única fuente: `ops_contract()` → OpenAPI → `opsContract.generated.ts`; UI, API e IA comparten el mismo vocabulario — `check_generated_api` vela la paridad.
@@ -143,7 +136,6 @@ Append-only chronology. Keep newest entries at the bottom.
 - Errores corregidos en caliente: BOM renderizaba `kind` crudo (MOSQUITO_SCREEN) — ahora `assembly.fittingKind` con fallback `catalog.extraKind`; identidad de piezas con `numeric_collapsed` para no romper el binding `"1500.00"` ≡ `"1500"`.
 - Hallazgo E2E corregido: en vanos de un solo módulo `designPayload()` plegaba a la forma clásica (IntentNode pelado) y `product.extras` se perdía al guardar — ahora una posición simple CON extras persiste como `product-v2`, y `pickStarter` conserva `extras` al cambiar de starter (antes borraba las declaradas por plantilla).
 - Verificado: lint/typecheck/test/build verdes, `make test-db` (pgTAP + integracion + e2e), goldens vierteaguas/instalacion-ml, 30 capturas antes/despues (incl. 2 paginas DOC-01) en `docs/redesign/captures/d06-accesorios-extras/`, ux:capture sin hallazgos nuevos.
-
 
 ## [2026-10-05] IA3 | proveedor de IA real
 
@@ -200,3 +192,13 @@ Append-only chronology. Keep newest entries at the bottom.
 - Aprendizajes: `segno.make(...).svg_inline()` no acepta `line_color` (usa `dark=`/`light=`); el segno inline necesita `_Raw` o `mark_safe` en celdas de tabla; `_assembly_plan_strip` mapea `y - min_y` (los cantos traseros quedan arriba = EXTERIOR, la cadena frontal abajo = INTERIOR); `discount_pct` del motor llega como porcentaje humano (>1 ⇒ `/100`).
 - Verificado: 38 tests PyMuPDF nuevos + contratos/portal verdes; `make lint|typecheck|test|build` y `make test-db` verdes (`PY=.venv/bin/python`); capturas `docs/redesign/captures/doc01-v2/` (portada, resumen, detalle, cierre); decisiones en `docs/decisions/valores-por-defecto.md` sección P09.
 - No hecho: tabla de calendario de pagos con montos — no existe modelo de cuotas; el documento imprime `payment_terms` sellado (rubrica R-riesgo declarada en el PR).
+
+## [2026-10-06] P03 | shell por flujo + Inicio «Hoy» por rol
+
+- Encargo P03 (ola 1): barra lateral agrupada por flujo (Inicio / Ventas / Ingeniería / Operación / Asistente / Ajustes, plegable a icono+tooltip, secciones vacías ocultas por rol), topbar con migas de pan humanas + switchers org/proyecto + `Ctrl K` + campana de atención + ayuda `?`, y «Hoy» como cola ordenada por consecuencia (no dashboard).
+- Backend: `GET /api/v1/today/` devuelve la cola por rol (ítem = frase + código de entidad + CTA + razón, urgencias `overdue/today/soon/when_free`); contadores solo si accionables y filtrados; vacío único «Todo al día». Búsqueda global cubre clientes, proyectos, cotizaciones, OT, OC (folios reales `OC-` minteados por `next_human_code` vía el flujo documental completo: eligibility→allocation→confirm batch) y retazos (remnant_code/SKU/rack/material/nota, path `/inventory`); `_INSTALLER_EXCLUDED_GROUPS` excluye grupos no visibles para INSTALLER.
+- Matriz rol→nav espejo del backend: `AI_SURFACE_ROLES`/`hasAiSurface` replica `_AGENT_CALLERS`/`_JOB_READERS` (OWNER/ESTIMATOR/WORKSHOP_MANAGER) — OPERATOR e INSTALLER no montan Orb ni AskDekopen ni ven /assistant//jobs (OPERATOR antes recibía 403s en `/ai/*` en cada carga).
+- Responsive: <1024 px el riel colapsa a drawer; destinos táctiles ≥44 px en `@media (max-width:1024px)` (rail-toggle, topbar, búsqueda, skip-link); 390 px usable para estimator+installer.
+- Firma v1: Orb en topbar refleja jobs reales; cota-loader F3 en transiciones. Fixes de verificación: `overflow-x` 1503>1440 en settings-general (`.payments-form select` sin `max-width` — la opción más larga `Nombre · SKU · clase` desbordaba el documento); `touch-too-small` de chrome del shell; claves duplicadas `remnants` (residuo de rebase) en CommandPalette/es-CL.
+- Verificado: `make lint|typecheck|test|build` + `make test-db` verdes (`PY=.venv/bin/python`, pgTAP 1044, integración 278 incl. `test_shell_p03.py` — OC real, aislamiento tenant, exclusión INSTALLER); capturas 5 roles ×1440/390×claro/oscuro en `docs/redesign/captures/p03-shell-hoy/` (0 hallazgos en dashboard) + corrida completa `p03-shell-hoy-full/`; `ux:axe-shell` (axe 5 roles ×2 temas) sin violaciones serious/critical; paleta Ctrl K probada en vivo (`P-000012` → proyecto). Hallazgos netos restantes viven en páginas internas de otros encargos (production-*, portal, catalogs).
+- Decisiones registradas en `docs/decisions/valores-por-defecto.md` (sección P03: grupos del riel, matriz rol→nav, spec de cola por rol, migas humanas, grupos de paleta, campana, 44 px, columnas de retazos, `AI_PROVIDER=mock`).

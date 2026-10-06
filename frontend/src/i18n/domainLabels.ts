@@ -28,6 +28,14 @@ const l = (label: string, tone: DomainTone, icon?: string): DomainLabel => ({
  * Los valores faltantes se detectan en el test — este archivo es la fuente
  * de verdad editorial. */
 export const DOMAIN_LABELS: Record<string, L> = {
+  /* ---------- Hoy (urgencia de la cola por rol) ---------- */
+  UrgencyEnum: {
+    overdue: l("Atrasado", "person", "warn"),
+    today: l("Hoy", "warn", "clock"),
+    soon: l("Pronto", "info", "calendar"),
+    when_free: l("Cuando puedas", "neutral"),
+  },
+
   /* ---------- Proyecto / cotización ---------- */
   ProjectResponseStatusEnum: {
     DRAFT: l("Borrador", "neutral", "draft"),

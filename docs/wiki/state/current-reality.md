@@ -22,6 +22,7 @@ sources:
   - P02 identificadores/formato PR https://github.com/KaraAliOsman/dekopen/pull/27
   - P04 editor canvas-first PR https://github.com/KaraAliOsman/dekopen/pull/24
   - P09 DOC-01 propuesta PR https://github.com/KaraAliOsman/dekopen/pull/34
+  - P03 shell/Hoy PR https://github.com/KaraAliOsman/dekopen/pull/32
   - integracion/v1 merge 747c528b67d234d697624929ccbcc7098261ed54
   - open PR metadata observed 2026-09-27/28
   - AGENTS.md
@@ -277,6 +278,17 @@ Merged into `integracion/v1` as squash `acc90900e872e10cd93167f98d3911fbda19c61f
 - Formato §3.3 aplicado backend+frontend: mm enteros con espacio fino U+2009, coma decimal es-CL, CLP `$1.435.471`, `US$`/`UF`, `%` un decimal, `dd-mm-aaaa`; `frontend/src/format.ts` (`fmtMm`, `fmtMmCanonical` para inputs — decimal canónico en la frontera de edición/persistencia — `fmtPct`, `shortTechnicalId`), `<EntityCode>` para ids técnicos; CSV/DXF siguen canónicos/ASCII; huella digital 8-hex sólo en pie/cajetín (QR conserva 16 hex); sin UUID/hash ≥10 hex en superficies de cliente/taller.
 - Búsqueda global resuelve `OC-000012`, `RT-000003`, `REC-000004` y códigos OT/posición (CommandPalette + `search/service.py` grupos remnants/receipts).
 - Verificado: `make lint|typecheck|test|build` verdes (`PY=.venv/bin/python`); `make test-db` verde (pgTAP 1034 incl. `179_p02` 21 aserciones, integración 275 incl. 2 tests de concurrencia de folios, e2e Playwright); e2e `canvas.spec.ts` actualizado a expectativa `1 006 mm`.
+
+## P03 shell + Inicio «Hoy» state
+
+Open PR on `integracion/v1` (branch `devin/P03-shell-hoy`; pendiente de merge — el squash SHA se registra tras el merge):
+
+- Riel lateral por flujo: Inicio; Ventas (Clientes, Proyectos, Cotizaciones, Precios con gate); Ingeniería (Catálogo técnico); Operación (Compras, Inventario, Producción, Despacho); Asistente (Asistente, Trabajos — solo `AI_SURFACE_ROLES`); Ajustes. Plegable a icono+tooltip; secciones vacías no se renderizan por rol; <1024 px colapsa a drawer.
+- Topbar: migas de pan humanas (códigos `P-`/OT en vez de ids), switchers org/proyecto, `Ctrl K` paleta global (clientes, proyectos, cotizaciones, OT, OC, retazos por código/nombre — retazos por remnant_code/SKU/rack/material/nota → `/inventory`), campana de atención, ayuda `?`.
+- «Hoy» (`/dashboard`): `GET /api/v1/today/` (backend `analytics/today.py`) devuelve por rol una cola ordenada por consecuencia — ítem = frase + código de entidad + CTA + razón, urgencias `overdue/today/soon/when_free`; contadores solo accionables+filtrados; estado vacío único «Todo al día». El frontend nunca agrega.
+- `AI_SURFACE_ROLES`/`hasAiSurface` (`app/shellUtils.ts`) espeja `_AGENT_CALLERS`/`_JOB_READERS` del backend (OWNER/ESTIMATOR/WORKSHOP_MANAGER): OPERATOR/INSTALLER no montan Orb, AskDekopen ni ven rutas /assistant, /jobs — elimina los 403s de `/ai/*` que OPERATOR recibía en cada carga del shell.
+- Destinos táctiles ≥44 px bajo 1024 px; fix `overflow-x` en settings (`.payments-form select` `max-width:100%`).
+- Verificado: lint/typecheck/test/build + `make test-db` verdes; capturas 5 roles en `docs/redesign/captures/p03-shell-hoy/` (0 hallazgos en rutas dashboard) + `p03-shell-hoy-full/`; axe-shell sin serious/critical; e2e búsqueda resuelve `P-000012`, `OC-*` real minteada, `RT-000045`, `OT-P-000005-REV-A-03` y nombre de cliente con aislamiento tenant.
 
 ## P04 editor canvas-first state
 

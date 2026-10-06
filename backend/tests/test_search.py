@@ -38,6 +38,15 @@ def _seed(responses):
             [{"id": uuid4(), "name": "Inmobiliaria Sur", "rut": "76.123.456-7"}],
             [
                 {
+                    "id": pid,
+                    "code": "PRJ-1",
+                    "name": "Hotel Sur",
+                    "client_name": "Inmobiliaria",
+                    "current_revision": "B",
+                }
+            ],
+            [
+                {
                     "id": pos,
                     "project_id": pid,
                     "location_tag": "D101",
@@ -64,6 +73,7 @@ def _seed(responses):
                     "kind": "SHEET",
                     "status": "AVAILABLE",
                     "sheet_workshop_sku": "CH-44",
+                    "rack_location": "V-02",
                 }
             ],
             [
@@ -97,17 +107,20 @@ def test_every_group_maps_row_to_result(fake_rows):
     assert by_group["projects"][0]["title"] == "PRJ-1 · Hotel Sur"
     assert by_group["projects"][0]["path"] == f"/projects/{pid}"
     assert by_group["clients"][0]["title"] == "Inmobiliaria Sur"
+    assert by_group["quotations"][0]["title"] == "PRJ-1 · B"
+    assert by_group["quotations"][0]["path"] == f"/projects/{pid}"
     assert by_group["positions"][0]["path"] == f"/projects/{pid}/positions/{pos}/edit"
     assert by_group["systems"][0]["title"] == "DEMO_60 · Demo 60"
     assert len(by_group["articles"]) == 2
     assert by_group["orders"][0]["path"] == "/production"
     assert by_group["remnants"][0]["title"] == "RT-000045"
-    assert by_group["remnants"][0]["subtitle"] == "SHEET · AVAILABLE · CH-44"
+    assert by_group["remnants"][0]["subtitle"] == "SHEET · AVAILABLE · CH-44 · V-02"
+    assert by_group["remnants"][0]["path"] == "/inventory"
     assert by_group["receipts"][0]["title"] == "REC-000012"
     assert by_group["receipts"][0]["path"] == "/purchasing"
     assert by_group["documents"][0]["title"] == "FAC-3"
     assert by_group["documents"][1]["title"] == "GD-2"
-    assert by_group["inventory"][0]["path"] == "/purchasing"
+    assert by_group["inventory"][0]["path"] == "/inventory"
 
 
 def test_queries_are_org_scoped_and_pattern_safe(fake_rows):
@@ -170,9 +183,10 @@ def test_supplier_folios_resolve_under_documentary_role(fake_rows):
 def test_installer_stays_in_member_scope(fake_rows):
     calls, responses, documentary = fake_rows
     _seed(responses)
-    del responses[8]  # receipts group is not queried outside purchasing roles
+    del responses[9]  # receipts group is not queried outside purchasing roles
     out = service.search(uuid4(), "ot-9", role="INSTALLER")
     assert documentary == []
     groups = {item["group"] for item in out["results"]}
-    assert "receipts" not in groups
-    assert groups.isdisjoint({"clients", "documents"})
+    assert groups.isdisjoint(
+        {"clients", "documents", "quotations", "inventory", "remnants", "receipts"}
+    )

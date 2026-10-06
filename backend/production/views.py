@@ -22,7 +22,7 @@ from dekopen_engine.cutting import InvalidCutContract
 from documents.repository import DocumentaryError
 from documents.views import DOCUMENTARY_ERROR_DETAILS, ERRORS, documentary_scope, validate
 from engine_api.repository import SystemNotFound
-from production import cnc, service
+from production import cnc, deliveries as deliveries_api, service
 from production.trace import trace_piece, trace_version, trace_work_order
 from production.confirmations import confirmation_access, confirm_delivery
 from production.dispatch_notes import dispatch_note_access
@@ -37,6 +37,7 @@ from production.serializers import (
     DeliveryConfirmRequestSerializer,
     DeliveryConfirmResponseSerializer,
     DeliveryConfirmationAccessSerializer,
+    DeliveryListResponseSerializer,
     DeliveryResponseSerializer,
     DeliveryScheduleRequestSerializer,
     DeliveryTransitionRequestSerializer,
@@ -1038,6 +1039,46 @@ class ProductionVersionTraceView(APIView):
         with public_production_errors():
             with documentary_scope(request, _READERS) as (_, _, org_id):
                 output = trace_version(org_id=org_id, version_id=version_id)
+        return Response(output)
+
+
+class ProductionDeliveriesView(APIView):
+    """Hoja de ruta del despacho: todas las entregas del tenant con su OT,
+    proyecto y estado real. El equipo de instalación y el jefe de taller
+    trabajan desde aquí; el comercial no despacha."""
+
+    @extend_schema(
+        operation_id="production_deliveries",
+        parameters=[
+            ACTIVE_ORGANIZATION_HEADER,
+            OpenApiParameter(
+                name="when",
+                type=str,
+                location="query",
+                enum=["open", "today", "overdue", "all"],
+                description="Ventana en la zona de la organización",
+            ),
+            OpenApiParameter(
+                name="status",
+                type=str,
+                location="query",
+                enum=["SCHEDULED", "ON_ROUTE", "DELIVERED", "FAILED"],
+            ),
+        ],
+        request=None,
+        responses={200: DeliveryListResponseSerializer, **ERRORS},
+        tags=["production"],
+    )
+    def get(self, request):
+        with public_production_errors():
+            with documentary_scope(
+                request, ("OWNER", "WORKSHOP_MANAGER", "INSTALLER")
+            ) as (_, _, org_id):
+                output = deliveries_api.list_deliveries(
+                    org_id=org_id,
+                    when=request.query_params.get("when") or "open",
+                    status=request.query_params.get("status") or None,
+                )
         return Response(output)
 
 
