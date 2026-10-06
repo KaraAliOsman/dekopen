@@ -269,3 +269,14 @@ Append-only chronology. Keep newest entries at the bottom.
 - Retazos como stock de primera clase: `inventory_movements.remnant_id` + tipo `MOVE`; `scrap` exige motivo y reserva/movimiento escriben actor real; los retazos de producción guardan `physical_stock_identity` (vía `stock_authority`); `remnant_pool` en coverage y el filtro `stock_identity` resuelven autoridades — la UI sólo ofrece el retazo compatible que el motor calcula cuando una OT tiene faltante.
 - Causa raíz del 409 al cargar stock ya estaba corregida en la base (`a1b08c07`, lectura bajo `documentary_backend`); se agregan tests de regresión (acceso por rol + grants pgTAP).
 - Migraciones `20270210/11/12`; pgTAP `182` (16 aserciones); `make lint|typecheck|test|build|test-db` verdes (`PY=.venv/bin/python`); ux:capture 0 hallazgos `/purchasing`+`/inventory` tras llevar objetivos táctiles a 44 px (`.inventory-page` min-height incl. `summary` y `.fmt-code`); 14 capturas en `docs/redesign/captures/p15-compras-inventario/`; decisiones en `valores-por-defecto.md` §P15.
+
+
+## [2026-10-06] P14 | CNC: veredictos por máquina, tarjeta de miembro y auditoría
+
+- La pestaña Mecanizado pasa de matriz densa a tarjeta por miembro: identidad física completa, vista por caras a escala con ops ubicadas desde el datum declarado (sin cara → carril «cara no declarada», nunca adivinada) y tabla con X/Y/u, profundidad, herramienta y fuente de regla.
+- Lo declarado y no emitido es sección explícita por OT y por máquina (`declared_gaps`): anotaciones de taller, intención de manilla y mecanizado de herraje, con causa (`sin regla`, `sin coordenadas`) y, por máquina, si podría ejecutarlo (`sin herramienta`, `no soportada`, `sin tipo evaluable`, `emisor no implementado`).
+- Emisores honestos: registro `_POSTPROCESSORS` en código; `postprocessor_id` desconocido → BLOCK `emitter_not_implemented` en readiness + rechazo `cnc_emitter_not_implemented` en generación. Nunca se manda formato neutro como si fuera propietario.
+- CRUD máquinas (tipo/ejes/carreras/emisor) y herramientas bajo OWNER+WORKSHOP_MANAGER; migración `20270206000000` crea `cnc_authority_events` append-only (org-scoped, diff from→to) y `cnc_programs.superseded_by` enlaza el programa reemplazado con el vigente; nuevo diff `compare` entre versiones del programa.
+- Aprendizajes: `test_openapi` mantiene una allowlist de paths — cada endpoint nuevo hay que registrarlo; `verify`/`capture` regeneran PNGs de capturas anteriores (difs binarios) — no committear ruido; los tests sin `@pytest.mark.django_db` no pueden tocar la conexión aunque sea para `documentary_backend()` — la validación de enums va antes del `with`.
+- Verificado: `make lint|typecheck|test|build|test-db` verdes; capturas en `docs/redesign/captures/p14-cnc-mecanizado/`; decisiones en sección P14 de `valores-por-defecto.md`.
+
