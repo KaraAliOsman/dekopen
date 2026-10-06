@@ -25,6 +25,7 @@ sources:
   - P03 shell/Hoy PR https://github.com/KaraAliOsman/dekopen/pull/32
   - P17 asistente/Orb PR https://github.com/KaraAliOsman/dekopen/pull/35
   - P07 workspace precios PR https://github.com/KaraAliOsman/dekopen/pull/33
+  - P12 producción PR https://github.com/KaraAliOsman/dekopen/pull/40
   - P17 asistente IA/trabajos/Orb branch devin/P17-asistente-orb
   - integracion/v1 merge 747c528b67d234d697624929ccbcc7098261ed54
   - open PR metadata observed 2026-09-27/28
@@ -352,6 +353,8 @@ Merged into `integracion/v1` as squash `c7cde331c0c4763c4133928dcc4abe442a446b03
 
 
 ## P12 producción: tablero, OT y operario state
+
+Merged into `integracion/v1` as squash `5bbd04ce401863faec5f35a0b6f7fe9b900603f5` (dekopen PR #40):
 
 Open PR (branch `devin/P12-produccion`, on `integracion/v1`):
 
