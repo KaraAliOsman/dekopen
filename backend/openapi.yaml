@@ -27307,6 +27307,16 @@ components:
       required:
       - x_mm
       - y_mm
+    PlanStateEnum:
+      enum:
+      - none
+      - ok
+      - invalidated
+      type: string
+      description: |-
+        * `none` - none
+        * `ok` - ok
+        * `invalidated` - invalidated
     PolishingEdges:
       type: object
       properties:
@@ -28231,6 +28241,25 @@ components:
           type: object
           additionalProperties: {}
           nullable: true
+        project_code:
+          type: string
+          nullable: true
+        project_name:
+          type: string
+          nullable: true
+        client_name:
+          type: string
+          nullable: true
+        committed_date:
+          type: string
+          format: date
+          nullable: true
+        steps_blocked:
+          type: integer
+        qc_blocked:
+          type: boolean
+        plan_state:
+          $ref: '#/components/schemas/PlanStateEnum'
         created_at:
           type: string
           format: date-time
@@ -28291,6 +28320,25 @@ components:
           type: object
           additionalProperties: {}
           nullable: true
+        project_code:
+          type: string
+          nullable: true
+        project_name:
+          type: string
+          nullable: true
+        client_name:
+          type: string
+          nullable: true
+        committed_date:
+          type: string
+          format: date
+          nullable: true
+        steps_blocked:
+          type: integer
+        qc_blocked:
+          type: boolean
+        plan_state:
+          $ref: '#/components/schemas/PlanStateEnum'
         created_at:
           type: string
           format: date-time

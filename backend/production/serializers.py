@@ -48,6 +48,18 @@ class ProductionOrderSerializer(serializers.Serializer):
     shortage = serializers.IntegerField()
     version_shortage = serializers.IntegerField()
     remake_reason = serializers.DictField(allow_null=True, required=False)
+    # Board context (P12): project header + real commitment + plan/blocked
+    # state so the floor board cards carry obra/compromiso/bloqueos without
+    # a second request per order.
+    project_code = serializers.CharField(allow_null=True, required=False)
+    project_name = serializers.CharField(allow_null=True, required=False)
+    client_name = serializers.CharField(allow_null=True, required=False)
+    committed_date = serializers.DateField(allow_null=True, required=False)
+    steps_blocked = serializers.IntegerField(required=False)
+    qc_blocked = serializers.BooleanField(required=False)
+    plan_state = serializers.ChoiceField(
+        choices=("none", "ok", "invalidated"), required=False
+    )
     created_at = serializers.DateTimeField()
     project_version_id = serializers.UUIDField(allow_null=True, required=False)
     payload = serializers.DictField(required=False)

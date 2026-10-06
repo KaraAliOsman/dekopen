@@ -238,6 +238,7 @@ Registradas al implementar la Constitucion como codigo. No son configurables por
 | Textos legales por organización | `doc_terms` JSONB con llaves declaradas `plazo_entrega, instalacion, exclusiones, garantia, jurisdiccion`; vacío omite la línea | migración + `doc_terms_is_valid()`, serializers, `SettingsPage` | El §7 manda «sin valores desconocidos»: la llave ausente no imprime rótulo ni «Sin dato». |
 | Calendario de pagos | no existe modelo de cuotas: `payment_terms` (texto sellado) es el calendario — registrado en «No hecho» del PR | `_doc01` bloque Condiciones | Una tabla de montos necesita el modelo; sin él la alternativa es texto inventado, prohibido por la invariante del motor. |
 
+
 ## Decisiones de implementación — P03 (shell + navegación + Inicio: «Hoy» por rol)
 
 | Decisión | Valor adoptado | Dónde vive | Notas |
@@ -283,3 +284,24 @@ Registradas al implementar la Constitucion como codigo. No son configurables por
 | Read-model de históricas | operaciones pre-P07 sin los campos nuevos los reciben en lectura vía `_operation_enrichment` (misma matemática sobre el snapshot almacenado) | `pricing.service` | La historia nunca diverge; no hay backfill — el snapshot ES la autoridad. |
 | Cobertura SKU | unión de identidades de compra: `profile_purchase_mappings`, `reinforcement_articles`, `glass_purchase_mappings` (técnica+compra), `infill_articles`, `panel_purchase_authorities`, `hardware_kits`, `hardware_purchase_mappings`, `fitting_purchase_mappings` | `pricing.repository.coverage` | Kinds: PROFILE/REINFORCEMENT/GLASS/PANEL/HARDWARE/FITTING; cada SKU emitido por catálogo sin costo vigente aparece con su origen. |
 | Filtros de operaciones | `?state=` (enum validado, 400 si inválido) y `?project_id=`; ESTIMATOR ve solo sus operaciones | `OperationsView`, select de estado en el workspace | Causa raíz del "No se pudieron cargar los datos": el listado era solo-OWNER y el estimador recibía 403 al montar. |
+
+
+## Decisiones de implementación — P12 (producción: tablero, OT y operario)
+
+| Decisión | Valor adoptado | Dónde vive | Notas |
+| --- | --- | --- | --- |
+| Densidad del operario | El rol `OPERATOR` entra a `/production` con `density="workshop"` (fija tema oscuro + objetivos ≥44 px); el resto de roles conserva su densidad | `ProductionPage.tsx` (`useTheme` + `setDensity`) | La preferencia es por rol de superficie, no por usuario: un jefe que también opera ve el mismo taller. |
+| Estación del operario | Se elige una vez y persiste en `localStorage` bajo `dekopen.operatorStation.<userId>`; "Cambiar estación" la reabre | `OperatorSurface.tsx` (`readOperatorStation`/`writeOperatorStation`) | Por usuario y dispositivo — una tablet compartida en la estación no arrastra la estación de otro operario. |
+| Cola de estación | `GET /production/station-queue/` agrupa pasos abiertos por estación; el operario sólo ve su estación y el detalle filtra `step.code === station` | `service.py::station_queue`, `queue.ts` | `is_next` marca el primer paso abierto de cada OT — la tarjeta «Siguiente» no decide por el operario, muestra lo que la ruta manda. |
+| Entrega comprometida en tarjeta | `committed_date` = `MIN(deliveries.scheduled_date)` de la OT vía `_board_context` (batcheado, sin N+1); sin entrega agendada → «Sin fecha agendada» | `service.py::_board_context`, `StationBoard.tsx` | Cero capacidad inventada: la tarjeta nunca promete una fecha que el sistema no tiene. |
+| Columnas del tablero | Sólo estaciones con pasos abiertos en la cola real + columna «Salida» para OTs sin paso abierto (terminadas/despachadas/anuladas) | `board.ts::boardColumns` | La planta se lee de un vistazo: columnas que existen, no un carril por cada centro de trabajo del catálogo. |
+| Chips de tarjeta | faltante (cortesía corta real), bloqueada, QC rechazado, sin plan de corte, plan vencido, repetición, guía pendiente; `blocked`/`qc`/`shortage` llevan tono naranjo «requiere persona» | `board.ts::orderChips`, `production.css` | Naranjo ≤3 %: sólo lo que necesita una decisión humana ahora. |
+| Detalle de OT | Cabecera fija + stepper horizontal + tabs (Resumen, Piezas, Corte, Mecanizado, Vidrios, Herrajes, Calidad, Embalaje, Trazabilidad); el paso abierto vive en un Drawer lateral | `ProductionPage.tsx` | ≤2 pantallas de scroll antes de las pestañas — mide lo que una OT de 100 posiciones pedía como «muro de tablas». |
+| Lista de piezas | Virtualización propia (filas 40 px, cabeceras de grupo 44 px, overscan 6, viewport 460 px); agrupada por posición/unidad con búsqueda `P01-U02-M03` tolerante | `PieceList.tsx`, `pieces.ts` | 2.000 piezas → <100 filas DOM (test fijado); sin dependencia nueva. |
+| Trazabilidad humana | `HH:MM · actor · acción (cantidad)` por día con filtros de actor/tipo; el log crudo del evento queda bajo «Detalles técnicos» | `HumanTrace.tsx` | El actor se resuelve del evento backend (nombre), nunca un UUID. |
+| Vista F9 pieza | Escanear/escribir la etiqueta abre una pantalla única: código de pieza en mono ≥32 px, acción del paso y qué sigue | `OperatorSurface.tsx` (`FocusedPiece`) | §8 del programa: la etiqueta es la entrada principal del operario. |
+| Motivos de bloqueo | 5 predefinidos de un toque (Falta material, Falta herramienta, Pieza dañada, Medida no coincide, Máquina detenida) + «Otro motivo» con campo libre obligatorio | `OperatorSurface.tsx` (`BlockDialog`, `BLOCK_REASONS`) | Un toque, sin teclado, con guantes; el motivo viaja como nota del bloqueo para quien desbloquea. |
+| Datos comerciales en operario | La vista del operario no renderiza cliente, precios ni margen: muestra código OT, estación, cantidad y compromiso | `OperatorSurface.tsx` | La tarjeta del jefe sí muestra cliente/obra — la segregación es por rol, no por ocultar filas. |
+| Escala del fixture | P-ESCALA (100 posiciones) se sella y libera en `dev_fixture.py` (~100 OTs vivas en el tablero; la primera optimizada) | `scripts/dev_fixture.py` | La medición de <2 s del tablero/ficha corre sobre la superficie real, no un mock. |
+| Etiqueta de estado OT | `ORDER_STATUS_KEY`/`ORDER_STATUS_TONE` compartidos entre ficha y tarjeta; `PlanStateEnum` etiquetado (`none`→Sin plan, `ok`→Plan vigente, `invalidated`→Plan vencido) | `board.ts`, `domainLabels.ts` | Un solo mapa de estados — la tarjeta no puede inventar un estado que la ficha no conoce. |
+

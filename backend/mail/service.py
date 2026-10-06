@@ -13,12 +13,12 @@ import base64
 import json
 import logging
 import os
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from django.conf import settings
 
 from documents.brand import effective_brand_color
-from documents.repository import one, rows
+from documents.repository import one, rows, write
 from mail import templates
 from mail.providers import ProviderError, configured, from_address, get_provider
 
@@ -120,21 +120,39 @@ def _enqueue(
     rendered: templates.RenderedMail,
     context: dict,
 ) -> dict:
-    return one(
+    # Sin RETURNING: la cláusula re-evalúa la fila contra mail_messages_select
+    # (solo staff) y un actor OPERATOR — el que bloquea un paso — violaría la
+    # política. El operario puede generar el correo interno (es miembro del
+    # org) pero nunca leerlo: el id se genera aquí.
+    message = {
+        "id": str(uuid4()),
+        "org_id": str(org_id),
+        "audience": audience,
+        "template": template,
+        "to_email": to_email,
+        "subject": rendered.subject,
+        "html_body": rendered.html,
+        "text_body": rendered.text,
+        "status": "QUEUED",
+        "context": context,
+    }
+    write(
         "INSERT INTO public.mail_messages"
-        " (org_id,audience,template,to_email,subject,html_body,text_body,context)"
-        " VALUES (%s,%s,%s,%s,%s,%s,%s,%s::jsonb) RETURNING *",
+        " (id,org_id,audience,template,to_email,subject,html_body,text_body,context)"
+        " VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb)",
         [
-            str(org_id),
-            audience,
-            template,
-            to_email,
-            rendered.subject,
-            rendered.html,
-            rendered.text,
+            message["id"],
+            message["org_id"],
+            message["audience"],
+            message["template"],
+            message["to_email"],
+            message["subject"],
+            message["html_body"],
+            message["text_body"],
             json.dumps(context),
         ],
     )
+    return message
 
 
 def _send_now(message: dict) -> dict:
@@ -150,17 +168,19 @@ def _send_now(message: dict) -> dict:
             ),
         )
     except ProviderError as error:
-        return one(
+        write(
             "UPDATE public.mail_messages SET status='FAILED', attempts=attempts+1,"
-            " error=%s WHERE id=%s RETURNING id,status",
+            " error=%s WHERE id=%s",
             [str(error)[:400], str(message["id"])],
         )
-    return one(
+        return {"id": str(message["id"]), "status": "FAILED"}
+    write(
         "UPDATE public.mail_messages SET status='SENT', attempts=attempts+1,"
         " provider=%s, provider_ref=%s, sent_at=now(), error=NULL"
-        " WHERE id=%s RETURNING id,status",
+        " WHERE id=%s",
         [outcome.provider, outcome.ref[:255], str(message["id"])],
     )
+    return {"id": str(message["id"]), "status": "SENT"}
 
 
 def _deliver(
@@ -188,6 +208,22 @@ def _deliver_to_staff(
     *, org_id: UUID, template: str, roles: tuple[str, ...], render, context: dict
 ) -> list[dict]:
     """Un correo interno por destinatario — la bandeja muestra a quién salió."""
+    # La bandeja interna solo es legible por personal: el UPDATE de entrega
+    # exige visibilidad SELECT además del USING, así que las escrituras se
+    # evalúan con claims de un miembro staff del org. El actor del evento
+    # —p.ej. un operario que bloquea un paso— puede insertar el correo
+    # (es miembro) pero jamás leerlo.
+    staff_uid = one(
+        "SELECT user_id FROM public.tenancy_memberships"
+        " WHERE org_id = %s AND is_active AND role::text = ANY(%s::text[])"
+        " ORDER BY created_at LIMIT 1",
+        [str(org_id), list(roles)],
+        "staff_member_not_found",
+    )["user_id"]
+    rows(
+        "SELECT set_config('request.jwt.claims', %s, true)",
+        [json.dumps({"sub": str(staff_uid), "role": "authenticated"})],
+    )
     sent: list[dict] = []
     for email in staff_emails(org_id=org_id, roles=roles):
         sent.append(

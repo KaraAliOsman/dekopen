@@ -247,6 +247,11 @@ export const DOMAIN_LABELS: Record<string, L> = {
   },
 
   /* ---------- Órdenes de compra / pagos ---------- */
+  PlanStateEnum: {
+    none: l("Sin plan", "neutral"),
+    ok: l("Plan vigente", "ok", "check"),
+    invalidated: l("Plan vencido", "warn", "warn"),
+  },
   OrderStatusEnum: {
     DRAFT: l("Borrador", "neutral"),
     SENT: l("Enviada", "info"),

@@ -5,6 +5,7 @@ import { apiMutator } from "../../api/apiMutator";
 import { t } from "../../i18n/es-CL";
 import { ProductionPage } from "./ProductionPage";
 import { ConfirmProvider } from "../../ui";
+import { ThemeProvider } from "../../theme/ThemeProvider";
 
 const identity = vi.hoisted(() => ({ id: "tenant-a", role: "WORKSHOP_MANAGER" }));
 vi.mock("../../auth/AuthSessionProvider", () => ({
@@ -69,9 +70,33 @@ const detail = {
   ],
 };
 
+const stationQueue = {
+  stations: [
+    {
+      code: "CUT",
+      label: "Corte",
+      pending: 1,
+      in_progress: 0,
+      blocked: 0,
+      entries: [
+        {
+          step_id: "step-1",
+          order_id: "order-1",
+          order_code: "OT-REV-A-01",
+          sequence: 1,
+          label: "Corte",
+          status: "READY",
+          is_next: true,
+        },
+      ],
+    },
+  ],
+};
+
 function respond(url: string): { data: unknown; status: number } {
   if (url === "/api/v1/production/prep/") return { data: { versions: [] }, status: 200 };
   if (url === "/api/v1/production/orders/") return { data: { orders: [order] }, status: 200 };
+  if (url === "/api/v1/production/station-queue/") return { data: stationQueue, status: 200 };
   if (url === `/api/v1/production/orders/${order.id}/`) return { data: detail, status: 200 };
   return { data: detail, status: 200 };
 }
@@ -88,7 +113,9 @@ describe("ProductionPage", () => {
     render(
       <MemoryRouter initialEntries={["/production"]}>
         <ConfirmProvider>
-          <ProductionPage />
+          <ThemeProvider>
+            <ProductionPage />
+          </ThemeProvider>
         </ConfirmProvider>
       </MemoryRouter>,
     );
@@ -96,16 +123,24 @@ describe("ProductionPage", () => {
     fireEvent.click(orderButton);
     await waitFor(() => expect(screen.getAllByText("Corte").length).toBeGreaterThan(0));
     expect(screen.getByText("Armado")).toBeTruthy();
-    // Only the next actionable step shows START (backend rejects the rest) +
-    // callout + the operator card's sticky action bar mirrors it.
-    expect(screen.getAllByRole("button", { name: t("production.actionStart") })).toHaveLength(3);
+    // La barra «Siguiente» del resumen ofrece START solo en el paso abierto;
+    // abrir el paso en el drawer lo duplica en el panel de acciones.
+    expect(screen.getAllByRole("button", { name: t("production.actionStart") })).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: /Corte/ }));
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole("button", { name: t("production.actionStart") }).length,
+      ).toBeGreaterThanOrEqual(2),
+    );
   });
 
   it("starts a step through the transition endpoint", async () => {
     render(
       <MemoryRouter initialEntries={[`/production?order=${order.id}`]}>
         <ConfirmProvider>
-          <ProductionPage />
+          <ThemeProvider>
+            <ProductionPage />
+          </ThemeProvider>
         </ConfirmProvider>
       </MemoryRouter>,
     );
@@ -125,7 +160,9 @@ describe("ProductionPage", () => {
     render(
       <MemoryRouter initialEntries={[`/production?order=${order.id}`]}>
         <ConfirmProvider>
-          <ProductionPage />
+          <ThemeProvider>
+            <ProductionPage />
+          </ThemeProvider>
         </ConfirmProvider>
       </MemoryRouter>,
     );
@@ -139,7 +176,9 @@ describe("ProductionPage", () => {
     render(
       <MemoryRouter initialEntries={[`/production?order=${order.id}`]}>
         <ConfirmProvider>
-          <ProductionPage />
+          <ThemeProvider>
+            <ProductionPage />
+          </ThemeProvider>
         </ConfirmProvider>
       </MemoryRouter>,
     );
@@ -169,7 +208,9 @@ describe("ProductionPage", () => {
     render(
       <MemoryRouter initialEntries={[`/production?order=${order.id}`]}>
         <ConfirmProvider>
-          <ProductionPage />
+          <ThemeProvider>
+            <ProductionPage />
+          </ThemeProvider>
         </ConfirmProvider>
       </MemoryRouter>,
     );
@@ -191,7 +232,9 @@ describe("ProductionPage", () => {
     render(
       <MemoryRouter initialEntries={[`/production?order=${order.id}`]}>
         <ConfirmProvider>
-          <ProductionPage />
+          <ThemeProvider>
+            <ProductionPage />
+          </ThemeProvider>
         </ConfirmProvider>
       </MemoryRouter>,
     );
@@ -205,6 +248,7 @@ describe("ProductionPage", () => {
     mutator.mockImplementation(async (url: string) => {
       if (url === "/api/v1/production/prep/") return { data: { versions: [] }, status: 200 };
       if (url === "/api/v1/production/orders/") return { data: { orders: [order] }, status: 200 };
+      if (url === "/api/v1/production/station-queue/") return { data: stationQueue, status: 200 };
       return {
         data: {
           ...detail,
@@ -215,21 +259,29 @@ describe("ProductionPage", () => {
       };
     });
     identity.role = "OPERATOR";
+    // El operario aterriza en su superficie: estación fijada → solo la cola
+    // de esa estación; Desbloquear es acción de supervisor y no existe ahí.
+    localStorage.setItem("dekopen.operatorStation.", "CUT");
     const { unmount } = render(
       <MemoryRouter initialEntries={[`/production?order=${order.id}`]}>
         <ConfirmProvider>
-          <ProductionPage />
+          <ThemeProvider>
+            <ProductionPage />
+          </ThemeProvider>
         </ConfirmProvider>
       </MemoryRouter>,
     );
-    await waitFor(() => expect(screen.getByText("OT-REV-A-01")).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText("OT-REV-A-01").length).toBeGreaterThan(0));
     expect(screen.queryByRole("button", { name: t("production.actionUnblock") })).toBeNull();
     unmount();
+    localStorage.removeItem("dekopen.operatorStation.");
     identity.role = "WORKSHOP_MANAGER";
     render(
       <MemoryRouter initialEntries={[`/production?order=${order.id}`]}>
         <ConfirmProvider>
-          <ProductionPage />
+          <ThemeProvider>
+            <ProductionPage />
+          </ThemeProvider>
         </ConfirmProvider>
       </MemoryRouter>,
     );

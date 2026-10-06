@@ -319,6 +319,7 @@ Open PR (branch `devin/P09-doc01-propuesta`, rebased on `integracion/v1` post-P0
 - Tests `backend/tests/test_doc01_render.py` (38, PyMuPDF fijado `pymupdf==1.26.6` en requirements-dev): escalera de densidad 1/12/24/100, ≤45 páginas a 100 posiciones, sin página sólo-pie, sin solapamiento de bboxes de texto, total igual al motor, USD `US$`, sin hex ≥10 fuera del pie, wrap de nombres 120 caracteres, papel A4, QR con approval_url, reconciliación descuento+extras.
 - No hecho conocido: no existe modelo de cuotas — el "calendario de pagos" imprime `payment_terms` sellado (registrado en valores-por-defecto y en el PR).
 
+
 ## P17 asistente IA + trabajos + Orb state
 
 Merged into `integracion/v1` as squash `bb713d8710e22c89b41949a674e491e8e3124123` (dekopen PR #35):
@@ -348,3 +349,15 @@ Merged into `integracion/v1` as squash `c7cde331c0c4763c4133928dcc4abe442a446b03
 - Cobertura SKU: `coverage` une identidades de compra (perfil, refuerzo, vidrio técnica+compra, rellenos, paneles, kits de herraje, herraje compra, fijaciones) — lista los SKU emitidos sin costo vigente. Migración `20270202000000_p07_coverage_grants.sql` + pgTAP `181`: GRANT SELECT a `pricing_backend` en los 4 mapeos que le faltaban (vidrio/panel/herraje/fijación — el 42501 que devolvía 409) y política `*_pricing_read` en las 7 tablas cuyo `TO authenticated` las dejaba en filas vacías silenciosas.
 - Frontend `/projects/:id/pricing` + `/pricing/commercial`: `MarginBand` (gauge min→max con objetivo y realizado, chip de estado del servidor), `PriceCascade` (waterfall + cascada por posición + autoridades como procedencia), `DeltaBreakdown` (aportes por impulsor con neto/costo/neto resultante), campos de banda en `rules`, `margin_pct` en el formulario, confirmBand + errOwnerConfirm.
 - Verificado: `make lint|typecheck|test|build` verdes (`PY=.venv/bin/python`); 16 tests P07 motor (golden 12/100 posiciones cierra exacto), 48 tests de página, integración `test_margin_band_gates_preview_apply_and_notifies`; capturas en `docs/redesign/captures/p07-precios/`; decisiones en sección P07 de `valores-por-defecto.md`.
+
+
+## P12 producción: tablero, OT y operario state
+
+Open PR (branch `devin/P12-produccion`, on `integracion/v1`):
+
+- `/production` splits by role into three surfaces. Manager board: kanban whose columns are exactly the stations holding open steps (`station_queue` entries grouped by step code) plus an «Salida» outbound column; each card shows order code, obra (`project_code` + `client_name`), units, real commitment (`MIN(deliveries.scheduled_date)` — «Sin fecha agendada» when none), `steps_done/steps_total` progress and chips (shortage, bloqueada, QC rechazado, sin plan, plan vencido, repetición, guía pendiente; the three "needs a person" chips carry the orange accent). Filters: text, obra, commitment bucket (vencida/≤7 días/más tarde/sin fecha), issue kind. Deep links `?blocked=1`, `?shortage=1`, `?status=` still resolve.
+- Order detail: fixed header (code, `ORDER_STATUS_KEY` label, commitment, progress, actions) + compact horizontal stepper + tabs Resumen·Piezas·Corte·Mecanizado·Vidrios·Herrajes·Calidad·Embalaje·Trazabilidad; the open step edits in a right Drawer. `PieceList` hand-virtualizes (40px rows, 44px sticky group headers, overscan 6) grouped `P{pos}-U{u}` with tolerant search; `HumanTrace` renders day-grouped `HH:MM · actor · acción` with actor/type filters and the raw event log under «Detalles técnicos».
+- Operator surface (`OPERATOR` role): auto `density="workshop"` (dark + ≥44px targets, 1024×768 default), station pick persisted per user (`localStorage dekopen.operatorStation.<userId>`), only own station's queue (`Siguiente` = first `is_next` entry), scan input in topbar opens the F9 single-piece screen (code ≥2.5rem mono), action bar Completar·Bloquear·Nota with five one-tap block reasons + «Otro motivo»; no client/price/margin anywhere.
+- Backend (no migrations): `list_production_orders` returns `project_code`, `project_name`, `client_name`, `committed_date`, `steps_blocked`, `qc_blocked`, `plan_state`; `_board_context` batch-resolves documentary project names and earliest scheduled delivery.
+- Fixture: P-ESCALA seals + releases (~100 live OTs on the board; first optimized). e2e `production-operator.spec.ts` runs inside `make test-db` (operator completes a step, blocks the next order, manager sees it on the board and in «Hoy»).
+

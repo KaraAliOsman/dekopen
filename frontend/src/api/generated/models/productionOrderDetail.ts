@@ -5,6 +5,7 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { PlanStateEnum } from "./planStateEnum";
 import type { ProductionNextStep } from "./productionNextStep";
 import type { ProductionOrderDetailDispatchNoteDte } from "./productionOrderDetailDispatchNoteDte";
 import type { ProductionOrderDetailDispatchNotesItem } from "./productionOrderDetailDispatchNotesItem";
@@ -31,6 +32,17 @@ export interface ProductionOrderDetail {
   version_shortage: number;
   /** @nullable */
   remake_reason?: ProductionOrderDetailRemakeReason;
+  /** @nullable */
+  project_code?: string | null;
+  /** @nullable */
+  project_name?: string | null;
+  /** @nullable */
+  client_name?: string | null;
+  /** @nullable */
+  committed_date?: string | null;
+  steps_blocked?: number;
+  qc_blocked?: boolean;
+  plan_state?: PlanStateEnum;
   created_at: string;
   /** @nullable */
   project_version_id?: string | null;
