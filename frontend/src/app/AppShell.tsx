@@ -26,6 +26,7 @@ import { ShellCrumbs, crumbsFor, useProjectName } from "./ShellCrumbs";
 import { ShellLeafContext } from "./shellLeaf";
 import {
   contextItemActive,
+  hasAiSurface,
   navigationAllowedFor,
   roleLabel,
   SHELL_NAV_GROUPS,
@@ -358,9 +359,10 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
                 >
                   <UiIcon name="info" />
                 </button>
-                {/* INSTALLER has no AI surface — every ai endpoint is gated to
-                    _AGENT_CALLERS, so the orb would offer a 403 wall. */}
-                {role !== "INSTALLER" ? (
+                {/* OPERATOR e INSTALLER no tienen superficie de agente — los
+                    endpoints ai/jobs sirven sólo a _AGENT_CALLERS/_JOB_READERS
+                    y el orb sería una pared 403. */}
+                {hasAiSurface(role) ? (
                   <>
                     {/* The orb always opens the dock — a pressing job gets its
                         own chip so an unlucky FAILED_RETRYABLE can never make
@@ -434,7 +436,7 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
             onNavigate={(to) => navigate(to)}
             organizationId={org?.id ?? null}
           />
-          {role !== "INSTALLER" ? (
+          {hasAiSurface(role) ? (
             <AskDekopen
               openRequested={assistantRequest}
               hideTrigger

@@ -3631,7 +3631,6 @@ export const messages = {
   "search.groupReceipts": "Recepción",
   "search.groupDocuments": "Documento",
   "search.groupInventory": "Inventario",
-  "search.groupRemnants": "Retazo",
   "search.groupQuotations": "Cotización",
   "search.groupResults": "Resultado",
   "cmd.palette": "Paleta de comandos",

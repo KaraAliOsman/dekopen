@@ -262,7 +262,15 @@
   gap: 8px;
   grid-column: 1 / -1;
   margin: 0;
+  min-width: 0;
   padding: 0;
+}
+
+/* El ancho intrínseco de un <select> lo da su opción más larga
+ * («Nombre · SKU · clase»): sin tope desborda la tarjeta y el documento. */
+.payments-form select {
+  max-width: 100%;
+  min-width: 0;
 }
 
 .payments-form fieldset legend {

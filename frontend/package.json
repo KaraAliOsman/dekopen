@@ -16,7 +16,8 @@
     "ux:capture": "node --experimental-strip-types scripts/ux-capture/index.ts",
     "api:generate": "orval --config orval.config.ts",
     "build": "vite build",
-    "ux:axe": "node --experimental-strip-types scripts/ux-capture/axe-devui.ts"
+    "ux:axe": "node --experimental-strip-types scripts/ux-capture/axe-devui.ts",
+    "ux:axe-shell": "node --experimental-strip-types scripts/ux-capture/axe-shell.ts"
   },
   "dependencies": {
     "@react-three/drei": "^9.122.0",

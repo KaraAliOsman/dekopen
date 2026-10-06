@@ -70,7 +70,7 @@ describe("matriz rol → navegación", () => {
       "/settings/general",
     ],
     INSTALLER: ["/dashboard", "/production", "/deliveries"],
-    OPERATOR: ["/dashboard", "/inventory", "/production", "/assistant", "/jobs"],
+    OPERATOR: ["/dashboard", "/inventory", "/production"],
   };
 
   it.each(Object.entries(EXPECTED))(

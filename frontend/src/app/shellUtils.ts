@@ -118,6 +118,19 @@ export const SHELL_NAV_GROUPS: ShellNavGroup[] = [
   },
 ];
 
+/** Espejo de `_AGENT_CALLERS`/`_JOB_READERS` del backend: la superficie
+ * Asistente (orb, dock, /assistant, /jobs) sólo sirve a los roles de
+ * oficina — OPERATOR e INSTALLER jamás deben pagar una pared 403. */
+export const AI_SURFACE_ROLES: ReadonlySet<MembershipRoleEnum> = new Set([
+  "OWNER",
+  "ESTIMATOR",
+  "WORKSHOP_MANAGER",
+]);
+
+export function hasAiSurface(role: MembershipRoleEnum | null | undefined): boolean {
+  return role !== undefined && role !== null && AI_SURFACE_ROLES.has(role);
+}
+
 /** Matriz rol → destino. Refleja los role-sets del backend: una entrada
  * de menú nunca lleva a una pared 403. Exportada para el test de matriz. */
 export function navigationAllowedFor(
@@ -150,7 +163,7 @@ export function navigationAllowedFor(
       return role === "OWNER" || role === "WORKSHOP_MANAGER" || role === "INSTALLER";
     case "/assistant":
     case "/jobs":
-      return role !== undefined && role !== "INSTALLER";
+      return hasAiSurface(role);
     case "/settings/general":
       return role === "OWNER" || role === "WORKSHOP_MANAGER";
     default:
