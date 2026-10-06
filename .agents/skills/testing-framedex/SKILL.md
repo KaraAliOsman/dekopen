@@ -618,3 +618,24 @@ description: Local dev-stack recipe for DEKOPEN E2E testing — Supabase CLI sta
 - **Dark login capture**: `dekopen.theme` in localStorage only applies inside
   the shell — to shoot a dark login, toggle dark while logged in, sign out,
   then `/login` renders dark.
+## Settings / org-branding surface (P09)
+
+- `/settings/general` is behind ReadyGuard only — NO route-level role gate.
+  The left-rail "Administración" nav item is gated
+  `OWNER || WORKSHOP_MANAGER` (AppShell `navigationAllowed`), but the
+  org-branding card (incl. the "Documento comercial" fieldset:
+  `doc_paper_size` select + 5 `doc_terms` textareas) renders for
+  `OWNER || ESTIMATOR` (`canWriteDocs`). An ESTIMATOR fixture user can view
+  AND save org doc settings — navigate to `/settings/general` directly; the
+  nav link simply isn't shown.
+- Org-branding/doc-settings UI testing does NOT need an OWNER account
+  (avoids the aal2/MFA enrollment wall). ESTIMATOR suffices: RLS policy
+  `tenancy_organizations_branding_update` allows `OWNER`/`ESTIMATOR` and the
+  column grant covers `doc_paper_size`/`doc_terms`.
+- Fixture org insert needs only `{id, name, tax_id}` — every other
+  `tenancy_organizations` column (country, currency, subscription_tier,
+  doc_paper_size='LETTER', doc_terms='{}') has a default.
+- Save path: one shared "Guardar marca" submit writes brand fields + doc
+  fields together; empty/whitespace `doc_terms` values are stripped
+  client-side before POST and land as absent keys (verify with
+  `SELECT doc_paper_size, doc_terms FROM tenancy_organizations`).

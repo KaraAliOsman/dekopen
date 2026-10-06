@@ -7,6 +7,7 @@ a logo key can never render a different image.
 from __future__ import annotations
 
 import hashlib
+import json
 import re  # regex solo para validar brand_color en _save_branding
 from uuid import UUID
 
@@ -68,14 +69,44 @@ def _branding(row: dict) -> dict:
             if row.get("vano_spread_tolerance_mm") is None
             else str(row["vano_spread_tolerance_mm"])
         ),
+        "doc_paper_size": row.get("doc_paper_size") or "LETTER",
+        "doc_terms": _doc_terms(row.get("doc_terms")),
     }
 
 
 _FIELDS = (
     "name, tax_id, commercial_name, giro, brand_address, brand_phone,"
     " brand_email, brand_logo_key, brand_logo_sha256, brand_color,"
-    " doc_dekopen_credit, vano_spread_tolerance_mm"
+    " doc_dekopen_credit, vano_spread_tolerance_mm,"
+    " doc_paper_size, doc_terms"
 )
+
+# P09 — claves legales declaradas que el documento del cliente imprime en
+# "Condiciones comerciales". La misma lista gobierna el CHECK de la
+# migración, el serializer y el congelado: una clave nueva es una decisión
+# de producto, no un texto libre.
+_DOC_TERM_KEYS = (
+    "plazo_entrega",
+    "instalacion",
+    "exclusiones",
+    "garantia",
+    "jurisdiccion",
+)
+_DOC_PAPER_SIZES = ("LETTER", "LEGAL", "A4")
+
+
+def _doc_terms(raw: object) -> dict:
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except ValueError:
+            raw = {}
+    terms = raw if isinstance(raw, dict) else {}
+    return {
+        key: str(terms[key]).strip()
+        for key in _DOC_TERM_KEYS
+        if isinstance(terms.get(key), str) and terms[key].strip()
+    }
 
 
 def get_branding(*, org_id: UUID) -> dict:
@@ -140,6 +171,34 @@ def _save_branding(*, org_id: UUID, data: dict) -> dict:
     if "vano_spread_tolerance_mm" in data:
         assignments.append("vano_spread_tolerance_mm=%s")
         params.append(data.get("vano_spread_tolerance_mm"))
+    if "doc_paper_size" in data:
+        assignments.append("doc_paper_size=%s")
+        size = str(data.get("doc_paper_size") or "").strip().upper()
+        if size not in _DOC_PAPER_SIZES:
+            raise contract_error(
+                400,
+                "doc_paper_size_invalid",
+                "El papel debe ser Carta, Oficio o A4.",
+            )
+        params.append(size)
+    if "doc_terms" in data:
+        assignments.append("doc_terms=%s::jsonb")
+        raw_terms = data.get("doc_terms")
+        if raw_terms is not None and not isinstance(raw_terms, dict):
+            raise contract_error(
+                400,
+                "doc_terms_invalid",
+                "Los textos de documento deben ser un objeto de claves declaradas.",
+            )
+        terms = raw_terms or {}
+        unknown = [key for key in terms if key not in _DOC_TERM_KEYS]
+        if unknown:
+            raise contract_error(
+                400,
+                "doc_terms_invalid",
+                "Claves de texto no reconocidas: " + ", ".join(sorted(unknown)) + ".",
+            )
+        params.append(json.dumps(_doc_terms(terms)))
     if not assignments:
         row = one(
             f"SELECT {_FIELDS} FROM public.tenancy_organizations WHERE id=%s",

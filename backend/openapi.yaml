@@ -21416,6 +21416,16 @@ components:
             type: integer
             minimum: 1
           nullable: true
+    DocPaperSizeEnum:
+      enum:
+      - LETTER
+      - LEGAL
+      - A4
+      type: string
+      description: |-
+        * `LETTER` - Carta
+        * `LEGAL` - Oficio
+        * `A4` - A4
     DocumentTypeEnum:
       enum:
       - DOC-01
@@ -25795,6 +25805,12 @@ components:
           format: decimal
           pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
           nullable: true
+        doc_paper_size:
+          type: string
+        doc_terms:
+          type: object
+          additionalProperties:
+            type: string
       required:
       - brand_address
       - brand_color
@@ -25804,6 +25820,8 @@ components:
       - brand_phone
       - commercial_name
       - doc_dekopen_credit
+      - doc_paper_size
+      - doc_terms
       - giro
       - name
       - tax_id
@@ -25845,6 +25863,17 @@ components:
           type: string
           format: decimal
           pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          nullable: true
+        doc_paper_size:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/DocPaperSizeEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        doc_terms:
+          type: object
+          additionalProperties:
+            type: string
+            maxLength: 4000
           nullable: true
     OrientationEnum:
       enum:

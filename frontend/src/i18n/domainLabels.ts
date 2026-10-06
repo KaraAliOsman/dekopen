@@ -654,6 +654,12 @@ export const DOMAIN_LABELS: Record<string, L> = {
     POSITION: l("Posición", "neutral"),
     MATERIALS_PCT: l("% de materiales", "neutral"),
   },
+  /* ---------- Documentos por organización ---------- */
+  DocPaperSizeEnum: {
+    LETTER: l("Carta", "neutral"),
+    LEGAL: l("Oficio", "neutral"),
+    A4: l("A4", "neutral"),
+  },
 };
 
 /** Enums que NUNCA llegan a una pantalla — contratos internos del API.

@@ -51,6 +51,7 @@ from dekopen_engine.finishes import (
 from dekopen_engine.models import BayOpeningType, EngineResult
 from dekopen_engine.openings import leaf_policy_opening_candidates
 from dekopen_engine.product import (
+    PlanGeometry,
     contour_module_computation,
     frameless_module_computation,
 )
@@ -825,12 +826,18 @@ def _position_calculations(
     params: object,
     system_id: UUID,
     org_id: UUID,
-) -> tuple[list[tuple[str | None, GeometryComputation, dict[str, object]]], EngineResult]:
+) -> tuple[
+    list[tuple[str | None, GeometryComputation, dict[str, object]]],
+    EngineResult,
+    PlanGeometry | None,
+]:
     """Classic per-module geometry+trace for one persisted position.
 
-    Returns (calculations, result): classic positions compute once with a
-    ``None`` module id; product-v2 assemblies evaluate for the BOM and each
-    module recomputes on its own tree, the ``module.id`` becoming the
+    Returns (calculations, result, plan): classic positions compute once
+    with a ``None`` module id and never carry a plan; product-v2 assemblies
+    evaluate for the BOM (``plan`` is the resolved PlanGeometry the
+    commercial document draws under the elevation) and each module
+    recomputes on its own tree, the ``module.id`` becoming the
     ``"<module_id>|<id>"`` namespace used by the persisted BOM.
     """
     calculations: list[tuple[str | None, GeometryComputation, dict[str, object]]] = []
@@ -861,9 +868,11 @@ def _position_calculations(
         if evaluation.status.value != "VALID" or evaluation.bom is None:
             raise DocumentaryError("documentary_geometry_incomplete")
         result = evaluation.bom
+        plan = evaluation.plan
         module_specs = [(module.id, module) for module in product.assembly.modules]
     else:
         result = None
+        plan = None
         module_specs = [(None, None)]
     for module_id, module in module_specs:
         if module is not None and module.contour is not None:
@@ -902,7 +911,7 @@ def _position_calculations(
             result = computation.result
     if result is None:
         raise DocumentaryError("documentary_geometry_incomplete")
-    return calculations, result
+    return calculations, result, plan
 
 
 def _valid_targets(
@@ -1307,7 +1316,7 @@ def freeze_revision_a(
             color_exterior = str(position["color_exterior"] or color_interior)
             system_id = UUID(str(position["system_id"]))
             params = SystemParamsRepository().load_visible(system_id, org_id)
-            calculations, result = _position_calculations(
+            calculations, result, plan = _position_calculations(
                 tree=tree,
                 width_mm=D(str(position["width_mm"])),
                 height_mm=D(str(position["height_mm"])),
@@ -1674,6 +1683,35 @@ def freeze_revision_a(
                 # estimator saw at seal time.
                 "measurement": _measurement_evidence(org_id, position),
                 "parametric_tree": tree,
+                # P09 — la geometría de planta del conjunto (cortesía del
+                # motor) se sella aditiva: la propuesta comercial dibuja el
+                # corte de planta bajo el alzado de un conjunto/bow. Los
+                # snapshots anteriores simplemente no la traen.
+                "plan": plan.model_dump(mode="json") if plan is not None else None,
+                # P09 — los datos comerciales del vidrio (Ug, g, TL, clase)
+                # son dato declarado del catálogo, no número calculado:
+                # se sella solo la ficha de los sku que la posición usa.
+                "glass_products": {
+                    sku: {
+                        "name": params.glass_products[sku].name,
+                        "ug_w_m2k": str(params.glass_products[sku].ug_w_m2k)
+                        if params.glass_products[sku].ug_w_m2k is not None else None,
+                        "g_value": str(params.glass_products[sku].g_value)
+                        if params.glass_products[sku].g_value is not None else None,
+                        "light_transmission_pct": str(
+                            params.glass_products[sku].light_transmission_pct
+                        )
+                        if params.glass_products[sku].light_transmission_pct
+                        is not None else None,
+                        "safety_class": params.glass_products[sku].safety_class,
+                    }
+                    for sku in {
+                        piece.article_sku
+                        for piece in result.glasses
+                        if piece.article_sku is not None
+                    }
+                    if sku in params.glass_products
+                },
                 "workshop_annotations": [item.model_dump(mode="python") for item in annotations],
                 "structural_inputs": [item.model_dump(mode="python") for item in structural],
                 "glass_polishing": [item.model_dump(mode="python") for item in polishing],
@@ -1731,7 +1769,8 @@ def freeze_revision_a(
         organization = one(
             "SELECT name, tax_id, commercial_name, giro, brand_address,"
             " brand_phone, brand_email, brand_logo_key, brand_logo_sha256,"
-            " brand_color, doc_dekopen_credit, extras_display"
+            " brand_color, doc_dekopen_credit, extras_display,"
+            " doc_paper_size, doc_terms"
             " FROM public.tenancy_organizations WHERE id = %s",
             [str(org_id)],
             "organization_not_found",
@@ -1766,6 +1805,15 @@ def freeze_revision_a(
                 # the position sum. Older snapshots omit it and render
                 # detailed (the only behavior that ever existed).
                 "extras_display": organization["extras_display"],
+                # P09: papel y textos legales declarados en Ajustes —
+                # sellados para que la revisión re-impresa salga idéntica
+                # aunque la organización cambie sus ajustes después.
+                "doc_paper_size": str(organization["doc_paper_size"]),
+                "doc_terms": (
+                    organization["doc_terms"]
+                    if isinstance(organization["doc_terms"], dict)
+                    else json.loads(organization["doc_terms"] or "{}")
+                ),
             },
             "revision": revision,
             "sealed_by": actor_id,
@@ -2027,7 +2075,7 @@ def prepare_documentary_inputs(
         color_interior = str(position["color_interior"])
         color_exterior = str(position["color_exterior"] or color_interior)
         params = SystemParamsRepository().load_visible(system_id_uuid, org_id)
-        calculations, result = _position_calculations(
+        calculations, result, _plan = _position_calculations(
             tree=tree,
             width_mm=D(str(position["width_mm"])),
             height_mm=D(str(position["height_mm"])),
@@ -2282,7 +2330,7 @@ def save_documentary_inputs(
         color_interior = str(pos["color_interior"])
         color_exterior = str(pos["color_exterior"] or color_interior)
         params = SystemParamsRepository().load_visible(system_id_uuid, org_id)
-        calculations, result = _position_calculations(
+        calculations, result, _plan = _position_calculations(
             tree=tree,
             width_mm=D(str(pos["width_mm"])),
             height_mm=D(str(pos["height_mm"])),

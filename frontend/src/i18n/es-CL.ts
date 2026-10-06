@@ -1159,6 +1159,20 @@ export const messages = {
     "Acento del taller en documentos, portal del cliente y correos. Debe leerse sobre papel blanco.",
   "settings.brandColorWarning":
     "Este color no alcanza contraste suficiente sobre blanco (4.5:1) — en documentos se usará el verde DEKOPEN de respaldo.",
+  "settings.documents": "Documento comercial",
+  "settings.documentsHint":
+    "Papel y condiciones que se sellan en la propuesta DOC-01 de cada revisión.",
+  "settings.docPaperSize": "Tamaño de papel",
+  "settings.docPaperLetter": "Carta",
+  "settings.docPaperLegal": "Oficio",
+  "settings.docPaperA4": "A4",
+  "settings.docTermsPlazo": "Plazo de entrega",
+  "settings.docTermsInstalacion": "Instalación",
+  "settings.docTermsExclusiones": "Exclusiones",
+  "settings.docTermsGarantia": "Garantía",
+  "settings.docTermsJurisdiccion": "Jurisdicción",
+  "settings.docTermsHint":
+    "Textos legales de la propuesta comercial — vacío omite la línea en el documento.",
   "settings.brandCredit": "Mostrar «Generado con DEKOPEN» en documentos",
   "settings.brandCreditHint":
     "Crédito discreto al pie de cotizaciones y órdenes. Desactivado, los documentos salen solo con tu marca.",

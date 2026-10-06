@@ -274,8 +274,9 @@ def test_client_document_escapes_input_and_never_contains_raw_cost() -> None:
 def test_client_quote_includes_deterministic_opening_drawings() -> None:
     html = _doc01(revision_snapshot())
     # P05 — every elevation declares its reading side in the gutter the
-    # viewBox grows for (the drawing itself still lives at 0,0).
-    assert "<svg" in html and 'viewBox="0 -66.7 1000 1352.4"' in html
+    # viewBox grows for (the drawing itself still lives at 0,0); P09 adds
+    # the left gutter for the per-field height chain in client figures.
+    assert "<svg" in html and 'viewBox="-83.3 -66.7 1083.3 1352.4"' in html
     assert "Vista interior" in html
     sliding = revision_snapshot()
     sliding["positions"][0]["parametric_tree"] = {  # type: ignore[index]
@@ -323,12 +324,16 @@ def test_client_quote_draws_frozen_sliding_layout_not_schematic() -> None:
     }
     html = _doc01(snapshot)
     card_svg = html[html.index("<svg") : html.index("</svg>")]
+    # The field-mode figure ends its elevation at the sliding plan strip
+    # (EXTERIOR label); panel slots there repeat the bay-edge stroke, so
+    # counts apply to the elevation half only.
+    elevation = card_svg[: card_svg.index(">EXTERIOR<")]
     # O/X/X/O: exactly 4 leaf rects (FIXED panes included — the leaf
     # outline is the only `fill="none"` rect stroked with the bay edge
     # color), exactly 2 travel arrows (MOVING only), and declared travel
     # is honored — no `stroke-opacity` inferred flag anywhere.
-    assert card_svg.count('fill="none" stroke="#98A2A5"') == 4
-    assert card_svg.count('<path d="M ') == 2
+    assert elevation.count('fill="none" stroke="#98A2A5"') == 4
+    assert elevation.count('<path d="M ') == 2
     assert "stroke-opacity" not in card_svg
     # The same frozen layout feeds the technical elevation's plan cut —
     # rail numbers and side labels must come from the real layout too.
@@ -422,9 +427,9 @@ def test_client_quote_renders_discount_fraction_as_percent() -> None:
     snapshot["positions"][0]["discount_pct"] = "0.10"  # type: ignore[index]
     snapshot["positions"][0]["price_net"] = "119000"  # type: ignore[index]
     html = _doc01(snapshot)
-    assert "-10,0 %" in html
-    assert "descuento del 10,0 %" in html
+    assert "-10 %" in html
     assert "0.1 %" not in html and "0.1%" not in html
+    assert "0,1 %" not in html and "0,1%" not in html
 
 
 def test_client_quote_draws_stacked_assembly_as_a_column() -> None:
@@ -454,7 +459,8 @@ def test_client_quote_draws_stacked_assembly_as_a_column() -> None:
         },
     }
     html = _doc01(snapshot)
-    assert 'viewBox="0 -144.4 1000 2930.1"' in html
+    # Field mode widens the box with the left chain gutter (width/12).
+    assert 'viewBox="-83.3 -144.4 1083.3 2930.1"' in html
     # The transom sill sits at 2200 mm elevation → svg y = 2600 − 2200 = 400.
     assert 'x1="0" y1="400" x2="1000" y2="400"' in html
 

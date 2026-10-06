@@ -27,7 +27,7 @@ def _roles(monkeypatch):
 def test_share_quote_mints_hashed_token(monkeypatch) -> None:
     _roles(monkeypatch)
     org_id, project_id, actor_id, version_id = uuid4(), uuid4(), uuid4(), uuid4()
-    captured: dict[str, list] = {"insert_params": []}
+    captured: dict[str, list] = {"inserts": [], "updates": []}
     artifact_calls: list[dict] = []
 
     def fake_one(sql_text, params, code="not_found"):
@@ -35,7 +35,7 @@ def test_share_quote_mints_hashed_token(monkeypatch) -> None:
         if lowered.startswith("select id,status"):
             return {"id": project_id, "status": "QUOTED"}
         if lowered.startswith("insert into public.customer_approvals"):
-            captured["insert_params"] = list(params)
+            captured["inserts"].append((lowered, list(params)))
             return {"id": uuid4()}
         raise AssertionError(lowered)
 
@@ -43,6 +43,9 @@ def test_share_quote_mints_hashed_token(monkeypatch) -> None:
         lowered = " ".join(sql_text.lower().split())
         if "project_versions" in lowered:
             return [{"id": version_id}]
+        if lowered.startswith("update public.customer_approvals"):
+            captured["updates"].append((lowered, list(params)))
+            return []
         return []
 
     monkeypatch.setattr("portal.service.one", fake_one)
@@ -57,24 +60,126 @@ def test_share_quote_mints_hashed_token(monkeypatch) -> None:
 
     token = out["token"]
     assert len(token) > 40 and out["expires_at"] > datetime.now(timezone.utc)
+    # Two approvals mint: the emailed link (EMAIL, rotated on every share)
+    # and the document link (DOCUMENT, sealed inside the stored PDF's QR).
+    assert len(captured["inserts"]) == 2
+    email_params = captured["inserts"][0][1]
+    document_sql, document_params = captured["inserts"][1]
     # the raw token never reaches storage — only its sha256
-    assert captured["insert_params"][3] != token
-    assert captured["insert_params"][3] == __import__("hashlib").sha256(
-        token.encode()
-    ).hexdigest()
-    assert captured["insert_params"][4] == out["expires_at"]
-    # minting guarantees the client-facing DOC-01 for the bound version
-    assert artifact_calls == [
-        {
-            "org_id": org_id,
-            "actor_id": actor_id,
-            "role": "ESTIMATOR",
-            "project_version_id": version_id,
-            "order_id": None,
-            "document_type": "DOC-01",
-            "file_format": "PDF",
-        }
-    ]
+    import hashlib
+
+    assert email_params[3] != token
+    assert email_params[3] == hashlib.sha256(token.encode()).hexdigest()
+    assert email_params[4] == out["expires_at"]
+    # the document approval is hashed too and rides the DOCUMENT channel
+    assert document_params[3] != email_params[3]
+    assert "'document'" in document_sql
+    # the share-side revocation only kills EMAIL links — a prior document
+    # QR must keep resolving against its sealed PDF.
+    assert captured["updates"] and "channel='email'" in captured["updates"][0][0]
+    # the artifact renders with the document approval URL, not the email one
+    assert len(artifact_calls) == 1
+    call = artifact_calls[0]
+    assert call["org_id"] == org_id
+    assert call["actor_id"] == actor_id
+    assert call["role"] == "ESTIMATOR"
+    assert call["project_version_id"] == version_id
+    assert call["order_id"] is None
+    assert call["document_type"] == "DOC-01"
+    assert call["file_format"] == "PDF"
+    qr_url = call["render_context"]["approval_url"]
+    assert qr_url.startswith("http://localhost:5173/cotizacion/")
+    assert token not in qr_url
+
+
+def test_share_quote_with_existing_artifact_mints_only_email_link(
+    monkeypatch,
+) -> None:
+    """An already-sealed DOC-01 slot is immutable evidence: a re-share
+    rotates the emailed link but never re-renders nor re-mints a
+    document-channel approval."""
+    _roles(monkeypatch)
+    org_id, project_id, actor_id, version_id = uuid4(), uuid4(), uuid4(), uuid4()
+    inserts: list[list] = []
+    artifact_calls: list[dict] = []
+
+    def fake_one(sql_text, params, code="not_found"):
+        lowered = " ".join(sql_text.lower().split())
+        if lowered.startswith("select id,status"):
+            return {"id": project_id, "status": "QUOTED"}
+        if lowered.startswith("insert into public.customer_approvals"):
+            inserts.append(list(params))
+            return {"id": uuid4()}
+        raise AssertionError(lowered)
+
+    def fake_rows(sql_text, params=()):
+        lowered = " ".join(sql_text.lower().split())
+        if "project_versions" in lowered:
+            return [{"id": version_id}]
+        if "document_artifacts" in lowered:
+            return [{"id": uuid4()}]
+        return []
+
+    monkeypatch.setattr("portal.service.one", fake_one)
+    monkeypatch.setattr("portal.service.rows", fake_rows)
+    monkeypatch.setattr(
+        "portal.service.generate_artifact",
+        lambda **k: (artifact_calls.append(dict(k)) or ({}, True)),
+    )
+    service.share_quote(
+        org_id=org_id, project_id=project_id, actor_id=actor_id, role="ESTIMATOR"
+    )
+    assert len(inserts) == 1
+    assert not artifact_calls
+
+
+def test_share_quote_render_failure_revokes_minted_approvals(monkeypatch) -> None:
+    """If the DOC-01 render blows up, every approval minted for the share
+    (email + document) is revoked — no stranded link whose document
+    nobody can produce."""
+    _roles(monkeypatch)
+    org_id, project_id, actor_id, version_id = uuid4(), uuid4(), uuid4(), uuid4()
+    minted_ids = [uuid4(), uuid4()]
+    issued: list = []
+    revokes: list[list] = []
+
+    def fake_one(sql_text, params, code="not_found"):
+        lowered = " ".join(sql_text.lower().split())
+        if lowered.startswith("select id,status"):
+            return {"id": project_id, "status": "QUOTED"}
+        if lowered.startswith("insert into public.customer_approvals"):
+            issued.append(minted_ids[len(issued)])
+            return {"id": issued[-1]}
+        raise AssertionError(lowered)
+
+    def fake_rows(sql_text, params=()):
+        lowered = " ".join(sql_text.lower().split())
+        if "project_versions" in lowered:
+            return [{"id": version_id}]
+        if "document_artifacts" in lowered:
+            return []
+        if lowered.startswith("update public.customer_approvals"):
+            if "any(%s::uuid[])" in lowered:
+                revokes.append(list(params))
+            return []
+        return []
+
+    def failing_artifact(**_k):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("portal.service.one", fake_one)
+    monkeypatch.setattr("portal.service.rows", fake_rows)
+    monkeypatch.setattr("portal.service.generate_artifact", failing_artifact)
+    with pytest.raises(RuntimeError, match="boom"):
+        service.share_quote(
+            org_id=org_id,
+            project_id=project_id,
+            actor_id=actor_id,
+            role="ESTIMATOR",
+        )
+    assert len(issued) == 2
+    assert len(revokes) == 1
+    assert revokes[0][2] == issued
 
 
 def test_share_quote_requires_quoted_status(monkeypatch) -> None:
