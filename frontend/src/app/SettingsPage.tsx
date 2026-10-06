@@ -914,9 +914,9 @@ function WorkshopRulesCard({ orgId }: { orgId: string }): JSX.Element {
         requestOptions,
       );
       if (response.status !== 200) throw new ApiError(response.status, response.data);
-      setMessage({ text: t("settings.brandingSaved"), error: false });
+      setMessage({ text: t("settings.workshopSaved"), error: false });
     } catch {
-      setMessage({ text: t("settings.brandingSaveError"), error: true });
+      setMessage({ text: t("settings.workshopSaveError"), error: true });
     } finally {
       setBusy(false);
     }
@@ -949,7 +949,7 @@ function WorkshopRulesCard({ orgId }: { orgId: string }): JSX.Element {
         <p className="settings-hint">{t("settings.remnantDaysHint")}</p>
         <div className="payments-form-actions">
           <button type="submit" className="primary-action" disabled={busy}>
-            {t("settings.brandingSave")}
+            {t("settings.workshopSave")}
           </button>
         </div>
       </form>

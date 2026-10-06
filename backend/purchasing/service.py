@@ -295,6 +295,18 @@ def purchasing_state(org_id: UUID, version_id: UUID | None = None) -> dict[str, 
             [version_id, org_id],
         )
         allocated = {str(item["requirement_line_id"]) for item in allocations}
+        # A confirmed batch seals every allocation of that order_type as
+        # evidence (guard_confirmed_allocation rejects any later write) —
+        # the UI reads `sealed` to render supplier/price read-only instead of
+        # offering edits that would 409.
+        sealed_types = {
+            str(item["order_type"])
+            for item in rows(
+                "SELECT DISTINCT order_type::text FROM public.order_allocation_batches "
+                "WHERE project_version_id=%s AND org_id=%s",
+                [version_id, org_id],
+            )
+        }
         coverage = {
             str(row["requirement_line_id"]): Decimal(str(row["covered_qty"]))
             for row in rows(
@@ -310,6 +322,7 @@ def purchasing_state(org_id: UUID, version_id: UUID | None = None) -> dict[str, 
             open_qty = Decimal(str(item["quantity"])) - covered_qty
             item["claimed"] = open_qty <= 0
             item["open_qty"] = int(open_qty) if open_qty > 0 else 0
+            item["sealed"] = str(item["order_type"]) in sealed_types
         for item in orders:
             item["total_amount"] = item.pop("priced_amount", None)
             item["unpriced_lines"] = int(item.get("unpriced_lines") or 0)

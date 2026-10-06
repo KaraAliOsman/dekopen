@@ -88,6 +88,9 @@ type Requirement = {
   // order releases its unreceived remainder, which comes back as open_qty.
   claimed?: boolean;
   open_qty?: number;
+  // True once an allocation batch exists for this order_type — supplier and
+  // price stay as sealed evidence (guard_confirmed_allocation blocks writes).
+  sealed?: boolean;
 };
 type Eligibility = {
   id: string;
@@ -726,12 +729,14 @@ function PurchasingWorkspace({
             </tbody>
           </table>
           {canWrite &&
-            coverageLines.some((line) => line.shortage !== "0" && line.remnant_pool?.key) && (
+            coverageLines.some(
+              (line) => (qtyNumber(line.shortage) ?? 0) > 0 && line.remnant_pool?.key,
+            ) && (
               <section className="purchasing-remnant-offers">
                 <h3>{t("purchasing.remnantOffer")}</h3>
                 <p className="purchasing-hint">{t("purchasing.remnantOfferHint")}</p>
                 {coverageLines
-                  .filter((line) => line.shortage !== "0" && line.remnant_pool?.key)
+                  .filter((line) => (qtyNumber(line.shortage) ?? 0) > 0 && line.remnant_pool?.key)
                   .map((line) => (
                     <RemnantOffer
                       key={line.requirement_line_id}
@@ -959,7 +964,7 @@ function RequirementRow({
   }, [allocation?.unit_price]);
 
   function savePrice(): void {
-    if (!allocation || !canWrite || requirement.claimed) return;
+    if (!allocation || !canWrite || requirement.claimed || requirement.sealed) return;
     const value = price.trim();
     if (value === (allocation.unit_price ?? "")) return;
     void action(
@@ -1006,8 +1011,16 @@ function RequirementRow({
         )}
       </td>
       <td>
-        {requirement.claimed === true || !canWrite ? (
-          (allocated?.supplier_name ?? "—")
+        {requirement.claimed === true || requirement.sealed === true || !canWrite ? (
+          <>
+            {allocated?.supplier_name ?? "—"}
+            {requirement.sealed === true && requirement.claimed !== true ? (
+              <small className="purchasing-hint">
+                <br />
+                {t("purchasing.allocationSealed")}
+              </small>
+            ) : null}
+          </>
         ) : (
           <select
             aria-label={t("purchasing.chooseSupplier")}
@@ -1052,7 +1065,7 @@ function RequirementRow({
         )}
         {allocation ? (
           <div className="purchasing-price">
-            {requirement.claimed === true || !canWrite ? (
+            {requirement.claimed === true || requirement.sealed === true || !canWrite ? (
               allocation.unit_price ? (
                 <small>
                   {t("purchasing.unitPrice")}: {formatMoney(allocation.unit_price, "CLP")}
