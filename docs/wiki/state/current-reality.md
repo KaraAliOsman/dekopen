@@ -235,3 +235,15 @@ A fuller capability-by-capability reality map should be added only after a fresh
 - UI: Ajustes › Inteligencia artificial (OWNER): estado, tabla por capacidad, Probar conexión, presupuesto y consumo del mes; panel "Actividad de IA" en /jobs con filtros; insignia "Modo de prueba" en el shell cuando MOCK sirve (miembros incluidos); el Orb lee fases del worker (`progress_phase`: contexto/modelo/propuesta); el job muestra su costo (créditos·tokens·≈USD).
 - MOCK seguro en prod: sólo `AI_GATEWAY_MOCK_ENABLED=1` explícito lo abre en producción — DEBUG no lo abre (test congelado). La clave del proveedor nunca sale del servidor (test: no llega al response ni al log).
 - Verificado: `make lint|typecheck|test|build` verdes; 23 tests nuevos `test_ia3_runtime.py` (reintento, timeout, presupuesto, fallback JSON, tools, gate MOCK, fuga de clave); evals MOCK 0/26 baseline + MIMO 0/26 por cuota documentados.
+
+
+## [2026-10-06] P05 | dibujo técnico: geometría de glifos y cotas
+
+- Contrato de simbología único: `engine/src/dekopen_engine/opening_symbols.py` (autoridad) + `frontend/src/features/canvas/openingSymbols.ts` (gemelo estricto). `leaf_primitives`/`sliding_primitives` emiten primitivas simbólicas (`tri`/`arrow`/`handle`/`sill`/`none`); `glyph_paths`/`glyphPaths` las convierten a paths SVG canónicos; 14 fixtures JSON en `engine/tests/fixtures/symbols/` congelan primitivas y `d` por caso × vista — paridad exacta (20+29 tests).
+- `SlidingPanel.travel` (`LEFT`/`RIGHT`) declarado por hoja móvil; `SlidingLayoutError` si una hoja viaja a jamba sin espacio o dos móviles adyacentes comparten riel; paneles sin `travel` dibujan la convención documentada marcada "dirección inferida" (opacidad/dash en flecha, badge en editor).
+- Toda elevación declara la vista ("Vista interior/exterior"): el editor gana selector (espejo de lámina con mobiliario no espejado y exterior solo-lectura) + bloque "Simbología" plegable; las figuras PDF imprimen la leyenda y las cotas enteras `tabular-nums` en canaletas fuera del dibujo.
+- Puerta en alzado = triángulos DIN + umbral naranjo bajo toda hoja no fija — el arco de barrido quedó solo en planta. Correderas dibujan flechas por `travel` declarado; O/X/X/O respeta slots fijos.
+- Corte de planta bajo cada bay corredizo del alzado técnico (canvas + PDF): barra de muro EXTERIOR arriba, rieles numerados por `track` (0 = más exterior), hojas en su slot con flecha.
+- Cotas del nivel técnico en canvas: cadena exterior total + cadena por paño eje-a-eje de partidor + datum de manilla cuando `handle_height_mm` declarada.
+- `OpeningGlyph` (`ui/icons.tsx`) y la sección Firma de `/dev/ui` dibujan el contrato real — la tabla de símbolos del dev-canvas cubre el vocabulario completo.
+- Contrato y anti-reglas en `docs/PRD/opening-symbols.md`; ilustraciones por caso/vista generadas por el engine (`scripts/gen_symbol_doc_assets.py`).

@@ -393,3 +393,103 @@ class TestContourEndpoint:
         assert response.status_code == 200
         glass = response.json()["bom"]["glasses"][0]
         assert glass["shape"] is None
+
+
+def sliding_product(layout: dict[str, object]) -> dict[str, object]:
+    return {
+        "version": "product-v2",
+        "assembly": {
+            "modules": [
+                {
+                    "id": "m1",
+                    "width_mm": "1600.00",
+                    "height_mm": "1400.00",
+                    "tree": {
+                        "id": "m1",
+                        "type": "BAY",
+                        "opening_type": "SLIDING_2L",
+                        "glass_thickness_mm": "4.00",
+                        "glass_spec": "4",
+                        "sliding_layout": layout,
+                    },
+                },
+            ],
+            "couplings": [],
+        },
+    }
+
+
+class TestSlidingLayoutParse:
+    """P05 — the adapter accepts declared travel + primary_index (the IA2
+    writer side already emits primary_index; P05 adds per-panel travel)."""
+
+    def test_parses_travel_and_primary_index(self) -> None:
+        product = sliding_product(
+            {
+                "tracks": 2,
+                "primary_index": 1,
+                "panels": [
+                    {"slot": "S1", "kind": "MOVING", "track": 0, "travel": "RIGHT"},
+                    {"slot": "S2", "kind": "MOVING", "track": 1, "travel": "LEFT"},
+                ],
+            }
+        )
+        parsed = parse_product_model(product)
+        layout = parsed.assembly.modules[0].tree.sliding_layout
+        assert layout is not None
+        assert layout.primary_index == 1
+        assert layout.panels[0].travel.value == "RIGHT"
+        assert layout.panels[1].travel.value == "LEFT"
+
+    def test_parses_layout_without_travel(self) -> None:
+        product = sliding_product(
+            {
+                "tracks": 2,
+                "panels": [
+                    {"slot": "S1", "kind": "MOVING", "track": 0},
+                    {"slot": "S2", "kind": "MOVING", "track": 1},
+                ],
+            }
+        )
+        parsed = parse_product_model(product)
+        layout = parsed.assembly.modules[0].tree.sliding_layout
+        assert layout is not None
+        assert layout.panels[0].travel is None
+
+    def test_rejects_unknown_travel(self) -> None:
+        product = sliding_product(
+            {
+                "tracks": 2,
+                "panels": [
+                    {"slot": "S1", "kind": "MOVING", "track": 0, "travel": "UP"},
+                ],
+            }
+        )
+        with pytest.raises(InvalidEngineRequest):
+            parse_product_model(product)
+
+    def test_rejects_fixed_panel_with_travel(self) -> None:
+        product = sliding_product(
+            {
+                "tracks": 2,
+                "panels": [
+                    {"slot": "O1", "kind": "FIXED", "track": None, "travel": "LEFT"},
+                ],
+            }
+        )
+        with pytest.raises(InvalidEngineRequest):
+            parse_product_model(product)
+
+    def test_rejects_non_integer_primary_index(self) -> None:
+        product = sliding_product(
+            {
+                "tracks": 2,
+                "primary_index": "first",
+                "panels": [
+                    {"slot": "S1", "kind": "MOVING", "track": 0},
+                    {"slot": "S2", "kind": "MOVING", "track": 1},
+                ],
+            }
+        )
+        with pytest.raises(InvalidEngineRequest):
+            parse_product_model(product)

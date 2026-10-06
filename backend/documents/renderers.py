@@ -11,7 +11,25 @@ from html import escape
 from pathlib import Path
 
 from dekopen_engine.contour import Contour, contour_points
-from dekopen_engine.models import Opening, OpeningSpec, PlanPoint, UnitKind
+from dekopen_engine.models import (
+    HingeSide,
+    OpeningDirection,
+    OpeningMovement,
+    Opening,
+    OpeningSpec,
+    PlanPoint,
+    SlidingLayout,
+    SlidingPanel,
+    SlidingPanelKind,
+    UnitKind,
+)
+from dekopen_engine.opening_symbols import (
+    ElevationView,
+    GlyphPrimitive,
+    glyph_paths,
+    leaf_primitives,
+    sliding_primitives,
+)
 from dekopen_engine.openings import opening_leaf_name_es, spec_display_name_es
 from dekopen_engine.product import ElevationMember, elevation_layout
 from documents.repository import DocumentaryError
@@ -633,94 +651,72 @@ def _hardware_marks(opening: str, handedness: str, ix: Decimal, iy: Decimal,
         )
 
 
-def _spec_leaf_glyphs(
-    leaves: list[tuple[Decimal, Decimal, "Opening"]],
-    unit: "UnitKind",
-    iy: Decimal,
-    ih: Decimal,
+def _glyph_paths_out(
+    prims: list[GlyphPrimitive],
+    x: Decimal,
+    y: Decimal,
+    w: Decimal,
+    h: Decimal,
     out: list[str],
     pal: dict[str, str | None],
-    stroke: str,
     stroke_mm: Decimal,
-    marker: str,
+    *,
+    leaf_bottom: Decimal | None = None,
+    inferred_opacity: bool = True,
 ) -> None:
-    """DIN symbology per spec-declared leaf (D03) — the same vocabulary the
-    legacy `opening_type` branch draws, resolved per leaf so a french pair,
-    a banderola or a proyectante reads correctly. Interior view convention:
-    continuous = opens toward the viewer (INWARD), dashed = OUTWARD. Door
-    leaves keep the issued-door convention (swing arc + sill accent)."""
-    top_y, bottom_y = iy, iy + ih
-    for index, (lx, lw, leaf) in enumerate(leaves):
-        dash_attr = ""
-        if leaf.direction is not None and leaf.direction.value == "OUTWARD":
-            dash = f'{_pt(stroke_mm * Decimal("2.4"))} {_pt(stroke_mm * Decimal("2"))}'
-            dash_attr = f' stroke-dasharray="{dash}"'
-        movement = leaf.movement.value
-        if movement == "FIXED":
-            # A fixed leaf (incl. fijo en hoja and door sidelights) opens
-            # nowhere — no glyph, no swing arc, whatever the unit is.
-            continue
-        hinge = leaf.hinge_side.value if leaf.hinge_side is not None else None
-        cx, right_x = lx + lw / 2, lx + lw
-        if movement.endswith("SLIDE"):
-            # Sliding leaf: same figure as the legacy panels — leaf outline
-            # plus the travel arrow toward its neighbouring slot.
-            out.append(
-                f'<rect x="{_pt(lx)}" y="{_pt(top_y)}" width="{_pt(lw)}" '
-                f'height="{_pt(ih)}" fill="none" stroke="{pal["bay_edge"]}" '
-                f'stroke-width="{stroke}"/>'
-            )
-            forward = index * 2 < len(leaves)
-            ax1 = lx + lw / 4 if forward else lx + lw * Decimal("3") / 4
-            ax2 = lx + lw * Decimal("3") / 4 if forward else lx + lw / 4
-            out.append(
-                f'<line x1="{_pt(ax1)}" y1="{_pt(top_y + ih / 2)}" '
-                f'x2="{_pt(ax2)}" y2="{_pt(top_y + ih / 2)}" stroke="{pal["glyph"]}" '
-                f'stroke-width="{stroke}" marker-end="url(#{marker})"/>'
-            )
-            continue
-        if unit == UnitKind.DOOR:
-            # Door figure: swing arc anchored on the hinge-side top corner.
-            radius = lw
-            if hinge == "RIGHT":
-                out.append(
-                    f'<path d="M {_pt(lx)} {_pt(top_y)} '
-                    f'A {_pt(radius)} {_pt(radius)} 0 0 0 {_pt(right_x)} '
-                    f'{_pt(top_y + radius)}" fill="none" stroke="{pal["glyph"]}" '
-                    f'stroke-width="{stroke}"{dash_attr}/>'
-                )
-            else:
-                out.append(
-                    f'<path d="M {_pt(right_x)} {_pt(top_y)} '
-                    f'A {_pt(radius)} {_pt(radius)} 0 0 1 {_pt(lx)} '
-                    f'{_pt(top_y + radius)}" fill="none" stroke="{pal["glyph"]}" '
-                    f'stroke-width="{stroke}"{dash_attr}/>'
-                )
-            continue
-        if hinge == "RIGHT":
-            out.append(
-                f'<polygon points="{_pt(right_x)},{_pt(top_y)} {_pt(right_x)},{_pt(bottom_y)} '
-                f'{_pt(lx)},{_pt(top_y + ih / 2)}" fill="none" stroke="{pal["glyph"]}" '
-                f'stroke-width="{stroke}"{dash_attr}/>'
-            )
-        elif hinge == "LEFT":
-            out.append(
-                f'<polygon points="{_pt(lx)},{_pt(top_y)} {_pt(lx)},{_pt(bottom_y)} '
-                f'{_pt(right_x)},{_pt(top_y + ih / 2)}" fill="none" stroke="{pal["glyph"]}" '
-                f'stroke-width="{stroke}"{dash_attr}/>'
-            )
-        if movement in ("TILT_TURN", "BOTTOM_HUNG") or hinge == "BOTTOM":
-            out.append(
-                f'<polygon points="{_pt(lx)},{_pt(bottom_y)} {_pt(right_x)},{_pt(bottom_y)} '
-                f'{_pt(cx)},{_pt(top_y)}" fill="none" stroke="{pal["glyph"]}" '
-                f'stroke-width="{stroke}"{dash_attr}/>'
-            )
-        elif movement == "TOP_HUNG" or hinge == "TOP":
-            out.append(
-                f'<polygon points="{_pt(lx)},{_pt(top_y)} {_pt(right_x)},{_pt(top_y)} '
-                f'{_pt(cx)},{_pt(bottom_y)}" fill="none" stroke="{pal["glyph"]}" '
-                f'stroke-width="{stroke}"{dash_attr}/>'
-            )
+    """Emit the contract's canonical path data — the same strings the
+    canvas draws (engine/tests/fixtures/symbols pins both sides)."""
+    for prim, (path_d, dash) in zip(
+        prims, glyph_paths(prims, x, y, w, h, leaf_bottom=leaf_bottom)
+    ):
+        attrs = ""
+        if dash:
+            dsh = f"{_pt(stroke_mm * Decimal('2.4'))} {_pt(stroke_mm * Decimal('2'))}"
+            attrs += f' stroke-dasharray="{dsh}"'
+        if prim.inferred and inferred_opacity:
+            attrs += ' stroke-opacity="0.72"'
+        # The door sill is a threshold accent, not a glyph mark — keep the
+        # orange the factory reads as "walkable edge" on both palettes.
+        color = pal["accent"] if prim.k == "sill" else pal["glyph"]
+        out.append(
+            f'<path d="{path_d}" fill="none" stroke="{color}" '
+            f'stroke-width="{_pt(stroke_mm)}"{attrs}/>'
+        )
+
+
+def _legacy_leaf_specs(
+    opening: str, node: dict[str, object]
+) -> tuple[list[Opening], "UnitKind"]:
+    """Map a legacy ``opening_type`` enum to the spec-leaf vocabulary the
+    glyph contract consumes — same table as the canvas's
+    ``glyphLeafSpec``. Door enums resolve to DOOR unit so the sill accent
+    and the door handle come free from the contract."""
+    handed = str(node.get("door_handedness") or "")
+    inward = OpeningDirection.INWARD
+
+    def leaf(movement: OpeningMovement, hinge: "HingeSide | None") -> Opening:
+        return Opening(movement=movement, hinge_side=hinge, direction=inward)
+
+    table: dict[str, tuple[list[Opening], "UnitKind"]] = {
+        "TURN_LEFT": ([leaf(OpeningMovement.TURN, HingeSide.LEFT)], UnitKind.WINDOW),
+        "TURN_RIGHT": ([leaf(OpeningMovement.TURN, HingeSide.RIGHT)], UnitKind.WINDOW),
+        "TILT_TURN_LEFT": ([leaf(OpeningMovement.TILT_TURN, HingeSide.LEFT)], UnitKind.WINDOW),
+        "TILT_TURN_RIGHT": ([leaf(OpeningMovement.TILT_TURN, HingeSide.RIGHT)], UnitKind.WINDOW),
+        "AWNING": (
+            [Opening(movement=OpeningMovement.TOP_HUNG, hinge_side=HingeSide.TOP,
+                     direction=OpeningDirection.OUTWARD)],
+            UnitKind.WINDOW,
+        ),
+        "DOOR_ENTRY": (
+            [leaf(OpeningMovement.TURN, HingeSide.RIGHT if handed == "RIGHT" else HingeSide.LEFT)],
+            UnitKind.DOOR,
+        ),
+        "DOOR_DOUBLE": (
+            [leaf(OpeningMovement.TURN, HingeSide.LEFT), leaf(OpeningMovement.TURN, HingeSide.RIGHT)],
+            UnitKind.DOOR,
+        ),
+    }
+    return table.get(opening, ([], UnitKind.WINDOW))
 
 
 def _svg_elements(node: dict[str, object], x: Decimal, y: Decimal,
@@ -797,9 +793,12 @@ def _svg_elements(node: dict[str, object], x: Decimal, y: Decimal,
             )
     opening = node.get("opening_type")
     mx, my = ix + iw / 2, iy + ih / 2
+    handle_raw = node.get("handle_height_mm")
+    handle_mm = _num(handle_raw) if handle_raw is not None else None
+    view: ElevationView = "interior"  # issued elevations are interior unless asked
     if opening is None:
         # D03 spec form — `opening`/`leaves`/`unit_kind` instead of the
-        # legacy enum: resolve each leaf and draw the same DIN vocabulary
+        # legacy enum: resolve each leaf and draw the shared DIN grammar
         # per leaf (interior view; dashed when it opens away).
         spec_leaves: list[tuple[Decimal, Decimal, Opening]] = []
         raw_leaves = node.get("leaves")
@@ -823,17 +822,6 @@ def _svg_elements(node: dict[str, object], x: Decimal, y: Decimal,
             except InvalidEngineRequest:
                 spec_leaves = []
         if spec_leaves:
-            if unit == UnitKind.DOOR:
-                # Threshold accent runs under operable leaves only — a fixed
-                # sidelight keeps its frame bottom, not a walkable sill.
-                for leaf_x, leaf_w, leaf in spec_leaves:
-                    if leaf.movement.value == "FIXED":
-                        continue
-                    out.append(
-                        f'<line x1="{_pt(leaf_x)}" y1="{_pt(iy + ih)}" '
-                        f'x2="{_pt(leaf_x + leaf_w)}" y2="{_pt(iy + ih)}" '
-                        f'stroke="{pal["accent"]}" stroke-width="{stroke}"/>'
-                    )
             # Meeting stile between leaves (inversor / encuentro) — a real
             # vertical member on hinged pairs, whether window or door.
             for leaf_x, _leaf_w, _leaf in spec_leaves[1:]:
@@ -842,9 +830,11 @@ def _svg_elements(node: dict[str, object], x: Decimal, y: Decimal,
                     f'y2="{_pt(iy + ih)}" stroke="{pal["glyph"]}" '
                     f'stroke-width="{stroke}"/>'
                 )
-            _spec_leaf_glyphs(
-                spec_leaves, unit, iy, ih, out, pal, stroke, stroke_mm, marker
-            )
+            for leaf_x, leaf_w, leaf in spec_leaves:
+                _glyph_paths_out(
+                    leaf_primitives(leaf, view, unit=unit, handle_mm=handle_mm),
+                    leaf_x, iy, leaf_w, ih, out, pal, stroke_mm,
+                )
             if pal.get("hardware"):
                 for leaf_x, leaf_w, leaf in spec_leaves:
                     hinge = leaf.hinge_side.value if leaf.hinge_side else None
@@ -860,114 +850,74 @@ def _svg_elements(node: dict[str, object], x: Decimal, y: Decimal,
                             pseudo, "RIGHT" if hinge == "RIGHT" else "",
                             leaf_x, iy, leaf_w, ih, out, pal,
                         )
-    if opening in ("TURN_LEFT", "TILT_TURN_LEFT"):
-        out.append(
-            f'<polygon points="{_pt(ix)},{_pt(iy)} {_pt(ix)},{_pt(iy + ih)} '
-            f'{_pt(ix + iw)},{_pt(my)}" fill="none" stroke="{pal["glyph"]}" '
-            f'stroke-width="{stroke}"/>'
-        )
-    elif opening in ("TURN_RIGHT", "TILT_TURN_RIGHT"):
-        out.append(
-            f'<polygon points="{_pt(ix + iw)},{_pt(iy)} {_pt(ix + iw)},{_pt(iy + ih)} '
-            f'{_pt(ix)},{_pt(my)}" fill="none" stroke="{pal["glyph"]}" '
-            f'stroke-width="{stroke}"/>'
-        )
-    if opening in ("TILT_TURN_LEFT", "TILT_TURN_RIGHT"):
-        out.append(
-            f'<polygon points="{_pt(ix)},{_pt(iy + ih)} {_pt(ix + iw)},{_pt(iy + ih)} '
-            f'{_pt(mx)},{_pt(iy)}" fill="none" stroke="{pal["glyph"]}" stroke-width="{stroke}"/>'
-        )
-    elif opening == "AWNING":
-        out.append(
-            f'<polygon points="{_pt(ix)},{_pt(iy)} {_pt(ix + iw)},{_pt(iy)} '
-            f'{_pt(mx)},{_pt(iy + ih)}" fill="none" stroke="{pal["glyph"]}" '
-            f'stroke-width="{stroke}"/>'
-        )
     elif opening in ("SLIDING_2L", "SLIDING_3L", "SLIDING_4L", "SLIDING"):
-        layout = node.get("sliding_layout")
-        layout_panels = (
-            layout.get("panels")
-            if isinstance(layout, dict) and isinstance(layout.get("panels"), list)
-            and layout["panels"] else None
-        )
-        if layout_panels is None:
+        # The layout owns the semantics: track assignment + declared travel.
+        # A frozen tree saved before `travel` resolves direction by the
+        # documented convention and the arrow carries `inferred`.
+        parsed_layout: SlidingLayout | None = None
+        raw_layout = node.get("sliding_layout")
+        if isinstance(raw_layout, dict):
+            try:
+                parsed_layout = SlidingLayout.model_validate(raw_layout)
+            except ValueError:
+                parsed_layout = None
+        if parsed_layout is None or not parsed_layout.panels:
             leaf_count = {"SLIDING_2L": 2, "SLIDING_3L": 3, "SLIDING_4L": 4}.get(
                 str(opening), 2
             )
-            layout_panels = [{"kind": "MOVING"} for _ in range(leaf_count)]
-        leaf_w = iw / len(layout_panels)
-        for index, panel in enumerate(layout_panels):
+            parsed_layout = SlidingLayout(
+                tracks=2,
+                panels=[
+                    SlidingPanel(slot=str(i), kind=SlidingPanelKind.MOVING)
+                    for i in range(leaf_count)
+                ],
+            )
+        leaf_w = iw / len(parsed_layout.panels)
+        panel_prims = sliding_primitives(parsed_layout, view)
+        for index, panel in enumerate(parsed_layout.panels):
             lx = ix + leaf_w * index
             out.append(
                 f'<rect x="{_pt(lx)}" y="{_pt(iy)}" width="{_pt(leaf_w)}" '
                 f'height="{_pt(ih)}" fill="none" stroke="{pal["bay_edge"]}" '
                 f'stroke-width="{stroke}"/>'
             )
-            if not isinstance(panel, dict) or panel.get("kind") == "MOVING":
-                # A leaf opens toward its neighbouring slot: left half of
-                # the bay travels right, right half travels left — the same
-                # convention the pull mark below and the 3D pose use.
-                forward = index * 2 < len(layout_panels)
-                ax1 = lx + leaf_w / 4 if forward else lx + leaf_w * Decimal("3") / 4
-                ax2 = lx + leaf_w * Decimal("3") / 4 if forward else lx + leaf_w / 4
-                out.append(
-                    f'<line x1="{_pt(ax1)}" y1="{_pt(my)}" '
-                    f'x2="{_pt(ax2)}" y2="{_pt(my)}" stroke="{pal["glyph"]}" '
-                    f'stroke-width="{stroke}" marker-end="url(#{marker})"/>'
-                )
-                if pal.get("hardware"):
-                    # Pull on the meeting-stile edge: panels on the left
-                    # half pull right, on the right half pull left.
-                    pull_w = max(leaf_w * Decimal("0.05"), Decimal("1.1"))
-                    pull_h = ih * Decimal("0.16")
-                    inner = index * 2 < len(layout_panels)
-                    px = (
-                        lx + leaf_w - pull_w * Decimal("1.5")
-                        if inner
-                        else lx + pull_w * Decimal("0.5")
-                    )
-                    out.append(
-                        f'<rect x="{_pt(px)}" y="{_pt(my - pull_h / 2)}" '
-                        f'width="{_pt(pull_w)}" height="{_pt(pull_h)}" '
-                        f'rx="{_pt(pull_w / 2)}" fill="{pal["hardware"]}"/>'
-                    )
-    elif opening in ("DOOR_ENTRY", "DOOR_DOUBLE"):
-        out.append(
-            f'<line x1="{_pt(ix)}" y1="{_pt(iy + ih)}" x2="{_pt(ix + iw)}" '
-            f'y2="{_pt(iy + ih)}" stroke="{pal["accent"]}" stroke-width="{stroke}"/>'
-        )
-        # Swing arc on each leaf: the quarter circle anchored on the hinge-side
-        # top corner, dashed — the elevation's way of saying which edge is
-        # hinged before hardware marks load (review: door leaves read as
-        # blank slabs without it).
-        dash = f'{_pt(stroke_mm * Decimal("2.4"))} {_pt(stroke_mm * Decimal("2"))}'
-        handedness = str(node.get("door_handedness") or "")
-        leaves = (
-            [(ix, iw, handedness != "RIGHT")]
-            if opening == "DOOR_ENTRY"
-            else [(ix, iw / 2, True), (ix + iw / 2, iw / 2, False)]
-        )
-        for leaf_x, leaf_w, leaf_hinge_left in leaves:
-            radius = leaf_w
-            if leaf_hinge_left:
-                out.append(
-                    f'<path d="M {_pt(leaf_x + leaf_w)} {_pt(iy)} '
-                    f'A {_pt(radius)} {_pt(radius)} 0 0 1 {_pt(leaf_x)} '
-                    f'{_pt(iy + radius)}" fill="none" stroke="{pal["glyph"]}" '
-                    f'stroke-width="{stroke}" stroke-dasharray="{dash}"/>'
-                )
-            else:
-                out.append(
-                    f'<path d="M {_pt(leaf_x)} {_pt(iy)} '
-                    f'A {_pt(radius)} {_pt(radius)} 0 0 0 {_pt(leaf_x + leaf_w)} '
-                    f'{_pt(iy + radius)}" fill="none" stroke="{pal["glyph"]}" '
-                    f'stroke-width="{stroke}" stroke-dasharray="{dash}"/>'
-                )
-        if opening == "DOOR_DOUBLE":
-            out.append(
-                f'<line x1="{_pt(mx)}" y1="{_pt(iy)}" x2="{_pt(mx)}" '
-                f'y2="{_pt(iy + ih)}" stroke="{pal["glyph"]}" stroke-width="{stroke}"/>'
+            _glyph_paths_out(
+                panel_prims[index], lx, iy, leaf_w, ih, out, pal, stroke_mm,
             )
+            if pal.get("hardware") and panel.kind != "FIXED":
+                # Pull on the meeting-stile edge: panels on the left
+                # half pull right, on the right half pull left.
+                pull_w = max(leaf_w * Decimal("0.05"), Decimal("1.1"))
+                pull_h = ih * Decimal("0.16")
+                inner = index * 2 < len(parsed_layout.panels)
+                px = (
+                    lx + leaf_w - pull_w * Decimal("1.5")
+                    if inner
+                    else lx + pull_w * Decimal("0.5")
+                )
+                out.append(
+                    f'<rect x="{_pt(px)}" y="{_pt(my - pull_h / 2)}" '
+                    f'width="{_pt(pull_w)}" height="{_pt(pull_h)}" '
+                    f'rx="{_pt(pull_w / 2)}" fill="{pal["hardware"]}"/>'
+                )
+    else:
+        # Legacy single-enum openings — mapped onto the spec vocabulary and
+        # drawn by the same contract (door elevation = DIN triangles + sill;
+        # the swing arc stays in plan views, never on the elevation).
+        legacy_leaves, legacy_unit = _legacy_leaf_specs(str(opening), node)
+        if legacy_leaves:
+            leaf_w = iw / len(legacy_leaves)
+            for index, leaf in enumerate(legacy_leaves):
+                leaf_x = ix + leaf_w * index
+                _glyph_paths_out(
+                    leaf_primitives(leaf, view, unit=legacy_unit, handle_mm=handle_mm),
+                    leaf_x, iy, leaf_w, ih, out, pal, stroke_mm,
+                )
+            if str(opening) == "DOOR_DOUBLE":
+                out.append(
+                    f'<line x1="{_pt(mx)}" y1="{_pt(iy)}" x2="{_pt(mx)}" '
+                    f'y2="{_pt(iy + ih)}" stroke="{pal["glyph"]}" stroke-width="{stroke}"/>'
+                )
     if pal.get("hardware"):
         _hardware_marks(
             str(opening), str(node.get("door_handedness") or ""),
@@ -1064,6 +1014,110 @@ def _contour_svg_path(
     return " ".join(commands) + " Z", top, bottom, left, right
 
 
+def _collect_sliding_bays(
+    node: dict[str, object],
+    x: Decimal,
+    y: Decimal,
+    width: Decimal,
+    height: Decimal,
+    acc: list[tuple[Decimal, Decimal, Decimal, Decimal, dict[str, object]]],
+) -> None:
+    """Mirror the ``_svg_elements`` geometry walk and collect the box of
+    every BAY that is a sliding unit — the plan strip draws one block per
+    such bay under the technical elevation."""
+    node_type = str(node.get("type"))
+    children = node.get("children")
+    if not isinstance(children, list):
+        children = []
+    if node_type == "ROOT" and len(children) == 1 and isinstance(children[0], dict):
+        _collect_sliding_bays(children[0], x, y, width, height, acc)
+        return
+    if node_type in ("SPLIT_V", "SPLIT_H") and len(children) == 2:
+        offset = node.get("split_offset_mm")
+        if offset is None:
+            return
+        first, second = children
+        if not isinstance(first, dict) or not isinstance(second, dict):
+            return
+        split = _num(offset)
+        if node_type == "SPLIT_V":
+            _collect_sliding_bays(first, x, y, split, height, acc)
+            _collect_sliding_bays(second, x + split, y, width - split, height, acc)
+        else:
+            _collect_sliding_bays(first, x, y, width, split, acc)
+            _collect_sliding_bays(second, x, y + split, width, height - split, acc)
+        return
+    if node_type != "BAY":
+        return
+    opening = str(node.get("opening_type") or "")
+    if opening.startswith("SLIDING") or node.get("sliding_layout") is not None:
+        acc.append((x, y, width, height, node))
+
+
+def _sliding_plan_strip(
+    bx: Decimal,
+    strip_top: Decimal,
+    bw: Decimal,
+    layout: SlidingLayout,
+    out: list[str],
+    pal: dict[str, str | None],
+    stroke_mm: Decimal,
+    font_mm: Decimal,
+    track_h: Decimal,
+) -> Decimal:
+    """Plan cut of a sliding bay under the technical elevation: the wall
+    bar on the exterior side, one numbered rail per track, the leaves in
+    their slots and the travel arrow — EXTERIOR / INTERIOR declared.
+    Returns the strip's total height so the caller can grow the viewBox."""
+    tracks = max(layout.tracks, 1)
+    wall_h = track_h / Decimal("3")
+    pitch = bw / len(layout.panels)
+    # Wall bar — the exterior side is always the top of the plan strip.
+    out.append(
+        f'<rect x="{_pt(bx)}" y="{_pt(strip_top)}" width="{_pt(bw)}" '
+        f'height="{_pt(wall_h)}" fill="{pal["frame_edge"]}"/>'
+    )
+    out.append(
+        f'<text x="{_pt(bx + bw)}" y="{_pt(strip_top + wall_h + font_mm)}" '
+        f'font-size="{_pt(font_mm)}" text-anchor="end" '
+        f'fill="{pal["glyph"]}">EXTERIOR</text>'
+    )
+    rails_top = strip_top + wall_h + font_mm * Decimal("1.6")
+    for track in range(tracks):
+        rail_y = rails_top + track_h * track
+        out.append(
+            f'<line x1="{_pt(bx)}" y1="{_pt(rail_y)}" x2="{_pt(bx + bw)}" '
+            f'y2="{_pt(rail_y)}" stroke="{pal["split"]}" '
+            f'stroke-width="{_pt(stroke_mm / 2)}"/>'
+        )
+        out.append(
+            f'<text x="{_pt(bx - font_mm / 3)}" y="{_pt(rail_y + track_h * Decimal("0.6"))}" '
+            f'font-size="{_pt(font_mm)}" text-anchor="end" '
+            f'fill="{pal["glyph"]}">{track + 1}</text>'
+        )
+    for index, panel in enumerate(layout.panels):
+        slot_x = bx + pitch * index
+        track = panel.track if panel.track is not None else 0
+        slot_y = rails_top + track_h * track
+        out.append(
+            f'<rect x="{_pt(slot_x)}" y="{_pt(slot_y)}" width="{_pt(pitch)}" '
+            f'height="{_pt(track_h)}" fill="none" stroke="{pal["bay_edge"]}" '
+            f'stroke-width="{_pt(stroke_mm)}"/>'
+        )
+        if panel.kind != "FIXED":
+            prim = sliding_primitives(layout, "interior")[index]
+            _glyph_paths_out(
+                prim, slot_x, slot_y, pitch, track_h, out, pal, stroke_mm / 2
+            )
+    interior_y = rails_top + track_h * tracks + font_mm * Decimal("1.4")
+    out.append(
+        f'<text x="{_pt(bx + bw)}" y="{_pt(interior_y)}" '
+        f'font-size="{_pt(font_mm)}" text-anchor="end" '
+        f'fill="{pal["glyph"]}">INTERIOR</text>'
+    )
+    return interior_y - strip_top + font_mm * Decimal("0.6")
+
+
 def _position_svg(
     position: dict[str, object], *, commercial: bool = False, marker_key: str = ""
 ) -> str:
@@ -1078,6 +1132,7 @@ def _position_svg(
         f'stroke="{pal["glyph"]}" '
         'stroke-width="1"/></marker></defs>'
     ]
+    sliding_bays: list[tuple[Decimal, Decimal, Decimal, Decimal, dict[str, object]]] = []
     if tree.get("version") == "product-v2":
         assembly = _object(tree.get("assembly"), "invalid_frozen_parametric_tree")
         modules = [
@@ -1136,6 +1191,10 @@ def _position_svg(
             x = member.x_mm - left_edge
             baseline = top_edge - (member.sill_mm + member_top)
             frameless = module.get("frameless")
+            _collect_sliding_bays(
+                _object(module.get("tree"), "invalid_frozen_parametric_tree"),
+                x, baseline, module_width, module_height, sliding_bays,
+            )
             if path_d is not None:
                 stroke = module_width / Decimal("150")
                 elements.append(
@@ -1206,8 +1265,99 @@ def _position_svg(
         if width <= 0 or height <= 0:
             raise DocumentaryError("svg_dimension_invalid")
         _svg_elements(tree, Decimal("0"), Decimal("0"), width, height, elements, marker, pal=pal)
+        _collect_sliding_bays(
+            tree, Decimal("0"), Decimal("0"), width, height, sliding_bays
+        )
+    # P05 — every elevation declares its reading side; the technical
+    # figure also carries exterior dims and, under each sliding bay, the
+    # plan cut with numbered tracks. The furniture lives in gutters the
+    # viewBox grows for; the drawing itself stays at 0,0.
+    q = Decimal("0.1")
+    top_pad = (height / Decimal("18")).quantize(q) if height > 0 else Decimal("0")
+    left_pad = (
+        (width / Decimal("14")).quantize(q)
+        if width > 0 and not commercial
+        else Decimal("0")
+    )
+    right_pad = (
+        (height / Decimal("24")).quantize(q)
+        if height > 0 and not commercial
+        else Decimal("0")
+    )
+    bottom_pad = (height / Decimal("14")).quantize(q) if height > 0 else Decimal("0")
+    font_mm = (height / Decimal("48")).quantize(q) if height > 0 else Decimal("10")
+    dim_stroke = _pt(height / Decimal("700")) if height > 0 else "0.5"
+    elements.append(
+        f'<text x="{_pt(width)}" y="{_pt(-top_pad / 3)}" '
+        f'font-size="{_pt(font_mm)}" text-anchor="end" '
+        'font-family="IBM Plex Mono, monospace" '
+        f'fill="{pal["glyph"]}">Vista interior</text>'
+    )
+    if not commercial:
+        # Exterior total chains — one width chain on top, one height
+        # chain on the left; integer mm, tabular mono face.
+        dim_y = -top_pad * Decimal("0.68")
+        tick = font_mm / 2
+        elements.append(
+            f'<line x1="0" y1="{_pt(dim_y)}" x2="{_pt(width)}" y2="{_pt(dim_y)}" '
+            f'stroke="{pal["glyph"]}" stroke-width="{dim_stroke}"/>'
+            f'<line x1="0" y1="{_pt(dim_y - tick)}" x2="0" y2="{_pt(dim_y + tick)}" '
+            f'stroke="{pal["glyph"]}" stroke-width="{dim_stroke}"/>'
+            f'<line x1="{_pt(width)}" y1="{_pt(dim_y - tick)}" x2="{_pt(width)}" '
+            f'y2="{_pt(dim_y + tick)}" stroke="{pal["glyph"]}" stroke-width="{dim_stroke}"/>'
+            f'<text x="{_pt(width / 2)}" y="{_pt(dim_y - tick)}" '
+            f'font-size="{_pt(font_mm)}" text-anchor="middle" '
+            'font-family="IBM Plex Mono, monospace" '
+            f'fill="{pal["glyph"]}">{int(width.to_integral_value())}</text>'
+        )
+        dim_x = -left_pad * Decimal("0.55")
+        elements.append(
+            f'<line x1="{_pt(dim_x)}" y1="0" x2="{_pt(dim_x)}" y2="{_pt(height)}" '
+            f'stroke="{pal["glyph"]}" stroke-width="{dim_stroke}"/>'
+            f'<line x1="{_pt(dim_x - tick)}" y1="0" x2="{_pt(dim_x + tick)}" y2="0" '
+            f'stroke="{pal["glyph"]}" stroke-width="{dim_stroke}"/>'
+            f'<line x1="{_pt(dim_x - tick)}" y1="{_pt(height)}" x2="{_pt(dim_x + tick)}" '
+            f'y2="{_pt(height)}" stroke="{pal["glyph"]}" stroke-width="{dim_stroke}"/>'
+            f'<text x="{_pt(dim_x - font_mm * Decimal("0.4"))}" y="{_pt(height / 2)}" '
+            f'font-size="{_pt(font_mm)}" text-anchor="middle" '
+            'font-family="IBM Plex Mono, monospace" '
+            f'transform="rotate(-90 {_pt(dim_x - font_mm * Decimal("0.4"))} {_pt(height / 2)})" '
+            f'fill="{pal["glyph"]}">{int(height.to_integral_value())}</text>'
+        )
+        # Sliding plan strips — one cut per sliding bay, in bay order.
+        strip_top = height + bottom_pad
+        track_h = max((height / Decimal("40")).quantize(q), Decimal("22"))
+        strip_stroke = height / Decimal("120") if height > 0 else Decimal("2")
+        plan_bottom = height
+        for bx, _by, bw, _bh, bay_node in sliding_bays:
+            bay_layout: SlidingLayout | None = None
+            raw_layout = bay_node.get("sliding_layout")
+            if isinstance(raw_layout, dict):
+                try:
+                    bay_layout = SlidingLayout.model_validate(raw_layout)
+                except ValueError:
+                    bay_layout = None
+            if bay_layout is None or not bay_layout.panels:
+                leaf_count = {
+                    "SLIDING_2L": 2, "SLIDING_3L": 3, "SLIDING_4L": 4
+                }.get(str(bay_node.get("opening_type")), 2)
+                bay_layout = SlidingLayout(
+                    tracks=2,
+                    panels=[
+                        SlidingPanel(slot=str(i), kind=SlidingPanelKind.MOVING)
+                        for i in range(leaf_count)
+                    ],
+                )
+            plan_bottom = strip_top + _sliding_plan_strip(
+                bx, strip_top, bw, bay_layout, elements, pal,
+                strip_stroke, font_mm, track_h,
+            )
+            strip_top = plan_bottom + bottom_pad / 2
+        bottom_pad = max(bottom_pad, plan_bottom - height)
     return (
-        f'<svg viewBox="0 0 {_pt(width)} {_pt(height)}" '
+        f'<svg viewBox="{_pt(-left_pad)} {_pt(-top_pad)} '
+        f'{_pt(width + left_pad + right_pad)} '
+        f'{_pt(height + top_pad + bottom_pad)}" '
         'xmlns="http://www.w3.org/2000/svg" role="img" '
         f'aria-label="Vano {_value(position.get("position_index"))}">'
         + "".join(elements) + "</svg>"

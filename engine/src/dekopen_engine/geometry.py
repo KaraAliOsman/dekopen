@@ -87,6 +87,7 @@ from dekopen_engine.models import (
     SlidingLayout,
     SlidingPanel,
     SlidingPanelKind,
+    SlidingTravel,
     SystemParams,
     TypologyLimit,
     UnitKind,
@@ -281,33 +282,62 @@ def capability_rejection_reasons(spec: OpeningSpec, params: SystemParams) -> lis
     return reasons
 
 
-def _moving_panel(index: int, track: int) -> SlidingPanel:
+def _moving_panel(index: int, track: int, travel: "SlidingTravel") -> SlidingPanel:
     return SlidingPanel(
-        slot=f"P{index + 1}", kind=SlidingPanelKind.MOVING, track=track
+        slot=f"P{index + 1}", kind=SlidingPanelKind.MOVING, track=track,
+        travel=travel,
     )
 
 
 # Canonical topologies behind the legacy leaf-count presets: every panel is
 # MOVING and adjacent leaves alternate rails — the physical requirement for
-# consecutive panels to slide past each other on a dual-rail frame.
+# consecutive panels to slide past each other on a dual-rail frame. Each
+# preset declares its travel: leaves in the left half slide toward the
+# right, leaves in the right half toward the left (the same convention
+# `panel_travel` infers for layouts that never declared it).
 _SLIDING_PRESETS: dict[BayOpeningType, SlidingLayout] = {
     BayOpeningType.SLIDING_2L: SlidingLayout(
-        tracks=2, panels=[_moving_panel(0, 0), _moving_panel(1, 1)]
+        tracks=2,
+        panels=[
+            _moving_panel(0, 0, SlidingTravel.RIGHT),
+            _moving_panel(1, 1, SlidingTravel.LEFT),
+        ],
     ),
     BayOpeningType.SLIDING_3L: SlidingLayout(
         tracks=2,
-        panels=[_moving_panel(0, 0), _moving_panel(1, 1), _moving_panel(2, 0)],
+        panels=[
+            _moving_panel(0, 0, SlidingTravel.RIGHT),
+            _moving_panel(1, 1, SlidingTravel.RIGHT),
+            _moving_panel(2, 0, SlidingTravel.LEFT),
+        ],
     ),
     BayOpeningType.SLIDING_4L: SlidingLayout(
         tracks=2,
         panels=[
-            _moving_panel(0, 0),
-            _moving_panel(1, 1),
-            _moving_panel(2, 0),
-            _moving_panel(3, 1),
+            _moving_panel(0, 0, SlidingTravel.RIGHT),
+            _moving_panel(1, 1, SlidingTravel.RIGHT),
+            _moving_panel(2, 0, SlidingTravel.LEFT),
+            _moving_panel(3, 1, SlidingTravel.LEFT),
         ],
     ),
 }
+
+
+def travel_inferred(panel: SlidingPanel) -> bool:
+    """True when the panel's direction is the presentation convention, not
+    a declaration — the symbology contract flags those `dirección inferida`."""
+    return panel.kind is SlidingPanelKind.MOVING and panel.travel is None
+
+
+def panel_travel(panel: SlidingPanel, index: int, count: int) -> "SlidingTravel | None":
+    """Resolved slide direction of a panel: its declared `travel`, else
+    the documented inference — left half of the bay travels right, right
+    half travels left (a leaf slides over its neighbouring slot)."""
+    if panel.kind is SlidingPanelKind.FIXED:
+        return None
+    if panel.travel is not None:
+        return panel.travel
+    return SlidingTravel.RIGHT if index * 2 < count else SlidingTravel.LEFT
 
 
 def resolved_sliding_layout(node: ParametricNode) -> SlidingLayout:
@@ -375,6 +405,18 @@ def validate_sliding_layout(layout: SlidingLayout, params: SystemParams) -> None
             raise SlidingLayoutError(
                 "sliding_layout_invalid",
                 f"fixed panel {panel.slot} cannot occupy a track",
+                {"slot": panel.slot},
+            )
+        if (
+            panel.kind is SlidingPanelKind.MOVING
+            and (
+                (index == 0 and panel.travel is SlidingTravel.LEFT)
+                or (index == len(layout.panels) - 1 and panel.travel is SlidingTravel.RIGHT)
+            )
+        ):
+            raise SlidingLayoutError(
+                "sliding_layout_invalid",
+                f"panel {panel.slot} cannot travel toward a jamb without space",
                 {"slot": panel.slot},
             )
         if index == 0:

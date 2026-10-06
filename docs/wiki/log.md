@@ -153,3 +153,12 @@ Append-only chronology. Keep newest entries at the bottom.
 - MiMo repineado `mimo-v2.6-pro`; sonda: cuota token-plan agotada (429 en 26/26 evals) — pendiente credencial pay-as-you-go para la verificación real, causa exacta en el PR.
 - OWNER: Ajustes › IA (estado, modelos, probar conexión, presupuesto, consumo); /jobs gana panel Actividad de IA filtrable; miembros ven badge "Modo de prueba" cuando MOCK sirve; el agente reporta fases (contexto/modelo/propuesta) al Orb.
 - Decisiones en `docs/decisions/valores-por-defecto.md` sección IA3; config en `.env.example` + `docs/operations/AI_PROVIDERS.md`.
+
+## [2026-10-06] P05 | dibujo técnico: geometría de glifos y cotas
+
+- Contrato de simbología único (`engine/.../opening_symbols.py` + gemelo `frontend/.../openingSymbols.ts`): `leaf_primitives`/`sliding_primitives` emiten primitivas simbólicas (`tri`/`arrow`/`handle`/`sill`/`none`), `glyph_paths` las convierte en `d` canónicas; 14 fixtures JSON congelan ambos lados por caso × vista (paridad exacta, divergencia rompe ambos tests).
+- `SlidingPanel.travel` (LEFT|RIGHT) declarado por hoja móvil; `validate_sliding_layout` rechaza viaje hacia jamba sin espacio y rieles compartidos entre móviles adyacentes; `panel_travel` resuelve la convención documentada y `inferred` marca "dirección inferida" en toda superficie.
+- Vista declarada: `view` interior/exterior en el editor (selector + espejo de lámina, mobiliario sin espejar, vista exterior de solo lectura); PDF declara "Vista interior" en toda figura; cotas enteras `tabular-nums` en canaletas fuera del dibujo; corte de planta corredera bajo el alzado (EXTERIOR/muro arriba, rieles numerados, flechas por slot).
+- Puerta en alzado = triángulos + umbral naranjo bajo toda hoja no fija (el arco de barrido solo existe en planta); DOC-01 técnica dibuja el corte de planta por bay corredizo.
+- `ui/icons.tsx` `OpeningGlyph` ahora dibuja el contrato real (antes era una aproximación a mano al 50 %); `SignatureSection` de /dev/ui lista el vocabulario completo.
+- Decisiones registradas en `docs/decisions/valores-por-defecto.md` (sección P05); contrato en `docs/PRD/opening-symbols.md` con ilustraciones generadas por el engine.

@@ -10,9 +10,9 @@
  * * `LEFT` - LEFT
  * * `RIGHT` - RIGHT
  */
-export type HostMemberSideEnum = (typeof HostMemberSideEnum)[keyof typeof HostMemberSideEnum];
+export type SlidingTravelEnum = (typeof SlidingTravelEnum)[keyof typeof SlidingTravelEnum];
 
-export const HostMemberSideEnum = {
+export const SlidingTravelEnum = {
   LEFT: "LEFT",
   RIGHT: "RIGHT",
 } as const;

@@ -574,16 +574,20 @@ function OverlaySection(): JSX.Element {
 }
 
 function SignatureSection(): JSX.Element {
+  // El vocabulario completo del contrato de símbolos (docs/PRD/opening-symbols.md):
+  // abatibles, oscilobatientes, proyectante, correderas por travel, puertas
+  // (triángulo + umbral — el arco solo vive en planta) y el fijo = silencio.
   const glyphTypes = [
     "TURN_LEFT",
     "TURN_RIGHT",
     "TILT_TURN_LEFT",
     "TILT_TURN_RIGHT",
     "AWNING",
-    "SLIDING",
     "SLIDING_2L",
-    "DOOR",
+    "SLIDING_3L",
+    "SLIDING_4L",
     "DOOR_ENTRY",
+    "DOOR_DOUBLE",
     "FIXED",
   ];
   return (

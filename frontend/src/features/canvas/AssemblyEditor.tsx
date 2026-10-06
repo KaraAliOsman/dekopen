@@ -54,11 +54,19 @@ import {
   frontModuleBox,
   OpeningGlyph,
   ProductFrontContent,
+  technicalExtraBottom,
   type VanoDim,
 } from "./ProductFrontSvg";
 
 import { useAssemblyCalculation } from "./useAssemblyCalculation";
-import type { IntentNode, Opening, OpeningChoice, SlidingLayout, SplitType } from "./intentEditing";
+import type {
+  IntentNode,
+  Opening,
+  OpeningChoice,
+  SlidingLayout,
+  SlidingTravel,
+  SplitType,
+} from "./intentEditing";
 import {
   bayIsDoor,
   bayKitGroup,
@@ -69,6 +77,7 @@ import {
   isSlidingOpening,
   nodeSpecKey,
   OPTION_SPEC_KEY,
+  panelTravel,
   resolvedSlidingLayout,
   topIntent,
   updateBay,
@@ -179,6 +188,8 @@ export const REASON_KEYS: [RegExp, TranslationKey][] = [
   [/adjacent fixed panels/i, "assembly.reason.slidingFixedAdjacent"],
   [/cannot share a track/i, "assembly.reason.slidingSameTrack"],
   [/at least one moving panel/i, "assembly.reason.slidingNoMoving"],
+  [/cannot travel toward a jamb/i, "assembly.reason.slidingJambTravel"],
+  [/a FIXED panel declares no travel/i, "assembly.reason.slidingFixedTravel"],
   [/frame inset collapsed the glass pocket/i, "assembly.reason.glassPocketCollapsed"],
   [/handle height requires explicit/i, "assembly.reason.handleHeightMigration"],
   [/polishing authority/i, "assembly.reason.polishingAuthority"],
@@ -830,6 +841,34 @@ function SlidingPanelsEditor({
                     {t("assembly.panelTrack")} {track + 1}
                   </option>
                 ))}
+              </select>
+            )}
+            {panel.kind === "MOVING" && (
+              <select
+                // P05 — travel declarado: la flecha del alzado sigue esta
+                // dirección en vista interior. Sin declaración la lámina
+                // aplica la convención de presentación y la marca
+                // "dirección inferida".
+                aria-label={`${t("assembly.slidingPanel").replace("{index}", String(index + 1))} ${t("assembly.travelDirection")}`}
+                value={panel.travel ?? ""}
+                disabled={busy}
+                title={panel.travel ? undefined : t("assembly.travelInferredHint")}
+                onChange={(event) => {
+                  const travel = (event.target.value || null) as SlidingTravel | null;
+                  const panels = layout.panels.map((item, at) =>
+                    at === index ? { ...item, travel } : item,
+                  );
+                  onChange({ ...layout, panels });
+                }}
+              >
+                <option value="">
+                  {t("assembly.travelInferred")} —{" "}
+                  {panelTravel(panel, index, layout.panels.length) === "LEFT"
+                    ? t("assembly.travelLeft")
+                    : t("assembly.travelRight")}
+                </option>
+                <option value="LEFT">{t("assembly.travelLeft")}</option>
+                <option value="RIGHT">{t("assembly.travelRight")}</option>
               </select>
             )}
           </li>
@@ -2301,6 +2340,8 @@ export function AssemblyEditor({
   /** Right-rail detail level — overview/design/technical over the same
    * selection; complexity stays hidden until the user asks for it. */
   const [detail, setDetail] = useState<DetailLevel>("design");
+  // P05 — vista declarada del alzado (interior/exterior).
+  const [frontView, setFrontView] = useState<"interior" | "exterior">("interior");
   const [planOpen, setPlanOpen] = useState(true);
   const [view3dOpen, setView3dOpen] = useState(false);
   /** Queued prompt for the assistant — "" means focus only. Every "…with
@@ -2401,7 +2442,19 @@ export function AssemblyEditor({
   // One layout pass per product commit — bounds/selection boxes derive from
   // the memo instead of recomputing the elevation four times per render.
   const front = useMemo(() => (product ? frontLayout(product) : null), [product]);
-  const frontBox = useMemo(() => (front ? frontBounds(front, vano) : null), [front, vano]);
+  const frontBox = useMemo(
+    () =>
+      front
+        ? frontBounds(
+            front,
+            vano,
+            detail === "technical"
+              ? technicalExtraBottom(front.rects, members, front.height, members.frame.faceWidthMm)
+              : 0,
+          )
+        : null,
+    [front, vano, detail, members],
+  );
   const selectionBox = useMemo(
     () => (front ? frontModuleBox(front, selection) : null),
     [front, selection],
@@ -2770,6 +2823,7 @@ export function AssemblyEditor({
             }
             onResizeSeam={(index, deltaMm) => commit(resizeModuleSeam(product, index, deltaMm))}
             vano={vano}
+            view={frontView}
           />
         </CanvasViewport>
         {couplings.length > 0 && evaluation?.plan && planBox && planOpen && (
@@ -2941,6 +2995,25 @@ export function AssemblyEditor({
             </button>
           ))}
         </div>
+        {/* P05 — vista declarada del alzado + bloque plegable de
+            simbología: el contrato de lectura va pegado al dibujo. */}
+        <div className="view-levels" role="group" aria-label={t("assembly.viewLabel")}>
+          {(["interior", "exterior"] as const).map((level) => (
+            <button
+              key={level}
+              type="button"
+              className={`detail-levels__btn${frontView === level ? " is-active" : ""}`}
+              aria-pressed={frontView === level}
+              onClick={() => setFrontView(level)}
+            >
+              {t(level === "exterior" ? "assembly.viewExterior" : "assembly.viewInterior")}
+            </button>
+          ))}
+        </div>
+        <details className="symbols-legend">
+          <summary>{t("assembly.symbolsLegend")}</summary>
+          <p>{t("assembly.symbolsHint")}</p>
+        </details>
         {issues.length > 0 && (
           <ul className="assembly-issues" aria-label={t("assembly.issues")} ref={issuesListRef}>
             {issues.map((issue, index) => (
