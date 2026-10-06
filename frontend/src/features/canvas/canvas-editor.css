@@ -411,11 +411,18 @@
 .editor-surface {
   display: grid;
   gap: 0.6rem;
-  grid-template-columns: auto minmax(0, 1fr) minmax(320px, 360px);
+  /* Fixed rail + pinned inspector: `auto`/minmax(320,360) tracks eat the
+   * canvas' share — at 1440 the labeled rail (~30ch tool names) plus a 360px
+   * inspector left the canvas under the required 60%. A 7rem rail wraps its
+   * longest labels to two lines; 320px stays inside the 320–360 spec. */
+  grid-template-columns: 7rem minmax(0, 1fr) 320px;
   grid-template-rows: minmax(0, 1fr) auto;
+  /* The dock hangs under the canvas only: a full-width dock lets its floating
+   * body cover the inspector's lower fields (e.g. the glazing cards) while
+   * the tree is open. The rail and inspector keep their full-height columns. */
   grid-template-areas:
     "rail canvas side"
-    "dock dock dock";
+    "rail dock side";
   height: calc(100dvh - 10.5rem);
   min-height: 28rem;
   position: relative;
@@ -528,7 +535,8 @@
 
 .rail-item__label {
   font-size: var(--type-dense);
-  white-space: nowrap;
+  /* Wraps: long tool names break to a second line inside the fixed 7rem rail. */
+  white-space: normal;
 }
 
 .editor-rail__divider {
@@ -857,7 +865,7 @@
 
 /* Empty state — no product yet: rail offers the library, canvas explains. */
 .editor-surface.is-empty {
-  grid-template-columns: auto minmax(0, 1fr) minmax(320px, 360px);
+  grid-template-columns: 7rem minmax(0, 1fr) 320px;
 }
 
 .editor-surface.is-empty.is-compact {

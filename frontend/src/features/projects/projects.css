@@ -185,12 +185,18 @@
 }
 /* P04 — position editor shell: a bounded app viewport. The 48 px strip
    carries crumbs + fields + save state + price + status; the canvas-first
-   grid fills the rest and nothing page-scrolls. */
+   grid fills the rest and nothing page-scrolls. The studio route keeps a
+   tighter gutter than the generic 1.5rem workspace padding so the canvas
+   keeps its ≥60% share at 1440 (rail + inspector are already fixed). */
+.workspace:has(.position-editor-shell) {
+  padding: 1rem;
+}
+
 .position-editor-shell {
   display: flex;
   flex-direction: column;
-  height: calc(100dvh - 4.875rem);
-  max-height: calc(100dvh - 4.875rem);
+  height: calc(100dvh - 4.375rem);
+  max-height: calc(100dvh - 4.375rem);
   max-width: none;
   min-height: 0;
 }

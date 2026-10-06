@@ -1187,6 +1187,9 @@ function PositionWorkspace({
                       useCanvasStore.getState().commitInputs({ ...inputs, systemId: next });
                       setMessage("");
                     }
+                    // Single-pick chip: choosing a series closes the popover —
+                    // left open it overlays and blocks the inspector below.
+                    setSystemChipOpen(false);
                   }}
                 >
                   <option value="">{t("projects.chooseSystem")}</option>
