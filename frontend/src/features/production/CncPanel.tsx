@@ -167,9 +167,7 @@ const GAP_CAUSES: Record<string, string> = {
 };
 
 function gapCauseLabel(cause: string): string {
-  return (
-    tOptional(GAP_CAUSES[cause] ?? "") ?? t("production.cncGapCauseGeneric")
-  );
+  return tOptional(GAP_CAUSES[cause] ?? "") ?? t("production.cncGapCauseGeneric");
 }
 
 const GAP_SOURCES: Record<string, string> = {
@@ -181,9 +179,7 @@ const GAP_SOURCES: Record<string, string> = {
 };
 
 function gapSourceLabel(source: string): string {
-  return (
-    tOptional(GAP_SOURCES[source] ?? "") ?? t("production.cncGapSourceGeneric")
-  );
+  return tOptional(GAP_SOURCES[source] ?? "") ?? t("production.cncGapSourceGeneric");
 }
 
 const DETAIL_KEYS: Record<string, string> = {
@@ -568,19 +564,15 @@ function MemberCard({
           {[
             member.workshop_sku,
             member.role ? cutRoleLabel(member.role) : null,
-            member.material ? MATERIAL_LABELS[member.material] ?? member.material : null,
-            member.axis ? AXIS_LABELS[member.axis] ?? member.axis : null,
+            member.material ? (MATERIAL_LABELS[member.material] ?? member.material) : null,
+            member.axis ? (AXIS_LABELS[member.axis] ?? member.axis) : null,
             member.leaf_slot,
           ]
             .filter(Boolean)
             .join(" · ")}
           {member.length_mm ? ` · ${fmtMm(member.length_mm)}` : ""}
-          {member.angle_left_deg
-            ? ` · ${member.angle_left_deg}°`
-            : ""}
-          {member.angle_right_deg
-            ? `/${member.angle_right_deg}°`
-            : ""}
+          {member.angle_left_deg ? ` · ${member.angle_left_deg}°` : ""}
+          {member.angle_right_deg ? `/${member.angle_right_deg}°` : ""}
         </span>
       </div>
       <MemberOpsDiagram member={member} selectedOp={selectedOp} onSelectOp={onSelectOp} />
