@@ -17,7 +17,12 @@ import { t, type TranslationKey } from "../../i18n/es-CL";
 import { formatMoney } from "../../format";
 import { addDecimal, formatDecimal, parseDecimal, subtractDecimal } from "./decimal";
 import { applyDesignOps, describeDesignOp, describeScopeOp } from "../canvas/designOps";
-import { isProductModel, type ProductJson } from "../canvas/productEditing";
+import {
+  isProductModel,
+  wrapTreeAsProduct,
+  type ProductJson,
+} from "../canvas/productEditing";
+import type { IntentNode } from "../canvas/intentEditing";
 import { designFromProduct } from "../assistant/designPayload";
 
 /** P08 — cambios globales: el mismo cambio aplicado a todas (o un subconjunto)
@@ -246,14 +251,35 @@ export function GlobalChangesPanel({
             return row;
           }
           const tree = row.before.parametric_tree;
-          if (!isProductModel(tree)) {
+          // Las posiciones guardan el árbol pelado (IntentNode) en la forma
+          // clásica y el product-v2 sólo cuando hay acople — el backend ya
+          // normaliza las dos (_normalize_product). Aquí envolvemos la forma
+          // clásica para aplicar las ops por el mismo registro del editor;
+          // designFromProduct la devuelve a su forma original al proyectar.
+          let product: ProductJson | undefined;
+          if (isProductModel(tree)) {
+            product = tree;
+          } else if (
+            typeof tree === "object" &&
+            tree !== null &&
+            "type" in tree &&
+            typeof row.before.nominal_width_mm === "string" &&
+            typeof row.before.nominal_height_mm === "string"
+          ) {
+            product = wrapTreeAsProduct(
+              tree as IntentNode,
+              row.before.nominal_width_mm,
+              row.before.nominal_height_mm,
+            );
+          }
+          if (!product) {
             row.status = "unsupported";
             return row;
           }
-          row.product = tree;
-          row.ops = productOps(op, value, tree.assembly.modules);
+          row.product = product;
+          row.ops = productOps(op, value, product.assembly.modules);
           row.after = designFromProduct(
-            applyDesignOps(tree, row.ops),
+            applyDesignOps(product, row.ops),
             row.before.system_id,
             row.before.color,
           );
