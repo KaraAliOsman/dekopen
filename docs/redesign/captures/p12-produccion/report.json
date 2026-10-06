@@ -1,0 +1,329 @@
+{
+  "summary": {
+    "generated_at": "2026-10-06T09:22:18.523Z",
+    "routes": 24,
+    "routes_with_findings": [
+      "production-manager",
+      "production-installer"
+    ],
+    "total_findings": 18
+  },
+  "results": [
+    {
+      "route": "production-manager",
+      "url": "/production",
+      "role": "manager",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/production-manager--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production"
+    },
+    {
+      "route": "production-manager",
+      "url": "/production",
+      "role": "manager",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/production-manager--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production"
+    },
+    {
+      "route": "production-manager",
+      "url": "/production",
+      "role": "manager",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/production-manager--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production"
+    },
+    {
+      "route": "production-manager",
+      "url": "/production",
+      "role": "manager",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/production-manager--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production"
+    },
+    {
+      "route": "production-manager",
+      "url": "/production",
+      "role": "manager",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/production-manager--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production"
+    },
+    {
+      "route": "production-manager",
+      "url": "/production",
+      "role": "manager",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/production-manager--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production"
+    },
+    {
+      "route": "production-manager",
+      "url": "/production",
+      "role": "manager",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/production-manager--390x844--light.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "a · Saltar al contenido · 150×34px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button ·  · 32×32px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Buscar o ejecutar…Ctrl K/ · 99×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 10 · 28×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · IA · 57×28px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/production"
+    },
+    {
+      "route": "production-manager",
+      "url": "/production",
+      "role": "manager",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/production-manager--390x844--dark.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "a · Saltar al contenido · 150×34px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button ·  · 32×32px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Buscar o ejecutar…Ctrl K/ · 99×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 10 · 28×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · IA · 57×28px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/production"
+    },
+    {
+      "route": "production-operator",
+      "url": "/production",
+      "role": "operator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/production-operator--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production"
+    },
+    {
+      "route": "production-operator",
+      "url": "/production",
+      "role": "operator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/production-operator--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production"
+    },
+    {
+      "route": "production-operator",
+      "url": "/production",
+      "role": "operator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/production-operator--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production"
+    },
+    {
+      "route": "production-operator",
+      "url": "/production",
+      "role": "operator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/production-operator--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production"
+    },
+    {
+      "route": "production-operator",
+      "url": "/production",
+      "role": "operator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/production-operator--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production"
+    },
+    {
+      "route": "production-operator",
+      "url": "/production",
+      "role": "operator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/production-operator--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production"
+    },
+    {
+      "route": "production-operator",
+      "url": "/production",
+      "role": "operator",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/production-operator--390x844--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production"
+    },
+    {
+      "route": "production-operator",
+      "url": "/production",
+      "role": "operator",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/production-operator--390x844--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production"
+    },
+    {
+      "route": "production-installer",
+      "url": "/production",
+      "role": "installer",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/production-installer--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production"
+    },
+    {
+      "route": "production-installer",
+      "url": "/production",
+      "role": "installer",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/production-installer--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production"
+    },
+    {
+      "route": "production-installer",
+      "url": "/production",
+      "role": "installer",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/production-installer--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production"
+    },
+    {
+      "route": "production-installer",
+      "url": "/production",
+      "role": "installer",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/production-installer--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production"
+    },
+    {
+      "route": "production-installer",
+      "url": "/production",
+      "role": "installer",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/production-installer--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production"
+    },
+    {
+      "route": "production-installer",
+      "url": "/production",
+      "role": "installer",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/production-installer--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/production"
+    },
+    {
+      "route": "production-installer",
+      "url": "/production",
+      "role": "installer",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/production-installer--390x844--light.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "a · Saltar al contenido · 150×34px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button ·  · 32×32px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Buscar o ejecutar…Ctrl K/ · 99×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · 28×28px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/production"
+    },
+    {
+      "route": "production-installer",
+      "url": "/production",
+      "role": "installer",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/production-installer--390x844--dark.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "a · Saltar al contenido · 150×34px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button ·  · 32×32px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Buscar o ejecutar…Ctrl K/ · 99×28px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · 2 · 28×28px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/production"
+    }
+  ]
+}

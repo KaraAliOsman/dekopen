@@ -783,6 +783,15 @@ def _public_order(order: dict[str, object], *, include_payload: bool = False) ->
         # this unit is being rebuilt without opening the source order
         # ({qc_item, note} — the QC failure that triggered it).
         "remake_reason": (payload or {}).get("remake_reason"),
+        # Board-card context (None when the caller never resolved it —
+        # _board_context runs on list/detail reads only).
+        "project_code": order.get("project_code"),
+        "project_name": order.get("project_name"),
+        "client_name": order.get("client_name"),
+        "committed_date": order.get("committed_date"),
+        "steps_blocked": order.get("steps_blocked", 0),
+        "qc_blocked": bool(order.get("qc_blocked")),
+        "plan_state": order.get("plan_state", "none"),
         "created_at": order["created_at"],
     }
     if include_payload:
@@ -1082,16 +1091,72 @@ def release_production(*, org_id: UUID, version_id: UUID, actor_id: UUID) -> dic
         }
 
 
+def _board_context(*, org_id: UUID, orders: list[dict[str, object]]) -> None:
+    """Board-card context for a batch of work orders: the project header
+    (the same whitelisted trio ``trace_work_order`` exposes to every floor
+    role) and the real commitment — the earliest still-open scheduled
+    delivery. ``committed_date`` stays ``None`` when no trip is booked:
+    the board renders "sin fecha agendada" instead of inventing capacity."""
+    order_ids = [str(order["id"]) for order in orders]
+    project_ids = sorted(
+        {str(order["project_id"]) for order in orders if order.get("project_id")}
+    )
+    if not order_ids:
+        return
+    projects: dict[str, dict[str, object]] = {}
+    if project_ids:
+        # authenticated holds column-level grants only — code/name are not
+        # among them — so the documentary authority resolves the header and
+        # only these three fields leave this function.
+        with documentary_backend():
+            for row in rows(
+                "SELECT id::text, code, name, client_name FROM public.projects "
+                "WHERE org_id = %s AND id = ANY(%s::uuid[])",
+                [str(org_id), project_ids],
+            ):
+                projects[str(row["id"])] = row
+    committed: dict[str, object] = {}
+    for row in rows(
+        """
+        SELECT order_id::text, MIN(scheduled_date) AS committed_date
+        FROM public.deliveries
+        WHERE org_id = %s AND order_id = ANY(%s::uuid[])
+          AND status::text IN ('SCHEDULED', 'ON_ROUTE')
+        GROUP BY order_id
+        """,
+        [str(org_id), order_ids],
+    ):
+        committed[str(row["order_id"])] = row["committed_date"]
+    for order in orders:
+        project = projects.get(str(order.get("project_id") or ""))
+        order["project_code"] = project.get("code") if project else None
+        order["project_name"] = project.get("name") if project else None
+        order["client_name"] = project.get("client_name") if project else None
+        order["committed_date"] = committed.get(str(order["id"]))
+
+
 def list_production_orders(*, org_id: UUID) -> dict[str, object]:
     orders = rows(
         """
         SELECT o.id, o.order_code, o.order_type::text, o.status::text, o.payload_json,
-               o.project_version_id, o.created_at,
+               o.project_version_id, o.project_id, o.created_at,
                COUNT(s.id) AS steps_total,
                COUNT(s.id) FILTER (WHERE s.status = 'DONE') AS steps_done,
+               COUNT(s.id) FILTER (WHERE s.status = 'BLOCKED') AS steps_blocked,
+               EXISTS(SELECT 1 FROM public.production_steps sq
+                      WHERE sq.order_id = o.id AND sq.status = 'BLOCKED'
+                        AND sq.code = 'QC') AS qc_blocked,
                (SELECT s2.code FROM public.production_steps s2
                 WHERE s2.order_id = o.id AND s2.status <> 'DONE'
                 ORDER BY s2.sequence LIMIT 1) AS next_step_code,
+               CASE
+                 WHEN o.payload_json->'optimization' IS NULL THEN 'none'
+                 WHEN COALESCE(
+                     (o.payload_json->'optimization'->>'invalidated')::boolean,
+                     false
+                 ) THEN 'invalidated'
+                 ELSE 'ok'
+               END AS plan_state,
                EXISTS(SELECT 1 FROM public.dispatch_notes dn
                       WHERE dn.org_id = o.org_id AND dn.work_order_id = o.id
                         AND dn.voided_at IS NULL
@@ -1104,6 +1169,7 @@ def list_production_orders(*, org_id: UUID) -> dict[str, object]:
         """,
         [str(org_id)],
     )
+    _board_context(org_id=org_id, orders=orders)
     return {"orders": [_public_order(order) for order in orders]}
 
 
@@ -1439,12 +1505,24 @@ def get_work_order(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
     order = one(
         """
         SELECT o.id, o.order_code, o.order_type::text, o.status::text, o.payload_json,
-               o.project_version_id, o.created_at,
+               o.project_version_id, o.project_id, o.created_at,
                COUNT(s.id) AS steps_total,
                COUNT(s.id) FILTER (WHERE s.status = 'DONE') AS steps_done,
+               COUNT(s.id) FILTER (WHERE s.status = 'BLOCKED') AS steps_blocked,
+               EXISTS(SELECT 1 FROM public.production_steps sq
+                      WHERE sq.order_id = o.id AND sq.status = 'BLOCKED'
+                        AND sq.code = 'QC') AS qc_blocked,
                (SELECT s2.code FROM public.production_steps s2
                 WHERE s2.order_id = o.id AND s2.status <> 'DONE'
                 ORDER BY s2.sequence LIMIT 1) AS next_step_code,
+               CASE
+                 WHEN o.payload_json->'optimization' IS NULL THEN 'none'
+                 WHEN COALESCE(
+                     (o.payload_json->'optimization'->>'invalidated')::boolean,
+                     false
+                 ) THEN 'invalidated'
+                 ELSE 'ok'
+               END AS plan_state,
                EXISTS(SELECT 1 FROM public.dispatch_notes dn
                       WHERE dn.org_id = o.org_id AND dn.work_order_id = o.id
                         AND dn.voided_at IS NULL
@@ -1457,6 +1535,7 @@ def get_work_order(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
         [str(order_id), str(org_id)],
         "work_order_not_found",
     )
+    _board_context(org_id=org_id, orders=[order])
     steps = rows(
         """
         SELECT s.id, s.sequence, s.code, s.label, s.status, s.work_center_id,

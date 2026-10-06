@@ -2055,6 +2055,23 @@ def stage(
         state["orders"]["embalada"] = pool[5]["id"]
     state["orders"]["vitrina_all"] = [o["id"] for o in pool]
 
+    # ---- P-ESCALA: released so the board carries ~100 live OTs -----------
+    # La prueba de escala necesita la superficie real: ~100 tarjetas en el
+    # tablero y una OT navegable. Se libera todo el proyecto y se optimiza
+    # la primera OT para que las pestañas Corte/Mecanizado tengan datos.
+    escala_orders: list[dict] = []
+    op = priced_operation(projects["escala"]["id"])
+    if op:
+        frozen = freeze(projects["escala"]["id"], op["id"])
+        if frozen:
+            emit_doc01(frozen["id"])
+            escala_orders = released_orders(frozen["id"])
+    if escala_orders:
+        escala_orders.sort(key=lambda o: str(o.get("order_code") or o["id"]))
+        state["orders"]["escala"] = escala_orders[0]["id"]
+        state["orders"]["escala_all"] = [o["id"] for o in escala_orders]
+        optimize_and_pack(escala_orders[0]["id"])
+
     # ---- Purchasing on the vitrina version -----------------------------
     # Purchasing writes son rol OWNER/WORKSHOP_MANAGER — el estimador solo lee.
     purchasing(wm, state.get("vitrina_version_id"))

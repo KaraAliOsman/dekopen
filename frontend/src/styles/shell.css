@@ -550,3 +550,40 @@
     margin-right: 400px;
   }
 }
+
+/* ——— Densidad taller: objetivos ≥ 44 px ———
+ * El operario usa la app con guantes y a la distancia de una tablet: el
+ * chrome del cascarón (que define alturas fijas de 28–36 px) adopta la
+ * regla de tokens `--control-height: 2.75rem` de [data-density="workshop"]. */
+[data-density="workshop"] .app-topbar button,
+[data-density="workshop"] .app-topbar [role="button"],
+[data-density="workshop"] .rail-toggle {
+  min-height: 44px;
+  min-width: 44px;
+}
+[data-density="workshop"] .topbar-button--icon {
+  width: 44px;
+}
+[data-density="workshop"] .topbar-search {
+  min-height: 44px;
+}
+[data-density="workshop"] .rail-item {
+  min-height: 44px;
+}
+[data-density="workshop"] .rail-context__back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+[data-density="workshop"] .org-switcher__current {
+  min-height: 44px;
+}
+[data-density="workshop"] .skip-link {
+  align-items: center;
+  display: inline-flex;
+  min-height: 44px;
+}
+[data-density="workshop"] .rail-icon-button {
+  height: 44px;
+  width: 44px;
+}
