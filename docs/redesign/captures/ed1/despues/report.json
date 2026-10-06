@@ -1,6 +1,6 @@
 {
   "summary": {
-    "generated_at": "2026-10-06T14:56:37.393Z",
+    "generated_at": "2026-10-06T15:53:30.546Z",
     "routes": 294,
     "routes_with_findings": [],
     "total_findings": 0
@@ -2647,126 +2647,6 @@
       "finalUrl": "http://127.0.0.1:5173/cotizacion/8zXZ8cBlkFawVS7R13hcjQ_JtqnIVP4zLDVIGhoBdj8"
     },
     {
-      "route": "catalogs-systems",
-      "url": "/catalogs/systems",
-      "role": "estimator",
-      "viewport": "1440x900",
-      "theme": "light",
-      "screenshot": "shots/catalogs-systems--1440x900--light.png",
-      "findings": [],
-      "finalUrl": "http://127.0.0.1:5173/catalogs/systems"
-    },
-    {
-      "route": "catalogs-systems",
-      "url": "/catalogs/systems",
-      "role": "estimator",
-      "viewport": "1440x900",
-      "theme": "dark",
-      "screenshot": "shots/catalogs-systems--1440x900--dark.png",
-      "findings": [],
-      "finalUrl": "http://127.0.0.1:5173/catalogs/systems"
-    },
-    {
-      "route": "catalogs-systems",
-      "url": "/catalogs/systems",
-      "role": "estimator",
-      "viewport": "1280x800",
-      "theme": "light",
-      "screenshot": "shots/catalogs-systems--1280x800--light.png",
-      "findings": [],
-      "finalUrl": "http://127.0.0.1:5173/catalogs/systems"
-    },
-    {
-      "route": "catalogs-systems",
-      "url": "/catalogs/systems",
-      "role": "estimator",
-      "viewport": "1280x800",
-      "theme": "dark",
-      "screenshot": "shots/catalogs-systems--1280x800--dark.png",
-      "findings": [],
-      "finalUrl": "http://127.0.0.1:5173/catalogs/systems"
-    },
-    {
-      "route": "catalogs-systems",
-      "url": "/catalogs/systems",
-      "role": "estimator",
-      "viewport": "1024x768",
-      "theme": "light",
-      "screenshot": "shots/catalogs-systems--1024x768--light.png",
-      "findings": [],
-      "finalUrl": "http://127.0.0.1:5173/catalogs/systems"
-    },
-    {
-      "route": "catalogs-systems",
-      "url": "/catalogs/systems",
-      "role": "estimator",
-      "viewport": "1024x768",
-      "theme": "dark",
-      "screenshot": "shots/catalogs-systems--1024x768--dark.png",
-      "findings": [],
-      "finalUrl": "http://127.0.0.1:5173/catalogs/systems"
-    },
-    {
-      "route": "catalogs-alias",
-      "url": "/catalogs",
-      "role": "estimator",
-      "viewport": "1440x900",
-      "theme": "light",
-      "screenshot": "shots/catalogs-alias--1440x900--light.png",
-      "findings": [],
-      "finalUrl": "http://127.0.0.1:5173/catalogs/systems"
-    },
-    {
-      "route": "catalogs-alias",
-      "url": "/catalogs",
-      "role": "estimator",
-      "viewport": "1440x900",
-      "theme": "dark",
-      "screenshot": "shots/catalogs-alias--1440x900--dark.png",
-      "findings": [],
-      "finalUrl": "http://127.0.0.1:5173/catalogs/systems"
-    },
-    {
-      "route": "catalogs-alias",
-      "url": "/catalogs",
-      "role": "estimator",
-      "viewport": "1280x800",
-      "theme": "light",
-      "screenshot": "shots/catalogs-alias--1280x800--light.png",
-      "findings": [],
-      "finalUrl": "http://127.0.0.1:5173/catalogs/systems"
-    },
-    {
-      "route": "catalogs-alias",
-      "url": "/catalogs",
-      "role": "estimator",
-      "viewport": "1280x800",
-      "theme": "dark",
-      "screenshot": "shots/catalogs-alias--1280x800--dark.png",
-      "findings": [],
-      "finalUrl": "http://127.0.0.1:5173/catalogs/systems"
-    },
-    {
-      "route": "catalogs-alias",
-      "url": "/catalogs",
-      "role": "estimator",
-      "viewport": "1024x768",
-      "theme": "light",
-      "screenshot": "shots/catalogs-alias--1024x768--light.png",
-      "findings": [],
-      "finalUrl": "http://127.0.0.1:5173/catalogs/systems"
-    },
-    {
-      "route": "catalogs-alias",
-      "url": "/catalogs",
-      "role": "estimator",
-      "viewport": "1024x768",
-      "theme": "dark",
-      "screenshot": "shots/catalogs-alias--1024x768--dark.png",
-      "findings": [],
-      "finalUrl": "http://127.0.0.1:5173/catalogs/systems"
-    },
-    {
       "route": "dev-ui",
       "url": "/dev/ui",
       "role": "public",
@@ -2945,6 +2825,126 @@
       "screenshot": "shots/purchasing--1024x768--dark.png",
       "findings": [],
       "finalUrl": "http://127.0.0.1:5173/purchasing"
+    },
+    {
+      "route": "catalogs-systems",
+      "url": "/catalogs/systems",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/catalogs-systems--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/catalogs/systems"
+    },
+    {
+      "route": "catalogs-systems",
+      "url": "/catalogs/systems",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/catalogs-systems--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/catalogs/systems"
+    },
+    {
+      "route": "catalogs-systems",
+      "url": "/catalogs/systems",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/catalogs-systems--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/catalogs/systems"
+    },
+    {
+      "route": "catalogs-systems",
+      "url": "/catalogs/systems",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/catalogs-systems--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/catalogs/systems"
+    },
+    {
+      "route": "catalogs-systems",
+      "url": "/catalogs/systems",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/catalogs-systems--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/catalogs/systems"
+    },
+    {
+      "route": "catalogs-systems",
+      "url": "/catalogs/systems",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/catalogs-systems--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/catalogs/systems"
+    },
+    {
+      "route": "catalogs-alias",
+      "url": "/catalogs",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/catalogs-alias--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/catalogs/systems"
+    },
+    {
+      "route": "catalogs-alias",
+      "url": "/catalogs",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/catalogs-alias--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/catalogs/systems"
+    },
+    {
+      "route": "catalogs-alias",
+      "url": "/catalogs",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/catalogs-alias--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/catalogs/systems"
+    },
+    {
+      "route": "catalogs-alias",
+      "url": "/catalogs",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/catalogs-alias--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/catalogs/systems"
+    },
+    {
+      "route": "catalogs-alias",
+      "url": "/catalogs",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/catalogs-alias--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/catalogs/systems"
+    },
+    {
+      "route": "catalogs-alias",
+      "url": "/catalogs",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/catalogs-alias--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/catalogs/systems"
     }
   ]
 }

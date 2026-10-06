@@ -613,6 +613,13 @@
   align-items: center;
   gap: 0.5rem;
 }
+/* La columna es angosta (~144 px): el chip de procedencia envuelve en vez
+   de desbordar la tarjeta (el .ws-badge anterior tenía overflow-wrap). */
+.ws-article-body footer .ui-chip {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .ws-table {
   width: 100%;
   border-collapse: collapse;
