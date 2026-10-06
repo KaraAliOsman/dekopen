@@ -132,6 +132,7 @@ tbody tr:last-child td { border-bottom: 0.9pt solid #465158; }
 .break-avoid { break-inside: avoid; } h2, h3 { break-after: avoid; } .blank { display: inline-block; width: 5mm; height: 5mm; border: 1px solid #252D31; vertical-align: middle; }
 .confidential { color: #991B1B; font-weight: 600; font-size: 6.5pt; text-transform: uppercase; letter-spacing: 0.8pt; }
 .voided-banner { border: 1.5pt solid #991B1B; color: #991B1B; padding: 3mm 5mm; margin: 3mm 0; break-inside: avoid; }
+.tributary-note { border: 0.75pt solid #465158; color: #252D31; padding: 2mm 4mm; margin: 2.5mm 0; font-size: 7.5pt; letter-spacing: 0.2pt; break-inside: avoid; }
 .voided-banner p { margin: 0; } .voided-title { font-size: 16pt; font-weight: 700; letter-spacing: 2pt; margin-bottom: 1.5mm; }
 .muted { color: #727D82; } .signature { height: 15mm; border-bottom: 0.5pt solid #465158; margin-top: 6mm; }
 .signoff { break-inside: avoid; }
@@ -4091,6 +4092,30 @@ _PAYMENT_METHOD_ES = {
 }
 
 
+def _tributary_notice(payload: dict[str, object]) -> str:
+    """Leyenda de honestidad tributaria (P11).
+
+    Si la organización no tenía la integración SII activa y certificada al
+    emitir el documento — o el documento precede al marcador — la leyenda
+    obligatoria es «Documento interno — no válido como documento tributario
+    electrónico». Con integración certificada el archivo sigue siendo una
+    copia interna: el respaldo tributario es el DTE firmado, y la leyenda lo
+    dice sin hacerse pasar por él. En ninguno de los dos casos se imita el
+    timbre electrónico (TED/PDF417) del SII.
+    """
+    state = payload.get("tributary")
+    certified = isinstance(state, dict) and state.get("certified") is True
+    if certified:
+        return (
+            '<p class="tributary-note">Documento interno — el respaldo '
+            "tributario es el documento electrónico emitido al SII.</p>"
+        )
+    return (
+        '<p class="tributary-note">Documento interno — no válido como '
+        "documento tributario electrónico.</p>"
+    )
+
+
 def _receipt_body(payload: dict[str, object]) -> str:
     project = _object(payload.get("project"), "invalid_receipt_project")
     payment = _object(payload.get("payment"), "invalid_receipt_payment")
@@ -4179,6 +4204,7 @@ def _receipt_body(payload: dict[str, object]) -> str:
             ],
             ["", "", "dimension"],
         )
+        + _tributary_notice(payload)
         + "<div class=\"signoff\"><div class=\"signature\"></div>"
         + "<p class=\"muted\">Recibido por</p></div></main>"
     )
@@ -4324,6 +4350,7 @@ def _dispatch_note_body(payload: dict[str, object]) -> str:
             ],
             ["dimension", "dimension", "dimension", "dimension", "dimension", "dimension"],
         )
+        + _tributary_notice(payload)
         + "<div class=\"signoff\"><div class=\"signature\"></div>"
         + "<p class=\"muted\">Despachado por / Recibido conforme</p></div></main>"
     )
@@ -4595,29 +4622,61 @@ def _invoice_body(payload: dict[str, object]) -> str:
         )
         + "</p>"
         f'<p class="total">Total: {escape(_money(deal.get("total_gross"), currency))}</p>'
-        '<p style="font-size:7pt;color:#727D82">Documento comercial interno — '
-        "no constituye documento tributario SII.</p></section>"
+        "</section>"
     )
+    def _position_description(position: dict) -> str:
+        """Descripción humana de la línea: tipología + medidas + ubicación,
+        nunca el código técnico solo."""
+        typology = _TYPOLOGY_ES.get(
+            _value(position.get("typology")), _value(position.get("typology"))
+        )
+        parts = [f"P{position.get('position_index')} · {typology}"]
+        width, height = position.get("width_mm"), position.get("height_mm")
+        if width not in (None, "") and height not in (None, ""):
+            parts.append(
+                f"{_dim(width)}\u00a0×\u00a0{_dim(height)} mm"
+            )
+        location = _value(position.get("location_tag"))
+        if location != "—":
+            parts.append(location)
+        return " — ".join(parts)
+
+    def _unit_net(position: dict):
+        """Unitario neto sellado (line_detail); fallback: neto/cantidad."""
+        unit = position.get("unit_net")
+        if unit not in (None, ""):
+            return unit
+        price = position.get("price_net")
+        quantity = position.get("quantity")
+        if price in (None, "") or quantity in (None, 0, "0"):
+            return None
+        return _num(price) / _num(quantity)
+
+    def _discount_pct_fraction(position: dict) -> Decimal:
+        pct = _num(position.get("discount_pct") or 0)
+        return pct / 100 if pct > 1 else pct
+
     if positions:
+        discount_pcts = sorted(
+            {
+                _discount_pct_fraction(position)
+                for position in positions
+                if _discount_pct_fraction(position) > 0
+            }
+        )
         body += (
             "<h2>Detalle</h2>"
             + _table(
-                ["Posición", "Tipología", "Medidas (mm)", "Cantidad", "Neto"],
+                ["Cantidad", "Descripción", "Unitario neto", "Total neto"],
                 [
                     [
-                        position.get("position_index"),
-                        _TYPOLOGY_ES.get(
-                            _value(position.get("typology")),
-                            _value(position.get("typology")),
-                        ),
-                        f"{_dim(position.get('width_mm'))}\u00a0×\u00a0"
-                        f"{_dim(position.get('height_mm'))}"
-                        + (
-                            f" · {_value(position.get('location_tag'))}"
-                            if _value(position.get("location_tag")) != "—"
-                            else ""
-                        ),
                         position.get("quantity"),
+                        _position_description(position),
+                        (
+                            _money(_unit_net(position), currency)
+                            if _unit_net(position) is not None
+                            else "—"
+                        ),
                         (
                             _money(position.get("price_net"), currency)
                             if position.get("price_net") not in (None, "")
@@ -4626,12 +4685,28 @@ def _invoice_body(payload: dict[str, object]) -> str:
                     ]
                     for position in positions
                 ],
-                ["", "", "", "dimension", "dimension"],
+                ["dimension", "", "dimension", "dimension"],
             )
         )
+    else:
+        discount_pcts = []
     payment_terms = _value(project.get("payment_terms"))
     if payment_terms != "—":
         body += f"<p><strong>Condiciones de pago:</strong> {escape(payment_terms)}</p>"
+    if discount_pcts:
+        labels = " / −".join(
+            _discount_label(str(pct)) for pct in discount_pcts
+        )
+        subtotal = _money(deal.get("total_net_before_discount"), currency)
+        body += (
+            "<p><strong>Descuento aplicado</strong> (−" + escape(labels) + ")"
+            + (
+                f" — posiciones antes del descuento: {escape(subtotal)}"
+                if _value(deal.get("total_net_before_discount")) != "—"
+                else ""
+            )
+            + "</p>"
+        )
     body += (
         "<h2>Totales</h2>"
         + _table(
@@ -4647,6 +4722,7 @@ def _invoice_body(payload: dict[str, object]) -> str:
             ],
             ["dimension", "dimension", "dimension", "dimension", "dimension"],
         )
+        + _tributary_notice(payload)
         + "<div class=\"signoff\"><div class=\"signature\"></div>"
         + "<p class=\"muted\">Emitido por / Recibido conforme</p></div></main>"
     )
@@ -4716,6 +4792,7 @@ def _credit_note_body(payload: dict[str, object]) -> str:
         f"<h2>{escape(_value(project.get('client_name')))}</h2>"
         f"<p>RUT: {escape(_value(project.get('client_rut')))}</p>"
         f'<p class="total">Crédito: {escape(_money(credited, currency))}</p></section>'
+        + _tributary_notice(payload)
     )
     reference_verb = "abono parcial de la Factura" if partial else "anula Factura"
     body += (
@@ -4798,6 +4875,7 @@ def _credit_note_body(payload: dict[str, object]) -> str:
                 ["dimension", "dimension", "dimension"],
             )
         )
+    body += _tributary_notice(payload)
     body += (
         "<div class=\"signoff\"><div class=\"signature\"></div>"
         + "<p class=\"muted\">Emitido por / Recibido conforme</p></div></main>"
@@ -4919,6 +4997,7 @@ def _delivery_pod_body(payload: dict[str, object], signature_b64: str) -> str:
                 ["", "", "dimension", ""],
             )
         )
+    body += _tributary_notice(payload)
     body += (
         "<h2>Firma del receptor</h2>"
         f'<img class="pod-signature" src="data:image/png;base64,{signature_b64}" alt="Firma">'

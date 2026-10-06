@@ -14227,6 +14227,159 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/projects/{project_id}/collection-reminder/:
+    post:
+      operationId: project_collection_reminder_prepare
+      description: IA prepara el mensaje — jamás envía. El clic de enviar vive aparte.
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: project_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - projects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollectionReminderPrepareRequest'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionReminderDraftResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/projects/{project_id}/collection-reminder/send/:
+    post:
+      operationId: project_collection_reminder_send
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: project_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - projects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollectionReminderSendRequest'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionReminderSendResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/projects/{project_id}/credit-notes/{credit_note_id}/:
     get:
       operationId: project_credit_note_access
@@ -18228,6 +18381,16 @@ components:
       - id
       - name
       - role
+    AdapterEnum:
+      enum:
+      - sii-ws
+      - mock
+      - none
+      type: string
+      description: |-
+        * `sii-ws` - sii-ws
+        * `mock` - mock
+        * `none` - none
     AdminResponse:
       type: object
       properties:
@@ -20735,6 +20898,165 @@ components:
         * `SOBRE_VANO` - SOBRE_VANO
         * `TRASLAPADO` - TRASLAPADO
         * `RENOVACION` - RENOVACION
+    CollectionMovement:
+      type: object
+      properties:
+        type:
+          $ref: '#/components/schemas/TypeEnum'
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          nullable: true
+        amount:
+          type: string
+          nullable: true
+        method:
+          type: string
+          nullable: true
+        voided:
+          type: boolean
+        at:
+          type: string
+          nullable: true
+        actor:
+          type: string
+          nullable: true
+        code:
+          type: string
+          nullable: true
+        document_id:
+          type: string
+          nullable: true
+      required:
+      - actor
+      - amount
+      - at
+      - code
+      - document_id
+      - id
+      - kind
+      - method
+      - type
+      - voided
+    CollectionQuota:
+      type: object
+      properties:
+        key:
+          $ref: '#/components/schemas/KeyEnum'
+        amount:
+          type: string
+        covered:
+          type: string
+        due_at:
+          type: string
+          nullable: true
+        due_basis:
+          type: string
+        pct:
+          type: string
+        pct_source:
+          $ref: '#/components/schemas/PctSourceEnum'
+        state:
+          $ref: '#/components/schemas/CollectionQuotaStateEnum'
+      required:
+      - amount
+      - covered
+      - due_at
+      - due_basis
+      - key
+      - pct
+      - pct_source
+      - state
+    CollectionQuotaStateEnum:
+      enum:
+      - PENDING
+      - PAID
+      - OVERDUE
+      type: string
+      description: |-
+        * `PENDING` - PENDING
+        * `PAID` - PAID
+        * `OVERDUE` - OVERDUE
+    CollectionReminderDraftResponse:
+      type: object
+      properties:
+        subject:
+          type: string
+        body:
+          type: string
+        model:
+          type: string
+        audit_id:
+          type: string
+        credits_debited:
+          type: integer
+        client_email:
+          type: string
+          nullable: true
+        amount_due:
+          type: string
+        currency:
+          type: string
+      required:
+      - amount_due
+      - audit_id
+      - body
+      - client_email
+      - credits_debited
+      - currency
+      - model
+      - subject
+    CollectionReminderPrepareRequest:
+      type: object
+      properties:
+        operation_key:
+          type: string
+          minLength: 8
+          maxLength: 120
+      required:
+      - operation_key
+    CollectionReminderSendRequest:
+      type: object
+      properties:
+        subject:
+          type: string
+          minLength: 1
+          maxLength: 200
+        body:
+          type: string
+          minLength: 1
+          maxLength: 4000
+      required:
+      - body
+      - subject
+    CollectionReminderSendResponse:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/CollectionReminderSendResponseStatusEnum'
+        to:
+          type: string
+        mail_id:
+          type: string
+          nullable: true
+      required:
+      - mail_id
+      - status
+      - to
+    CollectionReminderSendResponseStatusEnum:
+      enum:
+      - QUEUED
+      - SENT
+      - FAILED
+      - SKIPPED
+      type: string
+      description: |-
+        * `QUEUED` - QUEUED
+        * `SENT` - SENT
+        * `FAILED` - FAILED
+        * `SKIPPED` - SKIPPED
     ColorEnum:
       enum:
       - WHITE
@@ -25048,6 +25370,14 @@ components:
         * `SUCCEEDED` - SUCCEEDED
         * `FAILED` - FAILED
         * `CANCELED` - CANCELED
+    KeyEnum:
+      enum:
+      - ANTICIPO
+      - SALDO
+      type: string
+      description: |-
+        * `ANTICIPO` - ANTICIPO
+        * `SALDO` - SALDO
     KitChoice:
       type: object
       properties:
@@ -27392,6 +27722,11 @@ components:
       properties:
         configured:
           type: boolean
+        provider_mode:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/ProviderModeEnum'
+          - $ref: '#/components/schemas/NullEnum'
         api_url:
           type: string
         api_key_preview:
@@ -27441,6 +27776,12 @@ components:
         project_payment_id:
           type: string
           nullable: true
+        expires_at:
+          type: string
+          nullable: true
+        expired:
+          type: boolean
+          default: false
         created_at:
           type: string
         updated_at:
@@ -27449,6 +27790,7 @@ components:
       - amount
       - created_at
       - environment
+      - expires_at
       - id
       - kind
       - operation_key
@@ -27598,6 +27940,20 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ProjectInvoice'
+        schedule:
+          type: array
+          items:
+            $ref: '#/components/schemas/CollectionQuota'
+        movements:
+          type: array
+          items:
+            $ref: '#/components/schemas/CollectionMovement'
+        sii:
+          $ref: '#/components/schemas/SiiIntegrationState'
+        reminder:
+          allOf:
+          - $ref: '#/components/schemas/ReminderDraft'
+          nullable: true
         collected:
           type: string
         quote_total_gross:
@@ -27624,11 +27980,15 @@ components:
       - collected
       - currency
       - invoices
+      - movements
       - payment
       - payments
       - quote_total_gross
       - receipt
+      - reminder
+      - schedule
       - sealed_revision
+      - sii
       - status
     PaymentStatusEnum:
       enum:
@@ -27659,6 +28019,20 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ProjectInvoice'
+        schedule:
+          type: array
+          items:
+            $ref: '#/components/schemas/CollectionQuota'
+        movements:
+          type: array
+          items:
+            $ref: '#/components/schemas/CollectionMovement'
+        sii:
+          $ref: '#/components/schemas/SiiIntegrationState'
+        reminder:
+          allOf:
+          - $ref: '#/components/schemas/ReminderDraft'
+          nullable: true
         collected:
           type: string
         quote_total_gross:
@@ -27679,10 +28053,22 @@ components:
       - collected
       - currency
       - invoices
+      - movements
       - payments
       - quote_total_gross
+      - reminder
+      - schedule
       - sealed_revision
+      - sii
       - status
+    PctSourceEnum:
+      enum:
+      - terms
+      - default
+      type: string
+      description: |-
+        * `terms` - terms
+        * `default` - default
     PieceOriginEnum:
       enum:
       - PRODUCT
@@ -29476,6 +29862,15 @@ components:
         revision_code:
           type: string
           nullable: true
+        total_net:
+          type: string
+          nullable: true
+        total_tax:
+          type: string
+          nullable: true
+        total_gross:
+          type: string
+          nullable: true
         credit_note:
           allOf:
           - $ref: '#/components/schemas/ProjectCreditNote'
@@ -29505,6 +29900,15 @@ components:
           type: string
           format: uuid
         revision_code:
+          type: string
+          nullable: true
+        total_net:
+          type: string
+          nullable: true
+        total_tax:
+          type: string
+          nullable: true
+        total_gross:
           type: string
           nullable: true
         credit_note:
@@ -29811,6 +30215,14 @@ components:
       required:
       - client_name
       - name
+    ProviderModeEnum:
+      enum:
+      - mock
+      - live
+      type: string
+      description: |-
+        * `mock` - mock
+        * `live` - live
     PurchaseLine:
       type: object
       properties:
@@ -30247,6 +30659,22 @@ components:
           nullable: true
           minLength: 1
           maxLength: 500
+    ReminderDraft:
+      type: object
+      properties:
+        subject:
+          type: string
+        body:
+          type: string
+        model:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          nullable: true
+      required:
+      - body
+      - subject
     Remnant:
       type: object
       properties:
@@ -31244,8 +31672,11 @@ components:
           allOf:
           - $ref: '#/components/schemas/SiiCertificate'
           nullable: true
+        integration:
+          $ref: '#/components/schemas/SiiIntegrationState'
       required:
       - certificate
+      - integration
     SiiCertificateUploadRequest:
       type: object
       properties:
@@ -31338,12 +31769,30 @@ components:
       enum:
       - PENDING
       - ACCEPTED
+      - OBSERVED
       - REJECTED
       type: string
       description: |-
         * `PENDING` - PENDING
         * `ACCEPTED` - ACCEPTED
+        * `OBSERVED` - OBSERVED
         * `REJECTED` - REJECTED
+    SiiIntegrationState:
+      type: object
+      properties:
+        adapter:
+          $ref: '#/components/schemas/AdapterEnum'
+        certified:
+          type: boolean
+        certificate:
+          type: boolean
+        caf_available:
+          type: boolean
+      required:
+      - adapter
+      - caf_available
+      - certificate
+      - certified
     SlidingLayoutFacts:
       type: object
       properties:
@@ -32108,6 +32557,22 @@ components:
       - count
       - label
       - value
+    TypeEnum:
+      enum:
+      - payment
+      - payment_void
+      - link
+      - invoice
+      - credit_note
+      - envio
+      type: string
+      description: |-
+        * `payment` - payment
+        * `payment_void` - payment_void
+        * `link` - link
+        * `invoice` - invoice
+        * `credit_note` - credit_note
+        * `envio` - envio
     TypologyLimit:
       type: object
       properties:

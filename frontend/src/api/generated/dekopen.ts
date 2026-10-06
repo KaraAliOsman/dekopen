@@ -80,6 +80,10 @@ import type {
   CncToolList,
   CncToolRequestRequest,
   CncWorkspace,
+  CollectionReminderDraftResponse,
+  CollectionReminderPrepareRequest,
+  CollectionReminderSendRequest,
+  CollectionReminderSendResponse,
   Commerce,
   ConfirmBatchRequestRequest,
   ConfirmChangeRequest,
@@ -15736,6 +15740,183 @@ export const projectsClone = async (
     headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
     body: JSON.stringify(cloneProjectRequest),
   });
+};
+
+export type projectCollectionReminderPrepareResponse200 = {
+  data: CollectionReminderDraftResponse;
+  status: 200;
+};
+
+export type projectCollectionReminderPrepareResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type projectCollectionReminderPrepareResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type projectCollectionReminderPrepareResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type projectCollectionReminderPrepareResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type projectCollectionReminderPrepareResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type projectCollectionReminderPrepareResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type projectCollectionReminderPrepareResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type projectCollectionReminderPrepareResponseSuccess =
+  projectCollectionReminderPrepareResponse200 & {
+    headers: Headers;
+  };
+export type projectCollectionReminderPrepareResponseError = (
+  | projectCollectionReminderPrepareResponse400
+  | projectCollectionReminderPrepareResponse401
+  | projectCollectionReminderPrepareResponse403
+  | projectCollectionReminderPrepareResponse404
+  | projectCollectionReminderPrepareResponse409
+  | projectCollectionReminderPrepareResponse422
+  | projectCollectionReminderPrepareResponse503
+) & {
+  headers: Headers;
+};
+
+export type projectCollectionReminderPrepareResponse =
+  projectCollectionReminderPrepareResponseSuccess | projectCollectionReminderPrepareResponseError;
+
+export const getProjectCollectionReminderPrepareUrl = (projectId: string) => {
+  return `/api/v1/projects/${projectId}/collection-reminder/`;
+};
+
+/**
+ * IA prepara el mensaje — jamás envía. El clic de enviar vive aparte.
+ */
+export const projectCollectionReminderPrepare = async (
+  projectId: string,
+  collectionReminderPrepareRequest: CollectionReminderPrepareRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<projectCollectionReminderPrepareResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<projectCollectionReminderPrepareResponse>(
+    getProjectCollectionReminderPrepareUrl(projectId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+      body: JSON.stringify(collectionReminderPrepareRequest),
+    },
+  );
+};
+
+export type projectCollectionReminderSendResponse200 = {
+  data: CollectionReminderSendResponse;
+  status: 200;
+};
+
+export type projectCollectionReminderSendResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type projectCollectionReminderSendResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type projectCollectionReminderSendResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type projectCollectionReminderSendResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type projectCollectionReminderSendResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type projectCollectionReminderSendResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type projectCollectionReminderSendResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type projectCollectionReminderSendResponseSuccess =
+  projectCollectionReminderSendResponse200 & {
+    headers: Headers;
+  };
+export type projectCollectionReminderSendResponseError = (
+  | projectCollectionReminderSendResponse400
+  | projectCollectionReminderSendResponse401
+  | projectCollectionReminderSendResponse403
+  | projectCollectionReminderSendResponse404
+  | projectCollectionReminderSendResponse409
+  | projectCollectionReminderSendResponse422
+  | projectCollectionReminderSendResponse503
+) & {
+  headers: Headers;
+};
+
+export type projectCollectionReminderSendResponse =
+  projectCollectionReminderSendResponseSuccess | projectCollectionReminderSendResponseError;
+
+export const getProjectCollectionReminderSendUrl = (projectId: string) => {
+  return `/api/v1/projects/${projectId}/collection-reminder/send/`;
+};
+
+export const projectCollectionReminderSend = async (
+  projectId: string,
+  collectionReminderSendRequest: CollectionReminderSendRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<projectCollectionReminderSendResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<projectCollectionReminderSendResponse>(
+    getProjectCollectionReminderSendUrl(projectId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+      body: JSON.stringify(collectionReminderSendRequest),
+    },
+  );
 };
 
 export type projectCreditNoteAccessResponse200 = {

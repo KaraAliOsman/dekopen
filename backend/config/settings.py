@@ -176,7 +176,9 @@ SPECTACULAR_SETTINGS = {
             "AWNING", "DOOR_ENTRY", "FIXED", "SLIDING_2L",
             "TILT_TURN_LEFT", "TILT_TURN_RIGHT", "TURN_LEFT", "TURN_RIGHT",
         ],
-        "SiiEnvioStatusEnum": ["PENDING", "ACCEPTED", "REJECTED"],
+        # P11 — «aceptado con reparos» es un veredicto propio del SII, no un
+        # detalle: lo lleva el enum del envío.
+        "SiiEnvioStatusEnum": ["PENDING", "ACCEPTED", "OBSERVED", "REJECTED"],
         "OrderStatusEnum": [
             "DRAFT",
             "SENT",

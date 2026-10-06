@@ -16,21 +16,21 @@ Este indice no contiene secretos. Los valores reales se cargan como variables de
 
 | Campo        | Detalle                                                                                                                                          |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Estado       | Diferida; usar sandbox hasta aprobacion del dueno.                                                                                               |
-| Adaptador    | `backend/billing` con proveedor Flow configurado por entorno.                                                                                    |
-| Variables    | `FLOW_API_URL`, `FLOW_API_KEY`, `FLOW_SECRET_KEY`, `BILLING_CALLBACK_ORIGIN`, `BILLING_FRONTEND_ORIGIN`, `FLOW_MERCHANT_TIMEZONE`.               |
-| Activacion   | Crear comercio sandbox, cargar llaves, configurar URL de retorno/callback, ejecutar pago de prueba y luego repetir con credenciales productivas. |
-| Verificacion | Crear enlace de pago, completar pago sandbox, confirmar idempotencia de callback y estado visible en proyecto/portal.                            |
+| Estado       | Diferida; el proveedor simulado recorre el flujo de punta a punta hasta que el dueno cargue credenciales reales.                                   |
+| Adaptador    | `backend/billing/flow.py::client_for`: con `FLOW_WS_MOCK=1` toda integracion habla con `MockFlowClient` — la pagina de cobro local `GET/POST /api/v1/billing/flow-sim/<token>/` (`billing/sim.py`) deja al pagador pagar o rechazar y la decision entra por el mismo `payment_status` que el webhook real. Sin la env, `FlowClient` real. Enlace con vencimiento: `project_payment_links.expires_at` (TTL de referencia 72 h). |
+| Variables    | `FLOW_WS_MOCK` (opt-in del simulador), `FLOW_SIM_ORIGIN` (origen de la pagina simulada; default `http://127.0.0.1:8000`), `FLOW_API_URL`, `FLOW_API_KEY`, `FLOW_SECRET_KEY`, `BILLING_CALLBACK_ORIGIN`, `BILLING_FRONTEND_ORIGIN`, `FLOW_MERCHANT_TIMEZONE`.               |
+| Activacion   | Crear comercio sandbox, cargar llaves en Ajustes > Integraciones, configurar URL de retorno/callback, ejecutar pago de prueba y luego repetir con credenciales productivas. Quitar `FLOW_WS_MOCK` al pasar a real: el simulador nunca es fallback silencioso. |
+| Verificacion | Crear enlace de pago, completar pago en el checkout simulado (o sandbox real), confirmar idempotencia de callback, `project_payment_id` ligado al link y estado visible en proyecto/portal. |
 
 ## SII / DTE
 
-| Campo        | Detalle                                                                                                                                    |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Estado       | Diferida; no hay emision real sin certificados/CAF del contribuyente.                                                                      |
-| Adaptador    | `backend/billing` y tablas de CAF/certificados/DTE.                                                                                        |
-| Variables    | Nombres reservados por proveedor DTE/SII: `SII_ENV`, `SII_CERTIFICATE_PASSWORD`, `SII_PROVIDER_*` cuando se conecte el adaptador final.    |
-| Activacion   | Cargar certificado y CAF autorizados, declarar ambiente certificacion/produccion, emitir DTE de certificacion y validar respuesta del SII. |
-| Verificacion | DTE aceptado en ambiente de certificacion, XML/PDF almacenado como documento emitido e historial inmutable.                                |
+| Campo        | Detalle                                                                                                                                                                                                                                             |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Estado       | Diferida; sin certificado + CAF + adapter `sii-ws` configurado, todo documento se imprime como **«Documento interno — no valido como documento tributario electronico»** y el envio se marca `adapter=mock`. Nunca se dibuja un timbre SII simulado.     |
+| Adaptador    | `backend/projects/sii_envio.py::integration_state` resume `{adapter, certificate, caf_available, certified}`; el envio usa `SII_WS_*` reales o, con `SII_WS_ENVIO_MOCK=1` (solo desarrollo), el mock que responde ACCEPTED / OBSERVED («reparos», estado propio P11) / REJECTED segun `SII_WS_ENVIO_MOCK_VERDICT`. |
+| Variables    | `SII_WS_URL`, `SII_WS_STATUS_URL`, `SII_WS_TOKEN`, `SII_WS_ENVIO_MOCK` + `SII_WS_ENVIO_MOCK_VERDICT` (dev), `SII_ENV`, `SII_CERTIFICATE_PASSWORD`, `SII_PROVIDER_*` cuando se conecte el adaptador final.                                                |
+| Activacion   | Cargar certificado y CAF autorizados en Ajustes > Integraciones, declarar ambiente certificacion/produccion, configurar `SII_WS_*`, emitir DTE de certificacion y validar respuesta del SII.                                                          |
+| Verificacion | `integration_state.certified=true`, DTE aceptado en ambiente de certificacion (envio ACCEPTED/OBSERVED visible en la linea de tiempo de Cobranza), XML/PDF almacenado como documento emitido e historial inmutable.                                    |
 
 ## Correo con dominio propio
 

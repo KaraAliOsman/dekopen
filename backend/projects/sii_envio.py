@@ -407,7 +407,18 @@ class _MockSiiClient:
         }
 
     def query_status(self, *, track_id: str, rut_emisor: str) -> dict:
-        return {"status": "ACCEPTED", "glosa": "Envío simulado localmente"}
+        # El veredicto es conducible por entorno para recorrer los tres
+        # resultados reales (aceptado / aceptado con reparos / rechazado)
+        # sin tocar código — nunca mezcla estados en una sola respuesta.
+        verdict = os.environ.get("SII_WS_ENVIO_MOCK_VERDICT", "ACCEPTED").upper()
+        if verdict not in {"ACCEPTED", "OBSERVED", "REJECTED"}:
+            verdict = "ACCEPTED"
+        glosa = {
+            "ACCEPTED": "Envío simulado aceptado",
+            "OBSERVED": "Envío simulado aceptado con reparos",
+            "REJECTED": "Envío simulado rechazado",
+        }[verdict]
+        return {"status": verdict, "glosa": glosa}
 
 
 def _rut_parts(rut: str) -> tuple[str, str]:
@@ -519,12 +530,18 @@ class _HttpSiiClient:
                 return None
 
         # EPR means "processed", not "accepted" — the outcome counters decide:
-        # a rejected DTE inside a processed envelope is a REJECTED envío.
+        # a rejected DTE inside a processed envelope is a REJECTED envío, and
+        # reparos son su propio estado visible, nunca escondidos en ACCEPTED.
         rejected = _count("RECHAZADOS")
+        reparos = _count("REPAROS", "CONREPAROS", "INFONOTOK")
         if code in {"RPR", "RECHAZADO", "DNK", "FAU", "FAN"} or (
             rejected is not None and rejected > 0
         ):
             return {"status": "REJECTED", "glosa": glosa}
+        if code in {"APR", "ACEPTADO_REPAROS", "DOKEPR"} or (
+            reparos is not None and reparos > 0
+        ):
+            return {"status": "OBSERVED", "glosa": glosa}
         if code in {"EPR", "ACEPTADO", "FOK", "ENC", "FIN"}:
             return {"status": "ACCEPTED", "glosa": glosa}
         return {"status": "PENDING", "glosa": glosa}
@@ -580,6 +597,60 @@ def _sii_client():
         "El envío al SII no está configurado — defina SII_WS_ENVIO_URL y "
         "SII_WS_TOKEN, o habilite SII_WS_ENVIO_MOCK=1 en desarrollo.",
     )
+
+
+def integration_adapter() -> str:
+    """Qué transporte contestaría un envío hoy — sin levantar errores:
+    ``sii-ws`` con endpoint + token válidos, ``mock`` bajo el opt-in,
+    ``none`` si nada está configurado."""
+    url = os.environ.get("SII_WS_ENVIO_URL", "").strip()
+    if url and os.environ.get("SII_WS_TOKEN", "").strip() and _endpoint_allowed(url):
+        return "sii-ws"
+    if os.environ.get("SII_WS_ENVIO_MOCK", "").strip() == "1":
+        return "mock"
+    return "none"
+
+
+def integration_state(*, org_id) -> dict:
+    """La verdad tributaria de la organización, en una sola forma para todas
+    las superficies (panel de cobranza, Ajustes › Integraciones, leyenda de
+    los PDF): la integración está «activa y certificada» sólo cuando hay
+    adaptador real configurado, certificado vigente y folios CAF disponibles.
+    Un mock — aunque procese envíos de punta a punta — jamás reporta
+    certificación: nada simulado puede parecer documento tributario."""
+    adapter = integration_adapter()
+    now = timezone.now()
+    with documentary_backend():
+        certs = rows(
+            "SELECT valid_from, valid_to FROM public.sii_certificates "
+            "WHERE org_id=%s AND active",
+            [str(org_id)],
+        )
+        cafs = one(
+            "SELECT COUNT(*) AS n FROM public.sii_cafs "
+            "WHERE org_id=%s AND folio_actual <= folio_hasta",
+            [str(org_id)],
+        )
+    certificate_valid = False
+    if certs:
+        valid_to = certs[0]["valid_to"]
+        valid_from = certs[0]["valid_from"]
+        if valid_to is not None and valid_to.tzinfo is None:
+            valid_to = valid_to.replace(tzinfo=utc_timezone.utc)
+        if valid_from is not None and valid_from.tzinfo is None:
+            valid_from = valid_from.replace(tzinfo=utc_timezone.utc)
+        certificate_valid = bool(
+            valid_from is not None and valid_to is not None
+            and valid_from <= now <= valid_to
+        )
+    caf_available = int(cafs["n"] or 0) > 0
+    certified = adapter == "sii-ws" and certificate_valid and caf_available
+    return {
+        "adapter": adapter,
+        "certified": certified,
+        "certificate": certificate_valid,
+        "caf_available": caf_available,
+    }
 
 
 def _payload(row: dict) -> dict:
@@ -913,7 +984,7 @@ def _send_dte_envio(
     )
     if verdict is not None:
         with transaction.atomic(), documentary_backend():
-            if verdict.get("status") in ("ACCEPTED", "REJECTED"):
+            if verdict.get("status") in ("ACCEPTED", "OBSERVED", "REJECTED"):
                 updated = rows(
                     "UPDATE public.sii_envios SET status=%s, glosa=%s "
                     "WHERE id=%s AND status='PENDING' RETURNING *",

@@ -12,6 +12,7 @@ from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from authentication.errors import ContractAPIException
 from projects import credit_notes as credit_notes_module
 from projects import invoices as invoices_module
+from projects import sii_envio as sii_envio_module
 from projects import sii
 
 
@@ -304,6 +305,15 @@ def _patch_env(
     )
     monkeypatch.setattr(
         credit_notes_module, "_purge_unreferenced_credit_note", lambda **kw: None
+    )
+    # P11 — la leyenda tributaria sella el estado SII al emitir la NC; el
+    # import es perezoso dentro de credit_notes, así que el stub va sobre el
+    # módulo origen.
+    monkeypatch.setattr(
+        sii_envio_module,
+        "integration_state",
+        lambda *, org_id: {"adapter": "none", "certified": False,
+                           "certificate": False, "caf_available": False},
     )
     # The fiscal-cover composition is exercised by its own test; emit tests
     # stub it so they stay unit-fast.

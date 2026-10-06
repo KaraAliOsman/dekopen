@@ -21,6 +21,9 @@ export interface PaymentLink {
   url: string | null;
   /** @nullable */
   project_payment_id: string | null;
+  /** @nullable */
+  expires_at: string | null;
+  expired?: boolean;
   created_at: string;
   updated_at: string;
 }

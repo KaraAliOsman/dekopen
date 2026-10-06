@@ -82,6 +82,14 @@ def test_issue_receipt_renders_uploads_and_inserts(monkeypatch):
 
     monkeypatch.setattr(receipts, "one", fake_one)
     monkeypatch.setattr(receipts, "SupabaseDocumentStorage", lambda: storage)
+    # P11 — el recibo sella el estado tributario de la org al emitirse;
+    # en unidad ese estado es «no certificado» honesto.
+    monkeypatch.setattr(
+        receipts,
+        "integration_state",
+        lambda *, org_id: {"adapter": "none", "certified": False,
+                           "certificate": False, "caf_available": False},
+    )
     org, actor = uuid4(), uuid4()
     payment = {
         "id": uuid4(),
@@ -219,6 +227,15 @@ def test_record_payment_issues_receipt_with_the_deal(monkeypatch):
     )
     monkeypatch.setattr(
         payments, "project_row", staticmethod(lambda *a, **kw: project_row)
+    )
+    # P11 — el resumen consulta la bitácora IA y el estado tributario real.
+    monkeypatch.setattr(
+        payments.reminders, "latest_draft", lambda *, org_id, project_id: None
+    )
+    monkeypatch.setattr(
+        payments, "_sii_summary",
+        lambda org_id: {"adapter": "none", "certified": False,
+                        "certificate": False, "caf_available": False},
     )
     monkeypatch.setattr(payments, "rows", fake_rows)
     monkeypatch.setattr(payments, "issue_receipt", lambda **kw: calls.append(kw) or {

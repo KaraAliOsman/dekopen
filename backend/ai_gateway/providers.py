@@ -1247,6 +1247,35 @@ _QUERYABLE_WITHOUT_REFS = {
 }
 
 
+def _collection_reminder_output(input_payload: dict) -> dict:
+    """Mock del recordatorio de cobranza (P11): redacta el mensaje con los
+    hechos reales del payload — nunca inventa monto ni proyecto — para que
+    el flujo preparar→revisar→enviar sea ejercitable de punta a punta sin
+    proveedor externo."""
+    from decimal import Decimal, InvalidOperation
+
+    try:
+        entero = int(Decimal(str(input_payload.get("amount_due") or "0")))
+    except (InvalidOperation, ValueError):
+        entero = 0
+    monto = f"${entero:,}".replace(",", ".")
+    moneda = str(input_payload.get("currency") or "CLP")
+    proyecto = str(input_payload.get("project_name") or "su proyecto")
+    codigo = str(input_payload.get("project_code") or "")
+    empresa = str(input_payload.get("company_name") or "nuestra empresa")
+    subject = f"Recordatorio de pago — {proyecto}"
+    body = (
+        f"Estimado cliente:\n\n"
+        f"Junto con saludar, le recordamos que el proyecto {proyecto}"
+        f"{f' ({codigo})' if codigo else ''} registra un saldo pendiente de "
+        f"{monto} {moneda}. Agradecemos gestionar el pago a la brevedad "
+        f"para continuar con el calendario acordado.\n\n"
+        f"Si ya realizó el pago, por favor ignore este mensaje.\n\n"
+        f"Atentamente,\n{empresa}"
+    )
+    return {"subject": subject, "body": body}
+
+
 def _agent_output(input_payload: dict) -> dict:
     """Mock agent round: a contract-valid JSON document built only from the
     server-built context — so dev/CI can exercise the flagship agent loop
@@ -1766,6 +1795,10 @@ class MockProvider:
         elif capability == "context_assist":
             output = json.dumps(
                 _context_assist_output(input_payload), ensure_ascii=False
+            )
+        elif capability == "collection_reminder":
+            output = json.dumps(
+                _collection_reminder_output(input_payload), ensure_ascii=False
             )
         elif capability == "agent":
             output = json.dumps(

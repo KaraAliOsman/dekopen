@@ -1276,8 +1276,9 @@ def test_query_status_epr_with_rejected_dte_is_rejected():
     assert verdict["status"] == "REJECTED"
 
 
-def test_query_status_epr_with_reparos_only_is_accepted():
-    """REPAROS are accepted-with-corrections — the envelope is accepted."""
+def test_query_status_epr_with_reparos_only_is_observed():
+    """REPAROS are accepted-with-corrections — a distinct visible state
+    (P11), never folded silently into ACCEPTED."""
 
     def fake_post(url, **kw):
         class _R:
@@ -1298,7 +1299,7 @@ def test_query_status_epr_with_reparos_only_is_accepted():
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(sii_envio.httpx, "post", fake_post)
         verdict = client.query_status(track_id="9", rut_emisor="76123456-0")
-    assert verdict["status"] == "ACCEPTED"
+    assert verdict["status"] == "OBSERVED"
 
 
 def test_upload_certificate_rejects_self_signed():

@@ -10,6 +10,7 @@ import {
 import type { PaymentKindEnum, PaymentLink } from "../../api/generated/models";
 import { t, type TranslationKey } from "../../i18n/es-CL";
 import { StatusChip } from "../../ui/StatusChip";
+import { actionErrorDetail } from "../errors";
 import { formatMoney } from "../../format";
 
 const KIND_LABEL: Record<string, TranslationKey> = {
@@ -129,8 +130,10 @@ export function ProjectPaymentLinksPanel({
       setAmount("");
       setPayerEmail("");
       setSubject("");
-    } catch {
-      setMessage(t("projects.paymentLinkCreateError"));
+    } catch (error) {
+      // El backend contesta en español («El cobro supera el saldo
+      // pendiente») — ese detalle es el mensaje, no un error crudo.
+      setMessage(actionErrorDetail(error, t("projects.paymentLinkCreateError")));
     } finally {
       setBusy(false);
     }
@@ -163,7 +166,11 @@ export function ProjectPaymentLinksPanel({
     }
   }
 
-  const configured = integration?.configured === true && integration.enabled === true;
+  // Con FLOW_WS_MOCK el proveedor simulado habilita el cobro sin fila de
+  // credenciales — el marcador «simulado» lo dice en voz alta.
+  const simulated = integration?.provider_mode === "mock";
+  const configured =
+    (integration?.configured === true && integration.enabled === true) || simulated;
 
   return (
     <section
@@ -187,7 +194,12 @@ export function ProjectPaymentLinksPanel({
         )}
       </div>
       {message && <p className="form-error">{message}</p>}
-      {integration !== null && !configured && (
+      {simulated && (
+        <p className="settings-hint" role="status">
+          {t("projects.paymentLinkSimulated")}
+        </p>
+      )}
+      {integration !== null && !configured && !simulated && (
         <p className="settings-hint">
           {isOwner
             ? t("projects.paymentLinkFlowRequired")
@@ -251,6 +263,7 @@ export function ProjectPaymentLinksPanel({
               <th className="num">{t("projects.paymentAmount")}</th>
               <th>{t("projects.paymentLinkEmail")}</th>
               <th>{t("projects.paymentLinkStatus")}</th>
+              <th>{t("projects.paymentLinkExpiry")}</th>
               <th>{t("projects.paymentLinkUrl")}</th>
               {canWrite && <th />}
             </tr>
@@ -266,6 +279,17 @@ export function ProjectPaymentLinksPanel({
                   <td>{link.payer_email}</td>
                   <td>
                     <StatusChip enumName="PaymentLinkStatusEnum" value={linkStatus} />
+                  </td>
+                  <td>
+                    {link.expired === true ? (
+                      <span className="production-chip is-warn">
+                        {t("projects.paymentLinkExpired")}
+                      </span>
+                    ) : link.expires_at ? (
+                      formatDate(link.expires_at)
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td>
                     {link.url ? (

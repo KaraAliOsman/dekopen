@@ -27,6 +27,7 @@ from documents.renderers import render_project_invoice
 from documents.storage import SupabaseDocumentStorage
 from pricing.repository import one, rows
 from projects import org_branding, sii, sii_envio
+from projects.sii_envio import integration_state
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +122,15 @@ def _sealed_deal(
     if gross is None:
         return None
     positions = snapshot.get("positions")
+    pricing = snapshot.get("pricing")
+    pricing_result = (
+        pricing.get("result") if isinstance(pricing, dict) else None
+    )
+    line_detail = (
+        pricing_result.get("line_detail")
+        if isinstance(pricing_result, dict)
+        else None
+    )
     return {
         "version_id": version["id"],
         "revision_code": version["revision_code"],
@@ -131,6 +141,7 @@ def _sealed_deal(
         "currency": project.get("currency") or "CLP",
         "payment_terms": project.get("payment_terms"),
         "positions": positions if isinstance(positions, list) else [],
+        "line_detail": line_detail if isinstance(line_detail, list) else [],
     }
 
 
@@ -176,11 +187,36 @@ def issue_invoice(*, org_id: UUID, project: dict, actor_id: UUID) -> dict:
             # successor may have already rewritten the live project's client
             # data, and the invoice must never mix two different states.
             sealed_project = deal["project"]
+            # Unitario neto por línea: el line_detail sellado del motor
+            # (pre-descuento exacto); cae a price_net/cantidad en snapshots
+            # anteriores al detalle.
+            unit_by_index = {
+                str(item.get("position_index")): item.get("unit_price")
+                for item in deal["line_detail"]
+                if isinstance(item, dict) and item.get("unit_price") is not None
+            }
+            discount_total = Decimal("0")
+            net_before_discount = Decimal("0")
+            for position in deal["positions"]:
+                pct = Decimal(str(position.get("discount_pct") or "0"))
+                if pct > 1:
+                    pct /= 100
+                if pct <= 0:
+                    continue
+                unit = unit_by_index.get(str(position.get("position_index")))
+                if unit is None:
+                    continue
+                quantity = Decimal(str(position.get("quantity") or "0"))
+                line_gross = Decimal(str(unit)) * quantity
+                discount_total += line_gross * pct
+                net_before_discount += line_gross
+            tributary = integration_state(org_id=org_id)
             payload = {
                 "invoice_code": invoice_code,
                 "organization": org_branding.branding_for_snapshot(org_id=org_id),
                 "issued_at": timezone.now().isoformat(),
                 "revision_code": deal["revision_code"],
+                "tributary": tributary,
                 "project": {
                     "code": sealed_project.get("code"),
                     "name": sealed_project.get("name"),
@@ -210,6 +246,12 @@ def issue_invoice(*, org_id: UUID, project: dict, actor_id: UUID) -> dict:
                         "price_net": str(position.get("price_net"))
                         if position.get("price_net") is not None
                         else None,
+                        "discount_pct": str(position.get("discount_pct"))
+                        if position.get("discount_pct") is not None
+                        else None,
+                        "unit_net": str(unit_by_index.get(str(position.get("position_index"))))
+                        if unit_by_index.get(str(position.get("position_index"))) is not None
+                        else None,
                     }
                     for position in deal["positions"]
                 ],
@@ -218,6 +260,12 @@ def issue_invoice(*, org_id: UUID, project: dict, actor_id: UUID) -> dict:
                     "total_tax": str(deal["tax"]),
                     "total_gross": str(deal["gross"]),
                     "currency": deal["currency"],
+                    "discount_amount": str(discount_total)
+                    if discount_total > 0
+                    else None,
+                    "total_net_before_discount": str(net_before_discount)
+                    if net_before_discount > 0
+                    else None,
                 },
                 "balance": {
                     "collected": str(collected),

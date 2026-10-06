@@ -310,7 +310,8 @@ def _owner_items(
         """
         SELECT p.id, p.code AS project_code, p.name AS project_name,
                p.status::text AS status, p.total_price_gross,
-               COALESCE(pay.collected, 0) AS collected
+               COALESCE(pay.collected, 0) AS collected,
+               (rem.drafted IS TRUE) AS reminder_drafted
         FROM public.projects p
         LEFT JOIN LATERAL (
             SELECT COALESCE(sum(pay.amount), 0) AS collected
@@ -318,6 +319,15 @@ def _owner_items(
             WHERE pay.project_id = p.id AND pay.org_id = p.org_id
               AND pay.voided_at IS NULL
         ) pay ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT TRUE AS drafted
+            FROM public.ai_audit_logs rem
+            WHERE rem.org_id = p.org_id
+              AND rem.tool_name = 'collection_reminder'
+              AND rem.input_payload->>'project_id' = p.id::text
+            ORDER BY rem.created_at DESC
+            LIMIT 1
+        ) rem ON TRUE
         WHERE p.org_id = %s
           AND p.status::text IN ('APPROVED', 'IN_PRODUCTION', 'COMPLETED')
           AND p.total_price_gross > COALESCE(pay.collected, 0)
@@ -332,16 +342,25 @@ def _owner_items(
         )
         outstanding_total += outstanding
         name = str(project["project_name"])
+        reminder_note = (
+            " — el recordatorio al cliente ya está preparado, revísalo en Cobranza"
+            if project["reminder_drafted"]
+            else ""
+        )
+        cobranza_link = f"{_project_link(project['id'])}?section=payments"
         if project["status"] == "COMPLETED":
             items.append(
                 _item(
                     "collection_overdue",
                     "overdue",
                     f"Cobrar el saldo de {name}",
-                    reason=f"Quedan {_fmt_money(outstanding, currency)} por cobrar y la obra ya fue entregada e instalada",
+                    reason=(
+                        f"Quedan {_fmt_money(outstanding, currency)} por cobrar "
+                        f"y la obra ya fue entregada e instalada{reminder_note}"
+                    ),
                     entity_code=str(project["project_code"]),
                     entity_label=name,
-                    to=_project_link(project["id"]),
+                    to=cobranza_link,
                     cta="Ver cobro",
                 )
             )
@@ -351,11 +370,14 @@ def _owner_items(
                     "collection_open",
                     "soon",
                     f"Saldo por cobrar de {name}",
-                    reason=f"Quedan {_fmt_money(outstanding, currency)} — el convenio es contra entrega",
+                    reason=(
+                        f"Quedan {_fmt_money(outstanding, currency)} — "
+                        f"el convenio es contra entrega{reminder_note}"
+                    ),
                     entity_code=str(project["project_code"]),
                     entity_label=name,
-                    to=_project_link(project["id"]),
-                    cta="Ver proyecto",
+                    to=cobranza_link,
+                    cta="Ver cobro",
                 )
             )
         else:
@@ -364,11 +386,14 @@ def _owner_items(
                     "deposit_pending",
                     "soon",
                     f"Falta el anticipo de {name}",
-                    reason=f"Quedan {_fmt_money(outstanding, currency)} por cobrar antes de liberar a taller",
+                    reason=(
+                        f"Quedan {_fmt_money(outstanding, currency)} por cobrar "
+                        f"antes de liberar a taller{reminder_note}"
+                    ),
                     entity_code=str(project["project_code"]),
                     entity_label=name,
-                    to=_project_link(project["id"]),
-                    cta="Ver proyecto",
+                    to=cobranza_link,
+                    cta="Ver cobro",
                 )
             )
 

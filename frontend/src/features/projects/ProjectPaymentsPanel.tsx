@@ -2,6 +2,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { ApiError } from "../../api/apiMutator";
 import {
+  projectCollectionReminderPrepare,
+  projectCollectionReminderSend,
   projectCreditNoteAccess,
   projectCreditNoteDteAccess,
   projectCreditNoteDteEmit,
@@ -48,9 +50,33 @@ const METHOD_LABEL: Record<string, TranslationKey> = {
   OTHER: "projects.paymentMethodOther",
 };
 
-/** El track del envío SII no es enum orval: se pinta literal, con «—» si falta. */
+const MOVEMENT_LABEL: Record<string, TranslationKey> = {
+  payment: "projects.movementPayment",
+  payment_void: "projects.movementPaymentVoid",
+  link: "projects.movementLink",
+  invoice: "projects.movementInvoice",
+  credit_note: "projects.movementCreditNote",
+  envio: "projects.movementEnvio",
+};
+
+const QUOTA_STATE_LABEL: Record<string, TranslationKey> = {
+  PAID: "projects.quotaStatePaid",
+  PENDING: "projects.quotaStatePending",
+  OVERDUE: "projects.quotaStateOverdue",
+};
+
+// El veredicto del envío SII jamás se pinta en inglés crudo — «aceptado con
+// reparos» es un estado propio y distinto, no una etiqueta técnica.
+const ENVIO_STATUS_LABEL: Record<string, TranslationKey> = {
+  PENDING: "projects.envioStatusPending",
+  ACCEPTED: "projects.envioStatusAccepted",
+  OBSERVED: "projects.envioStatusObserved",
+  REJECTED: "projects.envioStatusRejected",
+};
+
 function envioStatusLabel(envio: { status?: string | null } | null | undefined): string {
-  return envio?.status ?? "—";
+  const key = envio?.status ? ENVIO_STATUS_LABEL[envio.status] : undefined;
+  return key ? t(key) : "—";
 }
 
 export function ProjectPaymentsPanel({
@@ -99,6 +125,10 @@ export function ProjectPaymentsPanel({
   const [note, setNote] = useState("");
   const [baseline, setBaseline] = useState({ kind, method });
   const [linksDirty, setLinksDirty] = useState(false);
+  const [reminderOpen, setReminderOpen] = useState(false);
+  const [reminderSubject, setReminderSubject] = useState("");
+  const [reminderBody, setReminderBody] = useState("");
+  const [notice, setNotice] = useState("");
   const generation = useRef(0);
   const requestOptions = { headers: { "X-Organization-ID": orgId } };
   useEffect(
@@ -110,6 +140,7 @@ export function ProjectPaymentsPanel({
 
   const load = useCallback(async () => {
     setMessage("");
+    setNotice("");
     const result = await paymentsQuery.refetch();
     if (result.isError) setMessage(t("projects.paymentsLoadError"));
   }, [paymentsQuery]);
@@ -514,6 +545,60 @@ export function ProjectPaymentsPanel({
     }
   }
 
+  async function prepareReminder(): Promise<void> {
+    // Preparar es barato y reversible — la IA redacta, el humano decide.
+    const current = generation.current;
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await projectCollectionReminderPrepare(
+        projectId,
+        { operation_key: crypto.randomUUID() },
+        requestOptions,
+      );
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      if (generation.current !== current) return;
+      setReminderSubject(response.data.subject);
+      setReminderBody(response.data.body);
+      setReminderOpen(true);
+      await load();
+    } catch (error) {
+      if (generation.current === current)
+        setMessage(actionErrorDetail(error, t("projects.reminderError")));
+    } finally {
+      if (generation.current === current) setBusy(false);
+    }
+  }
+
+  async function sendReminder(): Promise<void> {
+    // Enviar es la acción externa — exige un clic explícito y confirmación;
+    // jamás dispara desde la preparación.
+    if (!(await confirm({ title: t("projects.reminderSendConfirm"), danger: true }))) return;
+    const current = generation.current;
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await projectCollectionReminderSend(
+        projectId,
+        { subject: reminderSubject.trim(), body: reminderBody.trim() },
+        requestOptions,
+      );
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      if (generation.current !== current) return;
+      setReminderOpen(false);
+      setReminderSubject("");
+      setReminderBody("");
+      setNotice(t("projects.reminderSent").replace("{email}", response.data.to ?? ""));
+      await load();
+    } catch (error) {
+      if (generation.current === current) {
+        setMessage(actionErrorDetail(error, t("projects.reminderSendError")));
+      }
+    } finally {
+      if (generation.current === current) setBusy(false);
+    }
+  }
+
   async function openCreditNote(note: ProjectCreditNote): Promise<void> {
     const tab = window.open("", "_blank");
     if (!tab) {
@@ -542,6 +627,10 @@ export function ProjectPaymentsPanel({
 
   const payments = summary?.payments ?? [];
   const invoiceList = summary?.invoices ?? [];
+  const schedule = summary?.schedule ?? [];
+  const movements = summary?.movements ?? [];
+  const existingReminder = summary?.reminder ?? null;
+  const balanceDue = summary ? Number(summary.balance ?? "0") : 0;
   const percent =
     summary?.quote_total_gross && Number(summary.quote_total_gross) > 0
       ? Math.min(100, (Number(summary.collected) / Number(summary.quote_total_gross)) * 100)
@@ -558,6 +647,7 @@ export function ProjectPaymentsPanel({
         )}
       </div>
       {message && <p className="form-error">{message}</p>}
+      {notice && <p className="settings-hint">{notice}</p>}
       {summary && (
         <div className="payments-summary">
           <StatusChip enumName="PaymentStatusEnum" value={summaryStatus} />
@@ -585,6 +675,128 @@ export function ProjectPaymentsPanel({
             >
               <div style={{ width: `${percent}%` }} />
             </div>
+          )}
+        </div>
+      )}
+      {schedule.length > 0 && (
+        <ol className="collection-stepper" aria-label={t("projects.scheduleTitle")}>
+          {schedule.map((quota) => (
+            <li
+              key={quota.key}
+              className={`collection-stepper__step is-${quota.state.toLowerCase()}`}
+            >
+              <span className="collection-stepper__head">
+                <span className="collection-stepper__label">
+                  {t(KIND_LABEL[quota.key] ?? "projects.paymentKindParcial")}
+                </span>
+                <span
+                  className={`production-chip${
+                    quota.state === "OVERDUE"
+                      ? " production-chip-danger"
+                      : quota.state === "PENDING"
+                        ? " is-warn"
+                        : ""
+                  }`}
+                >
+                  {t(QUOTA_STATE_LABEL[quota.state] ?? "projects.quotaStatePending")}
+                </span>
+              </span>
+              <strong className="collection-stepper__amount">
+                {formatMoney(quota.amount, summary?.currency ?? "CLP")}
+              </strong>
+              <span className="collection-stepper__meta">
+                {t("projects.scheduleCovered")}:{" "}
+                {formatMoney(quota.covered, summary?.currency ?? "CLP")}
+              </span>
+              <span className="collection-stepper__meta">
+                {quota.due_at ? formatDate(quota.due_at) : t("projects.scheduleNoDate")}
+                {" · "}
+                {quota.due_basis === "al aprobar"
+                  ? t("projects.scheduleDueApproval")
+                  : t("projects.scheduleDueDelivery")}
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+      {summary?.sii && (
+        <p className="settings-hint" role="note">
+          {summary.sii.certified
+            ? t("projects.siiStateActive")
+            : summary.sii.adapter === "mock"
+              ? t("projects.siiStateMock")
+              : t("projects.siiStateNone")}{" "}
+          {summary.sii.certified
+            ? t("projects.siiHonestyCertified")
+            : t("projects.siiHonestyInternal")}
+        </p>
+      )}
+      {canWrite && summary && balanceDue > 0 && (
+        <div className="projects-reminder">
+          <div className="projects-actions">
+            <h3>{t("projects.reminderTitle")}</h3>
+            {!reminderOpen && (
+              <button type="button" onClick={() => void prepareReminder()} disabled={busy}>
+                {t("projects.reminderPrepare")}
+              </button>
+            )}
+          </div>
+          {existingReminder && !reminderOpen && (
+            <p className="settings-hint">
+              {t("projects.reminderDraftLabel")} — «{existingReminder.subject}»{" "}
+              <button
+                type="button"
+                className="link-button"
+                onClick={() => {
+                  setReminderSubject(existingReminder.subject);
+                  setReminderBody(existingReminder.body);
+                  setReminderOpen(true);
+                }}
+              >
+                {t("projects.invoiceOpen")}
+              </button>
+            </p>
+          )}
+          {reminderOpen && (
+            <form
+              noValidate
+              className="payments-form reminder-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void sendReminder();
+              }}
+            >
+              <p className="settings-hint">{t("projects.reminderAiNote")}</p>
+              <label>
+                {t("projects.reminderSubject")}
+                <input
+                  required
+                  value={reminderSubject}
+                  onChange={(event) => setReminderSubject(event.target.value)}
+                />
+              </label>
+              <label className="payments-form-wide">
+                {t("projects.reminderBody")}
+                <textarea
+                  required
+                  rows={6}
+                  value={reminderBody}
+                  onChange={(event) => setReminderBody(event.target.value)}
+                />
+              </label>
+              <div className="payments-form-actions">
+                <button
+                  type="submit"
+                  className="primary-action"
+                  disabled={busy || !reminderSubject.trim() || !reminderBody.trim()}
+                >
+                  {t("projects.reminderSend")}
+                </button>
+                <button type="button" onClick={() => setReminderOpen(false)} disabled={busy}>
+                  {t("projects.paymentCancel")}
+                </button>
+              </div>
+            </form>
           )}
         </div>
       )}
@@ -711,6 +923,9 @@ export function ProjectPaymentsPanel({
                 <tr>
                   <th>{t("projects.invoiceDate")}</th>
                   <th>{t("projects.invoiceCode")}</th>
+                  <th className="num">{t("projects.invoiceNet")}</th>
+                  <th className="num">{t("projects.invoiceTax")}</th>
+                  <th className="num">{t("projects.invoiceTotal")}</th>
                   <th>{t("projects.invoiceRevision")}</th>
                   <th>{t("projects.invoiceStatus")}</th>
                   <th />
@@ -721,6 +936,21 @@ export function ProjectPaymentsPanel({
                   <tr key={invoice.id}>
                     <td>{formatDate(invoice.created_at)}</td>
                     <td>{invoice.invoice_code}</td>
+                    <td className="num">
+                      {invoice.total_net
+                        ? formatMoney(invoice.total_net, summary?.currency ?? "CLP")
+                        : "—"}
+                    </td>
+                    <td className="num">
+                      {invoice.total_tax
+                        ? formatMoney(invoice.total_tax, summary?.currency ?? "CLP")
+                        : "—"}
+                    </td>
+                    <td className="num">
+                      {invoice.total_gross
+                        ? formatMoney(invoice.total_gross, summary?.currency ?? "CLP")
+                        : "—"}
+                    </td>
                     <td>{formatRevision(invoice.revision_code)}</td>
                     <td>
                       {invoice.credit_note ? (
@@ -886,6 +1116,28 @@ export function ProjectPaymentsPanel({
           ) : (
             <p>{t("projects.invoicesEmpty")}</p>
           )}
+        </div>
+      )}
+      {movements.length > 0 && (
+        <div className="collection-movements">
+          <h3>{t("projects.movementsTitle")}</h3>
+          <ol className="collection-timeline">
+            {movements.map((movement) => (
+              <li key={`${movement.type}-${movement.id}`} className="collection-timeline__item">
+                <span className="collection-timeline__what">
+                  {t(MOVEMENT_LABEL[movement.type] ?? "projects.movementPayment")}
+                  {movement.code ? ` · ${movement.code}` : ""}
+                  {movement.amount
+                    ? ` — ${formatMoney(movement.amount, summary?.currency ?? "CLP")}`
+                    : ""}
+                </span>
+                <span className="collection-timeline__meta">
+                  {movement.at ? formatDate(movement.at) : "—"}
+                  {movement.actor ? ` · ${t("projects.movementActor")} ${movement.actor}` : ""}
+                </span>
+              </li>
+            ))}
+          </ol>
         </div>
       )}
       <ProjectPaymentLinksPanel

@@ -7,7 +7,8 @@ the ledger keeps the full history.
 """
 
 import json
-from decimal import Decimal
+import re
+from decimal import Decimal, ROUND_HALF_UP
 from uuid import UUID
 
 from django.db import transaction
@@ -17,8 +18,230 @@ from authentication.errors import contract_error
 from documents.repository import documentary_backend
 from pricing.repository import rows
 from projects import sii
+from projects import reminders
 from projects.receipts import _receipt_public, issue_receipt
 from projects.service import project_row
+
+
+# ── Calendario de cobranza ───────────────────────────────────────────────
+# El calendario se deriva del acuerdo sellado (condiciones comerciales de la
+# revisión emitida): «50% anticipo, 50% contra entrega» produce dos cuotas —
+# anticipo al aprobar y saldo contra la fecha de entrega programada. El
+# porcentaje por defecto es el §11 de la Constitución y el patrón que el
+# fixture siembra; unas condiciones distintas («30% anticipo») se respetan
+# cuando declaran el porcentaje explícito.
+
+def _anticipo_pct(payment_terms) -> tuple[Decimal, str]:
+    """«N% anticipo» en las condiciones manda; si no, el default §11 (50%)."""
+    if payment_terms:
+        found = re.search(r"(\d{1,3})\s*%(?=[^%]*anticipo)", str(payment_terms).lower())
+        if found:
+            pct = Decimal(found.group(1))
+            if Decimal("0") < pct <= Decimal("100"):
+                return pct, "terms"
+    return Decimal("50"), "default"
+
+
+def _schedule(
+    *,
+    org_id: UUID,
+    project_id: UUID,
+    deal: dict | None,
+    payments: list,
+    payment_terms,
+) -> list[dict]:
+    """Cuotas del acuerdo sellado con monto, cubierto y vencimiento.
+
+    Un pago cubre primero la cuota de su propio tipo y lo que sobre se
+    lleva a la otra abierta — así un anticipo mayor al pactado amortigua
+    el saldo y un pago SALDO nunca tapa un anticipo vencido.
+    """
+    if deal is None or deal.get("sealed_revision") is None:
+        return []
+    gross = deal["total"]
+    pct, source = _anticipo_pct(payment_terms)
+    anticipo = (gross * pct / Decimal("100")).quantize(
+        Decimal("1"), rounding=ROUND_HALF_UP
+    )
+    saldo = gross - anticipo
+    today = timezone.localdate()
+    with documentary_backend():
+        approval = rows(
+            "SELECT decided_at FROM public.customer_approvals "
+            "WHERE org_id=%s AND project_id=%s AND status='APPROVED' "
+            "ORDER BY decided_at DESC LIMIT 1",
+            [str(org_id), str(project_id)],
+        )
+        emitted = rows(
+            "SELECT emitted_at FROM public.project_versions "
+            "WHERE org_id=%s AND project_id=%s ORDER BY emitted_at DESC,id DESC LIMIT 1",
+            [str(org_id), str(project_id)],
+        )
+        delivery = rows(
+            "SELECT d.scheduled_date, d.status, o.order_type::text AS order_type "
+            "FROM public.deliveries d "
+            "JOIN public.orders o ON o.id = d.order_id AND o.org_id = d.org_id "
+            "WHERE o.org_id=%s AND o.project_id=%s "
+            "ORDER BY d.scheduled_date DESC",
+            [str(org_id), str(project_id)],
+        )
+    # Anticipo vence al aprobar (decisión del cliente) o a la emisión si aún
+    # no hay aprobación registrada.
+    anticipo_due = None
+    if approval and approval[0].get("decided_at"):
+        anticipo_due = approval[0]["decided_at"]
+    elif emitted and emitted[0].get("emitted_at"):
+        anticipo_due = emitted[0]["emitted_at"]
+    anticipo_due_date = (
+        anticipo_due.date() if hasattr(anticipo_due, "date") else anticipo_due
+    )
+    # Saldo vence con la entrega: la próxima fecha programada si existe, la
+    # última entregada si ya salió, o sin fecha (la cuota no se vence sin
+    # entrega programada — «contra entrega» es el ancla declarativa).
+    saldo_due = None
+    pending_delivery = [
+        d for d in delivery if d["status"] in ("SCHEDULED", "ON_ROUTE", "FAILED")
+    ]
+    delivered = [d for d in delivery if d["status"] == "DELIVERED"]
+    if pending_delivery:
+        saldo_due = min(d["scheduled_date"] for d in pending_delivery)
+    elif delivered:
+        saldo_due = delivered[0]["scheduled_date"]
+
+    def _covers() -> tuple[Decimal, Decimal]:
+        """(cubierto_anticipo, cubierto_saldo) repartiendo cada pago."""
+        covered_a = Decimal("0")
+        covered_s = Decimal("0")
+        for payment in payments:
+            if payment["voided_at"] is not None:
+                continue
+            amount = Decimal(str(payment["amount"]))
+            kind = str(payment["kind"])
+            if kind == "SALDO":
+                take = min(amount, saldo - covered_s)
+                covered_s += take
+                covered_a += min(amount - take, anticipo - covered_a)
+            else:
+                # ANTICIPO y PARCIAL cubren la cuota más antigua primero.
+                take = min(amount, anticipo - covered_a)
+                covered_a += take
+                covered_s += min(amount - take, saldo - covered_s)
+        return covered_a, covered_s
+
+    covered_a, covered_s = _covers()
+
+    def _state(amount, covered, due) -> str:
+        if covered >= amount:
+            return "PAID"
+        if due is not None and due < today:
+            return "OVERDUE"
+        return "PENDING"
+
+    return [
+        {
+            "key": "ANTICIPO",
+            "amount": str(anticipo),
+            "covered": str(covered_a),
+            "due_at": anticipo_due_date.isoformat()
+            if hasattr(anticipo_due_date, "isoformat")
+            else anticipo_due_date,
+            "due_basis": "al aprobar",
+            "pct_source": source,
+            "pct": str(pct),
+            "state": _state(anticipo, covered_a, anticipo_due_date),
+        },
+        {
+            "key": "SALDO",
+            "amount": str(saldo),
+            "covered": str(covered_s),
+            "due_at": saldo_due.isoformat() if saldo_due else None,
+            "due_basis": "contra entrega",
+            "pct_source": source,
+            "pct": str(Decimal("100") - pct),
+            "state": _state(saldo, covered_s, saldo_due),
+        },
+    ]
+
+
+def _movements(org_id: UUID, project_id: UUID) -> list[dict]:
+    """Línea de tiempo de la cobranza: cada movimiento con su actor y su
+    documento respaldo — la aplicación F6 a los saldos."""
+    with documentary_backend():
+        found = rows(
+            """
+            SELECT /* p11_movements */ 'payment' AS type, p.id, p.kind,
+                   p.amount, p.method,
+                   p.voided_at IS NOT NULL AS voided, p.recorded_at AS at,
+                   private.user_email(p.recorded_by) AS actor,
+                   r.receipt_code AS code, r.id AS document_id
+            FROM public.project_payments p
+            LEFT JOIN public.payment_receipts r ON r.payment_id = p.id
+            WHERE p.org_id=%s AND p.project_id=%s
+            UNION ALL
+            SELECT 'payment_void', p.id, p.kind, p.amount, p.method,
+                   TRUE, p.voided_at, private.user_email(p.voided_by),
+                   r.receipt_code, r.id
+            FROM public.project_payments p
+            LEFT JOIN public.payment_receipts r ON r.payment_id = p.id
+            WHERE p.org_id=%s AND p.project_id=%s AND p.voided_at IS NOT NULL
+            UNION ALL
+            SELECT 'link', l.id, l.kind, l.amount, NULL, FALSE,
+                   l.created_at, private.user_email(l.created_by),
+                   l.status, NULL
+            FROM public.project_payment_links l
+            WHERE l.org_id=%s AND l.project_id=%s
+            UNION ALL
+            SELECT 'invoice', i.id, NULL, NULL, NULL, FALSE, i.created_at,
+                   private.user_email(i.created_by), i.invoice_code, i.id
+            FROM public.project_invoices i
+            WHERE i.org_id=%s AND i.project_id=%s
+            UNION ALL
+            SELECT 'credit_note', n.id, NULL, NULL, NULL, FALSE, n.created_at,
+                   private.user_email(n.created_by), n.credit_code, n.id
+            FROM public.project_credit_notes n
+            WHERE n.org_id=%s AND n.project_id=%s
+            UNION ALL
+            SELECT 'envio', e.id, NULL, NULL, NULL, FALSE,
+                   COALESCE(e.sent_at, e.created_at),
+                   NULL, e.status::text, NULL
+            FROM public.sii_envios e
+            WHERE e.org_id=%s AND e.project_id=%s
+            ORDER BY 7 DESC
+            """,
+            [
+                str(org_id), str(project_id),
+                str(org_id), str(project_id),
+                str(org_id), str(project_id),
+                str(org_id), str(project_id),
+                str(org_id), str(project_id),
+                str(org_id), str(project_id),
+            ],
+        )
+    return [
+        {
+            "type": row["type"],
+            "id": str(row["id"]),
+            "kind": row["kind"],
+            "amount": str(row["amount"]) if row["amount"] is not None else None,
+            "method": row["method"],
+            "voided": bool(row["voided"]),
+            "at": row["at"].isoformat()
+            if hasattr(row["at"], "isoformat")
+            else row["at"],
+            "actor": row["actor"],
+            "code": row["code"],
+            "document_id": str(row["document_id"]) if row["document_id"] else None,
+        }
+        for row in found
+    ]
+
+
+def _sii_summary(org_id: UUID) -> dict:
+    """Estado tributario honesto de la organización para la superficie de
+    cobranza — la misma verdad que decide la leyenda en los PDF."""
+    from projects import sii_envio
+
+    return sii_envio.integration_state(org_id=org_id)
 
 
 def _payment_public(row, receipt=None):
@@ -67,6 +290,7 @@ def _deal(org_id: UUID, project_id: UUID, project: dict) -> dict | None:
                 "total": Decimal(str(gross)),
                 "currency": (sealed_project or {}).get("currency") or "CLP",
                 "sealed_revision": versions[0]["revision_code"],
+                "payment_terms": (sealed_project or {}).get("payment_terms"),
             }
     with documentary_backend():
         applied = rows(
@@ -138,6 +362,14 @@ def _summary(org_id: UUID, project_id: UUID, project: dict) -> dict:
                 [str(org_id), str(project_id)],
             )
         }
+        def _invoice_deal(invoice: dict) -> dict:
+            payload = (
+                invoice["payload_json"]
+                if isinstance(invoice["payload_json"], dict)
+                else json.loads(invoice["payload_json"])
+            )
+            return (payload or {}).get("deal") or {}
+
         invoices = [
             {
                 "id": str(invoice["id"]),
@@ -148,6 +380,11 @@ def _summary(org_id: UUID, project_id: UUID, project: dict) -> dict:
                     if isinstance(invoice["payload_json"], dict)
                     else json.loads(invoice["payload_json"])
                 ).get("revision_code"),
+                # Neto/IVA/Total explícitos — las mismas cifras selladas en
+                # el PDF, para que la lista no obligue a abrir el documento.
+                "total_net": _invoice_deal(invoice).get("total_net"),
+                "total_tax": _invoice_deal(invoice).get("total_tax"),
+                "total_gross": _invoice_deal(invoice).get("total_gross"),
                 "credit_note": {
                     **credit_notes[str(invoice["id"])],
                     "invoice_code": invoice["invoice_code"],
@@ -192,6 +429,16 @@ def _summary(org_id: UUID, project_id: UUID, project: dict) -> dict:
             _payment_public(p, receipts.get(str(p["id"]))) for p in payments
         ],
         "invoices": invoices,
+        "schedule": _schedule(
+            org_id=org_id,
+            project_id=project_id,
+            deal=deal,
+            payments=payments,
+            payment_terms=(deal or {}).get("payment_terms"),
+        ),
+        "movements": _movements(org_id, project_id),
+        "sii": _sii_summary(org_id),
+        "reminder": reminders.latest_draft(org_id=org_id, project_id=project_id),
         "collected": str(collected),
         "quote_total_gross": str(total) if total is not None else None,
         "balance": str(balance) if balance is not None else None,

@@ -14,6 +14,12 @@ export interface ProjectInvoice {
   project_id: string;
   /** @nullable */
   revision_code: string | null;
+  /** @nullable */
+  total_net?: string | null;
+  /** @nullable */
+  total_tax?: string | null;
+  /** @nullable */
+  total_gross?: string | null;
   credit_note: ProjectCreditNote | null;
   dte?: ProjectDte | null;
   created_at: string;

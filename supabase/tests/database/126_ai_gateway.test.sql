@@ -24,9 +24,9 @@ SELECT ok(
     'route prices are strictly positive credits'
 );
 SELECT ok(
-    (SELECT count(*) = 9 FROM public.ai_routes
+    (SELECT count(*) = 10 FROM public.ai_routes
       WHERE provider = 'MIMO' AND provider_model = 'mimo-v2.6-pro' AND enabled),
-    'all nine capabilities are pinned to the MiMo wire model mimo-v2.6-pro'
+    'all ten capabilities are pinned to the MiMo wire model mimo-v2.6-pro'
 );
 SELECT ok(
     (SELECT count(*) = 0 FROM public.ai_routes
