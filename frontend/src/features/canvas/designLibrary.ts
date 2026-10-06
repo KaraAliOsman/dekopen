@@ -139,7 +139,37 @@ export const STARTER_DEFINITIONS: StarterDefinition[] = [
     key: "bow3",
     titleKey: "assembly.starter.bow3",
     hintKey: "assembly.starter.bow3Hint",
-    build: (w, h) => makeBowProduct({ moduleCount: 3, widthMm: w, heightMm: h, angleDeg: 15 }),
+    // P06 — canonical bow: fixed center, tilt-turn laterals, 2 × 22,5°. The
+    // e2e bar builds this design in ≤10 interactions from the library pick.
+    build: (w, h) =>
+      makeBowProduct({
+        moduleCount: 3,
+        widthMm: w,
+        heightMm: h,
+        angleDeg: 22.5,
+        moduleOpenings: ["TILT_TURN_LEFT", "FIXED", "TILT_TURN_RIGHT"],
+      }),
+  },
+  {
+    key: "bay45",
+    titleKey: "assembly.starter.bay45",
+    hintKey: "assembly.starter.bay45Hint",
+    build: (w, h) => makeBowProduct({ moduleCount: 3, widthMm: w, heightMm: h, angleDeg: 45 }),
+  },
+  {
+    key: "corner90",
+    titleKey: "assembly.starter.corner90",
+    hintKey: "assembly.starter.corner90Hint",
+    build: (w, h) => makeBowProduct({ moduleCount: 2, widthMm: w, heightMm: h, angleDeg: 90 }),
+  },
+  {
+    key: "windowTransom",
+    titleKey: "assembly.starter.windowTransom",
+    hintKey: "assembly.starter.windowTransomHint",
+    // Sobreluz: la división horizontal deja la ventana abajo (children[0])
+    // y el fijo arriba (children[1]) — el motor compone un solo módulo.
+    build: (w, h) =>
+      splitBay("SPLIT_H", [starterTree("TILT_TURN_LEFT"), starterTree("FIXED")], w, h),
   },
   {
     key: "bow5",
@@ -204,8 +234,14 @@ export function starterNominalSize(key: string): { widthMm: number; heightMm: nu
   switch (key) {
     case "bow3":
       return { widthMm: 2400, heightMm: 1400 };
+    case "bay45":
+      return { widthMm: 2400, heightMm: 1400 };
     case "bow5":
       return { widthMm: 3000, heightMm: 1400 };
+    case "corner90":
+      return { widthMm: 2000, heightMm: 1500 };
+    case "windowTransom":
+      return { widthMm: 1200, heightMm: 2000 };
     case "doorSide":
       return { widthMm: 1600, heightMm: 2200 };
     case "trapezoid":

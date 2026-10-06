@@ -20711,6 +20711,12 @@ components:
           allOf:
           - $ref: '#/components/schemas/ProfileSection'
           nullable: true
+        angle_min_deg:
+          type: string
+          nullable: true
+        angle_max_deg:
+          type: string
+          nullable: true
       required:
       - face_width_mm
       - material
@@ -21453,6 +21459,11 @@ components:
           nullable: true
         line_net_after:
           type: string
+          nullable: true
+        module_net_after:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModuleNetSplit'
           nullable: true
       required:
       - ok
@@ -25444,6 +25455,16 @@ components:
       - module_id
       - result
       - sliding
+    ModuleNetSplit:
+      type: object
+      properties:
+        module_id:
+          type: string
+        unit_net:
+          type: string
+      required:
+      - module_id
+      - unit_net
     MountingRuleListResponse:
       type: object
       properties:

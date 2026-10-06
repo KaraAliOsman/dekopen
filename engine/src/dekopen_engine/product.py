@@ -134,6 +134,9 @@ class IssueCode(str, Enum):
     COUPLER_MODULE_UNKNOWN = "coupler_module_unknown"
     COUPLER_EDGE_INVALID = "coupler_edge_invalid"
     COUPLER_EDGE_CONFLICT = "coupler_edge_conflict"
+    # P06 — the picked coupler declares an angle envelope the joint's
+    # deflection does not fit (catalog authority, never a hardcoded band).
+    COUPLER_ANGLE_INCOMPATIBLE = "coupler_angle_incompatible"
     CONNECTION_TYPE_UNSUPPORTED = "connection_type_unsupported"
     ASSEMBLY_DISCONNECTED = "assembly_disconnected"
     STACKED_CYCLE = "stacked_cycle"
@@ -2238,6 +2241,32 @@ def evaluate_product(
                 )
             )
             continue
+        # P06 — declared angle envelope: the catalog states which joint
+        # deflections this coupler physically closes. Compared over
+        # |angle_deg| — the same profile mounted mirrored serves the ± case.
+        # An undeclared envelope stays UNKNOWN: no check can honestly run.
+        if (
+            article.coupler_angle_min_deg is not None
+            and article.coupler_angle_max_deg is not None
+            and not (
+                article.coupler_angle_min_deg
+                <= abs(coupling.angle_deg)
+                <= article.coupler_angle_max_deg
+            )
+        ):
+            issues.append(
+                ProductIssue(
+                    code=IssueCode.COUPLER_ANGLE_INCOMPATIBLE.value,
+                    severity=Severity.WARNING,
+                    target=target,
+                    params={
+                        "sku": article.sku,
+                        "angle_deg": str(coupling.angle_deg),
+                        "min_deg": str(article.coupler_angle_min_deg),
+                        "max_deg": str(article.coupler_angle_max_deg),
+                    },
+                )
+            )
         if coupling.kind is ConnectionKind.INLINE:
             if first.height_mm != second.height_mm:
                 issues.append(

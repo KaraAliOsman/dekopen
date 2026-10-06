@@ -1298,7 +1298,12 @@ function PositionWorkspace({
           >
             ↻
           </button>
-          <LivePriceChip price={livePrice.price} pending={livePrice.pending} currency={currency} />
+          <LivePriceChip
+            price={livePrice.price}
+            pending={livePrice.pending}
+            currency={currency}
+            moduleIds={inputs.product?.assembly.modules.map((module) => module.id) ?? []}
+          />
           <WhatsMissing items={missingItems} blocked={missingBlocked} disabled={readOnly} />
           <button
             className="primary-action"

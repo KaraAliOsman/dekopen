@@ -13,4 +13,8 @@ export interface CouplerChoice {
   material: string;
   face_width_mm: string;
   section?: ProfileSection | null;
+  /** @nullable */
+  angle_min_deg?: string | null;
+  /** @nullable */
+  angle_max_deg?: string | null;
 }

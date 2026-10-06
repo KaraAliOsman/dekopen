@@ -32,9 +32,8 @@
     min-height: 18rem;
   }
 
-  .plan-inset {
-    height: 7.5rem;
-    width: 10.5rem;
+  .plan-strip {
+    max-height: 8.5rem;
   }
 }
 
@@ -167,78 +166,121 @@
   flex: 1;
 }
 
-/* Plan mini-navigator — inset over the canvas, never a second stacked sheet */
+/* P06 — planta acoplada: franja inferior del lienzo, altura arrastrable.
+ * No es una tarjeta flotante: ocupa el pie de la columna del lienzo y el
+ * viewport cede el espacio (flex column). */
 .assembly-canvas {
+  display: flex;
+  flex-direction: column;
   position: relative;
 }
 
-.plan-inset {
+.assembly-canvas .canvas-viewport {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 12rem;
+}
+
+.plan-strip {
   background: var(--theme-surface-panel);
   border: 1px solid var(--theme-border-subtle);
-  border-radius: var(--radius-md);
-  bottom: 0.75rem;
-  box-shadow: var(--shadow-raise);
+  border-top: none;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
   display: flex;
+  flex: 0 0 auto;
   flex-direction: column;
-  height: 9rem;
-  position: absolute;
-  right: 0.75rem;
-  width: 13rem;
+  min-height: 0;
+  position: relative;
+}
+
+.plan-strip--collapsed {
+  height: auto;
+}
+
+.plan-strip__resize {
+  cursor: ns-resize;
+  flex: 0 0 auto;
+  height: 6px;
+  margin-top: -3px;
+  position: relative;
+  touch-action: none;
   z-index: var(--z-sticky);
-  /* The card floats over the canvas; its empty area must not become a dead
-   * zone that swallows clicks meant for the product behind it. Interactive
-   * children (header, module/coupling shapes, angle handles) re-enable. */
-  pointer-events: none;
 }
 
-.plan-inset__header,
-.plan-inset .plan-module,
-.plan-inset .plan-coupling,
-.plan-inset .plan-angle,
-.plan-inset .plan-issue-flag {
-  pointer-events: auto;
+.plan-strip__resize::after {
+  background: var(--theme-border-subtle);
+  border-radius: 2px;
+  content: "";
+  display: block;
+  height: 2px;
+  left: 50%;
+  position: absolute;
+  top: 2px;
+  transform: translateX(-50%);
+  width: 3rem;
 }
 
-.plan-inset__header {
+.plan-strip__resize:hover::after,
+.plan-strip__resize:focus-visible::after {
+  background: var(--theme-accent);
+}
+
+.plan-strip__header {
   align-items: center;
   border-bottom: 1px solid var(--theme-border-subtle);
   color: var(--theme-text-muted);
   display: flex;
+  flex-wrap: wrap;
   font-size: var(--type-dense);
   font-weight: 600;
-  justify-content: space-between;
+  gap: 0.5rem;
   letter-spacing: 0.06em;
-  padding: 0.3rem 0.5rem;
+  padding: 0.15rem 0.5rem;
   text-transform: uppercase;
 }
 
-.plan-inset__header button {
+.plan-strip__fold {
+  align-items: center;
   background: transparent;
   border: none;
-  color: var(--theme-text-muted);
+  color: inherit;
   cursor: pointer;
-  font-size: 0.9rem;
-  line-height: 1;
-  padding: 0 0.15rem;
+  display: inline-flex;
+  font: inherit;
+  gap: 0.3rem;
+  letter-spacing: inherit;
+  padding: 0.15rem 0.1rem;
+  text-transform: inherit;
 }
 
-.plan-inset__svg {
+.plan-strip__chevron {
+  font-size: 0.75rem;
+}
+
+.plan-strip__measures {
+  color: var(--theme-text-secondary);
+  display: inline-flex;
+  flex: 1;
+  font-weight: 500;
+  gap: 0.9rem;
+  justify-content: center;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.plan-strip__elevation {
+  display: inline-flex;
+}
+
+.plan-strip__elevation button {
+  font-size: var(--type-dense);
+  padding: 0.15rem 0.55rem;
+}
+
+.plan-strip__svg {
   flex: 1;
   min-height: 0;
-}
-
-.plan-toggle {
-  background: var(--theme-surface-panel);
-  border: 1px solid var(--theme-border-subtle);
-  border-radius: var(--radius-sm);
-  bottom: 0.75rem;
-  color: var(--theme-text-secondary);
-  cursor: pointer;
-  font-size: 0.78rem;
-  padding: 0.3rem 0.6rem;
-  position: absolute;
-  right: 0.75rem;
-  z-index: var(--z-sticky);
 }
 
 /* §16 3D view — larger inset panel; orbit/pan/zoom inside, same selection. */
@@ -834,12 +876,14 @@
 }
 
 /* The open body floats UP over the canvas — a collapsible panel must not
- * shrink the canvas below its ≥75%-viewport contract; the bar stays put. */
+ * shrink the canvas below its ≥75%-viewport contract; the bar stays put.
+ * When a plan strip is rendered React lifts the body's bottom inline by the
+ * strip's live height so the strip stays usable with the tree open. */
 .editor-dock__body {
   background: var(--theme-surface-panel);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-md);
-  bottom: calc(100% + 0.25rem);
+  bottom: calc(100% + 0.6rem + 0.25rem);
   box-shadow: var(--shadow-raise);
   left: 0;
   max-height: 14rem;

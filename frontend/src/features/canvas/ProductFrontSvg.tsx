@@ -1374,6 +1374,12 @@ const SIDE_GUTTER = 130;
 const BOTTOM_GUTTER = 120;
 const LEFT_GUTTER = 195;
 
+/** P06 — vista proyectada: el escorzo produce números largos del motor;
+ * las cotas se leen redondeadas al cuantío de hilo (0,01 mm), igual que
+ * el taller. Solo cambia lo que se muestra: la geometría interna conserva
+ * la precisión completa. */
+const roundMm = (value: number): number => Math.round(value * 100) / 100;
+
 /** D07 · Cota doble — el vano de obra alrededor de la medida de
  * fabricación, con la holgura (o el solape) entre ambas rectas. El lienzo
  * sigue dibujando el producto igual; el vano entra como envolvente punteada
@@ -1549,9 +1555,9 @@ export interface FrontLayout {
  * top edge), and narrower members centre. Couplers overlay their seam: an
  * INLINE seam draws vertically between columns, a STACKED contact draws
  * horizontally across the hanging member. */
-export function frontLayout(product: ProductJson): FrontLayout {
+export function frontLayout(product: ProductJson, options?: { projected?: boolean }): FrontLayout {
   const { pairs, stackParent, stackRoot } = resolveStacks(product);
-  const layoutMm = elevationLayoutMm(product);
+  const layoutMm = elevationLayoutMm(product, options);
   const rects: FrontModuleRect[] = layoutMm.members.map((member) => ({
     module: member.module,
     x: member.x,
@@ -1940,6 +1946,7 @@ export function ProductFrontContent({
   onResizeSeam,
   vano = null,
   view = "interior",
+  projected = false,
 }: {
   product: ProductJson;
   members: MemberGeometry;
@@ -1989,6 +1996,10 @@ export function ProductFrontContent({
    * dentro se dibuja discontinuo visto desde afuera). La vista exterior
    * es de lectura: edición y arrastres solo en vista interior. */
   view?: ElevationView;
+  /** P06 — elevación proyectada: cada columna del conjunto dibuja con su
+   * escorzo real (w·cos(rumbo)) en vez del desarrollo un al lado del otro.
+   * Solo afecta el dibujo; anchos y costuras editables siguen declarados. */
+  projected?: boolean;
 }): JSX.Element {
   const { couplings } = product.assembly;
   const frameT = members.frame.faceWidthMm;
@@ -1996,8 +2007,8 @@ export function ProductFrontContent({
   // Layout derivation runs over every module — memoize so seam/division
   // drags (per-pointermove renders) don't rebuild the whole elevation.
   const { rects, columns, joints, totalW, height, lift } = useMemo(
-    () => frontLayout(product),
-    [product],
+    () => frontLayout(product, { projected }),
+    [product, projected],
   );
   const issueMap = useMemo(() => severityByModule(issues), [issues]);
   const midY = height / 2;
@@ -2251,12 +2262,15 @@ export function ProductFrontContent({
       {/* overall width chain — untranslated so it always clears the
           tallest silhouette point (arc crowns sit at viewBox y ≥ 0). */}
       <DimRun marks={[0, totalW]} edge={0} at={-70} vertical={false} />
+      {/* En proyectada el ancho dibujado es el escorzo del motor — la cota
+          lo lee redondeada y queda en solo-lectura: el ancho declarado se
+          edita en desarrollada, nunca se reescribe con un valor escorzado. */}
       <SvgDim
         x={totalW / 2}
         y={-70}
-        value={fmtMmCanonical(totalW)}
+        value={projected ? fmtMm(roundMm(totalW)) : fmtMmCanonical(totalW)}
         label={t("assembly.totalWidth")}
-        disabled={disabled}
+        disabled={disabled || projected}
         onCommit={onCommitTotalWidth}
       />
       {/* P05 — la vista declarada queda rotulada en el alzado mismo;
@@ -2381,10 +2395,10 @@ export function ProductFrontContent({
                 key={`dim-${column.rootId}`}
                 x={mx(column.x + column.w / 2)}
                 y={height + 80}
-                value={fmtMmCanonical(column.w)}
+                value={projected ? fmtMm(roundMm(column.w)) : fmtMmCanonical(column.w)}
                 label={`${t("assembly.module")} ${column.rootId} ${t("assembly.width")}`}
                 active={column.rootId === selectedId}
-                disabled={disabled || mirrored}
+                disabled={disabled || mirrored || projected}
                 onCommit={(value) => onCommitModuleWidth(column.rootId, value)}
               />
             ))}
@@ -2727,7 +2741,7 @@ export function ProductFrontContent({
  * (CanvasViewport) renders `ProductFrontContent` inside its own transform
  * instead; this wrapper stays for any consumer that just wants an SVG. */
 export function ProductFrontSvg(props: Parameters<typeof ProductFrontContent>[0]): JSX.Element {
-  const front = frontLayout(props.product);
+  const front = frontLayout(props.product, { projected: props.projected });
   const extraBottom =
     props.dimLevel === "technical"
       ? technicalExtraBottom(

@@ -10,6 +10,7 @@ import type {
 import type { IntentNode, OpeningChoice } from "./intentEditing";
 import { baySpec, findNode, parentSplitOf, SPEC_KEY_TO_OPTION, walkIntent } from "./intentEditing";
 import { OPENING_OPTIONS } from "./openings";
+import { couplerFitsAngle } from "./members";
 import { runCommand } from "../commands/registry";
 import { unlinkCoupling, usedEdges } from "./assemblyGraph";
 import {
@@ -797,14 +798,30 @@ export const ASSEMBLY_COMMANDS: CommandSpec[] = [
     title: "cmd.setCoupler",
     keywords: ["cople", "acoplador", "perfil", "acoplamiento"],
     applicable: (ctx) => selectedCoupling(ctx) !== null && ctx.catalog.couplerSkus.length > 0,
-    params: (ctx) => [
-      {
-        kind: "choice",
-        id: "coupler",
-        label: t("cmd.couplerLabel"),
-        options: ctx.catalog.couplerSkus.map((value) => ({ value, label: value })),
-      },
-    ],
+    params: (ctx) => {
+      // P06 — filtro por compatibilidad de ángulo declarada en catálogo;
+      // el cople asignado siempre aparece (la selección vigente no se esconde).
+      const coupling = selectedCoupling(ctx);
+      const angleDeg = Number(coupling?.angle_deg ?? "0");
+      const skus = ctx.catalog.couplerSkus.filter(
+        (sku) =>
+          sku === coupling?.coupler_profile_sku ||
+          couplerFitsAngle(ctx.members?.couplerFor(sku) ?? null, angleDeg),
+      );
+      return [
+        {
+          kind: "choice" as const,
+          id: "coupler",
+          label: t("cmd.couplerLabel"),
+          options: skus.map((value) => ({
+            value,
+            label: ctx.members?.couplerFor(value)?.name
+              ? `${ctx.members.couplerFor(value)!.name} · ${value}`
+              : value,
+          })),
+        },
+      ];
+    },
     apply: (ctx, args) => {
       const id = args.coupling ?? selectedCoupling(ctx)?.id;
       return id ? setCouplerSku(ctx.product, id, args.coupler ?? null) : ctx.product;

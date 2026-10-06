@@ -33,6 +33,10 @@ class CouplerChoiceSerializer(serializers.Serializer):
     material = serializers.CharField()
     face_width_mm = serializers.CharField()
     section = ProfileSectionSerializer(required=False, allow_null=True)
+    # P06 — envolvente de ángulo declarada sobre |angle_deg|; null = sin
+    # declarar (el editor no puede verificarla — estado UNKNOWN).
+    angle_min_deg = serializers.CharField(allow_null=True, required=False)
+    angle_max_deg = serializers.CharField(allow_null=True, required=False)
 
 
 class GlazingBeadChoiceSerializer(serializers.Serializer):
@@ -587,6 +591,16 @@ class DesignOptionsView(APIView):
                             "material": item.material.value,
                             "face_width_mm": str(item.face_width_mm),
                             "section": _section_json(item.section),
+                            "angle_min_deg": (
+                                str(item.coupler_angle_min_deg)
+                                if item.coupler_angle_min_deg is not None
+                                else None
+                            ),
+                            "angle_max_deg": (
+                                str(item.coupler_angle_max_deg)
+                                if item.coupler_angle_max_deg is not None
+                                else None
+                            ),
                         }
                         for item in sorted(couplers.values(), key=lambda article: article.sku)
                     ],

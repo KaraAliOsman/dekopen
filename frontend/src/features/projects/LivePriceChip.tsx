@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 
 import { pricingDesignBatchPreview } from "../../api/generated/dekopen";
+import type { ModuleNetSplit } from "../../api/generated/models";
 import { formatMoney } from "../../format";
 import { t } from "../../i18n/es-CL";
 
 export interface LivePrice {
   unitNet: string;
   lineNet: string;
+  /** P06 — per-module net split for assembly designs (engine-cost
+   * attribution inside the pricing boundary); null for single designs. */
+  modules: ModuleNetSplit[] | null;
   /** Cost was priced but the org's pricing mode can't quote a single
    * design's net (catalog modes need project authorities) — the chip
    * shows "—", not a wrong number. */
@@ -63,9 +67,16 @@ export function useLivePrice({
       if (item.unit_net_after == null || item.line_net_after == null) {
         // Priced cost but no sell formula for a standalone design —
         // honest "—", never an invented margin.
-        return item.unit_cost_after != null ? { unitNet: "", lineNet: "", netless: true } : null;
+        return item.unit_cost_after != null
+          ? { unitNet: "", lineNet: "", modules: null, netless: true }
+          : null;
       }
-      return { unitNet: item.unit_net_after, lineNet: item.line_net_after, netless: false };
+      return {
+        unitNet: item.unit_net_after,
+        lineNet: item.line_net_after,
+        modules: item.module_net_after ?? null,
+        netless: false,
+      };
     } catch {
       return null;
     }
@@ -98,17 +109,39 @@ export function useLivePrice({
   return { price, pending, quote };
 }
 
-/** Strip chip: net unit + line total from the live quote. "calculando"
- * while a quote is in flight — a stale number is never shown as current. */
+/** Strip chip: net unit + line total from the live quote; assemblies
+ * additionally break the unit net down per module. "calculando" while a
+ * quote is in flight — a stale number is never shown as current. */
 export function LivePriceChip({
   price,
   pending,
   currency,
+  moduleIds = [],
 }: {
   price: LivePrice | null;
   pending: boolean;
   currency: string;
+  /** Order of assembly module ids — labels the per-module breakdown
+   * M1..Mn in the same left-to-right order the elevation draws them. */
+  moduleIds?: string[];
 }): JSX.Element {
+  const moduleSplit =
+    price?.modules && price.modules.length > 1
+      ? [...price.modules]
+          // Order follows the elevation's declared module order, never the
+          // payload's — an out-of-order payload must not scramble M1..Mn.
+          .sort(
+            (a, b) =>
+              (moduleIds.indexOf(a.module_id) + 1 || Number.MAX_SAFE_INTEGER) -
+              (moduleIds.indexOf(b.module_id) + 1 || Number.MAX_SAFE_INTEGER),
+          )
+          .map((item) => {
+            const index = moduleIds.indexOf(item.module_id);
+            const label = index >= 0 ? `M${index + 1}` : item.module_id;
+            return `${label} ${formatMoney(item.unit_net, currency)}`;
+          })
+          .join(" · ")
+      : null;
   return (
     <span
       className={`live-price${pending ? " is-pending" : ""}`}
@@ -127,6 +160,15 @@ export function LivePriceChip({
           <span className="live-price__unit">
             {t("projects.netUnit")} {formatMoney(price.unitNet, currency)}
           </span>
+          {moduleSplit !== null && (
+            <span
+              className="live-price__modules"
+              title={t("assembly.pricePerModule")}
+              data-testid="live-price-modules"
+            >
+              {moduleSplit}
+            </span>
+          )}
           <span className="live-price__line">{formatMoney(price.lineNet, currency)}</span>
         </>
       )}

@@ -388,3 +388,14 @@ Open PR (branch `devin/P13-pack-corte-etiquetas`, on `integracion/v1`):
 - Legibilidad: piso de 8 pt en todo el pack (`.workshop th`, `.tb-label`, `.sign-label`, mono de barras y etiquetas ≥8 pt; texto SVG ≥3 mm de alto); `test_cut_pack_p13.py` verifica OTs de 1/12/100 posiciones — páginas acotadas, cero colisión de bbox de palabras, cierre exacto por barra.
 - Columnas CSV documentadas como formato genérico DEKOPEN en `docs/formatos/corte-csv.md` (ningún formato propietario de sierra/CNC). Decisión registrada en `valores-por-defecto.md` (etiquetas grilla por defecto). Capturas raster en `docs/redesign/captures/p13-pack-corte/` (lista de corte, vidrios, etiquetas).
 - Verificado: `make lint|typecheck|test|build|test-db` verdes (`PY=.venv/bin/python`; backend 1236, pgTAP 1080 incl. `181_p13_workshop_label_format`, integración 279, e2e Playwright).
+
+## P06 bow/bay y conjuntos acoplados state
+
+Open PR (branch `devin/P06-bow-acoplados`, on `integracion/v1` post-ED1):
+
+- El bow/acoplado se diseña en el mismo editor canvas-first: franja inferior `.plan-strip` (altura arrastrable 96px–45%, plegable) dibuja la planta real del motor (`front_chain` + módulos + cuñas de cople) bajo el alzado, con encabezado de cotas del conjunto (Ancho desarrollado, Frente/cuerda, Proyección) y selector de elevación Desarrollada/Proyectada (`w·|cos(rumbo)|` por columna — cotas redondeadas a 0,01 mm y de solo-lectura en proyectada; un rumbo > 90° muestra el ancho aparente del módulo replegado, nunca negativo).
+- Selección bidireccional plan↔frente (mismo `select()` del canvas store); el ángulo de cada unión se edita en la etiqueta de la planta (click → input) o arrastrando: el mango de bisagra y el arrastre de módulo giran la cola de la cadena con imanes {0,±10,±15,±22,5,±30,±45,±90}° (tolerancia 3,5°, umbral de gesto 5px, límite editorial ±90°) — al soltar se llama `setCouplingAngle` y el motor repliega plano, coples y precio.
+- Coples filtrados por envolvente de ángulo declarada en catálogo (`coupler_angle_min/max_deg`, migración `20270205000000_p06_coupler_angle_envelope`); envolvente no declarada = desconocida, nunca rechaza. El motor emite `coupler_angle_incompatible` (range en params); el plano marca `!` en la cuña exacta y el chip nombra la unión y el rango admisible.
+- Precio por módulo en el chip vivo: `module_net_after` de `design_batch_preview` reparte el neto por costo de material atribuido (`module_id` en líneas de composición); chip muestra «M1 $x · M2 $y» bajo el neto unitario.
+- Biblioteca: Bow ×3 canónico (centro fijo, laterales oscilobatiente, 2×22,5°), Bow ×5, Bay 45°, Puerta + lateral, Ventana + sobreluz, Esquina 90° — todas plantillas sobre la misma composición.
+- e2e `bow-acoplados.spec.ts` (dentro de `make test-db`): bow 600/1200/600 @2×22,5° en 5 gestos ≤10 + guardar/reabrir idéntico, selección plan↔frente, proyectada más corta que desarrollada.

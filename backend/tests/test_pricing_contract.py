@@ -700,3 +700,78 @@ def test_position_cost_glass_product_min_area_and_surcharges(monkeypatch):
     # No DRILL selection → no drill line.
     assert "GLASS_DRILL" not in by_kind
     assert total == Decimal("5000.0000") + Decimal("2500.0000") + Decimal("3500.0000")
+
+
+def test_module_net_split_reparte_el_neto_por_motor(monkeypatch=None):
+    """P06 — el reparto del neto del conjunto es proporcional al costo de
+    material atribuido por el motor a cada módulo; el total cuadra al neto
+    (último módulo cierra el redondeo) y las líneas sin dueño se reparten
+    en la misma proporción."""
+    from decimal import Decimal
+
+    import pricing.service as service
+
+    design = {
+        'parametric_tree': {
+            'version': 'product-v2',
+            'assembly': {
+                'modules': [{'id': 'm1'}, {'id': 'm2'}, {'id': 'm3'}],
+                'couplings': [],
+            },
+        },
+    }
+    formation = {
+        'composition': [
+            {'module_id': 'm1', 'cost': '30'},
+            {'module_id': 'm2', 'cost': '60'},
+            {'module_id': 'm3', 'cost': '30'},
+            # corte de coplador: sin dueño — no entra en las bases pero el
+            # neto total ya lo incluye, repartido en proporción.
+            {'module_id': None, 'cost': '10'},
+        ],
+    }
+    split = service._module_net_split(Decimal('120.0000'), formation, design)
+    assert [entry['module_id'] for entry in split] == ['m1', 'm2', 'm3']
+    values = [Decimal(entry['unit_net']) for entry in split]
+    assert sum(values) == Decimal('120.0000')
+    # 30/120, 60/120, 30/120 → 30/60/30
+    assert values == [Decimal('30.0000'), Decimal('60.0000'), Decimal('30.0000')]
+
+
+def test_module_net_split_redondeo_cierra_en_el_ultimo():
+    from decimal import Decimal
+
+    import pricing.service as service
+
+    design = {
+        'parametric_tree': {
+            'version': 'product-v2',
+            'assembly': {'modules': [{'id': 'm1'}, {'id': 'm2'}], 'couplings': []},
+        },
+    }
+    formation = {'composition': [
+        {'module_id': 'm1', 'cost': '1'},
+        {'module_id': 'm2', 'cost': '1'},
+    ]}
+    split = service._module_net_split(Decimal('100.0001'), formation, design)
+    # ROUND_HALF_EVEN: 50.00005 → 50.0000 en el primero, el resto al último
+    assert [Decimal(e['unit_net']) for e in split] == [
+        Decimal('50.0000'),
+        Decimal('50.0001'),
+    ]
+    assert sum(Decimal(e['unit_net']) for e in split) == Decimal('100.0001')
+
+
+def test_module_net_split_sin_conjunto_devuelve_none():
+    from decimal import Decimal
+
+    import pricing.service as service
+
+    assert service._module_net_split(Decimal('10'), {'composition': []}, {}) is None
+    assert service._module_net_split(None, {'composition': []}, {}) is None
+    # diseño sin módulos — no hay reparto honesto
+    assert service._module_net_split(
+        Decimal('10'),
+        {'composition': [{'module_id': 'm1', 'cost': '5'}]},
+        {'parametric_tree': {'version': 'product-v2', 'assembly': {'modules': []}}},
+    ) is None
