@@ -1,0 +1,509 @@
+{
+  "summary": {
+    "generated_at": "2026-10-06T05:58:55.275Z",
+    "routes": 46,
+    "routes_with_findings": [
+      "dashboard-operator",
+      "dashboard-installer"
+    ],
+    "total_findings": 8
+  },
+  "results": [
+    {
+      "route": "dashboard-owner",
+      "url": "/dashboard",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/dashboard-owner--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-owner",
+      "url": "/dashboard",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-owner--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-owner",
+      "url": "/dashboard",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/dashboard-owner--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-owner",
+      "url": "/dashboard",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-owner--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-owner",
+      "url": "/dashboard",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/dashboard-owner--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-owner",
+      "url": "/dashboard",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-owner--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-owner",
+      "url": "/dashboard",
+      "role": "owner",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/dashboard-owner--390x844--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-owner",
+      "url": "/dashboard",
+      "role": "owner",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-owner--390x844--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard",
+      "url": "/dashboard",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/dashboard--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard",
+      "url": "/dashboard",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/dashboard--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard",
+      "url": "/dashboard",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/dashboard--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard",
+      "url": "/dashboard",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/dashboard--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard",
+      "url": "/dashboard",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/dashboard--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard",
+      "url": "/dashboard",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/dashboard--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard",
+      "url": "/dashboard",
+      "role": "estimator",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/dashboard--390x844--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard",
+      "url": "/dashboard",
+      "role": "estimator",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/dashboard--390x844--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-manager",
+      "url": "/dashboard",
+      "role": "manager",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/dashboard-manager--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-manager",
+      "url": "/dashboard",
+      "role": "manager",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-manager--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-manager",
+      "url": "/dashboard",
+      "role": "manager",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/dashboard-manager--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-manager",
+      "url": "/dashboard",
+      "role": "manager",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-manager--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-manager",
+      "url": "/dashboard",
+      "role": "manager",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/dashboard-manager--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-manager",
+      "url": "/dashboard",
+      "role": "manager",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-manager--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-manager",
+      "url": "/dashboard",
+      "role": "manager",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/dashboard-manager--390x844--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-manager",
+      "url": "/dashboard",
+      "role": "manager",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-manager--390x844--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-operator",
+      "url": "/dashboard",
+      "role": "operator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/dashboard-operator--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-operator",
+      "url": "/dashboard",
+      "role": "operator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-operator--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-operator",
+      "url": "/dashboard",
+      "role": "operator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/dashboard-operator--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-operator",
+      "url": "/dashboard",
+      "role": "operator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-operator--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-operator",
+      "url": "/dashboard",
+      "role": "operator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/dashboard-operator--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-operator",
+      "url": "/dashboard",
+      "role": "operator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-operator--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-operator",
+      "url": "/dashboard",
+      "role": "operator",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/dashboard-operator--390x844--light.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "label · Correo · 324×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Enviar enlace de acceso · 324×32px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-operator",
+      "url": "/dashboard",
+      "role": "operator",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-operator--390x844--dark.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "label · Correo · 324×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Enviar enlace de acceso · 324×32px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-installer",
+      "url": "/dashboard",
+      "role": "installer",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/dashboard-installer--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-installer",
+      "url": "/dashboard",
+      "role": "installer",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-installer--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-installer",
+      "url": "/dashboard",
+      "role": "installer",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/dashboard-installer--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-installer",
+      "url": "/dashboard",
+      "role": "installer",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-installer--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-installer",
+      "url": "/dashboard",
+      "role": "installer",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/dashboard-installer--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-installer",
+      "url": "/dashboard",
+      "role": "installer",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-installer--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-installer",
+      "url": "/dashboard",
+      "role": "installer",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/dashboard-installer--390x844--light.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "label · Correo · 324×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Enviar enlace de acceso · 324×32px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-installer",
+      "url": "/dashboard",
+      "role": "installer",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-installer--390x844--dark.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "label · Correo · 324×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Enviar enlace de acceso · 324×32px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-multi",
+      "url": "/dashboard",
+      "role": "multi",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/dashboard-multi--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-multi",
+      "url": "/dashboard",
+      "role": "multi",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-multi--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-multi",
+      "url": "/dashboard",
+      "role": "multi",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/dashboard-multi--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-multi",
+      "url": "/dashboard",
+      "role": "multi",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-multi--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-multi",
+      "url": "/dashboard",
+      "role": "multi",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/dashboard-multi--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-multi",
+      "url": "/dashboard",
+      "role": "multi",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-multi--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    }
+  ]
+}
