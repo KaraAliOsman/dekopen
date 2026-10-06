@@ -23,6 +23,7 @@ sources:
   - P04 editor canvas-first PR https://github.com/KaraAliOsman/dekopen/pull/24
   - P09 DOC-01 propuesta PR https://github.com/KaraAliOsman/dekopen/pull/34
   - P03 shell/Hoy PR https://github.com/KaraAliOsman/dekopen/pull/32
+  - P17 asistente/Orb PR https://github.com/KaraAliOsman/dekopen/pull/35
   - P17 asistente IA/trabajos/Orb branch devin/P17-asistente-orb
   - integracion/v1 merge 747c528b67d234d697624929ccbcc7098261ed54
   - open PR metadata observed 2026-09-27/28
@@ -318,6 +319,8 @@ Open PR (branch `devin/P09-doc01-propuesta`, rebased on `integracion/v1` post-P0
 - No hecho conocido: no existe modelo de cuotas — el "calendario de pagos" imprime `payment_terms` sellado (registrado en valores-por-defecto y en el PR).
 
 ## P17 asistente IA + trabajos + Orb state
+
+Merged into `integracion/v1` as squash `bb713d8710e22c89b41949a674e491e8e3124123` (dekopen PR #35):
 
 Opened on branch `devin/P17-asistente-orb` (PR pendiente sobre `integracion/v1`); verification at HEAD of that branch:
 

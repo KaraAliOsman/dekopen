@@ -20,7 +20,7 @@
 | P07 | 1 | pendiente |  |  |  |
 | P03 | 1 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/32 | 473d027426321995fb90b071ca416a77cdbfe7fb | CI 6/6 verde; squash mergeado. Shell por flujo (riel agrupado, drawer <1024) + topbar (migas, switchers, Ctrl K, campana, ?) + «Hoy» por rol servido por /analytics/today con RLS; nav espejo de permisos backend (OPERATOR/INSTALLER sin 403s IA). |
 | P12 | 1 | pendiente |  |  |  |
-| P17 | 1 | pendiente |  |  |  |
+| P17 | 1 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/35 | bb713d8710e22c89b41949a674e491e8e3124123 | CI 6/6 verde; squash mergeado. Orb vivo (useAssistantPresence, estados thinking→success), dock contextual 400px con sugerencias por pantalla, artefactos revisables (diff dibujado + Δ del motor + Aplicar deshacible + Auditoría), fallos colapsados, /jobs legible por rol con espejo _JOB_READERS. |
 | ED1 | ED1 | pendiente |  |  |  |
 | P06 | 2 | pendiente |  |  |  |
 | P08 | 2 | pendiente |  |  |  |
