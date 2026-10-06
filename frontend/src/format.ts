@@ -72,6 +72,19 @@ export function fmtMm(value: string | number | null | undefined): string {
   return frac ? `${grouped},${frac}` : grouped;
 }
 
+/** Cantidad §3.3 — sin escala forzada: recorta ceros sobrantes del NUMERIC
+ * ("476.0000" → "476", "2.5000" → "2,5"), hasta 3 decimales reales con coma
+ * ("0.125" → "0,125"). Precisión mayor se recorta a 3 — una cantidad con más
+ * decimales es error del emisor, no detalle que se lee. */
+export function fmtQty(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const text = String(value);
+  if (!/^[+-]?\d+(\.\d+)?$/.test(text)) return text;
+  const [intPart = "", fracRaw = ""] = text.split(".");
+  const frac = fracRaw.replace(/0+$/, "").slice(0, 3);
+  return frac ? `${intPart},${frac}` : intPart;
+}
+
 /** Chilean RUT — módulo-11 check digit. Accepts "12.345.678-5", "12345678-5",
  * "123456785" and "K" digits; empty/blank is valid (the field is optional). */
 export function isValidRut(candidate: string): boolean {

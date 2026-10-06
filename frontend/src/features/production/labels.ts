@@ -1,3 +1,4 @@
+import { shortTechnicalId } from "../../format";
 import { t } from "../../i18n/es-CL";
 
 export function cutRoleLabel(role: string | null | undefined): string {
@@ -203,7 +204,7 @@ export function opBasisLabel(basis: string | null | undefined): string {
     return `Política herraje ${basis.split(":", 2)[1] ?? ""}`;
   }
   if (basis.startsWith("handle_policy:")) {
-    return `Herraje ${(basis.split(":", 2)[1] ?? "").slice(0, 8)}`;
+    return `Herraje ${shortTechnicalId(basis.split(":", 2)[1] ?? "")}`;
   }
   return basis;
 }

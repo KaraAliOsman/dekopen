@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 import { ApiError } from "../../api/apiMutator";
-import { fmtMm, shortTechnicalId } from "../../format";
+import { fmtMm, fmtQty, shortTechnicalId } from "../../format";
 import { t } from "../../i18n/es-CL";
 import { formatDateTime } from "../../format";
 import { useConfirm } from "../../ui";
@@ -636,7 +636,7 @@ export function InventorySection({
                   <td>{formatDateTime(m.created_at)}</td>
                   <td>{movementLabel(m.movement_type)}</td>
                   <td>{itemNames.get(m.item_id) ?? shortTechnicalId(m.item_id)}</td>
-                  <td>{m.quantity}</td>
+                  <td>{fmtQty(m.quantity)}</td>
                   <td>{m.rack_location ?? "—"}</td>
                   <td>{m.actor_label ?? "—"}</td>
                   <td title={m.note ?? undefined}>
