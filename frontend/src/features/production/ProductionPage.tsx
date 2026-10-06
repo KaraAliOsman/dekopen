@@ -52,7 +52,7 @@ import type {
 import { ApiError, apiFetchBlob } from "../../api/apiMutator";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
 import { formatDateTime } from "../../format";
-import { DeniedState, PageHeader, usePrompt } from "../../ui";
+import { DeniedState, EmptyState, PageHeader, usePrompt } from "../../ui";
 import { fmtMm, fmtPct } from "../../format";
 import { formatDate } from "../../format";
 import { t, tDynamic, tOptional } from "../../i18n/es-CL";
@@ -1493,7 +1493,9 @@ export function ProductionPage(): JSX.Element {
               </ul>
             </section>
           ) : null}
-          {orders.length === 0 ? <p>{t("production.empty")}</p> : null}
+          {orders.length === 0 ? (
+            <EmptyState illustration="order" title={t("production.empty")} />
+          ) : null}
           {listFiltered && orders.length > 0 && filteredOrders.length === 0 ? (
             <p>{t("production.emptyFilter")}</p>
           ) : null}
@@ -2248,7 +2250,7 @@ export function ProductionPage(): JSX.Element {
                       <CncPanel orderId={detail.id} canWrite={canOptimize} />
                     ) : null}
                     {!optimization ? (
-                      <p className="production-optimize-empty">{t("production.optimizeEmpty")}</p>
+                      <EmptyState illustration="bar" title={t("production.optimizeEmpty")} />
                     ) : (
                       <>
                         {optimization.invalidated ? (
@@ -2664,7 +2666,7 @@ export function ProductionPage(): JSX.Element {
                         </tbody>
                       </table>
                     ) : (
-                      <p className="production-optimize-empty">{t("production.packingEmpty")}</p>
+                      <EmptyState illustration="document" title={t("production.packingEmpty")} />
                     )}
                     {(() => {
                       // §14: packing honesty — surface unresolved material
@@ -3028,7 +3030,7 @@ export function ProductionPage(): JSX.Element {
                       </form>
                     ) : null}
                     {!delivery && deliveryForm === null ? (
-                      <p className="production-optimize-empty">{t("production.deliveryEmpty")}</p>
+                      <EmptyState illustration="document" title={t("production.deliveryEmpty")} />
                     ) : null}
                     {deliveryForm !== null && canWrite ? (
                       <form

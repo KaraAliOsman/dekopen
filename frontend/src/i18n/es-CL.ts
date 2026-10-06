@@ -936,6 +936,17 @@ export const messages = {
   "app.errorBody": "Esta vista no pudo cargarse. Tus datos están a salvo — recarga para continuar.",
   "app.errorReload": "Recargar",
   "app.errorHome": "Ir al inicio",
+  "app.notFoundTitle": "Esta vista no existe",
+  "app.notFoundBody":
+    "La dirección no corresponde a ninguna pantalla del taller. Vuelve al inicio para continuar.",
+  "app.offlineTitle": "Sin conexión",
+  "app.offlineBody":
+    "El taller necesita red para guardar y consultar. Revisa tu conexión — la vista vuelve sola al recuperarla.",
+  "devMail.title": "Vista previa de correos",
+  "devMail.errorTitle": "Vistas previas no disponibles",
+  "devMail.errorBody":
+    "El endpoint de vista previa solo responde en desarrollo (DEBUG o MAIL_DEV_PREVIEWS=1).",
+  "devMail.empty": "Sin plantillas para previsualizar.",
   "auth.resolving": "Resolviendo sesión…",
   "auth.unavailable":
     "No pudimos conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.",
@@ -1131,6 +1142,25 @@ export const messages = {
   "settings.brandingSaved": "Marca guardada.",
   "settings.brandingSaveError": "No se pudo guardar la marca.",
   "settings.brandingLoadError": "No se pudo cargar la marca.",
+  "settings.brandColor": "Color de marca",
+  "settings.brandColorHint":
+    "Acento del taller en documentos, portal del cliente y correos. Debe leerse sobre papel blanco.",
+  "settings.brandColorWarning":
+    "Este color no alcanza contraste suficiente sobre blanco (4.5:1) — en documentos se usará el verde DEKOPEN de respaldo.",
+  "settings.brandCredit": "Mostrar «Generado con DEKOPEN» en documentos",
+  "settings.brandCreditHint":
+    "Crédito discreto al pie de cotizaciones y órdenes. Desactivado, los documentos salen solo con tu marca.",
+  "settings.mailTitle": "Correo transaccional",
+  "settings.mailHint":
+    "Proveedor que envía cotizaciones y avisos del taller. La activación real se configura en el servidor (ACTIVACION.md).",
+  "settings.mailLoadError": "No se pudo cargar el estado del correo.",
+  "settings.mailProvider": "Proveedor",
+  "settings.mailProviderSandbox": "Sandbox (no envía — registra la bandeja)",
+  "settings.mailProviderSmtp": "SMTP configurado",
+  "settings.mailFrom": "Remitente",
+  "settings.mailQueued": "En cola",
+  "settings.mailSent7d": "Enviados (7 días)",
+  "settings.mailFailed7d": "Fallidos (7 días)",
   "settings.fileChoose": "Elegir archivo",
   "settings.fileNone": "Sin archivo seleccionado",
   "settings.groupCharging": "Cobrar y emitir",

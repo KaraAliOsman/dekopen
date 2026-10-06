@@ -30,6 +30,8 @@ export type { Command } from "./CommandPalette";
 export { DataTable } from "./DataTable";
 export type { Column, DataTableProps } from "./DataTable";
 export { Dialog } from "./Dialog";
+export { EmptyIllustration } from "./EmptyIllustration";
+export type { EmptyIllustrationKind } from "./EmptyIllustration";
 export {
   Area,
   DateOnly,

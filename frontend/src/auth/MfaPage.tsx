@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 
 import { t } from "../i18n/es-CL";
 import { telemetry } from "../telemetry/telemetry";
+import { AuthSheet } from "./AuthSheet";
 import { useAuthSession } from "./AuthSessionProvider";
 import { consumeReturnTo } from "./returnTo";
 import { supabase } from "./supabaseClient";
@@ -105,12 +106,8 @@ export function MfaPage(): JSX.Element {
   }
 
   return (
-    <main className="auth-screen" data-testid="mfa-page">
-      <section className="auth-card">
-        <div className="auth-card__brand">
-          <span className="brand">{t("app.brand")}</span>
-          <span className="brand-os">{t("app.brandOs")}</span>
-        </div>
+    <AuthSheet testId="mfa-page">
+      <>
         <header className="auth-card__header">
           <p className="eyebrow">{t("auth.mfaEyebrow")}</p>
           <h1>{t("auth.mfaTitle")}</h1>
@@ -164,7 +161,7 @@ export function MfaPage(): JSX.Element {
             {error}
           </p>
         ) : null}
-      </section>
-    </main>
+      </>
+    </AuthSheet>
   );
 }

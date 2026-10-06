@@ -17,6 +17,7 @@ from psycopg import sql
 
 from authentication.rls import tx_aborted
 from documents.artifacts import SupabaseDocumentStorage, generate_artifact
+from documents.brand import effective_brand_color
 from documents.renderers import finish_label, frozen_glass_specs
 from documents.repository import (
     DocumentaryError,
@@ -113,7 +114,7 @@ def share_quote(
                 str(versions[0]["id"]),
             ],
         )
-        one(
+        minted = one(
             "INSERT INTO public.customer_approvals "
             "(org_id,project_id,project_version_id,token_hash,expires_at,created_by) "
             "VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
@@ -125,6 +126,18 @@ def share_quote(
                 expires_at,
                 str(actor_id),
             ],
+        )
+        # P25: enlace de cotización al cliente por correo — el handler renderiza
+        # white-label con la marca del org y registra mail_messages vía outbox.
+        from automations.service import emit
+
+        emit(
+            "mail.quote_sent",
+            org_id=org_id,
+            actor_id=actor_id,
+            idempotency_key=f"mail:quote-sent:{minted['id']}",
+            project_id=str(project_id),
+            token=token,
         )
     return {"token": token, "expires_at": expires_at}
 
@@ -327,6 +340,9 @@ def _sealed_organization(version: dict[str, object]) -> dict[str, object]:
         "brand_phone": org.get("brand_phone"),
         "brand_email": org.get("brand_email"),
         "brand_logo_url": logo_url,
+        "brand_color": effective_brand_color(org.get("brand_color"))[0],
+        # El pie «Generado con DEKOPEN» del portal es siempre discreto (§11):
+        # `doc_dekopen_credit` solo gobierna documentos, no viaja aquí.
     }
 
 
@@ -597,6 +613,17 @@ def approve_internal(
         _transition_project_approved(
             approval=approval, version_id=str(versions[0]["id"]), now=now
         )
+        # P25: aviso interno — el staff ve la aprobación sin abrir la app.
+        from automations.service import emit
+
+        emit(
+            "mail.quote_approved",
+            org_id=org_id,
+            actor_id=actor_id,
+            idempotency_key=f"mail:quote-approved:{approval['id']}",
+            project_id=str(project_id),
+            decided_by=actor_label,
+        )
     return {"project_status": "APPROVED"}
 
 
@@ -649,5 +676,22 @@ def decide_quote(
                     approval=approval,
                     version_id=str(approval["project_version_id"]),
                     now=now,
+                )
+            if decided and decision == "APPROVED":
+                # P25: aviso interno de aprobación — el actor del job es el
+                # miembro que acuñó el enlace (created_by del approval).
+                from automations.service import emit
+
+                emit(
+                    "mail.quote_approved",
+                    org_id=UUID(str(approval["org_id"])),
+                    actor_id=UUID(str(approval["created_by"])),
+                    idempotency_key=f"mail:quote-approved:{approval['id']}",
+                    project_id=str(approval["project_id"]),
+                    decided_by=(
+                        f"{decided_by} · {decided_rut}"
+                        if decided_rut
+                        else decided_by
+                    ),
                 )
     return portal_quote(token, track=False)

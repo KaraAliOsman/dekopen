@@ -21,4 +21,6 @@ export interface PortalOrganization {
   brand_email: string | null;
   /** @nullable */
   brand_logo_url: string | null;
+  /** @nullable */
+  brand_color: string | null;
 }

@@ -3,6 +3,7 @@ import { Navigate, useLocation } from "react-router-dom";
 
 import { t } from "../i18n/es-CL";
 
+import { AuthSheet } from "./AuthSheet";
 import { useAuthSession } from "./AuthSessionProvider";
 import { consumeReturnTo, stashReturnTo } from "./returnTo";
 
@@ -41,12 +42,8 @@ export function LoginPage(): JSX.Element {
   }
 
   return (
-    <main className="auth-screen" data-testid="login-page">
-      <section className="auth-card" aria-labelledby="login-title">
-        <div className="auth-card__brand">
-          <span className="brand">{t("app.brand")}</span>
-          <span className="brand-os">{t("app.brandOs")}</span>
-        </div>
+    <AuthSheet testId="login-page" labelledBy="login-title">
+      <>
         <header className="auth-card__header">
           <h1 id="login-title">{t("auth.loginTitle")}</h1>
           <p className="auth-hint">{t("auth.loginDescription")}</p>
@@ -81,7 +78,7 @@ export function LoginPage(): JSX.Element {
             {error}
           </p>
         ) : null}
-      </section>
-    </main>
+      </>
+    </AuthSheet>
   );
 }

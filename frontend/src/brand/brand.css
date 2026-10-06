@@ -1,0 +1,92 @@
+/* Marca — «La sección» (Dirección B) + «La cota» (Dirección D).
+   Construcción completa y usos prohibidos en docs/design/marca.md. */
+
+.brand-mark {
+  color: var(--theme-accent-ink);
+  display: block;
+  flex: none;
+}
+
+.brand-wordmark {
+  align-items: baseline;
+  color: var(--theme-accent-ink);
+  display: inline-flex;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  gap: 0.06em;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+/* La O: la sección baja a la línea base con un leve overshoot óptico
+   (la O real sobresale de la cap-height igual que la marca). */
+.brand-wordmark .brand-mark {
+  align-self: flex-end;
+  display: inline-block;
+  margin-bottom: -0.02em;
+}
+
+/* DocLockup — la cota enmarca el wordmark. */
+.brand-doclockup {
+  color: var(--theme-accent-ink);
+  display: inline-grid;
+  justify-items: stretch;
+}
+
+.brand-doclockup__word {
+  display: block;
+  position: relative;
+}
+
+/* Líneas de extensión en los bordes D/N: bajan del techo del wordmark
+   y sobrepasan la línea base 2px hasta la línea de cota. */
+.brand-doclockup__word::before,
+.brand-doclockup__word::after {
+  background: var(--theme-accent-ink);
+  content: "";
+  height: calc(100% + var(--space-12));
+  opacity: 0.85;
+  position: absolute;
+  top: 0;
+  width: 0.75px;
+}
+
+.brand-doclockup__word::before {
+  left: 0;
+}
+
+.brand-doclockup__word::after {
+  right: 0;
+}
+
+.brand-doclockup__dimline {
+  align-items: center;
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-6);
+}
+
+.brand-doclockup__rule {
+  border-top: 0.75px solid var(--theme-accent-ink);
+  flex: 1;
+  opacity: 0.85;
+}
+
+.brand-doclockup__tick {
+  display: block;
+  flex: none;
+  height: 6px;
+  stroke: var(--theme-accent-ink);
+  stroke-width: 0.75;
+  width: 6px;
+}
+
+.brand-doclockup__measure {
+  color: var(--theme-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 0.55em; /* ≈11 px a size 20 — escala con el lockup */
+  justify-self: center;
+  letter-spacing: 0.06em;
+  margin-top: var(--space-4);
+}

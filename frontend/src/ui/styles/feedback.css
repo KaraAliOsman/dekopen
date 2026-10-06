@@ -218,3 +218,34 @@
   padding: 1px var(--space-4);
   white-space: nowrap;
 }
+
+/* Lámina técnica del estado vacío — la pieza que falta, dibujada a ras
+ * (P25): trazo 1.5 con tinta atenuada; las cotas fantasma son discontinuas
+ * y el texto de medida va en Mono tabular como en el lienzo. */
+.empty-ill {
+  color: var(--theme-text-secondary);
+  display: block;
+  fill: none;
+  height: 5rem;
+  opacity: 0.85;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  width: 7.5rem;
+}
+
+.empty-ill .is-ghost {
+  stroke-dasharray: 3 2.5;
+  opacity: 0.55;
+}
+
+.empty-ill .is-dim {
+  stroke-width: 0.75;
+  opacity: 0.8;
+}
+
+.empty-ill .empty-ill__dim {
+  fill: var(--theme-text-muted);
+  font-family: var(--font-mono);
+  stroke: none;
+  text-anchor: middle;
+}

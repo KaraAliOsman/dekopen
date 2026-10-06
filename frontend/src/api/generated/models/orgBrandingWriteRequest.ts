@@ -32,6 +32,8 @@ export interface OrgBrandingWriteRequest {
    * @nullable
    */
   brand_email?: string | null;
+  brand_color?: string | null;
+  doc_dekopen_credit?: boolean;
   /**
    * @nullable
    * @pattern ^-?\d{0,4}(?:\.\d{0,2})?$

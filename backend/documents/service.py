@@ -1731,7 +1731,7 @@ def freeze_revision_a(
         organization = one(
             "SELECT name, tax_id, commercial_name, giro, brand_address,"
             " brand_phone, brand_email, brand_logo_key, brand_logo_sha256,"
-            " extras_display"
+            " brand_color, doc_dekopen_credit, extras_display"
             " FROM public.tenancy_organizations WHERE id = %s",
             [str(org_id)],
             "organization_not_found",
@@ -1756,6 +1756,11 @@ def freeze_revision_a(
                 "brand_email": organization["brand_email"],
                 "brand_logo_key": organization["brand_logo_key"],
                 "brand_logo_sha256": organization["brand_logo_sha256"],
+                # P25: color de marca white-label y atribución DEKOPEN
+                # opt-in — sellados con la revisión como el resto de la
+                # identidad del emisor.
+                "brand_color": organization["brand_color"],
+                "doc_dekopen_credit": bool(organization["doc_dekopen_credit"]),
                 # D06: sealed policy for how extras/services print —
                 # DETAILED prints every sublínea, GROUPED folds them into
                 # the position sum. Older snapshots omit it and render

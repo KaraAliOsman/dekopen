@@ -76,6 +76,7 @@ INSTALLED_APPS = [
     "ingest.apps.IngestConfig",
     "search.apps.SearchConfig",
     "automations.apps.AutomationsConfig",
+    "mail.apps.MailConfig",
 ]
 
 MIDDLEWARE = [

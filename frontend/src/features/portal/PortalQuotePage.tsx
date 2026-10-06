@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { CSSProperties, FormEvent, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import { ApiError } from "../../api/apiMutator";
@@ -414,6 +414,16 @@ export function PortalQuotePage(): JSX.Element {
       .filter((part) => part != null && part !== "")
       .join(" · ") || "";
   const groups = groupPositions(quote.positions);
+  // White-label (P25): el acento del portal es el color de marca del
+  // fabricante — ya llega validado AA desde el backend — como override
+  // local del token de acento. Sin color válido, hereda el teal DEKOPEN.
+  const accentStyle = org?.brand_color
+    ? ({
+        "--theme-accent": org.brand_color,
+        "--theme-accent-strong": org.brand_color,
+        "--theme-accent-soft": `${org.brand_color}20`,
+      } as CSSProperties)
+    : undefined;
   // The hero is the customer's own largest glazed unit — rendered, not stock.
   const hero = groups.reduce<ReturnType<typeof groupPositions>[number] | null>((best, group) => {
     const area = Number(group.position.width_mm) * Number(group.position.height_mm);
@@ -422,7 +432,7 @@ export function PortalQuotePage(): JSX.Element {
   }, null);
 
   return (
-    <main className="portal-page">
+    <main className="portal-page" style={accentStyle}>
       <article className="portal-proposal">
         <header className="portal-proposal__head">
           <div className="portal-proposal__issuer">

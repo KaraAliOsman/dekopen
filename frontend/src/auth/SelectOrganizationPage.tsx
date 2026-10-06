@@ -5,6 +5,7 @@ import { t } from "../i18n/es-CL";
 import { roleLabel } from "../app/shellUtils";
 import { StatusBadge } from "../ui";
 
+import { AuthSheet } from "./AuthSheet";
 import { useAuthSession } from "./AuthSessionProvider";
 import { consumeReturnTo } from "./returnTo";
 
@@ -17,12 +18,8 @@ export function SelectOrganizationPage(): JSX.Element {
   if (auth.status === "mfa_required") return <Navigate to="/auth/mfa" replace />;
 
   return (
-    <main className="auth-screen" data-testid="organization-selector">
-      <section className="auth-card" aria-labelledby="org-title">
-        <div className="auth-card__brand">
-          <span className="brand">{t("app.brand")}</span>
-          <span className="brand-os">{t("app.brandOs")}</span>
-        </div>
+    <AuthSheet testId="organization-selector" labelledBy="org-title">
+      <>
         <header className="auth-card__header">
           <h1 id="org-title">{t("org.select")}</h1>
           <p className="auth-hint">{t("org.selectDescription")}</p>
@@ -61,7 +58,7 @@ export function SelectOrganizationPage(): JSX.Element {
             );
           })}
         </div>
-      </section>
-    </main>
+      </>
+    </AuthSheet>
   );
 }

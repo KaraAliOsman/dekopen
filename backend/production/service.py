@@ -2252,6 +2252,20 @@ def transition_step(
                 order_id=str(step["order_id"]),
                 step_code=str(step["code"]),
             )
+        if new_status == "BLOCKED":
+            # P25: aviso interno de OT bloqueada — la nota obligatoria del
+            # bloqueo es el cuerpo del correo.
+            from automations.service import emit
+
+            emit(
+                "mail.step_blocked",
+                org_id=org_id,
+                actor_id=actor_id,
+                idempotency_key=f"mail:step:{step_id}:blocked",
+                order_id=str(step["order_id"]),
+                step_label=str(fresh.get("label") or step["code"]),
+                note=str(note or ""),
+            )
         return {"step": _public_step(fresh), "order_status": order_status}
 
 

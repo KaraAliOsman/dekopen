@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <style>
+    .ink { fill: #161c1f; }
+    @media (prefers-color-scheme: dark) { .ink { fill: #fcfdfc; } }
+  </style>
+  <path class="ink" fill-rule="evenodd" d="M2 0h20a2 2 0 0 1 2 2v20a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2ZM2.5 2.5H8v19H2.5ZM10 2.5h11.5v19H10Z"/>
+</svg>

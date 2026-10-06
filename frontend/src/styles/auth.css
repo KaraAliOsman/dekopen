@@ -29,13 +29,7 @@
   padding: 0.75rem;
 }
 
-.auth-card__brand {
-  align-items: baseline;
-  display: flex;
-  gap: 0.5rem;
-}
-
-.auth-card__brand .brand-os {
+.auth-sheet__masthead .brand-os {
   color: var(--theme-text-muted);
   font-size: var(--type-micro);
   font-weight: 600;
@@ -147,11 +141,45 @@
   margin: 0;
 }
 
-.onboarding-steps {
+/* P25 — hoja técnica: la tarjeta de acceso es papel sobre la mesa, con el
+ * marco de inglete de las láminas y la marca en el rótulo. Una acción por
+ * hoja; a 390 px el papel ocupa el ancho con aire de la mesa alrededor. */
+.auth-sheet {
+  background: var(--theme-canvas);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-1);
+  box-shadow: none;
+  position: relative;
+}
+
+/* Inglete — el filete interior paralelo al borde del papel. */
+.auth-sheet::before {
+  border: 1px solid var(--theme-border-subtle);
+  content: "";
+  inset: 6px;
+  pointer-events: none;
+  position: absolute;
+}
+
+.auth-sheet__masthead {
+  align-items: baseline;
+  border-bottom: 1px solid var(--theme-border-subtle);
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-  list-style: none;
-  margin: 0;
-  padding: 0;
+  justify-content: space-between;
+  margin: 0 0 var(--space-16);
+  padding-bottom: var(--space-12);
+}
+
+.auth-sheet > * {
+  position: relative;
+}
+
+@media (max-width: 420px) {
+  .auth-screen {
+    padding: var(--space-16);
+  }
+
+  .auth-card {
+    padding: var(--space-24) var(--space-16);
+  }
 }

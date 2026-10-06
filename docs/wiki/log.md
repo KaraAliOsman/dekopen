@@ -153,3 +153,12 @@ Append-only chronology. Keep newest entries at the bottom.
 - MiMo repineado `mimo-v2.6-pro`; sonda: cuota token-plan agotada (429 en 26/26 evals) — pendiente credencial pay-as-you-go para la verificación real, causa exacta en el PR.
 - OWNER: Ajustes › IA (estado, modelos, probar conexión, presupuesto, consumo); /jobs gana panel Actividad de IA filtrable; miembros ven badge "Modo de prueba" cuando MOCK sirve; el agente reporta fases (contexto/modelo/propuesta) al Orb.
 - Decisiones en `docs/decisions/valores-por-defecto.md` sección IA3; config en `.env.example` + `docs/operations/AI_PROVIDERS.md`.
+
+## [2026-10-06] P25 | marca e identidad visual
+
+- Encargo P25 (ola 1): identidad completa DEKOPEN — marca «La sección» (anillo 24×24, alma 2→1/3) como `SECTION_PATH` canónico, wordmark con O-marca, DocLockup «La cota», favicon auto-tema por media query, iconos + manifest.
+- Acceso/onboarding = hoja técnica (papel sobre mesa, marco con inglete, una acción por hoja); `ui/Stepper` corregido (is-done/is-current/is-blocked).
+- Outbox de correo `mail_messages` + 5 plantillas transaccionales es-CL + providers sandbox/smtp + jobs `mail.*` emitidos in-transaction + `/dev/correos` dev-only; white-label `brand_color` AA-validado con fallback teal-800 aplicado a DOC-01/portal/correos desde el snapshot sellado; `doc_dekopen_credit` opt-in.
+- `EmptyIllustration` (5 láminas técnicas) en EmptyState + 404/500/sin conexión; Orb recoloreado cyan→teal en tokens.
+- Bugs hallados verificando en vivo y corregidos: `projects.currency` inexistente en `_project_mail_row` (JOIN a org), DRF `Response` sobre PNG → 500 (ahora `HttpResponse`), `DocumentaryError` transitoria → `JobPermanentError` en handlers `mail.*`.
+- Verificado: `make lint|typecheck|test|build` + `make test-db` verdes (`PY=.venv/bin/python`), entrega real `SENT sandbox` con color de org en `html_body`, capturas en `docs/redesign/captures/p25-marca/` y `.../marca/`; decisiones en sección P25 de `valores-por-defecto.md`.

@@ -158,6 +158,8 @@ import type {
   KitList,
   KitResponse,
   KitWriteRequest,
+  MailPreview,
+  MailStatus,
   MaterialRecheck,
   MeasurementConfirmRequest,
   MeasurementResolveRequest,
@@ -8637,6 +8639,150 @@ export const jobsRetry = async (
   return apiMutator<jobsRetryResponse>(getJobsRetryUrl(jobId), {
     ...options,
     method: "POST",
+  });
+};
+
+export type mailDevPreviewsResponse200 = {
+  data: MailPreview[];
+  status: 200;
+};
+
+export type mailDevPreviewsResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type mailDevPreviewsResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type mailDevPreviewsResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type mailDevPreviewsResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type mailDevPreviewsResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type mailDevPreviewsResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type mailDevPreviewsResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type mailDevPreviewsResponseSuccess = mailDevPreviewsResponse200 & {
+  headers: Headers;
+};
+export type mailDevPreviewsResponseError = (
+  | mailDevPreviewsResponse400
+  | mailDevPreviewsResponse401
+  | mailDevPreviewsResponse403
+  | mailDevPreviewsResponse404
+  | mailDevPreviewsResponse409
+  | mailDevPreviewsResponse422
+  | mailDevPreviewsResponse503
+) & {
+  headers: Headers;
+};
+
+export type mailDevPreviewsResponse = mailDevPreviewsResponseSuccess | mailDevPreviewsResponseError;
+
+export const getMailDevPreviewsUrl = () => {
+  return `/api/v1/mail/dev-previews/`;
+};
+
+/**
+ * Las cinco plantillas con la marca real del org — solo desarrollo.
+ * /dev/correos las dibuja; en producción el endpoint no existe.
+ */
+export const mailDevPreviews = async (
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<mailDevPreviewsResponse> => {
+  return apiMutator<mailDevPreviewsResponse>(getMailDevPreviewsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export type mailStatusResponse200 = {
+  data: MailStatus;
+  status: 200;
+};
+
+export type mailStatusResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type mailStatusResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type mailStatusResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type mailStatusResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type mailStatusResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type mailStatusResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type mailStatusResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type mailStatusResponseSuccess = mailStatusResponse200 & {
+  headers: Headers;
+};
+export type mailStatusResponseError = (
+  | mailStatusResponse400
+  | mailStatusResponse401
+  | mailStatusResponse403
+  | mailStatusResponse404
+  | mailStatusResponse409
+  | mailStatusResponse422
+  | mailStatusResponse503
+) & {
+  headers: Headers;
+};
+
+export type mailStatusResponse = mailStatusResponseSuccess | mailStatusResponseError;
+
+export const getMailStatusUrl = () => {
+  return `/api/v1/mail/status/`;
+};
+
+export const mailStatus = async (
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<mailStatusResponse> => {
+  return apiMutator<mailStatusResponse>(getMailStatusUrl(), {
+    ...options,
+    method: "GET",
   });
 };
 
