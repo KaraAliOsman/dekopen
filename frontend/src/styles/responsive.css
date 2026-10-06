@@ -56,6 +56,11 @@
     min-height: 44px;
   }
 
+  /* En drawer los enlaces del riel también son destinos táctiles. */
+  .rail-item {
+    min-height: 44px;
+  }
+
   .rail-scrim {
     display: block;
     visibility: hidden;
@@ -195,8 +200,70 @@
     width: 100%;
   }
 
-  .topbar-search span {
+  .topbar-search span,
+  .topbar-search kbd {
     display: none;
+  }
+
+  /* 390 px: la topbar es una fila fija y debe caber entera — la búsqueda
+     pasa a sólo icono, el agente conserva sólo el orb (su rótulo queda en
+     el tooltip), el badge de modo de prueba se comprime a su punto de
+     color (la honestidad sigue visible, con el texto en el tooltip) y el
+     chip de job se cede al propio orb. El switcher de proyecto se omite:
+     el drawer ya ofrece la lista completa. */
+  .app-topbar__actions {
+    gap: 4px;
+  }
+
+  .topbar-search {
+    justify-content: center;
+    padding: 0;
+    width: 44px;
+  }
+
+  .project-switcher {
+    display: none;
+  }
+
+  .topbar-ai {
+    font-size: 0;
+    gap: 0;
+    justify-content: center;
+    padding: 0;
+    width: 44px;
+  }
+
+  .topbar-ai-job {
+    display: none;
+  }
+
+  .app-topbar .ai-test-mode-badge {
+    color: transparent;
+    font-size: 0;
+    gap: 0;
+    padding: 0.375rem;
+  }
+
+  .app-topbar .ai-test-mode-badge::before {
+    color: var(--warn-ink);
+  }
+
+  .app-topbar .crumbs,
+  .app-topbar .crumbs__list {
+    flex-wrap: nowrap;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .app-topbar .crumbs__current,
+  .app-topbar .crumbs__link {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ui-toast-region {
+    max-width: calc(100vw - 2 * var(--space-16));
   }
 
   .workspace {

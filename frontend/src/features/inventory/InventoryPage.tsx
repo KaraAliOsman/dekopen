@@ -56,7 +56,13 @@ export function InventoryPage(): JSX.Element {
     setFailed(false);
     request<{ items?: StockItem[] }>("inventory/stock/")
       .then((data) => setStock(data.items ?? []))
-      .catch(() => setFailed(true));
+      .catch((error: unknown) => {
+        /* StrictMode/remount aborta el fetch en vuelo: esa petición abortada
+         * no es un fallo del servidor y no debe pintar el estado de error
+         * por encima de los datos que el segundo fetch sí trae. */
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setFailed(true);
+      });
   }, [org, request]);
 
   useEffect(load, [load]);
@@ -74,20 +80,20 @@ export function InventoryPage(): JSX.Element {
         headingId="page-title"
         title={t("inventory.title")}
       />
-      {stock === null && !failed ? (
-        <LoadingState shape="table" />
-      ) : failed ? (
-        <ErrorState title={t("inventory.loadError")} onRetry={load} />
-      ) : (
+      {stock !== null ? (
         <InventorySection
           request={request}
           canWrite={canWrite}
-          stockItems={(stock ?? []).map((item) => ({
+          stockItems={stock.map((item) => ({
             item_id: item.item_id,
             sku: item.sku,
             name: item.name,
           }))}
         />
+      ) : failed ? (
+        <ErrorState title={t("inventory.loadError")} onRetry={load} />
+      ) : (
+        <LoadingState shape="table" />
       )}
     </section>
   );
