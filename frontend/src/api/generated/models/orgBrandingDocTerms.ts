@@ -6,7 +6,4 @@
  * OpenAPI spec version: 1.0.0
  */
 
-/**
- * Declared legal-text keys (plazo_entrega, instalacion, exclusiones, garantia, jurisdiccion) printed under Condiciones comerciales.
- */
 export type OrgBrandingDocTerms = { [key: string]: string };

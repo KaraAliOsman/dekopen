@@ -7,12 +7,13 @@
  */
 
 /**
- * Paper size for client-facing documents (DOC-01).
+ * * `LETTER` - Carta
+ * * `LEGAL` - Oficio
+ * * `A4` - A4
  */
-export type OrgBrandingDocPaperSize =
-  (typeof OrgBrandingDocPaperSize)[keyof typeof OrgBrandingDocPaperSize];
+export type DocPaperSizeEnum = (typeof DocPaperSizeEnum)[keyof typeof DocPaperSizeEnum];
 
-export const OrgBrandingDocPaperSize = {
+export const DocPaperSizeEnum = {
   LETTER: "LETTER",
   LEGAL: "LEGAL",
   A4: "A4",

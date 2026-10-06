@@ -5,16 +5,6 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import { DocPaperSizeEnum } from "./docPaperSizeEnum";
 
-/**
- * @nullable
- */
-export type OrgBrandingWriteRequestDocPaperSize =
-  | (typeof OrgBrandingWriteRequestDocPaperSize)[keyof typeof OrgBrandingWriteRequestDocPaperSize]
-  | null;
-
-export const OrgBrandingWriteRequestDocPaperSize = {
-  LETTER: "LETTER",
-  LEGAL: "LEGAL",
-  A4: "A4",
-} as const;
+export const OrgBrandingWriteRequestDocPaperSize = { ...DocPaperSizeEnum } as const;

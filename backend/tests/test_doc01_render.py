@@ -6,7 +6,6 @@ ladder (1/12/24/100 positions), USD totals, the bow plan cut and the
 approval-QR context.
 """
 import re
-from decimal import Decimal
 
 import fitz  # PyMuPDF — pinned test dependency (requirements-dev.txt)
 import pytest

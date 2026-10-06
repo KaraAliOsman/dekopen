@@ -23,11 +23,11 @@ import {
 import { apiFetchBlob } from "../api/apiMutator";
 import type {
   ApiUrlEnum,
+  DocPaperSizeEnum,
   ExtraArticleResponse,
   ExtraTemplateWriteRequest,
   MailStatus,
   Membership,
-  OrgBrandingDocPaperSize,
   PaymentIntegrationStatus,
   MembershipRoleEnum,
   ServiceArticleResponse,
@@ -473,7 +473,7 @@ function OrgBrandingCard({ orgId }: { orgId: string }): JSX.Element {
     brand_email: "",
     brand_color: "",
     doc_dekopen_credit: false,
-    doc_paper_size: "LETTER" as OrgBrandingDocPaperSize,
+    doc_paper_size: "LETTER" as DocPaperSizeEnum,
     doc_terms: {
       plazo_entrega: "",
       instalacion: "",
@@ -503,7 +503,7 @@ function OrgBrandingCard({ orgId }: { orgId: string }): JSX.Element {
         brand_email: response.data.brand_email ?? "",
         brand_color: response.data.brand_color ?? "",
         doc_dekopen_credit: response.data.doc_dekopen_credit ?? false,
-        doc_paper_size: response.data.doc_paper_size ?? "LETTER",
+        doc_paper_size: (response.data.doc_paper_size ?? "LETTER") as DocPaperSizeEnum,
         doc_terms: {
           plazo_entrega: "",
           instalacion: "",
@@ -718,7 +718,7 @@ function OrgBrandingCard({ orgId }: { orgId: string }): JSX.Element {
               onChange={(event) =>
                 setForm((prev) => ({
                   ...prev,
-                  doc_paper_size: event.target.value as OrgBrandingDocPaperSize,
+                  doc_paper_size: event.target.value as DocPaperSizeEnum,
                 }))
               }
             >

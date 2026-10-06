@@ -21416,6 +21416,16 @@ components:
             type: integer
             minimum: 1
           nullable: true
+    DocPaperSizeEnum:
+      enum:
+      - LETTER
+      - LEGAL
+      - A4
+      type: string
+      description: |-
+        * `LETTER` - Carta
+        * `LEGAL` - Oficio
+        * `A4` - A4
     DocumentTypeEnum:
       enum:
       - DOC-01
@@ -25797,18 +25807,10 @@ components:
           nullable: true
         doc_paper_size:
           type: string
-          enum:
-          - LETTER
-          - LEGAL
-          - A4
-          description: Paper size for client-facing documents (DOC-01).
         doc_terms:
           type: object
           additionalProperties:
             type: string
-          description: Declared legal-text keys (plazo_entrega, instalacion,
-            exclusiones, garantia, jurisdiccion) printed under Condiciones
-            comerciales.
       required:
       - brand_address
       - brand_color
@@ -25863,16 +25865,15 @@ components:
           pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
           nullable: true
         doc_paper_size:
-          type: string
-          enum:
-          - LETTER
-          - LEGAL
-          - A4
           nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/DocPaperSizeEnum'
+          - $ref: '#/components/schemas/NullEnum'
         doc_terms:
           type: object
           additionalProperties:
             type: string
+            maxLength: 4000
           nullable: true
     OrientationEnum:
       enum:

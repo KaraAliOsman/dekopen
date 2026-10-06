@@ -294,8 +294,11 @@ def test_assembly_position_prices_and_freezes_quote_only(documentary_tenant) -> 
     assert len(member_ids) == len(set(member_ids))
 
     # The commercial quote renders; the workshop order stays honestly blocked.
+    # Field mode (DOC-01 v2) names modules as campos, not raw ids — m1..m3
+    # surface through the construction list and the coupling angle stays
+    # legible at the seam top.
     html = _doc01(snapshot)
-    assert "<svg" in html and "m1" in html and "15°" in html
+    assert "<svg" in html and "Campo 1" in html and "15°" in html
     with pytest.raises(DocumentaryError, match="production_document_blocked"):
         _doc03(snapshot)
 
