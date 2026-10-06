@@ -19,6 +19,7 @@ sources:
   - IA3 proveedor real PR https://github.com/KaraAliOsman/dekopen/pull/22
   - P25 marca/identidad PR https://github.com/KaraAliOsman/dekopen/pull/26
   - P05 dibujo técnico PR https://github.com/KaraAliOsman/dekopen/pull/25
+  - P02 identificadores/formato PR https://github.com/KaraAliOsman/dekopen/pull/27
   - integracion/v1 merge 747c528b67d234d697624929ccbcc7098261ed54
   - open PR metadata observed 2026-09-27/28
   - AGENTS.md
@@ -63,7 +64,7 @@ Hard invariants documented by the repo include:
 
 ## P25 state
 
-PR abierto a `integracion/v1` (pendiente de merge) desde `devin/P25-marca`:
+Merged into `integracion/v1` as squash `80860f3ef9fe1cf94abf1c564ff00506ef6686b0` (dekopen PR #26):
 
 - Marca canónica «La sección»: anillo cuadrado 24×24 con muro 2.5 y alma de 2 a 1/3 (la sección de perfil que el producto dibuja); `SECTION_PATH` único en `frontend/src/brand/BrandMark.tsx` (currentColor — una geometría pinta claro/oscuro), wordmark con la O reemplazada por la marca (~0.73em), DocLockup «La cota» para portadas internas/correos.
 - `favicon.svg` se auto-colorea por `@media (prefers-color-scheme: dark)` interno (`.ink` #161c1f → #fcfdfc) — las capturas deben emular `colorScheme`, no recolorear el SVG; `manifest.webmanifest` + PNG 16/32/180/192/512 rasterizados; `theme-color` teal-800 sobre papel g-50 (maskable con safe-zone 78 %).
@@ -266,6 +267,8 @@ Merged into `integracion/v1` as squash `2c04dcd64afb7cea16effb899ecaf33fe9e7aa67
 - Contrato y anti-reglas en `docs/PRD/opening-symbols.md`; ilustraciones por caso/vista generadas por el engine (`scripts/gen_symbol_doc_assets.py`).
 
 ## [2026-10-06] P02 | identificadores humanos y formato §3.3
+
+Merged into `integracion/v1` as squash `acc90900e872e10cd93167f98d3911fbda19c61f` (dekopen PR #27):
 
 - Migración `20270107000001_p02_human_codes.sql`: `private.next_human_code(org_id, kind)` (advisory lock por org+kind → folio `OC-`/`RT-`/`REC-` de 6 dígitos), `private.guard_human_code` BEFORE UPDATE (42501 si alguien reescribe el código), columnas `inventory_remnants.remnant_code` y `order_receipts.receipt_code` NOT NULL UNIQUE(org) con backfill determinista por `created_at`; órdenes de compra nuevas llevan `OC-` y las selladas pre-P02 conservan `PO-`. Huecos por rollback documentados (folio abortado no se recicla en otra fila).
 - Identidad de pieza `P{pos}-U{u}-M{i}`/`-I{sec}` única en paquete de corte HTML, `bars.csv`, `sheets.csv` (columna `piece_label`), DXF (`_placement_code`) y etiquetas QR; test `test_piece_identity.py` exige conjuntos idénticos entre artefactos.
