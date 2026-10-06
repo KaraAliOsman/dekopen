@@ -27014,9 +27014,6 @@ components:
         brand_color:
           type: string
           nullable: true
-        dekopen_credit:
-          type: boolean
-          default: false
       required:
       - brand_address
       - brand_color

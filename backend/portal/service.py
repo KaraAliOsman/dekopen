@@ -341,7 +341,8 @@ def _sealed_organization(version: dict[str, object]) -> dict[str, object]:
         "brand_email": org.get("brand_email"),
         "brand_logo_url": logo_url,
         "brand_color": effective_brand_color(org.get("brand_color"))[0],
-        "dekopen_credit": bool(org.get("doc_dekopen_credit")),
+        # El pie «Generado con DEKOPEN» del portal es siempre discreto (§11):
+        # `doc_dekopen_credit` solo gobierna documentos, no viaja aquí.
     }
 
 

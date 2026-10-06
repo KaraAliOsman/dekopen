@@ -289,7 +289,6 @@ def test_portal_quote_carries_positions_issuer_and_payment_state(monkeypatch) ->
         "brand_logo_url": None,
         # Sin color declarado el portal recibe el fallback efectivo (teal-800).
         "brand_color": "#075F5A",
-        "dekopen_credit": False,
     }
     assert out["payment_terms"] == "50% anticipo"
     assert out["positions"][0]["typology"] == "2F_TT"

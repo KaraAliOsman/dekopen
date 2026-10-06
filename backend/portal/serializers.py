@@ -18,7 +18,6 @@ class PortalOrganizationSerializer(serializers.Serializer):
     brand_email = serializers.CharField(allow_null=True, allow_blank=True)
     brand_logo_url = serializers.CharField(allow_null=True, allow_blank=True)
     brand_color = serializers.CharField(allow_null=True, allow_blank=True)
-    dekopen_credit = serializers.BooleanField(default=False)
 
 
 class PortalPositionSerializer(serializers.Serializer):
