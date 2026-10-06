@@ -13,7 +13,7 @@
 | IA2 | D2 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/16 | e17fb7101fd7f84287cf51e7c3b86fadc6cbd0f7 | CI 6/6 verde; squash mergeado. Registro único 36 ops UI/IA/API + 8 herramientas de motor + clarify tipado + preview+Aplicar deshacible + prompt es-CL versionado. Evals MOCK 0/26 → 26/26. |
 | IA3 | D2 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/22 | 9a968b6041b69cc16f76400925fe9dd036627b48 | CI 6/6 verde; squash mergeado. Reintentos transitorios + tool calling nativo + invocaciones durables + presupuesto mensual + Ajustes IA + insignia Modo prueba + panel Actividad. Credencial MIMO sigue 429 (requiere clave pay-as-you-go). |
 | P02 | 1 | pendiente |  |  |  |
-| P25 | 1 | pendiente |  |  |  |
+| P25 | 1 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/26 | 80860f3ef9fe1cf94abf1c564ff00506ef6686b0 | CI 6/6 verde; squash mergeado. Marca «La sección» + favicon auto-tema + correos white-label (5 plantillas, outbox RLS, sandbox) + brand_color AA en DOC-01/portal + láminas EmptyIllustration + Orb teal; 3 bugs reales corregidos. |
 | P04 | 1 | pendiente |  |  |  |
 | P05 | 1 | pendiente |  |  |  |
 | P09 | 1 | pendiente |  |  |  |

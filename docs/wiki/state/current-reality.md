@@ -3,7 +3,7 @@ type: state
 status: active
 updated: 2026-10-05
 volatility: high
-verified_ref: 9a968b6041b69cc16f76400925fe9dd036627b48
+verified_ref: 80860f3ef9fe1cf94abf1c564ff00506ef6686b0
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
@@ -17,6 +17,7 @@ sources:
   - IA2 AI ops/tools PR https://github.com/KaraAliOsman/dekopen/pull/16
   - D06 accesorios/extras PR https://github.com/KaraAliOsman/dekopen/pull/17
   - IA3 proveedor real PR https://github.com/KaraAliOsman/dekopen/pull/22
+  - P25 marca/identidad PR https://github.com/KaraAliOsman/dekopen/pull/26
   - integracion/v1 merge 747c528b67d234d697624929ccbcc7098261ed54
   - open PR metadata observed 2026-09-27/28
   - AGENTS.md
@@ -61,7 +62,7 @@ Hard invariants documented by the repo include:
 
 ## P25 state
 
-PR abierto a `integracion/v1` (pendiente de merge) desde `devin/P25-marca`:
+Merged into `integracion/v1` as squash `80860f3ef9fe1cf94abf1c564ff00506ef6686b0` (dekopen PR #26):
 
 - Marca canónica «La sección»: anillo cuadrado 24×24 con muro 2.5 y alma de 2 a 1/3 (la sección de perfil que el producto dibuja); `SECTION_PATH` único en `frontend/src/brand/BrandMark.tsx` (currentColor — una geometría pinta claro/oscuro), wordmark con la O reemplazada por la marca (~0.73em), DocLockup «La cota» para portadas internas/correos.
 - `favicon.svg` se auto-colorea por `@media (prefers-color-scheme: dark)` interno (`.ink` #161c1f → #fcfdfc) — las capturas deben emular `colorScheme`, no recolorear el SVG; `manifest.webmanifest` + PNG 16/32/180/192/512 rasterizados; `theme-color` teal-800 sobre papel g-50 (maskable con safe-zone 78 %).
