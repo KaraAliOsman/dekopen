@@ -258,6 +258,16 @@ function mount(path = "/projects/project-a/positions/position-a/edit") {
 }
 
 function change(key: TranslationKey, value: string) {
+  if (key === "projects.system") {
+    // The Serie selector lives inside the strip chip's popover — open it first.
+    if (!screen.queryByRole("combobox", { name: t(key) })) {
+      fireEvent.click(screen.getByRole("button", { name: t(key) }));
+    }
+    fireEvent.change(screen.getByRole("combobox", { name: t(key) }), {
+      target: { value },
+    });
+    return;
+  }
   fireEvent.change(screen.getByLabelText(t(key)), {
     target: { value },
   });
@@ -402,9 +412,14 @@ afterEach(() => {
   useCanvasStore.getState().reset();
 });
 
+async function openStarterLibrary() {
+  fireEvent.click(screen.getByRole("button", { name: t("assembly.starterLibrary") }));
+  return await screen.findByRole("dialog", { name: t("assembly.starterLibrary") });
+}
+
 it("opens a new position directly on the canvas editor", async () => {
   mount("/projects/project-a/positions/new");
-  await screen.findByRole("list", { name: t("assembly.starterLibrary") });
+  await openStarterLibrary();
   // A blank window is already on the canvas — no product-type decision exists.
   expect(useCanvasStore.getState().inputs.product).not.toBeNull();
   expect(screen.getByRole("button", { name: t("projects.save") })).toBeDisabled();
@@ -515,7 +530,7 @@ it("saves a manufacturing-incomplete assembly as a draft", async () => {
 
 it("builds a five-unit bow from the design library and edits a joint angle on plan", async () => {
   mount("/projects/project-a/positions/new");
-  await screen.findByRole("list", { name: t("assembly.starterLibrary") });
+  await openStarterLibrary();
 
   fireEvent.click(screen.getByRole("button", { name: /Bow ×5/ }));
 
@@ -526,7 +541,7 @@ it("builds a five-unit bow from the design library and edits a joint angle on pl
 
 it("auto-resolves the catalog coupler when only one exists", async () => {
   mount("/projects/project-a/positions/new");
-  await screen.findByRole("list", { name: t("assembly.starterLibrary") });
+  await openStarterLibrary();
 
   fireEvent.click(screen.getByRole("button", { name: /Bow ×3/ }));
 
@@ -564,8 +579,10 @@ it("fills glass defaults when the catalog has a single glazing thickness", async
     }),
   );
   mount("/projects/project-a/positions/new");
-  await screen.findByRole("list", { name: t("assembly.starterLibrary") });
-  // The system <select> only commits once its options exist.
+  await openStarterLibrary();
+  // The system <select> only commits once its options exist — it lives inside
+  // the strip chip's popover.
+  fireEvent.click(screen.getByRole("button", { name: t("projects.system") }));
   await screen.findByRole("option", { name: /Sistema A/ });
 
   change("projects.system", "system-a");
@@ -592,7 +609,7 @@ it("fills glass defaults when the catalog has a single glazing thickness", async
 
 it("removes a selected module with Delete and undoes it", async () => {
   mount("/projects/project-a/positions/new");
-  await screen.findByRole("list", { name: t("assembly.starterLibrary") });
+  await openStarterLibrary();
   fireEvent.click(screen.getByRole("button", { name: /Bow ×3/ }));
 
   useCanvasStore.getState().select("m2");
@@ -927,9 +944,7 @@ it("does not offer FOILED or a catalog the backend marks incomplete", async () =
 
 it("renders the design library with rendered starter cards", async () => {
   mount("/projects/project-a/positions/new");
-  const list = await screen.findByRole("list", {
-    name: t("assembly.starterLibrary"),
-  });
+  const list = await openStarterLibrary();
   expect(within(list).getAllByRole("listitem")).toHaveLength(15);
   // Every card previews through the same front-elevation renderer.
   expect(within(list).getAllByTestId("product-front").length).toBeGreaterThan(0);
@@ -937,7 +952,7 @@ it("renders the design library with rendered starter cards", async () => {
 
 it("picking a sliding starter card builds a sliding product", async () => {
   mount("/projects/project-a/positions/new");
-  await screen.findByRole("list", { name: t("assembly.starterLibrary") });
+  await openStarterLibrary();
   fireEvent.click(screen.getByRole("button", { name: /Corredera 2 hojas/ }));
   const product = useCanvasStore.getState().inputs.product;
   expect(product?.assembly.modules[0]?.tree.opening_type).toBe("SLIDING_2L");

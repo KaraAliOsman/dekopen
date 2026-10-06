@@ -69,7 +69,7 @@
     position: absolute;
     top: 0.4rem;
     width: 18rem;
-    z-index: 6;
+    z-index: var(--z-popover);
   }
 
   .assembly-tree .object-tree {
@@ -184,7 +184,7 @@
   position: absolute;
   right: 0.75rem;
   width: 13rem;
-  z-index: 2;
+  z-index: var(--z-sticky);
   /* The card floats over the canvas; its empty area must not become a dead
    * zone that swallows clicks meant for the product behind it. Interactive
    * children (header, module/coupling shapes, angle handles) re-enable. */
@@ -238,7 +238,7 @@
   padding: 0.3rem 0.6rem;
   position: absolute;
   right: 0.75rem;
-  z-index: 2;
+  z-index: var(--z-sticky);
 }
 
 /* §16 3D view — larger inset panel; orbit/pan/zoom inside, same selection. */
@@ -254,7 +254,7 @@
   left: 0.75rem;
   position: absolute;
   width: 30rem;
-  z-index: 3;
+  z-index: var(--z-popover);
 }
 
 .model3d-inset .model3d-view {
@@ -401,4 +401,492 @@
     animation: none;
     width: 100%;
   }
+}
+
+/* ---------- P04 — canvas-first editor surface ---------- */
+/* Grid: labeled tool rail | canvas | inspector; the dock spans the full
+   bottom width. The page shell (48 px strip) lives above in the position
+   page — this grid owns the whole remaining viewport so the canvas gets
+   the largest honest share (≥60% wide, ≥75% high at desktop). */
+.editor-surface {
+  display: grid;
+  gap: 0.6rem;
+  /* Fixed rail + pinned inspector: `auto`/minmax(320,360) tracks eat the
+   * canvas' share — at 1440 the labeled rail (~30ch tool names) plus a 360px
+   * inspector left the canvas under the required 60%. A 7rem rail wraps its
+   * longest labels to two lines; 320px stays inside the 320–360 spec. */
+  grid-template-columns: 7rem minmax(0, 1fr) 320px;
+  grid-template-rows: minmax(0, 1fr) auto;
+  /* The dock hangs under the canvas only: a full-width dock lets its floating
+   * body cover the inspector's lower fields (e.g. the glazing cards) while
+   * the tree is open. The rail and inspector keep their full-height columns. */
+  grid-template-areas:
+    "rail canvas side"
+    "rail dock side";
+  height: calc(100dvh - 10.5rem);
+  min-height: 28rem;
+  position: relative;
+}
+
+@media (max-height: 52.5rem) {
+  .editor-surface {
+    height: calc(100dvh - 8rem);
+    min-height: 20rem;
+  }
+}
+
+.editor-rail-wrap {
+  grid-area: rail;
+  min-height: 0;
+  position: relative;
+}
+
+.assembly-canvas {
+  grid-area: canvas;
+  min-width: 0;
+}
+
+.assembly-side {
+  grid-area: side;
+}
+
+.editor-dock {
+  grid-area: dock;
+}
+
+/* 1024–1279: icon-only rail, the inspector becomes a drawer. */
+.editor-surface.is-compact {
+  grid-template-columns: 3rem minmax(0, 1fr);
+  grid-template-areas:
+    "rail canvas"
+    "dock dock";
+}
+
+.is-compact .rail-item__label {
+  display: none;
+}
+
+.is-compact .rail-item {
+  justify-content: center;
+  padding: 0.25rem;
+}
+
+/* <1024: read-only surface — rail hidden, canvas + dock stay. */
+.editor-surface.is-readonly {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "canvas"
+    "dock";
+  height: auto;
+  min-height: 0;
+}
+
+.is-readonly .editor-rail-wrap {
+  display: none;
+}
+
+.is-readonly .canvas-viewport {
+  min-height: 20rem;
+}
+
+/* Tool rail — labeled buttons (labels collapse to icons in compact). */
+.editor-rail {
+  align-items: stretch;
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  height: 100%;
+  overflow-y: auto;
+  padding: 0.3rem;
+}
+
+.rail-item {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--theme-text-secondary);
+  cursor: pointer;
+  display: flex;
+  gap: 0.45rem;
+  min-height: 2rem;
+  padding: 0.25rem 0.45rem;
+  text-align: left;
+}
+
+.rail-item:hover:not(:disabled) {
+  background: var(--theme-surface-hover);
+  color: var(--theme-text-primary);
+}
+
+.rail-item.is-active {
+  background: var(--theme-accent-soft);
+  color: var(--info-ink);
+}
+
+.rail-item:disabled {
+  color: var(--theme-text-muted);
+  cursor: default;
+  opacity: 0.45;
+}
+
+.rail-item__label {
+  font-size: var(--type-dense);
+  /* Wraps: long tool names break to a second line inside the fixed 7rem rail. */
+  white-space: normal;
+}
+
+.editor-rail__divider {
+  background: var(--theme-border-subtle);
+  height: 1px;
+  margin: 0.25rem 0.2rem;
+}
+
+.editor-rail__spacer {
+  flex: 1;
+}
+
+/* Flyout anchored to the rail's right edge — over the canvas, under
+   popovers. Width bounded so thumbnails stay legible. */
+.editor-flyout {
+  left: calc(100% + 0.4rem);
+  position: absolute;
+  top: 0;
+  width: min(26rem, 60vw);
+  z-index: var(--z-popover);
+}
+
+.editor-flyout--menu {
+  width: 16rem;
+}
+
+.typology-flyout {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-pop);
+  display: flex;
+  flex-direction: column;
+  max-height: min(70dvh, 34rem);
+  overflow: hidden;
+  padding: 0.6rem 0.75rem;
+}
+
+.typology-flyout__groups {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.typology-group__title {
+  color: var(--theme-text-muted);
+  font-size: var(--type-dense);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  margin: 0 0 0.35rem;
+  text-transform: uppercase;
+}
+
+.typology-flyout .starter-gallery {
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+}
+
+.typology-flyout .starter-card-wrap {
+  display: contents;
+}
+
+/* View selectors — top-right over the canvas. */
+.canvas-viewbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: flex-end;
+  left: 0.5rem;
+  pointer-events: none;
+  position: absolute;
+  right: 0.5rem;
+  top: 0.5rem;
+  z-index: var(--z-sticky);
+}
+
+.canvas-viewbar > * {
+  pointer-events: auto;
+}
+
+.view-seg {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  overflow: hidden;
+}
+
+.view-seg button,
+.view-toggle {
+  background: transparent;
+  border: none;
+  color: var(--theme-text-secondary);
+  cursor: pointer;
+  font-size: var(--type-dense);
+  padding: 0.25rem 0.55rem;
+}
+
+.view-seg button + button {
+  border-left: 1px solid var(--theme-border-subtle);
+}
+
+.view-seg button.is-active,
+.view-toggle.is-active {
+  background: var(--theme-accent-soft);
+  color: var(--info-ink);
+}
+
+.view-toggle {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+/* Measure tool — model-space ruler + screen chip. */
+.measure-layer {
+  pointer-events: none;
+}
+
+.measure-anchor {
+  cursor: crosshair;
+  fill: transparent;
+  pointer-events: all;
+}
+
+.measure-anchor:hover {
+  fill: var(--theme-accent-soft);
+  stroke: var(--theme-accent);
+  stroke-width: 1;
+}
+
+.measure-path {
+  stroke: var(--theme-accent);
+  stroke-dasharray: 6 4;
+  stroke-width: 1.5;
+}
+
+.measure-vertex {
+  fill: var(--theme-accent);
+}
+
+.measure-label {
+  fill: var(--theme-text-primary);
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+}
+
+.measure-chip {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-sm);
+  bottom: 0.6rem;
+  color: var(--theme-text-secondary);
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-size: 0.75rem;
+  left: 50%;
+  padding: 0.2rem 0.6rem;
+  position: absolute;
+  transform: translateX(-50%);
+  z-index: var(--z-sticky);
+}
+
+/* Typed-command ghost proposal — the §8 orange preview. The layer is a
+ * passive overlay: without pointer-events:none its shapes swallow the
+ * measure/bay clicks aimed at the drawing beneath. */
+.canvas-ghost {
+  pointer-events: none;
+}
+
+.canvas-ghost .module-frame,
+.canvas-ghost .bay-leaf,
+.canvas-ghost path,
+.canvas-ghost rect,
+.canvas-ghost line {
+  stroke: var(--warn-ink);
+}
+
+.canvas-ghost__frame {
+  stroke: var(--warn-ink);
+}
+
+/* The proposal bar lives inside .editor-dock as a normal-flow row: anchored
+ * to the canvas bottom it sat under the dock's floating body and its apply/
+ * discard buttons were unreachable while the tree was open. */
+.proposal-bar {
+  align-items: center;
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--warn-ink);
+  border-radius: var(--radius-md);
+  display: flex;
+  gap: 0.6rem;
+  justify-content: center;
+  margin: 0.3rem 0.4rem 0;
+  padding: 0.35rem 0.7rem;
+}
+
+.proposal-bar__label {
+  color: var(--warn-ink);
+  font-size: var(--type-dense);
+  font-weight: 600;
+}
+
+.proposal-bar__delta {
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-size: 0.8rem;
+}
+
+.proposal-bar kbd {
+  font-size: var(--type-dense);
+  margin-left: 0.25rem;
+}
+
+.canvas-readonly {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-sm);
+  bottom: 0.6rem;
+  color: var(--theme-text-secondary);
+  font-size: var(--type-dense);
+  left: 50%;
+  margin: 0;
+  padding: 0.25rem 0.7rem;
+  position: absolute;
+  transform: translateX(-50%);
+  z-index: var(--z-sticky);
+}
+
+/* Bottom dock — tree / vanos / materiales, foldable. */
+.editor-dock {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-md);
+  min-width: 0;
+  position: relative;
+  z-index: var(--z-sticky);
+}
+
+.editor-dock__bar {
+  align-items: center;
+  display: flex;
+  gap: 0.15rem;
+  padding: 0.15rem 0.4rem;
+}
+
+.editor-dock__tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--theme-text-secondary);
+  cursor: pointer;
+  font-size: var(--type-dense);
+  font-weight: 600;
+  padding: 0.3rem 0.55rem;
+}
+
+.editor-dock__tab:hover {
+  color: var(--theme-text-primary);
+}
+
+.editor-dock__tab.is-active {
+  border-bottom-color: var(--theme-accent);
+  color: var(--theme-text-primary);
+}
+
+.editor-dock__dims {
+  color: var(--theme-text-secondary);
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+
+.editor-dock__selection {
+  color: var(--theme-text-muted);
+  font-size: 0.75rem;
+}
+
+.editor-dock__issues {
+  background: transparent;
+  border: none;
+  color: var(--warn-ink);
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 0;
+}
+
+.editor-dock__fold {
+  background: transparent;
+  border: none;
+  color: var(--theme-text-muted);
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 0.1rem 0.35rem;
+}
+
+/* The open body floats UP over the canvas — a collapsible panel must not
+ * shrink the canvas below its ≥75%-viewport contract; the bar stays put. */
+.editor-dock__body {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-md);
+  bottom: calc(100% + 0.25rem);
+  box-shadow: var(--shadow-raise);
+  left: 0;
+  max-height: 14rem;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 0.4rem 0.6rem;
+  position: absolute;
+  right: 0;
+  z-index: var(--z-popover);
+}
+
+.dock-tree .object-tree {
+  border: none;
+  border-radius: 0;
+}
+
+/* Inspector inside the drawer keeps its column styles but drops the
+   grid-track constraints. */
+.assembly-side--drawer {
+  min-width: 0;
+  overflow-y: visible;
+}
+
+/* Empty state — no product yet: rail offers the library, canvas explains. */
+.editor-surface.is-empty {
+  grid-template-columns: 7rem minmax(0, 1fr) 320px;
+}
+
+.editor-surface.is-empty.is-compact {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.editor-surface.is-empty.is-readonly {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.canvas-empty {
+  align-items: center;
+  background: var(--theme-surface-panel);
+  border: 1px dashed var(--theme-border-strong);
+  border-radius: var(--radius-md);
+  display: flex;
+  justify-content: center;
+}
+
+.picker-anchor {
+  height: 1px;
+  position: absolute;
+  width: 1px;
 }

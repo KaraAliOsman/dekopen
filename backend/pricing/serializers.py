@@ -239,7 +239,13 @@ class ImportRequestSerializer(StrictSerializer):
 
 
 class DesignBatchPreviewItemSerializer(StrictSerializer):
-    position_id = serializers.UUIDField()
+    # Nullable: an unsaved position has no row to diff against — the live-price
+    # chip in the editor prices a draft design (after-only) through the same
+    # engine gate and position_cost authority as a stored position.
+    position_id = serializers.UUIDField(required=False,allow_null=True)
+    # Optional proposed quantity — the editor's live-price chip prices the
+    # Cantidad field it is editing, not just the stored row's.
+    quantity = serializers.IntegerField(required=False,min_value=1)
     design = serializers.DictField()
 
     def validate_design(self, value):
@@ -259,8 +265,8 @@ class DesignBatchPreviewRequestSerializer(StrictSerializer):
 
 
 class DesignBatchPreviewItemResponseSerializer(serializers.Serializer):
-    position_id = serializers.UUIDField()
-    index = serializers.IntegerField(required=False)
+    position_id = serializers.UUIDField(allow_null=True)
+    index = serializers.IntegerField(required=False,allow_null=True)
     ok = serializers.BooleanField()
     error_code = serializers.CharField(required=False,allow_null=True)
     error = serializers.CharField(required=False,allow_null=True)
@@ -269,6 +275,14 @@ class DesignBatchPreviewItemResponseSerializer(serializers.Serializer):
     unit_cost_after = serializers.CharField(required=False,allow_null=True)
     line_cost_before = serializers.CharField(required=False,allow_null=True)
     line_cost_after = serializers.CharField(required=False,allow_null=True)
+    # Net sell price (margin + declared sell deltas) under the org's declared
+    # pricing mode — only computed when the mode is COST_PLUS_MARGIN; other
+    # modes need project-level authorities a single-design preview cannot
+    # honestly fabricate, so the fields stay null and the UI shows "—".
+    unit_net_before = serializers.CharField(required=False,allow_null=True)
+    unit_net_after = serializers.CharField(required=False,allow_null=True)
+    line_net_before = serializers.CharField(required=False,allow_null=True)
+    line_net_after = serializers.CharField(required=False,allow_null=True)
 
 
 class DesignBatchPreviewResponseSerializer(serializers.Serializer):

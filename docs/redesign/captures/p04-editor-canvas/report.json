@@ -1,0 +1,210 @@
+{
+  "summary": {
+    "generated_at": "2026-10-06T02:57:05.923Z",
+    "routes": 12,
+    "routes_with_findings": [
+      "project-position-new"
+    ],
+    "total_findings": 18
+  },
+  "results": [
+    {
+      "route": "project-position-new",
+      "url": "/projects/34c8e59f-fa83-4368-a4ef-91939d240337/positions/new",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/project-position-new--1440x900--light.png",
+      "findings": [
+        {
+          "kind": "gradient",
+          "detail": "svg · 100010001000"
+        },
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · Módulo 11000 × 1000 mm · rgb(11, 119, 112) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · Marco · rgb(11, 119, 112) 2px 0px 0px 0px inset"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/34c8e59f-fa83-4368-a4ef-91939d240337/positions/new"
+    },
+    {
+      "route": "project-position-new",
+      "url": "/projects/34c8e59f-fa83-4368-a4ef-91939d240337/positions/new",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/project-position-new--1440x900--dark.png",
+      "findings": [
+        {
+          "kind": "gradient",
+          "detail": "svg · 100010001000"
+        },
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · Módulo 11000 × 1000 mm · rgb(72, 188, 175) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · Marco · rgb(72, 188, 175) 2px 0px 0px 0px inset"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/34c8e59f-fa83-4368-a4ef-91939d240337/positions/new"
+    },
+    {
+      "route": "project-position-new",
+      "url": "/projects/34c8e59f-fa83-4368-a4ef-91939d240337/positions/new",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/project-position-new--1280x800--light.png",
+      "findings": [
+        {
+          "kind": "gradient",
+          "detail": "svg · 100010001000"
+        },
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · Módulo 11000 × 1000 mm · rgb(11, 119, 112) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · Marco · rgb(11, 119, 112) 2px 0px 0px 0px inset"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/34c8e59f-fa83-4368-a4ef-91939d240337/positions/new"
+    },
+    {
+      "route": "project-position-new",
+      "url": "/projects/34c8e59f-fa83-4368-a4ef-91939d240337/positions/new",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/project-position-new--1280x800--dark.png",
+      "findings": [
+        {
+          "kind": "gradient",
+          "detail": "svg · 100010001000"
+        },
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · Módulo 11000 × 1000 mm · rgb(72, 188, 175) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · Marco · rgb(72, 188, 175) 2px 0px 0px 0px inset"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/34c8e59f-fa83-4368-a4ef-91939d240337/positions/new"
+    },
+    {
+      "route": "project-position-new",
+      "url": "/projects/34c8e59f-fa83-4368-a4ef-91939d240337/positions/new",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/project-position-new--1024x768--light.png",
+      "findings": [
+        {
+          "kind": "gradient",
+          "detail": "svg · 100010001000"
+        },
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · Módulo 11000 × 1000 mm · rgb(11, 119, 112) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · Marco · rgb(11, 119, 112) 2px 0px 0px 0px inset"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/34c8e59f-fa83-4368-a4ef-91939d240337/positions/new"
+    },
+    {
+      "route": "project-position-new",
+      "url": "/projects/34c8e59f-fa83-4368-a4ef-91939d240337/positions/new",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/project-position-new--1024x768--dark.png",
+      "findings": [
+        {
+          "kind": "gradient",
+          "detail": "svg · 100010001000"
+        },
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · Módulo 11000 × 1000 mm · rgb(72, 188, 175) 2px 0px 0px 0px inset"
+        },
+        {
+          "kind": "shadow-offscale",
+          "detail": "div · Marco · rgb(72, 188, 175) 2px 0px 0px 0px inset"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/projects/34c8e59f-fa83-4368-a4ef-91939d240337/positions/new"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/aea13443-95ac-48a3-b472-2669f15fa1fa/positions/2b31e67b-c2df-4463-8428-f2a8c1d6184d/edit",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/project-position-edit--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/aea13443-95ac-48a3-b472-2669f15fa1fa/positions/2b31e67b-c2df-4463-8428-f2a8c1d6184d/edit"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/aea13443-95ac-48a3-b472-2669f15fa1fa/positions/2b31e67b-c2df-4463-8428-f2a8c1d6184d/edit",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/project-position-edit--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/aea13443-95ac-48a3-b472-2669f15fa1fa/positions/2b31e67b-c2df-4463-8428-f2a8c1d6184d/edit"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/aea13443-95ac-48a3-b472-2669f15fa1fa/positions/2b31e67b-c2df-4463-8428-f2a8c1d6184d/edit",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/project-position-edit--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/aea13443-95ac-48a3-b472-2669f15fa1fa/positions/2b31e67b-c2df-4463-8428-f2a8c1d6184d/edit"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/aea13443-95ac-48a3-b472-2669f15fa1fa/positions/2b31e67b-c2df-4463-8428-f2a8c1d6184d/edit",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/project-position-edit--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/aea13443-95ac-48a3-b472-2669f15fa1fa/positions/2b31e67b-c2df-4463-8428-f2a8c1d6184d/edit"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/aea13443-95ac-48a3-b472-2669f15fa1fa/positions/2b31e67b-c2df-4463-8428-f2a8c1d6184d/edit",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/project-position-edit--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/aea13443-95ac-48a3-b472-2669f15fa1fa/positions/2b31e67b-c2df-4463-8428-f2a8c1d6184d/edit"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/aea13443-95ac-48a3-b472-2669f15fa1fa/positions/2b31e67b-c2df-4463-8428-f2a8c1d6184d/edit",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/project-position-edit--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/aea13443-95ac-48a3-b472-2669f15fa1fa/positions/2b31e67b-c2df-4463-8428-f2a8c1d6184d/edit"
+    }
+  ]
+}

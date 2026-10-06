@@ -183,71 +183,340 @@
   font-size: var(--text-display);
   line-height: 1.5;
 }
-/* Vano header strip — location/quantity/system are the position's own
-   fields, edited in the workspace header rather than buried in a rail. */
-.position-head {
-  background: var(--theme-surface);
-  border: 1px solid var(--theme-border);
-  border-radius: var(--radius-md);
-  padding: var(--space-8) var(--space-12);
+/* P04 — position editor shell: a bounded app viewport. The 48 px strip
+   carries crumbs + fields + save state + price + status; the canvas-first
+   grid fills the rest and nothing page-scrolls. The studio route keeps a
+   tighter gutter than the generic 1.5rem workspace padding so the canvas
+   keeps its ≥60% share at 1440 (rail + inspector are already fixed). */
+.workspace:has(.position-editor-shell) {
+  padding: 1rem;
 }
 
-/* fieldset ignores display:flex on its children — the row carries the layout. */
-.position-head__row {
-  align-items: end;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-12);
-}
-
-.position-head__field {
+.position-editor-shell {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  min-width: 7rem;
+  height: calc(100dvh - 4.375rem);
+  max-height: calc(100dvh - 4.375rem);
+  max-width: none;
+  min-height: 0;
 }
 
-/* The finish picker sits beside the system field — same field language as
-   position metadata, narrower: it never takes the wide grid cell. */
-.position-head__color {
-  align-self: center;
-  display: flex;
-  flex-direction: column;
-  font-size: var(--text-xs);
-  gap: var(--space-4);
-}
-
-.position-head__color > span {
-  color: var(--theme-text-muted);
-}
-
-.position-head__field--wide {
+.position-editor-shell .editor-surface {
   flex: 1;
-  min-width: 12rem;
+  min-height: 0;
 }
 
-.position-head__field > span {
+.editor-strip {
+  align-items: center;
+  border-bottom: 1px solid var(--theme-border-subtle);
+  display: flex;
+  gap: var(--space-8);
+  height: 3rem;
+  min-height: 3rem;
+  padding: 0 var(--space-12);
+}
+
+.editor-strip__crumbs {
+  align-items: center;
+  display: flex;
+  gap: var(--space-4);
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.editor-strip__crumb {
+  color: var(--theme-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-strip__crumb--here {
+  color: var(--theme-text-primary);
+  font-weight: 600;
+}
+
+.editor-strip__sep {
   color: var(--theme-text-muted);
-  font-size: var(--text-xs);
 }
 
-.position-head__field input,
-.position-head__field select {
+.editor-strip__location {
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   font: inherit;
+  max-width: 14rem;
+  min-width: 6rem;
   padding: var(--space-4) var(--space-8);
 }
 
-.position-head__hint,
-.position-head__alert {
-  align-self: center;
+.editor-strip__location:hover,
+.editor-strip__location:focus {
+  border-color: var(--theme-border-subtle);
+}
+
+.editor-strip__qty {
+  align-items: center;
   color: var(--theme-text-muted);
-  flex-basis: 100%;
+  display: flex;
+  gap: 2px;
+}
+
+.editor-strip__qty input {
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  padding: var(--space-4);
+  text-align: right;
+  width: 3.5rem;
+}
+
+.editor-strip__qty input:hover,
+.editor-strip__qty input:focus {
+  border-color: var(--theme-border-subtle);
+}
+
+.editor-strip__chip {
+  background: transparent;
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--theme-text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--type-dense);
+  max-width: 14rem;
+  overflow: hidden;
+  padding: var(--space-4) var(--space-8);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-strip__chip:hover:not(:disabled) {
+  border-color: var(--theme-accent);
+}
+
+.editor-strip__chip:disabled {
+  color: var(--theme-text-muted);
+  cursor: default;
+}
+
+.editor-strip__end {
+  align-items: center;
+  display: flex;
+  gap: var(--space-8);
+  margin-left: auto;
+}
+
+.editor-strip__save {
+  color: var(--theme-text-muted);
+  font-size: var(--type-dense);
+  white-space: nowrap;
+}
+
+.editor-strip__tool {
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--theme-text-secondary);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: var(--space-4);
+}
+
+.editor-strip__tool:hover:not(:disabled) {
+  background: var(--theme-surface-hover);
+  color: var(--theme-text-primary);
+}
+
+.editor-strip__tool:disabled {
+  color: var(--theme-text-muted);
+  cursor: default;
+  opacity: 0.45;
+}
+
+.editor-pop {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  min-width: 16rem;
+  padding: var(--space-8);
+}
+
+.editor-pop__field {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--text-xs);
+  gap: var(--space-4);
+}
+
+.editor-pop__field > span {
+  color: var(--theme-text-muted);
+}
+
+.editor-pop__hint {
+  color: var(--theme-text-muted);
   font-size: var(--text-xs);
   margin: 0;
 }
 
-.position-head__alert[role="alert"] {
+/* Live price chip — engine numbers only; "calculando" never a stale
+   figure. */
+.live-price {
+  align-items: baseline;
+  display: inline-flex;
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-size: var(--type-dense);
+  font-variant-numeric: tabular-nums;
+  gap: var(--space-8);
+  white-space: nowrap;
+}
+
+.live-price__unit {
+  color: var(--theme-text-secondary);
+}
+
+.live-price__line {
+  color: var(--theme-text-primary);
+  font-weight: 600;
+}
+
+.live-price__state {
+  color: var(--theme-text-muted);
+}
+
+/* Pending state dims statically — a long breathe animation violates the
+   * motion guard (no effects over 280 ms in product UI). */
+.live-price.is-pending .live-price__state {
+  opacity: 0.55;
+}
+
+/* Qué falta — the status chip that replaces the orange banner. */
+.missing-chip {
+  background: transparent;
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--theme-text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--type-dense);
+  padding: var(--space-4) var(--space-8);
+  white-space: nowrap;
+}
+
+.missing-chip--ok {
+  color: var(--info-ink);
+}
+
+.missing-chip--warn {
+  border-color: var(--warn-ink);
+  color: var(--warn-ink);
+}
+
+.missing-chip--blocked {
+  border-color: var(--danger-ink);
   color: var(--danger-ink);
+}
+
+.missing-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 22rem;
+  min-width: 18rem;
+  padding: var(--space-8);
+}
+
+.missing-panel__title {
+  font-size: var(--type-dense);
+  margin: 0;
+}
+
+.missing-panel__empty {
+  color: var(--theme-text-secondary);
+  font-size: var(--type-dense);
+  margin: 0;
+}
+
+.missing-panel__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  list-style: none;
+  margin: 0;
+  max-height: 16rem;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.missing-item {
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-4) var(--space-8);
+  text-align: left;
+}
+
+.missing-item:hover {
+  background: var(--theme-surface-hover);
+}
+
+.missing-item__reason {
+  color: var(--theme-text-primary);
+  font-size: var(--type-dense);
+}
+
+.missing-item__action {
+  color: var(--theme-text-muted);
+  font-size: var(--type-micro);
+}
+
+/* Project positions filmstrip — dock tab content. */
+.position-strip {
+  display: flex;
+  gap: var(--space-8);
+  overflow-x: auto;
+  padding: var(--space-4) 0;
+}
+
+.position-strip__item {
+  align-items: baseline;
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--theme-text-secondary);
+  display: flex;
+  gap: var(--space-8);
+  padding: var(--space-4) var(--space-8);
+  white-space: nowrap;
+}
+
+.position-strip__item:hover {
+  border-color: var(--theme-accent);
+  color: var(--theme-text-primary);
+  text-decoration: none;
+}
+
+.position-strip__item.is-active {
+  background: var(--theme-accent-soft);
+  border-color: var(--info-ink);
+  color: var(--info-ink);
+}
+
+.position-strip__item--new {
+  border-style: dashed;
+  color: var(--theme-text-muted);
+}
+
+.position-strip__index {
+  font-weight: 600;
+}
+
+.position-strip__meta {
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-size: var(--type-micro);
 }
 
 /* D05 real finish picker — declared swatches per face; chips use the
@@ -343,52 +612,6 @@
 .color-selector__issue {
   color: var(--danger-ink);
   margin: 0;
-}
-
-.position-workspace {
-  display: grid;
-  gap: 0.75rem;
-  grid-template-columns: minmax(0, 1fr);
-  margin-top: 1rem;
-}
-
-/* The position editor is a design tool, not a form page — it uses the full
-   shell width and height: the route is a bounded app viewport where the
-   canvas dominates; the BOM scrolls inside the body region. */
-.position-editor {
-  display: flex;
-  flex-direction: column;
-  height: calc(100dvh - 4.875rem);
-  max-height: calc(100dvh - 4.875rem);
-  max-width: none;
-}
-
-.position-body {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-height: 0;
-  /* The editor route is a bounded app viewport — the body never scrolls, so a
-     wheel gesture over the canvas pans the drawing instead of trapping the
-     page scroll. Ancillary content (BOM) docks below in its own scroller. */
-  overflow: hidden;
-}
-
-.position-body .position-workspace {
-  flex: 1;
-  grid-template-rows: auto minmax(0, 1fr);
-  min-height: 0;
-}
-
-.position-body .assembly-editor {
-  height: 100%;
-}
-@media (max-height: 700px) {
-  /* Short laptop screens: let the editor shrink below the 28rem floor rather
-     than clip its status bar under the non-scrolling body. */
-  .position-body .assembly-editor {
-    min-height: 0;
-  }
 }
 
 /* Unsaved-draft recovery banner — a reload no longer silently discards the
@@ -813,37 +1036,6 @@ p.handle-pending {
   text-align: left;
   padding: 0.5rem;
   border-bottom: 1px solid var(--theme-border-subtle);
-}
-@media (max-width: 960px) {
-  .position-workspace {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* Design library — starter cards previewed through the product renderer */
-.starter-library {
-  margin-bottom: 0.75rem;
-  border: 1px solid var(--theme-border-subtle);
-  border-radius: var(--r-1);
-  background: var(--theme-surface-panel);
-  min-width: 0;
-}
-.starter-library > summary {
-  cursor: pointer;
-  padding: 0.625rem 0.75rem;
-  font-weight: 600;
-  color: var(--theme-text-primary);
-  list-style: none;
-}
-.starter-library > summary::before {
-  content: "▸";
-  display: inline-block;
-  margin-right: 0.5rem;
-  color: var(--theme-accent);
-  transition: transform 0.12s ease;
-}
-.starter-library[open] > summary::before {
-  transform: rotate(90deg);
 }
 .starter-gallery-wrap {
   padding: 0.25rem 0.75rem 0.75rem;
@@ -1953,4 +2145,16 @@ p.handle-pending {
 
 .project-services__status.is-error {
   color: var(--danger-ink);
+}
+
+.position-editor-shell .editor-strip {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.position-editor-shell > .handle-pending,
+.position-editor-shell > .draft-banner,
+.position-editor-shell > p[role="status"] {
+  flex: none;
+  margin: 0.25rem 0.75rem 0;
 }

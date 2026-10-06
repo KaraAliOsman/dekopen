@@ -1043,6 +1043,32 @@ export function setAllModuleHeights(product: ProductJson, heightMm: string): Pro
   };
 }
 
+/** Single-module height — the arrow-nudge contract edits the selected
+ * module only (≠ setAllModuleHeights, which sizes the whole elevation). */
+export function setModuleHeight(
+  product: ProductJson,
+  moduleId: string,
+  heightMm: string,
+): ProductJson {
+  return {
+    ...product,
+    assembly: {
+      ...product.assembly,
+      modules: product.assembly.modules.map((module) =>
+        module.id !== moduleId
+          ? module
+          : {
+              ...module,
+              height_mm: heightMm,
+              ...(module.contour
+                ? { contour: scaledContour(module.contour, module.width_mm, heightMm) }
+                : {}),
+            },
+      ),
+    },
+  };
+}
+
 export function equalizeModuleWidths(product: ProductJson): ProductJson {
   const modules = product.assembly.modules;
   const total = totalModuleWidth(product);

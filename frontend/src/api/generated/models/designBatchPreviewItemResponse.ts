@@ -7,8 +7,10 @@
  */
 
 export interface DesignBatchPreviewItemResponse {
-  position_id: string;
-  index?: number;
+  /** @nullable */
+  position_id: string | null;
+  /** @nullable */
+  index?: number | null;
   ok: boolean;
   /** @nullable */
   error_code?: string | null;
@@ -23,4 +25,12 @@ export interface DesignBatchPreviewItemResponse {
   line_cost_before?: string | null;
   /** @nullable */
   line_cost_after?: string | null;
+  /** @nullable */
+  unit_net_before?: string | null;
+  /** @nullable */
+  unit_net_after?: string | null;
+  /** @nullable */
+  line_net_before?: string | null;
+  /** @nullable */
+  line_net_after?: string | null;
 }

@@ -186,7 +186,9 @@
 }
 
 .tree-label__detail {
-  color: var(--theme-text-muted);
+  /* Secondary ink: muted measured 4.32:1 on the dark surface — under AA
+   * for this detail line. */
+  color: var(--theme-text-secondary);
   font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
   font-size: var(--type-micro);
   overflow: hidden;
@@ -328,7 +330,9 @@
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-md);
   bottom: 0.75rem;
-  color: var(--theme-text-muted);
+  /* Secondary ink, not muted: on the panel's dark surface muted measured
+   * 4.32:1 — under AA for this readout's size. */
+  color: var(--theme-text-secondary);
   font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
   font-size: var(--type-dense);
   padding: 0.3rem 0.55rem;

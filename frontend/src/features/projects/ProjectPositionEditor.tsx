@@ -27,7 +27,8 @@ import { UnsavedChangesGuard } from "../../app/UnsavedChangesGuard";
 import { useShellLeaf } from "../../app/shellLeaf";
 import { t, tDynamic, tOptional } from "../../i18n/es-CL";
 import { domainLabel } from "../../i18n/domainLabels";
-import { DeniedState } from "../../ui";
+import { DeniedState, Popover } from "../../ui";
+import { useMediaQuery } from "../../utils/useMediaQuery";
 import { type CanvasDesignInputs, useCanvasStore } from "../canvas/canvasStore";
 import { ColorSelector, combinationIssue } from "./ColorSelector";
 import { useProject } from "./useProject";
@@ -40,7 +41,6 @@ import {
   starterNominalSize,
   type StarterDefinition,
 } from "../canvas/designLibrary";
-import { resolveMembers } from "../canvas/members";
 import {
   clearPositionDraft,
   positionDraftKey,
@@ -48,7 +48,6 @@ import {
   readPositionDraft,
   writePositionDraft,
 } from "./positionDraft";
-import { StarterGallery } from "../canvas/StarterGallery";
 import { VanoSection } from "./VanoSection";
 import {
   EMPTY_VANO,
@@ -67,6 +66,9 @@ import {
   type ProductJson,
 } from "../canvas/productEditing";
 import { PositionExtrasPanel } from "./PositionExtrasPanel";
+import { LivePriceChip, useLivePrice } from "./LivePriceChip";
+import { PositionStrip } from "./PositionStrip";
+import { WhatsMissing, type MissingItem } from "./WhatsMissing";
 
 import "./projects.css";
 
@@ -385,9 +387,6 @@ function PositionWorkspace({
   // When opened via ?copy=<id>, the source vano's index for the banner that
   // explains what's conserved — the copy is intent, not identity.
   const [copiedFrom, setCopiedFrom] = useState<string | null>(null);
-  // New positions open on the design library (the start point); saved ones go
-  // straight to the canvas — picking a starter collapses it.
-  const [libraryOpen, setLibraryOpen] = useState(!positionId && !copyId);
   const generation = useRef(0);
   const inputs = useCanvasStore((s) => s.inputs);
   const canUndo = useCanvasStore((s) => s.past.length > 0);
@@ -902,6 +901,26 @@ function PositionWorkspace({
   // D07 — la cota doble del lienzo y el chip leen la misma resolución: la
   // preview en vivo cuando el borrador cambió, la guardada cuando no.
   const liveResolution = vanoPreview?.resolution ?? saved?.measurement?.resolution ?? null;
+  // The strip's breadcrumbs and the dock's filmstrip read the project the
+  // parent already fetched — same query key, no second request.
+  const projectData = useProject(projectId);
+  const project = projectData.data;
+  const currency = project?.currency ?? "CLP";
+  const readOnly = useMediaQuery("(max-width: 1023px)");
+  const [systemChipOpen, setSystemChipOpen] = useState(false);
+  const [colorChipOpen, setColorChipOpen] = useState(false);
+  const systemAnchorRef = useRef<HTMLButtonElement>(null);
+  const colorAnchorRef = useRef<HTMLButtonElement>(null);
+  // Live net price: same `design_batch_preview` gate as Guardar, debounced.
+  // While a quote is in flight the chip says "calculando" — never a stale
+  // number presented as current.
+  const livePrice = useLivePrice({
+    projectId,
+    positionId: saved?.id ?? null,
+    quantity,
+    designPayload: () => designPayload(inputs, declaredColors) as { [key: string]: unknown } | null,
+    enabled: loaded && !readOnly,
+  });
   const liveMountingLabel = useMemo(() => {
     const rule = vanoPreview?.mounting_rule ?? saved?.measurement?.mounting_rule ?? null;
     return rule ? domainLabel("CodeEnum", rule.code).label : "";
@@ -925,7 +944,6 @@ function PositionWorkspace({
     setLocation(draft.location);
     setQuantity(draft.quantity);
     setVanoDraft(draft.vano ?? EMPTY_VANO);
-    setLibraryOpen(false);
     setViewEpoch((epoch) => epoch + 1);
     setPendingDraft(null);
     setMessage("");
@@ -951,7 +969,6 @@ function PositionWorkspace({
     // the inspector pointed at a module that no longer exists.
     store.select(nextProduct.assembly.modules[0]?.id ?? null);
     setViewEpoch((epoch) => epoch + 1);
-    setLibraryOpen(false);
     onAssemblyChanged();
   };
   // Overview-level position facts — the editable fields live in the
@@ -1032,55 +1049,282 @@ function PositionWorkspace({
       {extrasPanel}
     </>
   );
+  // «Qué falta» — one item per blocker, workshop language, anchored to the
+  // field that resolves it. Order = the order an estimator would fix them.
+  const missingItems: MissingItem[] = [];
+  if (!systemId) {
+    missingItems.push({
+      key: "system",
+      reason: t("projects.chooseSystem"),
+      action: t("projects.missingActionPick"),
+      anchor: "[data-missing=system]",
+    });
+  }
+  if (quantityInvalid) {
+    missingItems.push({
+      key: "quantity",
+      reason: t("projects.qtyInvalid"),
+      action: t("projects.missingActionFix"),
+      anchor: "[data-missing=quantity]",
+    });
+  }
+  if (colorUndeclared) {
+    missingItems.push({
+      key: "color",
+      reason: t("projects.colorNotDeclared"),
+      action: t("projects.missingActionPick"),
+      anchor: "[data-missing=color]",
+    });
+  } else if (colorPairIssue !== null) {
+    missingItems.push({
+      key: "color",
+      reason: colorPairIssue,
+      action: t("projects.missingActionPick"),
+      anchor: "[data-missing=color]",
+    });
+  }
+  if (vanoInvalid) {
+    missingItems.push({
+      key: "vano",
+      reason: t("projects.vanoInvalid"),
+      action: t("projects.missingActionFix"),
+      anchor: ".position-panel",
+    });
+  }
+  if (fillUnassigned) {
+    missingItems.push({
+      key: "glazing",
+      reason: t("projects.glazingMissing"),
+      action: t("projects.missingActionPick"),
+      anchor: "[data-section=glazing]",
+    });
+  }
+  if (assemblyUnsaveable && assemblyEval !== null && assemblyEval.issues.length > 0) {
+    missingItems.push({
+      key: "engine",
+      reason: issueText(
+        assemblyEval.issues[0]!,
+        inputs.product?.assembly.modules ?? [],
+        inputs.product?.assembly.couplings ?? [],
+      ),
+      anchor: ".assembly-canvas",
+    });
+  }
+  const missingBlocked =
+    !systemId || quantityInvalid || colorUndeclared || colorPairIssue !== null || vanoInvalid;
+
+  const colorChipLabel =
+    colorOptions.find((option) => option.code === inputs.color)?.name ??
+    tDynamic("projects.color", inputs.color);
+
   return (
-    <section className="projects-page position-editor">
+    <section className="position-editor-shell">
       <UnsavedChangesGuard dirty={dirty} message={t("projects.leaveUnsaved")} />
-      <header className="projects-header">
-        <div>
+      {/* Franja superior ≈48 px: migas, campos, chips, precio, estado. */}
+      <header className="editor-strip" data-testid="editor-strip">
+        <h1 className="visually-hidden">{location || t("projects.position")}</h1>
+        <nav className="editor-strip__crumbs" aria-label={t("crumb.label")}>
           <Link
-            className="ui-backlink ui-backlink--back"
-            to={projectId ? `/projects/${projectId}` : "/projects"}
+            className="editor-strip__crumb"
+            aria-label={`${t("projects.back")}: ${project?.name ?? t("crumb.projectFallback")}`}
+            to={`/projects/${projectId}`}
           >
-            {t("projects.back")}
+            {project?.name ?? t("crumb.projectFallback")}
           </Link>
-          <h1>{location || t("projects.position")}</h1>
-        </div>
-        <span role="status">
-          {dirty
-            ? t("projects.unsaved")
-            : saved === null
-              ? t("projects.draft")
-              : t("projects.savedState")}
-        </span>
-        <button disabled={!canUndo || busy} onClick={() => applyHistory("undo")}>
-          {t("projects.undo")}
-        </button>
-        <button disabled={!canRedo || busy} onClick={() => applyHistory("redo")}>
-          {t("projects.redo")}
-        </button>
+          <span aria-hidden="true" className="editor-strip__sep">
+            ›
+          </span>
+          <span className="editor-strip__crumb editor-strip__crumb--here">
+            {saved
+              ? t("projects.positionIndex").replace("{n}", String(saved.position_index))
+              : t("crumb.positionNew")}
+          </span>
+        </nav>
+        <input
+          className="editor-strip__location"
+          aria-label={t("projects.location")}
+          placeholder={t("projects.locationPlaceholder")}
+          value={location}
+          disabled={busy || readOnly}
+          onChange={(e) => setLocation(e.target.value)}
+        />
+        <label className="editor-strip__qty">
+          <span aria-hidden="true">×</span>
+          <input
+            aria-label={t("pricing.quantity")}
+            data-missing="quantity"
+            inputMode="numeric"
+            value={quantity}
+            disabled={busy || readOnly}
+            onChange={(e) => setQuantity(e.target.value)}
+          />
+        </label>
         <button
-          className="primary-action"
-          disabled={
-            uncertainCreate ||
-            busy ||
-            !result ||
-            !options.data ||
-            assemblyUnsaveable ||
-            quantityInvalid ||
-            colorUndeclared ||
-            vanoInvalid
-          }
-          title={
-            saveBlockReason !== null
-              ? `${t("projects.saveBlocked")}: ${saveBlockReason}`
-              : !result || assemblyUnsaveable
-                ? t("projects.saveBlocked")
-                : `${t("projects.save")} (Ctrl+S)`
-          }
-          onClick={() => void save()}
+          type="button"
+          ref={systemAnchorRef}
+          className="editor-strip__chip"
+          data-missing="system"
+          aria-label={t("projects.system")}
+          aria-expanded={systemChipOpen}
+          aria-haspopup="dialog"
+          disabled={busy || readOnly}
+          onClick={() => setSystemChipOpen((open) => !open)}
         >
-          {t("projects.save")}
+          {systemName}
         </button>
+        {systemChipOpen && (
+          <Popover anchorRef={systemAnchorRef} onClose={() => setSystemChipOpen(false)}>
+            <div className="editor-pop" role="dialog" aria-label={t("projects.system")}>
+              <label className="editor-pop__field">
+                <span>{t("projects.system")}</span>
+                <select
+                  className="assembly-select"
+                  aria-label={t("projects.system")}
+                  value={systemId}
+                  onChange={(e) => {
+                    const next = e.target.value || null;
+                    if (inputs.systemId !== next) {
+                      useCanvasStore.getState().commitInputs({ ...inputs, systemId: next });
+                      setMessage("");
+                    }
+                    // Single-pick chip: choosing a series closes the popover —
+                    // left open it overlays and blocks the inspector below.
+                    setSystemChipOpen(false);
+                  }}
+                >
+                  <option value="">{t("projects.chooseSystem")}</option>
+                  {systems.data
+                    ?.filter((system) => system.quote_ready)
+                    .map((system) => (
+                      <option key={system.id} value={system.id}>
+                        {system.name}
+                        {system.is_demo ? ` · ${t("projects.synthetic")}` : ""}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              {limitsLine && (
+                <p className="editor-pop__hint">
+                  {t("projects.systemLimits")}: {limitsLine}
+                </p>
+              )}
+            </div>
+          </Popover>
+        )}
+        <button
+          type="button"
+          ref={colorAnchorRef}
+          className="editor-strip__chip"
+          data-missing="color"
+          aria-label={t("projects.color")}
+          aria-expanded={colorChipOpen}
+          aria-haspopup="dialog"
+          disabled={busy || readOnly}
+          onClick={() => setColorChipOpen((open) => !open)}
+        >
+          {colorChipLabel}
+        </button>
+        {colorChipOpen && (
+          <Popover anchorRef={colorAnchorRef} onClose={() => setColorChipOpen(false)}>
+            <div className="editor-pop" role="dialog" aria-label={t("projects.color")}>
+              {colorOptions.length > 0 ? (
+                <ColorSelector
+                  options={colorOptions}
+                  bicolorAllowed={bicolorAllowed}
+                  colorInterior={inputs.color}
+                  colorExterior={inputs.colorExterior}
+                  disabled={busy}
+                  onChange={(color, colorExterior) =>
+                    useCanvasStore.getState().commitInputs({
+                      ...inputs,
+                      color,
+                      colorExterior,
+                    })
+                  }
+                />
+              ) : (
+                <select
+                  className="assembly-select"
+                  aria-label={t("projects.color")}
+                  disabled={busy || declaredColors.length === 0}
+                  value={inputs.color}
+                  onChange={(event) =>
+                    useCanvasStore.getState().commitInputs({
+                      ...inputs,
+                      color: event.target.value as CanvasDesignInputs["color"],
+                      colorExterior: "",
+                    })
+                  }
+                >
+                  {colorChoices.length === 0 && (
+                    <option value={inputs.color}>{inputs.color}</option>
+                  )}
+                  {colorChoices.map((color) => (
+                    <option key={color} value={color}>
+                      {tDynamic("projects.color", color)}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </Popover>
+        )}
+        {vanoChip !== null && (
+          <span className="ui-badge ui-chip ui-badge--info vano-chip">{vanoChip}</span>
+        )}
+        <div className="editor-strip__end">
+          <span className="editor-strip__save" role="status">
+            {dirty
+              ? t("projects.unsaved")
+              : saved === null
+                ? t("projects.draft")
+                : t("projects.savedState")}
+          </span>
+          <button
+            className="editor-strip__tool"
+            disabled={!canUndo || busy || readOnly}
+            title={`${t("projects.undo")} — Ctrl+Z`}
+            aria-label={t("projects.undo")}
+            onClick={() => applyHistory("undo")}
+          >
+            ↺
+          </button>
+          <button
+            className="editor-strip__tool"
+            disabled={!canRedo || busy || readOnly}
+            title={`${t("projects.redo")} — Ctrl+Y`}
+            aria-label={t("projects.redo")}
+            onClick={() => applyHistory("redo")}
+          >
+            ↻
+          </button>
+          <LivePriceChip price={livePrice.price} pending={livePrice.pending} currency={currency} />
+          <WhatsMissing items={missingItems} blocked={missingBlocked} disabled={readOnly} />
+          <button
+            className="primary-action"
+            disabled={
+              uncertainCreate ||
+              busy ||
+              readOnly ||
+              !result ||
+              !options.data ||
+              assemblyUnsaveable ||
+              quantityInvalid ||
+              colorUndeclared ||
+              vanoInvalid
+            }
+            title={
+              saveBlockReason !== null
+                ? `${t("projects.saveBlocked")}: ${saveBlockReason}`
+                : !result || assemblyUnsaveable
+                  ? t("projects.saveBlocked")
+                  : `${t("projects.save")} (Ctrl+S)`
+            }
+            onClick={() => void save()}
+          >
+            {t("projects.save")}
+          </button>
+        </div>
       </header>
       {/* The blocked hint lives BELOW the header row — inside the flex it
        * pushed Deshacer/Guardar left whenever it appeared, and a click aimed
@@ -1124,148 +1368,45 @@ function PositionWorkspace({
           </button>
         </div>
       )}
-      <fieldset className="position-head" disabled={busy}>
-        {/* <fieldset> can't be a flex container — the row wraps the fields
-            so the strip stays horizontal. */}
-        <div className="position-head__row">
-          <label className="position-head__field">
-            <span>{t("projects.location")}</span>
-            <input
-              aria-label={t("projects.location")}
-              placeholder={t("projects.locationPlaceholder")}
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
+      <AssemblyEditor
+        organizationId={orgId}
+        couplerSkus={options.data?.coupler_skus ?? []}
+        glassSkus={options.data?.glass_skus ?? []}
+        panelSkus={options.data?.panel_skus ?? []}
+        options={options.data}
+        optionsReady={options.data !== undefined || options.isError}
+        disabled={busy}
+        onChanged={onAssemblyChanged}
+        onEvaluationChange={onAssemblyEvaluation}
+        positionId={saved?.id ?? null}
+        positionPanel={positionPanel}
+        contentEpoch={viewEpoch}
+        vano={vanoDim}
+        onPickStarter={pickStarter}
+        currency={currency}
+        currentLineNet={livePrice.price?.netless ? null : (livePrice.price?.lineNet ?? null)}
+        quoteProposal={async (proposed) => {
+          const payload = designPayload({ ...inputs, product: proposed }, declaredColors) as {
+            [key: string]: unknown;
+          } | null;
+          return livePrice.quote(payload, Math.max(1, Number.parseInt(quantity, 10) || 1));
+        }}
+        dock={{
+          positions: project?.positions ? (
+            <PositionStrip
+              projectId={projectId}
+              positions={project.positions}
+              currentId={saved?.id ?? null}
+              currency={currency}
             />
-          </label>
-          <label className="position-head__field">
-            <span>{t("pricing.quantity")}</span>
-            <input
-              inputMode="numeric"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-            />
-          </label>
-          <label className="position-head__field position-head__field--wide">
-            <span>{t("projects.system")}</span>
-            <select
-              className="assembly-select"
-              aria-label={t("projects.system")}
-              value={systemId}
-              onChange={(e) => {
-                const next = e.target.value || null;
-                if (inputs.systemId !== next) {
-                  useCanvasStore.getState().commitInputs({ ...inputs, systemId: next });
-                  setMessage("");
-                }
-              }}
-            >
-              <option value="">{t("projects.chooseSystem")}</option>
-              {systems.data
-                ?.filter((system) => system.quote_ready)
-                .map((system) => (
-                  <option key={system.id} value={system.id}>
-                    {system.name}
-                    {system.is_demo ? ` · ${t("projects.synthetic")}` : ""}
-                  </option>
-                ))}
-            </select>
-          </label>
-          {limitsLine && (
-            <p className="position-head__limits">
-              {t("projects.systemLimits")}: {limitsLine}
-            </p>
-          )}
-          {vanoChip !== null && (
-            <span className="ui-badge ui-chip ui-badge--info vano-chip">{vanoChip}</span>
-          )}
-          {(systems.isError || options.isError) && (
-            <p className="position-head__alert" role="alert">
-              {t("projects.catalogError")}
-            </p>
-          )}
-          {(systems.isPending || (systemId && options.isPending)) && (
-            <p className="position-head__alert" role="status">
-              {t("projects.loading")}
-            </p>
-          )}
-          <div className="position-head__color">
-            <span>{t("projects.color")}</span>
-            {colorOptions.length > 0 ? (
-              <ColorSelector
-                options={colorOptions}
-                bicolorAllowed={bicolorAllowed}
-                colorInterior={inputs.color}
-                colorExterior={inputs.colorExterior}
-                disabled={busy}
-                onChange={(color, colorExterior) =>
-                  useCanvasStore.getState().commitInputs({
-                    ...inputs,
-                    color,
-                    colorExterior,
-                  })
-                }
-              />
-            ) : (
-              <select
-                className="assembly-select"
-                aria-label={t("projects.color")}
-                disabled={busy || declaredColors.length === 0}
-                value={inputs.color}
-                onChange={(event) =>
-                  useCanvasStore.getState().commitInputs({
-                    ...inputs,
-                    color: event.target.value as CanvasDesignInputs["color"],
-                    colorExterior: "",
-                  })
-                }
-              >
-                {colorChoices.length === 0 && <option value={inputs.color}>{inputs.color}</option>}
-                {colorChoices.map((color) => (
-                  <option key={color} value={color}>
-                    {tDynamic("projects.color", color)}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-        </div>
-      </fieldset>
-      <div className="position-body">
-        <div className="position-workspace">
-          <details
-            className="starter-library"
-            open={libraryOpen}
-            onToggle={(event) => setLibraryOpen(event.currentTarget.open)}
-          >
-            <summary>{t("assembly.starterLibrary")}</summary>
-            <StarterGallery
-              members={resolveMembers(options.data)}
-              disabled={busy}
-              onPick={pickStarter}
-            />
-          </details>
-          <AssemblyEditor
-            organizationId={orgId}
-            couplerSkus={options.data?.coupler_skus ?? []}
-            glassSkus={options.data?.glass_skus ?? []}
-            panelSkus={options.data?.panel_skus ?? []}
-            options={options.data}
-            optionsReady={options.data !== undefined || options.isError}
-            disabled={busy}
-            onChanged={onAssemblyChanged}
-            onEvaluationChange={onAssemblyEvaluation}
-            positionId={saved?.id ?? null}
-            positionPanel={positionPanel}
-            contentEpoch={viewEpoch}
-            vano={vanoDim}
-          />
-        </div>
-      </div>
-      {result ? (
-        <ProjectBom result={result} />
-      ) : (
-        <p role="status">{t("projects.calculationRequired")}</p>
-      )}
+          ) : null,
+          bom: result ? (
+            <ProjectBom result={result} />
+          ) : (
+            <p role="status">{t("projects.calculationRequired")}</p>
+          ),
+        }}
+      />
     </section>
   );
 }
