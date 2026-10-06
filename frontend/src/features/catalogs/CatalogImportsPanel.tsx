@@ -16,6 +16,13 @@ import type {
 import { CatalogItemRoleEnum } from "../../api/generated/models";
 import { domainLabel } from "../../i18n/domainLabels";
 import { t, tOptional, type TranslationKey } from "../../i18n/es-CL";
+import { StatusChip } from "../../ui/StatusChip";
+import {
+  IMPORT_CONFIDENCE_LABEL,
+  IMPORT_CONFIDENCE_TONE,
+  IMPORT_STATUS_LABEL,
+  IMPORT_STATUS_TONE,
+} from "./importStatus";
 
 const ct = (key: string) => t(`catalog.${key}` as TranslationKey);
 
@@ -127,14 +134,6 @@ function candidateFieldSummary(fields: Record<string, unknown>): string {
     .join(" · ");
 }
 
-const STATUS_LABEL: Record<string, TranslationKey> = {
-  UPLOADED: "projects.importsStatusUploaded",
-  EXTRACTING: "projects.importsStatusExtracting",
-  REVIEW_READY: "projects.importsStatusReviewReady",
-  CONFIRMED: "projects.importsStatusConfirmed",
-  FAILED: "projects.importsStatusFailed",
-};
-
 // Import warnings and per-item errors travel as codes — the UI owes the
 // catalog manager workshop language, never raw enum identifiers.
 const WARNING_LABEL: Record<string, string> = {
@@ -180,14 +179,6 @@ function codeText(code: string): string {
   // solo los códigos compactos sin mapeo caen al mensaje genérico.
   return code.includes(" ") ? code : ct("importsErrorUnknown");
 }
-
-const CONFIDENCE_LABEL: Record<string, string> = {
-  VERIFIED_STRUCTURED: "importsConfidenceVerified",
-  HIGH_CANDIDATE: "importsConfidenceCandidate",
-  REVIEW_REQUIRED: "importsConfidenceReview",
-  LOW: "importsConfidenceLow",
-  ERROR: "importsConfidenceError",
-};
 
 /** 'Seguro' = structured or unambiguous evidence and no disagreement with the
  * live catalog. Pre-selection only — every suggestion still waits for the
@@ -543,11 +534,13 @@ export function CatalogImportsPanel({
                 <tr key={entry.id}>
                   <td title={entry.file_name}>{entry.file_name}</td>
                   <td>
-                    <span
-                      className={`production-chip imports-status-${entry.status.toLowerCase()}`}
-                    >
-                      {t(STATUS_LABEL[entry.status] ?? "projects.importsStatusUploaded")}
-                    </span>
+                    <StatusChip
+                      label={t(
+                        IMPORT_STATUS_LABEL[entry.status] ?? "projects.importsStatusUploaded",
+                      )}
+                      tone={IMPORT_STATUS_TONE[entry.status] ?? "neutral"}
+                      value={null}
+                    />
                     {entry.status === "FAILED" && entry.error_code && (
                       <span className="imports-warning">{codeText(entry.error_code)}</span>
                     )}
@@ -646,9 +639,13 @@ export function CatalogImportsPanel({
                             />
                           </td>
                           <td colSpan={3}>
-                            <span className="production-chip">{ct(`entity.${row.entity}`)}</span>{" "}
+                            <StatusChip
+                              label={ct(`entity.${row.entity}`)}
+                              tone="neutral"
+                              value={null}
+                            />{" "}
                             {row.published && (
-                              <span className="production-chip">{ct("importsPublished")}</span>
+                              <StatusChip label={ct("importsPublished")} tone="ok" value={null} />
                             )}{" "}
                             {summary || ct("importsNoFields")}
                           </td>
@@ -663,11 +660,14 @@ export function CatalogImportsPanel({
                             >
                               {ct("importsEvidence")}
                             </button>
-                            <span
-                              className={`production-chip imports-confidence-${row.confidence.toLowerCase()}`}
-                            >
-                              {ct(CONFIDENCE_LABEL[row.confidence] ?? "importsConfidenceReview")}
-                            </span>
+                            <StatusChip
+                              label={t(
+                                IMPORT_CONFIDENCE_LABEL[row.confidence] ??
+                                  "catalog.importsConfidenceReview",
+                              )}
+                              tone={IMPORT_CONFIDENCE_TONE[row.confidence] ?? "neutral"}
+                              value={null}
+                            />
                             {row.row_errors.map((error) => (
                               <span key={error} className="imports-warning">
                                 {error}
@@ -715,7 +715,7 @@ export function CatalogImportsPanel({
                             }
                           />
                           {row.published && (
-                            <span className="production-chip">{ct("importsPublished")}</span>
+                            <StatusChip label={ct("importsPublished")} tone="ok" value={null} />
                           )}
                         </td>
                         <td>
@@ -815,11 +815,14 @@ export function CatalogImportsPanel({
                           >
                             {ct("importsEvidence")}
                           </button>
-                          <span
-                            className={`production-chip imports-confidence-${row.confidence.toLowerCase()}`}
-                          >
-                            {ct(CONFIDENCE_LABEL[row.confidence] ?? "importsConfidenceReview")}
-                          </span>
+                          <StatusChip
+                            label={t(
+                              IMPORT_CONFIDENCE_LABEL[row.confidence] ??
+                                "catalog.importsConfidenceReview",
+                            )}
+                            tone={IMPORT_CONFIDENCE_TONE[row.confidence] ?? "neutral"}
+                            value={null}
+                          />
                           {row.warnings.length > 0 && (
                             <span className="imports-warning">
                               {row.warnings.map(codeText).join(" · ")}

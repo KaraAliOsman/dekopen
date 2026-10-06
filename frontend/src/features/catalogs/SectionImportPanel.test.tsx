@@ -59,7 +59,7 @@ describe("SectionImportPanel", () => {
     fireEvent.change(screen.getByLabelText(t("catalog.sectionImport.scale") as never), {
       target: { value: "2" },
     });
-    await waitFor(() => expect(screen.getByText(/40\.0 × 40\.0 mm/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/40 × 40 mm/)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: t("catalog.sectionImport.apply") }));
 
     expect(onApply).toHaveBeenCalledWith({

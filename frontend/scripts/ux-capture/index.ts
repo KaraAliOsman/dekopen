@@ -101,6 +101,8 @@ async function main() {
     waitFor: r.waitFor,
     extraMobile: r.extraMobile,
     touchAudit: r.touchAudit,
+    expectViolations: r.expectViolations,
+    toleratedHttpStatuses: r.toleratedHttpStatuses,
   }));
   if (jobs.length === 0) {
     console.error("no routes matched the filters");

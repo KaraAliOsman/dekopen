@@ -155,9 +155,17 @@
  * selected" can never be confused with a tinted disclosure that merely
  * CONTAINS the selection on an ancestor row. */
 .tree-row.is-selected {
+  position: relative;
   background: var(--theme-accent-soft);
   border-radius: var(--radius-sm);
-  box-shadow: inset 2px 0 0 var(--theme-accent);
+}
+
+.tree-row.is-selected::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2px;
+  background: var(--theme-accent);
 }
 
 .tree-row.is-selected .tree-label {
@@ -238,10 +246,6 @@
 }
 
 .canvas-viewport .canvas-sheet {
-  background-image:
-    linear-gradient(to right, rgb(209 216 216 / 0.3) 1px, transparent 1px),
-    linear-gradient(to bottom, rgb(209 216 216 / 0.3) 1px, transparent 1px);
-  background-size: 24px 24px;
   cursor: grab;
   display: block;
   height: 100%;
@@ -893,7 +897,7 @@
 
 .plan-issue-flag {
   fill: var(--theme-danger);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 /* --- Direct manipulation: divider grips, seam grips, divide preview --- */

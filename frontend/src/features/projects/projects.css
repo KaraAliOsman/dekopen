@@ -566,7 +566,7 @@
 
 .color-chip.is-selected {
   border-color: var(--theme-accent);
-  box-shadow: 0 0 0 1px var(--theme-accent);
+  outline: 1px solid var(--theme-accent);
 }
 
 .color-chip.is-undeclared {
@@ -1132,7 +1132,7 @@ p.handle-pending {
 .payments-progress > div {
   height: 100%;
   background: var(--accent);
-  transition: width 0.3s ease;
+  transition: width 0.28s ease;
 }
 .imports-empty {
   color: var(--theme-text-secondary);
@@ -1257,6 +1257,7 @@ p.handle-pending {
 }
 
 .position-row {
+  position: relative;
   align-items: center;
   background: var(--theme-surface-panel);
   border: 1px solid var(--theme-border-subtle);
@@ -1274,7 +1275,14 @@ p.handle-pending {
 
 .position-row[data-selected] {
   border-color: var(--theme-accent);
-  box-shadow: inset 2px 0 0 var(--theme-accent);
+}
+
+.position-row[data-selected]::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2px;
+  background: var(--theme-accent);
 }
 
 .position-row:focus-visible {
@@ -1596,7 +1604,7 @@ p.handle-pending {
 
 .commercial-step[data-state="current"] .commercial-step__marker {
   border-color: var(--theme-accent);
-  box-shadow: 0 0 0 3px var(--theme-accent-soft, rgba(37, 99, 235, 0.15));
+  outline: 3px solid var(--theme-accent-soft, rgba(37, 99, 235, 0.15));
 }
 
 .commercial-step[data-state="current"] .commercial-step__label {
@@ -1727,21 +1735,6 @@ p.handle-pending {
 .compare-row__changes li {
   border-top: 1px dashed var(--theme-border-subtle);
   padding: 0.125rem 0;
-}
-
-.compare-chip[data-status="added"] {
-  background: var(--theme-accent-soft, rgba(37, 99, 235, 0.12));
-  color: var(--info-ink);
-}
-
-.compare-chip[data-status="removed"] {
-  background: var(--theme-danger-soft);
-  color: var(--danger-ink);
-}
-
-.compare-chip[data-status="changed"] {
-  background: var(--theme-warning-soft, rgba(217, 119, 6, 0.12));
-  color: var(--warn-ink);
 }
 
 .projects-error-actions {
@@ -1893,7 +1886,7 @@ p.handle-pending {
 
 .vano-point__tag {
   color: var(--theme-text-muted);
-  font-size: 0.6875rem;
+  font-size: var(--type-micro);
 }
 
 .vano-point input {

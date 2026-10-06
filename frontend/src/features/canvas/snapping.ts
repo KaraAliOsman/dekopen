@@ -1,3 +1,5 @@
+import { fmtWire } from "../../format";
+
 const MAX_DIMENSION_CENTI_MM = 9_999_999_999n;
 const FIFTY_MM_CENTI = 5_000n;
 const TEN_MM_CENTI = 1_000n;
@@ -110,5 +112,5 @@ export function snapOuterDimension(
 
 export function presentationNumberToDecimal(value: number): string {
   if (!Number.isFinite(value)) throw new Error("Pointer coordinate must be finite");
-  return value.toFixed(6);
+  return fmtWire(value, 6);
 }

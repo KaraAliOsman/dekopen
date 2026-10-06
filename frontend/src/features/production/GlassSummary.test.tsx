@@ -43,14 +43,23 @@ describe("GlassSummary", () => {
     expect(screen.getByText("4-16-4 Float Incoloro")).toBeTruthy();
     expect(screen.getByText("4.4.2-12-4 Laminado")).toBeTruthy();
     // two identical panes collapse into one dims row, order qty 2 → 4
-    expect(screen.getByText("680×1 310 mm")).toBeTruthy();
+    expect(
+      screen.getAllByText((_, el) => el?.textContent?.replace(/\s/g, " ") === "680 × 1 310 mm")
+        .length,
+    ).toBeGreaterThan(0);
     expect(screen.getByText("4")).toBeTruthy();
     // exact decimal sums: 2×0.8908=1.7816 → ×2 units = 3.5632; total 4.8474
     // §3.3 surface format: m² a 2 decimales con coma; kg a 1 decimal.
-    expect(screen.getByText("3,56 m²")).toBeTruthy();
-    expect(screen.getByText("4,85 m²")).toBeTruthy();
+    expect(
+      screen.getAllByText((_, el) => el?.textContent?.replace(/\s/g, " ") === "3,56 m²").length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText((_, el) => el?.textContent?.replace(/\s/g, " ") === "4,85 m²").length,
+    ).toBeGreaterThan(0);
     // weight 17.82*2*2 + 12.84*2 = 96.96
-    expect(screen.getByText("97,0 kg")).toBeTruthy();
+    expect(
+      screen.getAllByText((_, el) => el?.textContent?.replace(/\s/g, " ") === "97,0 kg").length,
+    ).toBeGreaterThan(0);
   });
 
   it("shows the sealed edge polishing per pane and exports a deterministic CSV", () => {

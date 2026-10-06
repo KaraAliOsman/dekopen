@@ -35,6 +35,7 @@ import type {
   SiiCertificate,
 } from "../api/generated/models";
 import { PageHeader } from "../ui";
+import { StatusChip } from "../ui/StatusChip";
 import { useAuthSession } from "../auth/AuthSessionProvider";
 import { AiSettingsCard } from "../features/assistant/AiSettingsCard";
 import { formatDate } from "../format";
@@ -150,11 +151,13 @@ function FlowIntegrationCard({ orgId }: { orgId: string }): JSX.Element {
       <h3 className="eyebrow">{t("settings.flow")}</h3>
       <p className="settings-hint">{t("settings.flowHint")}</p>
       <p>
-        <span
-          className={`production-chip ${status?.configured ? "delivery-delivered" : "delivery-scheduled"}`}
-        >
-          {status?.configured ? t("settings.flowConfigured") : t("settings.flowNotConfigured")}
-        </span>
+        <StatusChip
+          label={
+            status?.configured ? t("settings.flowConfigured") : t("settings.flowNotConfigured")
+          }
+          tone={status?.configured ? "ok" : "warn"}
+          value={null}
+        />
         {status?.api_key_preview && (
           <span className="settings-mono"> · {status.api_key_preview}</span>
         )}

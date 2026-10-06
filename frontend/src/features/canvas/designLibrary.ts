@@ -1,5 +1,6 @@
 import type { TranslationKey } from "../../i18n/es-CL";
 import type { IntentNode, Opening } from "./intentEditing";
+import { fmtWire } from "../../format";
 import {
   makeArchModule,
   makeBowProduct,
@@ -35,14 +36,14 @@ function coupledModules(
       modules: [
         {
           id: crypto.randomUUID(),
-          width_mm: (widthMm * firstShare).toFixed(2),
-          height_mm: heightMm.toFixed(2),
+          width_mm: fmtWire(widthMm * firstShare),
+          height_mm: fmtWire(heightMm),
           tree: first,
         },
         {
           id: crypto.randomUUID(),
-          width_mm: (widthMm * (1 - firstShare)).toFixed(2),
-          height_mm: heightMm.toFixed(2),
+          width_mm: fmtWire(widthMm * (1 - firstShare)),
+          height_mm: fmtWire(heightMm),
           tree: second,
         },
       ],
@@ -61,12 +62,12 @@ function splitBay(
     {
       id: crypto.randomUUID(),
       type: direction,
-      split_offset_mm: (direction === "SPLIT_V" ? widthMm / 2 : heightMm / 2).toFixed(2),
+      split_offset_mm: direction === "SPLIT_V" ? fmtWire(widthMm / 2) : fmtWire(heightMm / 2),
       mullion_profile_sku: null,
       children,
     },
-    widthMm.toFixed(2),
-    heightMm.toFixed(2),
+    fmtWire(widthMm),
+    fmtWire(heightMm),
   );
 }
 
@@ -77,13 +78,13 @@ export const STARTER_DEFINITIONS: StarterDefinition[] = [
     key: "fixed",
     titleKey: "assembly.starter.fixed",
     hintKey: "assembly.starter.fixedHint",
-    build: (w, h) => wrapTreeAsProduct(starterTree("FIXED"), w.toFixed(2), h.toFixed(2)),
+    build: (w, h) => wrapTreeAsProduct(starterTree("FIXED"), fmtWire(w), fmtWire(h)),
   },
   {
     key: "sash",
     titleKey: "assembly.starter.sash",
     hintKey: "assembly.starter.sashHint",
-    build: (w, h) => wrapTreeAsProduct(starterTree("TILT_TURN_LEFT"), w.toFixed(2), h.toFixed(2)),
+    build: (w, h) => wrapTreeAsProduct(starterTree("TILT_TURN_LEFT"), fmtWire(w), fmtWire(h)),
   },
   {
     key: "twoSash",
@@ -96,19 +97,19 @@ export const STARTER_DEFINITIONS: StarterDefinition[] = [
     key: "sliding2",
     titleKey: "assembly.starter.sliding2",
     hintKey: "assembly.starter.sliding2Hint",
-    build: (w, h) => wrapTreeAsProduct(starterTree("SLIDING_2L"), w.toFixed(2), h.toFixed(2)),
+    build: (w, h) => wrapTreeAsProduct(starterTree("SLIDING_2L"), fmtWire(w), fmtWire(h)),
   },
   {
     key: "sliding3",
     titleKey: "assembly.starter.sliding3",
     hintKey: "assembly.starter.sliding3Hint",
-    build: (w, h) => wrapTreeAsProduct(starterTree("SLIDING_3L"), w.toFixed(2), h.toFixed(2)),
+    build: (w, h) => wrapTreeAsProduct(starterTree("SLIDING_3L"), fmtWire(w), fmtWire(h)),
   },
   {
     key: "awning",
     titleKey: "assembly.starter.awning",
     hintKey: "assembly.starter.awningHint",
-    build: (w, h) => wrapTreeAsProduct(starterTree("AWNING"), w.toFixed(2), h.toFixed(2)),
+    build: (w, h) => wrapTreeAsProduct(starterTree("AWNING"), fmtWire(w), fmtWire(h)),
   },
   {
     key: "awningBand",
@@ -156,8 +157,8 @@ export const STARTER_DEFINITIONS: StarterDefinition[] = [
         modules: [
           makeTrapezoidModule(
             "m1",
-            w.toFixed(2),
-            h.toFixed(2),
+            fmtWire(w),
+            fmtWire(h),
             Math.round(w * 0.15),
             Math.round(w * 0.15),
             starterTree("FIXED"),
@@ -175,13 +176,7 @@ export const STARTER_DEFINITIONS: StarterDefinition[] = [
       version: "product-v2" as const,
       assembly: {
         modules: [
-          makeArchModule(
-            "m1",
-            w.toFixed(2),
-            h.toFixed(2),
-            Math.round(w * 0.2),
-            starterTree("FIXED"),
-          ),
+          makeArchModule("m1", fmtWire(w), fmtWire(h), Math.round(w * 0.2), starterTree("FIXED")),
         ],
         couplings: [],
       },
@@ -194,7 +189,7 @@ export const STARTER_DEFINITIONS: StarterDefinition[] = [
     build: (w, h) => ({
       version: "product-v2" as const,
       assembly: {
-        modules: [makeFramelessModule("m1", w.toFixed(2), h.toFixed(2), starterTree("FIXED"))],
+        modules: [makeFramelessModule("m1", fmtWire(w), fmtWire(h), starterTree("FIXED"))],
         couplings: [],
       },
     }),

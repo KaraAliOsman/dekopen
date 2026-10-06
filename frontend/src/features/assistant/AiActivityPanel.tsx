@@ -8,6 +8,8 @@ import type { AiInvocation } from "../../api/generated/models/aiInvocation";
 import { formatDateTime, formatMoney } from "../../format";
 import { t, type TranslationKey } from "../../i18n/es-CL";
 import { EmptyState } from "../../ui";
+import { StatusBadge } from "../../ui/StatusBadge";
+import { EntityCode } from "../../ui/format";
 
 const STATUS_KEYS: Record<string, TranslationKey> = {
   ok: "jobs.activity.ok",
@@ -188,13 +190,11 @@ export function AiActivityPanel({
                       : `≈ ${formatMoney(row.est_cost_usd, "USD")}`}
                   </td>
                   <td>
-                    <span
-                      className="status-chip"
-                      data-status={row.status === "ok" ? "completed" : "cancelled"}
-                    >
-                      {t(STATUS_KEYS[row.status] ?? "jobs.activity.ok")}
-                    </span>
-                    {row.error_code && <code className="job-row-code">{row.error_code}</code>}
+                    <StatusBadge
+                      label={t(STATUS_KEYS[row.status] ?? "jobs.activity.ok")}
+                      tone={row.status === "ok" ? "success" : "danger"}
+                    />
+                    {row.error_code && <EntityCode value={row.error_code} />}
                   </td>
                 </tr>
               ))}

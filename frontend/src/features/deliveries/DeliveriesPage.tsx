@@ -18,6 +18,7 @@ import {
 } from "../../ui";
 
 import "./deliveries.css";
+import { EntityCode } from "../../ui/format";
 
 const DELIVERY_ROLES = ["OWNER", "WORKSHOP_MANAGER", "INSTALLER"];
 const WINDOWS = ["open", "today", "overdue", "all"] as const;
@@ -123,7 +124,7 @@ export function DeliveriesPage(): JSX.Element {
                     </td>
                     <td>
                       <span className="deliveries-project">
-                        <span className="mono">{item.project_code}</span>
+                        <EntityCode value={item.project_code} />
                         <span className="deliveries-project__name">{item.project_name}</span>
                       </span>
                     </td>

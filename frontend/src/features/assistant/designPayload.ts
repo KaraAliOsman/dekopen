@@ -1,5 +1,6 @@
 import type { PositionDesignRequest } from "../../api/generated/models/positionDesignRequest";
 import { elevationEnvelopeMm, isSingleUnit, type ProductJson } from "../canvas/productEditing";
+import { fmtWire } from "../../format";
 
 /** La forma de payload que el flujo Guardar del editor persiste: una unidad
  * suelta se guarda en la forma clásica documental, los ensambles reales como
@@ -22,8 +23,8 @@ export function designFromProduct(
       }
     : {
         system_id: systemId,
-        nominal_width_mm: envelope.width.toFixed(2),
-        nominal_height_mm: envelope.height.toFixed(2),
+        nominal_width_mm: fmtWire(envelope.width),
+        nominal_height_mm: fmtWire(envelope.height),
         color,
         parametric_tree: product,
       };

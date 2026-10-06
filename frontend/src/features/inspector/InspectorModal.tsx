@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { ApiError } from "../../api/apiMutator";
 import { engineCalculate, engineInspect, engineOptimizeCut } from "../../api/generated/dekopen";
 import type { AnnotationRequest, InspectorDiff } from "../../api/generated/models";
-import { fmtMm } from "../../format";
+import { EntityCode, Length } from "../../ui/format";
 import { t } from "../../i18n/es-CL";
 import { type CanvasDesignInputs, useCanvasStore } from "../canvas/canvasStore";
 import { calculationKey, requestFromInputs } from "../canvas/useEngineCalculation";
@@ -317,8 +317,8 @@ export function InspectorModal({
           <ul>
             {cutting.data?.purchase_list.map((line, i) => (
               <li key={i}>
-                <strong>{line.commercial_sku}</strong> · {line.qty_bars} {t("inspector.bars")} ·{" "}
-                {fmtMm(line.stock_length_mm)} mm · {line.material} · {line.color}
+                <EntityCode value={line.commercial_sku} /> · {line.qty_bars} {t("inspector.bars")} ·{" "}
+                <Length value={line.stock_length_mm} /> · {line.material} · {line.color}
               </li>
             ))}
           </ul>
@@ -326,17 +326,17 @@ export function InspectorModal({
           {cutting.data?.workshop_cut_plan.map((bar) => (
             <article key={bar.bar_index}>
               <h4>
-                {t("inspector.bar")} {bar.bar_index} · {fmtMm(bar.stock_length_mm)} mm
+                {t("inspector.bar")} {bar.bar_index} · <Length value={bar.stock_length_mm} />
               </h4>
               <p>
-                {t("inspector.kerf")}: {fmtMm(bar.kerf_total_mm)} mm · {t("inspector.trims")}:{" "}
-                {fmtMm(bar.head_trim_mm)} / {fmtMm(bar.tail_trim_mm)} mm ·{" "}
-                {t("inspector.remainder")}: {fmtMm(bar.remainder_mm)} mm
+                {t("inspector.kerf")}: <Length value={bar.kerf_total_mm} /> · {t("inspector.trims")}
+                : <Length value={bar.head_trim_mm} /> / <Length value={bar.tail_trim_mm} /> ·{" "}
+                {t("inspector.remainder")}: <Length value={bar.remainder_mm} />
               </p>
               <ol>
                 {bar.cuts.map((cut) => (
                   <li key={cut.sequence}>
-                    <strong>{cut.workshop_sku}</strong> · {fmtMm(cut.length_mm)} mm
+                    <EntityCode value={cut.workshop_sku} /> · <Length value={cut.length_mm} />
                   </li>
                 ))}
               </ol>

@@ -47,6 +47,7 @@ import {
 } from "./decimal";
 import { runJob } from "../jobs/runJob";
 import { useConfirm, usePrompt } from "../../ui";
+import { StatusBadge } from "../../ui/StatusBadge";
 
 function requirementsFor(position: DocumentaryPreparationPosition): HandleRequirement[] {
   const group = position.handle_requirements.find(
@@ -2044,9 +2045,18 @@ export function ProjectQuotationPanel({
                   data-status={link.status.toLowerCase()}
                   key={link.id}
                 >
-                  <span className="status-chip" data-status={link.status.toLowerCase()}>
-                    {t(approvalStatusKeys[link.status] ?? "quotation.linkPending")}
-                  </span>
+                  <StatusBadge
+                    label={t(approvalStatusKeys[link.status] ?? "quotation.linkPending")}
+                    tone={
+                      link.status === "APPROVED"
+                        ? "success"
+                        : link.status === "PENDING"
+                          ? "warning"
+                          : link.status === "DECLINED"
+                            ? "danger"
+                            : "neutral"
+                    }
+                  />
                   <strong>{formatRevision(link.revision_code)}</strong>
                   <time dateTime={link.created_at}>{formatDateTime(link.created_at)}</time>
                   {link.status === "PENDING" && (

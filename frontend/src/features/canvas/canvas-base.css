@@ -191,7 +191,7 @@
 .canvas-technical-results dt {
   color: var(--theme-text-secondary);
   font-size: var(--type-micro);
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }

@@ -28,6 +28,7 @@ import type {
   ProjectPayment,
 } from "../../api/generated/models";
 import { t, type TranslationKey } from "../../i18n/es-CL";
+import { StatusChip } from "../../ui/StatusChip";
 import { actionErrorDetail } from "../errors";
 import { formatDate, formatMoney, parseMoneyInput } from "../../format";
 import { formatRevision } from "../../format";
@@ -46,12 +47,11 @@ const METHOD_LABEL: Record<string, TranslationKey> = {
   CHECK: "projects.paymentMethodCheck",
   OTHER: "projects.paymentMethodOther",
 };
-const STATUS_LABEL: Record<string, TranslationKey> = {
-  NO_DEAL: "projects.paymentStatusNoDeal",
-  PENDING: "projects.paymentStatusPending",
-  PARTIAL: "projects.paymentStatusPartial",
-  PAID: "projects.paymentStatusPaid",
-};
+
+/** El track del envío SII no es enum orval: se pinta literal, con «—» si falta. */
+function envioStatusLabel(envio: { status?: string | null } | null | undefined): string {
+  return envio?.status ?? "—";
+}
 
 export function ProjectPaymentsPanel({
   projectId,
@@ -86,6 +86,7 @@ export function ProjectPaymentsPanel({
     },
   });
   const summary = paymentsQuery.data ?? null;
+  const summaryStatus = summary?.status ?? null;
   const setSummary = (data: PaymentsSummary) => queryClient.setQueryData(paymentsKey, data);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -559,9 +560,7 @@ export function ProjectPaymentsPanel({
       {message && <p className="form-error">{message}</p>}
       {summary && (
         <div className="payments-summary">
-          <span className={`production-chip delivery-${summary.status.toLowerCase()}`}>
-            {t(STATUS_LABEL[summary.status] ?? "projects.paymentStatusNoDeal")}
-          </span>
+          <StatusChip enumName="PaymentStatusEnum" value={summaryStatus} />
           <dl className="payments-summary-facts">
             <div>
               <dt>{t("projects.paymentCollected")}</dt>
@@ -727,7 +726,7 @@ export function ProjectPaymentsPanel({
                       {invoice.credit_note ? (
                         <button
                           type="button"
-                          className="production-chip delivery-cancelled"
+                          className={`production-chip ${invoice.credit_note.partial ? "is-warn" : "production-chip-danger"}`}
                           title={invoice.credit_note.credit_code}
                           onClick={() => {
                             if (invoice.credit_note) void openCreditNote(invoice.credit_note);
@@ -737,7 +736,11 @@ export function ProjectPaymentsPanel({
                           {`${t(invoice.credit_note.partial ? "projects.invoiceStatusCredited" : "projects.invoiceStatusAnnulled")} · ${invoice.credit_note.credit_code}`}
                         </button>
                       ) : (
-                        <span className="production-chip">{t("projects.invoiceStatusIssued")}</span>
+                        <StatusChip
+                          label={t("projects.invoiceStatusIssued")}
+                          tone="ok"
+                          value={null}
+                        />
                       )}
                       {invoice.dte && (
                         <button
@@ -769,7 +772,7 @@ export function ProjectPaymentsPanel({
                           onClick={() => void openEnvio(invoice)}
                           disabled={busy}
                         >
-                          {`${t("projects.envioStatus")} · ${invoice.dte.envio.status}`}
+                          {`${t("projects.envioStatus")} · ${envioStatusLabel(invoice.dte.envio)}`}
                         </button>
                       )}
                       {invoice.credit_note?.dte?.envio && (
@@ -782,7 +785,7 @@ export function ProjectPaymentsPanel({
                           }}
                           disabled={busy}
                         >
-                          {`${t("projects.envioStatus")} · ${invoice.credit_note.dte.envio.status}`}
+                          {`${t("projects.envioStatus")} · ${envioStatusLabel(invoice.credit_note.dte.envio)}`}
                         </button>
                       )}
                     </td>

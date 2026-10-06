@@ -4,12 +4,14 @@ import { Link, useParams } from "react-router-dom";
 import { projectsList, projectsRetrieve } from "../../api/generated/dekopen";
 
 import type { PriceResponse, ProjectResponse } from "../../api/generated/models";
-import { formatDateTime, shortTechnicalId } from "../../format";
+import { formatDateTime, formatPercent, shortTechnicalId } from "../../format";
 import { formatMoney } from "../../format";
 import { apiMutator, ApiError } from "../../api/apiMutator";
 import { actionErrorDetail } from "../errors";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
 import { DeniedState, PageHeader, Tabs } from "../../ui";
+import { StatusBadge } from "../../ui/StatusBadge";
+import { StatusChip } from "../../ui/StatusChip";
 import { PositionThumb } from "../projects/PositionThumb";
 import { t } from "../../i18n/es-CL";
 import { useCanvasStore } from "../canvas/canvasStore";
@@ -117,13 +119,6 @@ function contextLabel(value: unknown): string {
 }
 
 const ISO_DAY = /^(\d{4})-(\d{2})-(\d{2})/;
-/** Rates store as fractions (0.35); people think in percents — §3.3 a un
- * decimal con coma. */
-function pctDisplay(value: unknown): string {
-  const pct = Number(value) * 100;
-  if (!Number.isFinite(pct)) return "0";
-  return pct.toFixed(1).replace(".", ",");
-}
 /** A <input type=number> only accepts dot decimals — the comma display
  * would render the field blank on edit. */
 function pctInput(value: unknown): string {
@@ -155,7 +150,7 @@ function renderFieldValue(
     const match = ISO_DAY.exec(text);
     if (match) return `${match[3]}-${match[2]}-${match[1]}`;
   }
-  if (field.type === "percent") return `${pctDisplay(text)} %`;
+  if (field.type === "percent") return `${formatPercent(text)}`;
   if (field.name === "unit_cost" || field.name === "catalog_price" || field.name === "price")
     return formatMoney(text, "CLP");
   if (field.name === "created_at") return formatDateTime(text);
@@ -706,11 +701,14 @@ function CoverageList({ items }: { items: Row[] }): JSX.Element {
               {t(coverageKindLabels[String(item.kind)] ?? "pricing.coverageKind.other")} ·{" "}
               {String(item.required_unit)}
             </span>
-            <span className="status-chip" data-status={uncovered ? "declined" : "approved"}>
-              {uncovered
-                ? t("pricing.coverageMissing")
-                : `${Number(item.active_cost_items ?? 0)} ${t("pricing.coverageLists")}`}
-            </span>
+            <StatusBadge
+              label={
+                uncovered
+                  ? t("pricing.coverageMissing")
+                  : `${Number(item.active_cost_items ?? 0)} ${t("pricing.coverageLists")}`
+              }
+              tone={uncovered ? "danger" : "success"}
+            />
           </article>
         );
       })}
@@ -777,12 +775,10 @@ function AuditCard({ item }: { item: Row }): JSX.Element {
     <article className="audit-card">
       <header className="audit-card__header">
         <strong>{t(auditEntityLabels[entity] ?? "pricing.auditEntity.other")}</strong>
-        <span
-          className="status-chip"
-          data-status={verb === "INSERT" ? "completed" : verb === "DELETE" ? "revoked" : "pending"}
-        >
-          {t(auditActionLabels[verb] ?? "pricing.auditAction.other")}
-        </span>
+        <StatusBadge
+          label={t(auditActionLabels[verb] ?? "pricing.auditAction.other")}
+          tone={verb === "INSERT" ? "success" : verb === "DELETE" ? "danger" : "warning"}
+        />
         {project !== "" && <span className="audit-card__project">{project}</span>}
       </header>
       {label !== "" && <p className="audit-card__title">{label}</p>}
@@ -1084,13 +1080,13 @@ function CostComposition({
       </table>
       <p className="cost-composition__math">
         {t("pricing.materials")} {formatMoney(entry.materials_cost ?? "0", currency)} +{" "}
-        {t("pricing.wasteShort")} {pctDisplay(entry.waste_pct)} %
+        {t("pricing.wasteShort")} {formatPercent(entry.waste_pct)}
         {labour !== null &&
           ` + ${t("pricing.laborShort")} ${formatMoney(String(labour), currency)}`}{" "}
         → {t("pricing.unitCost")} {formatMoney(entry.unit_cost ?? "0", currency)}
         {marginPct !== null &&
-          ` · ${t("pricing.marginRealized")} ${marginPct.toFixed(1).replace(".", ",")} %`}
-        {discount > 0 && ` · ${t("pricing.discount")} ${pctDisplay(discount)} %`} →{" "}
+          ` · ${t("pricing.marginRealized")} ${formatPercent(marginPct, "points")}`}
+        {discount > 0 && ` · ${t("pricing.discount")} ${formatPercent(discount)}`} →{" "}
         {formatMoney(lineNet, currency)}
       </p>
     </div>
@@ -1116,7 +1112,7 @@ function marginText(net: string, cost: string, currency: string): string {
   const cents = diffCents % 100n;
   const signed = diffCents < 0n ? "-" : "";
   const text = `${signed}${whole < 0n ? -whole : whole}.${`${cents < 0n ? -cents : cents}`.padStart(2, "0")}`;
-  return `${formatMoney(text, currency)} · ${margin.toFixed(1).replace(".", ",")} %`;
+  return `${formatMoney(text, currency)} · ${formatPercent(margin, "points")}`;
 }
 
 // ——— P07 workspace payloads — server-derived, rendered verbatim ———
@@ -1200,22 +1196,23 @@ function MarginBand({
       </div>
       <p className="margin-band__labels">
         <span>
-          {t("pricing.marginMin")} {pctDisplay(band.min)} %
+          {t("pricing.marginMin")} {formatPercent(band.min)}
         </span>
         <span>
-          {t("pricing.bandObjective")} {pctDisplay(band.objective)} %
+          {t("pricing.bandObjective")} {formatPercent(band.objective)}
         </span>
         <span>
-          {t("pricing.marginMax")} {pctDisplay(band.max)} %
+          {t("pricing.marginMax")} {formatPercent(band.max)}
         </span>
         {value !== null && (
           <strong>
-            {t("pricing.bandRealized")} {pctDisplay(String(value))} %
+            {t("pricing.bandRealized")} {formatPercent(String(value))}
           </strong>
         )}
-        <span className="status-chip" data-status={state === "IN_BAND" ? "approved" : "pending"}>
-          {t(`pricing.band.${state}` as never)}
-        </span>
+        <StatusBadge
+          label={t(`pricing.band.${state}` as never)}
+          tone={state === "IN_BAND" ? "success" : "warning"}
+        />
         {state !== "IN_BAND" && !owner && (
           <span className="operation-warning">{t("pricing.bandPendingHint")}</span>
         )}
@@ -1509,7 +1506,7 @@ function OperationDecision({
       ? Number(((netCents - costCents) * 10000n) / netCents) / 100
       : null;
   const objective = Number(operation.rules?.default_margin_pct ?? NaN);
-  // Compare at the displayed precision (marginText renders toFixed(1)):
+  // Compare at the displayed precision (marginText renders one decimal):
   // a realized 34.9998% shows as "35.0 %" — flagging it "below objective"
   // next to that readout would contradict the number on screen.
   const marginBelow =
@@ -1519,27 +1516,16 @@ function OperationDecision({
   return (
     <article className="operation-decision">
       <header className="operation-decision__head">
-        <span className="status-chip" data-status={operation.state.toLowerCase()}>
-          {t(
-            operation.state === "PENDING"
-              ? "pricing.pending"
-              : operation.state === "APPLIED"
-                ? "pricing.applied"
-                : operation.state === "REJECTED"
-                  ? "pricing.rejected"
-                  : operation.state === "WITHDRAWN"
-                    ? "pricing.withdrawn"
-                    : "pricing.notApplied",
-          )}
-        </span>
+        <StatusChip enumName="PriceResponseStateEnum" value={operation.state} />
         {projectLabel && (
           <span className="operation-decision__meta">
             {t("pricing.projectId")}: {projectLabel}
           </span>
         )}
         <span className="operation-decision__meta">
-          {operation.revision_code} · {t("pricing.discount")} {pctDisplay(operation.discount_pct)}%
-          · <time dateTime={operation.created_at}>{formatDateTime(operation.created_at)}</time>
+          {operation.revision_code} · {t("pricing.discount")}{" "}
+          {formatPercent(operation.discount_pct)}·{" "}
+          <time dateTime={operation.created_at}>{formatDateTime(operation.created_at)}</time>
         </span>
         {stale && <p className="operation-decision__stale">{t("pricing.staleHint")}</p>}
       </header>
@@ -1574,7 +1560,7 @@ function OperationDecision({
                 <small>
                   {" "}
                   ({diffPct > 0 ? "+" : ""}
-                  {diffPct.toFixed(1).replace(".", ",")} %)
+                  {formatPercent(diffPct, "points")})
                 </small>
               )}
             </strong>
@@ -1692,7 +1678,7 @@ function OperationDecision({
                     </td>
                     <td>
                       {lineDiscount !== null && lineDiscount > 0
-                        ? `−${pctDisplay(lineDiscount)} %`
+                        ? `−${formatPercent(lineDiscount)}`
                         : "—"}
                     </td>
                     <td className="operation-lines__money">
@@ -1709,7 +1695,7 @@ function OperationDecision({
                               String(Number(line.line_net) / (1 - discount)),
                               operation.currency,
                             )}{" "}
-                            −{pctDisplay(discount)}%)
+                            −{formatPercent(discount)})
                           </span>
                         </>
                       ) : (
@@ -2453,19 +2439,7 @@ function CommercialOperations({
             <article className="operation-history__item" key={item.id}>
               <p>
                 <strong>{formatMoney(item.project_gross, item.currency)}</strong>{" "}
-                <span className="status-chip" data-status={item.state.toLowerCase()}>
-                  {t(
-                    item.state === "PENDING"
-                      ? "pricing.pending"
-                      : item.state === "APPLIED"
-                        ? "pricing.applied"
-                        : item.state === "REJECTED"
-                          ? "pricing.rejected"
-                          : item.state === "WITHDRAWN"
-                            ? "pricing.withdrawn"
-                            : "pricing.notApplied",
-                  )}
-                </span>
+                <StatusChip enumName="PriceResponseStateEnum" value={item.state} />
               </p>
               <p className="operation-history__meta">
                 {[

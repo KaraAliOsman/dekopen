@@ -21,7 +21,7 @@ import {
 import { finishFace, type MemberFinish } from "../canvas/finishes";
 import { reSkinMembers, tintMembers, type MemberGeometry } from "../canvas/members";
 import "./portal.css";
-import { formatDate, formatMoney } from "../../format";
+import { formatDate, formatMoney, formatPercent } from "../../format";
 
 const money = formatMoney;
 
@@ -95,12 +95,22 @@ const typologyKeys: Record<string, TranslationKey> = {
   COMPOSITE: "typology.composite",
 };
 
+// Misma curva sRGB que backend/documents/brand.py (_contrast_ratio):
+// elige la tinta que contrasta ≥ 4.5:1 con el acento de marca, sea cual
+// sea el tema — la validación AA del backend mide el acento sobre papel.
+function brandOnFill(hex: string): string {
+  const channel = (i: number) => parseInt(hex.slice(i, i + 2), 16) / 255;
+  const linear = (c: number) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+  const lum =
+    0.2126 * linear(channel(1)) + 0.7152 * linear(channel(3)) + 0.0722 * linear(channel(5));
+  return lum > 0.32 ? "var(--g-950)" : "var(--paper)";
+}
+
 /** discount_pct persists as a fraction (0.10 = 10 %) — never print it raw. */
 function pctLabel(raw: string | null | undefined): string {
   const fraction = Number(raw);
   if (!Number.isFinite(fraction)) return `${raw}%`;
-  const pct = fraction <= 1 ? fraction * 100 : fraction;
-  return `${pct.toFixed(1).replace(".", ",")} %`;
+  return formatPercent(fraction, fraction <= 1 ? "fraction" : "points");
 }
 
 function typologyLabel(raw: string | null | undefined): string {
@@ -417,11 +427,15 @@ export function PortalQuotePage(): JSX.Element {
   // White-label (P25): el acento del portal es el color de marca del
   // fabricante — ya llega validado AA desde el backend — como override
   // local del token de acento. Sin color válido, hereda el teal DEKOPEN.
+  // La tinta sobre el relleno de marca se elige por luminancia: el AA del
+  // backend se mide sobre papel, y en tema oscuro un acento profundo igual
+  // exige papel encima (rgb(7,95,90) sobre rgb(15,20,22) da 2.31 < 4.5).
   const accentStyle = org?.brand_color
     ? ({
         "--theme-accent": org.brand_color,
         "--theme-accent-strong": org.brand_color,
         "--theme-accent-soft": `${org.brand_color}20`,
+        "--theme-accent-onfill": brandOnFill(org.brand_color),
       } as CSSProperties)
     : undefined;
   // The hero is the customer's own largest glazed unit — rendered, not stock.

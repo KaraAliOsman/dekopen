@@ -15,7 +15,7 @@
   inset: 0;
   padding: 0;
   position: fixed;
-  z-index: 40;
+  z-index: var(--z-popover);
 }
 
 @media (max-width: 1024px) {
@@ -81,11 +81,11 @@
       transform 0.18s ease,
       visibility 0.18s ease;
     visibility: hidden;
-    z-index: 50;
+    z-index: var(--z-drawer);
   }
 
   .app-shell.rail-open .app-rail {
-    box-shadow: 0 0 2rem rgba(15, 15, 14, 0.35);
+    box-shadow: var(--shadow-e3);
     transform: translateX(0);
     visibility: visible;
   }

@@ -15,9 +15,12 @@ import { t } from "../../i18n/es-CL";
 import { domainLabel } from "../../i18n/domainLabels";
 import { Icon } from "../../ui/icons";
 import { fmtMm, shortTechnicalId } from "../../format";
+import { EntityCode, Length } from "../../ui/format";
 import { centerKindLabel, opKindLabel, stationCodeLabel } from "../production/labels";
 import { SectionPreviewSvg } from "../canvas/SectionPreviewSvg";
 import type { Resource, Row, catalogApi } from "./catalogModel";
+import { StatusBadge } from "../../ui/StatusBadge";
+import { StatusChip } from "../../ui/StatusChip";
 
 type Label = Parameters<typeof t>[0];
 const ct = (key: string) => t(`catalog.${key}` as Label);
@@ -86,12 +89,12 @@ function ProvenanceBadge({
   // "Verificado" is reserved for an actual technical review — provenance
   // alone (manual entry, an import, a demo seed) is not verification.
   if (row.technical_reviewed_at)
-    return <span className="ws-badge ws-badge--ok">{wst("verified")}</span>;
+    return <StatusChip label={wst("verified")} tone="ok" value={null} />;
   if (row.data_provenance === "LEGACY_UNVERIFIED")
-    return <span className="ws-badge ws-badge--warn">{ct("provenanceLegacy")}</span>;
+    return <StatusChip label={ct("provenanceLegacy")} tone="warn" value={null} />;
   if (row.review_pending)
-    return <span className="ws-badge ws-badge--warn">{ct("reviewPending")}</span>;
-  return <span className="ws-badge">{provenanceLabel(row.data_provenance)}</span>;
+    return <StatusChip label={ct("reviewPending")} tone="warn" value={null} />;
+  return <StatusChip label={provenanceLabel(row.data_provenance)} tone="neutral" value={null} />;
 }
 
 function ArticleCard({
@@ -126,7 +129,7 @@ function ArticleCard({
       <div className="ws-article-body">
         <header>
           <strong>{article.name}</strong>
-          <code>{article.sku}</code>
+          <EntityCode value={article.sku} />
         </header>
         <dl>
           <div>
@@ -135,14 +138,14 @@ function ArticleCard({
           </div>
           <div>
             <dt>{wst("face")}</dt>
-            <dd>{fmtMm(article.face_width_mm)} mm</dd>
+            <dd>
+              <Length value={article.face_width_mm} />
+            </dd>
           </div>
           <div>
             <dt>{wst("commercialLength")}</dt>
             <dd>
-              {article.commercial_length_mm
-                ? `${fmtMm(article.commercial_length_mm)} mm`
-                : wst("unknown")}
+              <Length value={article.commercial_length_mm} />
             </dd>
           </div>
           <div>
@@ -153,9 +156,9 @@ function ArticleCard({
             <dt>{wst("purchaseState")}</dt>
             <dd>
               {purchased ? (
-                <span className="ws-badge ws-badge--ok">{wst("mapped")}</span>
+                <StatusChip label={wst("mapped")} tone="ok" value={null} />
               ) : (
-                <span className="ws-badge ws-badge--warn">{wst("unmapped")}</span>
+                <StatusChip label={wst("unmapped")} tone="warn" value={null} />
               )}
             </dd>
           </div>
@@ -292,6 +295,10 @@ export function SystemWorkspaceView({
 }: WorkspaceProps): JSX.Element {
   const [workspace, setWorkspace] = useState<SystemWorkspace | null>(null);
   const [centers, setCenters] = useState<WorkCenter[] | null>(null);
+
+  /** Stations store the work-center CODE (catalog JSON); show its name. */
+  const centerName = (code: string): string =>
+    centers?.find((center) => center.code === code)?.name ?? code;
   const [evidenceRows, setEvidenceRows] = useState<EvidenceRow[] | null>(null);
   const [error, setError] = useState(false);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
@@ -518,12 +525,18 @@ export function SystemWorkspaceView({
               </span>
             ))}
             <ProvenanceBadge row={system} />
-            <span className="ws-badge">{system.is_active ? ct("active") : ct("inactive")}</span>
+            <StatusChip
+              label={system.is_active ? ct("active") : ct("inactive")}
+              tone={system.is_active ? "ok" : "neutral"}
+              value={null}
+            />
           </div>
           <dl className="ws-identity-facts">
             <div>
               <dt>{ct("field.depth_mm")}</dt>
-              <dd>{fmtMm(system.depth_mm)} mm</dd>
+              <dd>
+                <Length value={system.depth_mm} />
+              </dd>
             </div>
             <div>
               <dt>{ct("field.chamber_count")}</dt>
@@ -696,11 +709,21 @@ export function SystemWorkspaceView({
                   return (
                     <tr key={bead.id}>
                       <th scope="row">{article?.name ?? bead.bead_article_id}</th>
-                      <td>{fmtMm(bead.glass_thickness_mm)} mm</td>
-                      <td>{fmtMm(bead.bead_width_mm)} mm</td>
-                      <td>{fmtMm(bead.gasket_interior_mm)} mm</td>
-                      <td>{fmtMm(bead.gasket_exterior_mm)} mm</td>
-                      <td>{fmtMm(bead.cut_add_mm)} mm</td>
+                      <td>
+                        <Length value={bead.glass_thickness_mm} />
+                      </td>
+                      <td>
+                        <Length value={bead.bead_width_mm} />
+                      </td>
+                      <td>
+                        <Length value={bead.gasket_interior_mm} />
+                      </td>
+                      <td>
+                        <Length value={bead.gasket_exterior_mm} />
+                      </td>
+                      <td>
+                        <Length value={bead.cut_add_mm} />
+                      </td>
                       <td>
                         <button
                           type="button"
@@ -793,13 +816,19 @@ export function SystemWorkspaceView({
                     <tr key={row.id}>
                       <th scope="row">{parent?.name ?? row.parent_profile_article_id}</th>
                       <td>
-                        <code>{row.sku}</code>
-                        {row.is_default && <span className="ws-badge">{wst("default")}</span>}
+                        <EntityCode value={row.sku} />
+                        {row.is_default && (
+                          <StatusChip label={wst("default")} tone="neutral" value={null} />
+                        )}
                       </td>
                       <td>{row.name}</td>
-                      <td>{row.thickness_mm ? `${fmtMm(row.thickness_mm)} mm` : wst("unknown")}</td>
+                      <td>
+                        <Length value={row.thickness_mm} />
+                      </td>
                       <td>{row.ix_cm4 ? `${row.ix_cm4} cm⁴` : wst("unknown")}</td>
-                      <td>{fmtMm(row.stock_length_mm)} mm</td>
+                      <td>
+                        <Length value={row.stock_length_mm} />
+                      </td>
                       <td>{row.supplier_name ?? row.manufacturer_name ?? wst("unknown")}</td>
                     </tr>
                   );
@@ -838,7 +867,7 @@ export function SystemWorkspaceView({
                     <tr key={map.id}>
                       <th scope="row">{article?.name ?? map.profile_article_id}</th>
                       <td>
-                        <code>{map.commercial_sku}</code>
+                        <EntityCode value={map.commercial_sku} />
                       </td>
                       <td>{map.manufacturer_name}</td>
                       <td>{map.supplier_name ?? wst("unknown")}</td>
@@ -874,7 +903,7 @@ export function SystemWorkspaceView({
           <div className="ws-process">
             <header>
               <strong>
-                {process_profile.label} <code>{process_profile.code}</code> v
+                {process_profile.label} <EntityCode value={process_profile.code} /> v
                 {process_profile.version}
               </strong>
               <div className="ws-identity-meta">
@@ -905,7 +934,7 @@ export function SystemWorkspaceView({
                     <li key={index}>
                       <strong>{stationCodeLabel(station.code ?? station.station ?? "?")}</strong>
                       {station.when && <small> · {station.when}</small>}
-                      {station.work_center && <small> · {station.work_center}</small>}
+                      {station.work_center && <small> · {centerName(station.work_center)}</small>}
                     </li>
                   ))}
                 </ul>
@@ -967,12 +996,12 @@ export function SystemWorkspaceView({
                   <strong>{center.name}</strong>
                   <small>
                     {" "}
-                    · <code>{center.code}</code> · {centerKindLabel(center.kind)}
+                    · <EntityCode value={center.code} /> · {centerKindLabel(center.kind)}
                   </small>
                   {!center.active && (
                     <>
                       {" "}
-                      <span className="ws-chip ws-chip--off">{wst("centerInactive")}</span>
+                      <StatusBadge tone="neutral" label={wst("centerInactive")} />
                       {canEdit && (
                         <>
                           {" "}
@@ -1089,7 +1118,7 @@ export function SystemWorkspaceView({
                 <tr key={row.id}>
                   <td>{targetName(row)}</td>
                   <td>
-                    <code>{row.field_name}</code>
+                    <EntityCode value={row.field_name} />
                   </td>
                   <td>
                     {row.value_text ?? "—"}
@@ -1113,11 +1142,17 @@ export function SystemWorkspaceView({
                   </td>
                   <td>{row.scope}</td>
                   <td>
-                    <span
-                      className={`ws-badge ${row.review_state === "REVIEWED" ? "ws-badge--ok" : row.review_state === "REJECTED" ? "ws-badge--warn" : ""}`}
-                    >
-                      {wst(`evidenceState.${row.review_state}`)}
-                    </span>
+                    <StatusChip
+                      label={wst(`evidenceState.${row.review_state}`)}
+                      tone={
+                        row.review_state === "REVIEWED"
+                          ? "ok"
+                          : row.review_state === "REJECTED"
+                            ? "danger"
+                            : "neutral"
+                      }
+                      value={null}
+                    />
                   </td>
                   {canEdit && (
                     <td>

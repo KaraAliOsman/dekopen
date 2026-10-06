@@ -35,6 +35,7 @@ import { SURFACE_LABELS } from "./surfaces";
 import { jobErrorKey } from "../jobs/jobError";
 import { formatMoney, shortTechnicalId } from "../../format";
 import { t, type TranslationKey } from "../../i18n/es-CL";
+import { formatDate } from "../../format";
 
 /* ------------------------------------------------------------------ */
 /* §07-H — AI workspace: durable jobs with real state, a transcript     */
@@ -151,7 +152,7 @@ function relativeTime(iso: string | undefined): string {
   if (hours < 24) return t("aiws.hoursAgo").replace("{n}", String(hours));
   const days = Math.floor(hours / 24);
   if (days < 7) return t("aiws.daysAgo").replace("{n}", String(days));
-  return new Date(then).toLocaleDateString("es-CL", { day: "numeric", month: "short" });
+  return formatDate(then);
 }
 
 /** §IA3 — the worker names its own intermediate state on job_runs

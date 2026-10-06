@@ -8,6 +8,7 @@ import type {
 } from "../../api/generated/models";
 import type { CanvasDesignInputs } from "./canvasStore";
 import { elevationEnvelopeMm } from "./productEditing";
+import { fmtWire } from "../../format";
 
 export function assemblyRequestFromInputs(
   inputs: CanvasDesignInputs,
@@ -17,8 +18,8 @@ export function assemblyRequestFromInputs(
   const envelope = elevationEnvelopeMm(inputs.product);
   const request: EngineAssemblyCalculateRequest = {
     system_id: inputs.systemId,
-    nominal_width_mm: envelope.width.toFixed(2),
-    nominal_height_mm: envelope.height.toFixed(2),
+    nominal_width_mm: fmtWire(envelope.width),
+    nominal_height_mm: fmtWire(envelope.height),
     color: inputs.color,
     product: inputs.product,
   };

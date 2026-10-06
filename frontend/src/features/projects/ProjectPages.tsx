@@ -34,12 +34,15 @@ import { t, tOptional, type TranslationKey } from "../../i18n/es-CL";
 import { formatDate, formatMoney } from "../../format";
 import {
   fmtMm,
+  fmtQty,
   formatDateTime,
+  formatDims,
   formatPercent,
   formatRevision,
   isValidEmail,
   isValidRut,
 } from "../../format";
+import { EntityCode } from "../../ui/format";
 import { projectNameWrite } from "./projectNames";
 import { useProjectView } from "./useProject";
 import "./projects.css";
@@ -50,6 +53,8 @@ import { ProjectImportsPanel } from "./ProjectImportsPanel";
 import { ProjectServicesPanel } from "./ProjectServicesPanel";
 import { ProjectPaymentsPanel } from "./ProjectPaymentsPanel";
 import { Button, DeniedState, EmptyState, PageHeader, useConfirm } from "../../ui";
+import { StatusBadge } from "../../ui/StatusBadge";
+import { StatusChip } from "../../ui/StatusChip";
 
 const fields = [
   ["name", "projects.name", "text", 255],
@@ -432,7 +437,8 @@ const COMPARE_FIELD_KEYS: Record<string, TranslationKey> = {
 };
 
 // Compare values arrive as raw strings — render them as the reader expects:
-// money through formatMoney, dims without decimals, discounts as %.
+// money through formatMoney, dims without decimals, discounts as %,
+// technical identifiers through EntityCode (mono + copy).
 function formatCompareValue(field: string, value: string, currency: string): string {
   if (value === "" || value == null) return "";
   if (field === "price_net") return formatMoney(value, currency);
@@ -442,6 +448,20 @@ function formatCompareValue(field: string, value: string, currency: string): str
     return formatPercent(value, "fraction");
   }
   return value;
+}
+
+function CompareValue({
+  field,
+  value,
+  currency,
+}: {
+  field: string;
+  value: string;
+  currency: string;
+}): JSX.Element {
+  if (value === "" || value == null) return <>—</>;
+  if (field === "system_id") return <EntityCode value={value} />;
+  return <>{formatCompareValue(field, value, currency)}</>;
 }
 
 const PROJECT_ORDER = ["DRAFT", "QUOTED", "APPROVED", "IN_PRODUCTION", "COMPLETED"];
@@ -708,6 +728,7 @@ function ProjectHeader({
     approvalsList,
     now,
   );
+  const projectStatus = project.status;
   return (
     <div className="project-head">
       <div className="project-head__row">
@@ -715,9 +736,7 @@ function ProjectHeader({
           <h1>{project.name || project.code}</h1>
           <p className="project-head__meta">
             {project.name ? <span className="project-head__code">{project.code}</span> : null}
-            <span className="status-chip" data-status={project.status.toLowerCase()}>
-              {t(statuses[project.status])}
-            </span>
+            <StatusChip enumName="ProjectResponseStatusEnum" value={projectStatus} />
             {project.client_name && (
               <>
                 {" · "}
@@ -805,11 +824,11 @@ function ComparePosition({
           {entry.location_tag || row?.location_tag || t("projects.position")}
         </span>
         <span className="compare-row__dims">
-          {row ? `${fmtMm(row.width_mm)} × ${fmtMm(row.height_mm)} mm` : ""}
+          {row ? `${formatDims(row.width_mm, row.height_mm)} mm` : ""}
         </span>
         {entry.change === "ADDED" && row && (
           <span className="compare-row__detail">
-            {formatMoney(row.price_net ?? "0", currency)} · ×{row.quantity}
+            {formatMoney(row.price_net ?? "0", currency)} · ×{fmtQty(row.quantity)}
           </span>
         )}
         {entry.changes.length > 0 && (
@@ -817,25 +836,33 @@ function ComparePosition({
             {entry.changes.map((change) => (
               <li key={change.field}>
                 {t(COMPARE_FIELD_KEYS[change.field] ?? "projects.compareField.spec")}
-                {change.field === "spec" || change.field === "manufacturing"
-                  ? ""
-                  : `: ${formatCompareValue(change.field, change.before, currency) || "—"} → ${
-                      formatCompareValue(change.field, change.after, currency) || "—"
-                    }`}
+                {change.field === "spec" || change.field === "manufacturing" ? (
+                  ""
+                ) : (
+                  <>
+                    {": "}
+                    <CompareValue field={change.field} value={change.before} currency={currency} />
+                    {" → "}
+                    <CompareValue field={change.field} value={change.after} currency={currency} />
+                  </>
+                )}
               </li>
             ))}
           </ul>
         )}
       </span>
-      <span className="status-chip compare-chip" data-status={entry.change.toLowerCase()}>
-        {t(
+      <StatusBadge
+        label={t(
           entry.change === "ADDED"
             ? "projects.compareChangeAdded"
             : entry.change === "REMOVED"
               ? "projects.compareChangeRemoved"
               : "projects.compareChangeChanged",
         )}
-      </span>
+        tone={
+          entry.change === "ADDED" ? "success" : entry.change === "REMOVED" ? "danger" : "warning"
+        }
+      />
     </li>
   );
 }
@@ -1941,9 +1968,16 @@ function ProjectWorkspace({
                         `×${position.quantity}`
                       )}
                     </span>
-                    <span className="status-chip" data-status={status.tone}>
-                      {t(status.key)}
-                    </span>
+                    <StatusBadge
+                      label={t(status.key)}
+                      tone={
+                        status.tone === "priced" || status.tone === "production"
+                          ? "success"
+                          : status.tone === "evaluated"
+                            ? "info"
+                            : "neutral"
+                      }
+                    />
                   </div>
                 );
               })}
@@ -2107,45 +2141,46 @@ function ProjectWorkspace({
                 </tr>
               </thead>
               <tbody>
-                {visible.map((item) => (
-                  <tr key={item.id}>
-                    <td>
-                      {draft ? (
-                        `${item.name || item.code}`
-                      ) : (
-                        <Link to={`/projects/${encodeURIComponent(item.id)}`}>
-                          {item.name || item.code}
-                        </Link>
-                      )}
-                      {item.name ? <span className="projects-row__code">{item.code}</span> : null}
-                    </td>
-                    <td>{item.client_name}</td>
-                    <td>
-                      <span className="status-chip" data-status={item.status.toLowerCase()}>
-                        {t(statuses[item.status])}
-                      </span>
-                    </td>
-                    <td>
-                      {item.current_revision ? (
-                        <span className="projects-row__rev">
-                          {formatRevision(item.current_revision)}
-                        </span>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td className="ui-table__num">{item.position_count}</td>
-                    <td>
-                      <time dateTime={item.updated_at}>{formatDateTime(item.updated_at)}</time>
-                    </td>
-                    <td className="ui-table__num">
-                      {item.pricing_current
-                        ? formatMoney(item.total_price_gross, item.currency)
-                        : t("projects.unpriced")}
-                    </td>
-                    <td className="projects-row__next">{t(listNextKeys[item.status])}</td>
-                  </tr>
-                ))}
+                {visible.map((item) => {
+                  const itemStatus = item.status;
+                  return (
+                    <tr key={item.id}>
+                      <td>
+                        {draft ? (
+                          `${item.name || item.code}`
+                        ) : (
+                          <Link to={`/projects/${encodeURIComponent(item.id)}`}>
+                            {item.name || item.code}
+                          </Link>
+                        )}
+                        {item.name ? <span className="projects-row__code">{item.code}</span> : null}
+                      </td>
+                      <td>{item.client_name}</td>
+                      <td>
+                        <StatusChip enumName="ProjectResponseStatusEnum" value={itemStatus} />
+                      </td>
+                      <td>
+                        {item.current_revision ? (
+                          <span className="projects-row__rev">
+                            {formatRevision(item.current_revision)}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="ui-table__num">{item.position_count}</td>
+                      <td>
+                        <time dateTime={item.updated_at}>{formatDateTime(item.updated_at)}</time>
+                      </td>
+                      <td className="ui-table__num">
+                        {item.pricing_current
+                          ? formatMoney(item.total_price_gross, item.currency)
+                          : t("projects.unpriced")}
+                      </td>
+                      <td className="projects-row__next">{t(listNextKeys[item.status])}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

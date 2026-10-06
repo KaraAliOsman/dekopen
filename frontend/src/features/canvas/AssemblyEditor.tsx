@@ -1,4 +1,11 @@
-import { fmtMm, formatMoney, parseLocaleNumber } from "../../format";
+import {
+  fmtMm,
+  formatMoney,
+  parseLocaleNumber,
+  fmtMmCanonical,
+  formatDims,
+  fmtWire,
+} from "../../format";
 import {
   lazy,
   Suspense,
@@ -267,13 +274,13 @@ const MAX_MM = 30000;
 function normalizeMm(candidate: string): string | null {
   const value = parseLocaleNumber(candidate);
   if (value === null || value <= 0 || value > MAX_MM) return null;
-  return value.toFixed(2);
+  return fmtWire(value);
 }
 
 function normalizeAngle(candidate: string): string | null {
   const value = parseLocaleNumber(candidate);
   if (value === null || Math.abs(value) >= 90) return null;
-  return value.toFixed(1);
+  return fmtWire(value, 1);
 }
 
 /** Contour coordinates are signed: zero/negative carry meaning (a vertical
@@ -281,7 +288,7 @@ function normalizeAngle(candidate: string): string | null {
 function normalizeRange(candidate: string, min: number, max: number): string | null {
   const value = parseLocaleNumber(candidate);
   if (value === null || value < min || value >= max) return null;
-  return value.toFixed(2);
+  return fmtWire(value);
 }
 
 /* Pickers label an option the way an estimator reads the catalog — the
@@ -419,7 +426,7 @@ function ContourShapeSection({
         <>
           <DraftField
             label={t("assembly.shapeOffsetLeft")}
-            value={Number(contour.vertices[corners.leftIndex]!.x_mm).toFixed(2)}
+            value={fmtMmCanonical(Number(contour.vertices[corners.leftIndex]!.x_mm))}
             unit="mm"
             disabled={busy}
             normalize={(candidate) => normalizeRange(candidate, 0, leftBound)}
@@ -437,7 +444,7 @@ function ContourShapeSection({
           />
           <DraftField
             label={t("assembly.shapeOffsetRight")}
-            value={(widthMm - Number(contour.vertices[corners.rightIndex]!.x_mm)).toFixed(2)}
+            value={fmtMmCanonical(widthMm - Number(contour.vertices[corners.rightIndex]!.x_mm))}
             unit="mm"
             disabled={busy}
             normalize={(candidate) => normalizeRange(candidate, 0, rightBound)}
@@ -447,7 +454,7 @@ function ContourShapeSection({
                   product,
                   module.id,
                   corners.rightIndex,
-                  (widthMm - Number(value)).toFixed(2),
+                  fmtWire(widthMm - Number(value)),
                   contour.vertices[corners.rightIndex]!.y_mm,
                 ),
               )
@@ -2741,7 +2748,7 @@ export function AssemblyEditor({
   // state, and save still requires the fresh engine verdict upstream.
   const evaluating = isPending && inputs.systemId !== null;
   const planBox = couplings.length > 0 && evaluation?.plan ? planBounds(evaluation.plan) : null;
-  const statusText = `${fmtMm(front.totalW.toFixed(0))} × ${fmtMm(front.height.toFixed(0))} mm`;
+  const statusText = `${formatDims(front.totalW, front.height)} mm`;
   // Labels derive from actual product membership — selection ids are
   // arbitrary strings, so a coupling legitimately named "coupling-x" must
   // still resolve (prefix sniffing would hide it).
@@ -2888,7 +2895,7 @@ export function AssemblyEditor({
           product,
           selectedDivisionModule.id,
           selectedDivisionNode.id,
-          (current + step).toFixed(2),
+          fmtWire(current + step),
         ),
       );
       return;
@@ -2901,7 +2908,7 @@ export function AssemblyEditor({
           setModuleWidth(
             product,
             selectedModule.id,
-            (Number(selectedModule.width_mm) + step).toFixed(2),
+            fmtWire(Number(selectedModule.width_mm) + step),
           ),
         );
       } else {
@@ -2909,7 +2916,7 @@ export function AssemblyEditor({
           setModuleHeight(
             product,
             selectedModule.id,
-            (Number(selectedModule.height_mm) + step).toFixed(2),
+            fmtWire(Number(selectedModule.height_mm) + step),
           ),
         );
       }
@@ -2966,7 +2973,7 @@ export function AssemblyEditor({
   const pickerBay = pickerModule && picker ? findNode(pickerModule.tree, picker.bayId) : null;
   const proposalDelta =
     proposalQuote.value !== null && currentLineNet !== null
-      ? (Number(proposalQuote.value) - Number(currentLineNet)).toFixed(2)
+      ? fmtWire(Number(proposalQuote.value) - Number(currentLineNet))
       : null;
 
   const inspectorSections = (
@@ -3053,7 +3060,7 @@ export function AssemblyEditor({
             rows={[
               [
                 t("inspector.dimensions"),
-                `${fmtMm(Number(selectedModule.width_mm).toFixed(0))} × ${fmtMm(Number(selectedModule.height_mm).toFixed(0))} mm`,
+                `${formatDims(Number(selectedModule.width_mm), Number(selectedModule.height_mm))} mm`,
               ],
               [
                 t("assembly.opening"),

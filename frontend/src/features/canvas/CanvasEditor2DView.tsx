@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 
 import { useAuthSession } from "../../auth/AuthSessionProvider";
 import { t } from "../../i18n/es-CL";
+import { fmtWire } from "../../format";
 import { CADViewportSvg } from "./CADViewportSvg";
 import { useCanvasStore } from "./canvasStore";
 import { CanvasTechnicalResults } from "./CanvasTechnicalResults";
@@ -61,7 +62,9 @@ export function CanvasEditor2DView({ demoRoute = false }: { demoRoute?: boolean 
       data-result-width-mm={inputs.nominalWidthMm}
       data-result-height-mm={inputs.nominalHeightMm}
       data-last-commit-sequence={controller.lastMeasurement?.sequence ?? 0}
-      data-last-commit-ms={controller.lastMeasurement?.durationMs.toFixed(3) ?? ""}
+      data-last-commit-ms={
+        controller.lastMeasurement ? fmtWire(controller.lastMeasurement.durationMs, 3) : ""
+      }
       aria-busy={controller.phase === "submitting" || controller.phase === "painting"}
     >
       <div className="canvas-toolbar" aria-label="Herramientas de presentación">

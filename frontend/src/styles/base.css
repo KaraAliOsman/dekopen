@@ -23,6 +23,21 @@ input {
   font: inherit;
 }
 
+/* §3.1 floor: body copy never drops below --type-label (11 px). The UA
+ * default for <small> is ~80 % of the context — under a workshop-density
+ * base that lands at 10.8 px, below the floor. Pin it to the dense step. */
+small {
+  font-size: var(--type-dense);
+  line-height: var(--type-dense-lh);
+}
+
+/* §3.4 — identifiers read in Plex Mono wherever they appear. */
+code,
+samp,
+kbd {
+  font-family: var(--font-mono);
+}
+
 button,
 input,
 a {

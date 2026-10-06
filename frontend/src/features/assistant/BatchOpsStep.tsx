@@ -339,62 +339,65 @@ export function BatchOpsStep({
   return (
     <div className="ask-dock__ops ask-dock__batch">
       <ul>
-        {rows.map((row) => (
-          <li key={row.item.position_id} className={`ask-dock__batch-row is-${row.status}`}>
-            <span className="ask-dock__batch-where">
-              V-{row.item.index ?? row.detail?.position_index ?? "?"}
-              {row.item.location || row.detail?.location_tag
-                ? ` · ${row.item.location ?? row.detail?.location_tag}`
-                : ""}
-            </span>
-            <span className="ask-dock__batch-ops">
-              {row.product && row.ops.length
-                ? `${describeDesignOp(row.ops[0] as DesignOp, row.product)}${row.ops.length > 1 ? ` +${row.ops.length - 1}` : ""}`
-                : t("agent.batchOps").replace("{count}", String(row.ops.length))}
-            </span>
-            <span className="ask-dock__batch-cost">
-              {row.status === "applied"
-                ? t("agent.batchApplied")
-                : row.status === "failed" || row.status === "apply_failed"
-                  ? (row.error ?? t("agent.batchFailed"))
-                  : row.status === "unsupported"
-                    ? t("agent.batchUnsupported")
-                    : row.unitBefore !== undefined && row.unitAfter !== undefined
-                      ? row.unitBefore === null
-                        ? t("agent.batchNoCost")
-                        : `${formatMoney(row.unitBefore, currency)} → ${formatMoney(row.unitAfter, currency)}`
-                      : "…"}
-            </span>
-            {/* §P17 §8 — el diff dibujado y la Ug declarada: el antes/después
-             * sale del renderer real por posición; la Ug es el peor vidrio
-             * declarado en el catálogo (honestamente «Ug vidrio», no Uw —
-             * el motor no calcula Uw de marco). */}
-            {row.product && row.afterProduct && row.status !== "unsupported" ? (
-              <span className="ask-dock__batch-diff">
-                <ProductPreviewFigure
-                  product={row.product}
-                  label={t("assistant.cardBefore")}
-                  height={64}
-                />
-                <span className="ops-card__arrow" aria-hidden="true">
-                  →
+        {rows.map((row) => {
+          const rowStatus = row.status;
+          return (
+            <li key={row.item.position_id} className={`ask-dock__batch-row is-${rowStatus}`}>
+              <span className="ask-dock__batch-where">
+                V-{row.item.index ?? row.detail?.position_index ?? "?"}
+                {row.item.location || row.detail?.location_tag
+                  ? ` · ${row.item.location ?? row.detail?.location_tag}`
+                  : ""}
+              </span>
+              <span className="ask-dock__batch-ops">
+                {row.product && row.ops.length
+                  ? `${describeDesignOp(row.ops[0] as DesignOp, row.product)}${row.ops.length > 1 ? ` +${row.ops.length - 1}` : ""}`
+                  : t("agent.batchOps").replace("{count}", String(row.ops.length))}
+              </span>
+              <span className="ask-dock__batch-cost">
+                {row.status === "applied"
+                  ? t("agent.batchApplied")
+                  : row.status === "failed" || row.status === "apply_failed"
+                    ? (row.error ?? t("agent.batchFailed"))
+                    : row.status === "unsupported"
+                      ? t("agent.batchUnsupported")
+                      : row.unitBefore !== undefined && row.unitAfter !== undefined
+                        ? row.unitBefore === null
+                          ? t("agent.batchNoCost")
+                          : `${formatMoney(row.unitBefore, currency)} → ${formatMoney(row.unitAfter, currency)}`
+                        : "…"}
+              </span>
+              {/* §P17 §8 — el diff dibujado y la Ug declarada: el antes/después
+               * sale del renderer real por posición; la Ug es el peor vidrio
+               * declarado en el catálogo (honestamente «Ug vidrio», no Uw —
+               * el motor no calcula Uw de marco). */}
+              {row.product && row.afterProduct && row.status !== "unsupported" ? (
+                <span className="ask-dock__batch-diff">
+                  <ProductPreviewFigure
+                    product={row.product}
+                    label={t("assistant.cardBefore")}
+                    height={64}
+                  />
+                  <span className="ops-card__arrow" aria-hidden="true">
+                    →
+                  </span>
+                  <ProductPreviewFigure
+                    product={row.afterProduct}
+                    label={t("assistant.cardAfter")}
+                    height={64}
+                  />
                 </span>
-                <ProductPreviewFigure
-                  product={row.afterProduct}
-                  label={t("assistant.cardAfter")}
-                  height={64}
-                />
-              </span>
-            ) : null}
-            {row.ugBefore != null || row.ugAfter != null ? (
-              <span className="ask-dock__batch-ug">
-                {t("agent.batchUg")
-                  .replace("{before}", row.ugBefore ?? "—")
-                  .replace("{after}", row.ugAfter ?? "—")}
-              </span>
-            ) : null}
-          </li>
-        ))}
+              ) : null}
+              {row.ugBefore != null || row.ugAfter != null ? (
+                <span className="ask-dock__batch-ug">
+                  {t("agent.batchUg")
+                    .replace("{before}", row.ugBefore ?? "—")
+                    .replace("{after}", row.ugAfter ?? "—")}
+                </span>
+              ) : null}
+            </li>
+          );
+        })}
       </ul>
       <footer className="ask-dock__batch-footer">
         {phase === "done" ? (

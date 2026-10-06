@@ -51,6 +51,14 @@ export function shortTechnicalId(value: string | null | undefined): string {
   return value;
 }
 
+/** Serialización para el contrato del motor — decimales fijos ("1400.00",
+ * ángulos "15.0"), sin agrupar. fmtMmCanonical RECORTA ceros para inputs;
+ * el wire exige el ancho exacto. Única vía permitida — la guarda prohíbe
+ * toFixed disperso en features. */
+export function fmtWire(value: number, decimals = 2): string {
+  return value.toFixed(decimals);
+}
+
 /** Decimal canónico para INPUTS — sin agrupar ni coma: un valor editable o
  * persistido jamás lleva glifos §3.3 ("1000.35" se edita, "1 000,35" se lee). */
 export function fmtMmCanonical(value: string | number | null | undefined): string {

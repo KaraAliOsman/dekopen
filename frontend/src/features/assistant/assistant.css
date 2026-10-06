@@ -5,7 +5,7 @@
   position: fixed;
   right: 16px;
   bottom: 40px; /* above the status bar */
-  z-index: 60;
+  z-index: var(--z-dialog);
 }
 /* On the position editor the bottom-right corner is the inspector column —
  * and just left of it the canvas' .plan-inset/.viewport-status live. The
@@ -51,9 +51,9 @@
   flex-direction: column;
   background: var(--theme-surface-panel, #ffffff);
   border-left: 1px solid var(--theme-border-subtle, #d9dfde);
-  box-shadow: -12px 0 32px rgb(9 14 13 / 14%);
+  box-shadow: var(--shadow-e3);
   overflow: hidden;
-  z-index: 61;
+  z-index: calc(var(--z-dialog) + 1);
   animation: ask-dock-in 0.24s ease-out;
 }
 @keyframes ask-dock-in {
