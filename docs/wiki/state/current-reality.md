@@ -23,6 +23,7 @@ sources:
   - P04 editor canvas-first PR https://github.com/KaraAliOsman/dekopen/pull/24
   - P09 DOC-01 propuesta PR https://github.com/KaraAliOsman/dekopen/pull/34
   - P03 shell/Hoy PR https://github.com/KaraAliOsman/dekopen/pull/32
+  - P03 shell/Hoy PR https://github.com/KaraAliOsman/dekopen/pull/32
   - integracion/v1 merge 747c528b67d234d697624929ccbcc7098261ed54
   - open PR metadata observed 2026-09-27/28
   - AGENTS.md
@@ -281,7 +282,7 @@ Merged into `integracion/v1` as squash `acc90900e872e10cd93167f98d3911fbda19c61f
 
 ## P03 shell + Inicio «Hoy» state
 
-Open PR on `integracion/v1` (branch `devin/P03-shell-hoy`; pendiente de merge — el squash SHA se registra tras el merge):
+Merged into `integracion/v1` as squash `473d027426321995fb90b071ca416a77cdbfe7fb` (dekopen PR #32):
 
 - Riel lateral por flujo: Inicio; Ventas (Clientes, Proyectos, Cotizaciones, Precios con gate); Ingeniería (Catálogo técnico); Operación (Compras, Inventario, Producción, Despacho); Asistente (Asistente, Trabajos — solo `AI_SURFACE_ROLES`); Ajustes. Plegable a icono+tooltip; secciones vacías no se renderizan por rol; <1024 px colapsa a drawer.
 - Topbar: migas de pan humanas (códigos `P-`/OT en vez de ids), switchers org/proyecto, `Ctrl K` paleta global (clientes, proyectos, cotizaciones, OT, OC, retazos por código/nombre — retazos por remnant_code/SKU/rack/material/nota → `/inventory`), campana de atención, ayuda `?`.

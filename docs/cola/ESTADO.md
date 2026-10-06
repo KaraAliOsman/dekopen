@@ -18,7 +18,7 @@
 | P05 | 1 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/25 | 2c04dcd64afb7cea16effb899ecaf33fe9e7aa67 | CI 6/6 verde; squash mergeado. Contrato de simbología único Python+TS con paridad de fixtures; SlidingPanel.travel + validación; vista declarada interior/exterior; cotas en canales; corte en planta corredera; puerta DIN + umbral; regresión sliding_layout corregida en E2E. |
 | P09 | 1 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/34 | 9731e0c790a7754bd420710f41646f7b2c08e674 | CI 6/6 verde; squash mergeado. DOC-01 v2: portada condicional, tabla resumen, detalle por densidad, resumen comercial reconciliado, aceptación + QR con canales EMAIL/DOCUMENT (artefacto inmutable), pie con folio/huella, ajustes papel + doc_terms. |
 | P07 | 1 | pendiente |  |  |  |
-| P03 | 1 | pendiente |  |  |  |
+| P03 | 1 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/32 | 473d027426321995fb90b071ca416a77cdbfe7fb | CI 6/6 verde; squash mergeado. Shell por flujo (riel agrupado, drawer <1024) + topbar (migas, switchers, Ctrl K, campana, ?) + «Hoy» por rol servido por /analytics/today con RLS; nav espejo de permisos backend (OPERATOR/INSTALLER sin 403s IA). |
 | P12 | 1 | pendiente |  |  |  |
 | P17 | 1 | pendiente |  |  |  |
 | ED1 | ED1 | pendiente |  |  |  |
