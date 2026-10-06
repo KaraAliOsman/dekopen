@@ -1,7 +1,7 @@
 ---
 type: state
 status: active
-updated: 2026-10-05
+updated: 2026-10-06
 volatility: high
 verified_ref: 2c04dcd64afb7cea16effb899ecaf33fe9e7aa67
 sources:
@@ -63,7 +63,7 @@ Hard invariants documented by the repo include:
 
 ## P25 state
 
-Merged into `integracion/v1` as squash `80860f3ef9fe1cf94abf1c564ff00506ef6686b0` (dekopen PR #26):
+PR abierto a `integracion/v1` (pendiente de merge) desde `devin/P25-marca`:
 
 - Marca canónica «La sección»: anillo cuadrado 24×24 con muro 2.5 y alma de 2 a 1/3 (la sección de perfil que el producto dibuja); `SECTION_PATH` único en `frontend/src/brand/BrandMark.tsx` (currentColor — una geometría pinta claro/oscuro), wordmark con la O reemplazada por la marca (~0.73em), DocLockup «La cota» para portadas internas/correos.
 - `favicon.svg` se auto-colorea por `@media (prefers-color-scheme: dark)` interno (`.ink` #161c1f → #fcfdfc) — las capturas deben emular `colorScheme`, no recolorear el SVG; `manifest.webmanifest` + PNG 16/32/180/192/512 rasterizados; `theme-color` teal-800 sobre papel g-50 (maskable con safe-zone 78 %).
@@ -264,3 +264,11 @@ Merged into `integracion/v1` as squash `2c04dcd64afb7cea16effb899ecaf33fe9e7aa67
 - Cotas del nivel técnico en canvas: cadena exterior total + cadena por paño eje-a-eje de partidor + datum de manilla cuando `handle_height_mm` declarada.
 - `OpeningGlyph` (`ui/icons.tsx`) y la sección Firma de `/dev/ui` dibujan el contrato real — la tabla de símbolos del dev-canvas cubre el vocabulario completo.
 - Contrato y anti-reglas en `docs/PRD/opening-symbols.md`; ilustraciones por caso/vista generadas por el engine (`scripts/gen_symbol_doc_assets.py`).
+
+## [2026-10-06] P02 | identificadores humanos y formato §3.3
+
+- Migración `20270107000001_p02_human_codes.sql`: `private.next_human_code(org_id, kind)` (advisory lock por org+kind → folio `OC-`/`RT-`/`REC-` de 6 dígitos), `private.guard_human_code` BEFORE UPDATE (42501 si alguien reescribe el código), columnas `inventory_remnants.remnant_code` y `order_receipts.receipt_code` NOT NULL UNIQUE(org) con backfill determinista por `created_at`; órdenes de compra nuevas llevan `OC-` y las selladas pre-P02 conservan `PO-`. Huecos por rollback documentados (folio abortado no se recicla en otra fila).
+- Identidad de pieza `P{pos}-U{u}-M{i}`/`-I{sec}` única en paquete de corte HTML, `bars.csv`, `sheets.csv` (columna `piece_label`), DXF (`_placement_code`) y etiquetas QR; test `test_piece_identity.py` exige conjuntos idénticos entre artefactos.
+- Formato §3.3 aplicado backend+frontend: mm enteros con espacio fino U+2009, coma decimal es-CL, CLP `$1.435.471`, `US$`/`UF`, `%` un decimal, `dd-mm-aaaa`; `frontend/src/format.ts` (`fmtMm`, `fmtMmCanonical` para inputs — decimal canónico en la frontera de edición/persistencia — `fmtPct`, `shortTechnicalId`), `<EntityCode>` para ids técnicos; CSV/DXF siguen canónicos/ASCII; huella digital 8-hex sólo en pie/cajetín (QR conserva 16 hex); sin UUID/hash ≥10 hex en superficies de cliente/taller.
+- Búsqueda global resuelve `OC-000012`, `RT-000003`, `REC-000004` y códigos OT/posición (CommandPalette + `search/service.py` grupos remnants/receipts).
+- Verificado: `make lint|typecheck|test|build` verdes (`PY=.venv/bin/python`); `make test-db` verde (pgTAP 1034 incl. `179_p02` 21 aserciones, integración 275 incl. 2 tests de concurrencia de folios, e2e Playwright); e2e `canvas.spec.ts` actualizado a expectativa `1 006 mm`.
