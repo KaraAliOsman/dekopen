@@ -72,6 +72,11 @@ def _branding(row: dict) -> dict:
         "doc_paper_size": row.get("doc_paper_size") or "LETTER",
         "doc_terms": _doc_terms(row.get("doc_terms")),
         "workshop_label_format": row.get("workshop_label_format") or "GRID",
+        "remnant_alert_days": (
+            int(row["remnant_alert_days"])
+            if row.get("remnant_alert_days") is not None
+            else 30
+        ),
     }
 
 
@@ -79,7 +84,7 @@ _FIELDS = (
     "name, tax_id, commercial_name, giro, brand_address, brand_phone,"
     " brand_email, brand_logo_key, brand_logo_sha256, brand_color,"
     " doc_dekopen_credit, vano_spread_tolerance_mm,"
-    " doc_paper_size, doc_terms, workshop_label_format"
+    " doc_paper_size, doc_terms, workshop_label_format, remnant_alert_days"
 )
 
 # P09 — claves legales declaradas que el documento del cliente imprime en
@@ -175,6 +180,23 @@ def _save_branding(*, org_id: UUID, data: dict) -> dict:
     if "vano_spread_tolerance_mm" in data:
         assignments.append("vano_spread_tolerance_mm=%s")
         params.append(data.get("vano_spread_tolerance_mm"))
+    if "remnant_alert_days" in data:
+        assignments.append("remnant_alert_days=%s")
+        try:
+            days = int(data["remnant_alert_days"])
+        except (TypeError, ValueError):
+            raise contract_error(
+                400,
+                "remnant_alert_days_invalid",
+                "Los días de alerta de retazos deben ser un entero.",
+            ) from None
+        if not 1 <= days <= 365:
+            raise contract_error(
+                400,
+                "remnant_alert_days_invalid",
+                "Los días de alerta de retazos deben estar entre 1 y 365.",
+            )
+        params.append(days)
     if "doc_paper_size" in data:
         assignments.append("doc_paper_size=%s")
         size = str(data.get("doc_paper_size") or "").strip().upper()

@@ -4,16 +4,10 @@ import { apiMutator } from "../../api/apiMutator";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
 import { t } from "../../i18n/es-CL";
 import { DeniedState, ErrorState, LoadingState, PageHeader } from "../../ui";
-import { InventorySection } from "../purchasing/InventorySection";
+import { InventorySection, type StockItem } from "../purchasing/InventorySection";
 import "../purchasing/purchasing.css";
 
 type RequestFn = <T>(path: string, method?: string, body?: unknown) => Promise<T>;
-
-type StockItem = {
-  item_id: string;
-  sku: string;
-  name: string;
-};
 
 const INVENTORY_ROLES = ["OWNER", "ESTIMATOR", "WORKSHOP_MANAGER", "OPERATOR"];
 
@@ -81,15 +75,7 @@ export function InventoryPage(): JSX.Element {
         title={t("inventory.title")}
       />
       {stock !== null ? (
-        <InventorySection
-          request={request}
-          canWrite={canWrite}
-          stockItems={stock.map((item) => ({
-            item_id: item.item_id,
-            sku: item.sku,
-            name: item.name,
-          }))}
-        />
+        <InventorySection request={request} canWrite={canWrite} stockItems={stock} />
       ) : failed ? (
         <ErrorState title={t("inventory.loadError")} onRetry={load} />
       ) : (

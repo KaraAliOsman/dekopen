@@ -14,6 +14,7 @@
  * * `ADJUSTMENT` - ADJUSTMENT
  * * `RETURN` - RETURN
  * * `SCRAP` - SCRAP
+ * * `MOVE` - MOVE
  */
 export type InventoryMovementMovementTypeEnum =
   (typeof InventoryMovementMovementTypeEnum)[keyof typeof InventoryMovementMovementTypeEnum];
@@ -26,4 +27,5 @@ export const InventoryMovementMovementTypeEnum = {
   ADJUSTMENT: "ADJUSTMENT",
   RETURN: "RETURN",
   SCRAP: "SCRAP",
+  MOVE: "MOVE",
 } as const;

@@ -6,9 +6,10 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from decimal import Decimal
 import json
+import logging
 from uuid import NAMESPACE_URL, UUID, uuid5
 
-from django.db import connection
+from django.db import connection, transaction
 
 from dekopen_engine.documentary_canonical import (
     DOCUMENTARY_CANONICAL_VERSION,
@@ -20,7 +21,10 @@ from documents.renderers import _piece_labels
 from documents.repository import DocumentaryError, decoded, documentary_backend, json_text, next_human_code, one, rows, write
 from inventory.production_stock import coverage_for_version
 from inventory.service import stock_variant_key
+from mail import service as mail_service
 from projects import org_branding
+
+logger = logging.getLogger(__name__)
 
 
 ORDER_TYPES = (
@@ -87,7 +91,8 @@ def _trace_labels(version_id: UUID, org_id: UUID) -> dict[str, str]:
 
 def _line_snapshot(row: dict[str, object],
                    labels: dict[str, str] | None = None,
-                   quantity_override=None) -> dict[str, object]:
+                   quantity_override=None,
+                   unit_price=None) -> dict[str, object]:
     technical = _object(row["technical_identity"], "invalid_purchase_requirement")
     specification = _object(row["specification"], "invalid_purchase_requirement")
     source_trace = _array(row["source_trace"], "invalid_purchase_requirement")
@@ -105,7 +110,7 @@ def _line_snapshot(row: dict[str, object],
         quantity = Decimal(str(row["quantity"]))
     if quantity != quantity.to_integral_value() or quantity <= 0:
         raise DocumentaryError("invalid_purchase_requirement")
-    return {
+    snapshot = {
         "id": str(row["id"]),
         "requirement_key": str(row["requirement_key"]),
         "order_type": str(row["order_type"]),
@@ -134,6 +139,11 @@ def _line_snapshot(row: dict[str, object],
             for entry in source_trace
         ],
     }
+    # El precio acordado con el proveedor se sella dentro de la línea — la OC
+    # es un documento y su monto no se deriva después, vive en la evidencia.
+    if unit_price is not None:
+        snapshot["unit_price"] = str(Decimal(str(unit_price)))
+    return snapshot
 
 
 def _requirements(version_id: UUID, org_id: UUID,
@@ -244,7 +254,7 @@ def purchasing_state(org_id: UUID, version_id: UUID | None = None) -> dict[str, 
             eligibility["expired"] = bool(expiry) and str(expiry) < today
         allocations = rows(
             "SELECT allocation.id,allocation.requirement_line_id,allocation.supplier_eligibility_id,"
-            "allocation.order_type::text,allocation.allocated_at "
+            "allocation.order_type::text,allocation.allocated_at,allocation.unit_price "
             "FROM public.purchase_allocations allocation WHERE allocation.project_version_id=%s "
             "AND allocation.org_id=%s ORDER BY allocation.order_type,allocation.requirement_line_id",
             [version_id, org_id],
@@ -254,12 +264,17 @@ def purchasing_state(org_id: UUID, version_id: UUID | None = None) -> dict[str, 
             "o.supplier_name,o.order_snapshot_hash,o.confirmed_at,o.sent_at,o.expected_at,"
             "o.sent_to,o.cancelled_at,o.supplier_details::text AS supplier_details,"
             "l.line_count,l.total_qty,l.released_qty,l.lines_preview::text AS lines_preview,"
+            "l.priced_amount,l.unpriced_lines,"
             "r.damaged_qty,r.receipt_count "
             "FROM public.orders o LEFT JOIN ("
             "SELECT order_id, COUNT(*) AS line_count, SUM(quantity) AS total_qty,"
             " SUM(COALESCE(released_qty, 0)) AS released_qty,"
             " jsonb_agg(jsonb_build_object('sku',line_snapshot->>'purchasing_sku',"
-            " 'qty',quantity,'unit',line_snapshot->>'unit') ORDER BY id) AS lines_preview"
+            " 'qty',quantity,'unit',line_snapshot->>'unit',"
+            " 'unit_price',line_snapshot->>'unit_price') ORDER BY id) AS lines_preview,"
+            " SUM(quantity * (line_snapshot->>'unit_price')::numeric) "
+            " FILTER (WHERE line_snapshot->>'unit_price' IS NOT NULL) AS priced_amount,"
+            " COUNT(*) FILTER (WHERE line_snapshot->>'unit_price' IS NULL) AS unpriced_lines"
             " FROM public.order_requirement_lines WHERE org_id=%s GROUP BY order_id"
             ") l ON l.order_id=o.id "
             "LEFT JOIN ("
@@ -295,6 +310,9 @@ def purchasing_state(org_id: UUID, version_id: UUID | None = None) -> dict[str, 
             open_qty = Decimal(str(item["quantity"])) - covered_qty
             item["claimed"] = open_qty <= 0
             item["open_qty"] = int(open_qty) if open_qty > 0 else 0
+        for item in orders:
+            item["total_amount"] = item.pop("priced_amount", None)
+            item["unpriced_lines"] = int(item.get("unpriced_lines") or 0)
         covered_keys = {
             (str(item["order_type"]), str(key))
             for item in eligibilities
@@ -415,7 +433,8 @@ def create_eligibility(
 
 
 def allocate_requirement(
-    *, org_id: UUID, actor_id: UUID, requirement_id: UUID, eligibility_id: UUID
+    *, org_id: UUID, actor_id: UUID, requirement_id: UUID, eligibility_id: UUID,
+    unit_price: object = None,
 ) -> dict[str, object]:
     with documentary_backend():
         requirement = one(
@@ -447,13 +466,15 @@ def allocate_requirement(
         allocation = one(
             "INSERT INTO public.purchase_allocations("
             "requirement_line_id,supplier_eligibility_id,project_id,project_version_id,"
-            "org_id,order_type,allocated_by) VALUES(%s,%s,%s,%s,%s,%s,%s) "
+            "org_id,order_type,allocated_by,unit_price) VALUES(%s,%s,%s,%s,%s,%s,%s,%s) "
             "ON CONFLICT(requirement_line_id) DO UPDATE SET "
             "supplier_eligibility_id=EXCLUDED.supplier_eligibility_id,"
-            "allocated_by=EXCLUDED.allocated_by,allocated_at=now() "
-            "RETURNING id,requirement_line_id,supplier_eligibility_id",
+            "allocated_by=EXCLUDED.allocated_by,allocated_at=now(),"
+            "unit_price=EXCLUDED.unit_price "
+            "RETURNING id,requirement_line_id,supplier_eligibility_id,unit_price",
             [requirement_id, eligibility_id, requirement["project_id"],
-             requirement["project_version_id"], org_id, requirement["order_type"], actor_id],
+             requirement["project_version_id"], org_id, requirement["order_type"], actor_id,
+             unit_price],
         )
         return {key: str(value) for key, value in allocation.items()}
 
@@ -506,6 +527,7 @@ def confirm_order_type_batch(
             raise DocumentaryError("order_type_has_no_requirements")
         allocations = rows(
             "SELECT allocation.id,allocation.requirement_line_id,allocation.supplier_eligibility_id,"
+            "allocation.unit_price,"
             "eligibility.supplier_identity,eligibility.supplier_name,"
             "eligibility.supplier_details::text,eligibility.eligible_requirement_keys::text,"
             "eligibility.evidence::text,eligibility.version,eligibility.content_hash "
@@ -583,8 +605,12 @@ def confirm_order_type_batch(
             values = grouped[eligibility_id]
             eligibility = values[0][1]
             line_snapshots = [
-                _line_snapshot(item, labels, quantity_override=item.get("open_qty"))
-                for item, _ in values
+                _line_snapshot(
+                    item, labels,
+                    quantity_override=item.get("open_qty"),
+                    unit_price=alloc["unit_price"],
+                )
+                for item, alloc in values
             ]
             order_id = uuid5(
                 NAMESPACE_URL,
@@ -685,15 +711,27 @@ def confirm_order_type_batch(
         return outputs, True
 
 
+# Tipo de documento de la OC por tipo de compra — el envío emite el PDF
+# en el mismo clic humano que encola el correo (DOC-02 vidrios, DOC-04
+# perfiles, DOC-08 herrajes y paneles).
+_ORDER_DOC_TYPES = {
+    "SUPPLIER_GLASS_PO": "DOC-02",
+    "SUPPLIER_PROFILE_PO": "DOC-04",
+    "SUPPLIER_HARDWARE_PO": "DOC-08",
+    "SUPPLIER_PANEL_PO": "DOC-08",
+}
+
+
 def send_order(
     *, org_id: UUID, actor_id: UUID, order_id: UUID, confirmed: bool,
-    expected_at=None, sent_to=None,
+    expected_at=None, sent_to=None, role: str | None = None,
 ) -> dict[str, object]:
     if not confirmed:
         raise DocumentaryError("order_send_confirmation_required")
     with documentary_backend():
         order = one(
-            "SELECT id,order_code,order_type::text,status::text,supplier_name,order_snapshot_hash "
+            "SELECT id,order_code,order_type::text,status::text,supplier_name,order_snapshot_hash,"
+            "project_version_id "
             "FROM public.orders WHERE id=%s AND org_id=%s FOR UPDATE",
             [order_id, org_id],
             "order_not_found",
@@ -714,7 +752,53 @@ def send_order(
             "supplier_name,order_snapshot_hash,expected_at,sent_to",
             [actor_id, sent_at, expected_at, sent_to, sent_at, order_id, org_id],
         )
-        return _public(updated)
+        # Aviso al proveedor por el outbox: la fila mail_messages es la
+        # evidencia del envío (sandbox entrega simulada; SMTP real se activa
+        # por ACTIVACION.md). Un proveedor sin correo declarado queda SKIPPED.
+        output = _public(updated)
+        try:
+            # Savepoint: si el outbox falla, sólo se deshace la fila de
+            # correo — un except a pelo dejaría la transacción abortada y el
+            # commit del SENT caería con ella.
+            with transaction.atomic():
+                output["mail"] = mail_service.deliver_order_sent(
+                    org_id=org_id, order_id=order_id,
+                    sent_to=str(sent_to or ""),
+                )
+        except Exception:  # el correo nunca tira la transición de la OC
+            logger.exception("order mail enqueue failed for %s", order_id)
+            output["mail"] = None
+    # El PDF de la OC se emite en el mismo clic: job_runs es service-owned,
+    # así que el enqueue pide el cambio de rol explícito (fuera del bloque
+    # documentary_backend que ya cerró). Si falla, la OC ya quedó SENT y el
+    # PDF se puede emitir manual desde la lista de documentos de la orden.
+    doc_type = _ORDER_DOC_TYPES.get(str(order["order_type"]))
+    if doc_type is not None and order.get("project_version_id") is not None and role is not None:
+        try:
+            from jobs.service import enqueue as enqueue_job, job_backend
+
+            # job_backend fuera, savepoint dentro: primero se deshace el
+            # INSERT fallido y luego se restaura el rol (si el savepoint va
+            # fuera, el restore del rol quedaría bloqueado por la tx abortada).
+            with job_backend(), transaction.atomic():
+                job, _created = enqueue_job(
+                    org_id=org_id,
+                    job_type="document.artifact.generate",
+                    payload={
+                        "document_type": doc_type,
+                        "format": "PDF",
+                        "project_version_id": str(order["project_version_id"]),
+                        "order_id": str(order_id),
+                    },
+                    idempotency_key=f"{doc_type.lower()}:pdf:{order_id}",
+                    created_by=actor_id,
+                    role=role,
+                )
+            output["document_job"] = {"id": str(job["id"]), "document_type": doc_type}
+        except Exception:
+            logger.exception("order PDF job enqueue failed for %s", order_id)
+            output["document_job"] = None
+    return output
 
 
 def cancel_order(
@@ -784,6 +868,7 @@ def orders_index(org_id: UUID, status: str | None = None) -> dict[str, object]:
             "v.revision_code,v.id AS project_version_id,"
             "p.id AS project_id,p.code AS project_code,"
             "COALESCE(l.line_count,0) AS line_count,l.total_qty,l.released_qty,"
+            "l.priced_amount,l.unpriced_lines,"
             "COALESCE(r.good_qty,0) AS good_qty,COALESCE(r.damaged_qty,0) AS damaged_qty,"
             "COALESCE(r.receipt_count,0) AS receipt_count "
             "FROM public.orders o "
@@ -792,8 +877,11 @@ def orders_index(org_id: UUID, status: str | None = None) -> dict[str, object]:
             "LEFT JOIN public.projects p ON p.id=o.project_id AND p.org_id=o.org_id "
             "LEFT JOIN ("
             "SELECT order_id, COUNT(*) AS line_count, SUM(quantity) AS total_qty,"
-            " SUM(COALESCE(released_qty, 0)) AS released_qty "
-            "FROM public.order_requirement_lines WHERE org_id=%s GROUP BY order_id"
+            " SUM(COALESCE(released_qty, 0)) AS released_qty,"
+            " SUM(quantity * (line_snapshot->>'unit_price')::numeric) "
+            " FILTER (WHERE line_snapshot->>'unit_price' IS NOT NULL) AS priced_amount,"
+            " COUNT(*) FILTER (WHERE line_snapshot->>'unit_price' IS NULL) AS unpriced_lines"
+            " FROM public.order_requirement_lines WHERE org_id=%s GROUP BY order_id"
             ") l ON l.order_id=o.id "
             "LEFT JOIN ("
             "SELECT rc.order_id,"
@@ -817,6 +905,8 @@ def orders_index(org_id: UUID, status: str | None = None) -> dict[str, object]:
             total = Decimal(str(item.get("total_qty") or 0))
             good = Decimal(str(item.get("good_qty") or 0))
             item["outstanding_qty"] = total - good
+            item["total_amount"] = item.pop("priced_amount", None)
+            item["unpriced_lines"] = int(item.get("unpriced_lines") or 0)
             result.append(_public(item))
         return {"orders": result}
 

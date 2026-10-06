@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { apiMutator, ApiError } from "../../api/apiMutator";
 import { PageHeader, useConfirm } from "../../ui";
+
 import { documentaryArtifactAccess } from "../../api/generated/dekopen";
 import type { OrderIndexItem } from "../../api/generated/models";
-import { InventorySection } from "./InventorySection";
 import { runJob } from "../jobs/runJob";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
 import { DeniedState } from "../../ui";
-import { fmtMm, fmtQty, shortTechnicalId } from "../../format";
+import { fmtMm, fmtQty, formatMoney, shortTechnicalId } from "../../format";
 import { t } from "../../i18n/es-CL";
 import { formatDateTime, formatRevision } from "../../format";
 import { formatDate } from "../../format";
@@ -100,9 +100,15 @@ type Allocation = {
   requirement_line_id: string;
   supplier_eligibility_id: string;
   order_type: OrderType;
+  unit_price?: string | null;
 };
 type OrderStatus = "DRAFT" | "SENT" | "PARTIALLY_RECEIVED" | "FULFILLED" | "CANCELLED";
-type OrderLinePreview = { sku: string | null; qty: string; unit: string | null };
+type OrderLinePreview = {
+  sku: string | null;
+  qty: string;
+  unit: string | null;
+  unit_price?: string | null;
+};
 type Order = {
   id: string;
   order_code: string;
@@ -120,6 +126,8 @@ type Order = {
   released_qty?: string | null;
   damaged_qty?: string | null;
   receipt_count?: string | null;
+  total_amount?: string | null;
+  unpriced_lines?: number;
   lines_preview?: OrderLinePreview[];
 };
 const ORDER_STATUSES: OrderStatus[] = [
@@ -158,20 +166,9 @@ type ReceivingState = {
     receipt_code: string;
     created_at: string;
     note: string | null;
+    supplier_delivery_ref?: string | null;
+    supplier_delivery_date?: string | null;
   }>;
-};
-type StockItem = {
-  item_id: string;
-  sku: string;
-  name: string;
-  category: string;
-  unit: string;
-  on_hand_qty: string;
-  reserved_qty: string;
-  available_qty: string;
-  incoming_qty?: string;
-  racks?: string | null;
-  spec_text?: string;
 };
 type VersionItem = {
   id: string;
@@ -196,7 +193,7 @@ type CoverageLine = {
   ordered: string;
   received: string;
   open_ordered: string;
-  remnant_pool?: { kind: string; count: number; total_mm?: string } | null;
+  remnant_pool?: { kind: string; count: number; total_mm?: string; key?: string } | null;
   shortage: string;
   recommended_purchase: string;
 };
@@ -338,8 +335,6 @@ function PurchasingWorkspace({
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [versionId, setVersionId] = useState(initialVersionId);
   const [state, setState] = useState<PurchasingState | null>(null);
-  const [stock, setStock] = useState<StockItem[]>([]);
-  const [stockQuery, setStockQuery] = useState("");
   const [busy, setBusy] = useState(true);
   const [message, setMessage] = useState("");
   const [revision, setRevision] = useState(0);
@@ -394,19 +389,7 @@ function PurchasingWorkspace({
               markSection("suppliers", true);
             }
           });
-        void request<{ items?: StockItem[] }>("inventory/stock/")
-          .then((stockData) => {
-            if (current) {
-              setStock(stockData.items ?? []);
-              markSection("stock", false);
-            }
-          })
-          .catch(() => {
-            if (current) {
-              setStock([]);
-              markSection("stock", true);
-            }
-          });
+
         if (!current) return;
         const list = data.versions ?? [];
         setVersions(list);
@@ -732,6 +715,24 @@ function PurchasingWorkspace({
               ))}
             </tbody>
           </table>
+          {canWrite &&
+            coverageLines.some((line) => line.shortage !== "0" && line.remnant_pool?.key) && (
+              <section className="purchasing-remnant-offers">
+                <h3>{t("purchasing.remnantOffer")}</h3>
+                <p className="purchasing-hint">{t("purchasing.remnantOfferHint")}</p>
+                {coverageLines
+                  .filter((line) => line.shortage !== "0" && line.remnant_pool?.key)
+                  .map((line) => (
+                    <RemnantOffer
+                      key={line.requirement_line_id}
+                      line={line}
+                      busy={busy}
+                      request={request}
+                      action={action}
+                    />
+                  ))}
+              </section>
+            )}
         </section>
       )}
       {state?.version &&
@@ -770,79 +771,12 @@ function PurchasingWorkspace({
           ))}
         </section>
       )}
-      {(stock.length > 0 || failedSections.has("stock")) && (
-        <section className="purchasing-stock">
-          <h2>{t("purchasing.stockTitle")}</h2>
-          {failedSections.has("stock") ? (
-            <p role="alert">{t("purchasing.sectionLoadError")}</p>
-          ) : null}
-          <label className="purchasing-stock-search">
-            {t("purchasing.stockSearch")}
-            <input
-              type="search"
-              value={stockQuery}
-              onChange={(e) => setStockQuery(e.target.value)}
-              placeholder={t("purchasing.stockSearchHint")}
-            />
-          </label>
-          <table>
-            <thead>
-              <tr>
-                <th>{t("purchasing.purchaseSku")}</th>
-                <th>{t("purchasing.stockName")}</th>
-                <th>{t("purchasing.stockOnHand")}</th>
-                <th>{t("purchasing.stockReserved")}</th>
-                <th>{t("purchasing.stockAvailable")}</th>
-                <th>{t("purchasing.stockIncoming")}</th>
-                <th>{t("purchasing.stockRacks")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stock
-                .filter((item) => {
-                  const q = stockQuery.trim().toLowerCase();
-                  if (!q) return true;
-                  return [item.sku, item.name, item.spec_text ?? "", item.racks ?? ""]
-                    .join(" ")
-                    .toLowerCase()
-                    .includes(q);
-                })
-                .map((item) => (
-                  <tr key={item.item_id}>
-                    <td>
-                      <EntityCode value={item.sku} />
-                    </td>
-                    <td>
-                      {item.name} · {purchaseUnitLabel(item.unit, 2)}
-                    </td>
-                    <td>{fmtQty(item.on_hand_qty)}</td>
-                    <td>{fmtQty(item.reserved_qty)}</td>
-                    <td>{fmtQty(item.available_qty)}</td>
-                    <td>
-                      {item.incoming_qty && item.incoming_qty !== "0" ? (
-                        <strong className="purchasing-coverage-received">
-                          {fmtQty(item.incoming_qty)}
-                        </strong>
-                      ) : (
-                        "0"
-                      )}
-                    </td>
-                    <td>{item.racks || "—"}</td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-        </section>
-      )}
-      <InventorySection
-        request={request}
-        canWrite={canWrite}
-        stockItems={stock.map((item) => ({
-          item_id: item.item_id,
-          sku: item.sku,
-          name: item.name,
-        }))}
-      />
+      {/* El material físico vive en /inventory — Compras decide qué falta,
+        a quién pedírselo y cuándo llega; el qué hay se mira allá. */}
+      <p className="purchasing-inventory-link">
+        {t("purchasing.inventoryLink")}{" "}
+        <Link to="/inventory">{t("purchasing.inventoryLinkCta")}</Link>.
+      </p>
       {state?.version && (
         <section className="purchasing-documents">
           <h2>{t("purchasing.documents")}</h2>
@@ -1007,6 +941,24 @@ function RequirementRow({
   action: (task: Promise<unknown>) => Promise<boolean>;
 }): JSX.Element {
   const allocated = eligibilities.find((item) => item.id === allocation?.supplier_eligibility_id);
+  // Precio acordado por línea: se edita en la propuesta y el confirmar lo
+  // sella dentro de la OC — la OC nunca se deriva de precios posteriores.
+  const [price, setPrice] = useState(allocation?.unit_price ?? "");
+  useEffect(() => {
+    setPrice(allocation?.unit_price ?? "");
+  }, [allocation?.unit_price]);
+
+  function savePrice(): void {
+    if (!allocation || !canWrite || requirement.claimed) return;
+    const value = price.trim();
+    if (value === (allocation.unit_price ?? "")) return;
+    void action(
+      request(`purchasing/requirements/${requirement.id}/allocation/`, "PUT", {
+        supplier_eligibility_id: allocation.supplier_eligibility_id,
+        unit_price: value === "" ? null : value,
+      }),
+    );
+  }
   return (
     <tr>
       <td>{categoryLabel(requirement.category)}</td>
@@ -1056,6 +1008,7 @@ function RequirementRow({
               void action(
                 request(`purchasing/requirements/${requirement.id}/allocation/`, "PUT", {
                   supplier_eligibility_id: event.target.value,
+                  unit_price: price.trim() === "" ? null : price.trim(),
                 }),
               );
             }}
@@ -1087,6 +1040,35 @@ function RequirementRow({
               ))}
           </select>
         )}
+        {allocation ? (
+          <div className="purchasing-price">
+            {requirement.claimed === true || !canWrite ? (
+              allocation.unit_price ? (
+                <small>
+                  {t("purchasing.unitPrice")}: {formatMoney(allocation.unit_price, "CLP")}
+                </small>
+              ) : (
+                <small className="purchasing-hint">—</small>
+              )
+            ) : (
+              <input
+                type="number"
+                min="0"
+                step="any"
+                aria-label={`${t("purchasing.unitPrice")} · ${requirement.purchasing_sku ?? requirement.category}`}
+                title={t("purchasing.unitPriceHint")}
+                placeholder={t("purchasing.unitPriceMissing")}
+                disabled={busy}
+                value={price}
+                onChange={(event) => setPrice(event.target.value)}
+                onBlur={savePrice}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") (event.target as HTMLInputElement).blur();
+                }}
+              />
+            )}
+          </div>
+        ) : null}
       </td>
       <td>
         <details>
@@ -1285,6 +1267,7 @@ function OrderCard({
 }): JSX.Element {
   const [attested, setAttested] = useState(false);
   const [expectedAt, setExpectedAt] = useState("");
+  const [mailNote, setMailNote] = useState<string | null>(null);
   const supplierEmail =
     typeof order.supplier_details?.email === "string" ? order.supplier_details.email : "";
   const [sentTo, setSentTo] = useState(supplierEmail);
@@ -1302,9 +1285,26 @@ function OrderCard({
           {order.lines_preview.map((line, index) => (
             <li key={index}>
               <EntityCode value={line.sku} /> × {fmtQty(line.qty)} {line.unit}
+              {line.unit_price ? ` · ${formatMoney(line.unit_price, "CLP")}` : ""}
             </li>
           ))}
         </ul>
+      )}
+      {(order.total_amount || (order.unpriced_lines ?? 0) > 0) && (
+        <p className="purchasing-order-total">
+          {order.total_amount ? (
+            <>
+              {t("purchasing.orderTotal")}:{" "}
+              <strong>{formatMoney(order.total_amount, "CLP")}</strong>
+            </>
+          ) : null}
+          {(order.unpriced_lines ?? 0) > 0 ? (
+            <small className="purchasing-hint">
+              {" "}
+              · {order.unpriced_lines} {t("purchasing.orderUnpriced")}
+            </small>
+          ) : null}
+        </p>
       )}
       {(order.expected_at || order.sent_to) && (
         <p className="purchasing-order-expected">
@@ -1350,11 +1350,28 @@ function OrderCard({
           noValidate
           onSubmit={(event) => {
             event.preventDefault();
+            // El correo al proveedor va por el outbox en la misma llamada —
+            // su estado vuelve en la respuesta (sandbox por defecto; SMTP
+            // real se activa en docs/operations/ACTIVACION.md).
             void action(
-              request(`purchasing/orders/${order.id}/send/`, "POST", {
-                confirmed: true,
-                expected_at: expectedAt || null,
-                sent_to: sentTo.trim() || null,
+              request<{ mail?: { status: string } | null }>(
+                `purchasing/orders/${order.id}/send/`,
+                "POST",
+                {
+                  confirmed: true,
+                  expected_at: expectedAt || null,
+                  sent_to: sentTo.trim() || null,
+                },
+              ).then((output) => {
+                const mail = output?.mail;
+                setMailNote(
+                  mail == null
+                    ? null
+                    : mail.status === "SKIPPED"
+                      ? t("purchasing.mailSkipped")
+                      : t("purchasing.mailSent"),
+                );
+                return output;
               }),
             );
           }}
@@ -1390,6 +1407,11 @@ function OrderCard({
           <button type="submit" disabled={busy || !attested}>
             {t("purchasing.send")}
           </button>
+          {mailNote ? (
+            <p className="purchasing-hint" role="status">
+              {mailNote}
+            </p>
+          ) : null}
         </form>
       )}
       <ul>
@@ -1656,6 +1678,9 @@ function ReceivingPanel({
   const [note, setNote] = useState("");
   const [formError, setFormError] = useState("");
   const [quantities, setQuantities] = useState<Quantities>({});
+  const [deliveryRef, setDeliveryRef] = useState("");
+  const [deliveryDate, setDeliveryDate] = useState("");
+  const [overPrompt, setOverPrompt] = useState(false);
   const [receiptKey, setReceiptKey] = useState(
     () => `${order.order_code}-${crypto.randomUUID().slice(0, 8)}`,
   );
@@ -1686,7 +1711,7 @@ function ReceivingPanel({
     };
   }, [open, order.id, request]);
 
-  function submit(event: FormEvent): void {
+  function submit(event: FormEvent, allowOver = false): void {
     event.preventDefault();
     if (!state) return;
     setFormError("");
@@ -1716,19 +1741,38 @@ function ReceivingPanel({
       setFormError(t("purchasing.receiveDamageExceeds"));
       return;
     }
+    let overReceived = false;
     void action(
       request(`inventory/orders/${order.id}/receipts/`, "POST", {
         receipt_key: receiptKey,
         note: note || null,
+        supplier_delivery_ref: deliveryRef.trim() || null,
+        supplier_delivery_date: deliveryDate || null,
+        allow_over_receipt: allowOver,
         lines,
+      }).catch((error) => {
+        // Sobre-recepción: el servidor pide confirmación explícita — se
+        // muestra la advertencia y el humano confirma con un segundo clic.
+        if (
+          error instanceof ApiError &&
+          (error.payload as { error?: { code?: unknown } })?.error?.code === "receipt_over_received"
+        ) {
+          overReceived = true;
+          setOverPrompt(true);
+          return;
+        }
+        throw error;
       }),
     ).then((ok) => {
-      if (!ok) return;
+      if (!ok || overReceived) return;
       // One key = one physical receipt: a successful post starts the next one
       // with a fresh key; a failed/uncertain submit keeps it for safe retry.
       setReceiptKey(`${order.order_code}-${crypto.randomUUID().slice(0, 8)}`);
       setQuantities({});
       setNote("");
+      setDeliveryRef("");
+      setDeliveryDate("");
+      setOverPrompt(false);
       request(`inventory/orders/${order.id}/receiving/`)
         .then((fresh) => setState(fresh as ReceivingState))
         .catch(() => undefined);
@@ -1878,6 +1922,25 @@ function ReceivingPanel({
             </table>
           </div>
           <label>
+            {t("purchasing.deliveryRef")}
+            <input
+              type="text"
+              value={deliveryRef}
+              disabled={busy}
+              placeholder={t("purchasing.deliveryRefHint")}
+              onChange={(event) => setDeliveryRef(event.target.value)}
+            />
+          </label>
+          <label>
+            {t("purchasing.deliveryDate")}
+            <input
+              type="date"
+              value={deliveryDate}
+              disabled={busy}
+              onChange={(event) => setDeliveryDate(event.target.value)}
+            />
+          </label>
+          <label>
             {t("purchasing.receiveNote")}
             <input
               type="text"
@@ -1912,6 +1975,19 @@ function ReceivingPanel({
           >
             {t("purchasing.receiveSubmit")}
           </button>
+          {overPrompt ? (
+            <div className="purchasing-over-receipt" role="alert">
+              <strong>{t("purchasing.overReceiptTitle")}</strong>
+              <p>{t("purchasing.overReceiptBody")}</p>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={(event) => submit(event as unknown as FormEvent, /* allowOver */ true)}
+              >
+                {t("purchasing.overReceiptConfirm")}
+              </button>
+            </div>
+          ) : null}
           {state.receipts.length > 0 && (
             <table className="purchasing-receipts">
               <caption>{t("purchasing.receiveHistory")}</caption>
@@ -1919,6 +1995,8 @@ function ReceivingPanel({
                 <tr>
                   <th>{t("purchasing.receiptCode")}</th>
                   <th>{t("purchasing.receiptDate")}</th>
+                  <th>{t("purchasing.deliveryRef")}</th>
+                  <th>{t("purchasing.deliveryDate")}</th>
                   <th>{t("purchasing.receiptNote")}</th>
                 </tr>
               </thead>
@@ -1927,6 +2005,12 @@ function ReceivingPanel({
                   <tr key={receipt.id}>
                     <td>{receipt.receipt_code}</td>
                     <td>{formatDateTime(receipt.created_at)}</td>
+                    <td>{receipt.supplier_delivery_ref || "—"}</td>
+                    <td>
+                      {receipt.supplier_delivery_date
+                        ? formatDate(receipt.supplier_delivery_date)
+                        : "—"}
+                    </td>
                     <td>{receipt.note || "—"}</td>
                   </tr>
                 ))}
@@ -1936,5 +2020,129 @@ function ReceivingPanel({
         </form>
       )}
     </details>
+  );
+}
+
+type OfferRemnant = {
+  id: string;
+  remnant_code: string;
+  kind: "BAR" | "SHEET";
+  length_mm: string | null;
+  width_mm: string | null;
+  height_mm: string | null;
+  rack_location: string | null;
+};
+
+type WorkOrderOption = { id: string; order_code: string; status?: string };
+
+// La compatibilidad (largo útil ≥ requerido + mermas) la decide el motor al
+// producir el remnant_pool; aquí solo se ofrece reservar la pieza a una OT.
+function RemnantOffer({
+  line,
+  busy,
+  request,
+  action,
+}: {
+  line: CoverageLine;
+  busy: boolean;
+  request: RequestFn;
+  action: (task: Promise<unknown>) => Promise<boolean>;
+}): JSX.Element {
+  const key = line.remnant_pool?.key ?? "";
+  const [remnants, setRemnants] = useState<OfferRemnant[] | null>(null);
+  const [orders, setOrders] = useState<WorkOrderOption[]>([]);
+  const [orderId, setOrderId] = useState("");
+  const [done, setDone] = useState<ReadonlySet<string>>(new Set());
+
+  useEffect(() => {
+    let live = true;
+    void request<{ remnants?: OfferRemnant[] }>(
+      `inventory/remnants/?status=AVAILABLE&stock_identity=${encodeURIComponent(key)}`,
+    )
+      .then((data) => {
+        if (live) setRemnants((data.remnants ?? []).slice(0, 4));
+      })
+      .catch(() => {
+        if (live) setRemnants([]);
+      });
+    return () => {
+      live = false;
+    };
+  }, [key, request]);
+
+  function loadOrders(): void {
+    if (orders.length > 0) return;
+    void request<{ orders?: WorkOrderOption[] }>("production/orders/")
+      .then((data) =>
+        setOrders(
+          (data.orders ?? []).filter((order) => order.order_code.startsWith("OT")).slice(0, 30),
+        ),
+      )
+      .catch(() => undefined);
+  }
+
+  return (
+    <div className="purchasing-remnant-offer">
+      <p>
+        <EntityCode value={line.purchasing_sku} /> · {t("purchasing.coverageShortage")}:{" "}
+        <strong>{fmtQty(line.shortage)}</strong>{" "}
+        {purchaseUnitLabel(line.unit, qtyNumber(line.shortage))}
+      </p>
+      {remnants === null ? (
+        <p className="purchasing-hint">{t("purchasing.receivingLoading")}</p>
+      ) : remnants.length === 0 ? (
+        <p className="purchasing-hint">{t("purchasing.remnantOfferEmpty")}</p>
+      ) : (
+        <ul>
+          {remnants.map((remnant) =>
+            done.has(remnant.id) ? (
+              <li key={remnant.id} className="purchasing-hint">
+                <EntityCode value={remnant.remnant_code} /> · {t("purchasing.remnantOfferReserved")}
+              </li>
+            ) : (
+              <li key={remnant.id}>
+                <EntityCode value={remnant.remnant_code} /> ·{" "}
+                {remnant.kind === "BAR"
+                  ? `${fmtMm(remnant.length_mm)} mm`
+                  : `${fmtMm(remnant.width_mm)} × ${fmtMm(remnant.height_mm)} mm`}
+                {remnant.rack_location ? ` · ${remnant.rack_location}` : ""}
+                {" · "}
+                <select
+                  aria-label={`${t("inventory.reserveTo")} · ${remnant.remnant_code}`}
+                  disabled={busy}
+                  value={orderId}
+                  onFocus={loadOrders}
+                  onChange={(event) => setOrderId(event.target.value)}
+                >
+                  <option value="">{t("inventory.reservePick")}</option>
+                  {orders.map((order) => (
+                    <option key={order.id} value={order.id}>
+                      {order.order_code}
+                    </option>
+                  ))}
+                </select>{" "}
+                <button
+                  type="button"
+                  disabled={busy || orderId === ""}
+                  onClick={() =>
+                    void action(
+                      request(`inventory/remnants/${remnant.id}/reserve/`, "POST", {
+                        order_id: orderId,
+                      }),
+                    ).then((ok) => {
+                      if (ok) {
+                        setDone((previous) => new Set(previous).add(remnant.id));
+                      }
+                    })
+                  }
+                >
+                  {t("inventory.reserve")}
+                </button>
+              </li>
+            ),
+          )}
+        </ul>
+      )}
+    </div>
   );
 }

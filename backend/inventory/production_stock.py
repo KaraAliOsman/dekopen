@@ -181,7 +181,7 @@ def release_for_order(*, org_id: UUID, order_id: UUID, actor_id: UUID) -> int:
             WHEN movement_type IN ('RELEASE', 'CONSUMPTION') THEN -quantity
             ELSE 0 END) AS outstanding
         FROM public.inventory_movements
-        WHERE org_id = %s AND order_id = %s
+        WHERE org_id = %s AND order_id = %s AND item_id IS NOT NULL
         GROUP BY item_id
         """,
         [str(org_id), str(order_id)],
@@ -581,12 +581,23 @@ def coverage_for_version(org_id: UUID, version_id: UUID) -> dict[str, Any]:
     if psi_values:
         for row in rows(
             """
-            SELECT physical_stock_identity::text AS psi,
-                   COUNT(*) AS count, SUM(length_mm) AS total_mm
-            FROM public.inventory_remnants
-            WHERE org_id = %s AND kind = 'BAR' AND status = 'AVAILABLE'
-              AND physical_stock_identity = ANY(%s::uuid[])
-            GROUP BY physical_stock_identity
+            SELECT psi::text, COUNT(*) AS count, SUM(length_mm) AS total_mm
+            FROM (
+                SELECT COALESCE(
+                           r.physical_stock_identity,
+                           pm.physical_stock_identity,
+                           ra.physical_stock_identity) AS psi,
+                       r.length_mm
+                FROM public.inventory_remnants r
+                LEFT JOIN public.profile_purchase_mappings pm
+                     ON pm.id = r.stock_authority_id
+                LEFT JOIN public.reinforcement_articles ra
+                     ON ra.id = r.stock_authority_id
+                WHERE r.org_id = %s AND r.kind = 'BAR'
+                  AND r.status = 'AVAILABLE'
+            ) identified
+            WHERE psi = ANY(%s::uuid[])
+            GROUP BY psi
             """,
             [str(org_id), psi_values],
         ):
@@ -657,7 +668,7 @@ def coverage_for_version(org_id: UUID, version_id: UUID) -> dict[str, Any]:
         if str(line["unit"]) == "BAR" and psi:
             pool = bar_remnants.get(str(psi))
             if pool:
-                remnant = {"kind": "BAR", **pool}
+                remnant = {"kind": "BAR", "key": str(psi), **pool}
         else:
             identity = line.get("technical_identity")
             workshop_sku = ""
@@ -667,7 +678,10 @@ def coverage_for_version(org_id: UUID, version_id: UUID) -> dict[str, Any]:
                 )
             count = sheet_remnants.get(workshop_sku or sku)
             if count:
-                remnant = {"kind": "SHEET", "count": count}
+                remnant = {
+                    "kind": "SHEET", "count": count,
+                    "key": workshop_sku or sku,
+                }
         coverage.append({
             "requirement_line_id": str(line["id"]),
             "order_type": line["order_type"],

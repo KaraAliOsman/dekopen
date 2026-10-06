@@ -495,3 +495,117 @@
   color: var(--danger-ink);
   font-weight: 600;
 }
+
+/* P15 — separación compras/inventario, montos, sobre-recepción y retazos. */
+.purchasing-inventory-link {
+  font-size: var(--type-micro);
+  color: var(--theme-text-secondary);
+}
+.purchasing-inventory-link a {
+  color: var(--theme-accent);
+  font-weight: 600;
+}
+.purchasing-order-total {
+  font-size: 0.85rem;
+  color: var(--theme-text-primary);
+  margin: 0.25rem 0;
+}
+.purchasing-order-lines {
+  list-style: none;
+  padding: 0;
+  margin: 0.25rem 0;
+  font-size: 0.8rem;
+  color: var(--theme-text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.purchasing-price {
+  margin-top: 0.25rem;
+}
+.purchasing-price input {
+  width: 8.5rem;
+  font-size: 0.8rem;
+}
+.purchasing-over-receipt {
+  border: 1px solid var(--theme-warning, #b26a00);
+  background: var(--theme-warning-soft, #fdf1e3);
+  border-radius: var(--r-2);
+  padding: 0.5rem 0.75rem;
+  margin: 0.5rem 0;
+}
+.purchasing-over-receipt p {
+  margin: 0.25rem 0;
+  font-size: 0.8rem;
+  color: var(--theme-text-secondary);
+}
+.purchasing-remnant-offers {
+  margin-top: 0.75rem;
+  border-top: 1px solid var(--theme-border-subtle);
+  padding-top: 0.5rem;
+}
+.purchasing-remnant-offers h3 {
+  font-size: 0.85rem;
+  margin: 0.25rem 0;
+}
+.purchasing-remnant-offer ul {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+}
+.purchasing-remnant-offer select {
+  margin: 0 0.25rem;
+  font-size: 0.8rem;
+}
+.inventory-remnant-old td {
+  background: var(--theme-warning-soft, #fdf1e3);
+}
+.inventory-remnant-old td:first-child {
+  border-left: 3px solid var(--theme-warning, #b26a00);
+}
+.inventory-remnant-rack input,
+.inventory-remnant-order select,
+.inventory-scrap input {
+  font-size: 0.8rem;
+  margin-right: 0.35rem;
+}
+.inventory-movement-doc,
+.inventory-movement-lot,
+.inventory-movement-actor {
+  color: var(--theme-text-secondary);
+  font-size: 0.78rem;
+}
+.inventory-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.inventory-search {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: var(--type-micro);
+  color: var(--theme-text-secondary);
+  margin: 0.5rem 0;
+}
+.inventory-search input {
+  max-width: 22rem;
+}
+
+/* ——— P15: objetivos táctiles ≥ 44 px en /inventory ———
+ * Misma regla que el tablero de producción (constitución §3.7 + auditoría
+ * ux:capture): ningún control de la superficie baja de 2.75 rem. */
+.inventory-page input:not([type="checkbox"]),
+.inventory-page select,
+.inventory-page button,
+.inventory-page label,
+.inventory-page summary {
+  min-height: 2.75rem;
+}
+.inventory-page .fmt-code {
+  min-height: 2.75rem;
+  align-items: center;
+}

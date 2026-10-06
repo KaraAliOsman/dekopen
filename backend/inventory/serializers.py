@@ -29,6 +29,9 @@ class InventoryStockItemSerializer(serializers.Serializer):
     )
     racks = serializers.CharField(allow_null=True, required=False)
     spec_text = serializers.CharField(required=False, allow_blank=True)
+    reserved_by = serializers.ListField(
+        child=serializers.DictField(), required=False
+    )
 
 
 class InventoryStockSerializer(serializers.Serializer):
@@ -37,7 +40,8 @@ class InventoryStockSerializer(serializers.Serializer):
 
 class InventoryMovementSerializer(serializers.Serializer):
     id = serializers.UUIDField()
-    item_id = serializers.UUIDField()
+    item_id = serializers.UUIDField(allow_null=True)
+    remnant_id = serializers.UUIDField(allow_null=True, required=False)
     movement_type = serializers.ChoiceField(
         choices=(
             "RECEIPT",
@@ -47,9 +51,12 @@ class InventoryMovementSerializer(serializers.Serializer):
             "ADJUSTMENT",
             "RETURN",
             "SCRAP",
+            "MOVE",
         )
     )
-    quantity = serializers.DecimalField(max_digits=14, decimal_places=2)
+    quantity = serializers.DecimalField(
+        max_digits=14, decimal_places=2, allow_null=True
+    )
     order_id = serializers.UUIDField(allow_null=True)
     order_line_id = serializers.UUIDField(allow_null=True)
     lot_code = serializers.CharField(allow_null=True)
@@ -57,6 +64,11 @@ class InventoryMovementSerializer(serializers.Serializer):
     note = serializers.CharField(allow_null=True)
     actor_id = serializers.UUIDField(allow_null=True)
     actor_label = serializers.CharField(allow_null=True, required=False)
+    order_code = serializers.CharField(allow_null=True, required=False)
+    receipt_code = serializers.CharField(allow_null=True, required=False)
+    remnant_code = serializers.CharField(allow_null=True, required=False)
+    sku = serializers.CharField(allow_null=True, required=False)
+    item_name = serializers.CharField(allow_null=True, required=False)
     created_at = serializers.DateTimeField()
 
 
@@ -83,6 +95,13 @@ class ReceiptLineRequestSerializer(StrictSerializer):
 class OrderReceiptRequestSerializer(StrictSerializer):
     receipt_key = serializers.CharField(max_length=100)
     note = serializers.CharField(required=False, allow_null=True, max_length=500)
+    supplier_delivery_ref = serializers.CharField(
+        required=False, allow_null=True, allow_blank=True, max_length=100
+    )
+    supplier_delivery_date = serializers.DateField(
+        required=False, allow_null=True
+    )
+    allow_over_receipt = serializers.BooleanField(required=False, default=False)
     lines = ReceiptLineRequestSerializer(many=True, allow_empty=False)
 
 
@@ -105,6 +124,12 @@ class OrderReceiptSerializer(serializers.Serializer):
     receipt_code = serializers.CharField()
     note = serializers.CharField(allow_null=True)
     received_by = serializers.CharField(allow_null=True)
+    supplier_delivery_ref = serializers.CharField(
+        allow_null=True, required=False
+    )
+    supplier_delivery_date = serializers.DateField(
+        allow_null=True, required=False
+    )
     created_at = serializers.DateTimeField()
 
 
@@ -152,13 +177,16 @@ class RemnantSerializer(serializers.Serializer):
     notes = serializers.CharField(allow_null=True)
     reserved_order_code = serializers.CharField(allow_null=True, required=False)
     origin_order_code = serializers.CharField(allow_null=True, required=False)
+    consumed_order_code = serializers.CharField(allow_null=True, required=False)
     article_sku = serializers.CharField(allow_null=True, required=False)
+    age_days = serializers.IntegerField(allow_null=True, required=False)
     created_at = serializers.DateTimeField()
     updated_at = serializers.DateTimeField()
 
 
 class RemnantListSerializer(serializers.Serializer):
     remnants = RemnantSerializer(many=True)
+    alert_days = serializers.IntegerField(required=False)
 
 
 class BarAuthoritySerializer(serializers.Serializer):
@@ -178,6 +206,20 @@ class RemnantListQuerySerializer(StrictSerializer):
     status = serializers.ChoiceField(
         choices=("AVAILABLE", "RESERVED", "CONSUMED", "SCRAPPED"), required=False
     )
+    physical_stock_identity = serializers.UUIDField(required=False)
+    stock_identity = serializers.CharField(required=False, max_length=200)
+
+
+class RemnantMoveRequestSerializer(StrictSerializer):
+    rack_location = serializers.CharField(max_length=100)
+
+
+class RemnantScrapRequestSerializer(StrictSerializer):
+    reason = serializers.CharField(max_length=500)
+
+
+class RemnantReserveRequestSerializer(StrictSerializer):
+    order_id = serializers.UUIDField()
 
 
 class RemnantCreateSerializer(StrictSerializer):
