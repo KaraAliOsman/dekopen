@@ -25795,6 +25795,20 @@ components:
           format: decimal
           pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
           nullable: true
+        doc_paper_size:
+          type: string
+          enum:
+          - LETTER
+          - LEGAL
+          - A4
+          description: Paper size for client-facing documents (DOC-01).
+        doc_terms:
+          type: object
+          additionalProperties:
+            type: string
+          description: Declared legal-text keys (plazo_entrega, instalacion,
+            exclusiones, garantia, jurisdiccion) printed under Condiciones
+            comerciales.
       required:
       - brand_address
       - brand_color
@@ -25804,6 +25818,8 @@ components:
       - brand_phone
       - commercial_name
       - doc_dekopen_credit
+      - doc_paper_size
+      - doc_terms
       - giro
       - name
       - tax_id
@@ -25845,6 +25861,18 @@ components:
           type: string
           format: decimal
           pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          nullable: true
+        doc_paper_size:
+          type: string
+          enum:
+          - LETTER
+          - LEGAL
+          - A4
+          nullable: true
+        doc_terms:
+          type: object
+          additionalProperties:
+            type: string
           nullable: true
     OrientationEnum:
       enum:

@@ -63,18 +63,20 @@ def test_share_quote_mints_hashed_token(monkeypatch) -> None:
         token.encode()
     ).hexdigest()
     assert captured["insert_params"][4] == out["expires_at"]
-    # minting guarantees the client-facing DOC-01 for the bound version
-    assert artifact_calls == [
-        {
-            "org_id": org_id,
-            "actor_id": actor_id,
-            "role": "ESTIMATOR",
-            "project_version_id": version_id,
-            "order_id": None,
-            "document_type": "DOC-01",
-            "file_format": "PDF",
-        }
-    ]
+    # minting guarantees the client-facing DOC-01 for the bound version —
+    # and the fresh approval URL is re-rendered into it (QR + link).
+    assert len(artifact_calls) == 1
+    call = artifact_calls[0]
+    assert call["org_id"] == org_id
+    assert call["actor_id"] == actor_id
+    assert call["role"] == "ESTIMATOR"
+    assert call["project_version_id"] == version_id
+    assert call["order_id"] is None
+    assert call["document_type"] == "DOC-01"
+    assert call["file_format"] == "PDF"
+    assert call["render_context"] == {
+        "approval_url": f"http://localhost:5173/cotizacion/{token}"
+    }
 
 
 def test_share_quote_requires_quoted_status(monkeypatch) -> None:

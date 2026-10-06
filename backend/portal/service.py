@@ -27,6 +27,7 @@ from documents.repository import (
     rows,
     write,
 )
+from mail.service import _frontend_origin
 
 logger = logging.getLogger(__name__)
 
@@ -85,20 +86,10 @@ def share_quote(
         )
         if not versions:
             raise DocumentaryError("version_not_found")
-    # The client-facing quotation is DOC-01 (the commercial offer). Generate it
-    # before minting: generation is slot-idempotent, and a failure must not
-    # strand an approval whose token nobody ever saw.
-    generate_artifact(
-        org_id=org_id,
-        actor_id=actor_id,
-        role=role,
-        project_version_id=versions[0]["id"],
-        order_id=None,
-        document_type="DOC-01",
-        file_format="PDF",
-    )
     token = secrets.token_urlsafe(_TOKEN_BYTES)
     expires_at = datetime.now(timezone.utc) + timedelta(days=_APPROVAL_TTL_DAYS)
+    approval_url = f"{_frontend_origin()}/cotizacion/{token}"
+    minted_id = None
     with transaction.atomic(), documentary_backend():
         # A fresh share supersedes every outstanding link for this revision —
         # otherwise pending tokens accumulate and stay concurrently valid.
@@ -127,6 +118,31 @@ def share_quote(
                 str(actor_id),
             ],
         )
+        minted_id = minted["id"]
+    # The client-facing quotation is DOC-01: it now carries this exact link
+    # in its acceptance block (QR + URL), so it generates AFTER minting. If
+    # the render fails the fresh approval is revoked — no stranded token
+    # whose document nobody can produce.
+    try:
+        generate_artifact(
+            org_id=org_id,
+            actor_id=actor_id,
+            role=role,
+            project_version_id=versions[0]["id"],
+            order_id=None,
+            document_type="DOC-01",
+            file_format="PDF",
+            render_context={"approval_url": approval_url},
+        )
+    except Exception:
+        with documentary_backend():
+            rows(
+                "UPDATE public.customer_approvals SET status='REVOKED',"
+                "revoked_at=%s,revoked_by=%s WHERE id=%s AND status='PENDING'",
+                [datetime.now(timezone.utc), str(actor_id), str(minted_id)],
+            )
+        raise
+    with documentary_backend():
         # P25: enlace de cotización al cliente por correo — el handler renderiza
         # white-label con la marca del org y registra mail_messages vía outbox.
         from automations.service import emit
@@ -135,7 +151,7 @@ def share_quote(
             "mail.quote_sent",
             org_id=org_id,
             actor_id=actor_id,
-            idempotency_key=f"mail:quote-sent:{minted['id']}",
+            idempotency_key=f"mail:quote-sent:{minted_id}",
             project_id=str(project_id),
             token=token,
         )

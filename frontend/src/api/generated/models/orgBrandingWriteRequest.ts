@@ -5,6 +5,8 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { OrgBrandingWriteRequestDocPaperSize } from "./orgBrandingWriteRequestDocPaperSize";
+import type { OrgBrandingWriteRequestDocTerms } from "./orgBrandingWriteRequestDocTerms";
 
 export interface OrgBrandingWriteRequest {
   /**
@@ -39,4 +41,8 @@ export interface OrgBrandingWriteRequest {
    * @pattern ^-?\d{0,4}(?:\.\d{0,2})?$
    */
   vano_spread_tolerance_mm?: string | null;
+  /** @nullable */
+  doc_paper_size?: OrgBrandingWriteRequestDocPaperSize;
+  /** @nullable */
+  doc_terms?: OrgBrandingWriteRequestDocTerms;
 }

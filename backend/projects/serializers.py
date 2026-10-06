@@ -619,6 +619,8 @@ class OrgBrandingSerializer(serializers.Serializer):
     vano_spread_tolerance_mm = serializers.DecimalField(
         max_digits=6, decimal_places=2, coerce_to_string=True, allow_null=True
     )
+    doc_paper_size = serializers.CharField()
+    doc_terms = serializers.DictField(child=serializers.CharField())
 
 
 class OrgBrandingWriteSerializer(StrictSerializer):
@@ -650,6 +652,16 @@ class OrgBrandingWriteSerializer(StrictSerializer):
         decimal_places=2,
         min_value=Decimal("0"),
         max_value=Decimal("100"),
+        required=False,
+        allow_null=True,
+    )
+    doc_paper_size = serializers.ChoiceField(
+        choices=(("LETTER", "Carta"), ("LEGAL", "Oficio"), ("A4", "A4")),
+        required=False,
+        allow_null=True,
+    )
+    doc_terms = serializers.DictField(
+        child=serializers.CharField(allow_blank=True, max_length=4000),
         required=False,
         allow_null=True,
     )

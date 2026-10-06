@@ -111,6 +111,30 @@
   margin: 2px 0 0;
 }
 
+.settings-docs {
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-1);
+  display: grid;
+  gap: 10px 14px;
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 12px 14px;
+}
+
+.settings-docs legend {
+  color: var(--theme-text-muted);
+  font-size: var(--type-micro);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  padding: 0 6px;
+  text-transform: uppercase;
+}
+
+.settings-docs textarea {
+  min-block-size: 3.4rem;
+  resize: vertical;
+}
+
 .settings-mail-grid {
   display: grid;
   gap: 6px 16px;

@@ -27,6 +27,7 @@ import type {
   ExtraTemplateWriteRequest,
   MailStatus,
   Membership,
+  OrgBrandingDocPaperSize,
   PaymentIntegrationStatus,
   MembershipRoleEnum,
   ServiceArticleResponse,
@@ -472,6 +473,14 @@ function OrgBrandingCard({ orgId }: { orgId: string }): JSX.Element {
     brand_email: "",
     brand_color: "",
     doc_dekopen_credit: false,
+    doc_paper_size: "LETTER" as OrgBrandingDocPaperSize,
+    doc_terms: {
+      plazo_entrega: "",
+      instalacion: "",
+      exclusiones: "",
+      garantia: "",
+      jurisdiccion: "",
+    } as Record<string, string>,
   });
   const requestOptions = { headers: { "X-Organization-ID": orgId } };
   // El color por defecto del control ES el token teal-800 — se resuelve
@@ -494,6 +503,15 @@ function OrgBrandingCard({ orgId }: { orgId: string }): JSX.Element {
         brand_email: response.data.brand_email ?? "",
         brand_color: response.data.brand_color ?? "",
         doc_dekopen_credit: response.data.doc_dekopen_credit ?? false,
+        doc_paper_size: response.data.doc_paper_size ?? "LETTER",
+        doc_terms: {
+          plazo_entrega: "",
+          instalacion: "",
+          exclusiones: "",
+          garantia: "",
+          jurisdiccion: "",
+          ...(response.data.doc_terms ?? {}),
+        },
       });
       if (response.data.brand_logo_key) {
         try {
@@ -519,8 +537,16 @@ function OrgBrandingCard({ orgId }: { orgId: string }): JSX.Element {
 
   async function save(event: FormEvent): Promise<void> {
     event.preventDefault();
-    const field = (name: Exclude<keyof typeof form, "doc_dekopen_credit">) =>
-      form[name].trim() || null;
+    const field = (
+      name: Exclude<keyof typeof form, "doc_dekopen_credit" | "doc_paper_size" | "doc_terms">,
+    ) => form[name].trim() || null;
+    // Vacío se sella como omisión — el documento imprime solo las
+    // condiciones que la organización declara.
+    const docTerms = Object.fromEntries(
+      Object.entries(form.doc_terms)
+        .map(([key, value]) => [key, value.trim()])
+        .filter(([, value]) => value !== ""),
+    );
     setBusy(true);
     setMessage(null);
     try {
@@ -533,6 +559,8 @@ function OrgBrandingCard({ orgId }: { orgId: string }): JSX.Element {
           brand_email: field("brand_email"),
           brand_color: field("brand_color")?.toUpperCase() ?? null,
           doc_dekopen_credit: form.doc_dekopen_credit,
+          doc_paper_size: form.doc_paper_size,
+          doc_terms: docTerms,
         },
         requestOptions,
       );
@@ -680,6 +708,51 @@ function OrgBrandingCard({ orgId }: { orgId: string }): JSX.Element {
           {t("settings.brandCredit")}
           <span className="settings-hint">{t("settings.brandCreditHint")}</span>
         </label>
+        <fieldset className="settings-docs">
+          <legend>{t("settings.documents")}</legend>
+          <p className="settings-hint">{t("settings.documentsHint")}</p>
+          <label>
+            {t("settings.docPaperSize")}
+            <select
+              value={form.doc_paper_size}
+              onChange={(event) =>
+                setForm((prev) => ({
+                  ...prev,
+                  doc_paper_size: event.target.value as OrgBrandingDocPaperSize,
+                }))
+              }
+            >
+              <option value="LETTER">{t("settings.docPaperLetter")}</option>
+              <option value="LEGAL">{t("settings.docPaperLegal")}</option>
+              <option value="A4">{t("settings.docPaperA4")}</option>
+            </select>
+          </label>
+          {(
+            [
+              ["plazo_entrega", "settings.docTermsPlazo"],
+              ["instalacion", "settings.docTermsInstalacion"],
+              ["exclusiones", "settings.docTermsExclusiones"],
+              ["garantia", "settings.docTermsGarantia"],
+              ["jurisdiccion", "settings.docTermsJurisdiccion"],
+            ] as const
+          ).map(([key, labelKey]) => (
+            <label key={key}>
+              {t(labelKey)}
+              <textarea
+                maxLength={4000}
+                rows={2}
+                value={form.doc_terms[key] ?? ""}
+                onChange={(event) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    doc_terms: { ...prev.doc_terms, [key]: event.target.value },
+                  }))
+                }
+              />
+            </label>
+          ))}
+          <p className="settings-hint">{t("settings.docTermsHint")}</p>
+        </fieldset>
         <div className="payments-form-actions">
           <button type="submit" className="primary-action" disabled={busy}>
             {t("settings.brandingSave")}

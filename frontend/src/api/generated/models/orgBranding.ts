@@ -5,6 +5,8 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { OrgBrandingDocPaperSize } from "./orgBrandingDocPaperSize";
+import type { OrgBrandingDocTerms } from "./orgBrandingDocTerms";
 
 /**
  * Org white-label identity rendered on emitted documents.
@@ -35,4 +37,8 @@ export interface OrgBranding {
    * @pattern ^-?\d{0,4}(?:\.\d{0,2})?$
    */
   vano_spread_tolerance_mm: string | null;
+  /** Paper size for client-facing documents (DOC-01). */
+  doc_paper_size: OrgBrandingDocPaperSize;
+  /** Declared legal-text keys (plazo_entrega, instalacion, exclusiones, garantia, jurisdiccion) printed under Condiciones comerciales. */
+  doc_terms: OrgBrandingDocTerms;
 }
