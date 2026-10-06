@@ -650,3 +650,41 @@ description: Local dev-stack recipe for DEKOPEN E2E testing — Supabase CLI sta
 - StrictMode firma de bug: página monta directo en estado de error con los GETs 200 — el doble-montaje aborta el primer fetch y `.catch→setFailed` gana la carrera contra el segundo fetch. Todo `useRef(new AbortController())` reemplazado en effect + precedencia `failed` sobre datos es sospechoso también en remontajes por cambio de org.
 - `?` no se puede teclear vía xdotool (`key "?"`/`type "?"` llegan como `\u0000`) — usar `key shift+slash`. `wmctrl -r :ACTIVE: -e 0,x,y,w,h` redimensiona la ventana. Para 390px usar DevTools device toolbar con preset iPhone y verificar `document.documentElement.clientWidth` (innerWidth miente). Overflow horizontal: `scrollWidth` vs `clientWidth` — `scrollLeft` se clampa a 0 cuando el overflow viene de elementos fijos.
 - Node real del box: `~/.nvm/versions/node/v24.19.0/bin` (la referencia vieja a `~/node22` puede no existir — comprobar).
+
+## AskDekopen dock + assistant/jobs surface (P17 learnings)
+
+- The AskDekopen dock (section aria-label="Preguntar a DEKOPEN") is a 400px
+  right drawer: at viewport ≥1024px the workspace reserves its width (content
+  pushes left); below that it overlays the page — close it via the × before
+  clicking right-edge controls; it reopens via the topbar "IA"/orb button and
+  its open state persists across navigations (sessionStorage `dk:askdock`).
+- Agent runs settle in <1s under the MOCK provider — screenshotting a live
+  thinking/working Orb mid-run is luck. Capture the DOM busy line
+  ("N% · En cola/Ejecutando… · Cancelar") instead; the 15fps recording still
+  shows ring animation frames.
+- Sending a dock prompt with chips: suggestion chips sit at the bottom of the
+  thread — coordinates drift as turns stream in; re-screenshot before clicking.
+- OpsProposalCard: "Aplicar N operaciones" is disabled with title
+  "El producto cambió — genera de nuevo para aplicar." whenever the live product
+  sig differs from the proposal's (stale guard). After Ctrl+Z restores the
+  product, older pending cards become apply-able again (sig matches).
+- Dock cards DO restore applied/declined outcomes on remount: `threadFromJob`
+  seeds each turn's outcome sets from `job.outcomes` (server dedupes per
+  (turn, step, action)); the workspace /assistant?job=<id> reads the same
+  source — both surfaces agree after a reload/reopen.
+- /jobs: state filter sets ?state=QUEUED etc. via a native <select> — click the
+  element then Down/Return; it must be focused (dock must not cover it).
+  Actor column is resolved via memberships→auth.users; object label is
+  "Pos. NN <location> · P-######" built in SQL from position_index.
+- Audit deep-link: dock card "Ver auditoría" and jobs "Abrir en el asistente"
+  both land on /assistant?job=<ai_job_id> (the job_runs.payload->>'ai_job_id'
+  provides the link). The "N créditos · N tokens" header counts that job's
+  operation_key plus its :rN/:gN round suffixes — a separate send is a
+  separate ai_jobs row with its own key, so per-job spend is correct
+  (verified: header == the job's own invocations exactly).
+- Role gate recipe: login as a fixture OPERATOR/INSTALLER (magic link via
+  Mailpit) — the SPA restores the last URL, so landing directly on /jobs after
+  login exercises the denied view: nav collapses to role-allowed entries, no
+  orb/badge/dock mount, denied text renders instantly (query disabled).
+- Magic-link: the /verify?token=...&redirect_to= URL from Mailpit can be pasted
+  straight into the address bar — no need to click it inside an email client.
