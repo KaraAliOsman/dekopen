@@ -9,6 +9,13 @@
  * paralela al carril; fijo = silencio. */
 import { type SVGProps } from "react";
 
+import {
+  glyphPaths,
+  leafPrimitives,
+  leafSpecsForBay,
+  type GlyphPrimitive,
+} from "../features/canvas/openingSymbols";
+
 export type IconName =
   | "check"
   | "cross"
@@ -266,16 +273,42 @@ export type OpeningType =
   | "AWNING"
   | "SLIDING"
   | "SLIDING_2L"
+  | "SLIDING_3L"
+  | "SLIDING_4L"
   | "DOOR"
-  | "DOOR_ENTRY";
+  | "DOOR_ENTRY"
+  | "DOOR_DOUBLE";
 
-/** Símbolo de apertura según la gramática real del dibujo:
- * - La hoja se representa por el marco (perfil 1,5 px).
- * - Las líneas de batiente parten de las esquinas del lado de bisagra hacia
- *   el centro del lado opuesto (el vértice marca la manilla).
- * - `toward` (hacia el observador) = trazo continuo; alejándose = discontinuo.
- * - Abatible/proyectante = batiente desde abajo; oscilobatiente = ambos.
- * - Corredera = flecha paralela al carril; fijo = silencio. */
+/** Preset sliding layouts for the icon vocabulary — same semantics the
+ * engine presets declare (track 0 = raíl más exterior). */
+const ICON_SLIDING_LAYOUTS: Record<string, { kind: "MOVING" | "FIXED"; track: number }[]> = {
+  SLIDING: [
+    { kind: "MOVING", track: 0 },
+    { kind: "MOVING", track: 1 },
+  ],
+  SLIDING_2L: [
+    { kind: "MOVING", track: 0 },
+    { kind: "MOVING", track: 1 },
+  ],
+  SLIDING_3L: [
+    { kind: "MOVING", track: 0 },
+    { kind: "MOVING", track: 1 },
+    { kind: "MOVING", track: 0 },
+  ],
+  SLIDING_4L: [
+    { kind: "MOVING", track: 0 },
+    { kind: "MOVING", track: 1 },
+    { kind: "MOVING", track: 0 },
+    { kind: "MOVING", track: 1 },
+  ],
+};
+
+/** Símbolo de apertura — dibuja el MISMO contrato que el canvas y el PDF
+ * (`glyphPaths`/`leafPrimitives`), no una aproximación a mano:
+ * - batiente = triángulo con base en la bisagra y vértice al 40 %;
+ * - `toward` (hacia el observador) = trazo continuo; alejándose = discontinuo;
+ * - puerta = triángulos + umbral (el arco de barrido vive en la planta);
+ * - corredera = flechas declaradas del layout; fijo = silencio. */
 export function OpeningGlyph({
   type,
   toward = true,
@@ -287,45 +320,55 @@ export function OpeningGlyph({
   toward?: boolean;
   size?: number;
 } & SVGProps<SVGSVGElement>): JSX.Element {
-  const dash = toward ? undefined : "3 2";
+  const view = toward ? "interior" : "exterior";
   // viewBox 24×24: marco 3..21, símbolo interior.
   const frame = <rect height="18" strokeWidth={1.5} width="18" x="3" y="3" />;
-  let symbol: React.ReactNode = null;
-  switch (type) {
-    case "TURN_LEFT":
-      symbol = <path d="M4 4L20 12 4 20" strokeDasharray={dash} strokeWidth={1.25} />;
-      break;
-    case "TURN_RIGHT":
-    case "DOOR":
-    case "DOOR_ENTRY":
-      symbol = <path d="M20 4L4 12 20 20" strokeDasharray={dash} strokeWidth={1.25} />;
-      break;
-    case "TILT_TURN_LEFT":
-      symbol = (
-        <>
-          <path d="M4 4L20 12 4 20" strokeDasharray={dash} strokeWidth={1.25} />
-          <path d="M4 4L12 20 20 4" strokeDasharray={dash} strokeWidth={1.25} />
-        </>
-      );
-      break;
-    case "TILT_TURN_RIGHT":
-      symbol = (
-        <>
-          <path d="M20 4L4 12 20 20" strokeDasharray={dash} strokeWidth={1.25} />
-          <path d="M4 4L12 20 20 4" strokeDasharray={dash} strokeWidth={1.25} />
-        </>
-      );
-      break;
-    case "AWNING":
-      symbol = <path d="M4 20L12 4l8 16" strokeDasharray={dash} strokeWidth={1.25} />;
-      break;
-    case "SLIDING":
-    case "SLIDING_2L":
-      symbol = <path d="M6 12h11M13.5 8.5L17 12l-3.5 3.5" strokeWidth={1.25} />;
-      break;
-    case "FIXED":
-    default:
-      symbol = null;
+  const paths: JSX.Element[] = [];
+  const sliding = ICON_SLIDING_LAYOUTS[type];
+  if (sliding) {
+    // La tabla de símbolos declara la dirección por travel — presets
+    // engine: [R@0,L@1] / [R@0,R@1,L@0] / [R@0,R@1,L@0,L@1].
+    const presets: ("LEFT" | "RIGHT")[][] = [
+      ["RIGHT", "LEFT"],
+      ["RIGHT", "RIGHT", "LEFT"],
+      ["RIGHT", "RIGHT", "LEFT", "LEFT"],
+    ];
+    const travels = presets[sliding.length - 2] ?? ["RIGHT", "LEFT"];
+    const leafW = 18 / sliding.length;
+    sliding.forEach((_panel, index) => {
+      const prims: GlyphPrimitive[] = [{ k: "arrow", dir: travels[index] ?? null }];
+      glyphPaths(prims, 3 + leafW * index, 3, leafW, 18).forEach((path, p) => {
+        paths.push(
+          <path
+            d={path.d}
+            key={`${index}-${p}`}
+            strokeDasharray={path.dash ?? undefined}
+            strokeWidth={1.1}
+          />,
+        );
+      });
+    });
+  } else {
+    const spec = leafSpecsForBay({ opening_type: type === "DOOR" ? "DOOR_ENTRY" : type });
+    const leaves = spec?.leaves ?? [];
+    const leafW = leaves.length ? 18 / leaves.length : 0;
+    leaves.forEach((leaf, index) => {
+      const prims = leafPrimitives(leaf, view, { unit: spec?.unit });
+      glyphPaths(prims, 3 + leafW * index, 3, leafW, 18).forEach((path, p) => {
+        paths.push(
+          <path
+            d={path.d}
+            key={`${index}-${p}`}
+            strokeDasharray={path.dash ?? undefined}
+            strokeWidth={1.1}
+          />,
+        );
+      });
+    });
+    if (type === "DOOR_DOUBLE") {
+      // Encuentro — la jamba de cierre entre las dos hojas.
+      paths.push(<path d="M12 3v18" key="meeting" strokeWidth={1.1} />);
+    }
   }
   return (
     <svg
@@ -341,7 +384,7 @@ export function OpeningGlyph({
       {...rest}
     >
       {frame}
-      {symbol}
+      {paths}
     </svg>
   );
 }

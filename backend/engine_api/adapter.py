@@ -27,6 +27,7 @@ from dekopen_engine import (
     SlidingLayout,
     SlidingPanel,
     SlidingPanelKind,
+    SlidingTravel,
     SystemParams,
     UnitKind,
     calculate_geometry,
@@ -278,20 +279,27 @@ def _parse_sliding_layout(payload: object) -> SlidingLayout:
     """Deserialize a node's declared sliding topology: rail count plus the
     ordered panels with their kind/track."""
     raw = _require_dict(payload, "sliding_layout")
-    unexpected = set(raw) - {"tracks", "panels"}
+    unexpected = set(raw) - {"tracks", "panels", "primary_index"}
     if unexpected:
         raise InvalidEngineRequest(
             f"sliding_layout contains unsupported fields: {sorted(unexpected)}"
         )
     if not isinstance(raw.get("tracks"), int) or isinstance(raw.get("tracks"), bool):
         raise InvalidEngineRequest("sliding_layout.tracks must be an integer")
+    primary_index = raw.get("primary_index")
+    if primary_index is not None and (
+        not isinstance(primary_index, int) or isinstance(primary_index, bool)
+    ):
+        raise InvalidEngineRequest(
+            "sliding_layout.primary_index must be an integer or null"
+        )
     panels = raw.get("panels")
     if not isinstance(panels, list) or not panels:
         raise InvalidEngineRequest("sliding_layout.panels must be a non-empty array")
     parsed_panels: list[SlidingPanel] = []
     for index, panel in enumerate(panels):
         panel_raw = _require_dict(panel, f"sliding_layout.panels[{index}]")
-        unexpected_panel = set(panel_raw) - {"slot", "kind", "track"}
+        unexpected_panel = set(panel_raw) - {"slot", "kind", "track", "travel"}
         if unexpected_panel:
             raise InvalidEngineRequest(
                 "sliding_layout.panels contains unsupported fields: "
@@ -310,10 +318,30 @@ def _parse_sliding_layout(payload: object) -> SlidingLayout:
             not isinstance(track, int) or isinstance(track, bool)
         ):
             raise InvalidEngineRequest("sliding_layout.panels[].track must be an integer or null")
-        parsed_panels.append(
-            SlidingPanel(slot=panel_raw["slot"], kind=kind, track=track)
+        travel = panel_raw.get("travel")
+        if travel is not None:
+            try:
+                travel = SlidingTravel(cast(str, travel))
+            except ValueError as error:
+                raise InvalidEngineRequest(
+                    "sliding_layout.panels[].travel must be LEFT, RIGHT or null"
+                ) from error
+        try:
+            parsed_panels.append(
+                SlidingPanel(
+                    slot=panel_raw["slot"], kind=kind, track=track, travel=travel
+                )
+            )
+        except ValueError as error:
+            raise InvalidEngineRequest(
+                f"invalid sliding_layout panel: {error}"
+            ) from error
+    try:
+        return SlidingLayout(
+            tracks=raw["tracks"], panels=parsed_panels, primary_index=primary_index
         )
-    return SlidingLayout(tracks=raw["tracks"], panels=parsed_panels)
+    except ValueError as error:
+        raise InvalidEngineRequest(f"invalid sliding_layout: {error}") from error
 
 
 def parse_contour(payload: object) -> Contour | None:

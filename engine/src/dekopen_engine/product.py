@@ -40,6 +40,8 @@ from dekopen_engine.geometry import (
     reinforcement_cut_length,
     resolve_bead_rule,
     resolved_sliding_layout,
+    panel_travel,
+    travel_inferred,
 )
 from dekopen_engine.finishes import apply_color_surcharges
 from dekopen_engine.glass import derive_net_glass_thickness
@@ -77,6 +79,7 @@ from dekopen_engine.models import (
     ProfileRole,
     ReinforcementPiece,
     SlidingPanelKind,
+    SlidingTravel,
     SystemParams,
     UnitKind,
 )
@@ -297,22 +300,28 @@ class ProductIssue(EngineModel):
 
 class SlidingPanelFacts(EngineModel):
     """One evaluated sliding slot — the panel's declared kind, the rail it
-    rides, and the leaf id the BOM carries for it (moving panels only)."""
+    rides, its slide direction (resolved or declared), whether that
+    direction was merely inferred, and the leaf id the BOM carries for it
+    (moving panels only)."""
 
     slot: str
     kind: SlidingPanelKind
     track: int | None = None
+    travel: SlidingTravel | None = None
+    travel_inferred: bool = False
     leaf_id: str | None = None
 
 
 class SlidingLayoutFacts(EngineModel):
     """The sliding topology a module's bay evaluated to — rails plus every
     panel left→right. Meeting stiles are every adjacent pair; a pair where
-    one side is FIXED is the channel the moving leaf covers."""
+    one side is FIXED is the channel the moving leaf covers.
+    `primary_index` is the stacking choice: which panel opens first."""
 
     bay_id: str
     tracks: int
     panels: list[SlidingPanelFacts]
+    primary_index: int | None = None
 
 
 class ModuleEvaluation(EngineModel):
@@ -1009,11 +1018,14 @@ def _sliding_facts(module: ProductModule) -> list[SlidingLayoutFacts]:
                     SlidingLayoutFacts(
                         bay_id=node.id,
                         tracks=layout.tracks,
+                        primary_index=layout.primary_index,
                         panels=[
                             SlidingPanelFacts(
                                 slot=panel.slot,
                                 kind=panel.kind,
                                 track=panel.track,
+                                travel=panel_travel(panel, index, len(layout.panels)),
+                                travel_inferred=travel_inferred(panel),
                                 leaf_id=(
                                     f"{node.id}:L{index + 1}"
                                     if panel.kind is SlidingPanelKind.MOVING

@@ -8,9 +8,18 @@ import {
   bayLeafTraces,
   isSlidingOpening,
   OPTION_SPEC_KEY,
+  panelTravel,
   resolvedSlidingLayout,
+  travelInferred,
   type OpeningSpecPayload,
+  type SlidingLayout,
 } from "./intentEditing";
+import {
+  glyphPaths,
+  leafPrimitives,
+  slidingPrimitives,
+  type ElevationView,
+} from "./openingSymbols";
 import { OPENING_OPTIONS } from "./openings";
 import { memberSurface, type MemberSurface } from "./materials";
 import { contourOutset, contourPathD, insetContourPoints, pointsPathD } from "./contourGeometry";
@@ -195,9 +204,60 @@ function glyphSpec(kind: string): {
   return { movement, hinge, direction };
 }
 
-/** Industry opening glyph: hinge side = triangle base, handle = apex.
- * DIN interior view (D03): a continuous line opens toward the viewer
- * (INWARD); a dashed line opens away (OUTWARD). */
+/** Leaf spec from an opening key — legacy enum (`TURN_LEFT`, `AWNING`,
+ * `DOOR_ENTRY`) or the D03 spec key (`TURN:LEFT:OUTWARD`,
+ * `DOOR:TURN:RIGHT:INWARD:ACTIVE`). Shared by the elevation glyph and
+ * the /dev/ui symbol table so both read the same vocabulary. */
+export function glyphLeafSpec(
+  kind: string,
+  doorHinge?: "left" | "right",
+): { opening: OpeningSpecPayload; unit: "WINDOW" | "DOOR" } | null {
+  const isDoor = kind === "DOOR_ENTRY" || kind === "DOOR_DOUBLE" || kind.startsWith("DOOR:");
+  const legacy: Record<string, OpeningSpecPayload> = {
+    FIXED: { movement: "FIXED" },
+    TURN_LEFT: { movement: "TURN", hinge_side: "LEFT", direction: "INWARD" },
+    TURN_RIGHT: { movement: "TURN", hinge_side: "RIGHT", direction: "INWARD" },
+    TILT_TURN_LEFT: { movement: "TILT_TURN", hinge_side: "LEFT", direction: "INWARD" },
+    TILT_TURN_RIGHT: { movement: "TILT_TURN", hinge_side: "RIGHT", direction: "INWARD" },
+    AWNING: { movement: "TOP_HUNG", hinge_side: "TOP", direction: "OUTWARD" },
+    DOOR_ENTRY: {
+      movement: "TURN",
+      hinge_side: doorHinge === "right" ? "RIGHT" : "LEFT",
+      direction: "INWARD",
+    },
+    DOOR_DOUBLE: {
+      movement: "TURN",
+      hinge_side: doorHinge === "right" ? "RIGHT" : "LEFT",
+      direction: "INWARD",
+      leaf_role: "ACTIVE",
+    },
+    SLIDING: { movement: "SLIDE" },
+    SLIDING_2L: { movement: "SLIDE" },
+    SLIDING_3L: { movement: "SLIDE" },
+    SLIDING_4L: { movement: "SLIDE" },
+  };
+  const direct = legacy[kind];
+  if (direct) return { opening: direct, unit: isDoor ? "DOOR" : "WINDOW" };
+  const parsed = glyphSpec(kind);
+  if (!parsed) return null;
+  return {
+    opening: {
+      movement: parsed.movement as OpeningSpecPayload["movement"],
+      hinge_side: parsed.hinge,
+      direction: parsed.direction,
+      leaf_role: kind.split(":").includes("PASSIVE") ? "PASSIVE" : null,
+    },
+    unit: isDoor ? "DOOR" : "WINDOW",
+  };
+}
+
+/** Industry opening glyph driven by the shared symbology contract
+ * (`openingSymbols.ts` = the engine's `opening_symbols.py`): DIN
+ * triangle lines with the apex at 40 % of the free edge, dashed when the
+ * leaf opens away from the viewer, sliding leaves as horizontal arrows,
+ * door leaves as triangles (the swing arc belongs to the plan view),
+ * fixed leaves as silence. `view` flips only the stroke — the mirror
+ * lives on the sheet. */
 export function OpeningGlyph({
   opening,
   x,
@@ -205,6 +265,7 @@ export function OpeningGlyph({
   w,
   h,
   doorHinge,
+  view = "interior",
 }: {
   opening: string | null | undefined;
   x: number;
@@ -212,116 +273,28 @@ export function OpeningGlyph({
   w: number;
   h: number;
   doorHinge?: "left" | "right";
+  view?: ElevationView;
 }): JSX.Element {
-  const padX = w * 0.2;
-  const padY = h * 0.2;
-  const left = x + padX;
-  const right = x + w - padX;
-  const top = y + padY;
-  const bottom = y + h - padY;
-  const cx = x + w / 2;
-  const cy = y + h / 2;
   const kind = opening ?? "FIXED";
-  const spec = glyphSpec(kind);
-  const isDoor = kind === "DOOR_ENTRY" || kind.startsWith("DOOR:");
-  // DIN: continuous = opens toward the interior viewer; dashed = outward.
-  // Legacy enums carry their direction in the name (AWNING is outward).
-  const dashed = spec ? spec.direction === "OUTWARD" : kind === "AWNING";
-  const dash = dashed ? "6 3" : undefined;
-  const hinge = spec
-    ? spec.hinge
-    : kind.includes("RIGHT")
-      ? "RIGHT"
-      : kind.includes("LEFT")
-        ? "LEFT"
-        : kind === "AWNING"
-          ? "TOP"
-          : isDoor
-            ? doorHinge === "right"
-              ? "RIGHT"
-              : "LEFT"
-            : null;
-  const sideHinge = hinge === "LEFT" || hinge === "RIGHT";
-  const movement = spec?.movement ?? kind;
+  const spec = glyphLeafSpec(kind, doorHinge);
+  const prims = spec
+    ? leafPrimitives(spec.opening, view, { unit: spec.unit })
+    : [{ k: "none" as const }];
+  const paths = glyphPaths(prims, x, y, w, h);
   return (
     <g
       className={`opening-glyph opening-${kind.toLowerCase().replace(/[:|]/g, "-")}`}
       aria-hidden="true"
     >
-      {hinge === "RIGHT" && (
-        <polyline
-          points={`${right},${top} ${left},${cy} ${right},${bottom}`}
+      {paths.map((entry, index) => (
+        <path
+          key={`glyph-path-${index}`}
+          d={entry.d}
           fill="none"
-          strokeDasharray={dash}
+          strokeDasharray={entry.dash ?? undefined}
+          className={`glyph-${entry.k}${entry.inferred ? " glyph-inferred" : ""}`}
         />
-      )}
-      {hinge === "LEFT" && (
-        <polyline
-          points={`${left},${top} ${right},${cy} ${left},${bottom}`}
-          fill="none"
-          strokeDasharray={dash}
-        />
-      )}
-      {/* Hinged at the bottom (banderola / abatimiento inferior) or the
-       * tilt arm of an oscilobatiente — base on the sill edge. */}
-      {(hinge === "BOTTOM" || movement === "TILT_TURN" || kind.startsWith("TILT_TURN")) && (
-        <polyline
-          points={`${left},${bottom} ${cx},${top} ${right},${bottom}`}
-          fill="none"
-          strokeDasharray={dash}
-        />
-      )}
-      {/* Top-hinged proyectante — base on the head edge. */}
-      {(hinge === "TOP" || kind === "AWNING") && movement !== "TILT_TURN" && (
-        <polyline
-          points={`${left},${top} ${cx},${bottom} ${right},${top}`}
-          fill="none"
-          strokeDasharray={dash}
-        />
-      )}
-      {(movement === "SLIDE" || kind.startsWith("SLIDING")) &&
-        (() => {
-          const panes = { SLIDING_3L: 3, SLIDING_4L: 4 }[kind] ?? 2;
-          const paneW = (right - left) / panes;
-          return Array.from({ length: panes }, (_, index) => {
-            const boundary = left + paneW * index;
-            const mid = boundary + paneW / 2;
-            const arrow = paneW * 0.22;
-            return (
-              <g key={`sliding-${index}`}>
-                {index > 0 && <line x1={boundary} y1={top} x2={boundary} y2={bottom} />}
-                <path
-                  d={`M${mid - arrow} ${cy} H${mid + arrow} M${mid + arrow * 0.5} ${cy - h * 0.05} L${mid + arrow} ${cy}`}
-                  fill="none"
-                />
-              </g>
-            );
-          });
-        })()}
-      {/* A door glyph shows its swing: quarter-arc centred on the bottom
-       * hinge corner plus a jamb tick on the hinge side. */}
-      {isDoor &&
-        sideHinge &&
-        (() => {
-          const hingeX = hinge === "RIGHT" ? right : left;
-          const sweepTo =
-            hinge === "RIGHT" ? right - Math.min(w, h) * 0.8 : left + Math.min(w, h) * 0.8;
-          const arcR = Math.min(w, h) * 0.8;
-          const sweep = hinge === "RIGHT" ? 1 : 0;
-          return (
-            <>
-              <line x1={hingeX} y1={top} x2={hingeX} y2={bottom} opacity={0.5} />
-              <path
-                d={`M ${sweepTo} ${bottom} A ${arcR} ${arcR} 0 0 ${sweep} ${hingeX} ${bottom - arcR}`}
-                fill="none"
-                strokeDasharray={dash}
-              />
-            </>
-          );
-        })()}
-      {(kind === "FIXED" || spec?.movement === "FIXED") && (
-        <line x1={left} y1={top} x2={right} y2={bottom} opacity={0.18} />
-      )}
+      ))}
     </g>
   );
 }
@@ -628,6 +601,8 @@ function Bay({
   onSelect,
   moduleBottom,
   unitKind = "WINDOW",
+  view = "interior",
+  technical = false,
 }: {
   node: IntentNode;
   region: Region;
@@ -639,6 +614,10 @@ function Bay({
   moduleBottom?: number;
   /** Declared unit kind of the unit root (door units draw thresholds). */
   unitKind?: UnitKind;
+  /** Declared elevation view — "exterior" flips the dash convention. */
+  view?: ElevationView;
+  /** Technical verbosity adds handle-height datum marks beside the lever. */
+  technical?: boolean;
 }): JSX.Element {
   const leafTraces = bayLeafTraces(node);
   const opening = node.opening_type ?? "FIXED";
@@ -690,6 +669,7 @@ function Bay({
   if (isSlidingOpening(opening)) {
     const layout = resolvedSlidingLayout(node);
     const panels = layout?.panels ?? [];
+    const panelPrims = layout ? slidingPrimitives(layout, view) : [];
     const interlock = members.sash.faceWidthMm;
     const pitch = region.w / Math.max(panels.length, 1);
     const leafW = pitch + interlock;
@@ -748,9 +728,6 @@ function Bay({
           const beadY = region.y + leafSashT;
           const beadW = leafW - leafSashT * 2;
           const beadH = region.h - leafSashT * 2;
-          const midX = leafX + leafW / 2;
-          const midY = region.y + region.h / 2;
-          const arrow = Math.min(leafW, region.h) * 0.16;
           return (
             <g
               key={`leaf-${index}`}
@@ -788,22 +765,21 @@ function Bay({
                   }}
                 />
               )}
-              <path
-                className="sliding-arrow"
-                // Travel convention shared with the 3D pose: a leaf opens
-                // toward its neighbouring slot — leaves in the left half of
-                // the bay slide right, the right half slides left. The
-                // product model declares no travel, so this stays a
-                // presentation convention, not manufacturing truth.
-                d={(() => {
-                  const dir = index * 2 < panels.length ? 1 : -1;
-                  const tip = midX + arrow * dir;
-                  const tail = midX - arrow * dir;
-                  const barb = tip - dir * arrow * 0.5;
-                  return `M${tail} ${midY} H${tip} M${barb} ${midY - arrow * 0.4} L${tip} ${midY} L${barb} ${midY + arrow * 0.4}`;
-                })()}
-                fill="none"
-              />
+              {/* Travel arrow from the shared symbology contract: the
+               * declared `travel` direction drives the glyph; leaves with no
+               * declaration keep the legacy presentation convention and are
+               * flagged `glyph-inferred` ("dirección inferida" — a surface
+               * reads it as assumed, never as manufacturing truth). */}
+              {glyphPaths(panelPrims[index] ?? [], leafX, region.y, leafW, region.h).map(
+                (entry, entryIndex) => (
+                  <path
+                    key={`travel-${entryIndex}`}
+                    className={`sliding-arrow${entry.inferred ? " glyph-inferred" : ""}`}
+                    d={entry.d}
+                    fill="none"
+                  />
+                ),
+              )}
             </g>
           );
         })}
@@ -1000,9 +976,52 @@ function Bay({
             w={leaf.pane.w}
             h={leaf.pane.h}
             doorHinge={leaf.doorHinge ?? (node.door_handedness === "RIGHT" ? "right" : "left")}
+            view={view}
           />
         ) : null,
       )}
+      {/* Technical verbosity: the declared handle height reads as a datum
+       * tick on the leaf's free edge plus its mm from the module's outer
+       * bottom — the mark a workshop sheet carries next to the lever. */}
+      {technical &&
+        leafGeom.map((leaf, index) => {
+          if (!leaf.operable || leaf.passive || !leaf.handleSide) return null;
+          const tickX =
+            leaf.handleSide === "right" ? leaf.box.x + leaf.box.w - sashT : leaf.box.x + sashT;
+          const labelX = leaf.handleSide === "right" ? tickX - 10 : tickX + 10;
+          return (
+            <g
+              key={`datum-${index}`}
+              className={`handle-datum${datumInvalid ? " is-invalid" : ""}`}
+              aria-hidden="true"
+            >
+              <line
+                x1={tickX}
+                y1={datumY}
+                x2={tickX + (leaf.handleSide === "right" ? -34 : 34)}
+                y2={datumY}
+              />
+              <text
+                x={labelX}
+                y={datumY - 8}
+                textAnchor={
+                  leaf.handleSide === "right"
+                    ? view === "exterior"
+                      ? "start"
+                      : "end"
+                    : view === "exterior"
+                      ? "end"
+                      : "start"
+                }
+                transform={
+                  view === "exterior" ? `translate(${labelX * 2} 0) scale(-1 1)` : undefined
+                }
+              >
+                {heightMm.toFixed(0)}
+              </text>
+            </g>
+          );
+        })}
       {leafGeom.map((leaf, index) => {
         if (!leaf.operable || leaf.passive) return null;
         if (leaf.handleTop) {
@@ -1120,6 +1139,8 @@ function ModuleTree({
   showSplitDims = false,
   moduleBottom,
   unitKind = "WINDOW",
+  view = "interior",
+  technical = false,
 }: {
   node: IntentNode;
   region: Region;
@@ -1148,6 +1169,10 @@ function ModuleTree({
   /** The unit root's declared kind — bays below a door unit draw door
    * rails/thresholds without repeating the declaration per bay. */
   unitKind?: UnitKind;
+  /** Declared elevation view — "exterior" inverts the dash convention. */
+  view?: ElevationView;
+  /** Technical verbosity — bays add handle-height datum marks. */
+  technical?: boolean;
 }): JSX.Element {
   if (node.type === "ROOT" && node.children?.length === 1 && node.children[0]) {
     return (
@@ -1167,6 +1192,8 @@ function ModuleTree({
         showSplitDims={showSplitDims}
         moduleBottom={moduleBottom}
         unitKind={node.children[0].unit_kind ?? "WINDOW"}
+        view={view}
+        technical={technical}
       />
     );
   }
@@ -1227,6 +1254,8 @@ function ModuleTree({
           showSplitDims={showSplitDims}
           moduleBottom={moduleBottom}
           unitKind={node.unit_kind ?? unitKind}
+          view={view}
+          technical={technical}
         />
         <ModuleTree
           node={second!}
@@ -1244,6 +1273,8 @@ function ModuleTree({
           moduleBottom={moduleBottom}
           showSplitDims={showSplitDims}
           unitKind={node.unit_kind ?? unitKind}
+          view={view}
+          technical={technical}
         />
         {/* The mullion, its dim and the grip draw after both subtrees so the
             bar stays selectable and its label stays visible where the second
@@ -1264,6 +1295,14 @@ function ModuleTree({
             className="split-dim"
             x={vertical ? bar.x + bar.w + 6 : bar.x + 8}
             y={vertical ? bar.y + 16 : bar.y - 6}
+            {...(view === "exterior"
+              ? {
+                  // Contra-espejo del rótulo dentro del grupo espejado:
+                  // el texto queda legible y anclado en el mismo punto.
+                  transform: `translate(${(vertical ? bar.x + bar.w + 6 : bar.x + 8) * 2} 0) scale(-1 1)`,
+                  textAnchor: "end" as const,
+                }
+              : {})}
           >
             {offset.toFixed(0)}
           </text>
@@ -1315,6 +1354,8 @@ function ModuleTree({
       onSelect={onSelectBay ? () => onSelectBay(node.id) : undefined}
       moduleBottom={moduleBottom}
       unitKind={node.unit_kind ?? unitKind}
+      view={view}
+      technical={technical}
     />
   );
 }
@@ -1617,8 +1658,15 @@ function asLayout(value: ProductJson | FrontLayout): FrontLayout {
   return isFrontLayout(value) ? value : frontLayout(value);
 }
 
-/** The drawable extent of the front elevation including gutters and chains. */
-export function frontBounds(source: ProductJson | FrontLayout, vano?: VanoDim | null) {
+/** The drawable extent of the front elevation including gutters and chains.
+ * `extraBottomMm` reserves room for the technical furniture under the sill
+ * (per-bay chain + sliding plan strips) — ProductFrontContent reports the
+ * real budget via `technicalExtraBottom`. */
+export function frontBounds(
+  source: ProductJson | FrontLayout,
+  vano?: VanoDim | null,
+  extraBottomMm = 0,
+) {
   const { totalW, height, lift, dip, leftOver, rightOver } = asLayout(source);
   // La cadena del vano corre por fuera de la del producto: el sheet crece
   // solo cuando hay registro del vano que mostrar.
@@ -1628,8 +1676,29 @@ export function frontBounds(source: ProductJson | FrontLayout, vano?: VanoDim | 
     x: -LEFT_GUTTER - leftOver - extraLeft,
     y: -TOP_GUTTER - extraTop,
     w: totalW + LEFT_GUTTER + SIDE_GUTTER + leftOver + rightOver + extraLeft,
-    h: height + TOP_GUTTER + BOTTOM_GUTTER + lift + dip + extraTop,
+    h: height + TOP_GUTTER + BOTTOM_GUTTER + lift + dip + extraTop + extraBottomMm,
   };
+}
+
+/** Extra bottom gutter a technical sheet needs: per-bay chain row plus a
+ * plan strip under every sliding bay (strips sit under their own bay, so
+ * one strip row covers them all — only a taller track count grows it). */
+export function technicalExtraBottom(
+  rects: FrontModuleRect[],
+  members: MemberGeometry,
+  height: number,
+  frameT: number,
+): number {
+  const bays = leafBaysOf(rects, members, height, frameT);
+  let bottom = BAY_CHAIN_AT + 70;
+  for (const bay of bays) {
+    const layout = resolvedSlidingLayout(bay.node);
+    if (!bay.node.opening_type || !isSlidingOpening(bay.node.opening_type) || !layout) continue;
+    const stripBottom =
+      PLAN_STRIP_AT + Math.max(layout.tracks, 1) * PLAN_TRACK_H + PLAN_STRIP_BOTTOM;
+    bottom = Math.max(bottom, stripBottom);
+  }
+  return bottom;
 }
 
 /** Sheet-space box of a module's frame — the Shift+2 / zoom-to-selection target. */
@@ -1649,6 +1718,7 @@ type LeafRegion = {
   id: string;
   region: Region;
   origin: { x: number; y: number };
+  node: IntentNode;
 };
 
 /** Leaf bays under a node with the same layout math ModuleTree renders —
@@ -1696,7 +1766,144 @@ function bayRegions(
       ...bayRegions(second!, secondRegion, { x: secondRegion.x, y: secondRegion.y }, members),
     ];
   }
-  return [{ id: node.id, region, origin }];
+  return [{ id: node.id, region, origin, node }];
+}
+
+/** Leaf bays of every module in sheet space — the shared math between the
+ * technical bay chain and the sliding plan strips. */
+function leafBaysOf(
+  rects: FrontModuleRect[],
+  members: MemberGeometry,
+  height: number,
+  frameT: number,
+): LeafRegion[] {
+  return rects.flatMap((rect) => {
+    if (rect.module.frameless || rect.module.contour) return [];
+    const top = height - rect.sill - rect.h;
+    return bayRegions(
+      rect.module.tree,
+      {
+        x: rect.x + frameT,
+        y: top + frameT,
+        w: Math.max(rect.w - frameT * 2, 0),
+        h: Math.max(rect.h - frameT * 2, 0),
+      },
+      { x: rect.x, y: top },
+      members,
+    );
+  });
+}
+
+/** Technical drawing budget under the sill: the per-bay chain sits at
+ * +130 and a sliding bay's plan strip at +210 (rail rows + labels). */
+const BAY_CHAIN_AT = 130;
+const PLAN_STRIP_AT = 210;
+const PLAN_TRACK_H = 26;
+const PLAN_STRIP_BOTTOM = 70;
+
+/** P05 — cinta de planta bajo el alzado técnico de una corredera: corte
+ * horizontal con los rieles numerados (riel 1 = el más exterior), las
+ * hojas en su posición declarada y la flecha de desplazamiento. EXTERIOR
+ * arriba / INTERIOR abajo, como el dibujo a mano alzada del taller. */
+function SlidingPlanStrip({
+  region,
+  layout,
+  top,
+  mirrored,
+  totalW,
+}: {
+  region: Region;
+  layout: SlidingLayout;
+  top: number;
+  mirrored: boolean;
+  totalW: number;
+}): JSX.Element {
+  const bx = mirrored ? totalW - region.x - region.w : region.x;
+  const bw = region.w;
+  const tracks = Math.max(layout.tracks, 1);
+  const count = Math.max(layout.panels.length, 1);
+  const pitch = bw / count;
+  const stripH = tracks * PLAN_TRACK_H;
+  const labelX = bx + bw + 14;
+  return (
+    <g className="sliding-plan" aria-hidden="true">
+      <rect className="plan-wall" x={bx} y={top} width={bw} height={stripH} />
+      {Array.from({ length: tracks }, (_, track) => (
+        <g key={`rail-${track}`}>
+          <line
+            className="plan-rail"
+            x1={bx}
+            y1={top + PLAN_TRACK_H * (track + 0.5)}
+            x2={bx + bw}
+            y2={top + PLAN_TRACK_H * (track + 0.5)}
+          />
+          <text
+            className="plan-rail-no"
+            x={labelX}
+            y={top + PLAN_TRACK_H * (track + 0.5)}
+            dominantBaseline="central"
+          >
+            {track + 1}
+          </text>
+        </g>
+      ))}
+      {layout.panels.map((panel, index) => {
+        const track = panel.track ?? 0;
+        // El riel 0 es el más exterior — dibujado arriba del corte.
+        const slotX = mirrored ? bx + bw - pitch * (index + 1) : bx + pitch * index;
+        const midY = top + PLAN_TRACK_H * (track + 0.5);
+        const travel = panel.kind === "MOVING" ? panelTravel(panel, index, count) : null;
+        const dir =
+          travel === null ? null : mirrored ? (travel === "LEFT" ? "RIGHT" : "LEFT") : travel;
+        return (
+          <g
+            key={`plan-panel-${index}`}
+            className={`plan-panel plan-panel--${panel.kind.toLowerCase()}`}
+          >
+            <rect
+              x={slotX + 2}
+              y={midY - PLAN_TRACK_H * 0.32}
+              width={Math.max(pitch - 4, 0)}
+              height={PLAN_TRACK_H * 0.64}
+            />
+            {dir !== null &&
+              glyphPaths(
+                [{ k: "arrow", dir, inferred: travelInferred(panel) }],
+                slotX,
+                top + PLAN_TRACK_H * track,
+                pitch,
+                PLAN_TRACK_H,
+              ).map((entry, entryIndex) => (
+                <path
+                  key={`plan-arrow-${entryIndex}`}
+                  className={`plan-arrow${entry.inferred ? " glyph-inferred" : ""}`}
+                  d={entry.d}
+                  fill="none"
+                />
+              ))}
+          </g>
+        );
+      })}
+      <text
+        className="plan-side"
+        x={bx - 10}
+        y={top + PLAN_TRACK_H * 0.5}
+        textAnchor="end"
+        dominantBaseline="central"
+      >
+        {t("assembly.planExterior")}
+      </text>
+      <text
+        className="plan-side"
+        x={bx - 10}
+        y={top + stripH - PLAN_TRACK_H * 0.5}
+        textAnchor="end"
+        dominantBaseline="central"
+      >
+        {t("assembly.planInterior")}
+      </text>
+    </g>
+  );
 }
 
 export function ProductFrontContent({
@@ -1723,6 +1930,7 @@ export function ProductFrontContent({
   onMoveDivision,
   onResizeSeam,
   vano = null,
+  view = "interior",
 }: {
   product: ProductJson;
   members: MemberGeometry;
@@ -1767,6 +1975,11 @@ export function ProductFrontContent({
    * dibuja la cota doble (vano + fabricación) por fuera de la del
    * producto. */
   vano?: VanoDim | null;
+  /** P05 — vista declarada del alzado: "exterior" espeja el dibujo e
+   * invierte la convención continuo/discontinuo (un paño que abre hacia
+   * dentro se dibuja discontinuo visto desde afuera). La vista exterior
+   * es de lectura: edición y arrastres solo en vista interior. */
+  view?: ElevationView;
 }): JSX.Element {
   const { couplings } = product.assembly;
   const frameT = members.frame.faceWidthMm;
@@ -1779,7 +1992,27 @@ export function ProductFrontContent({
   );
   const issueMap = useMemo(() => severityByModule(issues), [issues]);
   const midY = height / 2;
+  const mirrored = view === "exterior";
+  const mx = (value: number) => (mirrored ? totalW - value : value);
+  const leafBays = useMemo(
+    () => leafBaysOf(rects, members, height, frameT),
+    [rects, members, height, frameT],
+  );
+  const slidingBays = useMemo(
+    () =>
+      leafBays
+        .filter((bay) => bay.node.opening_type && isSlidingOpening(bay.node.opening_type))
+        .map((bay) => ({ bay, layout: resolvedSlidingLayout(bay.node) }))
+        .filter((entry): entry is { bay: LeafRegion; layout: SlidingLayout } =>
+          Boolean(entry.layout),
+        ),
+    [leafBays],
+  );
   const interactive = !preview && !disabled;
+  // En vista exterior el alzado es de lectura: se puede seleccionar pero
+  // no arrastrar divisiones ni costuras (un drag espejado invertiría el
+  // delta contra la intención del usuario).
+  const dragsEnabled = interactive && !mirrored;
   const sheetScale = useViewportScale();
   // ~12px on screen is the smallest usable drag target (W3C pointer
   // guidance); never wider than a third of the smallest affected span.
@@ -2017,82 +2250,97 @@ export function ProductFrontContent({
         disabled={disabled}
         onCommit={onCommitTotalWidth}
       />
+      {/* P05 — la vista declarada queda rotulada en el alzado mismo;
+          es la referencia que fija la convención continuo/discontinuo.
+          Fuera del lift: el rótulo ancla al borde superior de la lámina. */}
+      {!preview && (
+        <text
+          className="view-legend"
+          x={totalW}
+          y={-TOP_GUTTER + 44}
+          textAnchor="end"
+          data-view={view}
+        >
+          {t(view === "exterior" ? "assembly.viewExterior" : "assembly.viewInterior")}
+        </text>
+      )}
       {/* the drawing band lifts for arc overshoot: sill stays shared. */}
       <g transform={`translate(0 ${lift})`}>
         {/* D07 — cota doble: el vano de obra envuelve la fabricación con la
             holgura por lado; la propia cadena corre por fuera de la del
             producto. gap<0 (sobre vano / traslapado) el producto solapa el
-            vano y la envolvente queda por dentro. */}
-        {vano !== null && (
-          <g className="vano-overlay" aria-hidden="true">
-            <rect
-              className="vano-outline"
-              x={-vano.gap.left}
-              y={-vano.gap.top}
-              width={vano.gap.left + totalW + vano.gap.right}
-              height={vano.gap.top + height + vano.gap.bottom}
-            />
-            <DimRun
-              marks={[-vano.gap.left, totalW + vano.gap.right]}
-              edge={-vano.gap.top}
-              at={VANO_TOP_AT}
-              vertical={false}
-            />
-            <text className="vano-dim" x={totalW / 2} y={VANO_TOP_AT - 30} textAnchor="middle">
-              {`${t("assembly.vano")} ${fmtMm(vano.widthMm)}`}
-            </text>
-            {vano.mountingLabel !== "" && (
-              <text
-                className="vano-dim vano-dim--mount"
-                x={totalW / 2}
-                y={VANO_TOP_AT - 72}
-                textAnchor="middle"
-              >
-                {vano.mountingLabel}
-              </text>
-            )}
-            <DimRun
-              marks={[-vano.gap.top, height + vano.gap.bottom]}
-              edge={-vano.gap.left}
-              at={VANO_LEFT_AT}
-              vertical={true}
-            />
-            <g transform={`rotate(-90 ${VANO_LEFT_AT} ${midY})`}>
-              <text className="vano-dim" x={VANO_LEFT_AT} y={midY} textAnchor="middle">
-                {`${t("assembly.vano")} ${fmtMm(vano.heightMm)}`}
-              </text>
-            </g>
-            {vano.gap.top !== 0 && (
-              <text
-                className="vano-gap"
-                x={totalW / 2}
-                y={-vano.gap.top / 2 + 10}
-                textAnchor="middle"
-              >
-                {`${vano.gap.top > 0 ? t("assembly.vanoClearance") : t("assembly.vanoOverlap")} ${fmtMm(Math.abs(vano.gap.top))}`}
-              </text>
-            )}
-            {vano.gap.left !== 0 && (
-              <g transform={`rotate(-90 ${-vano.gap.left / 2} ${midY})`}>
-                <text className="vano-gap" x={-vano.gap.left / 2} y={midY} textAnchor="middle">
-                  {`${vano.gap.left > 0 ? t("assembly.vanoClearance") : t("assembly.vanoOverlap")} ${fmtMm(Math.abs(vano.gap.left))}`}
+            vano y la envolvente queda por dentro. En vista exterior la
+            holgura izquierda del dato se dibuja a la derecha de la lámina. */}
+        {vano !== null &&
+          (() => {
+            const gapL = mirrored ? vano.gap.right : vano.gap.left;
+            const gapR = mirrored ? vano.gap.left : vano.gap.right;
+            return (
+              <g className="vano-overlay" aria-hidden="true">
+                <rect
+                  className="vano-outline"
+                  x={-gapL}
+                  y={-vano.gap.top}
+                  width={gapL + totalW + gapR}
+                  height={vano.gap.top + height + vano.gap.bottom}
+                />
+                <DimRun
+                  marks={[-gapL, totalW + gapR]}
+                  edge={-vano.gap.top}
+                  at={VANO_TOP_AT}
+                  vertical={false}
+                />
+                <text className="vano-dim" x={totalW / 2} y={VANO_TOP_AT - 30} textAnchor="middle">
+                  {`${t("assembly.vano")} ${fmtMm(vano.widthMm)}`}
                 </text>
+                {vano.mountingLabel !== "" && (
+                  <text
+                    className="vano-dim vano-dim--mount"
+                    x={totalW / 2}
+                    y={VANO_TOP_AT - 72}
+                    textAnchor="middle"
+                  >
+                    {vano.mountingLabel}
+                  </text>
+                )}
+                <DimRun
+                  marks={[-vano.gap.top, height + vano.gap.bottom]}
+                  edge={-gapL}
+                  at={VANO_LEFT_AT}
+                  vertical={true}
+                />
+                <g transform={`rotate(-90 ${VANO_LEFT_AT} ${midY})`}>
+                  <text className="vano-dim" x={VANO_LEFT_AT} y={midY} textAnchor="middle">
+                    {`${t("assembly.vano")} ${fmtMm(vano.heightMm)}`}
+                  </text>
+                </g>
+                {vano.gap.top !== 0 && (
+                  <text
+                    className="vano-gap"
+                    x={totalW / 2}
+                    y={-vano.gap.top / 2 + 10}
+                    textAnchor="middle"
+                  >
+                    {`${vano.gap.top > 0 ? t("assembly.vanoClearance") : t("assembly.vanoOverlap")} ${fmtMm(Math.abs(vano.gap.top))}`}
+                  </text>
+                )}
+                {gapL !== 0 && (
+                  <g transform={`rotate(-90 ${-gapL / 2} ${midY})`}>
+                    <text className="vano-gap" x={-gapL / 2} y={midY} textAnchor="middle">
+                      {`${gapL > 0 ? t("assembly.vanoClearance") : t("assembly.vanoOverlap")} ${fmtMm(Math.abs(gapL))}`}
+                    </text>
+                  </g>
+                )}
+                {gapR !== 0 && (
+                  <g transform={`rotate(90 ${totalW + gapR / 2} ${midY})`}>
+                    <text className="vano-gap" x={totalW + gapR / 2} y={midY} textAnchor="middle">
+                      {`${gapR > 0 ? t("assembly.vanoClearance") : t("assembly.vanoOverlap")} ${fmtMm(Math.abs(gapR))}`}
+                    </text>
+                  </g>
+                )}
               </g>
-            )}
-            {vano.gap.right !== 0 && (
-              <g transform={`rotate(90 ${totalW + vano.gap.right / 2} ${midY})`}>
-                <text
-                  className="vano-gap"
-                  x={totalW + vano.gap.right / 2}
-                  y={midY}
-                  textAnchor="middle"
-                >
-                  {`${vano.gap.right > 0 ? t("assembly.vanoClearance") : t("assembly.vanoOverlap")} ${fmtMm(Math.abs(vano.gap.right))}`}
-                </text>
-              </g>
-            )}
-          </g>
-        )}
+            );
+          })()}
         {/* height chain */}
         <DimRun marks={[0, height]} edge={0} at={-160} vertical={true} />
         <g transform={`rotate(-90 ${-160} ${midY})`}>
@@ -2106,11 +2354,15 @@ export function ProductFrontContent({
           />
         </g>
         {/* per-column width chain — stacked members share the column span
-            (design/technical only: overview keeps the overall W/H). */}
+            (design/technical only: overview keeps the overall W/H). En vista
+            exterior la cadena se dibuja en coordenadas espejadas: la columna
+            declarada a la izquierda aparece a la derecha de la lámina. */}
         {dimLevel !== "overview" && (
           <>
             <DimRun
-              marks={columns.flatMap((column) => [column.x, column.x + column.w])}
+              marks={columns
+                .flatMap((column) => [mx(column.x), mx(column.x + column.w)])
+                .sort((a, b) => a - b)}
               edge={height}
               at={height + 80}
               vertical={false}
@@ -2118,17 +2370,67 @@ export function ProductFrontContent({
             {columns.map((column) => (
               <SvgDim
                 key={`dim-${column.rootId}`}
-                x={column.x + column.w / 2}
+                x={mx(column.x + column.w / 2)}
                 y={height + 80}
                 value={column.w.toFixed(2)}
                 label={`${t("assembly.module")} ${column.rootId} ${t("assembly.width")}`}
                 active={column.rootId === selectedId}
-                disabled={disabled}
+                disabled={disabled || mirrored}
                 onCommit={(value) => onCommitModuleWidth(column.rootId, value)}
               />
             ))}
           </>
         )}
+        {/* P05 — vista técnica: cadena interior por vanos (anchos de bay
+            bajo su módulo) y cintas de planta bajo cada corredera. */}
+        {dimLevel === "technical" &&
+          rects.map((rect) => {
+            const moduleBays = leafBays
+              .filter(
+                (bay) =>
+                  bay.region.x >= rect.x - 0.01 &&
+                  bay.region.x + bay.region.w <= rect.x + rect.w + 0.01,
+              )
+              .sort((a, b) => a.region.x - b.region.x);
+            if (moduleBays.length < 2) return null;
+            const marks = [
+              ...new Set(
+                moduleBays.flatMap((bay) => [mx(bay.region.x), mx(bay.region.x + bay.region.w)]),
+              ),
+            ].sort((a, b) => a - b);
+            return (
+              <g key={`bay-chain-${rect.module.id}`}>
+                <DimRun marks={marks} edge={height} at={height + BAY_CHAIN_AT} vertical={false} />
+                {marks.slice(0, -1).map((mark, index) => {
+                  const segW = marks[index + 1]! - mark;
+                  if (segW < 110) return null;
+                  return (
+                    <text
+                      key={`bay-dim-${index}`}
+                      className="member-dim"
+                      x={mark + segW / 2}
+                      y={height + BAY_CHAIN_AT}
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                    >
+                      {segW.toFixed(0)}
+                    </text>
+                  );
+                })}
+              </g>
+            );
+          })}
+        {dimLevel === "technical" &&
+          slidingBays.map(({ bay, layout }) => (
+            <SlidingPlanStrip
+              key={`plan-${bay.id}`}
+              region={bay.region}
+              layout={layout}
+              top={height + PLAN_STRIP_AT}
+              mirrored={mirrored}
+              totalW={totalW}
+            />
+          ))}
         {/* technical adds member heights for stacked columns — a transom
             over a unit is dimensioned like a shop drawing, right gutter. */}
         {dimLevel === "technical" &&
@@ -2143,20 +2445,25 @@ export function ProductFrontContent({
                 membersOf.flatMap((rect) => [height - rect.sill, height - rect.sill - rect.h]),
               ),
             ].sort((a, b) => a - b);
+            // En exterior la canaleta derecha del dato es la izquierda de la
+            // lámina: la cadena corre del lado que la vista muestra.
+            const chainX = mirrored ? column.x - 30 : column.x + column.w + 30;
+            const textX = mirrored ? column.x - 38 : column.x + column.w + 38;
             return (
               <g key={`member-dims-${column.rootId}-${columnIndex}`}>
                 <DimRun
                   marks={marks}
-                  edge={column.x + column.w}
-                  at={column.x + column.w + 30}
+                  edge={mirrored ? column.x : column.x + column.w}
+                  at={chainX}
                   vertical={true}
                 />
                 {membersOf.map((rect) => (
                   <text
                     key={`member-dim-${rect.module.id}`}
                     className="member-dim"
-                    x={column.x + column.w + 38}
+                    x={textX}
                     y={height - rect.sill - rect.h / 2}
+                    textAnchor={mirrored ? "end" : "start"}
                   >
                     {rect.h.toFixed(0)}
                   </text>
@@ -2165,233 +2472,243 @@ export function ProductFrontContent({
             );
           })}
         <AddHandle
-          x={-70}
+          x={mx(0) - 70}
           y={midY}
           label={t("assembly.addUnitLeft")}
-          disabled={disabled}
+          disabled={disabled || mirrored}
           onAdd={() => onAddUnit("left")}
         />
         <AddHandle
-          x={totalW + 70}
+          x={mx(totalW) + 70}
           y={midY}
           label={t("assembly.addUnitRight")}
-          disabled={disabled}
+          disabled={disabled || mirrored}
           onAdd={() => onAddUnit("right")}
         />
-        {rects.map(({ module, x, w, sill, h }) => {
-          const top = height - sill - h;
-          return (
-            <g
-              key={module.id}
-              className={`front-module${module.id === selectedId ? " is-selected" : ""}${issueMap.get(module.id) === "error" ? " has-error" : issueMap.get(module.id) === "warning" ? " has-warning" : ""}${divideTool ? " is-divide-target" : ""}`}
-              {...(preview
-                ? { role: "presentation", "aria-hidden": true }
-                : {
-                    role: "button",
-                    "aria-label": `${t("assembly.module")} ${module.id}`,
-                    "aria-pressed": module.id === selectedId,
-                    tabIndex: disabled ? -1 : 0,
-                    onClick: (event) =>
-                      divideTool
-                        ? endDivide(module.id, event.clientX, event.clientY)
-                        : onSelectModule(module.id),
-                    onContextMenu: (event) => {
-                      if (!onContextMenuModule) return;
-                      event.preventDefault();
-                      event.stopPropagation();
-                      onContextMenuModule(module.id, { x: event.clientX, y: event.clientY });
-                    },
-                    onKeyDown: (event: KeyboardEvent) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        if (divideTool) endDivide(module.id);
-                        else onSelectModule(module.id);
-                      }
-                    },
-                    onPointerMove: divideTool ? previewDivide(module.id) : undefined,
-                    onPointerLeave: divideTool
-                      ? () => {
-                          setDividePreview(null);
-                          divideHover.current = null;
-                        }
-                      : undefined,
-                  })}
-            >
-              {module.frameless ? (
-                <g transform={`translate(${x} ${top})`}>
-                  <FramelessModule spec={module.frameless} x={0} top={0} w={w} h={h} />
-                </g>
-              ) : module.contour ? (
-                <g transform={`translate(${x} ${top})`}>
-                  <path
-                    className="member-frame"
-                    d={contourPathD(module.contour, h)}
-                    fill={frameSurface.fill}
-                    stroke={frameSurface.edge}
-                    strokeWidth={2}
-                  />
-                  <path
-                    className="module-opening module-opening--lite"
-                    d={pointsPathD(insetContourPoints(module.contour, frameT), h)}
-                  />
-                </g>
-              ) : (
-                <>
-                  <Member
-                    x={x}
-                    y={top}
-                    w={w}
-                    h={h}
-                    surface={frameSurface}
-                    className="member-frame"
-                  />
-                  <rect
-                    className="module-opening"
-                    x={x + frameT}
-                    y={top + frameT}
-                    width={Math.max(w - frameT * 2, 0)}
-                    height={Math.max(h - frameT * 2, 0)}
-                  />
-                  <ModuleTree
-                    moduleId={module.id}
-                    selectedBayId={selectedBayId}
-                    onSelectBay={
-                      interactive && !divideTool && onSelectBay
-                        ? (bayId) => onSelectBay(module.id, bayId)
-                        : undefined
-                    }
-                    selectedDivisionId={selectedDivisionId}
-                    onSelectDivision={
-                      interactive && !divideTool && onSelectDivision
-                        ? (divisionId) => onSelectDivision(module.id, divisionId)
-                        : undefined
-                    }
-                    showSplitDims={dimLevel === "technical"}
-                    node={module.tree}
-                    region={{
-                      x: x + frameT,
-                      y: top + frameT,
-                      w: w - frameT * 2,
-                      h: h - frameT * 2,
-                    }}
-                    localOrigin={{ x, y: top }}
-                    moduleBottom={top + h}
-                    members={members}
-                    liveOffsets={liveOffsets}
-                    hitMm={hitMm}
-                    onDividerDown={
-                      interactive && onMoveDivision && !divideTool
-                        ? beginDividerDrag(module.id)
-                        : undefined
-                    }
-                  />
-                </>
-              )}
-              {dividePreview?.moduleId === module.id && (
-                <line className="divide-preview-line" {...dividePreview.line} />
-              )}
-            </g>
-          );
-        })}
-        {joints.map((joint, index) => {
-          const coupling = joint.couplingId
-            ? couplings.find((item) => item.id === joint.couplingId)
-            : undefined;
-          const width =
-            members.couplerFor(coupling?.coupler_profile_sku ?? null)?.faceWidthMm ?? 60;
-          const couplerSpec = members.couplerFor(coupling?.coupler_profile_sku ?? null);
-          const surface = memberSurface(
-            couplerSpec?.material ?? members.frame.material,
-            (couplerSpec ?? members.frame).finish?.exterior,
-          );
-          const pickable = interactive && !divideTool && onSelectCoupling && joint.couplingId;
-          const jointRect =
-            joint.kind === "column"
-              ? { x: joint.x - width / 2, y: height - joint.top, w: width, h: joint.top }
-              : { x: joint.x, y: height - joint.y - width / 2, w: joint.w, h: width };
-          const selectedJoint = selectedId === joint.couplingId;
-          return (
-            <g key={joint.couplingId ?? `joint-${index}`}>
-              <Member
-                x={jointRect.x}
-                y={jointRect.y}
-                w={jointRect.w}
-                h={jointRect.h}
-                surface={surface}
-                className={`member-coupler${selectedJoint ? " is-selected" : ""}`}
-              />
-              {pickable && (
-                <rect
-                  className={`joint-hit${selectedJoint ? " is-selected" : ""}`}
-                  x={jointRect.x}
-                  y={jointRect.y}
-                  width={jointRect.w}
-                  height={jointRect.h}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    if (joint.couplingId) onSelectCoupling?.(joint.couplingId);
-                  }}
-                />
-              )}
-            </g>
-          );
-        })}
-        {/* Seam grips render above the coupler members so the drag target is
-          not swallowed by the coupler rect — one grip per column boundary. */}
-        {interactive &&
-          onResizeSeam &&
-          !divideTool &&
-          columns.slice(0, -1).map((column, index) => {
-            const neighbor = columns[index + 1];
-            const seamW = Math.min(
-              hitMm,
-              Math.max(12, Math.min(column.w, neighbor?.w ?? column.w) * 0.5),
-            );
+        {/* Vista exterior: el dibujo se espeja completo (scale(-1,1) sobre
+            el eje central) — cotas, leyendas y cintas de planta viven fuera
+            y se posicionan en coordenadas espejadas vía `mx()`. */}
+        <g
+          transform={mirrored ? `translate(${totalW} 0) scale(-1 1)` : undefined}
+          data-view-group={view}
+        >
+          {rects.map(({ module, x, w, sill, h }) => {
+            const top = height - sill - h;
             return (
-              <g key={`seam-${index}`}>
-                <rect
-                  className="seam-grip"
-                  x={column.x + column.w - seamW / 2}
-                  y={0}
-                  width={seamW}
-                  height={height}
-                  onPointerDown={beginSeamDrag(index)}
-                />
-                {/* Resting drag affordance: three dots mid-seam so the grip
-                  doesn't need a lucky hover to be discovered. */}
-                {height > seamW * 2.4 &&
-                  [-1, 0, 1].map((slot) => (
-                    <circle
-                      key={slot}
-                      className="seam-grip-dot"
-                      cx={column.x + column.w}
-                      cy={height / 2 + slot * seamW * 0.5}
-                      r={Math.max(seamW * 0.1, 1.4)}
-                      pointerEvents="none"
+              <g
+                key={module.id}
+                className={`front-module${module.id === selectedId ? " is-selected" : ""}${issueMap.get(module.id) === "error" ? " has-error" : issueMap.get(module.id) === "warning" ? " has-warning" : ""}${divideTool ? " is-divide-target" : ""}`}
+                {...(preview
+                  ? { role: "presentation", "aria-hidden": true }
+                  : {
+                      role: "button",
+                      "aria-label": `${t("assembly.module")} ${module.id}`,
+                      "aria-pressed": module.id === selectedId,
+                      tabIndex: disabled ? -1 : 0,
+                      onClick: (event) =>
+                        divideTool
+                          ? endDivide(module.id, event.clientX, event.clientY)
+                          : onSelectModule(module.id),
+                      onContextMenu: (event) => {
+                        if (!onContextMenuModule) return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        onContextMenuModule(module.id, { x: event.clientX, y: event.clientY });
+                      },
+                      onKeyDown: (event: KeyboardEvent) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          if (divideTool) endDivide(module.id);
+                          else onSelectModule(module.id);
+                        }
+                      },
+                      onPointerMove: divideTool ? previewDivide(module.id) : undefined,
+                      onPointerLeave: divideTool
+                        ? () => {
+                            setDividePreview(null);
+                            divideHover.current = null;
+                          }
+                        : undefined,
+                    })}
+              >
+                {module.frameless ? (
+                  <g transform={`translate(${x} ${top})`}>
+                    <FramelessModule spec={module.frameless} x={0} top={0} w={w} h={h} />
+                  </g>
+                ) : module.contour ? (
+                  <g transform={`translate(${x} ${top})`}>
+                    <path
+                      className="member-frame"
+                      d={contourPathD(module.contour, h)}
+                      fill={frameSurface.fill}
+                      stroke={frameSurface.edge}
+                      strokeWidth={2}
                     />
-                  ))}
+                    <path
+                      className="module-opening module-opening--lite"
+                      d={pointsPathD(insetContourPoints(module.contour, frameT), h)}
+                    />
+                  </g>
+                ) : (
+                  <>
+                    <Member
+                      x={x}
+                      y={top}
+                      w={w}
+                      h={h}
+                      surface={frameSurface}
+                      className="member-frame"
+                    />
+                    <rect
+                      className="module-opening"
+                      x={x + frameT}
+                      y={top + frameT}
+                      width={Math.max(w - frameT * 2, 0)}
+                      height={Math.max(h - frameT * 2, 0)}
+                    />
+                    <ModuleTree
+                      moduleId={module.id}
+                      selectedBayId={selectedBayId}
+                      onSelectBay={
+                        interactive && !divideTool && onSelectBay
+                          ? (bayId) => onSelectBay(module.id, bayId)
+                          : undefined
+                      }
+                      selectedDivisionId={selectedDivisionId}
+                      onSelectDivision={
+                        interactive && !divideTool && onSelectDivision
+                          ? (divisionId) => onSelectDivision(module.id, divisionId)
+                          : undefined
+                      }
+                      showSplitDims={dimLevel === "technical"}
+                      technical={dimLevel === "technical"}
+                      view={view}
+                      node={module.tree}
+                      region={{
+                        x: x + frameT,
+                        y: top + frameT,
+                        w: w - frameT * 2,
+                        h: h - frameT * 2,
+                      }}
+                      localOrigin={{ x, y: top }}
+                      moduleBottom={top + h}
+                      members={members}
+                      liveOffsets={liveOffsets}
+                      hitMm={hitMm}
+                      onDividerDown={
+                        dragsEnabled && onMoveDivision && !divideTool
+                          ? beginDividerDrag(module.id)
+                          : undefined
+                      }
+                    />
+                  </>
+                )}
+                {dividePreview?.moduleId === module.id && (
+                  <line className="divide-preview-line" {...dividePreview.line} />
+                )}
               </g>
             );
           })}
-        {seamDrag && seamLeftMm !== null && seamRightMm !== null && (
-          <g className="seam-preview" aria-hidden="true">
-            <line
-              className="seam-preview-line"
-              x1={columns[seamDrag.index]!.x + columns[seamDrag.index]!.w + seamDrag.deltaMm}
-              y1={0}
-              x2={columns[seamDrag.index]!.x + columns[seamDrag.index]!.w + seamDrag.deltaMm}
-              y2={height}
-            />
-            <text
-              className="seam-preview-label"
-              x={columns[seamDrag.index]!.x + columns[seamDrag.index]!.w + seamDrag.deltaMm}
-              y={-40}
-              textAnchor="middle"
-            >
-              {`${seamLeftMm.toFixed(0)} | ${seamRightMm.toFixed(0)}`}
-            </text>
-          </g>
-        )}
+          {joints.map((joint, index) => {
+            const coupling = joint.couplingId
+              ? couplings.find((item) => item.id === joint.couplingId)
+              : undefined;
+            const width =
+              members.couplerFor(coupling?.coupler_profile_sku ?? null)?.faceWidthMm ?? 60;
+            const couplerSpec = members.couplerFor(coupling?.coupler_profile_sku ?? null);
+            const surface = memberSurface(
+              couplerSpec?.material ?? members.frame.material,
+              (couplerSpec ?? members.frame).finish?.exterior,
+            );
+            const pickable = interactive && !divideTool && onSelectCoupling && joint.couplingId;
+            const jointRect =
+              joint.kind === "column"
+                ? { x: joint.x - width / 2, y: height - joint.top, w: width, h: joint.top }
+                : { x: joint.x, y: height - joint.y - width / 2, w: joint.w, h: width };
+            const selectedJoint = selectedId === joint.couplingId;
+            return (
+              <g key={joint.couplingId ?? `joint-${index}`}>
+                <Member
+                  x={jointRect.x}
+                  y={jointRect.y}
+                  w={jointRect.w}
+                  h={jointRect.h}
+                  surface={surface}
+                  className={`member-coupler${selectedJoint ? " is-selected" : ""}`}
+                />
+                {pickable && (
+                  <rect
+                    className={`joint-hit${selectedJoint ? " is-selected" : ""}`}
+                    x={jointRect.x}
+                    y={jointRect.y}
+                    width={jointRect.w}
+                    height={jointRect.h}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      if (joint.couplingId) onSelectCoupling?.(joint.couplingId);
+                    }}
+                  />
+                )}
+              </g>
+            );
+          })}
+          {/* Seam grips render above the coupler members so the drag target is
+          not swallowed by the coupler rect — one grip per column boundary. */}
+          {dragsEnabled &&
+            onResizeSeam &&
+            !divideTool &&
+            columns.slice(0, -1).map((column, index) => {
+              const neighbor = columns[index + 1];
+              const seamW = Math.min(
+                hitMm,
+                Math.max(12, Math.min(column.w, neighbor?.w ?? column.w) * 0.5),
+              );
+              return (
+                <g key={`seam-${index}`}>
+                  <rect
+                    className="seam-grip"
+                    x={column.x + column.w - seamW / 2}
+                    y={0}
+                    width={seamW}
+                    height={height}
+                    onPointerDown={beginSeamDrag(index)}
+                  />
+                  {/* Resting drag affordance: three dots mid-seam so the grip
+                  doesn't need a lucky hover to be discovered. */}
+                  {height > seamW * 2.4 &&
+                    [-1, 0, 1].map((slot) => (
+                      <circle
+                        key={slot}
+                        className="seam-grip-dot"
+                        cx={column.x + column.w}
+                        cy={height / 2 + slot * seamW * 0.5}
+                        r={Math.max(seamW * 0.1, 1.4)}
+                        pointerEvents="none"
+                      />
+                    ))}
+                </g>
+              );
+            })}
+          {seamDrag && seamLeftMm !== null && seamRightMm !== null && (
+            <g className="seam-preview" aria-hidden="true">
+              <line
+                className="seam-preview-line"
+                x1={columns[seamDrag.index]!.x + columns[seamDrag.index]!.w + seamDrag.deltaMm}
+                y1={0}
+                x2={columns[seamDrag.index]!.x + columns[seamDrag.index]!.w + seamDrag.deltaMm}
+                y2={height}
+              />
+              <text
+                className="seam-preview-label"
+                x={columns[seamDrag.index]!.x + columns[seamDrag.index]!.w + seamDrag.deltaMm}
+                y={-40}
+                textAnchor="middle"
+              >
+                {`${seamLeftMm.toFixed(0)} | ${seamRightMm.toFixed(0)}`}
+              </text>
+            </g>
+          )}
+        </g>
       </g>
     </g>
   );
@@ -2401,7 +2718,17 @@ export function ProductFrontContent({
  * (CanvasViewport) renders `ProductFrontContent` inside its own transform
  * instead; this wrapper stays for any consumer that just wants an SVG. */
 export function ProductFrontSvg(props: Parameters<typeof ProductFrontContent>[0]): JSX.Element {
-  const bounds = frontBounds(props.product, props.vano ?? null);
+  const front = frontLayout(props.product);
+  const extraBottom =
+    props.dimLevel === "technical"
+      ? technicalExtraBottom(
+          front.rects,
+          props.members,
+          front.height,
+          props.members.frame.faceWidthMm,
+        )
+      : 0;
+  const bounds = frontBounds(front, props.vano ?? null, extraBottom);
   return (
     <svg
       className="product-front-svg"

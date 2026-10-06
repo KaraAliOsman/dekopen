@@ -23467,7 +23467,7 @@ components:
         host_member_side:
           nullable: true
           oneOf:
-          - $ref: '#/components/schemas/HostMemberSideEnum'
+          - $ref: '#/components/schemas/SlidingTravelEnum'
           - $ref: '#/components/schemas/NullEnum'
         requires_handedness:
           type: boolean
@@ -23767,14 +23767,6 @@ components:
         * `HANDLE_MODEL` - HANDLE_MODEL
         * `HANDLE_COLOR` - HANDLE_COLOR
         * `OPTION` - OPTION
-    HostMemberSideEnum:
-      enum:
-      - LEFT
-      - RIGHT
-      type: string
-      description: |-
-        * `LEFT` - LEFT
-        * `RIGHT` - RIGHT
     ImportConfirmRequest:
       type: object
       properties:
@@ -30335,9 +30327,13 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SlidingPanelFacts'
+        primary_index:
+          type: integer
+          nullable: true
       required:
       - bay_id
       - panels
+      - primary_index
       - tracks
     SlidingPanelFacts:
       type: object
@@ -30349,6 +30345,13 @@ components:
         track:
           type: integer
           nullable: true
+        travel:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/SlidingTravelEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        travel_inferred:
+          type: boolean
         leaf_id:
           type: string
           nullable: true
@@ -30357,6 +30360,8 @@ components:
       - leaf_id
       - slot
       - track
+      - travel
+      - travel_inferred
     SlidingPanelFactsKindEnum:
       enum:
       - MOVING
@@ -30365,6 +30370,14 @@ components:
       description: |-
         * `MOVING` - MOVING
         * `FIXED` - FIXED
+    SlidingTravelEnum:
+      enum:
+      - LEFT
+      - RIGHT
+      type: string
+      description: |-
+        * `LEFT` - LEFT
+        * `RIGHT` - RIGHT
     StepTransition:
       type: object
       properties:

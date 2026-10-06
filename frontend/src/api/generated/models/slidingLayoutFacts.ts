@@ -11,4 +11,6 @@ export interface SlidingLayoutFacts {
   bay_id: string;
   tracks: number;
   panels: SlidingPanelFacts[];
+  /** @nullable */
+  primary_index: number | null;
 }

@@ -1,0 +1,131 @@
+{
+  "id": "door-single-left",
+  "name": "Puerta simple izquierda",
+  "box": {
+    "x": 0,
+    "y": 0,
+    "w": 800,
+    "h": 1400
+  },
+  "input": {
+    "kind": "leaves",
+    "unit": "DOOR",
+    "leaves": [
+      {
+        "movement": "TURN",
+        "hinge_side": "LEFT",
+        "direction": "INWARD",
+        "leaf_role": "SINGLE",
+        "handle_mm": 1050
+      }
+    ]
+  },
+  "views": {
+    "interior": {
+      "stiles": 0,
+      "leaves": [
+        {
+          "prims": [
+            {
+              "k": "sill",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            },
+            {
+              "k": "tri",
+              "hinge": "LEFT",
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            },
+            {
+              "k": "handle",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "inferred": false,
+              "side": "right",
+              "at_mm": "1050"
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 0 1400 H 800",
+              "dash": null
+            },
+            {
+              "d": "M 160 168 L 640 593.6 L 160 1232",
+              "dash": null
+            },
+            {
+              "d": "M 765 350 H 783 M 774 341 V 359",
+              "dash": null
+            }
+          ]
+        }
+      ]
+    },
+    "exterior": {
+      "stiles": 0,
+      "leaves": [
+        {
+          "prims": [
+            {
+              "k": "sill",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            },
+            {
+              "k": "tri",
+              "hinge": "LEFT",
+              "apex_at": "0.4",
+              "dash": true,
+              "dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            },
+            {
+              "k": "handle",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "inferred": false,
+              "side": "right",
+              "at_mm": "1050"
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 0 1400 H 800",
+              "dash": null
+            },
+            {
+              "d": "M 160 168 L 640 593.6 L 160 1232",
+              "dash": "6 3"
+            },
+            {
+              "d": "M 765 350 H 783 M 774 341 V 359",
+              "dash": null
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

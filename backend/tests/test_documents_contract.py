@@ -7,7 +7,7 @@ import pytest
 
 from dekopen_engine.documentary_canonical import file_sha256
 from documents.artifacts import _require_document_role
-from documents.renderers import _doc01, _doc02, _doc03, _doc06, _doc07, render_pdf_document
+from documents.renderers import _doc01, _doc02, _doc03, _doc06, _doc07, _position_svg, render_pdf_document
 from documents.repository import DocumentaryError
 from documents.serializers import HandleIntentSerializer
 from documents.storage import SIGNED_URL_TTL_SECONDS, SupabaseDocumentStorage
@@ -273,22 +273,74 @@ def test_client_document_escapes_input_and_never_contains_raw_cost() -> None:
 
 def test_client_quote_includes_deterministic_opening_drawings() -> None:
     html = _doc01(revision_snapshot())
-    assert "<svg" in html and 'viewBox="0 0 1000 1200"' in html
+    # P05 — every elevation declares its reading side in the gutter the
+    # viewBox grows for (the drawing itself still lives at 0,0).
+    assert "<svg" in html and 'viewBox="0 -66.7 1000 1352.4"' in html
+    assert "Vista interior" in html
     sliding = revision_snapshot()
     sliding["positions"][0]["parametric_tree"] = {  # type: ignore[index]
         "id": "B1", "type": "BAY", "opening_type": "SLIDING_2L",
         "glass_spec": "4-12-4 Float Incoloro", "children": [],
     }
     sliding_html = _doc01(sliding)
-    # Card-scoped marker ids (the hero re-draws the same position) — each
-    # sliding panel still emits exactly one arrow in its product card.
-    assert sliding_html.count('marker-end="url(#arrow-1-c1)"') == 2
+    # Each sliding panel still emits its travel arrow in the product card.
+    assert sliding_html.count('<path d="M ') >= 2
     assert _doc01(sliding) == sliding_html
 
 
+def test_client_quote_draws_frozen_sliding_layout_not_schematic() -> None:
+    """P05 regression — frozen `sliding_layout` dicts store string
+    kind/track/travel values, and engine models only accept enum
+    instances. The renderer must coerce them, or every issued sliding
+    elevation silently degrades to a 2-panel schematic that discards the
+    real layout and every declared travel."""
+    snapshot = revision_snapshot()
+    snapshot["positions"][0]["parametric_tree"] = {  # type: ignore[index]
+        "version": "product-v2",
+        "assembly": {
+            "modules": [{
+                "id": "m1", "width_mm": "3600.00", "height_mm": "1600.00",
+                "tree": {
+                    "id": "m1", "type": "BAY", "opening_type": "SLIDING_4L",
+                    "glass_thickness_mm": "4.00",
+                    "glass_spec": "4-12-4 Float Incoloro",
+                    "sliding_layout": {
+                        "tracks": 2,
+                        "panels": [
+                            {"slot": "O1", "kind": "FIXED"},
+                            {"slot": "X1", "kind": "MOVING",
+                             "track": 0, "travel": "RIGHT"},
+                            {"slot": "X2", "kind": "MOVING",
+                             "track": 1, "travel": "LEFT"},
+                            {"slot": "O2", "kind": "FIXED"},
+                        ],
+                    },
+                    "children": [],
+                },
+            }],
+            "couplings": [],
+        },
+    }
+    html = _doc01(snapshot)
+    card_svg = html[html.index("<svg") : html.index("</svg>")]
+    # O/X/X/O: exactly 4 leaf rects (FIXED panes included — the leaf
+    # outline is the only `fill="none"` rect stroked with the bay edge
+    # color), exactly 2 travel arrows (MOVING only), and declared travel
+    # is honored — no `stroke-opacity` inferred flag anywhere.
+    assert card_svg.count('fill="none" stroke="#98A2A5"') == 4
+    assert card_svg.count('<path d="M ') == 2
+    assert "stroke-opacity" not in card_svg
+    # The same frozen layout feeds the technical elevation's plan cut —
+    # rail numbers and side labels must come from the real layout too.
+    tech_svg = _position_svg(snapshot["positions"][0], commercial=False)  # type: ignore[arg-type]
+    assert "INTERIOR" in tech_svg and "EXTERIOR" in tech_svg
+    assert "stroke-opacity" not in tech_svg
+
+
 def test_client_quote_renders_door_openings() -> None:
-    """DOOR_ENTRY/DOOR_DOUBLE leaves draw a dashed swing arc — a door in the
-    project must never 500 the customer quote."""
+    """DOOR_ENTRY/DOOR_DOUBLE leaves draw the elevation contract — DIN
+    triangles plus the sill accent (the swing arc stays in plan views) —
+    and a door in the project must never 500 the customer quote."""
     for opening in ("DOOR_ENTRY", "DOOR_DOUBLE"):
         snapshot = revision_snapshot()
         snapshot["positions"][0]["parametric_tree"] = {  # type: ignore[index]
@@ -298,7 +350,13 @@ def test_client_quote_renders_door_openings() -> None:
         }
         html = _doc01(snapshot)
         assert "<svg" in html
-        assert "stroke-dasharray" in html
+        # Triangle + sill accent paths — the swing arc stays in plan
+        # views, never on the elevation.
+        assert '<path d="M ' in html
+        svg = html[html.index("<svg") : html.index("</svg>")]
+        assert ' A ' not in svg
+        # The threshold accent the factory reads as "walkable edge".
+        assert 'stroke="#E56A32"' in html
 
 
 def test_client_quote_renders_spec_openings_din() -> None:
@@ -328,8 +386,10 @@ def test_client_quote_renders_spec_openings_din() -> None:
         "glass_spec": "4-12-4 Float Incoloro", "children": [],
     }
     french_html = _doc01(french)
-    # Glass overlay + one triangle per leaf + the meeting-stile separator.
-    assert french_html.count("<polygon") == 3
+    # Glass overlay polygon + one triangle path per leaf + the
+    # meeting-stile separator.
+    assert french_html.count("<polygon") == 1
+    assert french_html.count('<path d="M ') == 2
     assert '<line x1="500" y1="72" x2="500" y2="1128"' in french_html
     assert "stroke-dasharray" not in french_html
 
@@ -348,9 +408,9 @@ def test_client_quote_renders_spec_openings_din() -> None:
         ],
     }
     door_html = _doc01(door_side)
-    # One swing arc (`d="M `, the marker def uses `d="M0,0`); the sill accent
-    # runs under the door leaf only — the FIXED sidelight draws nothing.
-    assert door_html.count('d="M ') == 1
+    # Triangle + sill accent on the door leaf (`d="M `, the
+    # marker def uses `d="M0,0"`); the FIXED sidelight draws nothing.
+    assert door_html.count('d="M ') == 2
     assert door_html.count('stroke="#E56A32"') == 1
     assert "stroke-dasharray" not in door_html
 
@@ -394,7 +454,7 @@ def test_client_quote_draws_stacked_assembly_as_a_column() -> None:
         },
     }
     html = _doc01(snapshot)
-    assert 'viewBox="0 0 1000 2600"' in html
+    assert 'viewBox="0 -144.4 1000 2930.1"' in html
     # The transom sill sits at 2200 mm elevation → svg y = 2600 − 2200 = 400.
     assert 'x1="0" y1="400" x2="1000" y2="400"' in html
 

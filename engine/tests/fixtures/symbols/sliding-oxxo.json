@@ -1,0 +1,193 @@
+{
+  "id": "sliding-oxxo",
+  "name": "Corredera O/X/X/O",
+  "box": {
+    "x": 0,
+    "y": 0,
+    "w": 3200,
+    "h": 1200
+  },
+  "input": {
+    "kind": "sliding",
+    "unit": "WINDOW",
+    "tracks": 2,
+    "panels": [
+      {
+        "slot": "O1",
+        "kind": "FIXED",
+        "track": null,
+        "travel": null
+      },
+      {
+        "slot": "X1",
+        "kind": "MOVING",
+        "track": 0,
+        "travel": "RIGHT"
+      },
+      {
+        "slot": "X2",
+        "kind": "MOVING",
+        "track": 1,
+        "travel": "LEFT"
+      },
+      {
+        "slot": "O2",
+        "kind": "FIXED",
+        "track": null,
+        "travel": null
+      }
+    ]
+  },
+  "views": {
+    "interior": {
+      "stiles": 0,
+      "leaves": [
+        {
+          "prims": [
+            {
+              "k": "none",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": []
+        },
+        {
+          "prims": [
+            {
+              "k": "arrow",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": "RIGHT",
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 1084.8 600 H 1315.2 M 1263.36 563.14 L 1315.2 600 L 1263.36 636.86",
+              "dash": null
+            }
+          ]
+        },
+        {
+          "prims": [
+            {
+              "k": "arrow",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": "LEFT",
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 2115.2 600 H 1884.8 M 1936.64 563.14 L 1884.8 600 L 1936.64 636.86",
+              "dash": null
+            }
+          ]
+        },
+        {
+          "prims": [
+            {
+              "k": "none",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": []
+        }
+      ]
+    },
+    "exterior": {
+      "stiles": 0,
+      "leaves": [
+        {
+          "prims": [
+            {
+              "k": "none",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": []
+        },
+        {
+          "prims": [
+            {
+              "k": "arrow",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": "RIGHT",
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 1084.8 600 H 1315.2 M 1263.36 563.14 L 1315.2 600 L 1263.36 636.86",
+              "dash": null
+            }
+          ]
+        },
+        {
+          "prims": [
+            {
+              "k": "arrow",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": "LEFT",
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 2115.2 600 H 1884.8 M 1936.64 563.14 L 1884.8 600 L 1936.64 636.86",
+              "dash": null
+            }
+          ]
+        },
+        {
+          "prims": [
+            {
+              "k": "none",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": []
+        }
+      ]
+    }
+  }
+}

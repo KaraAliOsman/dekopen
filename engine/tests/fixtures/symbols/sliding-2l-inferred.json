@@ -1,0 +1,121 @@
+{
+  "id": "sliding-2l-inferred",
+  "name": "Corredera 2 hojas sin travel (dirección inferida)",
+  "box": {
+    "x": 0,
+    "y": 0,
+    "w": 1600,
+    "h": 1200
+  },
+  "input": {
+    "kind": "sliding",
+    "unit": "WINDOW",
+    "tracks": 2,
+    "panels": [
+      {
+        "slot": "S1",
+        "kind": "MOVING",
+        "track": 0,
+        "travel": null
+      },
+      {
+        "slot": "S2",
+        "kind": "MOVING",
+        "track": 1,
+        "travel": null
+      }
+    ]
+  },
+  "views": {
+    "interior": {
+      "stiles": 0,
+      "leaves": [
+        {
+          "prims": [
+            {
+              "k": "arrow",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": "RIGHT",
+              "inferred": true,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 284.8 600 H 515.2 M 463.36 563.14 L 515.2 600 L 463.36 636.86",
+              "dash": null
+            }
+          ]
+        },
+        {
+          "prims": [
+            {
+              "k": "arrow",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": "LEFT",
+              "inferred": true,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 1315.2 600 H 1084.8 M 1136.64 563.14 L 1084.8 600 L 1136.64 636.86",
+              "dash": null
+            }
+          ]
+        }
+      ]
+    },
+    "exterior": {
+      "stiles": 0,
+      "leaves": [
+        {
+          "prims": [
+            {
+              "k": "arrow",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": "RIGHT",
+              "inferred": true,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 284.8 600 H 515.2 M 463.36 563.14 L 515.2 600 L 463.36 636.86",
+              "dash": null
+            }
+          ]
+        },
+        {
+          "prims": [
+            {
+              "k": "arrow",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": "LEFT",
+              "inferred": true,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 1315.2 600 H 1084.8 M 1136.64 563.14 L 1084.8 600 L 1136.64 636.86",
+              "dash": null
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

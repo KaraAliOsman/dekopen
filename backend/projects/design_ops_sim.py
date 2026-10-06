@@ -220,6 +220,61 @@ def _mirror_spec(spec: Any) -> Any:
     return mirrored
 
 
+_FLIP_TRAVEL = {"LEFT": "RIGHT", "RIGHT": "LEFT"}
+
+# Presets corredera del engine (geometry._SLIDING_PRESETS) en forma de
+# dict: cada hoja móvil declara su travel desde P05 — mitad izquierda va
+# a la derecha, mitad derecha a la izquierda.
+_SLIDING_PRESET_LAYOUTS: dict[str, dict[str, Any]] = {
+    "SLIDING_2L": {
+        "tracks": 2,
+        "panels": [
+            {"slot": "P1", "kind": "MOVING", "track": 0, "travel": "RIGHT"},
+            {"slot": "P2", "kind": "MOVING", "track": 1, "travel": "LEFT"},
+        ],
+    },
+    "SLIDING_3L": {
+        "tracks": 2,
+        "panels": [
+            {"slot": "P1", "kind": "MOVING", "track": 0, "travel": "RIGHT"},
+            {"slot": "P2", "kind": "MOVING", "track": 1, "travel": "RIGHT"},
+            {"slot": "P3", "kind": "MOVING", "track": 0, "travel": "LEFT"},
+        ],
+    },
+    "SLIDING_4L": {
+        "tracks": 2,
+        "panels": [
+            {"slot": "P1", "kind": "MOVING", "track": 0, "travel": "RIGHT"},
+            {"slot": "P2", "kind": "MOVING", "track": 1, "travel": "RIGHT"},
+            {"slot": "P3", "kind": "MOVING", "track": 0, "travel": "LEFT"},
+            {"slot": "P4", "kind": "MOVING", "track": 1, "travel": "LEFT"},
+        ],
+    },
+}
+
+
+def _mirror_layout(layout: dict[str, Any]) -> dict[str, Any]:
+    """Espejo de una corredera: los extremos se intercambian (los paneles
+    recorren de derecha a izquierda) y cada travel declarado invierte su
+    sentido; el riel no cambia (la vista exterior/interior es la misma)."""
+    mirrored = deepcopy(layout)
+    panels = mirrored.get("panels")
+    if isinstance(panels, list) and panels:
+        mirrored["panels"] = [
+            {
+                **panel,
+                "travel": _FLIP_TRAVEL.get(panel.get("travel"), panel.get("travel")),
+            }
+            if isinstance(panel, dict)
+            else panel
+            for panel in reversed(panels)
+        ]
+        primary = layout.get("primary_index")
+        if isinstance(primary, int) and not isinstance(primary, bool):
+            mirrored["primary_index"] = len(panels) - 1 - primary
+    return mirrored
+
+
 def mirror_bay(node: dict[str, Any]) -> dict[str, Any]:
     """La segunda hoja de un split vertical: bisagras y hojas espejadas para
     que las manillas se junten en el poste (misma regla del frontend)."""
@@ -229,6 +284,8 @@ def mirror_bay(node: dict[str, Any]) -> dict[str, Any]:
         mirrored["opening_type"] = _MIRRORED_OPENING.get(opening_type, opening_type)
     if isinstance(mirrored.get("opening"), dict):
         mirrored["opening"] = _mirror_spec(mirrored["opening"])
+    if isinstance(mirrored.get("sliding_layout"), dict):
+        mirrored["sliding_layout"] = _mirror_layout(mirrored["sliding_layout"])
     if isinstance(mirrored.get("leaves"), list):
         def _slot(leaf: dict[str, Any]) -> dict[str, Any]:
             slot = leaf.get("slot")
@@ -258,22 +315,23 @@ def flip_bay(node: dict[str, Any]) -> dict[str, Any] | None:
         flipped["opening_type"] = _MIRRORED_OPENING[opening_type]
         changed = True
     elif isinstance(opening_type, str) and opening_type in _SLIDING_KEYS:
-        # Corredera: la hoja primaria invierte (primer panel ↔ último).
+        # Corredera: la hoja primaria invierte (primer panel ↔ último) y
+        # cada travel declarado invierte su sentido — mismo espejo que
+        # flipBay del frontend.
         layout = flipped.get("sliding_layout")
-        if isinstance(layout, dict):
-            panels = layout.get("panels") or layout.get("tracks")
-            primary = layout.get("primary_index")
-            count = _num(primary)
-            if isinstance(panels, list) and panels and count is not None:
-                flipped["sliding_layout"] = {
-                    **layout,
-                    "primary_index": len(panels) - 1 - int(count),
-                }
-                changed = True
-        else:
-            # Sin layout explícito: SLIDING_2L cambia el panel primario 0↔1
-            flipped["sliding_layout"] = {"primary_index": 1}
+        if isinstance(layout, dict) and isinstance(layout.get("panels"), list):
+            flipped["sliding_layout"] = _mirror_layout(layout)
             changed = True
+        else:
+            preset = _SLIDING_PRESET_LAYOUTS.get(opening_type)
+            if preset is not None:
+                # Sin layout explícito el espejo materializa el preset
+                # espejado (primary_index 0 → último slot).
+                mirrored = _mirror_layout(preset)
+                if "primary_index" not in mirrored:
+                    mirrored["primary_index"] = len(mirrored["panels"]) - 1
+                flipped["sliding_layout"] = mirrored
+                changed = True
     if isinstance(flipped.get("opening"), dict):
         spec = flipped["opening"]
         mirrored = _mirror_spec(spec)

@@ -5,6 +5,6 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
-import { HostMemberSideEnum } from "./hostMemberSideEnum";
+import { SlidingTravelEnum } from "./slidingTravelEnum";
 
-export const HandleRequirementHostMemberSide = { ...HostMemberSideEnum } as const;
+export const HandleRequirementHostMemberSide = { ...SlidingTravelEnum } as const;
