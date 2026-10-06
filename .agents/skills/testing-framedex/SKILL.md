@@ -698,3 +698,35 @@ description: Local dev-stack recipe for DEKOPEN E2E testing — Supabase CLI sta
 - **Pricing workspace routes**: project ops at `/projects/:id/pricing`; owner admin at `/pricing/cost-lists` (tabs: listas/insumos/cobertura/reglas/tarifas/matriz/fx/historial); margin band fields live in "Reglas comerciales" (margin_min_pct/margin_max_pct as percents, stored as fractions). "Editar registro" leaves % fields blank — retype all before "Guardar cambio auditado".
 - **Owner pricing form has an extra mode**: `TARGET_GROSS_MARGIN_PROJECT` ("Margen objetivo del proyecto") is owner-only in the pricing_mode select.
 - **Cascade "sin desglose exacto" signature**: `Operación anterior a la cascada — sin desglose exacto.` means `_cascade_payload` returned None — usually engine `_position_cascade` raising `inconsistent_pricing_result` when materials+waste+labour != stored unit_cost (4dp-quantized snapshots vs recompute drift). Check stored `input_snapshot.unit_cost` vs recomputed cost_net.
+
+## Pack de corte (P13) — receta de verificación
+
+- Ruta UI: `/production?order=<order_uuid>` → detalle de OT → tab **Corte** →
+  «Pack de corte (PDF)» (requiere `payload_json.optimization` no invalidado; el
+  botón se deshabilita con tooltip «plan invalidado» tras re-optimizar).
+  Endpoint: `GET /api/v1/production/orders/<id>/cut-pack/` (200 application/pdf;
+  errores `cut_pack_requires_optimization`, `plan_invalidated`). ESTIMATOR
+  alcanza para descargarlo.
+- `workshop_label_format` (migración 20270204000000): select en Ajustes ›
+  Documentos — GRID=«Grilla en hoja», THERMAL_100X50=«Rollo térmico 100×50 mm».
+  Se guarda con «Guardar marca» del formulario de branding y aterriza en
+  `tenancy_organizations.workshop_label_format` (round-trip al recargar).
+- La prueba dura de que el formato conduce el render: rasterizar/extraer el PDF
+  descargado con pymupdf (`fitz`, en `.venv`). GRID → etiquetas en página del
+  papel documental (Carta vertical 612×792, h2 «Etiquetas de pieza — en
+  secuencia de corte», muchas etiquetas por página + RETAZO al final).
+  THERMAL_100X50 → una página de 100×50 mm (283×142 pt) por etiqueta, sin
+  cajetín; el bloque «Identidad» queda en página full-size al final.
+- Secciones esperadas del PDF (apaisado, en español): stats de cabecera,
+  «Lista de corte» con bloques por barra + badges «BARRA NUEVA»/«retazo RT-…»,
+  línea de cierre Decimal exacto por barra, «Retazo N mm → stock de retazos
+  (folio RT- al cerrar el corte)», «Cortes agrupados — sierra manual»,
+  «Refuerzos y junquillos», «Plan de láminas»/«Vidrios», «Piezas no ubicadas»
+  (motivo → acción), etiquetas con QR y «→ siguiente estación», línea
+  `OT-… · plan <fp8>`, firma «Identidad».
+- Las OT de `dev_fixture.py` ya vienen optimizadas: la de vitrina (10
+  posiciones) ejercita cada sección, incl. «Piezas no ubicadas» («Sin formato
+  de lámina declarado en el catálogo → Catálogo › Vidrios › Formatos»).
+- Gotcha: el pack se renderiza al descargar, así que cambiar el setting de la
+  org y re-descargar la MISMA OT es la prueba A/B más limpia (la segunda
+  descarga aterriza como `… (1).pdf` en ~/Downloads).
