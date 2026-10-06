@@ -355,9 +355,9 @@ export function PortalQuotePage(): JSX.Element {
       : t("portal.proposalTitle");
   }, [quote]);
 
-  async function decide(decision: "APPROVED" | "DECLINED"): Promise<void> {
+  async function decide(decision: "APPROVED" | "DECLINED" | "CHANGES_REQUESTED"): Promise<void> {
     if (!name.trim() || busy) return;
-    if (decision === "DECLINED" && !note.trim()) return;
+    if (decision !== "APPROVED" && !note.trim()) return;
     setBusy(true);
     try {
       const response = await portalQuoteDecide(token, {
@@ -408,7 +408,10 @@ export function PortalQuotePage(): JSX.Element {
     );
   }
 
-  const decided = quote.approval_status !== "PENDING";
+  // CHANGES_REQUESTED no cierra la decisión: el enlace sigue vivo para
+  // que el cliente confirme aprobar/rechazar después de pedir ajustes.
+  const decided =
+    quote.approval_status !== "PENDING" && quote.approval_status !== "CHANGES_REQUESTED";
   // Line-level IVA: net + tax are the sealed truth — the implied rate lets
   // product cards show the gross the customer will actually pay.
   const netTotal = quote.total_price_net ? parseDecimal(quote.total_price_net) : null;
@@ -621,7 +624,9 @@ export function PortalQuotePage(): JSX.Element {
                 ? "done"
                 : quote.approval_status === "DECLINED"
                   ? "declined"
-                  : "current"
+                  : quote.approval_status === "CHANGES_REQUESTED"
+                    ? "changes"
+                    : "current"
             }
           >
             {t("portal.stepDecision")}
@@ -652,97 +657,116 @@ export function PortalQuotePage(): JSX.Element {
             </p>
             {issuerContact ? <p className="portal-decided__contact">{issuerContact}</p> : null}
           </div>
-        ) : quote.superseded ? (
-          <p className="portal-decided" role="status">
-            {t("portal.superseded")}
-          </p>
-        ) : quote.validity_expired ? (
-          <p className="portal-decided" role="status">
-            {t("portal.validityExpired")}
-          </p>
         ) : (
-          <form
-            noValidate
-            className="portal-decision"
-            onSubmit={(event: FormEvent<HTMLFormElement>) => {
-              event.preventDefault();
-              void decide("APPROVED");
-            }}
-          >
-            <h2>{t("portal.decisionTitle")}</h2>
-            <div className="portal-decision__recap">
-              <dl>
-                <div>
-                  <dt>{t("portal.decisionTotal")}</dt>
-                  <dd>{money(quote.total_price_gross, quote.currency)}</dd>
-                </div>
-                <div>
-                  <dt>{t("portal.project")}</dt>
-                  <dd>
-                    {quote.project_code} · {formatRevision(quote.revision_code)}
-                  </dd>
-                </div>
-                {quote.valid_until ? (
-                  <div>
-                    <dt>{t("portal.validUntil")}</dt>
-                    <dd>
-                      <time dateTime={quote.valid_until}>{formatDate(quote.valid_until)}</time>
-                    </dd>
-                  </div>
-                ) : null}
-              </dl>
-              <p className="portal-decision__hint">{t("portal.approveHint")}</p>
-            </div>
-            <label htmlFor="portal-name">{t("portal.nameLabel")}</label>
-            <input
-              id="portal-name"
-              required
-              maxLength={255}
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              disabled={busy}
-              autoComplete="name"
-            />
-            <label htmlFor="portal-rut">{t("portal.rutLabel")}</label>
-            <input
-              id="portal-rut"
-              maxLength={32}
-              value={rut}
-              onChange={(event) => setRut(event.target.value)}
-              disabled={busy}
-              placeholder={t("portal.rutPlaceholder")}
-            />
-            <label htmlFor="portal-note">{t("portal.noteLabel")}</label>
-            <textarea
-              id="portal-note"
-              maxLength={500}
-              rows={3}
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              disabled={busy}
-              placeholder={t("portal.notePlaceholder")}
-            />
-            {decideError !== null ? (
-              <p role="alert" className="portal-decision__error">
-                {decideError}
+          <>
+            {quote.approval_status === "CHANGES_REQUESTED" && (
+              <div className="portal-decided" data-state="changes" role="status">
+                <p className="portal-decided__state">{t("portal.wasChangesRequested")}</p>
+                <p>{t("portal.wasChangesRequestedDetail")}</p>
+                {issuerContact ? <p className="portal-decided__contact">{issuerContact}</p> : null}
+              </div>
+            )}
+            {quote.superseded ? (
+              <p className="portal-decided" role="status">
+                {t("portal.superseded")}
               </p>
-            ) : null}
-            <div className="projects-actions">
-              <button className="primary-action" disabled={busy || !name.trim()}>
-                {t("portal.approve")}
-              </button>
-              <button
-                type="button"
-                disabled={busy || !name.trim() || !note.trim()}
-                onClick={() => void decide("DECLINED")}
+            ) : quote.validity_expired ? (
+              <p className="portal-decided" role="status">
+                {t("portal.validityExpired")}
+              </p>
+            ) : (
+              <form
+                noValidate
+                className="portal-decision"
+                onSubmit={(event: FormEvent<HTMLFormElement>) => {
+                  event.preventDefault();
+                  void decide("APPROVED");
+                }}
               >
-                {t("portal.requestChange")}
-              </button>
-            </div>
-            {!note.trim() ? (
-              <p className="portal-decision__notehint">{t("portal.noteRequired")}</p>
-            ) : null}
-          </form>
+                <h2>{t("portal.decisionTitle")}</h2>
+                <div className="portal-decision__recap">
+                  <dl>
+                    <div>
+                      <dt>{t("portal.decisionTotal")}</dt>
+                      <dd>{money(quote.total_price_gross, quote.currency)}</dd>
+                    </div>
+                    <div>
+                      <dt>{t("portal.project")}</dt>
+                      <dd>
+                        {quote.project_code} · {formatRevision(quote.revision_code)}
+                      </dd>
+                    </div>
+                    {quote.valid_until ? (
+                      <div>
+                        <dt>{t("portal.validUntil")}</dt>
+                        <dd>
+                          <time dateTime={quote.valid_until}>{formatDate(quote.valid_until)}</time>
+                        </dd>
+                      </div>
+                    ) : null}
+                  </dl>
+                  <p className="portal-decision__hint">{t("portal.approveHint")}</p>
+                </div>
+                <label htmlFor="portal-name">{t("portal.nameLabel")}</label>
+                <input
+                  id="portal-name"
+                  required
+                  maxLength={255}
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  disabled={busy}
+                  autoComplete="name"
+                />
+                <label htmlFor="portal-rut">{t("portal.rutLabel")}</label>
+                <input
+                  id="portal-rut"
+                  maxLength={32}
+                  value={rut}
+                  onChange={(event) => setRut(event.target.value)}
+                  disabled={busy}
+                  placeholder={t("portal.rutPlaceholder")}
+                />
+                <label htmlFor="portal-note">{t("portal.noteLabel")}</label>
+                <textarea
+                  id="portal-note"
+                  maxLength={500}
+                  rows={3}
+                  value={note}
+                  onChange={(event) => setNote(event.target.value)}
+                  disabled={busy}
+                  placeholder={t("portal.notePlaceholder")}
+                />
+                {decideError !== null ? (
+                  <p role="alert" className="portal-decision__error">
+                    {decideError}
+                  </p>
+                ) : null}
+                <div className="projects-actions">
+                  <button className="primary-action" disabled={busy || !name.trim()}>
+                    {t("portal.approve")}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy || !name.trim() || !note.trim()}
+                    onClick={() => void decide("CHANGES_REQUESTED")}
+                  >
+                    {t("portal.requestChange")}
+                  </button>
+                  <button
+                    type="button"
+                    className="danger-action"
+                    disabled={busy || !name.trim() || !note.trim()}
+                    onClick={() => void decide("DECLINED")}
+                  >
+                    {t("portal.decline")}
+                  </button>
+                </div>
+                {!note.trim() ? (
+                  <p className="portal-decision__notehint">{t("portal.noteRequired")}</p>
+                ) : null}
+              </form>
+            )}
+          </>
         )}
 
         <footer className="portal-proposal__brand">{t("portal.brand")}</footer>

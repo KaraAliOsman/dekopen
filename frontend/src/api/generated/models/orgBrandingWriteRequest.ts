@@ -55,4 +55,10 @@ export interface OrgBrandingWriteRequest {
   remnant_alert_days?: number;
   /** @nullable */
   doc_terms?: OrgBrandingWriteRequestDocTerms;
+  /**
+   * @minimum 1
+   * @maximum 365
+   * @nullable
+   */
+  doc_validity_days?: number | null;
 }

@@ -2259,3 +2259,455 @@ p.handle-pending {
   flex: none;
   margin: 0.25rem 0.75rem 0;
 }
+
+/* ---------- P08 · Emisión guiada ---------- */
+
+/* Dos columnas: el formulario a la izquierda, la columna pegajosa de
+ * control a la derecha (checklist + documento real). */
+.emit-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(17rem, 22rem);
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .emit-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.emit-aside {
+  position: sticky;
+  top: 0.75rem;
+  display: grid;
+  gap: 0.75rem;
+  align-self: start;
+}
+
+/* Checklist siempre visible: tarjeta neutra (no advertencia) — es un
+ * panel de estado permanente, no una alerta. */
+.emit-checklist {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-2);
+  font-size: 0.8125rem;
+  margin: 0;
+  padding: 0.625rem 0.875rem;
+}
+
+.emit-checklist > strong {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.375rem;
+}
+
+.emit-checklist ol {
+  display: grid;
+  gap: 0.125rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.emit-checklist li {
+  align-items: baseline;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.emit-checklist li::before {
+  color: var(--warn-ink, var(--theme-warning));
+  content: "•";
+  flex: none;
+  font-weight: 600;
+}
+
+.emit-checklist li[data-ok]::before {
+  color: var(--theme-accent);
+  content: "✓";
+}
+
+.emit-checklist li[data-ok] .link-button {
+  color: var(--theme-text-muted);
+}
+
+.emit-checklist .link-button {
+  font-size: inherit;
+  padding: 0.125rem 0;
+  text-align: left;
+}
+
+.emit-checklist li small {
+  color: var(--theme-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.emit-checklist__done {
+  color: var(--theme-accent);
+  font-weight: 600;
+  margin: 0.375rem 0 0;
+}
+
+/* Campo destino de un ítem del checklist: resalte breve al navegar. */
+.emit-flash {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 2px;
+  transition: outline-color 200ms ease;
+}
+
+/* Condiciones comerciales editables (plantilla org → esta cotización). */
+.emit-terms {
+  grid-column: 1 / -1;
+}
+
+.emit-terms__hint {
+  color: var(--theme-text-muted);
+  font-size: 0.8125rem;
+  margin: 0 0 0.5rem;
+}
+
+.emit-term {
+  display: grid;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+}
+
+.emit-term__head {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.emit-term__head .handle-pending {
+  font-size: 0.6875rem;
+}
+
+/* Vista previa real del DOC-01 (mismo HTML que el PDF sellado). */
+.emit-preview {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-2);
+  display: grid;
+  gap: 0.375rem;
+  padding: 0.625rem 0.875rem;
+}
+
+.emit-preview__head {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.emit-preview__head small {
+  color: var(--theme-text-muted);
+}
+
+.emit-preview__hash {
+  color: var(--theme-accent);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.6875rem;
+}
+
+.emit-preview__frame {
+  background: var(--surface-sheet);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-1);
+  height: 30rem;
+  width: 100%;
+}
+
+.emit-preview__error {
+  color: var(--theme-text-muted);
+  font-size: 0.8125rem;
+  margin: 0;
+  padding: 0.5rem 0;
+}
+
+/* Confirmación de emisión — momento de firma: folio, consecuencia, huella. */
+.emit-facts {
+  display: grid;
+  gap: 0.375rem;
+  margin: 0 0 0.75rem;
+}
+
+.emit-facts > div {
+  display: grid;
+  grid-template-columns: 9rem minmax(0, 1fr);
+  gap: 0.5rem;
+}
+
+.emit-facts dt {
+  color: var(--theme-text-muted);
+  font-size: 0.8125rem;
+}
+
+.emit-facts dd {
+  margin: 0;
+}
+
+.emit-consequence {
+  background: var(--theme-warning-soft, rgba(217, 119, 6, 0.1));
+  border: 1px solid var(--theme-warning);
+  border-radius: var(--r-2);
+  font-size: 0.8125rem;
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.875rem;
+}
+
+/* F2 — la huella del documento se muestra como cajetín: borde, mono, teal. */
+.emit-fingerprint {
+  align-items: baseline;
+  border: 1px solid var(--theme-accent);
+  border-radius: var(--r-1);
+  display: flex;
+  gap: 0.625rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.emit-fingerprint span {
+  color: var(--theme-text-muted);
+  font-size: 0.75rem;
+}
+
+.emit-fingerprint code {
+  color: var(--theme-accent);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.8125rem;
+  letter-spacing: 0.04em;
+}
+
+/* Ciclo de vida del enlace: stepper Enviada → Vista → Decisión. */
+.quotation-links__head {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.quotation-link {
+  display: block;
+}
+
+.quotation-link__top {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+}
+
+.quotation-link__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.375rem;
+}
+
+.link-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  list-style: none;
+  margin: 0.5rem 0 0.25rem;
+  padding: 0;
+}
+
+.link-steps li {
+  align-items: center;
+  display: flex;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  color: var(--theme-text-muted);
+}
+
+.link-steps li::before {
+  align-items: center;
+  background: var(--theme-canvas);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-pill, 999px);
+  color: var(--theme-text-muted);
+  content: "";
+  display: inline-grid;
+  flex: none;
+  height: 1rem;
+  place-items: center;
+  width: 1rem;
+}
+
+.link-steps li[data-state="done"] {
+  color: var(--theme-text);
+}
+
+.link-steps li[data-state="done"]::before {
+  background: var(--theme-accent);
+  border-color: var(--theme-accent);
+  color: var(--theme-accent-onfill);
+  content: "✓";
+  font-size: 0.6875rem;
+}
+
+.link-steps li[data-state="current"] {
+  color: var(--theme-text);
+  font-weight: 600;
+}
+
+.link-steps li[data-state="current"]::before {
+  border-color: var(--theme-accent);
+  outline: 1px solid var(--theme-accent);
+  outline-offset: -1px;
+}
+
+.link-steps li[data-state="warn"] {
+  color: var(--warn-ink, var(--theme-warning));
+  font-weight: 600;
+}
+
+.link-steps li[data-state="warn"]::before {
+  background: var(--theme-warning);
+  border-color: var(--theme-warning);
+  color: var(--theme-surface-panel);
+  content: "↺";
+  font-size: 0.6875rem;
+}
+
+.link-steps li + li::after {
+  content: "";
+}
+
+.link-steps li + li {
+  margin-left: 0.75rem;
+}
+
+.link-steps li + li::before {
+  margin-left: 0;
+}
+
+/* Enlace recién acuñado: URL visible + copiar (fallback manual). */
+.quotation-share {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+}
+
+.quotation-share__url {
+  background: var(--theme-canvas);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-1);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.75rem;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 0.25rem 0.5rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+input.quotation-share__url {
+  min-width: min(28rem, 100%);
+}
+
+/* ---------- P08 · Cambios globales ---------- */
+
+.global-changes {
+  margin-top: 1rem;
+}
+
+.global-changes__hint {
+  color: var(--theme-text-muted);
+  font-size: 0.8125rem;
+  margin: 0 0 0.625rem;
+}
+
+.global-changes__grid {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.global-changes__grid > label {
+  display: grid;
+  font-size: 0.75rem;
+  gap: 0.25rem;
+}
+
+.global-changes__grid > label > span,
+.global-changes__grid > label {
+  color: var(--theme-text-muted);
+}
+
+.global-changes__scope {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.global-changes__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  max-height: 7.5rem;
+  overflow: auto;
+  padding: 0.375rem 0;
+}
+
+.global-changes__list label {
+  align-items: center;
+  display: flex;
+  font-size: 0.8125rem;
+  gap: 0.375rem;
+  white-space: nowrap;
+}
+
+.global-changes__warn {
+  color: var(--warn-ink, var(--theme-warning));
+  font-size: 0.8125rem;
+  margin: 0.5rem 0 0;
+}
+
+.global-changes__table {
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+  margin-top: 0.625rem;
+  width: 100%;
+}
+
+.global-changes__table th,
+.global-changes__table td {
+  border-bottom: 1px solid var(--theme-border-subtle);
+  padding: 0.375rem 0.5rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.global-changes__table th {
+  color: var(--theme-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.global-changes__table td:last-child {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.global-changes__ops {
+  color: var(--theme-text-secondary);
+}
+
+.global-delta {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  margin-left: 0.375rem;
+}
+
+.global-changes__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.625rem;
+}

@@ -6374,6 +6374,88 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/documents/projects/{project_id}/quote-preview/:
+    post:
+      operationId: documentary_quote_preview
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: project_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - documents
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuotePreviewRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/QuotePreviewRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/QuotePreviewRequest'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuotePreviewResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/documents/projects/{project_id}/versions/compare/:
     get:
       operationId: documents_compare_versions
@@ -8654,7 +8736,8 @@ paths:
   /api/v1/portal/quotes/{token}/decide/:
     post:
       operationId: portal_quote_decide
-      description: Customer approves or declines the shared quote.
+      description: Customer approves, declines or requests changes on the shared quote.
+        CHANGES_REQUESTED keeps the link live for a later decision.
       parameters:
       - in: path
         name: token
@@ -16485,6 +16568,90 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/projects/{project_id}/quote-links/{approval_id}/:
+    patch:
+      operationId: project_quote_link_update
+      description: Move a live link's expiry — the same token keeps resolving, only
+        the deadline moves.
+      parameters:
+      - in: path
+        name: approval_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: project_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedLinkExpiryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedLinkExpiryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedLinkExpiryRequest'
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApprovalRecord'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/projects/{project_id}/quote-links/{approval_id}/revoke/:
     post:
       operationId: project_quote_link_revoke
@@ -19353,6 +19520,8 @@ components:
           type: string
         revision_code:
           type: string
+        channel:
+          type: string
         decided_by:
           type: string
           nullable: true
@@ -19375,16 +19544,22 @@ components:
           nullable: true
         view_count:
           type: integer
+        first_viewed_at:
+          type: string
+          format: date-time
+          nullable: true
         last_viewed_at:
           type: string
           format: date-time
           nullable: true
       required:
+      - channel
       - created_at
       - decided_at
       - decided_by
       - decided_note
       - expires_at
+      - first_viewed_at
       - id
       - last_viewed_at
       - revision_code
@@ -21830,10 +22005,12 @@ components:
       enum:
       - APPROVED
       - DECLINED
+      - CHANGES_REQUESTED
       type: string
       description: |-
         * `APPROVED` - APPROVED
         * `DECLINED` - DECLINED
+        * `CHANGES_REQUESTED` - CHANGES_REQUESTED
     Delivery:
       type: object
       properties:
@@ -22673,6 +22850,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PositionDocumentaryInputRequest'
+        doc_terms:
+          type: object
+          additionalProperties:
+            type: string
+            maxLength: 4000
       required:
       - payment_terms
       - positions
@@ -22781,6 +22963,8 @@ components:
           type: boolean
         documentary_ready:
           type: boolean
+        inspector_blocked:
+          type: boolean
       required:
       - accessory_schedule
       - calculation_hash
@@ -22790,6 +22974,7 @@ components:
       - handle_options
       - handle_requirement_policy_id
       - handle_requirements
+      - inspector_blocked
       - location_tag
       - manufacturing_placement_policy_id
       - placement_options
@@ -22818,11 +23003,32 @@ components:
           type: string
           format: date
           nullable: true
+        org_doc_terms:
+          type: object
+          additionalProperties:
+            type: string
+        default_payment_terms:
+          type: string
+        doc_validity_days:
+          type: integer
+        doc_terms:
+          type: object
+          additionalProperties:
+            type: string
+        emission_missing:
+          type: array
+          items:
+            type: string
         positions:
           type: array
           items:
             $ref: '#/components/schemas/DocumentaryPreparationPosition'
       required:
+      - default_payment_terms
+      - doc_terms
+      - doc_validity_days
+      - emission_missing
+      - org_doc_terms
       - payment_terms
       - positions
       - project_id
@@ -28013,6 +28219,8 @@ components:
           type: string
         remnant_alert_days:
           type: integer
+        doc_validity_days:
+          type: integer
       required:
       - brand_address
       - brand_color
@@ -28024,6 +28232,7 @@ components:
       - doc_dekopen_credit
       - doc_paper_size
       - doc_terms
+      - doc_validity_days
       - giro
       - name
       - remnant_alert_days
@@ -28087,6 +28296,11 @@ components:
           additionalProperties:
             type: string
             maxLength: 4000
+          nullable: true
+        doc_validity_days:
+          type: integer
+          maximum: 365
+          minimum: 1
           nullable: true
     OrientationEnum:
       enum:
@@ -28588,6 +28802,12 @@ components:
           nullable: true
         is_active:
           type: boolean
+    PatchedLinkExpiryRequest:
+      type: object
+      properties:
+        expires_at:
+          type: string
+          format: date-time
     PatchedProjectUpdateRequest:
       type: object
       properties:
@@ -29676,6 +29896,70 @@ components:
         reinforcement_cut_policy_id:
           type: string
           format: uuid
+        workshop_annotations:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkshopAnnotationRequest'
+        structural_inputs:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocumentaryStructuralInputRequest'
+        glass_polishing:
+          type: array
+          items:
+            $ref: '#/components/schemas/GlassPolishingRequest'
+        handle_intents:
+          type: array
+          items:
+            $ref: '#/components/schemas/HandleIntentRequest'
+        accessory_schedule:
+          allOf:
+          - $ref: '#/components/schemas/AccessoryScheduleRequest'
+          nullable: true
+        legacy_handle_migration_confirmed:
+          type: boolean
+          default: false
+      required:
+      - accessory_schedule
+      - calculation_hash
+      - glass_polishing
+      - handle_intents
+      - handle_requirement_policy_id
+      - location_tag
+      - manufacturing_placement_policy_id
+      - position_id
+      - reinforcement_cut_policy_id
+      - structural_inputs
+      - workshop_annotations
+    PositionDocumentaryPreviewRequest:
+      type: object
+      description: |-
+        En la vista previa la ubicación y las políticas pueden ir vacías — el
+        documento imprime '—' y el checklist marca el pendiente; el sello sigue
+        exigiéndolas.
+      properties:
+        position_id:
+          type: string
+          format: uuid
+        calculation_hash:
+          type: string
+          minLength: 1
+          pattern: ^sha256:[0-9a-f]{64}$
+        location_tag:
+          type: string
+          maxLength: 100
+        manufacturing_placement_policy_id:
+          type: string
+          format: uuid
+          nullable: true
+        handle_requirement_policy_id:
+          type: string
+          format: uuid
+          nullable: true
+        reinforcement_cut_policy_id:
+          type: string
+          format: uuid
+          nullable: true
         workshop_annotations:
           type: array
           items:
@@ -31617,6 +31901,49 @@ components:
             $ref: '#/components/schemas/QuotationItem'
       required:
       - items
+    QuotePreviewRequest:
+      type: object
+      description: |-
+        Vista previa real del DOC-01: payload del formulario tal cual (aún no
+        guardado) + la operación de precios que autoriza la revisión.
+      properties:
+        pricing_operation_id:
+          type: string
+          format: uuid
+        payment_terms:
+          type: string
+          maxLength: 2000
+        quotation_valid_until:
+          type: string
+          format: date
+          nullable: true
+        doc_terms:
+          type: object
+          additionalProperties:
+            type: string
+            maxLength: 4000
+        positions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PositionDocumentaryPreviewRequest'
+      required:
+      - positions
+      - pricing_operation_id
+    QuotePreviewResponse:
+      type: object
+      properties:
+        html:
+          type: string
+        bom_hash:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+        revision_code:
+          type: string
+          pattern: ^REV-[A-Z]+$
+      required:
+      - bom_hash
+      - html
+      - revision_code
     RailTypeEnum:
       enum:
       - dual

@@ -23,6 +23,7 @@ from portal.serializers import (
     DecideRequestSerializer,
     InternalApprovalResultSerializer,
     InternalApprovalSerializer,
+    LinkExpirySerializer,
     PortalQuoteSerializer,
     ShareQuoteResponseSerializer,
 )
@@ -51,6 +52,24 @@ def public_portal_errors():
         if error.code == "approval_not_pending":
             raise contract_error(
                 409, error.code, "Este enlace ya fue respondido y no puede revocarse."
+            ) from error
+        if error.code == "approval_not_live":
+            raise contract_error(
+                409,
+                error.code,
+                "Este enlace ya no está vigente; no admite cambios.",
+            ) from error
+        if error.code == "link_expiry_invalid":
+            raise contract_error(
+                400, error.code, "El vencimiento debe ser una fecha futura."
+            ) from error
+        if error.code == "decided_rut_invalid":
+            raise contract_error(
+                400, error.code, "El RUT ingresado no es válido."
+            ) from error
+        if error.code == "changes_note_required":
+            raise contract_error(
+                400, error.code, "Describe los cambios que necesitas."
             ) from error
         if error.code in ("quote_expired", "quote_validity_expired"):
             raise contract_error(
@@ -149,6 +168,37 @@ class ProjectQuoteLinkRevokeView(APIView):
             )
 
 
+class ProjectQuoteLinkUpdateView(APIView):
+    @extend_schema(
+        operation_id="project_quote_link_update",
+        description=(
+            "Move a live link's expiry — the same token keeps resolving, "
+            "only the deadline moves."
+        ),
+        request=LinkExpirySerializer,
+        responses={200: ApprovalRecordSerializer(many=True), **ERRORS},
+    )
+    def patch(self, request, project_id: UUID, approval_id: UUID):
+        data = validate(LinkExpirySerializer, request.data)
+        with public_portal_errors(), documentary_scope(request, _WRITERS) as (
+            token,
+            _,
+            org_id,
+        ):
+            service.update_link_expiry(
+                org_id=org_id,
+                project_id=project_id,
+                approval_id=approval_id,
+                expires_at=data["expires_at"],
+            )
+            return Response(
+                ApprovalRecordSerializer(
+                    service.list_approvals(org_id=org_id, project_id=project_id),
+                    many=True,
+                ).data
+            )
+
+
 class ProjectQuoteApproveView(APIView):
     @extend_schema(
         operation_id="project_quote_approve_internal",
@@ -199,7 +249,10 @@ class PortalQuoteDecisionView(APIView):
 
     @extend_schema(
         operation_id="portal_quote_decide",
-        description="Customer approves or declines the shared quote.",
+        description=(
+            "Customer approves, declines or requests changes on the shared "
+            "quote. CHANGES_REQUESTED keeps the link live for a later decision."
+        ),
         request=DecideRequestSerializer,
         responses={200: PortalQuoteSerializer, **ERRORS},
     )

@@ -500,7 +500,9 @@ function OrgBrandingCard({ orgId }: { orgId: string }): JSX.Element {
     doc_dekopen_credit: false,
     doc_paper_size: "LETTER" as DocPaperSizeEnum,
     workshop_label_format: "GRID" as WorkshopLabelFormatEnum,
+    doc_validity_days: 15,
     doc_terms: {
+      pago: "",
       plazo_entrega: "",
       instalacion: "",
       exclusiones: "",
@@ -532,7 +534,9 @@ function OrgBrandingCard({ orgId }: { orgId: string }): JSX.Element {
         doc_paper_size: (response.data.doc_paper_size ?? "LETTER") as DocPaperSizeEnum,
         workshop_label_format: (response.data.workshop_label_format ??
           "GRID") as WorkshopLabelFormatEnum,
+        doc_validity_days: response.data.doc_validity_days ?? 15,
         doc_terms: {
+          pago: "",
           plazo_entrega: "",
           instalacion: "",
           exclusiones: "",
@@ -568,7 +572,11 @@ function OrgBrandingCard({ orgId }: { orgId: string }): JSX.Element {
     const field = (
       name: Exclude<
         keyof typeof form,
-        "doc_dekopen_credit" | "doc_paper_size" | "workshop_label_format" | "doc_terms"
+        | "doc_dekopen_credit"
+        | "doc_paper_size"
+        | "workshop_label_format"
+        | "doc_validity_days"
+        | "doc_terms"
       >,
     ) => form[name].trim() || null;
     // Vacío se sella como omisión — el documento imprime solo las
@@ -592,6 +600,7 @@ function OrgBrandingCard({ orgId }: { orgId: string }): JSX.Element {
           doc_dekopen_credit: form.doc_dekopen_credit,
           doc_paper_size: form.doc_paper_size,
           workshop_label_format: form.workshop_label_format,
+          doc_validity_days: form.doc_validity_days,
           doc_terms: docTerms,
         },
         requestOptions,
@@ -775,8 +784,30 @@ function OrgBrandingCard({ orgId }: { orgId: string }): JSX.Element {
             </select>
             <span className="settings-hint">{t("settings.labelFormatHint")}</span>
           </label>
+          <label>
+            {t("settings.docValidityDays")}
+            <input
+              type="number"
+              min={1}
+              max={365}
+              required
+              value={form.doc_validity_days}
+              onChange={(event) => {
+                const days = Number.parseInt(event.target.value, 10);
+                setForm((prev) => ({
+                  ...prev,
+                  doc_validity_days:
+                    Number.isFinite(days) && days >= 1 && days <= 365
+                      ? days
+                      : prev.doc_validity_days,
+                }));
+              }}
+            />
+          </label>
+          <p className="settings-hint">{t("settings.docValidityDaysHint")}</p>
           {(
             [
+              ["pago", "settings.docTermsPago"],
               ["plazo_entrega", "settings.docTermsPlazo"],
               ["instalacion", "settings.docTermsInstalacion"],
               ["exclusiones", "settings.docTermsExclusiones"],

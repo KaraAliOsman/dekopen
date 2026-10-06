@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from math import ceil
 from typing import Mapping, TypeVar
@@ -73,6 +73,7 @@ from engine_api.repository import SystemParamsRepository
 from pricing.repository import commercial_backend
 from production.service import process_facts_snapshot
 from projects.measurement import resolve_position_measurement
+from rut import rut_mod11_valid
 
 from documents.repository import (
     DocumentaryError,
@@ -1133,7 +1134,12 @@ def _measurement_evidence(org_id: UUID, position: dict[str, object]) -> dict[str
     return evidence
 
 
-def _position_rows(project_id: UUID, org_id: UUID) -> list[dict[str, object]]:
+def _position_rows(
+    project_id: UUID, org_id: UUID, *, require_inputs: bool = True
+) -> list[dict[str, object]]:
+    input_join = (
+        "JOIN" if require_inputs else "LEFT JOIN"
+    ) + " public.position_documentary_inputs input "
     return rows(
         "SELECT position.*,input.id AS documentary_input_id,"
         "input.manufacturing_placement_policy_id,input.handle_requirement_policy_id,"
@@ -1156,7 +1162,7 @@ def _position_rows(project_id: UUID, org_id: UUID) -> list[dict[str, object]]:
         "AND (lim.org_id IS NULL OR lim.org_id=position.org_id))::text "
         "AS system_limits "
         "FROM public.project_positions position "
-        "JOIN public.position_documentary_inputs input "
+        + input_join +
         "ON input.position_id=position.id AND input.project_id=position.project_id "
         "AND input.org_id=position.org_id "
         "JOIN public.profile_systems system ON system.id=position.system_id "
@@ -1197,6 +1203,727 @@ def _collect_purchase_authorities(
         _unique_by(prior.fitting_mappings + following.fitting_mappings, "authority_id",
                    "fitting_purchase_authority_conflict"),
     )
+
+
+# P08 — Condiciones comerciales por cotización: la cotización sella un mapa
+# efectivo = plantilla de la organización + ediciones del estimador para esta
+# cotización (un valor vacío omite la línea de la plantilla). Las claves son
+# las que el DOC-01 imprime; 'pago' vive sólo en la plantilla de Ajustes y
+# nunca entra al documento sellado.
+_QUOTE_DOC_TERM_KEYS = (
+    "plazo_entrega",
+    "instalacion",
+    "exclusiones",
+    "garantia",
+    "jurisdiccion",
+)
+_EMISSION_REQUIRED_TERMS = (
+    "plazo_entrega",
+    "instalacion",
+    "exclusiones",
+    "garantia",
+)
+
+
+def _doc_terms_map(raw: object) -> dict[str, str]:
+    """Mapa declarado→texto de las claves imprimibles (descarta vacíos)."""
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except ValueError:
+            raw = {}
+    terms = raw if isinstance(raw, dict) else {}
+    return {
+        key: str(terms[key]).strip()
+        for key in _QUOTE_DOC_TERM_KEYS
+        if isinstance(terms.get(key), str) and terms[key].strip()
+    }
+
+
+def _quote_doc_terms(raw: object) -> dict[str, str]:
+    """Las ediciones por cotización conservan los vacíos: un texto en
+    blanco es 'omitir esta línea de la plantilla', no 'usar la plantilla'."""
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except ValueError:
+            raw = {}
+    terms = raw if isinstance(raw, dict) else {}
+    return {
+        key: str(terms[key]).strip()
+        for key in _QUOTE_DOC_TERM_KEYS
+        if isinstance(terms.get(key), str)
+    }
+
+
+def _effective_doc_terms(
+    org_terms: dict[str, str], quote_terms: dict[str, str]
+) -> dict[str, str]:
+    merged = dict(org_terms)
+    for key in _QUOTE_DOC_TERM_KEYS:
+        if key not in quote_terms:
+            continue
+        value = quote_terms[key]
+        if value:
+            merged[key] = value
+        else:
+            merged.pop(key, None)
+    return merged
+
+
+def _emission_missing(
+    *,
+    project: dict[str, object],
+    project_input: dict[str, object],
+    positions: list[dict[str, object]],
+    effective_terms: dict[str, str],
+) -> list[str]:
+    """'Qué falta para emitir', en el orden exacto del checklist que el
+    constructor muestra — cliente, obra, posiciones, vigencia, pago y las
+    claves comerciales que la propuesta imprime."""
+    missing: list[str] = []
+    if not str(project.get("client_name") or "").strip() or not rut_mod11_valid(
+        project.get("client_rut")
+    ):
+        missing.append("client")
+    if not str(project.get("delivery_address") or "").strip():
+        missing.append("delivery_address")
+    if any(
+        not str(position.get("location_tag") or "").strip()
+        or not position.get("manufacturing_placement_policy_id")
+        or not position.get("handle_requirement_policy_id")
+        or not position.get("reinforcement_cut_policy_id")
+        for position in positions
+    ):
+        missing.append("positions")
+    valid_until = project_input.get("quotation_valid_until")
+    if isinstance(valid_until, str):
+        try:
+            valid_until = date.fromisoformat(valid_until[:10])
+        except ValueError:
+            valid_until = None
+    if not isinstance(valid_until, date):
+        missing.append("valid_until")
+    if not str(project_input.get("payment_terms") or "").strip():
+        missing.append("payment_terms")
+    for key in _EMISSION_REQUIRED_TERMS:
+        if not effective_terms.get(key):
+            missing.append(f"term:{key}")
+    return missing
+
+
+def _revision_snapshot(
+    *,
+    org_id: UUID,
+    project_id: UUID,
+    project: dict[str, object],
+    revision: str,
+    operation: dict[str, object],
+    request: dict[str, object],
+    pricing_snapshot: dict[str, object],
+    pricing_result: dict[str, object],
+    priced_bom: dict[str, object],
+    project_input: dict[str, object],
+    positions: list[dict[str, object]],
+    organization: dict[str, object],
+    effective_terms: dict[str, str],
+    actor_id: UUID,
+    sealed_at: datetime,
+    allow_incomplete_workshop: bool,
+    preview: bool = False,
+) -> dict[str, object]:
+    """Cadena de sellado de una revisión: recálculo por posición, inspector,
+    proyección de compra y snapshot canónico. El congelamiento la invoca y
+    persiste el resultado; la vista previa de emisión la invoca con
+    ``preview=True`` (no levanta errores de inspector ni de compra — los
+    registra en la evidencia igual que el congelamiento) para mostrar el
+    documento real antes de firmar."""
+    position_inputs: list[dict[str, object]] = []
+    bom: list[dict[str, object]] = []
+    manufacturing: list[object] = []
+    inspector_evidence: list[dict[str, object]] = []
+    purchase_positions: list[PositionPurchaseInputV1] = []
+    purchase_authorities: PurchaseAuthorities | None = None
+    documentary_complete = True
+    production_allowed = True
+    stock_repository = CuttingRepository()
+    # Process authority is frozen into the sealed position: release must
+    # route under the profile and system facts that existed at seal — a
+    # later catalog or profile edit can never re-route sealed evidence.
+    position_system_ids = [
+        str(position["system_id"]) for position in positions if position.get("system_id")
+    ]
+    system_facts_by_id = {
+        str(row["id"]): row
+        for row in rows(
+            """
+            SELECT id::text, material::text, end_milling_overlap_mm,
+                   process_profile_id::text
+            FROM public.profile_systems
+            WHERE id = ANY(%s::uuid[])
+            """,
+            [position_system_ids],
+        )
+    } if position_system_ids else {}
+    for position in positions:
+        position_id = str(position["id"])
+        tree = _json_object(position["parametric_tree"], "invalid_parametric_tree")
+        is_assembly = isinstance(tree, dict) and tree.get("version") == "product-v2"
+        color_interior = str(position["color_interior"])
+        color_exterior = str(position["color_exterior"] or color_interior)
+        system_id = UUID(str(position["system_id"]))
+        params = SystemParamsRepository().load_visible(system_id, org_id)
+        calculations, result, plan = _position_calculations(
+            tree=tree,
+            width_mm=D(str(position["width_mm"])),
+            height_mm=D(str(position["height_mm"])),
+            color=color_interior,
+            color_exterior=color_exterior,
+            params=params,
+            system_id=system_id,
+            org_id=org_id,
+        )
+        # The finish key the position's bars are stocked under — a
+        # plain code or the bicolor "EXT/INT" key; pre-D05 results
+        # fall back to the binary domain they sealed.
+        stock_color = result.finish_key or (
+            "WHITE"
+            if color_interior == "WHITE" and color_exterior == "WHITE"
+            else "FOILED"
+        )
+        current_bom = result.model_dump(mode="json")
+        stored_bom = _json_object(position["bom_snapshot"], "invalid_stored_bom")
+        stored_bom.pop("calculation_hash", None)
+        priced_ref = priced_bom.get(position_id)
+        if not _same_documentary_value(
+            _without_additive_bom_fields(current_bom, stored_bom),
+            _without_additive_bom_fields(stored_bom, stored_bom),
+        ) or not isinstance(priced_ref, dict) or not _same_documentary_value(
+            _without_additive_bom_fields(current_bom, priced_ref),
+            _without_additive_bom_fields(priced_ref, priced_ref),
+        ):
+            raise DocumentaryError("applied_pricing_technical_binding_drift")
+
+        process_facts = process_facts_snapshot(
+            org_id=org_id,
+            engine_result=current_bom,
+            system_facts=system_facts_by_id.get(str(system_id)),
+        )
+        annotations = workshop_annotations(position["workshop_annotations"])
+        structural = structural_inputs(position["structural_inputs"])
+        targets = {
+            (f"{module_id}|{opening.bay_id}" if module_id else opening.bay_id, None)
+            for module_id, computation, _ in calculations
+            for opening in computation.openings
+        } | {
+            (
+                f"{module_id}|{leaf.bay_id}" if module_id else leaf.bay_id,
+                f"{module_id}|{leaf.leaf_id}" if module_id else leaf.leaf_id,
+            )
+            for module_id, computation, _ in calculations
+            for leaf in computation.leaves
+        }
+        if any((item.bay_id, item.leaf_id) not in targets for item in annotations):
+            raise DocumentaryError("workshop_annotation_target_invalid")
+        spans = {
+            f"{module_id}|{span.target_id}" if module_id else span.target_id
+            for module_id, computation, _ in calculations
+            for span in computation.spans
+        }
+        if any(item.target_id not in spans for item in structural):
+            raise DocumentaryError("structural_input_target_invalid")
+        # Foiled positions exist now — annotations on one may carry the
+        # FOILED machining class; a WHITE design can never claim it.
+        finish_class = result.finish_class or (
+            "WHITE"
+            if color_interior == "WHITE" and color_exterior == "WHITE"
+            else "NON_WHITE"
+        )
+        if finish_class == "WHITE" and any(
+            item.finish_class not in (None, "WHITE") for item in annotations
+        ):
+            raise DocumentaryError("unsupported_documentary_color")
+
+        inspector_authorities = InspectorRepository().load(system_id, org_id)
+        cutting = stock_repository.for_result(
+            result, system_id, org_id, stock_color
+        )
+        calculation_request, legacy_request = _documentary_calculation_requests(
+            system_id=system_id, tree=tree,
+            width_mm=D(str(position["width_mm"])),
+            height_mm=D(str(position["height_mm"])),
+            color_interior=color_interior, color_exterior=color_exterior,
+        )
+        identity_hashes = _calculation_identity_hashes(
+            calculation_request, result, legacy_request=legacy_request
+        )
+        source_hash = identity_hashes[0]
+        stored_identity = position["documentary_calculation_hash"]
+        if stored_identity not in identity_hashes:
+            raise DocumentaryError("documentary_calculation_identity_stale")
+        inspections: list[tuple[str | None, InspectorResult, bool, bool]] = []
+        has_failures = False
+        position_production_allowed = True
+        position_complete = True
+        for module_id, computation, _ in calculations:
+            inertias: dict[str, Decimal | None] = {}
+            for span in computation.spans:
+                try:
+                    _, inertia = stock_repository.reinforcement_stock(
+                        system_id, org_id, span.parent_profile_sku
+                    )
+                except MissingStockAuthority:
+                    inertia = None
+                inertias[span.target_id] = inertia
+            try:
+                inspection = inspect(InspectorInput(
+                    computation=computation,
+                    chamber_clearance_mm=inspector_authorities.chamber_clearance_mm,
+                    annotations=_module_scoped(annotations, module_id, "bay_id", "leaf_id"),
+                    structural_inputs=_module_scoped(structural, module_id, "target_id"),
+                    reinforcement_ix_by_target=inertias,
+                    mode=InspectionMode.DESIGN,
+                    source_calculation_hash=str(source_hash),
+                ), inspector_authorities.config)
+            except ValueError as error:
+                # Inspector violations carry no position identity; without
+                # it the estimator must binary-search the vano list.
+                raise ValueError(
+                    f"Vano «{position.get('name') or position.get('position_index')}»: {error}"
+                ) from error
+            module_allowed = inspection.production_allowed
+            module_complete = not any(
+                evaluation.status is RuleEvaluationStatus.MISSING_INPUT
+                for evaluation in inspection.evaluations
+            )
+            inspections.append(
+                (module_id, inspection, module_complete, module_allowed)
+            )
+            # Only RED-severity failures block unconditionally — a
+            # YELLOW finding is a warning the inspector itself classifies
+            # as production-allowed, so blocking on it made a healthy
+            # freeze fail invisibly (review WB3).
+            red_rules = {
+                finding.rule_id
+                for finding in inspection.findings
+                if finding.severity is InspectorSeverity.RED
+            }
+            has_failures = has_failures or any(
+                evaluation.status is RuleEvaluationStatus.FAIL
+                and evaluation.rule_id in red_rules
+                for evaluation in inspection.evaluations
+            )
+            position_production_allowed = (
+                position_production_allowed and module_allowed
+            )
+            position_complete = position_complete and module_complete
+        is_red = not position_production_allowed or any(
+            inspection.status == "RED" for _, inspection, _, _ in inspections
+        )
+        if not preview and (
+            has_failures or (is_red and not allow_incomplete_workshop)
+        ):
+            # Serialize the blocking rules — a bare "inspector_red_blocks"
+            # left the emission form unable to say WHAT failed (review WB2).
+            failures = [
+                {
+                    "rule": str(finding.rule_id.value),
+                    "severity": str(finding.severity.value),
+                    "title": finding.title,
+                    "diagnosis": finding.diagnosis,
+                    "recommendation": finding.recommendation,
+                    "module_id": module_id,
+                    "bay_id": finding.bay_id,
+                    "leaf_id": finding.leaf_id,
+                }
+                for module_id, inspection, _, _ in inspections
+                for finding in inspection.findings
+                if finding.severity is InspectorSeverity.RED
+            ]
+            raise DocumentaryError(
+                "inspector_red_blocks_documentary_freeze",
+                detail="Una regla del inspector bloquea el congelamiento documental.",
+                extra={"inspector_failures": failures},
+            )
+        if position["measurement_state"] != "CONFIRMED" and (
+            position["rough_opening_input"] is not None
+            or position["mounting_rule_id"] is not None
+            or position["fabrication_lock"] is not None
+        ):
+            # D07: la OT no se libera con medidas sin confirmar — la
+            # revisión sella como cotización; producción exige una
+            # revisión con cada posición medida confirmada. Una
+            # posición sin registro de vano no arrastra el gate.
+            position_production_allowed = False
+        production_allowed = production_allowed and position_production_allowed
+        documentary_complete = documentary_complete and position_complete
+
+        policies = load_manufacturing_policies(
+            system_id=system_id,
+            org_id=org_id,
+            placement_id=UUID(str(position["manufacturing_placement_policy_id"])),
+            handle_id=UUID(str(position["handle_requirement_policy_id"])),
+            reinforcement_id=UUID(str(position["reinforcement_cut_policy_id"])),
+        )
+        intents = handle_intents(position["handle_intents"])
+        quantity = int(position["quantity"])
+        unit_models: list[tuple[str | None, ManufacturingFactsV1]] = []
+        for module_id, computation, module_tree in calculations:
+            scoped_intents = _synthesized_handle_intents(
+                module_tree,
+                computation.manufacturing_trace,
+                _module_scoped(intents, module_id, "bay_id", "leaf_id"),
+            )
+            if is_assembly and _missing_handle_intents(
+                computation.manufacturing_trace,
+                policies.handles,
+                scoped_intents,
+            ):
+                # Quote-only assemblies seal incomplete: a module whose
+                # handle intents were never saved is not projected rather
+                # than blocking the commercial freeze.
+                continue
+            for repetition in range(1, quantity + 1):
+                unit_models.append((
+                    module_id,
+                    project_manufacturing_facts_v1(
+                        trace=computation.manufacturing_trace,
+                        position_id=position_id,
+                        position_index=int(position["position_index"]),
+                        repetition_index=repetition,
+                        placement_policy=policies.placement,
+                        handle_policy=policies.handles,
+                        reinforcement_policy=policies.reinforcement,
+                        handle_intents=scoped_intents,
+                        resolved_reinforcement_skus=cutting.reinforcement_skus,
+
+                        module_id=module_id,
+                    ),
+                ))
+        units = [unit for _, unit in unit_models]
+        hardware = [HardwareSelectionV1(
+            repetition_index=repetition,
+            bay_id=item.bay_id,
+            leaf_id=item.leaf_id,
+            technical_kit_sku=item.kit_sku,
+            name=item.name,
+            quantity=item.qty,
+            contents=item.contents,
+        ) for repetition in range(1, quantity + 1) for item in result.hardware_items]
+        fittings = [FittingSelectionV1(
+            repetition_index=repetition,
+            bay_id=item.bay_id,
+            leaf_id=item.leaf_id,
+            technical_sku=item.sku,
+            kind=item.kind,
+            quantity=item.qty,
+        ) for repetition in range(1, quantity + 1) for item in result.fittings]
+        polishing = glass_polishing(position["glass_polishing"])
+        glass_targets = {
+            (
+                f"{module_id}|{infill.bay_id}" if module_id else infill.bay_id,
+                f"{module_id}|{infill.leaf_id}"
+                if module_id and infill.leaf_id is not None
+                else infill.leaf_id,
+            )
+            for module_id, unit in unit_models
+            for infill in unit.infills
+            if infill.kind == "GLASS"
+        }
+        accessories = (
+            accessory_schedule(position["accessory_schedule"], str(position["documentary_input_id"]))
+            if position["accessory_schedule"] is not None else None
+        )
+        purchase_complete = (
+            {(item.bay_id, item.leaf_id) for item in polishing} == glass_targets
+            and accessories is not None
+        )
+        if is_assembly:
+            # Per-module purchase projection is not yet defined for
+            # assemblies: they freeze honestly as quote-only, never
+            # faking production completeness.
+            purchase_complete = False
+        if not purchase_complete:
+            if not allow_incomplete_workshop and not preview:
+                raise DocumentaryError("purchase_authority_incomplete")
+            position_production_allowed = False
+            position_complete = False
+            production_allowed = False
+            documentary_complete = False
+        location_tag = str(position["location_tag"] or "")
+        if purchase_complete:
+            purchase_positions.append(PositionPurchaseInputV1(
+                position_id=position_id,
+                position_index=int(position["position_index"]),
+                system_id=str(system_id),
+                quantity=quantity,
+                color=stock_color,
+                steel_colors=steel_color_map(cutting.stocks),
+                location_tag=location_tag,
+                manufacturing_units=units,
+                hardware=hardware,
+                fittings=fittings,
+                glass_polishing=polishing,
+                accessory_schedule=accessories,
+            ))
+        # Module units cover every profile SKU the freeze needs: assembly
+        # coupler cuts are quote-level BOM evidence, not purchase evidence.
+        profile_skus = {member.workshop_sku for unit in units for member in unit.members}
+        reinforcement_skus = {
+            item.workshop_sku for unit in units for item in unit.reinforcements
+        }
+        glass_skus = {
+            infill.technical_sku for unit in units for infill in unit.infills
+            if infill.kind == "GLASS"
+        }
+        panel_skus = {
+            infill.technical_sku for unit in units for infill in unit.infills
+            if infill.kind == "PANEL"
+        }
+        following = load_purchase_authorities(
+            system_id=system_id,
+            org_id=org_id,
+            color=stock_color,
+            reinforcement_colors=steel_color_map(cutting.stocks),
+            profile_skus=profile_skus,
+            reinforcement_skus=reinforcement_skus,
+            glass_skus=glass_skus,
+            hardware_skus={item.technical_kit_sku for item in hardware},
+            panel_skus=panel_skus,
+            fitting_skus={item.technical_sku for item in fittings},
+        )
+        purchase_authorities = _collect_purchase_authorities(
+            purchase_authorities, following
+        )
+        position_inputs.append({
+            "id": position_id,
+            "position_index": int(position["position_index"]),
+            "quantity": quantity,
+            "typology": str(position["typology"]),
+            "system_id": system_id,
+            "width_mm": D(str(position["width_mm"])),
+            "height_mm": D(str(position["height_mm"])),
+            "color_interior": color_interior,
+            "color_exterior": color_exterior,
+            "finish_key": stock_color,
+            "finish": result.finish_label,
+            "color_interior_detail": _color_option_detail(
+                resolve_color(params, color_interior)
+            ),
+            "color_exterior_detail": _color_option_detail(
+                resolve_color(params, color_exterior)
+            ),
+            "location_tag": location_tag,
+            "system_name": str(position["system_name"]),
+            "system_is_demo": bool(position.get("system_is_demo")),
+            "system_limits": json.loads(
+                position["system_limits"], parse_float=Decimal
+            )
+            if position.get("system_limits") else [],
+            "price_net": D(str(position["price_net"])),
+            "discount_pct": str(position["discount_pct"]),
+            "rough_opening_input": position["rough_opening_input"],
+            "mounting_rule_id": (
+                None if position["mounting_rule_id"] is None
+                else str(position["mounting_rule_id"])
+            ),
+            "fabrication_lock": position["fabrication_lock"],
+            "measurement_state": str(position["measurement_state"]),
+            "measurement_confirmed_at": (
+                None if position["measurement_confirmed_at"] is None
+                else position["measurement_confirmed_at"].isoformat()
+            ),
+            "measurement_confirmed_by": (
+                None if position["measurement_confirmed_by"] is None
+                else str(position["measurement_confirmed_by"])
+            ),
+            # D07 sealed measurement evidence: the vano record, the rule
+            # applied and the engine resolution — the exact desglose the
+            # estimator saw at seal time.
+            "measurement": _measurement_evidence(org_id, position),
+            "parametric_tree": tree,
+            # P09 — la geometría de planta del conjunto (cortesía del
+            # motor) se sella aditiva: la propuesta comercial dibuja el
+            # corte de planta bajo el alzado de un conjunto/bow. Los
+            # snapshots anteriores simplemente no la traen.
+            "plan": plan.model_dump(mode="json") if plan is not None else None,
+            # P09 — los datos comerciales del vidrio (Ug, g, TL, clase)
+            # son dato declarado del catálogo, no número calculado:
+            # se sella solo la ficha de los sku que la posición usa.
+            "glass_products": {
+                sku: {
+                    "name": params.glass_products[sku].name,
+                    "ug_w_m2k": str(params.glass_products[sku].ug_w_m2k)
+                    if params.glass_products[sku].ug_w_m2k is not None else None,
+                    "g_value": str(params.glass_products[sku].g_value)
+                    if params.glass_products[sku].g_value is not None else None,
+                    "light_transmission_pct": str(
+                        params.glass_products[sku].light_transmission_pct
+                    )
+                    if params.glass_products[sku].light_transmission_pct
+                    is not None else None,
+                    "safety_class": params.glass_products[sku].safety_class,
+                }
+                for sku in {
+                    piece.article_sku
+                    for piece in result.glasses
+                    if piece.article_sku is not None
+                }
+                if sku in params.glass_products
+            },
+            "workshop_annotations": [item.model_dump(mode="python") for item in annotations],
+            "structural_inputs": [item.model_dump(mode="python") for item in structural],
+            "glass_polishing": [item.model_dump(mode="python") for item in polishing],
+            "handle_intents": [item.model_dump(mode="python") for item in intents],
+            "accessory_schedule": accessories.model_dump(mode="python") if accessories else None,
+            "calculation_hash": source_hash,
+            "manufacturing_policies": {
+                "placement": policies.placement.model_dump(mode="python"),
+                "handles": policies.handles.model_dump(mode="python"),
+                "reinforcement": policies.reinforcement.model_dump(mode="python"),
+            },
+            "legacy_handle_migration_confirmed": bool(
+                position["legacy_handle_migration_confirmed"]
+            ),
+            "process_facts": process_facts,
+        })
+        bom.append({
+            "position_id": position_id,
+            "quantity": quantity,
+            "engine_result": current_bom,
+            "calculation_hash": source_hash,
+        })
+        manufacturing.extend(
+            {
+                **unit.model_dump(mode="python"),
+                **({"module_id": module_id} if module_id else {}),
+            }
+            for module_id, unit in unit_models
+        )
+        for module_id, inspection, module_complete, module_allowed in inspections:
+            inspector_evidence.append({
+                "position_id": position_id,
+                **({"module_id": module_id} if module_id else {}),
+                "mode": "DESIGN",
+                "result": inspection.model_dump(mode="python"),
+                "config": inspector_authorities.config.model_dump(mode="python"),
+                "chamber_clearance_mm": inspector_authorities.chamber_clearance_mm,
+                "documentary_complete": module_complete,
+                "production_allowed": module_allowed,
+            })
+
+    if purchase_authorities is None:
+        raise DocumentaryError("purchase_authorities_required")
+    purchase = project_purchase_requirements_v1(
+        positions=purchase_positions,
+        stock_bindings=purchase_authorities.stock_bindings,
+        glass_mappings=purchase_authorities.glass_mappings,
+        hardware_mappings=purchase_authorities.hardware_mappings,
+        panel_authorities=purchase_authorities.panel_authorities,
+        fitting_mappings=purchase_authorities.fitting_mappings,
+    ) if len(purchase_positions) == len(positions) else None
+    bom_hash = bom_hash_v1(
+        project_id=project_id, revision=revision, positions=position_inputs, bom=bom
+    )
+    snapshot = {
+        "schema_version": 1,
+        "canonical_version": DOCUMENTARY_CANONICAL_VERSION,
+        "project_id": project_id,
+        "org_id": org_id,
+        # Issuer identity for the letterhead — rendered only on revisions
+        # frozen after this field existed; older snapshots simply omit it.
+        # The logo key is content-addressed, so the frozen sha pins the
+        # exact bytes a re-rendered document may show.
+        "organization": {
+            "name": str(organization["name"]),
+            "tax_id": str(organization["tax_id"]),
+            "commercial_name": organization["commercial_name"],
+            "giro": organization["giro"],
+            "brand_address": organization["brand_address"],
+            "brand_phone": organization["brand_phone"],
+            "brand_email": organization["brand_email"],
+            "brand_logo_key": organization["brand_logo_key"],
+            "brand_logo_sha256": organization["brand_logo_sha256"],
+            # P25: color de marca white-label y atribución DEKOPEN
+            # opt-in — sellados con la revisión como el resto de la
+            # identidad del emisor.
+            "brand_color": organization["brand_color"],
+            "doc_dekopen_credit": bool(organization["doc_dekopen_credit"]),
+            # D06: sealed policy for how extras/services print —
+            # DETAILED prints every sublínea, GROUPED folds them into
+            # the position sum. Older snapshots omit it and render
+            # detailed (the only behavior that ever existed).
+            "extras_display": organization["extras_display"],
+            # P09: papel y textos legales declarados en Ajustes —
+            # sellados para que la revisión re-impresa salga idéntica
+            # aunque la organización cambie sus ajustes después.
+            "doc_paper_size": str(organization["doc_paper_size"]),
+            "doc_terms": dict(effective_terms),
+        },
+        "revision": revision,
+        "sealed_by": actor_id,
+        "sealed_at": sealed_at,
+        "project": {
+            "code": str(project["code"]),
+            "name": str(project["name"]),
+            "client_name": str(project["client_name"]),
+            "client_rut": project["client_rut"],
+            "client_email": project["client_email"],
+            "client_phone": project["client_phone"],
+            "client_giro": project["client_giro"],
+            "client_comuna": project["client_comuna"],
+            "client_address": project["client_address"],
+            "delivery_address": project["delivery_address"],
+            "payment_terms": str(project_input["payment_terms"]),
+            "quotation_valid_until": project_input["quotation_valid_until"],
+            "notes_commercial": project["notes_commercial"],
+            "currency": request.get("currency"),
+            "total_price_net": D(str(project["total_price_net"])),
+            "total_price_tax": D(str(project["total_price_tax"])),
+            "total_price_gross": D(str(project["total_price_gross"])),
+        },
+        "positions": position_inputs,
+        "bom": bom,
+        "pricing": {
+            "operation_id": operation["id"],
+            "state": "APPLIED",
+            "requested_by": operation["requested_by"],
+            "approved_by": operation["approved_by"],
+            "approved_at": operation["approved_at"],
+            "request": request,
+            "input_snapshot": pricing_snapshot,
+            "result": pricing_result,
+            "applied_total_cost_net": D(str(project["total_cost_net"])),
+            "source_revision": operation["source_revision"],
+        },
+        "inspector": inspector_evidence,
+        "manufacturing": manufacturing,
+        "purchase_requirements": purchase.model_dump(mode="python") if purchase else None,
+        "purchase_authorities": {
+            "physical_stock_bindings": [
+                item.model_dump(mode="python")
+                for item in purchase_authorities.stock_bindings
+            ],
+            "glass": [item.model_dump(mode="python")
+                      for item in purchase_authorities.glass_mappings],
+            "hardware": [item.model_dump(mode="python")
+                         for item in purchase_authorities.hardware_mappings],
+            "panel": [item.model_dump(mode="python")
+                      for item in purchase_authorities.panel_authorities],
+        },
+        "production_allowed": production_allowed,
+        "documentary_complete": documentary_complete,
+        "realized_waste": {"status": "NOT_RECORDED", "value": None},
+        "bom_hash": bom_hash,
+    }
+    return {
+        "snapshot": snapshot,
+        "bom_hash": bom_hash,
+        "purchase": purchase,
+        "production_allowed": production_allowed,
+        "documentary_complete": documentary_complete,
+        "position_system_ids": position_system_ids,
+    }
 
 
 def freeze_revision_a(
@@ -1281,491 +2008,6 @@ def freeze_revision_a(
         _pricing_state_matches(project, positions, request, pricing_snapshot, pricing_result)
         priced_bom = _technical_bom(pricing_snapshot)
 
-        position_inputs: list[dict[str, object]] = []
-        bom: list[dict[str, object]] = []
-        manufacturing: list[object] = []
-        inspector_evidence: list[dict[str, object]] = []
-        purchase_positions: list[PositionPurchaseInputV1] = []
-        purchase_authorities: PurchaseAuthorities | None = None
-        documentary_complete = True
-        production_allowed = True
-        stock_repository = CuttingRepository()
-        # Process authority is frozen into the sealed position: release must
-        # route under the profile and system facts that existed at seal — a
-        # later catalog or profile edit can never re-route sealed evidence.
-        position_system_ids = [
-            str(position["system_id"]) for position in positions if position.get("system_id")
-        ]
-        system_facts_by_id = {
-            str(row["id"]): row
-            for row in rows(
-                """
-                SELECT id::text, material::text, end_milling_overlap_mm,
-                       process_profile_id::text
-                FROM public.profile_systems
-                WHERE id = ANY(%s::uuid[])
-                """,
-                [position_system_ids],
-            )
-        } if position_system_ids else {}
-        for position in positions:
-            position_id = str(position["id"])
-            tree = _json_object(position["parametric_tree"], "invalid_parametric_tree")
-            is_assembly = isinstance(tree, dict) and tree.get("version") == "product-v2"
-            color_interior = str(position["color_interior"])
-            color_exterior = str(position["color_exterior"] or color_interior)
-            system_id = UUID(str(position["system_id"]))
-            params = SystemParamsRepository().load_visible(system_id, org_id)
-            calculations, result, plan = _position_calculations(
-                tree=tree,
-                width_mm=D(str(position["width_mm"])),
-                height_mm=D(str(position["height_mm"])),
-                color=color_interior,
-                color_exterior=color_exterior,
-                params=params,
-                system_id=system_id,
-                org_id=org_id,
-            )
-            # The finish key the position's bars are stocked under — a
-            # plain code or the bicolor "EXT/INT" key; pre-D05 results
-            # fall back to the binary domain they sealed.
-            stock_color = result.finish_key or (
-                "WHITE"
-                if color_interior == "WHITE" and color_exterior == "WHITE"
-                else "FOILED"
-            )
-            current_bom = result.model_dump(mode="json")
-            stored_bom = _json_object(position["bom_snapshot"], "invalid_stored_bom")
-            stored_bom.pop("calculation_hash", None)
-            priced_ref = priced_bom.get(position_id)
-            if not _same_documentary_value(
-                _without_additive_bom_fields(current_bom, stored_bom),
-                _without_additive_bom_fields(stored_bom, stored_bom),
-            ) or not isinstance(priced_ref, dict) or not _same_documentary_value(
-                _without_additive_bom_fields(current_bom, priced_ref),
-                _without_additive_bom_fields(priced_ref, priced_ref),
-            ):
-                raise DocumentaryError("applied_pricing_technical_binding_drift")
-
-            process_facts = process_facts_snapshot(
-                org_id=org_id,
-                engine_result=current_bom,
-                system_facts=system_facts_by_id.get(str(system_id)),
-            )
-            annotations = workshop_annotations(position["workshop_annotations"])
-            structural = structural_inputs(position["structural_inputs"])
-            targets = {
-                (f"{module_id}|{opening.bay_id}" if module_id else opening.bay_id, None)
-                for module_id, computation, _ in calculations
-                for opening in computation.openings
-            } | {
-                (
-                    f"{module_id}|{leaf.bay_id}" if module_id else leaf.bay_id,
-                    f"{module_id}|{leaf.leaf_id}" if module_id else leaf.leaf_id,
-                )
-                for module_id, computation, _ in calculations
-                for leaf in computation.leaves
-            }
-            if any((item.bay_id, item.leaf_id) not in targets for item in annotations):
-                raise DocumentaryError("workshop_annotation_target_invalid")
-            spans = {
-                f"{module_id}|{span.target_id}" if module_id else span.target_id
-                for module_id, computation, _ in calculations
-                for span in computation.spans
-            }
-            if any(item.target_id not in spans for item in structural):
-                raise DocumentaryError("structural_input_target_invalid")
-            # Foiled positions exist now — annotations on one may carry the
-            # FOILED machining class; a WHITE design can never claim it.
-            finish_class = result.finish_class or (
-                "WHITE"
-                if color_interior == "WHITE" and color_exterior == "WHITE"
-                else "NON_WHITE"
-            )
-            if finish_class == "WHITE" and any(
-                item.finish_class not in (None, "WHITE") for item in annotations
-            ):
-                raise DocumentaryError("unsupported_documentary_color")
-
-            inspector_authorities = InspectorRepository().load(system_id, org_id)
-            cutting = stock_repository.for_result(
-                result, system_id, org_id, stock_color
-            )
-            calculation_request, legacy_request = _documentary_calculation_requests(
-                system_id=system_id, tree=tree,
-                width_mm=D(str(position["width_mm"])),
-                height_mm=D(str(position["height_mm"])),
-                color_interior=color_interior, color_exterior=color_exterior,
-            )
-            identity_hashes = _calculation_identity_hashes(
-                calculation_request, result, legacy_request=legacy_request
-            )
-            source_hash = identity_hashes[0]
-            stored_identity = position["documentary_calculation_hash"]
-            if stored_identity not in identity_hashes:
-                raise DocumentaryError("documentary_calculation_identity_stale")
-            inspections: list[tuple[str | None, InspectorResult, bool, bool]] = []
-            has_failures = False
-            position_production_allowed = True
-            position_complete = True
-            for module_id, computation, _ in calculations:
-                inertias: dict[str, Decimal | None] = {}
-                for span in computation.spans:
-                    try:
-                        _, inertia = stock_repository.reinforcement_stock(
-                            system_id, org_id, span.parent_profile_sku
-                        )
-                    except MissingStockAuthority:
-                        inertia = None
-                    inertias[span.target_id] = inertia
-                try:
-                    inspection = inspect(InspectorInput(
-                        computation=computation,
-                        chamber_clearance_mm=inspector_authorities.chamber_clearance_mm,
-                        annotations=_module_scoped(annotations, module_id, "bay_id", "leaf_id"),
-                        structural_inputs=_module_scoped(structural, module_id, "target_id"),
-                        reinforcement_ix_by_target=inertias,
-                        mode=InspectionMode.DESIGN,
-                        source_calculation_hash=str(source_hash),
-                    ), inspector_authorities.config)
-                except ValueError as error:
-                    # Inspector violations carry no position identity; without
-                    # it the estimator must binary-search the vano list.
-                    raise ValueError(
-                        f"Vano «{position.get('name') or position.get('position_index')}»: {error}"
-                    ) from error
-                module_allowed = inspection.production_allowed
-                module_complete = not any(
-                    evaluation.status is RuleEvaluationStatus.MISSING_INPUT
-                    for evaluation in inspection.evaluations
-                )
-                inspections.append(
-                    (module_id, inspection, module_complete, module_allowed)
-                )
-                # Only RED-severity failures block unconditionally — a
-                # YELLOW finding is a warning the inspector itself classifies
-                # as production-allowed, so blocking on it made a healthy
-                # freeze fail invisibly (review WB3).
-                red_rules = {
-                    finding.rule_id
-                    for finding in inspection.findings
-                    if finding.severity is InspectorSeverity.RED
-                }
-                has_failures = has_failures or any(
-                    evaluation.status is RuleEvaluationStatus.FAIL
-                    and evaluation.rule_id in red_rules
-                    for evaluation in inspection.evaluations
-                )
-                position_production_allowed = (
-                    position_production_allowed and module_allowed
-                )
-                position_complete = position_complete and module_complete
-            is_red = not position_production_allowed or any(
-                inspection.status == "RED" for _, inspection, _, _ in inspections
-            )
-            if has_failures or (is_red and not allow_incomplete_workshop):
-                # Serialize the blocking rules — a bare "inspector_red_blocks"
-                # left the emission form unable to say WHAT failed (review WB2).
-                failures = [
-                    {
-                        "rule": str(finding.rule_id.value),
-                        "severity": str(finding.severity.value),
-                        "title": finding.title,
-                        "diagnosis": finding.diagnosis,
-                        "recommendation": finding.recommendation,
-                        "module_id": module_id,
-                        "bay_id": finding.bay_id,
-                        "leaf_id": finding.leaf_id,
-                    }
-                    for module_id, inspection, _, _ in inspections
-                    for finding in inspection.findings
-                    if finding.severity is InspectorSeverity.RED
-                ]
-                raise DocumentaryError(
-                    "inspector_red_blocks_documentary_freeze",
-                    detail="Una regla del inspector bloquea el congelamiento documental.",
-                    extra={"inspector_failures": failures},
-                )
-            if position["measurement_state"] != "CONFIRMED" and (
-                position["rough_opening_input"] is not None
-                or position["mounting_rule_id"] is not None
-                or position["fabrication_lock"] is not None
-            ):
-                # D07: la OT no se libera con medidas sin confirmar — la
-                # revisión sella como cotización; producción exige una
-                # revisión con cada posición medida confirmada. Una
-                # posición sin registro de vano no arrastra el gate.
-                position_production_allowed = False
-            production_allowed = production_allowed and position_production_allowed
-            documentary_complete = documentary_complete and position_complete
-
-            policies = load_manufacturing_policies(
-                system_id=system_id,
-                org_id=org_id,
-                placement_id=UUID(str(position["manufacturing_placement_policy_id"])),
-                handle_id=UUID(str(position["handle_requirement_policy_id"])),
-                reinforcement_id=UUID(str(position["reinforcement_cut_policy_id"])),
-            )
-            intents = handle_intents(position["handle_intents"])
-            quantity = int(position["quantity"])
-            unit_models: list[tuple[str | None, ManufacturingFactsV1]] = []
-            for module_id, computation, module_tree in calculations:
-                scoped_intents = _synthesized_handle_intents(
-                    module_tree,
-                    computation.manufacturing_trace,
-                    _module_scoped(intents, module_id, "bay_id", "leaf_id"),
-                )
-                if is_assembly and _missing_handle_intents(
-                    computation.manufacturing_trace,
-                    policies.handles,
-                    scoped_intents,
-                ):
-                    # Quote-only assemblies seal incomplete: a module whose
-                    # handle intents were never saved is not projected rather
-                    # than blocking the commercial freeze.
-                    continue
-                for repetition in range(1, quantity + 1):
-                    unit_models.append((
-                        module_id,
-                        project_manufacturing_facts_v1(
-                            trace=computation.manufacturing_trace,
-                            position_id=position_id,
-                            position_index=int(position["position_index"]),
-                            repetition_index=repetition,
-                            placement_policy=policies.placement,
-                            handle_policy=policies.handles,
-                            reinforcement_policy=policies.reinforcement,
-                            handle_intents=scoped_intents,
-                            resolved_reinforcement_skus=cutting.reinforcement_skus,
-
-                            module_id=module_id,
-                        ),
-                    ))
-            units = [unit for _, unit in unit_models]
-            hardware = [HardwareSelectionV1(
-                repetition_index=repetition,
-                bay_id=item.bay_id,
-                leaf_id=item.leaf_id,
-                technical_kit_sku=item.kit_sku,
-                name=item.name,
-                quantity=item.qty,
-                contents=item.contents,
-            ) for repetition in range(1, quantity + 1) for item in result.hardware_items]
-            fittings = [FittingSelectionV1(
-                repetition_index=repetition,
-                bay_id=item.bay_id,
-                leaf_id=item.leaf_id,
-                technical_sku=item.sku,
-                kind=item.kind,
-                quantity=item.qty,
-            ) for repetition in range(1, quantity + 1) for item in result.fittings]
-            polishing = glass_polishing(position["glass_polishing"])
-            glass_targets = {
-                (
-                    f"{module_id}|{infill.bay_id}" if module_id else infill.bay_id,
-                    f"{module_id}|{infill.leaf_id}"
-                    if module_id and infill.leaf_id is not None
-                    else infill.leaf_id,
-                )
-                for module_id, unit in unit_models
-                for infill in unit.infills
-                if infill.kind == "GLASS"
-            }
-            accessories = (
-                accessory_schedule(position["accessory_schedule"], str(position["documentary_input_id"]))
-                if position["accessory_schedule"] is not None else None
-            )
-            purchase_complete = (
-                {(item.bay_id, item.leaf_id) for item in polishing} == glass_targets
-                and accessories is not None
-            )
-            if is_assembly:
-                # Per-module purchase projection is not yet defined for
-                # assemblies: they freeze honestly as quote-only, never
-                # faking production completeness.
-                purchase_complete = False
-            if not purchase_complete:
-                if not allow_incomplete_workshop:
-                    raise DocumentaryError("purchase_authority_incomplete")
-                position_production_allowed = False
-                position_complete = False
-                production_allowed = False
-                documentary_complete = False
-            location_tag = str(position["location_tag"] or "")
-            if purchase_complete:
-                purchase_positions.append(PositionPurchaseInputV1(
-                    position_id=position_id,
-                    position_index=int(position["position_index"]),
-                    system_id=str(system_id),
-                    quantity=quantity,
-                    color=stock_color,
-                    steel_colors=steel_color_map(cutting.stocks),
-                    location_tag=location_tag,
-                    manufacturing_units=units,
-                    hardware=hardware,
-                    fittings=fittings,
-                    glass_polishing=polishing,
-                    accessory_schedule=accessories,
-                ))
-            # Module units cover every profile SKU the freeze needs: assembly
-            # coupler cuts are quote-level BOM evidence, not purchase evidence.
-            profile_skus = {member.workshop_sku for unit in units for member in unit.members}
-            reinforcement_skus = {
-                item.workshop_sku for unit in units for item in unit.reinforcements
-            }
-            glass_skus = {
-                infill.technical_sku for unit in units for infill in unit.infills
-                if infill.kind == "GLASS"
-            }
-            panel_skus = {
-                infill.technical_sku for unit in units for infill in unit.infills
-                if infill.kind == "PANEL"
-            }
-            following = load_purchase_authorities(
-                system_id=system_id,
-                org_id=org_id,
-                color=stock_color,
-                reinforcement_colors=steel_color_map(cutting.stocks),
-                profile_skus=profile_skus,
-                reinforcement_skus=reinforcement_skus,
-                glass_skus=glass_skus,
-                hardware_skus={item.technical_kit_sku for item in hardware},
-                panel_skus=panel_skus,
-                fitting_skus={item.technical_sku for item in fittings},
-            )
-            purchase_authorities = _collect_purchase_authorities(
-                purchase_authorities, following
-            )
-            position_inputs.append({
-                "id": position_id,
-                "position_index": int(position["position_index"]),
-                "quantity": quantity,
-                "typology": str(position["typology"]),
-                "system_id": system_id,
-                "width_mm": D(str(position["width_mm"])),
-                "height_mm": D(str(position["height_mm"])),
-                "color_interior": color_interior,
-                "color_exterior": color_exterior,
-                "finish_key": stock_color,
-                "finish": result.finish_label,
-                "color_interior_detail": _color_option_detail(
-                    resolve_color(params, color_interior)
-                ),
-                "color_exterior_detail": _color_option_detail(
-                    resolve_color(params, color_exterior)
-                ),
-                "location_tag": location_tag,
-                "system_name": str(position["system_name"]),
-                "system_is_demo": bool(position.get("system_is_demo")),
-                "system_limits": json.loads(
-                    position["system_limits"], parse_float=Decimal
-                )
-                if position.get("system_limits") else [],
-                "price_net": D(str(position["price_net"])),
-                "discount_pct": str(position["discount_pct"]),
-                "rough_opening_input": position["rough_opening_input"],
-                "mounting_rule_id": (
-                    None if position["mounting_rule_id"] is None
-                    else str(position["mounting_rule_id"])
-                ),
-                "fabrication_lock": position["fabrication_lock"],
-                "measurement_state": str(position["measurement_state"]),
-                "measurement_confirmed_at": (
-                    None if position["measurement_confirmed_at"] is None
-                    else position["measurement_confirmed_at"].isoformat()
-                ),
-                "measurement_confirmed_by": (
-                    None if position["measurement_confirmed_by"] is None
-                    else str(position["measurement_confirmed_by"])
-                ),
-                # D07 sealed measurement evidence: the vano record, the rule
-                # applied and the engine resolution — the exact desglose the
-                # estimator saw at seal time.
-                "measurement": _measurement_evidence(org_id, position),
-                "parametric_tree": tree,
-                # P09 — la geometría de planta del conjunto (cortesía del
-                # motor) se sella aditiva: la propuesta comercial dibuja el
-                # corte de planta bajo el alzado de un conjunto/bow. Los
-                # snapshots anteriores simplemente no la traen.
-                "plan": plan.model_dump(mode="json") if plan is not None else None,
-                # P09 — los datos comerciales del vidrio (Ug, g, TL, clase)
-                # son dato declarado del catálogo, no número calculado:
-                # se sella solo la ficha de los sku que la posición usa.
-                "glass_products": {
-                    sku: {
-                        "name": params.glass_products[sku].name,
-                        "ug_w_m2k": str(params.glass_products[sku].ug_w_m2k)
-                        if params.glass_products[sku].ug_w_m2k is not None else None,
-                        "g_value": str(params.glass_products[sku].g_value)
-                        if params.glass_products[sku].g_value is not None else None,
-                        "light_transmission_pct": str(
-                            params.glass_products[sku].light_transmission_pct
-                        )
-                        if params.glass_products[sku].light_transmission_pct
-                        is not None else None,
-                        "safety_class": params.glass_products[sku].safety_class,
-                    }
-                    for sku in {
-                        piece.article_sku
-                        for piece in result.glasses
-                        if piece.article_sku is not None
-                    }
-                    if sku in params.glass_products
-                },
-                "workshop_annotations": [item.model_dump(mode="python") for item in annotations],
-                "structural_inputs": [item.model_dump(mode="python") for item in structural],
-                "glass_polishing": [item.model_dump(mode="python") for item in polishing],
-                "handle_intents": [item.model_dump(mode="python") for item in intents],
-                "accessory_schedule": accessories.model_dump(mode="python") if accessories else None,
-                "calculation_hash": source_hash,
-                "manufacturing_policies": {
-                    "placement": policies.placement.model_dump(mode="python"),
-                    "handles": policies.handles.model_dump(mode="python"),
-                    "reinforcement": policies.reinforcement.model_dump(mode="python"),
-                },
-                "legacy_handle_migration_confirmed": bool(
-                    position["legacy_handle_migration_confirmed"]
-                ),
-                "process_facts": process_facts,
-            })
-            bom.append({
-                "position_id": position_id,
-                "quantity": quantity,
-                "engine_result": current_bom,
-                "calculation_hash": source_hash,
-            })
-            manufacturing.extend(
-                {
-                    **unit.model_dump(mode="python"),
-                    **({"module_id": module_id} if module_id else {}),
-                }
-                for module_id, unit in unit_models
-            )
-            for module_id, inspection, module_complete, module_allowed in inspections:
-                inspector_evidence.append({
-                    "position_id": position_id,
-                    **({"module_id": module_id} if module_id else {}),
-                    "mode": "DESIGN",
-                    "result": inspection.model_dump(mode="python"),
-                    "config": inspector_authorities.config.model_dump(mode="python"),
-                    "chamber_clearance_mm": inspector_authorities.chamber_clearance_mm,
-                    "documentary_complete": module_complete,
-                    "production_allowed": module_allowed,
-                })
-
-        if purchase_authorities is None:
-            raise DocumentaryError("purchase_authorities_required")
-        purchase = project_purchase_requirements_v1(
-            positions=purchase_positions,
-            stock_bindings=purchase_authorities.stock_bindings,
-            glass_mappings=purchase_authorities.glass_mappings,
-            hardware_mappings=purchase_authorities.hardware_mappings,
-            panel_authorities=purchase_authorities.panel_authorities,
-            fitting_mappings=purchase_authorities.fitting_mappings,
-        ) if len(purchase_positions) == len(positions) else None
-        bom_hash = bom_hash_v1(
-            project_id=project_id, revision=revision, positions=position_inputs, bom=bom
-        )
         organization = one(
             "SELECT name, tax_id, commercial_name, giro, brand_address,"
             " brand_phone, brand_email, brand_logo_key, brand_logo_sha256,"
@@ -1775,102 +2017,53 @@ def freeze_revision_a(
             [str(org_id)],
             "organization_not_found",
         )
+        # P08 — compuerta de emisión: nada se sella incompleto. Las claves
+        # comerciales efectivas combinan la plantilla de la organización con
+        # lo que el estimador editó para esta cotización (guardado en
+        # project_documentary_inputs.doc_terms; un texto vacío omite la
+        # línea de la plantilla).
+        effective_terms = _effective_doc_terms(
+            _doc_terms_map(organization["doc_terms"]),
+            _quote_doc_terms(project_input.get("doc_terms")),
+        )
+        missing = _emission_missing(
+            project=project,
+            project_input=project_input,
+            positions=positions,
+            effective_terms=effective_terms,
+        )
+        if missing:
+            raise DocumentaryError(
+                "emission_checklist_incomplete",
+                detail="La cotización aún no está lista para emitir.",
+                extra={"missing": missing},
+            )
         sealed_at = datetime.now(timezone.utc)
-        snapshot = {
-            "schema_version": 1,
-            "canonical_version": DOCUMENTARY_CANONICAL_VERSION,
-            "project_id": project_id,
-            "org_id": org_id,
-            # Issuer identity for the letterhead — rendered only on revisions
-            # frozen after this field existed; older snapshots simply omit it.
-            # The logo key is content-addressed, so the frozen sha pins the
-            # exact bytes a re-rendered document may show.
-            "organization": {
-                "name": str(organization["name"]),
-                "tax_id": str(organization["tax_id"]),
-                "commercial_name": organization["commercial_name"],
-                "giro": organization["giro"],
-                "brand_address": organization["brand_address"],
-                "brand_phone": organization["brand_phone"],
-                "brand_email": organization["brand_email"],
-                "brand_logo_key": organization["brand_logo_key"],
-                "brand_logo_sha256": organization["brand_logo_sha256"],
-                # P25: color de marca white-label y atribución DEKOPEN
-                # opt-in — sellados con la revisión como el resto de la
-                # identidad del emisor.
-                "brand_color": organization["brand_color"],
-                "doc_dekopen_credit": bool(organization["doc_dekopen_credit"]),
-                # D06: sealed policy for how extras/services print —
-                # DETAILED prints every sublínea, GROUPED folds them into
-                # the position sum. Older snapshots omit it and render
-                # detailed (the only behavior that ever existed).
-                "extras_display": organization["extras_display"],
-                # P09: papel y textos legales declarados en Ajustes —
-                # sellados para que la revisión re-impresa salga idéntica
-                # aunque la organización cambie sus ajustes después.
-                "doc_paper_size": str(organization["doc_paper_size"]),
-                "doc_terms": (
-                    organization["doc_terms"]
-                    if isinstance(organization["doc_terms"], dict)
-                    else json.loads(organization["doc_terms"] or "{}")
-                ),
-            },
-            "revision": revision,
-            "sealed_by": actor_id,
-            "sealed_at": sealed_at,
-            "project": {
-                "code": str(project["code"]),
-                "name": str(project["name"]),
-                "client_name": str(project["client_name"]),
-                "client_rut": project["client_rut"],
-                "client_email": project["client_email"],
-                "client_phone": project["client_phone"],
-                "client_giro": project["client_giro"],
-                "client_comuna": project["client_comuna"],
-                "client_address": project["client_address"],
-                "delivery_address": project["delivery_address"],
-                "payment_terms": str(project_input["payment_terms"]),
-                "quotation_valid_until": project_input["quotation_valid_until"],
-                "notes_commercial": project["notes_commercial"],
-                "currency": request.get("currency"),
-                "total_price_net": D(str(project["total_price_net"])),
-                "total_price_tax": D(str(project["total_price_tax"])),
-                "total_price_gross": D(str(project["total_price_gross"])),
-            },
-            "positions": position_inputs,
-            "bom": bom,
-            "pricing": {
-                "operation_id": operation["id"],
-                "state": "APPLIED",
-                "requested_by": operation["requested_by"],
-                "approved_by": operation["approved_by"],
-                "approved_at": operation["approved_at"],
-                "request": request,
-                "input_snapshot": pricing_snapshot,
-                "result": pricing_result,
-                "applied_total_cost_net": D(str(project["total_cost_net"])),
-                "source_revision": operation["source_revision"],
-            },
-            "inspector": inspector_evidence,
-            "manufacturing": manufacturing,
-            "purchase_requirements": purchase.model_dump(mode="python") if purchase else None,
-            "purchase_authorities": {
-                "physical_stock_bindings": [
-                    item.model_dump(mode="python")
-                    for item in purchase_authorities.stock_bindings
-                ],
-                "glass": [item.model_dump(mode="python")
-                          for item in purchase_authorities.glass_mappings],
-                "hardware": [item.model_dump(mode="python")
-                             for item in purchase_authorities.hardware_mappings],
-                "panel": [item.model_dump(mode="python")
-                          for item in purchase_authorities.panel_authorities],
-            },
-            "production_allowed": production_allowed,
-            "documentary_complete": documentary_complete,
-            "realized_waste": {"status": "NOT_RECORDED", "value": None},
-            "bom_hash": bom_hash,
-        }
+        built = _revision_snapshot(
+            org_id=org_id,
+            project_id=project_id,
+            project=project,
+            revision=revision,
+            operation=operation,
+            request=request,
+            pricing_snapshot=pricing_snapshot,
+            pricing_result=pricing_result,
+            priced_bom=priced_bom,
+            project_input=project_input,
+            positions=positions,
+            organization=organization,
+            effective_terms=effective_terms,
+            actor_id=actor_id,
+            sealed_at=sealed_at,
+            allow_incomplete_workshop=allow_incomplete_workshop,
+        )
+        snapshot = built["snapshot"]
+        bom_hash = built["bom_hash"]
+        purchase = built["purchase"]
+        production_allowed = built["production_allowed"]
+        documentary_complete = built["documentary_complete"]
+        position_system_ids = built["position_system_ids"]
+
         snapshot_sha256 = snapshot_sha256_v1(snapshot)
         version = one(
             "INSERT INTO public.project_versions("
@@ -1978,7 +2171,9 @@ def prepare_documentary_inputs(
     *, org_id: UUID, project_id: UUID
 ) -> dict[str, object]:
     project = one(
-        "SELECT id,status,current_revision FROM public.projects WHERE id=%s AND org_id=%s",
+        "SELECT id,status,current_revision,client_name,client_rut,delivery_address,"
+        "pricing_reset_at FROM public.projects "
+        "WHERE id=%s AND org_id=%s",
         [project_id, org_id],
         "project_not_found",
     )
@@ -1992,9 +2187,14 @@ def prepare_documentary_inputs(
         [project_id, org_id],
     )
     project_inputs = rows(
-        "SELECT payment_terms,quotation_valid_until FROM public.project_documentary_inputs "
+        "SELECT payment_terms,quotation_valid_until,doc_terms FROM public.project_documentary_inputs "
         "WHERE project_id=%s AND org_id=%s",
         [project_id, org_id],
+    )
+    organization = one(
+        "SELECT doc_terms,doc_validity_days FROM public.tenancy_organizations WHERE id=%s",
+        [str(org_id)],
+        "organization_not_found",
     )
     position_inputs = {
         str(item["position_id"]): item
@@ -2193,6 +2393,10 @@ def prepare_documentary_inputs(
         preview_structural = structural_inputs(structural)
         production_ready = True
         documentary_ready = True
+        # Mismo umbral que la cadena de sellado: evaluación FAIL en una regla
+        # RED bloquea el freeze. El checklist de emisión debe avisarlo antes
+        # de que el estimador pulse «Emitir» — nunca como sorpresa en el 422.
+        inspector_blocked = False
         for module_id, computation, _module_tree in calculations:
             inertias: dict[str, Decimal | None] = {}
             for span in computation.spans:
@@ -2225,10 +2429,21 @@ def prepare_documentary_inputs(
                 # freeze surfaces the named rule if the estimator emits anyway.
                 production_ready = False
                 documentary_ready = False
+                inspector_blocked = True
                 continue
             production_ready = production_ready and preview.production_allowed
             documentary_ready = documentary_ready and not any(
                 evaluation.status is RuleEvaluationStatus.MISSING_INPUT
+                for evaluation in preview.evaluations
+            )
+            red_rules = {
+                finding.rule_id
+                for finding in preview.findings
+                if finding.severity is InspectorSeverity.RED
+            }
+            inspector_blocked = inspector_blocked or any(
+                evaluation.status is RuleEvaluationStatus.FAIL
+                and evaluation.rule_id in red_rules
                 for evaluation in preview.evaluations
             )
 
@@ -2283,14 +2498,65 @@ def prepare_documentary_inputs(
                 ),
                 "production_ready": production_ready,
                 "documentary_ready": documentary_ready,
+                "inspector_blocked": inspector_blocked,
             }
         )
     values = project_inputs[0] if project_inputs else {}
+    # P08 — las plantillas de Ajustes alimentan el constructor: prellenado
+    # de las condiciones editables y de la vigencia por defecto. El checklist
+    # se computa contra lo GUARDADO + lo que la preparación propone (los
+    # defaults de políticas cuentan como resueltos: el guardado los afirma).
+    org_terms = _doc_terms_map(organization["doc_terms"])
+    effective_terms = _effective_doc_terms(
+        org_terms, _quote_doc_terms(values.get("doc_terms"))
+    )
+    checklist_positions = [
+        {
+            "location_tag": item["location_tag"],
+            "manufacturing_placement_policy_id": item[
+                "manufacturing_placement_policy_id"
+            ],
+            "handle_requirement_policy_id": item["handle_requirement_policy_id"],
+            "reinforcement_cut_policy_id": item["reinforcement_cut_policy_id"],
+        }
+        for item in prepared
+    ]
+    pricing_current = bool(
+        rows(
+            "SELECT id FROM public.pricing_operations "
+            "WHERE org_id=%s AND project_id=%s AND state='APPLIED' "
+            "AND COALESCE(revision_code,'REV-A')=%s AND approved_at IS NOT NULL "
+            "AND (COALESCE(%s::timestamptz,'-infinity'::timestamptz) < approved_at) "
+            "ORDER BY approved_at DESC,id DESC LIMIT 1",
+            [
+                str(org_id),
+                str(project_id),
+                str(project["current_revision"]),
+                project.get("pricing_reset_at"),
+            ],
+        )
+    )
+    emission_missing = _emission_missing(
+        project=project,
+        project_input=values,
+        positions=checklist_positions,
+        effective_terms=effective_terms,
+    )
+    if not pricing_current and "positions" not in emission_missing:
+        emission_missing.insert(2, "positions")
     return {
         "project_id": project["id"],
         "revision_code": project["current_revision"],
         "payment_terms": values.get("payment_terms", ""),
         "quotation_valid_until": values.get("quotation_valid_until"),
+        # Plantillas de la organización (Ajustes) — referencia para
+        # "restablecer plantilla" y prellenado de la vigencia.
+        "org_doc_terms": org_terms,
+        "default_payment_terms": org_terms.get("pago", ""),
+        "doc_validity_days": int(organization["doc_validity_days"]),
+        # Mapa efectivo de esta cotización: guardado encima de la plantilla.
+        "doc_terms": effective_terms,
+        "emission_missing": emission_missing,
         "positions": prepared,
     }
 
@@ -2386,14 +2652,29 @@ def save_documentary_inputs(
                 "WHERE id=%s AND project_id=%s AND org_id=%s RETURNING id",
                 [item["location_tag"], UUID(str(item["position_id"])), project_id, org_id],
             )
+        # Un payload que no trae doc_terms conserva lo guardado — sólo una
+        # edición explícita (clave presente, aunque sea {}) reemplaza.
+        terms_supplied = "doc_terms" in data
+        quote_terms = _quote_doc_terms(data.get("doc_terms"))
         one(
             "INSERT INTO public.project_documentary_inputs("
-            "project_id,org_id,payment_terms,quotation_valid_until,created_by) "
-            "VALUES(%s,%s,%s,%s,%s) "
+            "project_id,org_id,payment_terms,quotation_valid_until,doc_terms,created_by) "
+            "VALUES(%s,%s,%s,%s,COALESCE(%s::jsonb,'{}'::jsonb),%s) "
             "ON CONFLICT(project_id,org_id) DO UPDATE SET "
             "payment_terms=EXCLUDED.payment_terms,"
-            "quotation_valid_until=EXCLUDED.quotation_valid_until,updated_at=now() RETURNING id",
-            [project_id, org_id, data["payment_terms"], data["quotation_valid_until"], actor_id],
+            "quotation_valid_until=EXCLUDED.quotation_valid_until,"
+            "doc_terms=CASE WHEN %s THEN EXCLUDED.doc_terms"
+            " ELSE project_documentary_inputs.doc_terms END,"
+            "updated_at=now() RETURNING id",
+            [
+                project_id,
+                org_id,
+                data["payment_terms"],
+                data["quotation_valid_until"],
+                json_text(quote_terms) if terms_supplied else None,
+                actor_id,
+                terms_supplied,
+            ],
         )
         for item in supplied_values:
             position_id = UUID(str(item["position_id"]))
@@ -2724,4 +3005,184 @@ def compare_versions(
             "price_gross_delta": price_delta,
         },
         "positions": entries,
+    }
+
+
+def preview_quote_document(
+    *, org_id: UUID, project_id: UUID, data: dict[str, object]
+) -> dict[str, object]:
+    """Vista previa REAL del DOC-01 antes de emitir.
+
+    Recorre la misma cadena de congelamiento — recálculo por posición,
+    inspector, BOM y snapshot canónico — pero con los valores del formulario
+    (aún no guardados) y sin persistir nada: no toca project_versions ni
+    document_artifacts. Devuelve el HTML idéntico al que alimenta el PDF
+    sellado y la huella que la revisión produciría, para que el constructor
+    pueda prometer "lo que ves es lo que el cliente recibe".
+    """
+    supplied_values = data.get("positions")
+    if not isinstance(supplied_values, list) or not all(
+        isinstance(item, dict) for item in supplied_values
+    ):
+        raise DocumentaryError("invalid_documentary_inputs")
+    pricing_operation_id = data.get("pricing_operation_id")
+    with documentary_backend():
+        project = one(
+            "SELECT * FROM public.projects WHERE org_id=%s AND id=%s",
+            [org_id, project_id],
+            "project_not_found",
+        )
+        if project["status"] != "DRAFT":
+            raise DocumentaryError("revision_not_available")
+        revision = str(project["current_revision"])
+        operation = one(
+            "SELECT id,org_id,project_id,requested_by,request::text,input_snapshot::text,"
+            "result::text,source_revision,revision_code,state,approved_by,approved_at,reason,created_at "
+            "FROM public.pricing_operations WHERE id=%s AND org_id=%s AND project_id=%s",
+            [pricing_operation_id, org_id, project_id],
+            "pricing_operation_not_found",
+        )
+        if operation["state"] != "APPLIED" or str(
+            operation["revision_code"] or "REV-A"
+        ) != revision:
+            raise DocumentaryError("applied_pricing_authority_required")
+        if project["pricing_reset_at"] is not None and (
+            operation["approved_at"] is None
+            or operation["approved_at"] <= project["pricing_reset_at"]
+        ):
+            raise DocumentaryError("applied_pricing_authority_required")
+        positions = _position_rows(project_id, org_id, require_inputs=False)
+        if not positions:
+            raise DocumentaryError("position_documentary_inputs_required")
+        expected = {str(item["id"]) for item in positions}
+        supplied = {
+            str(item.get("position_id"))
+            for item in supplied_values
+            if item.get("position_id")
+        }
+        if supplied != expected:
+            raise DocumentaryError("documentary_position_coverage_required")
+        drafts = {str(item["position_id"]): item for item in supplied_values}
+        # Valores del formulario encima de lo guardado — igual que
+        # save_documentary_inputs, pero en memoria.
+        for position in positions:
+            draft = drafts[str(position["id"])]
+            position["location_tag"] = draft.get("location_tag") or ""
+            for key in (
+                "manufacturing_placement_policy_id",
+                "handle_requirement_policy_id",
+                "reinforcement_cut_policy_id",
+            ):
+                value = draft.get(key)
+                position[key] = str(value) if value else None
+            position["workshop_annotations"] = json_text(
+                draft.get("workshop_annotations") or []
+            )
+            position["structural_inputs"] = json_text(
+                draft.get("structural_inputs") or []
+            )
+            position["glass_polishing"] = json_text(
+                draft.get("glass_polishing") or []
+            )
+            position["handle_intents"] = json_text(
+                draft.get("handle_intents") or []
+            )
+            schedule = draft.get("accessory_schedule")
+            position["accessory_schedule"] = (
+                json_text(schedule) if schedule is not None else None
+            )
+            position["legacy_handle_migration_confirmed"] = bool(
+                draft.get("legacy_handle_migration_confirmed")
+            )
+            position["documentary_calculation_hash"] = draft.get(
+                "calculation_hash"
+            )
+            if not position.get("documentary_input_id"):
+                # accessory_schedule usa el id de la fila guardada como
+                # semilla determinista; en borrador la posición basta.
+                position["documentary_input_id"] = position["id"]
+            if not all(
+                position.get(key)
+                for key in (
+                    "manufacturing_placement_policy_id",
+                    "handle_requirement_policy_id",
+                    "reinforcement_cut_policy_id",
+                )
+            ):
+                raise DocumentaryError("quote_preview_incomplete_policies")
+        request = _json_object(operation["request"], "invalid_applied_pricing_request")
+        pricing_snapshot = _json_object(
+            operation["input_snapshot"], "invalid_applied_pricing_snapshot"
+        )
+        pricing_result = _json_object(
+            operation["result"], "invalid_applied_pricing_result"
+        )
+        _pricing_state_matches(project, positions, request, pricing_snapshot, pricing_result)
+        priced_bom = _technical_bom(pricing_snapshot)
+        organization = one(
+            "SELECT name, tax_id, commercial_name, giro, brand_address,"
+            " brand_phone, brand_email, brand_logo_key, brand_logo_sha256,"
+            " brand_color, doc_dekopen_credit, extras_display,"
+            " doc_paper_size, doc_terms"
+            " FROM public.tenancy_organizations WHERE id = %s",
+            [str(org_id)],
+            "organization_not_found",
+        )
+        stored = rows(
+            "SELECT payment_terms,quotation_valid_until,doc_terms "
+            "FROM public.project_documentary_inputs "
+            "WHERE project_id=%s AND org_id=%s",
+            [project_id, org_id],
+        )
+        stored_input = stored[0] if stored else {}
+        project_input = {
+            "payment_terms": data.get("payment_terms")
+            if data.get("payment_terms") is not None
+            else stored_input.get("payment_terms", ""),
+            "quotation_valid_until": data.get("quotation_valid_until")
+            if data.get("quotation_valid_until") is not None
+            else stored_input.get("quotation_valid_until"),
+            "doc_terms": data.get("doc_terms")
+            if data.get("doc_terms") is not None
+            else stored_input.get("doc_terms"),
+        }
+        effective_terms = _effective_doc_terms(
+            _doc_terms_map(organization["doc_terms"]),
+            _quote_doc_terms(project_input["doc_terms"]),
+        )
+        sealed_at = datetime.now(timezone.utc)
+        built = _revision_snapshot(
+            org_id=org_id,
+            project_id=project_id,
+            project=project,
+            revision=revision,
+            operation=operation,
+            request=request,
+            pricing_snapshot=pricing_snapshot,
+            pricing_result=pricing_result,
+            priced_bom=priced_bom,
+            project_input=project_input,
+            positions=positions,
+            organization=organization,
+            effective_terms=effective_terms,
+            actor_id=project["created_by"],
+            sealed_at=sealed_at,
+            allow_incomplete_workshop=True,
+            preview=True,
+        )
+    from documents.renderers import render_document_html
+
+    # La vista previa renderiza el snapshot CANONICALIZADO — el mismo
+    # byte-equivalente que queda persistido al sellar (fechas/Decimal/UUID
+    # en forma JSON). Así el documento que ve el estimador es idéntico al
+    # que verá el cliente; cualquier valor que no sea escalar en el
+    # renderer rompe aquí, nunca en la revisión sellada.
+    canonical_snapshot = json.loads(
+        documentary_canonical_json_v1(built["snapshot"]).decode("utf-8")
+    )
+
+    return {
+        "html": render_document_html("DOC-01", canonical_snapshot),
+        "bom_hash": built["bom_hash"],
+        "revision_code": revision,
     }

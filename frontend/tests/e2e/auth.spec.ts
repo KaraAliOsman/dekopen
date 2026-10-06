@@ -328,6 +328,34 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   const createdResponse = await creation;
   expect(createdResponse.status()).toBe(201);
   const draft = (await createdResponse.json()) as { id: string };
+  // P08: la compuerta de emisión exige cliente con RUT válido (módulo 11) y
+  // dirección de obra — se siembran por API antes del flujo de UI.
+  const draftGet = await request.get(`${djangoUrl}/api/v1/projects/${draft.id}/`, { headers });
+  expect(draftGet.status()).toBe(200);
+  const draftRow = (await draftGet.json()) as { updated_at: string };
+  const patchProject = await request.patch(`${djangoUrl}/api/v1/projects/${draft.id}/`, {
+    headers,
+    data: {
+      expected_updated_at: draftRow.updated_at,
+      client_rut: "76.543.210-3",
+      delivery_address: "Obra Av. Siempre Viva 742, Santiago",
+    },
+  });
+  expect(patchProject.status(), await patchProject.text()).toBe(200);
+  // La plantilla de condiciones comerciales de la organización precarga los
+  // términos de la cotización (editables por revisión, congelados al sellar).
+  const branding = await request.put(`${djangoUrl}/api/v1/organization/branding/`, {
+    headers,
+    data: {
+      doc_terms: {
+        plazo_entrega: "15 días hábiles desde la aprobación",
+        instalacion: "Instalación en obra incluida; andamios a cargo del cliente",
+        exclusiones: "No incluye terminaciones de albañilería ni sellos perimetrales",
+        garantia: "10 años perfiles, 5 años herrajes y vidrios",
+      },
+    },
+  });
+  expect(branding.status(), await branding.text()).toBe(200);
   await page.getByRole("link", { name: "Añadir vano", exact: true }).click();
   await page.getByLabel("Ubicación del vano", { exact: true }).fill("Fijo comercial");
   await page.getByLabel("Cantidad", { exact: true }).fill("2");
@@ -418,7 +446,9 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   await page.getByRole("button", { name: "Preparar emisión", exact: true }).click();
   await prepA;
   await page.getByLabel("Condiciones de pago", { exact: true }).fill("50% anticipo, 50% entrega");
-  await page.getByLabel("Cotización válida hasta", { exact: true }).fill("2026-10-19");
+  await page.getByLabel("Cotización válida hasta", { exact: true }).fill("2027-10-19");
+  // La plantilla de la organización precarga las condiciones comerciales —
+  // el checklist «Qué falta para emitir» queda completo sin rellenarlas.
   await expect(page.getByLabel("Criterio de fabricación", { exact: true })).not.toHaveValue("");
   // DEMO_60 ships two handle authorities since D03 (V3 adds TILT,
   // BOTTOM_HUNG and the double-door leaves): the freeze requires an
@@ -432,13 +462,17 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   await page
     .getByLabel("Criterio de refuerzos", { exact: true })
     .selectOption({ label: "DEMO_60_REINFORCEMENT_CUT_V2 · v2" });
-  await page.getByLabel(/Confirmo la emisión: esta revisión/).check();
+  await page.getByRole("button", { name: "Emitir y enviar al cliente", exact: true }).click();
+  // P08: la confirmación previa a emitir muestra la consecuencia — el sello
+  // sólo se dispara desde el diálogo, acción canónica única.
+  const emitDialogA = page.getByRole("dialog");
+  await expect(emitDialogA).toContainText("Confirmar emisión");
   const freezeA = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
       new URL(response.url()).pathname === `/api/v1/documents/projects/${draft.id}/freeze/`,
   );
-  await page.getByRole("button", { name: "Emitir cotización", exact: true }).click();
+  await emitDialogA.getByRole("button", { name: "Emitir y enviar al cliente" }).click();
   const frozenA = await freezeA;
   expect(frozenA.status(), await frozenA.text()).toBe(201);
   await expect(page.getByText("Cotizado", { exact: true })).toBeVisible();
@@ -502,13 +536,15 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   await expect(page.getByLabel("Condiciones de pago", { exact: true })).toHaveValue(
     "50% anticipo, 50% entrega",
   );
-  await page.getByLabel(/Confirmo la emisión: esta revisión/).check();
+  await page.getByRole("button", { name: "Emitir y enviar al cliente", exact: true }).click();
+  const emitDialogB = page.getByRole("dialog");
+  await expect(emitDialogB).toContainText("Confirmar emisión");
   const freezeB = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
       new URL(response.url()).pathname === `/api/v1/documents/projects/${draft.id}/freeze/`,
   );
-  await page.getByRole("button", { name: "Emitir cotización", exact: true }).click();
+  await emitDialogB.getByRole("button", { name: "Emitir y enviar al cliente" }).click();
   const frozenB = await freezeB;
   expect(frozenB.status(), await frozenB.text()).toBe(201);
   await expect(page.getByText("Cotizado", { exact: true })).toBeVisible();
@@ -517,20 +553,15 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   await expect(history.getByText("Revisión B", { exact: true })).toBeVisible();
 
   const revA = history.locator("li").filter({ has: page.getByText("Revisión A", { exact: true }) });
-  // Emitted evidence is generated by the durable job system, not a direct
-  // artifact POST: enqueue → poll → access → blob download.
-  const artifact = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      new URL(response.url()).pathname === "/api/v1/jobs/",
-  );
+  // Emitting seals + mints the link, and share_quote renders the DOC-01 PDF
+  // inline (its acceptance QR names the document token): the artifact
+  // already exists, so opening the evidence is a direct access call.
   const access = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
       new URL(response.url()).pathname.endsWith("/access/"),
   );
   await revA.getByRole("button", { name: "Abrir cotización emitida", exact: true }).click();
-  expect((await artifact).status()).toBeLessThan(300);
   expect((await access).status()).toBe(200);
 
   const finalProject = await request.get(`${djangoUrl}/api/v1/projects/${draft.id}/`, { headers });

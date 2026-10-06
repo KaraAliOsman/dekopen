@@ -31,9 +31,11 @@ def _quote_state(approval: dict[str, Any] | None, now: datetime) -> str:
     if status == "DECLINED":
         return "declined"
     expires = approval.get("expires_at")
-    if status == "PENDING" and isinstance(expires, datetime):
+    if status in ("PENDING", "CHANGES_REQUESTED") and isinstance(expires, datetime):
         if expires <= now:
             return "expired"
+        if status == "CHANGES_REQUESTED":
+            return "changes_requested"
         return "viewed" if int(approval.get("view_count") or 0) > 0 else "sent"
     if status == "REVOKED":
         return "no_link"

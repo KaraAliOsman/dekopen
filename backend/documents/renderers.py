@@ -4016,15 +4016,15 @@ def _doc08(snapshot: dict[str, object]) -> str:
 _DOC01_PAGE_SIZES = {"LETTER": "letter", "LEGAL": "legal", "A4": "a4"}
 
 
-def render_pdf_document(
+def render_document_html(
     document_type: str,
     snapshot: dict[str, object],
     *,
-    pdf_identifier: str,
     render_context: dict | None = None,
-) -> tuple[bytes, str]:
-    from weasyprint import HTML
-
+) -> str:
+    """HTML completo del documento — la misma composición que alimenta el
+    PDF sellado, expuesta para vistas previas en pantalla que deben ser
+    idénticas a lo que el cliente recibe."""
     if document_type == "DOC-01":
         body = _doc01(snapshot, render_context=render_context)
     elif document_type == "DOC-02":
@@ -4068,10 +4068,24 @@ def render_pdf_document(
                 f"\n@page {{ size: {size} portrait; margin: 13mm 12mm 22mm;"
                 " @bottom-center { content: element(titleblock); } }}"
             )
-    html = (
+    return (
         "<!doctype html><html lang=\"es-CL\"><head><meta charset=\"utf-8\">"
         f"<title>{title}</title>"
         f"<style>{css}</style></head><body>{body}</body></html>"
+    )
+
+
+def render_pdf_document(
+    document_type: str,
+    snapshot: dict[str, object],
+    *,
+    pdf_identifier: str,
+    render_context: dict | None = None,
+) -> tuple[bytes, str]:
+    from weasyprint import HTML
+
+    html = render_document_html(
+        document_type, snapshot, render_context=render_context
     )
     content = HTML(string=html, url_fetcher=_url_fetcher).write_pdf(
         pdf_identifier=pdf_identifier,

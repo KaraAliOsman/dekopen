@@ -191,6 +191,7 @@ import type {
   PatchedCncToolPatchRequest,
   PatchedExtraArticleWriteRequest,
   PatchedKitWriteRequest,
+  PatchedLinkExpiryRequest,
   PatchedProjectUpdateRequest,
   PatchedServiceArticleWriteRequest,
   PatchedSystemWriteRequest,
@@ -237,6 +238,8 @@ import type {
   ProjectWriteRequest,
   PurchasingState,
   QuotationListResponse,
+  QuotePreviewRequest,
+  QuotePreviewResponse,
   RemakeRequestRequest,
   Remnant,
   RemnantCreateRequest,
@@ -7334,6 +7337,89 @@ export const documentarySaveInputs = async (
   });
 };
 
+export type documentaryQuotePreviewResponse200 = {
+  data: QuotePreviewResponse;
+  status: 200;
+};
+
+export type documentaryQuotePreviewResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type documentaryQuotePreviewResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type documentaryQuotePreviewResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type documentaryQuotePreviewResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type documentaryQuotePreviewResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type documentaryQuotePreviewResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type documentaryQuotePreviewResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type documentaryQuotePreviewResponseSuccess = documentaryQuotePreviewResponse200 & {
+  headers: Headers;
+};
+export type documentaryQuotePreviewResponseError = (
+  | documentaryQuotePreviewResponse400
+  | documentaryQuotePreviewResponse401
+  | documentaryQuotePreviewResponse403
+  | documentaryQuotePreviewResponse404
+  | documentaryQuotePreviewResponse409
+  | documentaryQuotePreviewResponse422
+  | documentaryQuotePreviewResponse503
+) & {
+  headers: Headers;
+};
+
+export type documentaryQuotePreviewResponse =
+  documentaryQuotePreviewResponseSuccess | documentaryQuotePreviewResponseError;
+
+export const getDocumentaryQuotePreviewUrl = (projectId: string) => {
+  return `/api/v1/documents/projects/${projectId}/quote-preview/`;
+};
+
+export const documentaryQuotePreview = async (
+  projectId: string,
+  quotePreviewRequest: QuotePreviewRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<documentaryQuotePreviewResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<documentaryQuotePreviewResponse>(getDocumentaryQuotePreviewUrl(projectId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+    body: JSON.stringify(quotePreviewRequest),
+  });
+};
+
 export type documentsCompareVersionsResponse200 = {
   data: RevisionCompareResponse;
   status: 200;
@@ -9800,7 +9886,7 @@ export const getPortalQuoteDecideUrl = (token: string) => {
 };
 
 /**
- * Customer approves or declines the shared quote.
+ * Customer approves, declines or requests changes on the shared quote. CHANGES_REQUESTED keeps the link live for a later decision.
  */
 export const portalQuoteDecide = async (
   token: string,
@@ -18117,6 +18203,96 @@ export const projectQuoteLinkCreate = async (
     ...options,
     method: "POST",
   });
+};
+
+export type projectQuoteLinkUpdateResponse200 = {
+  data: ApprovalRecord[];
+  status: 200;
+};
+
+export type projectQuoteLinkUpdateResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type projectQuoteLinkUpdateResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type projectQuoteLinkUpdateResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type projectQuoteLinkUpdateResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type projectQuoteLinkUpdateResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type projectQuoteLinkUpdateResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type projectQuoteLinkUpdateResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type projectQuoteLinkUpdateResponseSuccess = projectQuoteLinkUpdateResponse200 & {
+  headers: Headers;
+};
+export type projectQuoteLinkUpdateResponseError = (
+  | projectQuoteLinkUpdateResponse400
+  | projectQuoteLinkUpdateResponse401
+  | projectQuoteLinkUpdateResponse403
+  | projectQuoteLinkUpdateResponse404
+  | projectQuoteLinkUpdateResponse409
+  | projectQuoteLinkUpdateResponse422
+  | projectQuoteLinkUpdateResponse503
+) & {
+  headers: Headers;
+};
+
+export type projectQuoteLinkUpdateResponse =
+  projectQuoteLinkUpdateResponseSuccess | projectQuoteLinkUpdateResponseError;
+
+export const getProjectQuoteLinkUpdateUrl = (projectId: string, approvalId: string) => {
+  return `/api/v1/projects/${projectId}/quote-links/${approvalId}/`;
+};
+
+/**
+ * Move a live link's expiry — the same token keeps resolving, only the deadline moves.
+ */
+export const projectQuoteLinkUpdate = async (
+  projectId: string,
+  approvalId: string,
+  patchedLinkExpiryRequest?: PatchedLinkExpiryRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<projectQuoteLinkUpdateResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<projectQuoteLinkUpdateResponse>(
+    getProjectQuoteLinkUpdateUrl(projectId, approvalId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+      body: JSON.stringify(patchedLinkExpiryRequest),
+    },
+  );
 };
 
 export type projectQuoteLinkRevokeResponse200 = {

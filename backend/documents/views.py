@@ -36,6 +36,8 @@ from documents.serializers import (
     DocumentaryPreparationResponseSerializer,
     FreezeRequestSerializer,
     FreezeResponseSerializer,
+    QuotePreviewResponseSerializer,
+    QuotePreviewSerializer,
     RevisionCompareQuerySerializer,
     RevisionCompareResponseSerializer,
     SignedAccessResponseSerializer,
@@ -44,6 +46,7 @@ from documents.service import (
     compare_versions,
     freeze_revision_a,
     prepare_documentary_inputs,
+    preview_quote_document,
     save_documentary_inputs,
 )
 
@@ -341,6 +344,24 @@ class DocumentaryInputsView(APIView):
                     actor_id=token.user_id,
                     project_id=project_id,
                     data=data,
+                )
+        return Response(output)
+
+
+class QuotePreviewView(APIView):
+    @extend_schema(
+        operation_id="documentary_quote_preview",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=QuotePreviewSerializer,
+        responses={200: QuotePreviewResponseSerializer, **ERRORS},
+        tags=["documents"],
+    )
+    def post(self, request, project_id: UUID):
+        data = validate(QuotePreviewSerializer, request.data)
+        with documentary_scope(request, ("OWNER", "ESTIMATOR")) as (_, _, org_id):
+            with documentary_backend():
+                output = preview_quote_document(
+                    org_id=org_id, project_id=project_id, data=data
                 )
         return Response(output)
 

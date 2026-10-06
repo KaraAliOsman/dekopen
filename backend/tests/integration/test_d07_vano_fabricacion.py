@@ -167,7 +167,7 @@ def _refresh_documentary_inputs(
             project_id=project_id,
             data={
                 "payment_terms": "50% anticipo, 50% contra entrega",
-                "quotation_valid_until": date(2026, 10, 14),
+                "quotation_valid_until": date(2030, 12, 31),
                 "positions": [{
                     "position_id": position_id,
                     "calculation_hash": identity,

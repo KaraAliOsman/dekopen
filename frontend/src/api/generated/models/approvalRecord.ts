@@ -10,6 +10,7 @@ export interface ApprovalRecord {
   id: string;
   status: string;
   revision_code: string;
+  channel: string;
   /** @nullable */
   decided_by: string | null;
   /** @nullable */
@@ -21,6 +22,8 @@ export interface ApprovalRecord {
   /** @nullable */
   revoked_at: string | null;
   view_count: number;
+  /** @nullable */
+  first_viewed_at: string | null;
   /** @nullable */
   last_viewed_at: string | null;
 }

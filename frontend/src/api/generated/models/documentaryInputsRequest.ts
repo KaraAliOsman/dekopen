@@ -5,6 +5,7 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { DocumentaryInputsRequestDocTerms } from "./documentaryInputsRequestDocTerms";
 import type { PositionDocumentaryInputRequest } from "./positionDocumentaryInputRequest";
 
 export interface DocumentaryInputsRequest {
@@ -15,4 +16,5 @@ export interface DocumentaryInputsRequest {
   payment_terms: string;
   quotation_valid_until: string;
   positions: PositionDocumentaryInputRequest[];
+  doc_terms?: DocumentaryInputsRequestDocTerms;
 }
