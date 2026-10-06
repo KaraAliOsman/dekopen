@@ -176,7 +176,7 @@ def test_evaluate_rejects_prompt_echo_as_clarification():
     run = {
         "outcome": {
             "reply": "Revisé el contexto para “¿cuánto pesa la hoja derecha?”. "
-            "Respuesta determinista del proveedor MOCK.",
+            "Respuesta determinista del proveedor de prueba.",
             "questions": [],
         },
         "sandbox": {},

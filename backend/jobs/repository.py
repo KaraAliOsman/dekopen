@@ -144,31 +144,78 @@ def list_jobs(
     limit: int = 50,
     offset: int = 0,
 ) -> list[dict[str, object]]:
-    clauses = ["org_id = %s"]
+    clauses = ["jr.org_id = %s"]
     parameters: list[object] = [str(org_id)]
     if job_type:
-        clauses.append("type = %s")
+        clauses.append("jr.type = %s")
         parameters.append(job_type)
     if state:
-        clauses.append("state = %s")
+        clauses.append("jr.state = %s")
         parameters.append(state)
     parameters.extend([limit, offset])
     return [
         _decode(record)
         for record in rows(
             f"""
-            SELECT id, type, state, progress, result, error, attempt,
-                   max_attempts, created_at, started_at, completed_at,
+            SELECT jr.id, jr.type, jr.state, jr.progress, jr.result,
+                   jr.error, jr.attempt,
+                   jr.max_attempts, jr.created_at, jr.started_at,
+                   jr.completed_at,
                    /* The AI run's own job id lets the jobs list deep-link to
                     * the assistant workspace — expose just the id, not the
                     * service-owned payload. */
-                   CASE WHEN type = 'ai.agent.run'
-                        THEN payload->>'ai_job_id'
+                   CASE WHEN jr.type = 'ai.agent.run'
+                        THEN jr.payload->>'ai_job_id'
                         ELSE NULL
-                   END AS ai_job_id
-            FROM public.job_runs
+                   END AS ai_job_id,
+                   /* §P17 — el actor humano del trabajo: el correo del
+                    * miembro que lo encoló (memberships acotan el join al
+                    * tenant). */
+                   actor_user.email::text AS actor,
+                   /* §P17 — el objeto legible: «Pos. 03 Living · P-000012»,
+                    * el código de la OT o el nombre del cliente, resuelto
+                    * desde los refs del payload. */
+                   CASE
+                     WHEN pos.id IS NOT NULL THEN
+                       'Pos. ' || LPAD(pos.position_index::text, 2, '0') ||
+                       COALESCE(' ' || NULLIF(pos.location_tag, ''), '') ||
+                       COALESCE(' · ' || pos_project.code, '')
+                     WHEN proj.id IS NOT NULL THEN proj.code
+                     WHEN ord.id IS NOT NULL THEN ord.order_code
+                     WHEN cli.id IS NOT NULL THEN cli.name
+                     WHEN imp.id IS NOT NULL THEN imp.file_name
+                     ELSE NULL
+                   END AS object_label
+            FROM public.job_runs jr
+            LEFT JOIN public.tenancy_memberships actor_member
+              ON actor_member.org_id = jr.org_id
+             AND actor_member.user_id = jr.created_by
+            LEFT JOIN auth.users actor_user
+              ON actor_user.id = actor_member.user_id
+            LEFT JOIN public.project_positions pos
+              ON pos.org_id = jr.org_id
+             AND pos.id::text = jr.payload->'refs'->>'position_id'
+            LEFT JOIN public.projects pos_project
+              ON pos_project.org_id = jr.org_id
+             AND pos_project.id = pos.project_id
+            LEFT JOIN public.projects proj
+              ON proj.org_id = jr.org_id
+             AND proj.id::text = COALESCE(
+                   jr.payload->'refs'->>'project_id',
+                   jr.payload->>'project_id')
+            LEFT JOIN public.orders ord
+              ON ord.org_id = jr.org_id
+             AND ord.id::text = COALESCE(
+                   jr.payload->'refs'->>'work_order_id',
+                   jr.payload->>'order_id')
+            LEFT JOIN public.clients cli
+              ON cli.org_id = jr.org_id
+             AND cli.id::text = jr.payload->'refs'->>'client_id'
+            LEFT JOIN public.document_imports imp
+              ON imp.org_id = jr.org_id
+             AND imp.id::text = jr.payload->>'import_id'
             WHERE {" AND ".join(clauses)}
-            ORDER BY created_at DESC, id DESC
+            ORDER BY jr.created_at DESC, jr.id DESC
             LIMIT %s OFFSET %s
             """,
             parameters,

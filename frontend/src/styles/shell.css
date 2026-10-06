@@ -540,3 +540,13 @@
   font-size: var(--type-micro);
   padding: 0 0.25rem;
 }
+
+/* §P17 — con el dock abierto el workspace reserva sus 400px: el drawer no
+ * tapa los controles del borde derecho (p. ej. el filtro de /jobs a 1024).
+ * Bajo 1024 el dock queda como overlay cerrable — el patrón de drawer en
+ * pantallas angostas. */
+@media (min-width: 1024px) {
+  .app-shell--askdock .workspace {
+    margin-right: 400px;
+  }
+}

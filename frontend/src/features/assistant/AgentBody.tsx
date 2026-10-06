@@ -17,17 +17,14 @@ import type { AiJobDetail } from "../../api/generated/models/aiJobDetail";
 import { t } from "../../i18n/es-CL";
 import { jobErrorKey } from "../jobs/jobError";
 import type { DesignOp } from "../commands/types";
-import {
-  describeDesignOp,
-  describeScopeOp,
-  designAssistProduct,
-  productFingerprint,
-} from "../canvas/designOps";
+import { designAssistProduct, productFingerprint } from "../canvas/designOps";
 import { applyPositionOps, applyProjectOps, splitOps } from "./positionOps";
 import type { ProductJson } from "../canvas/productEditing";
 import { stableRefs, useDesignOpsBridge } from "./assistantContext";
 import { BatchOpsStep } from "./BatchOpsStep";
 import { BotFigure } from "./BotFigure";
+import { OpsProposalCard } from "./OpsProposalCard";
+import { FailureCollapse } from "./FailureCollapse";
 import { SURFACE_LABELS } from "./surfaces";
 
 /** The durable worker can leave the job running far longer than a request
@@ -91,10 +88,34 @@ interface TranscriptAgentTurn {
 }
 
 /** Transcript → thread: user entries pair with the agent/error entry that
- * answers them; a trailing user entry is a round still in flight. */
+ * answers them; a trailing user entry is a round still in flight. The
+ * recorded outcomes seed applied/declined per step — a dock reopened after
+ * an apply must show "Aplicado", never offer a second apply. */
 function threadFromJob(job: AiJobDetail): Turn[] {
   const turns: Turn[] = [];
   let pending: { text: string; replay: boolean; sig: string | null } | null = null;
+  const outcomeSets = new Map<number, { applied: Set<number>; declined: Set<number> }>();
+  for (const raw of (job.outcomes ?? []) as {
+    turn_index?: number;
+    step_index?: number;
+    action?: string;
+  }[]) {
+    const turnIndex = Number(raw?.turn_index);
+    const stepIndex = Number(raw?.step_index);
+    if (!Number.isInteger(turnIndex) || !Number.isInteger(stepIndex)) continue;
+    if (raw.action !== "applied" && raw.action !== "declined") continue;
+    const entry = outcomeSets.get(turnIndex) ?? {
+      applied: new Set<number>(),
+      declined: new Set<number>(),
+    };
+    if (raw.action === "applied") entry.applied.add(stepIndex);
+    else entry.declined.add(stepIndex);
+    outcomeSets.set(turnIndex, entry);
+  }
+  const seeded = (transcriptIndex: number) => ({
+    appliedOps: outcomeSets.get(transcriptIndex)?.applied ?? new Set<number>(),
+    declinedOps: outcomeSets.get(transcriptIndex)?.declined ?? new Set<number>(),
+  });
   const entries = (job.transcript ?? []) as TranscriptAgentTurn[];
   for (const [index, entry] of entries.entries()) {
     if (!entry || typeof entry !== "object") continue;
@@ -113,8 +134,7 @@ function threadFromJob(job: AiJobDetail): Turn[] {
         product: null,
         productSig: pending?.sig ?? null,
         transcriptIndex: index,
-        appliedOps: new Set(),
-        declinedOps: new Set(),
+        ...seeded(index),
       });
       pending = null;
     } else if (entry.role === "error") {
@@ -126,8 +146,7 @@ function threadFromJob(job: AiJobDetail): Turn[] {
         product: null,
         productSig: pending?.sig ?? null,
         transcriptIndex: index,
-        appliedOps: new Set(),
-        declinedOps: new Set(),
+        ...seeded(index),
       });
       pending = null;
     }
@@ -141,8 +160,7 @@ function threadFromJob(job: AiJobDetail): Turn[] {
       product: null,
       productSig: pending.sig,
       transcriptIndex: entries.length - 1,
-      appliedOps: new Set(),
-      declinedOps: new Set(),
+      ...seeded(entries.length - 1),
     });
   }
   // Jobs settled before transcript turns carried the result shape still
@@ -157,8 +175,7 @@ function threadFromJob(job: AiJobDetail): Turn[] {
       product: null,
       productSig: null,
       transcriptIndex: entries.length - 1,
-      appliedOps: new Set(),
-      declinedOps: new Set(),
+      ...seeded(entries.length - 1),
     });
   }
   return turns;
@@ -192,6 +209,15 @@ export { SURFACE_LABELS };
  * separate surface. They only prefill the goal — the human edits before
  * sending, and the answer stays evidence-bound either way. */
 const GOAL_CHIPS: Record<string, string[]> = {
+  // §P17 — el dock contextual ofrece sugerencias de la pantalla real: en el
+  // editor son propuestas de diseño sobre el modelo; en precios, lecturas
+  // del motor; cada frase cae dentro de lo que el agente sabe ejecutar.
+  position: [
+    "Divide la hoja en dos oscilobatientes",
+    "Proponer división 1/3–2/3",
+    "Revisar compatibilidad de herrajes",
+    "¿Cuánto pesa la hoja derecha?",
+  ],
   project: [
     "Convierte todas las fijas del proyecto en abatibles.",
     "Copia el vidrio del primer vano a todos los demás.",
@@ -202,10 +228,25 @@ const GOAL_CHIPS: Record<string, string[]> = {
     "Redacta el aviso de entrega programada.",
   ],
   quotation: [
+    "Explica por qué subió el total",
+    "¿Qué falta para emitir la revisión?",
     "Redacta el correo para enviar la cotización al cliente.",
     "Resume los cambios de la última revisión para el cliente.",
     "Redacta un recordatorio de pago pendiente.",
   ],
+  production: [
+    "¿Qué órdenes están bloqueadas o atrasadas?",
+    "¿Qué falta para liberar la próxima OT?",
+  ],
+  work_order: [
+    "¿Qué pasos quedan pendientes en esta OT?",
+    "¿Hay material faltante para esta orden?",
+  ],
+  purchasing: [
+    "Arma el plan de compras con las líneas sin cobertura.",
+    "¿Qué pedidos siguen abiertos?",
+  ],
+  dashboard: ["¿Qué requiere mi atención hoy?", "¿Qué órdenes de producción están atrasadas?"],
 };
 
 /** The DEKOPEN agent: a goal turns into a server-side observe → plan loop.
@@ -714,7 +755,7 @@ export function AgentBody({
       <div className="ask-dock__thread">
         {thread.length === 0 && !live ? (
           <div className="ask-dock__welcome">
-            <BotFigure size={110} />
+            <BotFigure size={110} welcome />
             <p className="ask-dock__hint">{t("agent.hint")}</p>
           </div>
         ) : (
@@ -730,20 +771,17 @@ export function AgentBody({
               ) : null}
               {turn.errorCode !== null ? (
                 <div className="ask-dock__errorTurn">
-                  <p>
-                    {t(jobErrorKey(turn.errorCode))}
-                    <code>{turn.errorCode}</code>
-                  </p>
-                  {retryable ? (
-                    <button
-                      type="button"
-                      className="ask-dock__action"
-                      title={t("aiws.retryTitle")}
-                      onClick={() => void retryJob()}
-                    >
-                      {t("aiws.retry")}
-                    </button>
-                  ) : null}
+                  <FailureCollapse
+                    message={t(jobErrorKey(turn.errorCode))}
+                    code={turn.errorCode}
+                    /* Los intentos fallidos son los turnos de error que el
+                     * transcript acumula hasta este punto. */
+                    attempts={
+                      thread.slice(0, turnIndex + 1).filter((item) => item.errorCode !== null)
+                        .length
+                    }
+                    onRetry={retryable ? () => void retryJob() : undefined}
+                  />
                 </div>
               ) : turn.result === null ? null : (
                 <>
@@ -901,50 +939,23 @@ export function AgentBody({
                               }
                             | undefined;
                           return (
-                            <div key={stepIndex} className="ask-dock__ops">
-                              <ul>
-                                {ops.map((op, i) => (
-                                  <li key={i}>
-                                    {proposal
-                                      ? describeDesignOp(op, proposal, ops.slice(0, i))
-                                      : (describeScopeOp(op) ?? op.op)}
-                                  </li>
-                                ))}
-                              </ul>
-                              {simulation?.modules?.length ? (
-                                <p className="ask-dock__ops-sim">
-                                  {simulation.modules
-                                    .map(
-                                      (module) =>
-                                        `${module.ref ?? "?"}: ${(module.bays ?? []).length} paño(s)${(module.splits ?? []).length ? `, ${(module.splits ?? []).length} división(es)` : ""}`,
-                                    )
-                                    .join(" · ")}
-                                </p>
-                              ) : null}
-                              <div className="ask-dock__ops-actions">
-                                <button
-                                  type="button"
-                                  className="ask-dock__action"
-                                  disabled={applied || declined || stale || unroutable}
-                                  title={stale && bridge ? t("assistant.stale") : undefined}
-                                  onClick={() => applyOps(turnIndex, stepIndex, ops)}
-                                >
-                                  {applied
-                                    ? t("agent.applied")
-                                    : t("assistant.apply").replace("{count}", String(ops.length))}
-                                </button>
-                                {!applied ? (
-                                  <button
-                                    type="button"
-                                    className="ask-dock__action ask-dock__action--ghost"
-                                    disabled={declined}
-                                    onClick={() => declineOps(turnIndex, stepIndex, ops)}
-                                  >
-                                    {declined ? t("agent.declined") : t("agent.decline")}
-                                  </button>
-                                ) : null}
-                              </div>
-                            </div>
+                            <OpsProposalCard
+                              key={stepIndex}
+                              ops={ops}
+                              proposal={proposal as ProductJson | null}
+                              organizationId={organizationId}
+                              positionId={refs.position_id ?? null}
+                              stale={stale}
+                              unroutable={unroutable}
+                              applied={applied}
+                              declined={declined}
+                              simulation={simulation}
+                              onApply={() => applyOps(turnIndex, stepIndex, ops)}
+                              onDecline={() => declineOps(turnIndex, stepIndex, ops)}
+                              onAudit={() =>
+                                job ? navigate(`/assistant?job=${job.id}`) : undefined
+                              }
+                            />
                           );
                         }
                         return null;

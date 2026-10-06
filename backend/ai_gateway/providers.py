@@ -943,6 +943,28 @@ def _design_assist_output(input_payload: dict) -> dict:
         ops.append({"op": "set_opening", "bay": 1, "opening": "TILT_TURN_LEFT"})
         notes.append("dos hojas: fija izquierda, oscilobatiente derecha")
         handled = True
+    elif re.search(r"(?:en\s+dos|dos\s+hojas).*(?:oscil|batiente|tilt)", prompt):
+        # "divide la hoja en dos oscilobatientes" — split + una apertura por
+        # hoja en orden de documento (espejo: izquierda TILT_TURN_LEFT,
+        # derecha TILT_TURN_RIGHT), mismo patrón que "fija + oscilobatiente".
+        ops.append({"op": "split_bay", "axis": "V", "parts": 2})
+        ops.append({"op": "set_opening", "bay": 0, "opening": "TILT_TURN_LEFT"})
+        ops.append({"op": "set_opening", "bay": 1, "opening": "TILT_TURN_RIGHT"})
+        notes.append("dos hojas oscilobatientes espejo")
+        handled = True
+    elif re.search(r"tercio|1/3|2/3", prompt):
+        # «Proponer división 1/3–2/3» — un corte vertical al tercio del
+        # ancho real del módulo (offset_mm es un número derivado de la
+        # medida del contexto, lo que el contrato permite).
+        total = sum(
+            int(str(module.get("width_mm") or 0)) for module in modules
+        )
+        op: dict[str, object] = {"op": "split_bay", "axis": "V"}
+        if total > 0:
+            op["offset_mm"] = str(total // 3)
+        ops.append(op)
+        notes.append("división 1/3–2/3")
+        handled = True
     elif re.search(r"dos\s+hojas|en\s+dos\b|a\s+la\s+mitad|por\s+la\s+mitad", prompt):
         ops.append({"op": "split_bay", "axis": "V", "parts": 2})
         notes.append("dos hojas iguales")
@@ -1239,7 +1261,7 @@ def _agent_output(input_payload: dict) -> dict:
     org_name = str(org.get("name") or "la organización")
     reply = (
         f"Revisé el contexto de {org_name} para “{goal[:120]}”. "
-        "Respuesta determinista del proveedor MOCK."
+        "Respuesta determinista del proveedor de prueba."
     )
     evidence = re.findall(
         r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
@@ -1290,7 +1312,7 @@ def _agent_output(input_payload: dict) -> dict:
                     "args": {"position_id": position_ref},
                 }
             )
-        if position_ref and re.search(r"guardar|bloque|v[aá]lid", goal_l):
+        if position_ref and re.search(r"guardar|bloque|v[aá]lid|herraje|compatib", goal_l):
             document["steps"].append(
                 {
                     "kind": "tool",
@@ -1316,7 +1338,7 @@ def _agent_output(input_payload: dict) -> dict:
                     "args": {"project_id": project_ref},
                 }
             )
-        if project_ref and re.search(r"compar|rev-?[ab]", goal_l):
+        if project_ref and re.search(r"compar|rev-?[ab]|subi|encarec|delta", goal_l):
             document["steps"].append(
                 {
                     "kind": "tool",
@@ -1493,29 +1515,39 @@ def _agent_output(input_payload: dict) -> dict:
                 document["steps"].append(
                     {"kind": "ops", "ops": [op], "label": "duplicar posición"}
                 )
-        elif re.search(r"vidrio|glass", goal_l) and re.search(r"todas|segundo\s+piso|piso", goal_l):
+        elif re.search(r"vidrio|glass|termopanel|low-?e|dvh", goal_l) and re.search(
+            r"todas|segundo\s*piso|[2２]\s*[º°o]?\s*piso|piso\s*2|piso", goal_l
+        ):
             # Lote por ubicación: position_ids explícitos del contexto —
-            # los que dicen "segundo piso" (o todas si no hay filtro).
+            # los que dicen "segundo piso"/"2º piso" (o todas si no hay
+            # filtro). «Termopanel Low-E» mapea al SKU real del catálogo
+            # demo — la propuesta siempre apunta a un artículo existente.
+            wants_low_e = bool(re.search(r"low-?e|lowe", goal_l))
+            floor_re = re.compile(r"segundo\s*piso|[2２]\s*[º°o]?\s*piso|piso\s*2")
+            wants_floor = bool(floor_re.search(goal_l))
             filtered = [
                 item for item in positions
-                if "segundo piso" in str(item.get("location") or "").lower()
-            ] if "segundo piso" in goal_l else positions
-            sku_match = re.search(r"vidrio\s+a\s+([A-Z0-9-]+)|a\s+([A-Z0-9-]+)$", goal, re.I)
-            sku = next(
-                (
-                    group for group in (sku_match.groups() if sku_match else [])
-                    if group
-                ),
-                "VIDRIO-BASE",
-            )
+                if floor_re.search(str(item.get("location") or "").lower())
+            ] if wants_floor else positions
+            if wants_low_e:
+                sku = "VIDRIO-LOWE-24"
+            else:
+                sku_match = re.search(r"vidrio\s+a\s+([A-Z0-9-]+)|a\s+([A-Z0-9-]+)$", goal, re.I)
+                sku = next(
+                    (
+                        group for group in (sku_match.groups() if sku_match else [])
+                        if group
+                    ),
+                    "VIDRIO-BASE",
+                ).upper()
             ids = [str(item["id"]) for item in filtered if item.get("id")]
             if ids:
                 document["steps"].append(
                     {
                         "kind": "batch_ops",
                         "targets": {"position_ids": ids},
-                        "ops": [{"op": "set_glass", "sku": sku.upper()}],
-                        "label": f"vidrio {sku.upper()} en {len(ids)} posición(es)",
+                        "ops": [{"op": "set_glass", "sku": sku}],
+                        "label": f"vidrio {sku} en {len(ids)} posición(es)",
                     }
                 )
         elif re.search(r"descuento|baja.*precio|precio.*%|%\s*de\s*desc", goal_l):

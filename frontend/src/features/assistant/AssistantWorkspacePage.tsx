@@ -22,11 +22,13 @@ import type { AiJobLive } from "../../api/generated/models/aiJobLive";
 import type { DesignOp } from "../commands/types";
 import { describeDesignOp, designAssistProduct, productFingerprint } from "../canvas/designOps";
 import type { ProductJson } from "../canvas/productEditing";
-import { useDesignOpsBridge } from "./assistantContext";
+import { useAssistantContext, useDesignOpsBridge } from "./assistantContext";
+import { useAssistantPresence } from "./useAssistantPresence";
 import { AiMetricsCard } from "./AiMetricsCard";
 import { ArtifactDetail, type Artifact } from "./ArtifactDetail";
 import { BatchOpsStep } from "./BatchOpsStep";
 import { BotFigure } from "./BotFigure";
+import { FailureCollapse } from "./FailureCollapse";
 import { Orb, orbStateFor } from "./Orb";
 import { STATE_LABELS } from "./states";
 import { SURFACE_LABELS } from "./surfaces";
@@ -585,20 +587,12 @@ function ErrorTurnView({
     <div className="aiws-turn aiws-turn--error">
       <Orb state="error" size={28} />
       <div className="aiws-turn__body">
-        <p className="aiws-error__text">
-          {turn.code ? t(jobErrorKey(turn.code)) : t("jobs.fail.generic")}
-          {turn.code ? <code className="aiws-tool">{turn.code}</code> : null}
-        </p>
-        {job.state === "FAILED_RETRYABLE" ? (
-          <button
-            type="button"
-            className="ui-button ui-button--small"
-            disabled={retryBusy}
-            onClick={onRetry}
-          >
-            {t("aiws.retry")}
-          </button>
-        ) : null}
+        <FailureCollapse
+          message={turn.code ? t(jobErrorKey(turn.code)) : t("jobs.fail.generic")}
+          code={turn.code}
+          onRetry={job.state === "FAILED_RETRYABLE" ? onRetry : undefined}
+          retryBusy={retryBusy}
+        />
       </div>
     </div>
   );
@@ -610,6 +604,12 @@ export function AssistantWorkspacePage(): JSX.Element {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const orgId = auth.me?.active_organization?.id ?? null;
+  const { surface: presenceSurface, refs: presenceRefs } = useAssistantContext();
+  const presence = useAssistantPresence({
+    organizationId: orgId ?? null,
+    surface: presenceSurface,
+    refs: presenceRefs,
+  });
   const selectedId = searchParams.get("job");
   const artParam = searchParams.get("art");
   const [draft, setDraft] = useState("");
@@ -949,7 +949,9 @@ export function AssistantWorkspacePage(): JSX.Element {
                 className="aiws-shelf__item"
                 onClick={() => setArtifact(item)}
               >
-                <Orb state="idle" size={16} />
+                {/* §P17 — la tarjeta de artefacto comunica el estado real
+                 * del trabajo que la produjo. */}
+                <Orb state={orbStateFor(job.state)} size={16} />
                 {item.title ?? artifactKindLabel(item.kind)}
               </button>
             ))}
@@ -959,7 +961,9 @@ export function AssistantWorkspacePage(): JSX.Element {
           {transcript.length === 0 && !job ? (
             <>
               <div className="aiws-hero">
-                <BotFigure size={120} />
+                {/* §P17 — el estado vacío también deriva su figura del
+                 * trabajo más reciente del contexto. */}
+                <BotFigure size={160} state={presence.orbState} welcome />
                 <div>
                   <h1 className="aiws-hero__title">{t("aiws.title")}</h1>
                   <AiMetricsCard organizationId={orgId ?? ""} />

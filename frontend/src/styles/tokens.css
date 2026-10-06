@@ -391,21 +391,27 @@
   /* Orb DEKOPEN — 2D plano. La esfera es la identidad (grafito en ambos
      temas); el acento cromático es el teal de la marca (P25: se retira el
      cyan fuera de paleta); solo el borde adapta. */
-  --orb-mid: #2a3238;
-  --orb-deep: #171e23;
+  --orb-hi: #4e5960;
+  --orb-mid: #262e34;
+  --orb-lo: #12171b;
   --orb-edge: rgb(10 15 18 / 55%);
+  --orb-spec-op: 0.5;
   --orb-eye: var(--teal-400);
-  --orb-eye-hi: var(--teal-200);
   --orb-ribbon: var(--teal-400);
-  --orb-ribbon-soft: rgb(72 188 175 / 42%);
+  --orb-pane: rgb(111 217 205 / 28%);
+  --orb-shadow: rgb(15 22 24 / 22%);
 }
 :root[data-theme="dark"],
 [data-theme-scope="dark"] {
+  --orb-hi: #5a666e;
+  --orb-mid: #272f35;
+  --orb-lo: #10151a;
   --orb-edge: rgb(233 242 241 / 16%);
+  --orb-spec-op: 0.32;
   --orb-eye: var(--teal-400);
-  --orb-eye-hi: var(--teal-200);
   --orb-ribbon: var(--teal-400);
-  --orb-ribbon-soft: rgb(72 188 175 / 48%);
+  --orb-pane: rgb(111 217 205 / 18%);
+  --orb-shadow: rgb(0 0 0 / 45%);
 }
 
 /* ------------------------------------------------------------------ *
@@ -598,11 +604,6 @@
 
 /* Tema oscuro: los alias semánticos heredan los roles oscuros
    automáticamente; solo los alias que apuntaban a valores fijos cambian. */
-:root[data-theme="dark"],
-[data-theme-scope="dark"] {
-  --orb-mid: #313a41;
-  --orb-deep: #1a2228;
-}
 
 /* Route-level error boundary: a crashed view keeps a recoverable frame. */
 .route-error {

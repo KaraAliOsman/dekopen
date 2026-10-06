@@ -1,0 +1,70 @@
+{
+  "summary": {
+    "generated_at": "2026-10-06T06:33:53.286Z",
+    "routes": 6,
+    "routes_with_findings": [],
+    "total_findings": 0
+  },
+  "results": [
+    {
+      "route": "assistant",
+      "url": "/assistant",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/assistant--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/assistant"
+    },
+    {
+      "route": "assistant",
+      "url": "/assistant",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/assistant--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/assistant"
+    },
+    {
+      "route": "assistant",
+      "url": "/assistant",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/assistant--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/assistant"
+    },
+    {
+      "route": "assistant",
+      "url": "/assistant",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/assistant--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/assistant"
+    },
+    {
+      "route": "assistant",
+      "url": "/assistant",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/assistant--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/assistant"
+    },
+    {
+      "route": "assistant",
+      "url": "/assistant",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/assistant--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/assistant"
+    }
+  ]
+}
