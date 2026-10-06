@@ -84,6 +84,7 @@ type CncProgram = {
   machine_code: string | null;
   plan_seed?: string | null;
   plan_fingerprint?: string | null;
+  stale_inputs?: boolean;
   superseded_by?: { id: string; program_no: string } | null;
   created_at: string;
 };
@@ -767,7 +768,9 @@ function CncProgramRow({
         <span className="cnc-stale">
           {program.superseded_by
             ? `${t("production.cncSupersededBy")} ${program.superseded_by.program_no}`
-            : t("production.cncSuperseded")}
+            : program.stale_inputs
+              ? t("production.cncStale")
+              : t("production.cncSuperseded")}
         </span>
       ) : (
         <span className="cnc-program-actions">

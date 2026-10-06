@@ -1438,10 +1438,13 @@ div:has(> table.production-plan) {
 .cnc-verdict {
   display: inline-block;
   padding: 0.1rem 0.45rem;
-  /* Chips de veredicto son texto, no puntos de estado: radio mínimo. */
+  /* Chips de veredicto son texto, no puntos de estado: radio mínimo.
+   * nowrap: «Atención»/«Bloqueado» nunca se parten a ancho estrecho. */
   border-radius: var(--r-1);
   font-size: 0.75rem;
   font-weight: 600;
+  white-space: nowrap;
+  hyphens: none;
 }
 .cnc-verdict-btn {
   border: none;

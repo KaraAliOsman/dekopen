@@ -1473,11 +1473,10 @@ def list_programs(*, org_id: UUID, order_id: UUID) -> list[dict[str, object]]:
     }
     output: list[dict[str, object]] = []
     for row in program_rows:
-        stale = (
-            row["input_fingerprint"]
-            != expected_by_machine.get(str(row["machine_id"]), "")
-            or bool(row["status"] == "SUPERSEDED")
+        stale_inputs = row["input_fingerprint"] != expected_by_machine.get(
+            str(row["machine_id"]), ""
         )
+        stale = stale_inputs or bool(row["status"] == "SUPERSEDED")
         identity = _decoded(row["identity_json"]) or {}
         output.append(
             {
@@ -1489,6 +1488,9 @@ def list_programs(*, org_id: UUID, order_id: UUID) -> list[dict[str, object]]:
                 "verdict": row["verdict"],
                 "fingerprint": row["fingerprint"],
                 "status": "SUPERSEDED" if stale else "CURRENT",
+                # Obsoleto por inputs cambiados (aún CURRENT en fila) —
+                # distinto de "Reemplazado", que exige sucesor enlazado.
+                "stale_inputs": stale_inputs,
                 "machine_code": row["machine_code"],
                 # The plan fingerprint + optimization seed this program was
                 # cut from — re-optimization produces a different plan part.
