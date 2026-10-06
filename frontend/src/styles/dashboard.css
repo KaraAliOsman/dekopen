@@ -10,7 +10,7 @@
   top: 0;
   transform: translateY(-110%);
   transition: transform 0.15s ease;
-  z-index: 100;
+  z-index: calc(var(--z-palette) + 10);
 }
 
 .skip-link:focus-visible {
@@ -103,7 +103,6 @@ p[role="alert"]:only-child::before {
   white-space: nowrap;
 }
 
-.status-chip,
 .production-chip,
 .production-chip-danger {
   border-radius: var(--r-pill);
@@ -128,115 +127,15 @@ button.production-chip:hover {
 
 /* Production chips share the pill language; tones come from the same
    status palette so a status reads identically on every surface. */
-.production-chip.status-released {
-  background: var(--theme-info-soft);
-  color: var(--info-ink);
-}
-.production-chip.status-in_progress {
-  background: var(--theme-accent-soft);
-  color: var(--info-ink);
-}
-.production-chip.status-hold {
-  background: var(--theme-warning-soft);
-  color: var(--warn-ink);
-}
-.production-chip.status-completed {
-  background: var(--theme-success-soft);
-  color: var(--ok-ink);
-}
-.production-chip.status-dispatched {
-  background: var(--theme-accent-soft);
-  color: var(--info-ink);
-}
-.production-chip.status-installed {
-  background: var(--theme-success-soft);
-  color: var(--ok-ink);
-}
 .production-chip.is-warn {
   background: var(--theme-warning-soft);
   color: var(--warn-ink);
-}
-.production-chip.is-ready {
-  background: var(--theme-success-soft);
-  color: var(--ok-ink);
-}
-.production-chip.delivery-scheduled {
-  background: var(--theme-info-soft);
-  color: var(--info-ink);
-}
-.production-chip.delivery-on_route {
-  background: var(--theme-accent-soft);
-  color: var(--info-ink);
 }
 .production-chip.delivery-delivered {
   background: var(--theme-success-soft);
   color: var(--ok-ink);
 }
-.production-chip.delivery-failed {
-  background: var(--theme-danger-soft);
-  color: var(--danger-ink);
-}
 .production-chip-danger {
-  background: var(--theme-danger-soft);
-  color: var(--danger-ink);
-}
-
-.status-chip[data-status="draft"] {
-  background: var(--theme-surface-card);
-  border: 1px solid var(--theme-border-strong);
-  color: var(--theme-text-secondary);
-}
-
-.status-chip[data-status="quoted"] {
-  background: var(--theme-accent-soft);
-  color: var(--info-ink);
-}
-
-.status-chip[data-status="approved"],
-.status-chip[data-status="in_production"] {
-  background: var(--theme-success-soft);
-  color: var(--ok-ink);
-}
-
-.status-chip[data-status="completed"] {
-  background: var(--theme-accent-soft);
-  color: var(--info-ink);
-}
-
-.status-chip[data-status="cancelled"] {
-  background: var(--theme-danger-soft);
-  color: var(--danger-ink);
-}
-
-/* Derived vano progression (position-statusKey tones) */
-.status-chip[data-status="evaluated"] {
-  background: var(--theme-info-soft);
-  color: var(--info-ink);
-}
-
-.status-chip[data-status="priced"] {
-  background: var(--theme-accent-soft);
-  color: var(--info-ink);
-}
-
-.status-chip[data-status="frozen"] {
-  background: var(--theme-warning-soft);
-  color: var(--warn-ink);
-}
-
-.status-chip[data-status="production"] {
-  background: var(--theme-success-soft);
-  color: var(--ok-ink);
-}
-
-/* Customer approval link states (quotation links ledger) */
-.status-chip[data-status="pending"] {
-  background: var(--theme-info-soft);
-  color: var(--info-ink);
-}
-
-.status-chip[data-status="declined"],
-.status-chip[data-status="revoked"] {
   background: var(--theme-danger-soft);
   color: var(--danger-ink);
 }

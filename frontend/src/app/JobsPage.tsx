@@ -11,6 +11,7 @@ import { FailureCollapse } from "../features/assistant/FailureCollapse";
 import { jobErrorKey } from "../features/jobs/jobError";
 import { formatDateTime } from "../format";
 import { EmptyState, PageHeader } from "../ui";
+import { StatusChip } from "../ui/StatusChip";
 import { t, tDynamic, type TranslationKey } from "../i18n/es-CL";
 
 const STATE_KEYS: Record<string, TranslationKey> = {
@@ -237,9 +238,7 @@ export function JobsPage(): JSX.Element {
                       </time>
                     </td>
                     <td>
-                      <span className="status-chip" data-status={job.state.toLowerCase()}>
-                        {t(STATE_KEYS[job.state] ?? "jobs.state.QUEUED")}
-                      </span>
+                      <StatusChip enumName="JobRunStateEnum" value={job.state} />
                     </td>
                     <td className="jobs-table__num">{durationLabel(job)}</td>
                     <td>{job.actor ?? t("jobs.actor.system")}</td>

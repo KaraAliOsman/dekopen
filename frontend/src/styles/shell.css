@@ -178,7 +178,7 @@
   padding: 0 var(--space-12);
   position: sticky;
   top: 0;
-  z-index: 30;
+  z-index: var(--z-rail);
 }
 
 .app-topbar__actions {
@@ -327,7 +327,7 @@
   padding: var(--space-4);
   position: absolute;
   top: calc(100% + 6px);
-  z-index: 50;
+  z-index: var(--z-drawer);
 }
 
 .shell-menu--right {
@@ -395,7 +395,7 @@
   color: var(--theme-danger-ink);
   display: inline-flex;
   font-size: var(--type-micro);
-  font-weight: 700;
+  font-weight: 600;
   height: 14px;
   justify-content: center;
   min-width: 14px;

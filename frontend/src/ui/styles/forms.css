@@ -139,7 +139,8 @@
 }
 .ui-segmented__input:checked + .ui-segmented__label {
   background: var(--surface-selected);
-  box-shadow: inset 0 0 0 1px var(--border-focus);
+  outline: 1px solid var(--border-focus);
+  outline-offset: -1px;
 }
 .ui-segmented__input:focus-visible + .ui-segmented__label {
   outline: 2px solid var(--border-focus);

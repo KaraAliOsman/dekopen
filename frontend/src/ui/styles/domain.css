@@ -13,7 +13,9 @@
 }
 .fmt-unit {
   color: var(--text-muted);
-  font-size: 0.85em;
+  /* 0.85em de la unidad subordinada, pero nunca bajo el piso §3.1 de 11 px —
+     en contextos de 12 px el em solo caía a 10,6 px. */
+  font-size: max(0.85em, 11px);
   margin-left: var(--space-2);
   white-space: nowrap;
 }

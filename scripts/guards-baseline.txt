@@ -1,12 +1,8 @@
 # Línea base del trinquete §10 — regenerar solo al mejorar.
 # Regla + conteo máximo permitido; subir el número es la falla.
-ui-font<11 2
-ui-gradient 5
-ui-hex-inline 1
-ui-motion>280 27
-ui-raw-status 5
-ui-rgb-inline 23
-ui-shadow-off 12
-ui-tofixed 87
-ui-weight-700 13
-ui-z-literal 20
+ui-gradient 1
+ui-motion>280 22
+ui-rgb-inline 15
+ui-tofixed 2
+ui-weight-700 1
+ui-z-literal 8

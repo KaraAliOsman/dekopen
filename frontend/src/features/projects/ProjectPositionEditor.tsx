@@ -1,4 +1,4 @@
-import { fmtMm } from "../../format";
+import { formatDateTime, fmtMm, fmtWire } from "../../format";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -292,8 +292,8 @@ function designPayload(
       }
     : {
         system_id: inputs.systemId,
-        nominal_width_mm: elevationEnvelopeMm(product).width.toFixed(2),
-        nominal_height_mm: elevationEnvelopeMm(product).height.toFixed(2),
+        nominal_width_mm: fmtWire(elevationEnvelopeMm(product).width),
+        nominal_height_mm: fmtWire(elevationEnvelopeMm(product).height),
         color,
         ...(colorExterior !== null ? { color_exterior: colorExterior } : {}),
         parametric_tree: product,
@@ -1346,13 +1346,7 @@ function PositionWorkspace({
       {pendingDraft !== null && (
         <div className="draft-banner" role="status">
           <span>
-            {t("projects.draftFound").replace(
-              "{time}",
-              new Date(pendingDraft.savedAt).toLocaleString("es-CL", {
-                dateStyle: "short",
-                timeStyle: "short",
-              }),
-            )}
+            {t("projects.draftFound").replace("{time}", formatDateTime(pendingDraft.savedAt))}
           </span>
           <button type="button" onClick={() => restoreDraft(pendingDraft)}>
             {t("projects.restoreDraft")}

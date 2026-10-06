@@ -101,8 +101,7 @@
 }
 .catalog-detail h2,
 .ws-identity-head h2,
-.ws-chip,
-.ws-badge {
+.ws-chip {
   overflow-wrap: anywhere;
 }
 
@@ -136,9 +135,18 @@
 
 .catalog button[aria-current="true"],
 .catalog button[aria-pressed="true"] {
+  position: relative;
   border-color: var(--theme-accent);
   background: var(--theme-surface-card);
-  box-shadow: inset 0 -2px var(--theme-accent);
+}
+
+.catalog button[aria-current="true"]::after,
+.catalog button[aria-pressed="true"]::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 2px;
+  background: var(--theme-accent);
 }
 
 .catalog button:disabled,
@@ -321,11 +329,6 @@
   border-radius: var(--r-pill);
   background: var(--theme-surface-2, rgba(0, 0, 0, 0.06));
 }
-.ws-chip--off {
-  border: 1px solid var(--theme-warning, #b26a00);
-  color: var(--warn-ink);
-  background: transparent;
-}
 .ws-centers {
   margin-top: 0.9rem;
 }
@@ -362,20 +365,6 @@
 .ws-center-form [role="alert"] {
   color: var(--danger-ink);
   font-size: 0.82rem;
-}
-.ws-badge {
-  font-size: var(--type-dense);
-  padding: 0.15rem 0.55rem;
-  border-radius: var(--r-pill);
-  border: 1px solid var(--theme-border);
-}
-.ws-badge--ok {
-  border-color: var(--ok-ink);
-  color: var(--ok-ink);
-}
-.ws-badge--warn {
-  border-color: var(--warn-ink);
-  color: var(--warn-ink);
 }
 .ws-identity-facts {
   display: flex;
@@ -619,9 +608,17 @@
 }
 .ws-article-body footer {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   gap: 0.5rem;
+}
+/* La columna es angosta (~144 px): el chip de procedencia envuelve en vez
+   de desbordar la tarjeta (el .ws-badge anterior tenía overflow-wrap). */
+.ws-article-body footer .ui-chip {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .ws-table {
   width: 100%;

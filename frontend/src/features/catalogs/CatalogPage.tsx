@@ -316,7 +316,8 @@ function CatalogWorkspace({ orgId, role }: { orgId: string; role: string }): JSX
                   </strong>
                   <span title={system.code}>
                     {system.family ? `${system.family} · ` : ""}
-                    {shortCode(system.code)} · {ct(`option.${system.material}`)} · v{system.version}
+                    <code>{shortCode(system.code)}</code>
+                    {` · ${ct(`option.${system.material}`)} · v${system.version}`}
                   </span>
                   <small>
                     {system.is_global ? ct("global") : ct("own")}

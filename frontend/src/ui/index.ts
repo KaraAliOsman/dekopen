@@ -11,7 +11,6 @@ export {
   Radio,
   SegmentedControl,
   SelectField,
-  Spinner,
   Switch,
   TextInput,
   Tooltip,

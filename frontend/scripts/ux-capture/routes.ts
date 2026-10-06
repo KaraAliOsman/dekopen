@@ -20,6 +20,12 @@ export type CaptureRoute = {
   touchAudit?: boolean;
   /** settle hint: css selector to wait for before snapshotting */
   waitFor?: string;
+  /** la página ES el muestrario de anti-patrones: los hallazgos son su
+   * contenido, no defectos — se captura igual pero no cuenta hallazgos. */
+  expectViolations?: boolean;
+  /** Estados HTTP que la ruta espera por diseño (p. ej. un enlace de portal
+   * revocado responde 410 Gone y la UI muestra el estado correcto). */
+  toleratedHttpStatuses?: number[];
 };
 
 export const ROUTES: CaptureRoute[] = [
@@ -42,18 +48,21 @@ export const ROUTES: CaptureRoute[] = [
     path: "/cotizacion/{{portal.revocada}}",
     role: "public",
     extraMobile: true,
+    toleratedHttpStatuses: [410],
   },
   {
     name: "portal-expirada",
     path: "/cotizacion/{{portal.expirada}}",
     role: "public",
     extraMobile: true,
+    toleratedHttpStatuses: [410],
   },
   {
     name: "portal-reemplazada",
     path: "/cotizacion/{{portal.reemplazada}}",
     role: "public",
     extraMobile: true,
+    toleratedHttpStatuses: [410],
   },
   { name: "pago-retorno", path: "/pago/retorno", role: "public" },
 
@@ -101,7 +110,6 @@ export const ROUTES: CaptureRoute[] = [
   { name: "catalogs-alias", path: "/catalogs", role: "estimator" },
   { name: "assistant", path: "/assistant", role: "estimator" },
   { name: "onboarding", path: "/onboarding", role: "estimator" },
-  { name: "demo-editor", path: "/projects/demo/positions/g1/edit", role: "estimator" },
   { name: "benchmark", path: "/benchmark", role: "estimator" },
 
   // ---- workshop manager --------------------------------------------------
@@ -164,5 +172,11 @@ export const ROUTES: CaptureRoute[] = [
 
   // ---- muestrario del sistema (DEV-only) ----------------------------------
   { name: "dev-ui", path: "/dev/ui", role: "public", waitFor: ".dev-ui" },
-  { name: "dev-ui-mal", path: "/dev/ui/mal", role: "public", waitFor: ".mal" },
+  {
+    name: "dev-ui-mal",
+    path: "/dev/ui/mal",
+    role: "public",
+    waitFor: ".mal",
+    expectViolations: true,
+  },
 ];

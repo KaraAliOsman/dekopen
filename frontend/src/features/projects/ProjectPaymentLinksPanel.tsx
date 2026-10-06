@@ -7,12 +7,9 @@ import {
   projectPaymentLinkRecover,
   projectPaymentLinksList,
 } from "../../api/generated/dekopen";
-import type {
-  PaymentKindEnum,
-  PaymentLink,
-  PaymentLinkStatusEnum,
-} from "../../api/generated/models";
+import type { PaymentKindEnum, PaymentLink } from "../../api/generated/models";
 import { t, type TranslationKey } from "../../i18n/es-CL";
+import { StatusChip } from "../../ui/StatusChip";
 import { formatMoney } from "../../format";
 
 const KIND_LABEL: Record<string, TranslationKey> = {
@@ -20,15 +17,6 @@ const KIND_LABEL: Record<string, TranslationKey> = {
   PARCIAL: "projects.paymentKindParcial",
   SALDO: "projects.paymentKindSaldo",
 };
-const LINK_STATUS_LABEL: Record<PaymentLinkStatusEnum, TranslationKey> = {
-  DISPATCHING: "projects.paymentLinkStatusDispatching",
-  PENDING: "projects.paymentLinkStatusPending",
-  PAID: "projects.paymentLinkStatusPaid",
-  FAILED: "projects.paymentLinkStatusFailed",
-  UNCERTAIN: "projects.paymentLinkStatusUncertain",
-  CANCELLED: "projects.paymentLinkStatusCancelled",
-};
-
 function formatClp(value: string): string {
   return formatMoney(value, "CLP");
 }
@@ -70,11 +58,11 @@ export function ProjectPaymentLinksPanel({
   const links = linksQuery.data ?? [];
   const setLinks = (updater: (previous: PaymentLink[]) => PaymentLink[]) =>
     queryClient.setQueryData(linksKey, updater(linksQuery.data ?? []));
-  // Integration status is write-scoped — readers (e.g. taller) only need the
-  // links list; fetching it would 403 for them.
+  // Integration status is owner-scoped (backend: _OWNER_ONLY) — estimators
+  // only need the links list; fetching it would 403 for them.
   const integrationQuery = useQuery({
     queryKey: ["projects", "payment-integration", orgId],
-    enabled: canWrite,
+    enabled: isOwner,
     queryFn: async ({ signal }) => {
       const response = await projectPaymentIntegrationStatus({
         signal,
@@ -268,39 +256,40 @@ export function ProjectPaymentLinksPanel({
             </tr>
           </thead>
           <tbody>
-            {links.map((link) => (
-              <tr key={link.id}>
-                <td>{formatDate(link.created_at)}</td>
-                <td>{t(KIND_LABEL[link.kind] ?? "projects.paymentKindParcial")}</td>
-                <td className="num">{formatClp(link.amount)}</td>
-                <td>{link.payer_email}</td>
-                <td>
-                  <span className={`production-chip link-${link.status.toLowerCase()}`}>
-                    {t(LINK_STATUS_LABEL[link.status])}
-                  </span>
-                </td>
-                <td>
-                  {link.url ? (
-                    <button type="button" onClick={() => copy(link)} disabled={busy}>
-                      {copiedId === link.id
-                        ? t("projects.paymentLinkCopied")
-                        : t("projects.paymentLinkCopy")}
-                    </button>
-                  ) : (
-                    "—"
-                  )}
-                </td>
-                {canWrite && (
+            {links.map((link) => {
+              const linkStatus = link.status;
+              return (
+                <tr key={link.id}>
+                  <td>{formatDate(link.created_at)}</td>
+                  <td>{t(KIND_LABEL[link.kind] ?? "projects.paymentKindParcial")}</td>
+                  <td className="num">{formatClp(link.amount)}</td>
+                  <td>{link.payer_email}</td>
                   <td>
-                    {link.status !== "PAID" && link.status !== "DISPATCHING" && (
-                      <button type="button" onClick={() => recover(link)} disabled={busy}>
-                        {t("projects.paymentLinkRecover")}
+                    <StatusChip enumName="PaymentLinkStatusEnum" value={linkStatus} />
+                  </td>
+                  <td>
+                    {link.url ? (
+                      <button type="button" onClick={() => copy(link)} disabled={busy}>
+                        {copiedId === link.id
+                          ? t("projects.paymentLinkCopied")
+                          : t("projects.paymentLinkCopy")}
                       </button>
+                    ) : (
+                      "—"
                     )}
                   </td>
-                )}
-              </tr>
-            ))}
+                  {canWrite && (
+                    <td>
+                      {link.status !== "PAID" && link.status !== "DISPATCHING" && (
+                        <button type="button" onClick={() => recover(link)} disabled={busy}>
+                          {t("projects.paymentLinkRecover")}
+                        </button>
+                      )}
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}

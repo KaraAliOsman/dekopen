@@ -62,8 +62,9 @@ import {
   TechDetails,
   usePrompt,
 } from "../../ui";
+import { Dims, Length } from "../../ui/format";
 import type { TabItem } from "../../ui";
-import { fmtMm, fmtQty, formatPercent } from "../../format";
+import { fmtMm, fmtQty, formatDims, formatPercent } from "../../format";
 import { formatDate } from "../../format";
 import { t, tDynamic, tOptional } from "../../i18n/es-CL";
 import { useAssistantSurface } from "../assistant/assistantContext";
@@ -81,7 +82,7 @@ import { HumanTrace } from "./HumanTrace";
 import { OperatorSurface } from "./OperatorSurface";
 import { PieceList } from "./PieceList";
 import { StationBoard } from "./StationBoard";
-import { ORDER_STATUS_KEY } from "./board";
+import { ORDER_STATUS_KEY, ORDER_STATUS_TONE } from "./board";
 import { buildPieceList, pieceMatches } from "./pieces";
 import type { StationQueueGroup } from "./queue";
 import { CutPlanView, type WorkOrderOptimization } from "./CutPlanView";
@@ -162,12 +163,6 @@ const TERMINAL_ORDER_STATUSES: ReadonlySet<string> = new Set([
   "INSTALLED",
   "CANCELLED",
 ]);
-const deliveryStatusKey: Record<string, Parameters<typeof t>[0]> = {
-  SCHEDULED: "production.deliveryStatusScheduled",
-  ON_ROUTE: "production.deliveryStatusOnRoute",
-  DELIVERED: "production.deliveryStatusDelivered",
-  FAILED: "production.deliveryStatusFailed",
-};
 
 /** Contract errors carry a human-readable detail — surface it so a refused
  * step (shortage, gate, invalid transition) tells the operator why instead
@@ -1513,9 +1508,11 @@ export function ProductionPage(): JSX.Element {
                     ← {t("production.boardBack")}
                   </button>
                   <h2>{detail.order_code}</h2>
-                  <span className={`production-chip status-${detail.status.toLowerCase()}`}>
-                    {t(orderStatusKey[detail.status] ?? "production.orderReleased")}
-                  </span>
+                  <StatusChip
+                    label={t(orderStatusKey[detail.status] ?? "production.orderReleased")}
+                    tone={ORDER_STATUS_TONE[detail.status] ?? "neutral"}
+                    value={null}
+                  />
                   <span className="ot-head__work">
                     {detail.project_code ?? ""}
                     {detail.project_name ? ` · ${detail.project_name}` : ""}
@@ -1542,9 +1539,14 @@ export function ProductionPage(): JSX.Element {
                     </span>
                   ) : null}
                   {detail.shortage > 0 ? (
-                    <span className="production-chip is-warn">
-                      {t("production.shortageChip").replace("{count}", String(detail.shortage))}
-                    </span>
+                    <StatusChip
+                      label={t("production.shortageChip").replace(
+                        "{count}",
+                        String(detail.shortage),
+                      )}
+                      tone="warn"
+                      value={null}
+                    />
                   ) : null}
                   {detail.version_shortage > detail.shortage &&
                   !TERMINAL_ORDER_STATUSES.has(detail.status) ? (
@@ -1565,9 +1567,7 @@ export function ProductionPage(): JSX.Element {
                     </button>
                   ) : null}
                   {detail.dispatch_ready ? (
-                    <span className="production-chip is-ready">
-                      {t("production.dispatchReadyChip")}
-                    </span>
+                    <StatusChip label={t("production.dispatchReadyChip")} tone="ok" value={null} />
                   ) : null}
                   {canWrite && detail.dispatch_ready ? (
                     <button
@@ -1798,7 +1798,7 @@ export function ProductionPage(): JSX.Element {
                         .join(" / ");
                       const dims =
                         making.width_mm && making.height_mm
-                          ? `${fmtMm(making.width_mm)} × ${fmtMm(making.height_mm)} mm`
+                          ? `${formatDims(making.width_mm, making.height_mm)} mm`
                           : null;
                       return (
                         <p className="production-making" aria-label={t("production.makingTitle")}>
@@ -2054,11 +2054,13 @@ export function ProductionPage(): JSX.Element {
                                 <strong>{stats.cuts_total}</strong>
                                 {" · "}
                                 {t("production.optimizeStatsUseful")}:{" "}
-                                <strong>{fmtMm(stats.productive_length_mm)} mm</strong>
+                                <strong>
+                                  <Length value={stats.productive_length_mm} />
+                                </strong>
                                 {" · "}
                                 {t("production.optimizeStatsWaste")}:{" "}
                                 <strong>
-                                  {fmtMm(stats.process_waste_mm ?? stats.waste_mm)} mm
+                                  <Length value={stats.process_waste_mm ?? stats.waste_mm} />
                                 </strong>
                                 {stats.reusable_remnant_mm && stats.reusable_remnant_mm !== "0"
                                   ? ` · ${t("production.optimizeStatsRemnantReusable")}: ${fmtMm(stats.reusable_remnant_mm)} mm`
@@ -2125,7 +2127,9 @@ export function ProductionPage(): JSX.Element {
                                             </td>
                                             <td>{row.cuts_total}</td>
                                             <td>
-                                              {fmtMm(row.process_waste_mm ?? row.waste_mm)} mm
+                                              <Length
+                                                value={row.process_waste_mm ?? row.waste_mm}
+                                              />
                                             </td>
                                             <td>{row.purchase_bars + row.purchase_sheets}</td>
                                             <td>
@@ -2358,7 +2362,9 @@ export function ProductionPage(): JSX.Element {
                                             </span>
                                           ) : null}
                                         </td>
-                                        <td>{fmtMm(bar.stock_length_mm)} mm</td>
+                                        <td>
+                                          <Length value={bar.stock_length_mm} />
+                                        </td>
                                         <td>
                                           {bar.cuts
                                             .map(
@@ -2368,7 +2374,7 @@ export function ProductionPage(): JSX.Element {
                                             .join(" · ")}
                                         </td>
                                         <td>
-                                          {fmtMm(bar.remainder_mm)} mm
+                                          <Length value={bar.remainder_mm} />
                                           {bar.remainder_reusable ? (
                                             <span className="production-remnant-tag">
                                               {" "}
@@ -2582,8 +2588,10 @@ export function ProductionPage(): JSX.Element {
                                         <td>#{layout.sheet_index}</td>
                                         <td>{layout.purchasing_sku}</td>
                                         <td>
-                                          {fmtMm(layout.sheet_width_mm)}×
-                                          {fmtMm(layout.sheet_height_mm)} mm
+                                          <Dims
+                                            width={layout.sheet_width_mm}
+                                            height={layout.sheet_height_mm}
+                                          />
                                         </td>
                                         <td>
                                           {layout.source === "REMNANT" ? (
@@ -2771,6 +2779,7 @@ export function ProductionPage(): JSX.Element {
                       const canSchedule =
                         canWrite &&
                         (detail.status === "COMPLETED" || detail.status === "DISPATCHED");
+                      const deliveryStatus = delivery?.status ?? null;
                       return (
                         <section
                           className="production-delivery"
@@ -2779,14 +2788,7 @@ export function ProductionPage(): JSX.Element {
                           <header className="production-optimize-head">
                             <h3>{t("production.deliveryTitle")}</h3>
                             {delivery ? (
-                              <span
-                                className={`production-chip delivery-${delivery.status.toLowerCase()}`}
-                              >
-                                {t(
-                                  deliveryStatusKey[delivery.status] ??
-                                    "production.deliveryStatusScheduled",
-                                )}
-                              </span>
+                              <StatusChip enumName="DeliveryStatusEnum" value={deliveryStatus} />
                             ) : null}
                             {canSchedule &&
                             deliveryForm === null &&
@@ -2900,33 +2902,29 @@ export function ProductionPage(): JSX.Element {
                           ) : null}
                           {deliveries.length > 1 ? (
                             <ul className="production-delivery-trips">
-                              {deliveries.map((trip) => (
-                                <li key={trip.id} className="production-delivery-trip">
-                                  <span
-                                    className={`production-chip delivery-${trip.status.toLowerCase()}`}
-                                  >
-                                    {t(
-                                      deliveryStatusKey[trip.status] ??
-                                        "production.deliveryStatusScheduled",
-                                    )}
-                                  </span>
-                                  <span className="production-delivery-trip-date">
-                                    {trip.scheduled_date}
-                                  </span>
-                                  <span className="production-delivery-trip-units">
-                                    {unitLabel(trip.unit_indexes)}
-                                  </span>
-                                  {trip.confirmation ? (
-                                    <button
-                                      type="button"
-                                      className="production-chip delivery-delivered"
-                                      onClick={() => void openConfirmation(detail.id, trip.id)}
-                                    >
-                                      {trip.confirmation.confirmation_code}
-                                    </button>
-                                  ) : null}
-                                </li>
-                              ))}
+                              {deliveries.map((trip) => {
+                                const tripStatus = trip.status;
+                                return (
+                                  <li key={trip.id} className="production-delivery-trip">
+                                    <StatusChip enumName="DeliveryStatusEnum" value={tripStatus} />
+                                    <span className="production-delivery-trip-date">
+                                      {trip.scheduled_date}
+                                    </span>
+                                    <span className="production-delivery-trip-units">
+                                      {unitLabel(trip.unit_indexes)}
+                                    </span>
+                                    {trip.confirmation ? (
+                                      <button
+                                        type="button"
+                                        className="production-chip delivery-delivered"
+                                        onClick={() => void openConfirmation(detail.id, trip.id)}
+                                      >
+                                        {trip.confirmation.confirmation_code}
+                                      </button>
+                                    ) : null}
+                                  </li>
+                                );
+                              })}
                             </ul>
                           ) : null}
                           {deliveries.length > 0 && pendingUnits.length > 0 ? (
@@ -3444,7 +3442,9 @@ export function ProductionPage(): JSX.Element {
                                 <span className="ot-machining-seq">{index + 1}</span>
                                 <strong>{opLabel(op)}</strong>
                                 {op.u_mm != null && op.u_mm !== "" ? (
-                                  <span>u = {fmtMm(op.u_mm)} mm</span>
+                                  <span>
+                                    u = <Length value={op.u_mm} />
+                                  </span>
                                 ) : null}
                                 {op.face ? <span>{opFaceLabel(op.face)}</span> : null}
                               </li>
@@ -3557,13 +3557,20 @@ export function ProductionPage(): JSX.Element {
                 >
                   <div className="ot-step-panel">
                     <div className="ot-step-panel__head">
-                      <span className={`production-chip status-${stepPanel.status.toLowerCase()}`}>
-                        {t(
+                      <StatusChip
+                        enumName="ProductionStepStatusEnum"
+                        label={t("production.stepPending")}
+                        tone={
                           stepPanel.status === "READY" && stepPanel.id !== firstOpenStepId
-                            ? "production.stepPending"
-                            : (stepStatusKey[stepPanel.status] ?? "production.stepReady"),
-                        )}
-                      </span>
+                            ? "neutral"
+                            : undefined
+                        }
+                        value={
+                          stepPanel.status === "READY" && stepPanel.id !== firstOpenStepId
+                            ? undefined
+                            : stepPanel.status
+                        }
+                      />
                       <span>{stationCodeLabel(stepPanel.code)}</span>
                       {(stepPanel.work_center_name ?? stepPanel.work_center_code) ? (
                         <span>{stepPanel.work_center_name ?? stepPanel.work_center_code}</span>

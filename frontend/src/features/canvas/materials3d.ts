@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { fmtWire } from "../../format";
 
 import type { Solid3D } from "./Product3DScene";
 
@@ -22,7 +23,7 @@ function drawGrain(axis: "u" | "v"): THREE.Texture {
       const at = Math.random() * 256;
       const wave = 4 + Math.random() * 14;
       const alpha = 0.1 + Math.random() * 0.16;
-      ctx.strokeStyle = `rgba(52, 34, 16, ${alpha.toFixed(3)})`;
+      ctx.strokeStyle = `rgba(52, 34, 16, ${fmtWire(alpha, 3)})`;
       ctx.lineWidth = 0.9 + Math.random() * 3.2;
       ctx.beginPath();
       if (axis === "u") {

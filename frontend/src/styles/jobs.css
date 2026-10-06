@@ -62,12 +62,6 @@
   margin: 0.125rem 0 0;
 }
 
-.job-row-code {
-  color: var(--theme-text-muted, #66707f);
-  font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
-  font-size: var(--type-micro);
-}
-
 /* §IA3 — the provider-call ledger under the jobs list. */
 .ai-activity {
   border-top: 1px solid var(--theme-border-subtle);

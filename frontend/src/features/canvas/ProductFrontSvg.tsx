@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 
 import type { ProductIssue } from "../../api/generated/models";
-import { fmtMm, parseLocaleNumber } from "../../format";
+import { fmtMm, parseLocaleNumber, fmtMmCanonical, fmtWire } from "../../format";
 import { t } from "../../i18n/es-CL";
 import type { IntentNode, UnitKind } from "./intentEditing";
 import {
@@ -192,7 +192,7 @@ const MAX_DIMENSION_MM = 30000;
 function normalizeDimension(candidate: string): string | null {
   const value = parseLocaleNumber(candidate.trim().replace(/[°\s]/g, ""));
   if (value === null || value <= 0 || value > MAX_DIMENSION_MM) return null;
-  return value.toFixed(2);
+  return fmtWire(value);
 }
 
 /** Parse an emitted spec key — "TURN:LEFT:OUTWARD[:ROLE]" or the DOOR:
@@ -1026,7 +1026,7 @@ function Bay({
                   view === "exterior" ? `translate(${labelX * 2} 0) scale(-1 1)` : undefined
                 }
               >
-                {heightMm.toFixed(0)}
+                {fmtMm(Math.round(heightMm))}
               </text>
             </g>
           );
@@ -1313,7 +1313,7 @@ function ModuleTree({
                 }
               : {})}
           >
-            {offset.toFixed(0)}
+            {fmtMm(Math.round(offset))}
           </text>
         )}
         {(onDividerDown || onSelectDivision) && (
@@ -2122,7 +2122,7 @@ export function ProductFrontContent({
           onMove(event);
           setLiveOffsets(new Map());
           if (Number.isFinite(last))
-            onMoveDivision(moduleId, info.divisionId, snapMm(last).toFixed(2));
+            onMoveDivision(moduleId, info.divisionId, fmtWire(snapMm(last)));
         },
         () => setLiveOffsets(new Map()),
       );
@@ -2228,7 +2228,7 @@ export function ProductFrontContent({
     if (!divideTool || !onCommitDivide) return;
     if (!rects.some((item) => item.module.id === moduleId)) return;
     if (hovered) {
-      onCommitDivide(moduleId, hovered.bayId, hovered.mm.toFixed(2));
+      onCommitDivide(moduleId, hovered.bayId, fmtWire(hovered.mm));
     } else if (clientX === undefined && clientY === undefined) {
       // Only a keyboard commit (no pointer position) may fall back to
       // centering the primary bay — a pointer click that landed on frame,
@@ -2254,7 +2254,7 @@ export function ProductFrontContent({
       <SvgDim
         x={totalW / 2}
         y={-70}
-        value={totalW.toFixed(2)}
+        value={fmtMmCanonical(totalW)}
         label={t("assembly.totalWidth")}
         disabled={disabled}
         onCommit={onCommitTotalWidth}
@@ -2356,7 +2356,7 @@ export function ProductFrontContent({
           <SvgDim
             x={-160}
             y={midY}
-            value={height.toFixed(2)}
+            value={fmtMmCanonical(height)}
             label={t("assembly.height")}
             disabled={disabled}
             onCommit={onCommitHeight}
@@ -2381,7 +2381,7 @@ export function ProductFrontContent({
                 key={`dim-${column.rootId}`}
                 x={mx(column.x + column.w / 2)}
                 y={height + 80}
-                value={column.w.toFixed(2)}
+                value={fmtMmCanonical(column.w)}
                 label={`${t("assembly.module")} ${column.rootId} ${t("assembly.width")}`}
                 active={column.rootId === selectedId}
                 disabled={disabled || mirrored}
@@ -2422,7 +2422,7 @@ export function ProductFrontContent({
                       textAnchor="middle"
                       dominantBaseline="central"
                     >
-                      {segW.toFixed(0)}
+                      {fmtMm(Math.round(segW))}
                     </text>
                   );
                 })}
@@ -2474,7 +2474,7 @@ export function ProductFrontContent({
                     y={height - rect.sill - rect.h / 2}
                     textAnchor={mirrored ? "end" : "start"}
                   >
-                    {rect.h.toFixed(0)}
+                    {fmtMm(Math.round(rect.h))}
                   </text>
                 ))}
               </g>
@@ -2713,7 +2713,7 @@ export function ProductFrontContent({
                 y={-40}
                 textAnchor="middle"
               >
-                {`${seamLeftMm.toFixed(0)} | ${seamRightMm.toFixed(0)}`}
+                {`${fmtMm(Math.round(seamLeftMm))} | ${fmtMm(Math.round(seamRightMm))}`}
               </text>
             </g>
           )}

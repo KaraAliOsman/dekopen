@@ -6,6 +6,7 @@ import { t } from "../../i18n/es-CL";
 import { formatDateTime } from "../../format";
 import { useConfirm } from "../../ui";
 import { traceNoteLabel } from "../production/labels";
+import { EntityCode } from "../../ui/format";
 
 type RequestFn = <T>(path: string, method?: string, body?: unknown) => Promise<T>;
 
@@ -300,7 +301,7 @@ export function InventorySection({
             {stockItems.map((item) => (
               <li key={item.item_id}>
                 <span>
-                  {item.sku} · {item.name}
+                  <EntityCode value={item.sku} /> · {item.name}
                 </span>
                 <button
                   type="button"
@@ -315,7 +316,7 @@ export function InventorySection({
           {adjustTarget ? (
             <form noValidate className="inventory-remnant-form" onSubmit={recordMovement}>
               <p className="purchasing-hint">
-                {adjustTarget.sku} · {adjustTarget.name}
+                <EntityCode value={adjustTarget.sku} /> · {adjustTarget.name}
               </p>
               <label>
                 {t("inventory.movementType")}

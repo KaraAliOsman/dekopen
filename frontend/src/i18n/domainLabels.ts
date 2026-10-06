@@ -48,9 +48,9 @@ export const DOMAIN_LABELS: Record<string, L> = {
   PriceResponseStateEnum: {
     PREVIEW: l("Vista previa", "neutral"),
     PENDING: l("Pendiente", "warn"),
-    APPLIED: l("Aplicado", "ok", "check"),
-    REJECTED: l("Rechazado", "danger", "cross"),
-    WITHDRAWN: l("Retirado", "neutral"),
+    APPLIED: l("Aplicada", "ok", "check"),
+    REJECTED: l("Rechazada", "danger", "cross"),
+    WITHDRAWN: l("Retirada", "neutral"),
   },
   DecisionEnum: {
     APPROVED: l("Aprobado", "ok", "check"),

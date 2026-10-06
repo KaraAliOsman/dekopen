@@ -443,6 +443,8 @@
   --theme-accent-deep: var(--interactive-fill-active);
   --theme-accent-soft: var(--info-soft);
   --theme-accent-ink: var(--info-ink);
+  /* Tinta sobre relleno de acento; el portal la recalcula por marca (brandOnFill). */
+  --theme-accent-onfill: var(--on-interactive-fill);
   --theme-accent-ghost: var(--surface-selected);
   --theme-mark: var(--mark);
   --theme-warning: var(--warn);
@@ -479,7 +481,6 @@
   --shadow-raise: var(--shadow-e2);
   --shadow-pop: var(--shadow-e2);
   --shadow-modal: var(--shadow-e3);
-  --shadow-lg: var(--shadow-e3);
 
   /* Tipografía legada */
   --theme-font-mono: var(--font-mono);
@@ -673,5 +674,5 @@
   inset: 0;
   place-items: center;
   position: fixed;
-  z-index: 90;
+  z-index: var(--z-palette);
 }

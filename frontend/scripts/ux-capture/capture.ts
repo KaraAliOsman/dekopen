@@ -41,6 +41,10 @@ const DOM_PROBE_JS = `() => {
     const v = node.nodeValue || "";
     const el = node.parentElement;
     if (!el) continue;
+    // Los identificadores técnicos (SKU, códigos de error, nombres de campo)
+    // viven en contextos code/mono — su texto no es voz de producto y no debe
+    // disparar el escáner de vocabulario.
+    if (el.closest("code, pre, samp, kbd, .fmt-code, .ui-code, [data-code]")) continue;
     const style = getComputedStyle(el);
     if (style.display === "none" || style.visibility === "hidden") continue;
     const trimmed = v.trim();
@@ -56,16 +60,48 @@ const DOM_PROBE_JS = `() => {
     );
   };
   const bgOf = (el) => {
+    // Compone las capas translúcidas sobre los ancestros: un
+    // rgba(7,95,90,0.125) NO es un fondo opaco — WCAG mide contra el
+    // color resultante de la composición, no el canal alfa ignorado.
+    const parseBg = (bg) => {
+      // Sin regex: este cuerpo se evalúa dentro de un template literal y
+      // los backslashes no sobreviven (el ( literal rompería el parseo).
+      const open = (bg || "").indexOf("(");
+      const close = (bg || "").indexOf(")");
+      if (open < 0 || close < 0 || close < open) return null;
+      const parts = bg
+        .slice(open + 1, close)
+        .split(/[ ,/]+/)
+        .filter((s) => s.length > 0)
+        .map((s) => parseFloat(s));
+      if (parts.length < 3 || parts.slice(0, 3).some((n) => !Number.isFinite(n))) return null;
+      return [parts[0], parts[1], parts[2], parts.length > 3 && Number.isFinite(parts[3]) ? parts[3] : 1];
+    };
+    const composite = (top, under) => {
+      const [tr, tg, tb, ta] = top;
+      const [ur, ug, ub, ua] = under;
+      const na = ta + ua * (1 - ta);
+      if (na <= 0) return [0, 0, 0, 0];
+      return [
+        (tr * ta + ur * ua * (1 - ta)) / na,
+        (tg * ta + ug * ua * (1 - ta)) / na,
+        (tb * ta + ub * ua * (1 - ta)) / na,
+        na,
+      ];
+    };
+    let acc = null;
     let node = el;
     while (node && node !== document.documentElement) {
-      const bg = getComputedStyle(node).backgroundColor;
-      const flat = bg.replaceAll(" ", "");
-      // sin barras: este archivo se evalúa como template string en el browser
-      const transparent = /[,/]0([.]0+)?[)]$/.test(flat);
-      if (bg && !transparent && bg !== "transparent") return bg;
+      const c = parseBg(getComputedStyle(node).backgroundColor);
+      if (c && c[3] > 0) {
+        acc = acc === null ? c : composite(acc, c);
+        if (acc[3] >= 0.999) break;
+      }
       node = node.parentElement;
     }
-    return getComputedStyle(document.body).backgroundColor;
+    const bodyC = parseBg(getComputedStyle(document.body).backgroundColor) || [255, 255, 255, 1];
+    const final = acc === null ? bodyC : composite(acc, bodyC);
+    return "rgb(" + Math.round(final[0]) + ", " + Math.round(final[1]) + ", " + Math.round(final[2]) + ")";
   };
   for (const el of document.querySelectorAll("body *")) {
     const r = el.getBoundingClientRect();
@@ -104,7 +140,14 @@ const DOM_PROBE_JS = `() => {
       interactive,
       radiusPx: Math.max(...radii),
       shadow: style.boxShadow,
-      gradient: (style.backgroundImage || "").includes("gradient("),
+      // El degradado prohibido es el decorativo en chrome de UI. Quedan
+      // fuera: el interior de un <svg> (la vidriera se sombrea como
+      // geometría, no como adorno) y la línea esquelética .ui-skeleton
+      // (la ondulación ES el indicador de espera, idiomático).
+      gradient:
+        (style.backgroundImage || "").includes("gradient(") &&
+        el.namespaceURI !== "http://www.w3.org/2000/svg" &&
+        el.closest("svg, .ui-skeleton__line") === null,
       blur:
         (style.backdropFilter && style.backdropFilter !== "none") ||
         (style.filter || "").includes("blur("),
@@ -150,6 +193,8 @@ async function captureOne(
     viewport: string;
     theme: string;
     touchAudit: boolean;
+    expectViolations?: boolean;
+    toleratedHttpStatuses?: number[];
   },
   waitFor: string | undefined,
   shotDir: string,
@@ -187,15 +232,27 @@ async function captureOne(
     boxes: BoxProbe[];
   };
 
-  const findings: Finding[] = [
-    ...scanVisibleText(probe.text),
-    ...scanLayout(probe.scrollWidth, probe.clientWidth, probe.boxes, {
-      touchAudit: meta.touchAudit,
-    }),
-    ...scanStyles(probe.boxes),
-    ...scanConsoleEntries(consoleEntries),
-    ...scanHttpEntries(httpEntries),
-  ];
+  const findings: Finding[] = meta.expectViolations
+    ? []
+    : [
+        ...scanVisibleText(probe.text),
+        ...scanLayout(probe.scrollWidth, probe.clientWidth, probe.boxes, {
+          touchAudit: meta.touchAudit,
+        }),
+        ...scanStyles(probe.boxes),
+        ...scanConsoleEntries(
+          consoleEntries.filter((e) => {
+            // Un código tolerado por contrato tampoco debe contar como
+            // error de consola: el navegador registra "Failed to load
+            // resource: ... 410" aunque el 410 sea la respuesta esperada.
+            const m = /status of (\d+)/.exec(e.text);
+            return !(m && (meta.toleratedHttpStatuses ?? []).includes(Number(m[1])));
+          }),
+        ),
+        ...scanHttpEntries(
+          httpEntries.filter((e) => !(meta.toleratedHttpStatuses ?? []).includes(e.status)),
+        ),
+      ];
 
   const shotName = `${meta.route}--${meta.viewport}--${meta.theme}.png`;
   await page.screenshot({ path: `${shotDir}/${shotName}`, fullPage: false });
@@ -222,6 +279,8 @@ export async function runCaptures(args: {
     waitFor?: string;
     extraMobile?: boolean;
     touchAudit?: boolean;
+    expectViolations?: boolean;
+    toleratedHttpStatuses?: number[];
   }[];
   storageStates: Record<string, string>;
   outDir: string;
@@ -251,6 +310,8 @@ export async function runCaptures(args: {
                   viewport: viewport.name,
                   theme,
                   touchAudit: job.touchAudit === true && viewport.name === MOBILE_VIEWPORT.name,
+                  expectViolations: job.expectViolations,
+                  toleratedHttpStatuses: job.toleratedHttpStatuses,
                 },
                 job.waitFor,
                 `${args.outDir}/shots`,

@@ -14,6 +14,7 @@ import { t } from "../../i18n/es-CL";
 import { formatDateTime, formatRevision } from "../../format";
 import { formatDate } from "../../format";
 import "./purchasing.css";
+import { EntityCode } from "../../ui/format";
 
 type OrderType =
   "SUPPLIER_PROFILE_PO" | "SUPPLIER_GLASS_PO" | "SUPPLIER_HARDWARE_PO" | "SUPPLIER_PANEL_PO";
@@ -691,7 +692,7 @@ function PurchasingWorkspace({
                 <tr key={line.requirement_line_id}>
                   <td>{categoryLabel(line.category)}</td>
                   <td>
-                    {line.purchasing_sku}
+                    <EntityCode value={line.purchasing_sku} />
                     <span className="purchasing-coverage-unit">
                       {" "}
                       {purchaseUnitLabel(line.unit, 2)}
@@ -808,7 +809,9 @@ function PurchasingWorkspace({
                 })
                 .map((item) => (
                   <tr key={item.item_id}>
-                    <td>{item.sku}</td>
+                    <td>
+                      <EntityCode value={item.sku} />
+                    </td>
                     <td>
                       {item.name} · {purchaseUnitLabel(item.unit, 2)}
                     </td>
@@ -1298,7 +1301,7 @@ function OrderCard({
         <ul className="purchasing-order-lines">
           {order.lines_preview.map((line, index) => (
             <li key={index}>
-              {line.sku} × {fmtQty(line.qty)} {line.unit}
+              <EntityCode value={line.sku} /> × {fmtQty(line.qty)} {line.unit}
             </li>
           ))}
         </ul>

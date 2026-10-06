@@ -319,10 +319,6 @@ export const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(funct
 
 /* ---------- misc ---------- */
 
-export function Spinner({ label }: { label?: string }): JSX.Element {
-  return <span aria-label={label ?? t("ui.loading")} className="ui-spinner" role="status" />;
-}
-
 /* ---------- Tooltip ---------- */
 
 /** Tooltip — el nombre completo del control y su atajo, visibles al

@@ -45,7 +45,7 @@
 .onboarding-system.is-picked,
 .onboarding-choice__card.is-picked {
   border-color: var(--theme-accent);
-  box-shadow: 0 0 0 1px var(--theme-accent);
+  outline: 1px solid var(--theme-accent);
 }
 
 .onboarding-system__meta {

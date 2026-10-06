@@ -306,7 +306,7 @@ for (const theme of ["light", "dark"] as const) {
       .locator(".inspector-semaphore")
       .evaluate((el) => getComputedStyle(el).transitionDuration);
     expect(transition.split(", ")).toContain("0.15s");
-    await expect(modal.locator(".is-corrected")).toHaveCSS("animation-duration", "0.3s");
+    await expect(modal.locator(".is-corrected")).toHaveCSS("animation-duration", "0.28s");
     await modal.getByRole("button", { name: "Corte 1D", exact: true }).click();
     await expect(modal.getByRole("heading", { name: "Pedido", exact: true })).toBeVisible();
     await expect(modal.getByText("COMPRA-MARCO", { exact: true })).toBeVisible();

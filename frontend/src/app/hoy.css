@@ -43,7 +43,7 @@
 
 .hoy-item__urgency {
   color: var(--theme-text-secondary);
-  font-size: 0.72rem;
+  font-size: var(--type-micro);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;

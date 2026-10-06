@@ -22,14 +22,14 @@
   left: 50%;
   bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
-  z-index: 60;
+  z-index: var(--z-toast);
   max-width: min(34rem, calc(100vw - 2rem));
   margin: 0;
   padding: 0.65rem 1rem;
   border: 1px solid var(--theme-danger);
   border-radius: var(--radius-md, var(--r-2));
   background: var(--theme-surface-panel);
-  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.18));
+  box-shadow: var(--shadow-raise);
   font-weight: 600;
 }
 .production-layout {
@@ -631,7 +631,7 @@
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: var(--r-2);
-  background: var(--paper-2, #faf9f7);
+  background: var(--paper-2);
 }
 .production-delivery-trip-date {
   font-weight: 600;
@@ -682,7 +682,7 @@
   border-radius: var(--radius-sm);
   /* The pad is paper, not a theme surface: the captured PNG seals into the
      printed POD, so it stays white with dark ink in either theme. */
-  background: #fff;
+  background: var(--paper);
   touch-action: none;
   cursor: crosshair;
 }

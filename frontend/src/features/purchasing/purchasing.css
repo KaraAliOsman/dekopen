@@ -118,6 +118,7 @@
 .purchasing-page td small {
   display: block;
   color: var(--theme-text-secondary);
+  font-size: var(--type-micro);
 }
 .purchasing-eligibility,
 .purchasing-confirm,
@@ -367,7 +368,7 @@
 }
 .inventory-label .inventory-label-name {
   font-size: 1.05rem;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.2;
 }
 .inventory-label .inventory-label-dims {

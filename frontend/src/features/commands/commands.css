@@ -6,7 +6,7 @@
   align-items: flex-start;
   justify-content: center;
   padding-top: 12vh;
-  z-index: 60;
+  z-index: var(--z-palette);
 }
 
 .command-palette {

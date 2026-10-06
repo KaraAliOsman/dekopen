@@ -16,6 +16,8 @@ import type { PatchedClientUpdateRequest } from "../../api/generated/models/patc
 import { useAuthSession } from "../../auth/AuthSessionProvider";
 import { t } from "../../i18n/es-CL";
 import { Button, DeniedState, Field, PageHeader, useConfirm } from "../../ui";
+import { StatusBadge } from "../../ui/StatusBadge";
+import { StatusChip } from "../../ui/StatusChip";
 import "./projects.css";
 import { isValidEmail, isValidRut } from "../../format";
 import { formatDate } from "../../format";
@@ -30,15 +32,6 @@ const clientFields = [
   ["comuna", "clients.comuna", "text", 20],
   ["notes", "clients.notes", "textarea", undefined],
 ] as const;
-
-const projectStatusKey: Record<string, Parameters<typeof t>[0]> = {
-  DRAFT: "projects.draft",
-  QUOTED: "projects.quoted",
-  APPROVED: "projects.approved",
-  IN_PRODUCTION: "projects.production",
-  COMPLETED: "projects.completed",
-  CANCELLED: "projects.cancelled",
-};
 
 type Draft = {
   value: PatchedClientUpdateRequest;
@@ -418,9 +411,7 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
                         </time>
                       </span>
                       {!item.is_active && (
-                        <span className="status-chip" data-status="cancelled">
-                          {t("clients.inactive")}
-                        </span>
+                        <StatusBadge label={t("clients.inactive")} tone="neutral" />
                       )}
                     </button>
                   </li>
@@ -522,23 +513,24 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
                     <p className="clients-empty">{t("clients.noProjects")}</p>
                   ) : (
                     <ul className="clients-projects">
-                      {selectedProjects.map((project) => (
-                        <li key={project.id}>
-                          <Link to={`/projects/${project.id}`} className="clients-project-row">
-                            <span className="dashboard-row-code">{project.code}</span>
-                            <span className="dashboard-row-name">{project.name}</span>
-                            <span
-                              className="status-chip"
-                              data-status={project.status.toLowerCase()}
-                            >
-                              {t(projectStatusKey[project.status] ?? "projects.draft")}
-                            </span>
-                            <time dateTime={project.updated_at}>
-                              {formatDate(project.updated_at)}
-                            </time>
-                          </Link>
-                        </li>
-                      ))}
+                      {selectedProjects.map((project) => {
+                        const projectStatus = project.status;
+                        return (
+                          <li key={project.id}>
+                            <Link to={`/projects/${project.id}`} className="clients-project-row">
+                              <span className="dashboard-row-code">{project.code}</span>
+                              <span className="dashboard-row-name">{project.name}</span>
+                              <StatusChip
+                                enumName="ProjectResponseStatusEnum"
+                                value={projectStatus}
+                              />
+                              <time dateTime={project.updated_at}>
+                                {formatDate(project.updated_at)}
+                              </time>
+                            </Link>
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
                 </section>

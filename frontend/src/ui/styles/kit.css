@@ -23,21 +23,6 @@
 .ui-button__icon {
   display: inline-flex;
 }
-@keyframes ui-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-.ui-spinner {
-  display: inline-block;
-  width: 1rem;
-  height: 1rem;
-  border: 2px solid var(--theme-border-strong);
-  border-top-color: var(--theme-accent);
-  border-radius: 50%;
-  animation: ui-spin 0.7s linear infinite;
-}
-
 /* Field help/error */
 .ui-field__help {
   color: var(--theme-text-muted);

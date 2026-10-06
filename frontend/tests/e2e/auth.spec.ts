@@ -370,16 +370,15 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   ).toBeEnabled();
   await page.getByRole("button", { name: "Aprobar y aplicar precios", exact: true }).click();
   await expect(
-    page
-      .locator(".operation-decision")
-      .getByText("Precios aplicados al proyecto.", { exact: true }),
+    page.locator(".operation-decision").locator(".ui-chip").getByText("Aplicada", { exact: true }),
   ).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: "Recargar", exact: true }).click();
   await expect(
     page
       .locator(".operation-history__item")
-      .getByText("Precios aplicados al proyecto.", { exact: true }),
+      .locator(".ui-chip")
+      .getByText("Aplicada", { exact: true }),
   ).toBeVisible();
   await page.goto(`/projects/${draft.id}`);
   await expect(
@@ -485,9 +484,7 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   ).toBeEnabled();
   await page.getByRole("button", { name: "Aprobar y aplicar precios", exact: true }).click();
   await expect(
-    page
-      .locator(".operation-decision")
-      .getByText("Precios aplicados al proyecto.", { exact: true }),
+    page.locator(".operation-decision").locator(".ui-chip").getByText("Aplicada", { exact: true }),
   ).toBeVisible();
   await page.goto(`/projects/${draft.id}`);
   const prepB = page.waitForResponse(
@@ -611,9 +608,7 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   expect((await compositePreview).status()).toBe(200);
   await page.getByRole("button", { name: "Aprobar y aplicar precios", exact: true }).click();
   await expect(
-    page
-      .locator(".operation-decision")
-      .getByText("Precios aplicados al proyecto.", { exact: true }),
+    page.locator(".operation-decision").locator(".ui-chip").getByText("Aplicada", { exact: true }),
   ).toBeVisible();
 });
 

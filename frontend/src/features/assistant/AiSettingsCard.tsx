@@ -8,6 +8,7 @@ import type { AiSettings } from "../../api/generated/models/aiSettings";
 import { formatMoney, parseLocaleNumber, shortTechnicalId } from "../../format";
 import { domainLabel } from "../../i18n/domainLabels";
 import { t, type TranslationKey } from "../../i18n/es-CL";
+import { StatusBadge } from "../../ui/StatusBadge";
 
 const MODE_KEYS: Record<string, TranslationKey> = {
   live: "settings.aiMode.live",
@@ -152,9 +153,18 @@ export function AiSettingsCard({ orgId }: { orgId: string }): JSX.Element {
         <div className="settings-row">
           <dt>{t("settings.aiStatus")}</dt>
           <dd>
-            <span className="status-chip ai-mode-chip" data-status={settingsData.mode}>
-              {t(MODE_KEYS[settingsData.mode] ?? "settings.aiMode.unconfigured")}
-            </span>
+            <StatusBadge
+              label={t(MODE_KEYS[settingsData.mode] ?? "settings.aiMode.unconfigured")}
+              tone={
+                settingsData.mode === "live"
+                  ? "success"
+                  : settingsData.mode === "test"
+                    ? "info"
+                    : settingsData.mode === "partial"
+                      ? "warning"
+                      : "neutral"
+              }
+            />
           </dd>
         </div>
       </dl>

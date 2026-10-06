@@ -47,7 +47,12 @@ const SURFACE_ROUTES: {
   {
     pattern: "/projects/:id/positions/:posId/edit",
     surface: "position",
-    refs: (p) => ({ project_id: p.id ?? "", position_id: p.posId ?? "" }),
+    // La ruta dev /projects/demo/positions/g1/edit no tiene proyecto real:
+    // refs vacías para que el «dónde estoy» no dispare 404 contra la API.
+    refs: (p) =>
+      p.id === "demo"
+        ? { project_id: "", position_id: "" }
+        : { project_id: p.id ?? "", position_id: p.posId ?? "" },
   },
   {
     pattern: "/projects/:id/pricing",

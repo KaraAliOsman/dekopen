@@ -83,7 +83,7 @@
   color: var(--ok-ink);
 }
 .is-corrected {
-  animation: inspector-corrected 300ms ease-out;
+  animation: inspector-corrected 280ms ease-out;
 }
 @keyframes inspector-corrected {
   from {

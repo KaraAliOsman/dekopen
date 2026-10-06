@@ -143,10 +143,28 @@ const STATION_CODES: ReadonlySet<string> = new Set([
   "DISPATCH",
 ]);
 
+/** Los perfiles de proceso citan a menudo el CÓDIGO del centro de trabajo
+ * sembrado (CUT_SAW, ASSEMBLY_BENCH…) en lugar del código de estación —
+ * el lector ve el nombre de la estación canónica en ambos casos. */
+const STATION_ALIASES: Record<string, string> = {
+  CUT_SAW: "CUT",
+  MACHINING_CELL: "MACHINING",
+  CRIMPING_MACHINE: "CRIMP",
+  CLEANING_STATION: "CLEAN",
+  ASSEMBLY_BENCH: "ASSEMBLE",
+  SASH_ASSEMBLY_BENCH: "SASH_ASSEMBLE",
+  HARDWARE_BENCH: "HARDWARE",
+  GLAZING_BENCH: "GLAZE",
+  QC_STATION: "QC",
+  PACK_STATION: "PACK",
+  WELDER: "WELD",
+};
+
 export function stationCodeLabel(code: string | null | undefined): string {
   if (code === null || code === undefined || code === "") return "—";
-  return STATION_CODES.has(code)
-    ? t(`production.station.${code}` as Parameters<typeof t>[0])
+  const resolved = STATION_ALIASES[code] ?? code;
+  return STATION_CODES.has(resolved)
+    ? t(`production.station.${resolved}` as Parameters<typeof t>[0])
     : code;
 }
 

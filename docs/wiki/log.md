@@ -193,7 +193,6 @@ Append-only chronology. Keep newest entries at the bottom.
 - Verificado: 38 tests PyMuPDF nuevos + contratos/portal verdes; `make lint|typecheck|test|build` y `make test-db` verdes (`PY=.venv/bin/python`); capturas `docs/redesign/captures/doc01-v2/` (portada, resumen, detalle, cierre); decisiones en `docs/decisions/valores-por-defecto.md` sección P09.
 - No hecho: tabla de calendario de pagos con montos — no existe modelo de cuotas; el documento imprime `payment_terms` sellado (rubrica R-riesgo declarada en el PR).
 
-
 ## [2026-10-06] P03 | shell por flujo + Inicio «Hoy» por rol
 
 - Encargo P03 (ola 1): barra lateral agrupada por flujo (Inicio / Ventas / Ingeniería / Operación / Asistente / Ajustes, plegable a icono+tooltip, secciones vacías ocultas por rol), topbar con migas de pan humanas + switchers org/proyecto + `Ctrl K` + campana de atención + ayuda `?`, y «Hoy» como cola ordenada por consecuencia (no dashboard).
@@ -226,7 +225,6 @@ Append-only chronology. Keep newest entries at the bottom.
 - Decisiones en `docs/decisions/valores-por-defecto.md` sección P07; capturas `docs/redesign/captures/p07-precios/`; `make lint|typecheck|test|build|test-db` (`PY=.venv/bin/python`).
 - Correcciones tras QA grabado: la cascada no renderizaba nunca — el gate de igualdad exacta rechazaba los snapshots cuantizados a 4dp (unit_cost almacenado vs. recomputado difería en fracciones de centésima). Solución: `QUANTUM_SLACK`/`MONEY_SLACK` por unidad/proyecto con fila explícita `rounding_residual` (telescopio sigue exacto); una divergencia real (>0,5+ por proyecto) sigue rechazando. Cobertura devolvía 409: `pricing_backend` no tenía SELECT en los 4 mapeos de compra más nuevos ni políticas `TO pricing_backend` en 7 tablas (política `TO authenticated` no cubre un rol NOBYPASSRLS → error o filas vacías) — migración `20270202000000`. Menores UI: Δ por línea solo con `pricing_current` (sin base aplicada mostraba +neto completo), cantidades acumuladas en escala entera (adiós `5.6240000000000006`), `FITTING` traducido, historial hace upsert local tras crear (sin Recargar), "Editar" de Reglas dejaba los % en blanco porque `pctDisplay` devolvía coma decimal en un `<input type=number>` (nuevo `pctInput`).
 
-
 ## [2026-10-06] P12 | producción: tablero por estación, OT navegable y operario táctil
 
 - `/production` se reestructura en tres superficies por rol: tablero kanban del jefe (columnas = estaciones con pasos abiertos en `station_queue` + «Salida», tarjetas con código/obra/unidades/compromiso real/avance/chips, filtros obra·compromiso·incidencia), ficha de OT (cabecera fija + stepper horizontal + 9 tabs con Piezas virtualizada <100 filas DOM a 2.000 piezas y Trazabilidad humana `HH:MM · actor · acción`), y superficie de operario (rol `OPERATOR`, density workshop → oscuro, 1024×768, estación persistente por usuario, tarjeta «Siguiente», escaneo de etiqueta → vista F9 pieza única ≥32 px mono, botones ≥44 px Completar/Bloquear/Nota, sin datos comerciales).
@@ -237,3 +235,10 @@ Append-only chronology. Keep newest entries at the bottom.
 - Aprendizajes: `t(key)` no acepta parámetros (`.replace("{x}", v)`); el trinquete §10 prohíbe `font-weight ≥700` y `{*.status}` crudo en JSX — se usó 600 + `StatusChip`/mapa compartido `ORDER_STATUS_KEY` en `board.ts`; `PlanStateEnum` (valores minúsculas) requirió etiqueta en `domainLabels`.
 - Verificado: `make lint|typecheck|test|build` verdes (`PY=.venv/bin/python`); unitarios producción 26/26 (virtualización y etiquetas); decisiones en `docs/decisions/valores-por-defecto.md` sección P12.
 
+## [2026-10-06] ED1 | pase editorial de la ola 1 (sin funcionalidad nueva)
+
+- Recorrido por persona + captura `ux:capture` completa antes/después en `docs/redesign/captures/ed1/` (44 rutas, 300 disparos por corrida). Hallazgos reales corregidos: `small` al piso §3.1 vía `--type-dense` (42 `font-too-small`), estado crudo en JSX a 0 (`ui-raw-status`), identificadores en `<code>`/mono, 404 de la ruta dev demo (refs vacías en `useAssistantWhereAmI`), 403 de `payment-integration` para no-OWNER.
+- Separamos tres naturalezas de formato que convivían: `fmtWire` (contrato máquina, decimales fijos), `fmtMmCanonical` (sólo inputs canónicos) y `fmtMm`/`formatDims` (presentación agrupada). `toFixed` fuera de `format.ts` quedó sólo en el muestrario dev intencional — guarda `ui-tofixed` 87→2.
+- El escáner de captura aprendió contexto: `code/pre/samp/kbd/.fmt-code` exentos del vocabulario (un código SKU en mono no es un enum-token), y `contrast-aa` compone alfa sobre el fondo real. Rutas con 410 por diseño (portal revocado/reemplazado) y el muestrario dev declaran su contrato en `routes.ts`.
+- Glosario: estados de operación de precio en femenino (la operación); `importStatus.ts` único para chips de importación; alias `--shadow-lg` muerto fuera; baseline de guardas regenerada a la baja (Δ −11).
+- Decisiones durables en `docs/decisions/valores-por-defecto.md` sección ED1; verificación `make lint|typecheck|test|build` verde con `PY=.venv/bin/python`.

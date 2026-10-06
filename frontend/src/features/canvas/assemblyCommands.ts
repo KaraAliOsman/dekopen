@@ -1,4 +1,4 @@
-import { parseLocaleNumber } from "../../format";
+import { parseLocaleNumber, fmtWire } from "../../format";
 import { t } from "../../i18n/es-CL";
 import type {
   CommandArgs,
@@ -63,13 +63,13 @@ const MAX_MM = 30000;
 function normalizeMm(raw: string): string | null {
   const value = parseLocaleNumber(raw);
   if (value === null || value <= 0 || value > MAX_MM) return null;
-  return value.toFixed(2);
+  return fmtWire(value);
 }
 
 function normalizeAngle(raw: string): string | null {
   const value = parseLocaleNumber(raw);
   if (value === null || Math.abs(value) >= 90) return null;
-  return value.toFixed(1);
+  return fmtWire(value, 1);
 }
 
 function normalizeCount(raw: string): string | null {

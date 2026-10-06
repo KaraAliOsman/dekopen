@@ -745,19 +745,22 @@ export function CncWorkspace() {
                       </tr>
                     </thead>
                     <tbody>
-                      {data.orders.map((order) => (
-                        <tr key={order.order_id}>
-                          <td>
-                            <strong>{order.order_code}</strong>
-                          </td>
-                          <td>{tOptional(`production.order${order.status}`) ?? order.status}</td>
-                          <td>
-                            {order.programs_total === 0
-                              ? "—"
-                              : `${order.programs_current}/${order.programs_total}`}
-                          </td>
-                        </tr>
-                      ))}
+                      {data.orders.map((order) => {
+                        const orderStatus = order.status;
+                        return (
+                          <tr key={order.order_id}>
+                            <td>
+                              <strong>{order.order_code}</strong>
+                            </td>
+                            <td>{tOptional(`production.order${orderStatus}`) ?? "—"}</td>
+                            <td>
+                              {order.programs_total === 0
+                                ? "—"
+                                : `${order.programs_current}/${order.programs_total}`}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 )}

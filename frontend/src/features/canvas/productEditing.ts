@@ -29,6 +29,7 @@ import {
 } from "./intentEditing";
 import type { MemberGeometry } from "./members";
 import type { CouplingKind, GraphEdge } from "./assemblyGraph";
+import { fmtWire } from "../../format";
 import {
   alreadyJoined,
   chainEnd,
@@ -40,7 +41,7 @@ import {
 
 /** Serializa un mm calculado en el cliente para el contrato del motor
  * (mismo formato "0.00" que usa el resto del modulo). */
-const mmStr = (value: number): string => value.toFixed(2);
+const mmStr = fmtWire;
 
 /** Compositional product model (product-v2) — modules joined by couplings.
  *
@@ -271,7 +272,7 @@ export function makeBowProduct(options: {
     if (index > 1) {
       couplings.push({
         id: `c${index - 1}`,
-        angle_deg: angleDeg.toFixed(1),
+        angle_deg: fmtWire(angleDeg, 1),
         coupler_profile_sku: null,
       });
     }
@@ -602,9 +603,10 @@ export function removeUnit(product: ProductJson, moduleId: string): ProductJson 
       const earlier = incident[0]!.index <= incident[1]!.index ? incident[0]! : incident[1]!;
       nextCouplings.splice(earlier.index, 0, {
         id: earlier.coupling.id,
-        angle_deg: (
-          Number(incident[0]!.coupling.angle_deg) + Number(incident[1]!.coupling.angle_deg)
-        ).toFixed(1),
+        angle_deg: fmtWire(
+          Number(incident[0]!.coupling.angle_deg) + Number(incident[1]!.coupling.angle_deg),
+          1,
+        ),
         coupler_profile_sku:
           incident[0]!.coupling.coupler_profile_sku ?? incident[1]!.coupling.coupler_profile_sku,
         kind: "INLINE",
@@ -656,7 +658,7 @@ export function insertModuleBetween(
   };
   const first: CouplingJson = {
     id: resolved.coupling.id,
-    angle_deg: halfAngle.toFixed(1),
+    angle_deg: fmtWire(halfAngle, 1),
     coupler_profile_sku: resolved.coupling.coupler_profile_sku,
     kind: "INLINE",
     modules: [left.id, inserted.id],
@@ -664,7 +666,7 @@ export function insertModuleBetween(
   };
   const second: CouplingJson = {
     id: nextCouplingId(product),
-    angle_deg: (totalAngle - halfAngle).toFixed(1),
+    angle_deg: fmtWire(totalAngle - halfAngle, 1),
     coupler_profile_sku: resolved.coupling.coupler_profile_sku,
     kind: "INLINE",
     modules: [inserted.id, right.id],

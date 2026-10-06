@@ -5,6 +5,7 @@ import { t } from "../../i18n/es-CL";
 import { memberSurface } from "./materials";
 import type { MemberGeometry } from "./members";
 import type { CouplingJson } from "./productEditing";
+import { fmtWire } from "../../format";
 
 type BowPlanSvgProps = {
   plan: PlanGeometry;
@@ -114,7 +115,7 @@ function JointAngle({
         onBlur={() => {
           const parsed = Number(draft.trim().replace(",", ".").replace(/[°\s]/g, ""));
           if (Number.isFinite(parsed) && parsed !== Number(angleDeg)) {
-            onCommit(parsed.toFixed(1));
+            onCommit(fmtWire(parsed, 1));
           }
           setEditing(false);
         }}

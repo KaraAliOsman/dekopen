@@ -17,7 +17,8 @@ import type {
   ProductionOrderTrace,
   ProductionStep,
 } from "../../api/generated/models";
-import { fmtMm, formatDate } from "../../format";
+import { fmtQty, formatDate } from "../../format";
+import { Dims, Length } from "../../ui/format";
 import { t } from "../../i18n/es-CL";
 import { Dialog } from "../../ui";
 import { stationCodeLabel } from "./labels";
@@ -203,7 +204,7 @@ export function OperatorSurface(props: Props): JSX.Element {
           <div className="operator-order-head__meta">
             {detail.quantity != null ? (
               <span>
-                {detail.quantity}{" "}
+                {fmtQty(detail.quantity)}{" "}
                 {detail.quantity === 1 ? t("production.unitsOne") : t("production.units")}
               </span>
             ) : null}
@@ -602,14 +603,16 @@ function FocusedPiece({
         {piece?.lengthMm != null ? (
           <div>
             <dt>{t("production.traceLength")}</dt>
-            <dd>{fmtMm(piece.lengthMm)} mm</dd>
+            <dd>
+              <Length value={piece.lengthMm} />
+            </dd>
           </div>
         ) : null}
         {piece?.widthMm != null && piece.heightMm != null ? (
           <div>
             <dt>{t("production.optimizeSize")}</dt>
             <dd>
-              {fmtMm(piece.widthMm)} × {fmtMm(piece.heightMm)}
+              <Dims width={piece.widthMm} height={piece.heightMm} />
             </dd>
           </div>
         ) : null}

@@ -277,26 +277,6 @@
   font-size: 0.75rem;
 }
 
-.status-chip[data-status="pending"] {
-  background: var(--theme-warning-soft, rgba(217, 119, 6, 0.12));
-  color: var(--warn-ink);
-}
-
-.status-chip[data-status="applied"] {
-  background: var(--theme-accent-soft, rgba(37, 99, 235, 0.12));
-  color: var(--info-ink);
-}
-
-.status-chip[data-status="rejected"] {
-  background: var(--theme-danger-soft);
-  color: var(--danger-ink);
-}
-
-.status-chip[data-status="withdrawn"] {
-  background: var(--theme-surface-alt, rgba(100, 116, 139, 0.12));
-  color: var(--theme-text-secondary);
-}
-
 .operation-decision__stale {
   color: var(--warn-ink);
   font-size: 0.75rem;
@@ -415,7 +395,7 @@
   font-size: 0.75rem;
 }
 
-.coverage-card .status-chip {
+.coverage-card .ui-badge {
   justify-self: start;
 }
 
@@ -667,7 +647,7 @@
 
 .price-cascade__row--total td {
   border-top: 2px solid var(--theme-accent);
-  font-weight: 700;
+  font-weight: 600;
   font-size: var(--type-body);
 }
 
@@ -720,7 +700,7 @@
 
 .delta-breakdown__table tfoot td {
   border-top: 2px solid var(--theme-accent);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .delta-breakdown__table [data-negative] {

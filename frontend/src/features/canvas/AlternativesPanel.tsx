@@ -10,6 +10,7 @@ import type { MemberGeometry } from "./members";
 import { elevationEnvelopeMm, isProductModel, type ProductJson } from "./productEditing";
 import { ProductFrontSvg } from "./ProductFrontSvg";
 import { webglAvailable } from "./webglAvailable";
+import { fmtWire } from "../../format";
 
 // three.js stays behind the dynamic boundary — see renderStudio.
 const LazyStudioImage = lazy(() =>
@@ -112,7 +113,7 @@ export function AlternativesPanel({
     // silently discard unsaved resize edits. Dimensions also key the
     // operation: identical requests replay, changed ones are new audits.
     const envelope = elevationEnvelopeMm(product);
-    const dims = `${envelope.width.toFixed(2)}x${envelope.height.toFixed(2)}`;
+    const dims = `${fmtWire(envelope.width)}x${fmtWire(envelope.height)}`;
     if (
       !operationKey.current ||
       operationKey.current.brief !== trimmed ||
@@ -137,8 +138,8 @@ export function AlternativesPanel({
           count: 3,
           system_id: systemId,
           operation_key: operationKey.current.key,
-          width_mm: envelope.width.toFixed(2),
-          height_mm: envelope.height.toFixed(2),
+          width_mm: fmtWire(envelope.width),
+          height_mm: fmtWire(envelope.height),
         },
         { headers: { "X-Organization-ID": organizationId } },
       );
