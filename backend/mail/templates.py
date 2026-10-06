@@ -231,6 +231,41 @@ def payment_received(ctx: dict) -> RenderedMail:
     )
 
 
+def pricing_decision(ctx: dict) -> RenderedMail:
+    """Interno: la operación comercial del estimador fue decidida."""
+    outcome = str(ctx.get("outcome_label") or "decidida")
+    project = str(ctx["project_name"])
+    decided = str(ctx.get("decided_by") or "el dueño")
+    pricing_url = str(ctx["pricing_url"])
+    body = _internal_body(
+        [
+            f"Tu operación comercial del proyecto <strong>{escape(project)}</strong>"
+            f" quedó <strong>{escape(outcome)}</strong>"
+            f" (decisión de {escape(decided)}).",
+        ],
+        [
+            ("Proyecto", f"{ctx.get('project_code') or '—'} · {project}"),
+            ("Operación", str(ctx.get("operation_label") or "—")),
+            ("Decisión", outcome),
+            ("Decisor", decided),
+            ("Neto", str(ctx.get("net_label") or "—")),
+            ("Motivo", str(ctx.get("reason") or "—")),
+        ],
+        _button(pricing_url, "Abrir precios", _TEAL_800),
+    )
+    html = _internal_shell(kicker="Decisión de precios", body=body)
+    text = (
+        f"Decisión de precios\n\n{project} — {outcome} por {decided}.\n"
+        f"Abrir: {pricing_url}\n"
+    )
+    return RenderedMail(
+        subject=f"[DEKOPEN] Precios {outcome} — {project}",
+        html=html,
+        text=text,
+        inline_images={"mark.png": _mark_png()},
+    )
+
+
 def work_order_blocked(ctx: dict) -> RenderedMail:
     """Interno: un paso de producción quedó bloqueado — necesita decisión."""
     order_code = str(ctx.get("order_code") or "—")
@@ -293,5 +328,6 @@ RENDERERS = {
     "quote_sent": quote_sent,
     "quote_approved": quote_approved,
     "payment_received": payment_received,
+    "pricing_decision": pricing_decision,
     "work_order_blocked": work_order_blocked,
 }

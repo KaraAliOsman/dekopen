@@ -27,6 +27,11 @@ class StepBlockedSerializer(serializers.Serializer):
     note = serializers.CharField(max_length=500)
 
 
+class PricingDecisionSerializer(serializers.Serializer):
+    operation_id = serializers.UUIDField()
+    outcome = serializers.ChoiceField(choices=['APPLIED', 'REJECTED', 'WITHDRAWN'])
+
+
 class MailStatusSerializer(serializers.Serializer):
     provider = serializers.CharField()
     configured = serializers.BooleanField()

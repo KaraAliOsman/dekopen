@@ -26,6 +26,8 @@ export interface PriceRequestRequest {
   discount_pct?: string;
   /** @pattern ^-?\d{0,2}(?:\.\d{0,4})?$ */
   target_margin?: string;
+  /** @pattern ^-?\d{0,2}(?:\.\d{0,4})?$ */
+  margin_pct?: string;
   segment?: SegmentEnum;
   /** @maxItems 10 */
   extras?: ExtraChargeRequest[];

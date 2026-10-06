@@ -1,0 +1,190 @@
+{
+  "summary": {
+    "generated_at": "2026-10-06T06:13:47.632Z",
+    "routes": 18,
+    "routes_with_findings": [],
+    "total_findings": 0
+  },
+  "results": [
+    {
+      "route": "project-pricing",
+      "url": "/projects/66c3f867-9f38-4433-8c17-85709fd01baf/pricing",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/project-pricing--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/66c3f867-9f38-4433-8c17-85709fd01baf/pricing"
+    },
+    {
+      "route": "project-pricing",
+      "url": "/projects/66c3f867-9f38-4433-8c17-85709fd01baf/pricing",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/project-pricing--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/66c3f867-9f38-4433-8c17-85709fd01baf/pricing"
+    },
+    {
+      "route": "project-pricing",
+      "url": "/projects/66c3f867-9f38-4433-8c17-85709fd01baf/pricing",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/project-pricing--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/66c3f867-9f38-4433-8c17-85709fd01baf/pricing"
+    },
+    {
+      "route": "project-pricing",
+      "url": "/projects/66c3f867-9f38-4433-8c17-85709fd01baf/pricing",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/project-pricing--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/66c3f867-9f38-4433-8c17-85709fd01baf/pricing"
+    },
+    {
+      "route": "project-pricing",
+      "url": "/projects/66c3f867-9f38-4433-8c17-85709fd01baf/pricing",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/project-pricing--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/66c3f867-9f38-4433-8c17-85709fd01baf/pricing"
+    },
+    {
+      "route": "project-pricing",
+      "url": "/projects/66c3f867-9f38-4433-8c17-85709fd01baf/pricing",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/project-pricing--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/66c3f867-9f38-4433-8c17-85709fd01baf/pricing"
+    },
+    {
+      "route": "pricing-commercial",
+      "url": "/pricing/commercial",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/pricing-commercial--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/pricing/commercial"
+    },
+    {
+      "route": "pricing-commercial",
+      "url": "/pricing/commercial",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/pricing-commercial--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/pricing/commercial"
+    },
+    {
+      "route": "pricing-commercial",
+      "url": "/pricing/commercial",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/pricing-commercial--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/pricing/commercial"
+    },
+    {
+      "route": "pricing-commercial",
+      "url": "/pricing/commercial",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/pricing-commercial--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/pricing/commercial"
+    },
+    {
+      "route": "pricing-commercial",
+      "url": "/pricing/commercial",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/pricing-commercial--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/pricing/commercial"
+    },
+    {
+      "route": "pricing-commercial",
+      "url": "/pricing/commercial",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/pricing-commercial--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/pricing/commercial"
+    },
+    {
+      "route": "pricing-cost-lists",
+      "url": "/pricing/cost-lists",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/pricing-cost-lists--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/pricing/cost-lists"
+    },
+    {
+      "route": "pricing-cost-lists",
+      "url": "/pricing/cost-lists",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/pricing-cost-lists--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/pricing/cost-lists"
+    },
+    {
+      "route": "pricing-cost-lists",
+      "url": "/pricing/cost-lists",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/pricing-cost-lists--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/pricing/cost-lists"
+    },
+    {
+      "route": "pricing-cost-lists",
+      "url": "/pricing/cost-lists",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/pricing-cost-lists--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/pricing/cost-lists"
+    },
+    {
+      "route": "pricing-cost-lists",
+      "url": "/pricing/cost-lists",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/pricing-cost-lists--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/pricing/cost-lists"
+    },
+    {
+      "route": "pricing-cost-lists",
+      "url": "/pricing/cost-lists",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/pricing-cost-lists--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/pricing/cost-lists"
+    }
+  ]
+}

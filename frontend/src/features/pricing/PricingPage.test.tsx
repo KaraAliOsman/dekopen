@@ -937,3 +937,66 @@ it("keeps the positioned backend reason and links to the resolver surface", asyn
     "/pricing/cost-lists",
   );
 });
+
+it("P07 — band, cascade and delta render; out-of-band flips to request approval", async () => {
+  identity.role = "ESTIMATOR";
+  const operation = {
+    ...result("A"),
+    project_id: "project-a",
+    margin_realized: "0.20",
+    band: { min: "0.25", objective: "0.35", max: "0.60", state: "BELOW_MIN" },
+    cascade: {
+      rows: [
+        { key: "materials", amount: "60", kind: "subtotal" },
+        { key: "cost_total", amount: "80", kind: "subtotal" },
+        { key: "net", amount: "100", kind: "subtotal" },
+        { key: "gross", amount: "119", kind: "total" },
+      ],
+      positions: [],
+      margin_realized: "0.20",
+    },
+    delta: {
+      baseline_revision: "REV-A",
+      baseline_net: "90",
+      proposed_net: "100",
+      net_delta: "10",
+      drivers: [{ driver: "quantity", net_delta: "10", cost_delta: "8", net_after: "100" }],
+    },
+  };
+  vi.mocked(apiMutator)
+    .mockResolvedValueOnce({ data: [] })
+    .mockResolvedValueOnce({ data: operation });
+  render(page(<CommercialPricingPage />));
+  submitPreview();
+  expect(await screen.findByText(t("pricing.marginBand"))).toBeInTheDocument();
+  expect(screen.getByText(t("pricing.band.BELOW_MIN"))).toBeInTheDocument();
+  expect(screen.getByText(t("pricing.bandPendingHint"))).toBeInTheDocument();
+  expect(screen.getByText(t("pricing.cascade"))).toBeInTheDocument();
+  expect(screen.getByText(t("pricing.delta"))).toBeInTheDocument();
+  expect(screen.getByText(t("pricing.deltaDriver.quantity"))).toBeInTheDocument();
+  expect(screen.getByText(t("pricing.confirmBand"))).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: t("pricing.requestApproval") })).toBeInTheDocument();
+  expect(screen.getByLabelText(t("pricing.reason"))).toHaveValue(t("pricing.bandReason"));
+});
+
+it("P07 — in-band keeps the calculate label and the owner sees no pending hint", async () => {
+  const operation = {
+    ...result("A"),
+    project_id: "project-a",
+    margin_realized: "0.20",
+    band: { min: "0.10", objective: "0.35", max: "0.60", state: "IN_BAND" },
+    cascade: null,
+    delta: null,
+  };
+  vi.mocked(apiMutator)
+    .mockResolvedValueOnce({ data: [] })
+    .mockResolvedValueOnce({ data: operation });
+  render(page(<CommercialPricingPage />));
+  submitPreview();
+  expect(await screen.findByText(t("pricing.marginBand"))).toBeInTheDocument();
+  expect(screen.getByText(t("pricing.band.IN_BAND"))).toBeInTheDocument();
+  expect(screen.queryByText(t("pricing.bandPendingHint"))).not.toBeInTheDocument();
+  expect(previewButton()).toBeInTheDocument();
+  expect(screen.getByText(t("pricing.noCascade"))).toBeInTheDocument();
+  expect(screen.getByText(t("pricing.noDelta"))).toBeInTheDocument();
+});

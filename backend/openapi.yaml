@@ -27580,6 +27580,23 @@ components:
           type: string
         hardware_option_delta:
           type: string
+        color_surcharge_delta:
+          type: string
+        extra_sell_delta:
+          type: string
+        quantity:
+          type: integer
+          nullable: true
+        width_mm:
+          type: string
+        height_mm:
+          type: string
+        typology:
+          type: string
+          nullable: true
+        location_tag:
+          type: string
+          nullable: true
         composition:
           type: array
           items:
@@ -27845,6 +27862,10 @@ components:
           format: decimal
           pattern: ^-?\d{0,2}(?:\.\d{0,4})?$
           default: '0.3500'
+        margin_pct:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,2}(?:\.\d{0,4})?$
         segment:
           allOf:
           - $ref: '#/components/schemas/SegmentEnum'
@@ -27941,21 +27962,34 @@ components:
         approved_at:
           type: string
           nullable: true
+        margin_realized:
+          type: string
+          nullable: true
+        band:
+          nullable: true
+        cascade:
+          nullable: true
+        delta:
+          nullable: true
         created_at:
           type: string
       required:
       - approved_at
       - approved_by
       - authorities
+      - band
+      - cascade
       - client_name
       - cost_lines
       - created_at
       - currency
+      - delta
       - discount_pct
       - extras
       - extras_net
       - id
       - lines
+      - margin_realized
       - positions_breakdown
       - pricing_mode
       - project_code

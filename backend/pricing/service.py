@@ -4,11 +4,16 @@ from dataclasses import asdict
 from decimal import Decimal, localcontext
 from hashlib import sha256
 import json
+from uuid import UUID
 
 from django.db import connection, DatabaseError
 
 from authentication.errors import contract_error
 from authentication.rls import tx_aborted
+from dekopen_engine.cascade import (
+    CascadeComponent, CascadePosition, DeltaLine, DeltaStage,
+    band_state, component_group, delta_contributions, price_cascade,
+)
 from dekopen_engine.commercial import (
     CommercialLine, PricingError, PricingMode, direct_cost, discount_state,
     finish_lines, target_project, unit_price, validate_segment,
@@ -439,6 +444,11 @@ def preview(org_id, actor, request):
         'labor_rate_per_m2':repo.convert(rules['labor_rate_per_m2'],organization['currency']),
         'installation_rate_per_m2':repo.convert(rules['installation_rate_per_m2'],organization['currency'])}
     discount = request['discount_pct']
+    # El margen de la cotización: la regla del taller es el defecto y el
+    # estimador puede moverlo — un cambio de margen se audita como request.
+    margin = request.get('margin_pct')
+    if margin is None:
+        margin = rules['default_margin_pct']
     state = discount_state(actor.active_organization.role,discount,request['confirmed'])
     if mode == PricingMode.COMMERCIAL_LIST_WITH_DISCOUNTS:
         # Segment bands only bound the list-with-discounts catalogue: RETAIL
@@ -465,6 +475,11 @@ def preview(org_id, actor, request):
                 technical.append({'position_id':position['id'],
                                   'position_index':index,
                                   'unit_cost':str(cost.quantize(D('0.0001'))),
+                                  'quantity':int(position['quantity']),
+                                  'width_mm':str(position['width_mm']),
+                                  'height_mm':str(position['height_mm']),
+                                  'typology':position.get('typology'),
+                                  'location_tag':position.get('location_tag'),
                                   'bom':result.model_dump(mode='json'),**formation})
                 if mode == PricingMode.TARGET_GROSS_MARGIN_PROJECT:
                     continue
@@ -485,7 +500,7 @@ def preview(org_id, actor, request):
                         extra = {'cells':repo.matrix(config)}
                     else:
                         extra = {'catalog_price':repo.convert(config['catalog_price'],config['currency'])}
-                exact_price = unit_price(mode,cost=cost,margin=rules['default_margin_pct'],area=area,
+                exact_price = unit_price(mode,cost=cost,margin=margin,area=area,
                                          width=position['width_mm'],height=position['height_mm'],
                                          foil=position['color_interior']!='WHITE' or position['color_exterior']!='WHITE',**extra)
                 # D04 + D05 + D06: declared selections, finish surcharges
@@ -515,6 +530,28 @@ def preview(org_id, actor, request):
         output = (target_project(cost_lines,request['target_margin'],request['currency'],rules['tax_rate_pct'],extra_amounts)
                   if mode == PricingMode.TARGET_GROSS_MARGIN_PROJECT
                   else finish_lines(priced_lines,request['currency'],rules['tax_rate_pct'],extra_amounts))
+    # P07 — la banda de margen es puerta de decisión: el estimador que
+    # cotiza fuera de banda pide aprobación; el dueño confirma explícito.
+    # El margen realizado es (neto−costo)/neto — sobre la venta, jamás markup.
+    project_cost = sum((D(str(cost)) for _, cost in cost_lines), D('0'))
+    margin_realized = (
+        (output.project_net - project_cost) / output.project_net
+        if output.project_net > 0 else None)
+    band = {
+        'min': str(rules['margin_min_pct']),
+        'objective': str(request['target_margin']
+                         if mode == PricingMode.TARGET_GROSS_MARGIN_PROJECT
+                         else margin),
+        'max': str(rules['margin_max_pct']),
+        'state': band_state(
+            margin_realized, rules['margin_min_pct'], rules['margin_max_pct']),
+    }
+    # Fuera de banda: la vista previa del estimador nace directamente como
+    # solicitud (PENDING). El dueño siempre ve PREVIEW — su confirmación se
+    # exige al aplicar, en apply_operation (owner_confirmation_required);
+    # bloquearle la vista le impediría siquiera mirar la banda.
+    if band['state'] != 'IN_BAND' and actor.active_organization.role != 'OWNER':
+        state = 'PENDING'
     # Per-line selling detail so the decision screen can show unit price,
     # quantity and discount next to the line total — a line net is a per-
     # position TOTAL (unit × qty × (1−discount)), never a unit price. The
@@ -543,6 +580,8 @@ def preview(org_id, actor, request):
          json_text({key:value for key,value in request.items() if not key.startswith('_')}),
          json_text({'rules':rules,'authorities':repo.authorities,'positions':technical,'cost_lines':cost_lines}),
          json_text({**asdict(output),'line_detail':line_detail,
+                    'margin_realized':str(margin_realized) if margin_realized is not None else None,
+                    'band':band,
                     'service_lines':[line.model_dump(mode='json')
                                      for line in service_lines]}),
          source_revision(project,positions),project['current_revision'],
@@ -557,8 +596,22 @@ def preview(org_id, actor, request):
         'waste_pct':str(p.get('waste_pct') or ''),
         'labor_rate_per_m2':str(p.get('labor_rate_per_m2') or ''),
         'installation_rate_per_m2':str(p.get('installation_rate_per_m2') or ''),
+        'hardware_option_delta':str(p.get('hardware_option_delta') or '0'),
+        'color_surcharge_delta':str(p.get('color_surcharge_delta') or '0'),
+        'extra_sell_delta':str(p.get('extra_sell_delta') or '0'),
+        'quantity':p.get('quantity'),
+        'width_mm':str(p.get('width_mm') or ''),
+        'height_mm':str(p.get('height_mm') or ''),
+        'typology':p.get('typology'),
+        'location_tag':p.get('location_tag'),
         'composition':p.get('composition') or [],
     } for p in technical]
+    stored = {'request':{key:value for key,value in request.items() if not key.startswith('_')},
+              'input_snapshot':{'rules':rules,'authorities':repo.authorities,'positions':technical,'cost_lines':cost_lines},
+              'result':{**asdict(output),'line_detail':line_detail,
+                        'margin_realized':str(margin_realized) if margin_realized is not None else None,
+                        'band':band,
+                        'service_lines':[line.model_dump(mode='json') for line in service_lines]}}
     return {'id':str(record['id']),'state':'PENDING' if state=='PENDING' else 'PREVIEW',
             'project_id':str(project['id']),
             'project_code':project.get('code') or '',
@@ -570,6 +623,11 @@ def preview(org_id, actor, request):
             'segment':request.get('segment') or '',
             'currency':request['currency'],**asdict(output),
             'line_detail':line_detail,
+            'margin_realized':str(margin_realized) if margin_realized is not None else None,
+            'band':band,
+            'cascade':_cascade_payload(stored['input_snapshot'],stored['result'],stored['request']),
+            'delta':_delta_payload(org_id,project['id'],None,stored['input_snapshot'],
+                                   stored['result'],stored['request']),
             'extras':[{'label':item['label'],'kind':item['kind'],
                        'amount':str(item['amount'])}
                       for item in request.get('extras') or []],
@@ -604,6 +662,330 @@ def _design_net_price(cost, area, formation, rules, *, width, height, foil):
     return (price + (D(formation['hardware_option_delta'])
                      + D(formation['color_surcharge_delta'])
                      + D(formation['extra_sell_delta']))).quantize(D('0.0001'))
+
+
+def _notify_pricing_decision(org_id, actor_id, operation, outcome):
+    """P07 — aviso durable al solicitante cuando su operación se decide.
+
+    Emitir desde la transacción que sella el estado: el job handler re-lee
+    la operación comprometida y materializa mail_messages (proveedor
+    sandbox por defecto — ver docs/ACTIVACION.md)."""
+    from automations.service import emit
+
+    emit(
+        'mail.pricing_decision',
+        org_id=org_id,
+        actor_id=actor_id,
+        idempotency_key=f'mail:pricing-decision:{operation["id"]}:{outcome}',
+        operation_id=str(operation['id']),
+        outcome=outcome,
+    )
+
+
+def _operation_econ(snapshot, result, request):
+    """Per-position economics from a stored operation shape.
+
+    Returns {match_key: {index, qty, uc, exact, d, sell, groups, dims}} or
+    None when the snapshot predates the fields the decomposition needs —
+    honesty over a guessed split. Everything read is the stored authority;
+    nothing is recomputed from the catalog."""
+    detail = {entry['position_index']: entry for entry in result.get('line_detail') or []}
+    try:
+        lines = {int(index): D(str(net)) for index, net in result['lines']}
+        costs = {int(index): D(str(cost)) for index, cost in snapshot.get('cost_lines') or []}
+        discount = D(str(request.get('discount_pct') or '0'))
+    except (KeyError, TypeError, ArithmeticError):
+        return None
+    econ = {}
+    for entry in snapshot.get('positions') or []:
+        index = int(entry['position_index'])
+        if index not in lines or 'unit_cost' not in entry:
+            continue
+        unit_cost = D(str(entry['unit_cost']))
+        quantity = (detail.get(index) or {}).get('quantity') or entry.get('quantity')
+        if quantity is None:
+            if unit_cost == 0 or index not in costs:
+                return None
+            ratio = costs[index] / unit_cost
+            if ratio != ratio.to_integral_value() or ratio < 1:
+                return None
+            quantity = int(ratio)
+        quantity = int(quantity)
+        applied_discount = D(str((detail.get(index) or {}).get('discount_pct') or discount))
+        exact = (detail.get(index) or {}).get('unit_price')
+        if exact is None:
+            factor = (D('1') - applied_discount) * quantity
+            if factor <= 0:
+                return None
+            exact = lines[index] / factor
+        sell = (
+            D(str(entry.get('hardware_option_delta') or '0'))
+            + D(str(entry.get('color_surcharge_delta') or '0'))
+            + D(str(entry.get('extra_sell_delta') or '0'))
+        )
+        groups: dict[str, Decimal] = {}
+        for component in entry.get('composition') or []:
+            group = component_group(str(component.get('kind') or ''))
+            if group is not None:
+                groups[group] = groups.get(group, D('0')) + D(str(component['cost']))
+        dims = None
+        if entry.get('width_mm') is not None and entry.get('height_mm') is not None:
+            dims = (str(entry['width_mm']), str(entry['height_mm']))
+        econ[str(entry.get('position_id') or index)] = {
+            'index': index,
+            'qty': quantity,
+            'uc': unit_cost,
+            'exact': D(str(exact)),
+            'd': applied_discount,
+            'sell': sell,
+            'groups': groups,
+            'dims': dims,
+        }
+    return econ
+
+
+def _cascade_payload(snapshot, result, request):
+    """The stored operation → waterfall rows, per project and per position.
+
+    Returns None when the operation predates the fields the cascade needs —
+    the UI says 'sin cascada' instead of drawing an approximate one."""
+    econ = _operation_econ(snapshot, result, request or {})
+    if econ is None:
+        return None
+    positions = []
+    by_index = {entry['index']: entry for entry in econ.values()}
+    position_index_of = {
+        int(entry['position_index']): entry for entry in snapshot.get('positions') or []
+    }
+    target_mode = str((request or {}).get('pricing_mode') or '') == 'TARGET_GROSS_MARGIN_PROJECT'
+    for index, entry in by_index.items():
+        raw = position_index_of.get(index) or {}
+        sell = entry['sell']
+        # En TARGET el delta de venta viaja como cargo de proyecto: la
+        # posición no lo lleva en su precio unitario.
+        if target_mode:
+            sell = D('0')
+        try:
+            positions.append(
+                CascadePosition(
+                    position_index=index,
+                    quantity=entry['qty'],
+                    unit_cost=entry['uc'],
+                    materials_cost=D(str(raw.get('materials_cost') or '0')),
+                    waste_pct=D(str(raw.get('waste_pct') or '0')),
+                    labour_per_m2=(
+                        D(str(raw.get('labor_rate_per_m2') or '0'))
+                        + D(str(raw.get('installation_rate_per_m2') or '0'))
+                    ),
+                    area_m2=D(str(raw.get('area_m2') or '0')),
+                    components=tuple(
+                        CascadeComponent(
+                            kind=str(component.get('kind') or ''),
+                            cost=D(str(component['cost'])),
+                        )
+                        for component in raw.get('composition') or []
+                    ),
+                    sell_delta=sell,
+                    exact_unit_price=entry['exact'],
+                    discount=entry['d'],
+                    line_net=D(str(dict(result['lines'])[index])),
+                )
+            )
+        except (KeyError, TypeError, ArithmeticError):
+            return None
+    if len(positions) != len(result.get('lines') or []):
+        # A position without economics would silently drop a waterfall row.
+        return None
+    try:
+        cascade = price_cascade(
+            positions,
+            extras_net=D(str(result.get('extras_net') or '0')),
+            project_net=D(str(result['project_net'])),
+            project_tax=D(str(result['project_tax'])),
+            project_gross=D(str(result['project_gross'])),
+            total_cost=D(str(sum((D(str(c)) for _, c in snapshot.get('cost_lines') or []), D('0')))),
+        )
+    except (PricingError, KeyError, TypeError, ArithmeticError):
+        return None
+    return {
+        'rows': [{'key': row.key, 'amount': str(row.amount), 'kind': row.kind}
+                 for row in cascade.rows],
+        'positions': [
+            {
+                'position_index': item['position_index'],
+                'groups': {key: str(value) for key, value in item['groups'].items()},
+                'materials': str(item['materials']),
+                'waste': str(item['waste']),
+                'labour': str(item['labour']),
+                'rounding': str(item['rounding']),
+                'cost': str(item['cost']),
+                'margin': str(item['margin']),
+                'sell': str(item['sell']),
+                'list_price': str(item['list_price']),
+                'discount': str(item['discount']),
+                'net': str(item['net']),
+            }
+            for item in cascade.positions
+        ],
+        'margin_realized': (
+            str(cascade.margin_realized) if cascade.margin_realized is not None else None
+        ),
+    }
+
+
+def _delta_stages(econ_a, econ_b, request_a, request_b, rules_b, extras_a, extras_b):
+    """Canonical scenarios baseline→proposed, one per driver.
+
+    Attribution rules (documented, fixed by golden tests):
+    - 'quantity' takes position set changes and quantity edits; a position
+      that appears carries its full proposed economics.
+    - 'dimensions' absorbs the whole residual of a vano whose measures
+      changed — its composition deltas are indistinguishable from geometry.
+    - glass/hardware/cost_list take the composition-bucket cost delta; in
+      COST_PLUS_MARGIN its price effect scales by 1/(1−margen), in catalog
+      modes the list price does not move with cost.
+    - 'fx' takes the entire residual when currency or FX snapshot changed.
+    - 'selections' takes the declared sell deltas (herraje, color, extras);
+      'commercial' takes the residual unit-price delta (margen, modo,
+      segmento); 'discount' and 'services' close the chain.
+    """
+    mode_b = str(request_b.get('pricing_mode') or '')
+    margin_b = request_b.get('margin_pct') or (rules_b or {}).get('default_margin_pct')
+    price_factor = (
+        D('1') / (D('1') - D(str(margin_b)))
+        if mode_b == 'COST_PLUS_MARGIN' and margin_b is not None
+        else D('0')
+    )
+    common = [key for key in econ_a if key in econ_b]
+    removed = [key for key in econ_a if key not in econ_b]
+    added = [key for key in econ_b if key not in econ_a]
+    states = {key: dict(econ_a[key]) for key in econ_a}
+
+    def snapshot_lines():
+        return tuple(
+            DeltaLine(
+                position_index=state['index'],
+                quantity=state['qty'],
+                unit_cost=state['uc'],
+                exact_unit_price=state['exact'],
+                discount=state['d'],
+            )
+            for _, state in sorted(states.items(), key=lambda item: item[1]['index'])
+        )
+
+    def dims_changed(key):
+        before, after = econ_a[key]['dims'], econ_b[key]['dims']
+        return bool(before and after and before != after)
+
+    stages = [DeltaStage('baseline', snapshot_lines(), extras=extras_a)]
+    for key in removed:
+        states.pop(key)
+    for key in added:
+        states[key] = dict(econ_b[key])
+    for key in common:
+        states[key]['qty'] = econ_b[key]['qty']
+    stages.append(DeltaStage('quantity', snapshot_lines(), extras=extras_a))
+    for key in common:
+        if dims_changed(key):
+            states[key]['uc'] = econ_b[key]['uc']
+            states[key]['exact'] = econ_b[key]['exact']
+    stages.append(DeltaStage('dimensions', snapshot_lines(), extras=extras_a))
+    for driver, buckets in (
+        ('glass', ('glass', 'glass_surcharges')),
+        ('hardware', ('hardware', 'fittings')),
+        ('cost_list', ('profiles', 'reinforcement', 'panels', 'extras_material')),
+    ):
+        for key in common:
+            if dims_changed(key):
+                continue
+            delta_cost = sum(
+                (econ_b[key]['groups'].get(group, D('0'))
+                 - econ_a[key]['groups'].get(group, D('0'))
+                 for group in buckets),
+                D('0'),
+            )
+            if delta_cost:
+                states[key]['uc'] += delta_cost
+                states[key]['exact'] += delta_cost * price_factor
+        stages.append(DeltaStage(driver, snapshot_lines(), extras=extras_a))
+    fx_changed = str(request_a.get('fx_snapshot_id') or '') != str(
+        request_b.get('fx_snapshot_id') or '')
+    if fx_changed:
+        for key in states:
+            states[key]['exact'] = econ_b[key]['exact']
+    stages.append(DeltaStage('fx', snapshot_lines(), extras=extras_a))
+    if not fx_changed:
+        for key in common:
+            states[key]['exact'] += econ_b[key]['sell'] - econ_a[key]['sell']
+    stages.append(DeltaStage('selections', snapshot_lines(), extras=extras_a))
+    if not fx_changed:
+        for key in common:
+            states[key]['exact'] = econ_b[key]['exact']
+    stages.append(DeltaStage('commercial', snapshot_lines(), extras=extras_a))
+    for key in states:
+        states[key]['d'] = econ_b[key]['d']
+    stages.append(DeltaStage('discount', snapshot_lines(), extras=extras_a))
+    stages.append(DeltaStage('services', snapshot_lines(), extras=extras_b))
+    return stages
+
+
+def _delta_payload(org_id, project_id, operation, snapshot, result, request):
+    """'¿Por qué cambió?' — decomposition of the net Δ against the last
+    APPLIED operation of the project (the price the client last saw).
+
+    None when there is no baseline (first quote of the project), when the
+    currencies differ (nets are not comparable), or when the baseline
+    predates the snapshot fields the attribution needs."""
+    condition = ' AND operation.created_at<%s' if operation is not None else ''
+    parameters = [org_id, project_id] + ([operation['created_at']] if operation is not None else [])
+    baseline_row = rows(
+        'SELECT * FROM public.pricing_operations operation '
+        "WHERE operation.org_id=%s AND operation.project_id=%s AND operation.state='APPLIED'"
+        + condition + ' ORDER BY operation.created_at DESC,operation.id LIMIT 1',
+        parameters)
+    if not baseline_row:
+        return None
+    baseline = baseline_row[0]
+    baseline_request = decoded(baseline['request'])
+    if str(baseline_request.get('currency')) != str(request.get('currency')):
+        return None
+    # Tipos persistentes: el request vivo trae UUID/fechas; lo almacenado,
+    # strings. Normaliza ambos antes de comparar impulsores.
+    request = {
+        key: (str(value) if isinstance(value, (UUID,)) else value)
+        for key, value in request.items()
+    }
+    econ_a = _operation_econ(decoded(baseline['input_snapshot']), decoded(baseline['result']), baseline_request)
+    econ_b = _operation_econ(snapshot, result, request)
+    if econ_a is None or econ_b is None:
+        return None
+    baseline_snapshot = decoded(baseline['input_snapshot'])
+    baseline_result = decoded(baseline['result'])
+    rules_b = (snapshot.get('rules') or {})
+    extras_a = (D(str(baseline_result.get('extras_net') or '0')),)
+    extras_b = (D(str(result.get('extras_net') or '0')),)
+    stages = _delta_stages(
+        econ_a, econ_b, baseline_request, request, rules_b, extras_a, extras_b)
+    tax_rate = D(str((baseline_snapshot.get('rules') or {}).get('tax_rate_pct') or '0'))
+    contributions = delta_contributions(stages, str(request['currency']), tax_rate)
+    # Zero-mover drivers carry no row — the chain still telescopes.
+    return {
+        'baseline_operation_id': str(baseline['id']),
+        'baseline_revision': baseline.get('revision_code') or 'REV-A',
+        'baseline_net': str(baseline_result['project_net']),
+        'proposed_net': str(result['project_net']),
+        'net_delta': str(D(str(result['project_net'])) - D(str(baseline_result['project_net']))),
+        'drivers': [
+            {
+                'driver': item.driver,
+                'net_delta': str(item.net_delta),
+                'cost_delta': str(item.cost_delta),
+                'net_after': str(item.net_after),
+            }
+            for item in contributions
+            if item.net_delta != 0 or item.cost_delta != 0
+        ],
+    }
 
 
 def design_batch_preview(org_id, _actor, request):
@@ -741,8 +1123,18 @@ def operation_public(operation):
         'waste_pct':str(p.get('waste_pct') or ''),
         'labor_rate_per_m2':str(p.get('labor_rate_per_m2') or ''),
         'installation_rate_per_m2':str(p.get('installation_rate_per_m2') or ''),
+        'hardware_option_delta':str(p.get('hardware_option_delta') or '0'),
+        'color_surcharge_delta':str(p.get('color_surcharge_delta') or '0'),
+        'extra_sell_delta':str(p.get('extra_sell_delta') or '0'),
+        'quantity':p.get('quantity'),
+        'width_mm':str(p.get('width_mm') or ''),
+        'height_mm':str(p.get('height_mm') or ''),
+        'typology':p.get('typology'),
+        'location_tag':p.get('location_tag'),
         'composition':p.get('composition') or [],
     } for p in snapshot.get('positions') or []]
+    result_dto = {'total_cost':str(sum((D(str(cost)) for _, cost in costs), D('0')))}
+    enrichment = _operation_enrichment(str(operation['org_id']), operation, result_dto)
     return {'id':str(operation['id']),'state':operation['state'],
             'project_id':str(operation['project_id']),
             'project_code':operation.get('project_code') or '',
@@ -768,7 +1160,48 @@ def operation_public(operation):
             'requested_by_email':operation.get('requested_by_email'),
             'approved_by':str(operation['approved_by']) if operation['approved_by'] else None,
             'approved_at':operation['approved_at'].isoformat() if operation['approved_at'] else None,
-            'created_at':operation['created_at'].isoformat()}
+            'created_at':operation['created_at'].isoformat(),
+            **enrichment}
+
+
+def _operation_enrichment(org_id, operation, result):
+    """P07 read-model: margin band, cascade and delta for a stored operation.
+
+    Ops priced after P07 carry margin_realized/band/cascade/delta inside
+    their stored result; older rows get them computed on read — the math is
+    deterministic over the same snapshot, so history never diverges."""
+    stored = decoded(operation['result'])
+    enrichment = {}
+    margin_realized = stored.get('margin_realized')
+    if margin_realized is None:
+        try:
+            net, cost = D(str(stored['project_net'])), D(str(result.get('total_cost') or '0'))
+            margin_realized = (
+                str((net - cost) / net) if net > 0 else None)
+        except (KeyError, ArithmeticError):
+            margin_realized = None
+    enrichment['margin_realized'] = margin_realized
+    enrichment['band'] = stored.get('band')
+    if enrichment['band'] is None:
+        rules_row = rows('SELECT margin_min_pct,default_margin_pct,margin_max_pct '
+                         'FROM public.pricing_rules WHERE org_id=%s', [org_id])
+        if rules_row:
+            rules_row = rules_row[0]
+            enrichment['band'] = {
+                'min': str(rules_row['margin_min_pct']),
+                'objective': str(rules_row['default_margin_pct']),
+                'max': str(rules_row['margin_max_pct']),
+                'state': band_state(
+                    None if margin_realized is None else D(str(margin_realized)),
+                    D(str(rules_row['margin_min_pct'])),
+                    D(str(rules_row['margin_max_pct']))),
+            }
+    enrichment['cascade'] = stored.get('cascade') or _cascade_payload(
+        decoded(operation['input_snapshot']), stored, decoded(operation['request']))
+    enrichment['delta'] = stored.get('delta') or _delta_payload(
+        org_id, operation['project_id'], operation,
+        decoded(operation['input_snapshot']), stored, decoded(operation['request']))
+    return enrichment
 
 
 def apply_operation(org_id, actor_id, role, operation_id, reason, confirmed, reject=False):
@@ -782,10 +1215,19 @@ def apply_operation(org_id, actor_id, role, operation_id, reason, confirmed, rej
     state = discount_state(role,D(str(request['discount_pct'])),confirmed)
     if state == 'PENDING' or (reject and role != 'OWNER'):
         raise PricingError('owner_approval_required')
+    # P07 — la banda también gobierna la aplicación: un PREVIEW fuera de
+    # banda no se cuela por el camino directo.
+    band = (decoded(operation['result']).get('band') or {})
+    if band.get('state') and band['state'] != 'IN_BAND' and not reject:
+        if role != 'OWNER':
+            raise PricingError('owner_approval_required')
+        if not confirmed:
+            raise PricingError('owner_confirmation_required')
     audit_reason(reason)
     if reject:
         one("UPDATE public.pricing_operations SET state='REJECTED',approved_by=%s,approved_at=now(),reason=%s "
             'WHERE id=%s AND org_id=%s RETURNING id',[actor_id,reason,operation_id,org_id])
+        _notify_pricing_decision(org_id, actor_id, operation, 'REJECTED')
         return operation_public(one('SELECT * FROM public.pricing_operations WHERE id=%s AND org_id=%s',
                                     [operation_id,org_id]))
     project = one('SELECT * FROM public.projects WHERE id=%s AND org_id=%s FOR UPDATE',
@@ -814,6 +1256,7 @@ def apply_operation(org_id, actor_id, role, operation_id, reason, confirmed, rej
                         output['project_gross'],project['id'],org_id])
         cursor.execute("UPDATE public.pricing_operations SET state='APPLIED',approved_by=%s,approved_at=clock_timestamp(),reason=%s "
                        'WHERE id=%s AND org_id=%s',[actor_id,reason,operation_id,org_id])
+    _notify_pricing_decision(org_id, actor_id, operation, 'APPLIED')
     return operation_public(one('SELECT * FROM public.pricing_operations WHERE id=%s AND org_id=%s',
                                 [operation_id,org_id]))
 
@@ -831,5 +1274,8 @@ def withdraw_operation(org_id, actor_id, role, operation_id, reason):
     one("UPDATE public.pricing_operations SET state='WITHDRAWN',approved_by=%s,approved_at=clock_timestamp(),"
         'reason=%s WHERE id=%s AND org_id=%s RETURNING id',
         [actor_id,reason,operation_id,org_id])
+    if role == 'OWNER' and str(operation['requested_by']) != str(actor_id):
+        # Retiro por el dueño también le avisa al solicitante.
+        _notify_pricing_decision(org_id, actor_id, operation, 'WITHDRAWN')
     return operation_public(one('SELECT * FROM public.pricing_operations WHERE id=%s AND org_id=%s',
                                 [operation_id,org_id]))

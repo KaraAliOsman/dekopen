@@ -277,7 +277,7 @@ def test_five_modes_resolve_real_bom_and_apply_atomically(commercial_rows,mode):
             # *1.08 + 15+12 = 346.4748; /.65 -> CLP533.
             assert output['project_net']==Decimal('533')
             assert output['project_tax']==Decimal('101')
-        applied=apply_operation(org,users['OWNER'],'OWNER',output['id'],'Apply approved gate',False)
+        applied=apply_operation(org,users['OWNER'],'OWNER',output['id'],'Apply approved gate',True)
         assert applied['state']=='APPLIED'
         persisted=one('SELECT total_price_net FROM public.projects WHERE id=%s',[project])
         assert persisted['total_price_net']==Decimal(str(output['project_net']))
@@ -368,7 +368,7 @@ def test_estimator_pending_owner_approval_and_stale_input(commercial_rows):
         with pytest.raises(PricingError,match='owner_approval_required'):
             apply_operation(org,users['ESTIMATOR'],'ESTIMATOR',output['id'],'Try unauthorized',False)
     with as_user(users['OWNER']),commercial_backend():
-        assert apply_operation(org,users['OWNER'],'OWNER',output['id'],'Approve exact request',False)['state']=='APPLIED'
+        assert apply_operation(org,users['OWNER'],'OWNER',output['id'],'Approve exact request',True)['state']=='APPLIED'
         next_output=preview(org,tenant(org,'OWNER'),price_request(draft,users['OWNER']))
     with as_user(users['OWNER']):
         assert len(rows('UPDATE public.project_positions SET quantity=2 WHERE project_id=%s RETURNING id',
@@ -614,7 +614,8 @@ def test_pricing_http_valid_preview_remains_successful(committed_commercial_rows
                       'project_code','project_name','client_name','pricing_mode','segment',
                       'positions_breakdown','authorities','rules','requested_by_email',
                       'reason','requested_by','approved_by','approved_at','created_at',
-                      'extras','extras_net','service_lines'}
+                      'extras','extras_net','service_lines','margin_realized','band','cascade',
+                      'delta'}
     assert body['approved_by'] is None and body['approved_at'] is None
     assert body['state']=='PREVIEW'
     assert body['project_id']==str(project)
@@ -1187,3 +1188,35 @@ def test_position_cost_preserves_original_database_sqlstate(commercial_rows,monk
             pricing_service.position_cost(repo,position,rules)
     assert rejected.value.__cause__.sqlstate=='42P01'
     assert one('SELECT 1 AS value')['value']==1
+
+
+def test_margin_band_gates_preview_apply_and_notifies(commercial_rows):
+    """P07 — margin band: an estimator quoting below the org's declared band
+    lands on the owner's queue, the owner must confirm expressly, and the
+    decided operation emits the requester notification job."""
+    org,_,users=commercial_rows
+    project=seed_commercial_project(org,users['OWNER'])
+    request={**price_request(project,users['ESTIMATOR']),'margin_pct':Decimal('0.10')}
+    with as_user(users['ESTIMATOR']),commercial_backend():
+        output=preview(org,tenant(org,'ESTIMATOR'),request)
+        # Fuera de banda (0.10 < mínimo 0.25): va a aprobación, no a PREVIEW.
+        assert output['state']=='PENDING'
+        assert output['band']['state']=='BELOW_MIN'
+        assert output['band']['min']=='0.2500'
+        assert output['margin_realized'] is not None
+        cascade_rows={row['key']:row['amount'] for row in output['cascade']['rows']}
+        # La cascada cierra: neto + IVA = total, todo Decimal-exacto.
+        assert Decimal(cascade_rows['net'])+Decimal(cascade_rows['tax'])==Decimal(cascade_rows['gross'])
+        with pytest.raises(PricingError,match='owner_approval_required'):
+            apply_operation(org,users['ESTIMATOR'],'ESTIMATOR',output['id'],'Bypass',False)
+    with as_user(users['OWNER']),commercial_backend():
+        # El dueño tampoco aplica fuera de banda sin confirmación expresa.
+        with pytest.raises(PricingError,match='owner_confirmation_required'):
+            apply_operation(org,users['OWNER'],'OWNER',output['id'],'No confirm',False)
+        applied=apply_operation(org,users['OWNER'],'OWNER',output['id'],'Confirm band',True)
+        assert applied['state']=='APPLIED'
+    # Aviso al solicitante emitido en la misma transacción que sella
+    # (job_runs no es legible por el rol authenticated — lectura privilegiada).
+    privileged_role()
+    assert one('SELECT type FROM public.job_runs WHERE org_id=%s AND idempotency_key=%s',
+               [org,f"mail:pricing-decision:{output['id']}:APPLIED"])['type']=='mail.pricing_decision'

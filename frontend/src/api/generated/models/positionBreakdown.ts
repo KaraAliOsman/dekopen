@@ -18,5 +18,15 @@ export interface PositionBreakdown {
   labor_rate_per_m2: string;
   installation_rate_per_m2: string;
   hardware_option_delta?: string;
+  color_surcharge_delta?: string;
+  extra_sell_delta?: string;
+  /** @nullable */
+  quantity?: number | null;
+  width_mm?: string;
+  height_mm?: string;
+  /** @nullable */
+  typology?: string | null;
+  /** @nullable */
+  location_tag?: string | null;
   composition: CompositionLine[];
 }

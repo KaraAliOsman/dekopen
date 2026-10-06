@@ -369,10 +369,18 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
     page.getByRole("button", { name: "Aprobar y aplicar precios", exact: true }),
   ).toBeEnabled();
   await page.getByRole("button", { name: "Aprobar y aplicar precios", exact: true }).click();
-  await expect(page.getByText("Precios aplicados al proyecto.", { exact: true })).toBeVisible();
+  await expect(
+    page
+      .locator(".operation-decision")
+      .getByText("Precios aplicados al proyecto.", { exact: true }),
+  ).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: "Recargar", exact: true }).click();
-  await expect(page.getByText("Precios aplicados al proyecto.", { exact: true })).toBeVisible();
+  await expect(
+    page
+      .locator(".operation-history__item")
+      .getByText("Precios aplicados al proyecto.", { exact: true }),
+  ).toBeVisible();
   await page.goto(`/projects/${draft.id}`);
   await expect(
     page
@@ -476,7 +484,11 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
     page.getByRole("button", { name: "Aprobar y aplicar precios", exact: true }),
   ).toBeEnabled();
   await page.getByRole("button", { name: "Aprobar y aplicar precios", exact: true }).click();
-  await expect(page.getByText("Precios aplicados al proyecto.", { exact: true })).toBeVisible();
+  await expect(
+    page
+      .locator(".operation-decision")
+      .getByText("Precios aplicados al proyecto.", { exact: true }),
+  ).toBeVisible();
   await page.goto(`/projects/${draft.id}`);
   const prepB = page.waitForResponse(
     (response) =>
@@ -598,7 +610,11 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   await page.getByRole("button", { name: "Calcular y revisar", exact: true }).click();
   expect((await compositePreview).status()).toBe(200);
   await page.getByRole("button", { name: "Aprobar y aplicar precios", exact: true }).click();
-  await expect(page.getByText("Precios aplicados al proyecto.", { exact: true })).toBeVisible();
+  await expect(
+    page
+      .locator(".operation-decision")
+      .getByText("Precios aplicados al proyecto.", { exact: true }),
+  ).toBeVisible();
 });
 
 test("OWNER must complete real TOTP enrollment and challenge after each Magic Link", async ({

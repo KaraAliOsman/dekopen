@@ -53,6 +53,19 @@ class RulesSerializer(StrictSerializer):
         min_value=Decimal('0.08'),max_value=Decimal('0.08'))
     labor_rate_per_m2 = serializers.DecimalField(max_digits=14,decimal_places=2,min_value=Decimal('0'))
     installation_rate_per_m2 = serializers.DecimalField(max_digits=14,decimal_places=2,min_value=Decimal('0'))
+    # P07 — banda de margen. Opcional en el PUT: un cliente que aún no la
+    # conoce no la toca — un INSERT recibe los defaults §11 (0.25/0.60) de
+    # la columna y un UPDATE conserva la banda guardada. Con ambas
+    # presentes se valida el orden; un borde parcial lo cubre el CHECK.
+    margin_min_pct = fraction(required=False)
+    margin_max_pct = fraction(required=False)
+
+    def validate(self, values):
+        if ('margin_min_pct' in values and 'margin_max_pct' in values
+                and values['margin_max_pct'] <= values['margin_min_pct']):
+            raise serializers.ValidationError(
+                'El máximo de la banda debe ser mayor que el mínimo.')
+        return values
 
 
 class ConfigurationSerializer(StrictSerializer):
@@ -115,6 +128,9 @@ class PriceRequestSerializer(StrictSerializer):
     fx_snapshot_id = serializers.UUIDField(required=False,allow_null=True)
     discount_pct = fraction(default=Decimal('0'))
     target_margin = fraction(default=Decimal('0.35'))
+    # P07 — margen por operación (fracción); ausente = el de la regla,
+    # nunca 0 % implícito.
+    margin_pct = fraction(required=False)
     segment = serializers.ChoiceField(choices=['RETAIL','ARCHITECT','CONSTRUCTION'],default='RETAIL')
     extras = serializers.ListField(
         child=ExtraChargeSerializer(), required=False, default=list, max_length=10)
@@ -165,6 +181,16 @@ class PositionBreakdownSerializer(serializers.Serializer):
     # D04: declared sell delta from hardware selections on this position —
     # added on the unit price, never inside materials_cost.
     hardware_option_delta = serializers.CharField(required=False)
+    # P07 — recargos de venta declarados que el motor ya sumó al precio
+    # unitario (acabado/color y accesorios/servicios) y el contexto del
+    # vano para la lectura de la cascada por posición.
+    color_surcharge_delta = serializers.CharField(required=False)
+    extra_sell_delta = serializers.CharField(required=False)
+    quantity = serializers.IntegerField(allow_null=True,required=False)
+    width_mm = serializers.CharField(required=False)
+    height_mm = serializers.CharField(required=False)
+    typology = serializers.CharField(allow_null=True,required=False)
+    location_tag = serializers.CharField(allow_null=True,required=False)
     composition = CompositionLineSerializer(many=True)
 
 
@@ -196,6 +222,13 @@ class PriceResponseSerializer(serializers.Serializer):
     requested_by_email = serializers.CharField(allow_null=True)
     approved_by = serializers.CharField(allow_null=True)
     approved_at = serializers.CharField(allow_null=True)
+    # P07 — lectura del número: margen realizado, banda declarada, cascada
+    # exacta y descomposición del delta. null en operaciones que no pueden
+    # reconstruirse (jamás un cero inventado).
+    margin_realized = serializers.CharField(allow_null=True)
+    band = serializers.JSONField(allow_null=True)
+    cascade = serializers.JSONField(allow_null=True)
+    delta = serializers.JSONField(allow_null=True)
     created_at = serializers.CharField()
 
 
