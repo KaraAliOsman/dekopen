@@ -26122,6 +26122,8 @@ components:
           type: object
           additionalProperties:
             type: string
+        workshop_label_format:
+          type: string
       required:
       - brand_address
       - brand_color
@@ -26137,6 +26139,7 @@ components:
       - name
       - tax_id
       - vano_spread_tolerance_mm
+      - workshop_label_format
     OrgBrandingWriteRequest:
       type: object
       properties:
@@ -26179,6 +26182,11 @@ components:
           nullable: true
           oneOf:
           - $ref: '#/components/schemas/DocPaperSizeEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        workshop_label_format:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/WorkshopLabelFormatEnum'
           - $ref: '#/components/schemas/NullEnum'
         doc_terms:
           type: object
@@ -32101,6 +32109,14 @@ components:
       - bay_id
       - label
       - leaf_id
+    WorkshopLabelFormatEnum:
+      enum:
+      - GRID
+      - THERMAL_100X50
+      type: string
+      description: |-
+        * `GRID` - Grilla A4/Carta
+        * `THERMAL_100X50` - Rollo térmico 100×50 mm
     WorkshopLeafTarget:
       type: object
       properties:

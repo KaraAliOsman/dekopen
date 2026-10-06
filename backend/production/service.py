@@ -38,11 +38,13 @@ from documents.repository import (
     write,
 )
 from documents.renderers import (
+    _bar_assignments,
     _cut_key,
     _cut_member_map,
     _infill_code_map,
     _infill_key,
     _piece_labels,
+    _sheet_assignments,
 )
 from engine_api.cutting_repository import CuttingRepository, steel_color_map
 from inventory import remnants as remnants_service
@@ -2570,11 +2572,15 @@ def _cnc_bars_csv(
     optimization: dict[str, object],
     *,
     cut_map: dict[tuple[str, ...], str] | None = None,
+    bar_codes: dict[tuple[object, object], str] | None = None,
 ) -> str:
-    """DEKOPEN-CNC-BARS-V1: one row per cut placement, ordered by bar then
+    """DEKOPEN-CNC-BARS-V2: one row per cut placement, ordered by bar then
     position inside the bar — deterministic output for the saw operator.
-    ``piece_label`` carries the printed shop code (M-xx/R-xx) so the saw
-    file reconciles against a labeled stick without a second document."""
+    ``piece_label`` carries the same per-instance code the pack prints
+    (P01-U01-M01): two identical cuts in different bars never share a
+    label, so a labeled stick reconciles without a second document.
+    ``cut_map`` stays as the spec-level fallback when no snapshot assigned
+    per-instance codes. Column spec: docs/formatos/corte-csv.md."""
     rows_out = [
         "bar_index,stock_sku,stock_length_mm,sequence_in_bar,piece_label,piece_id,"
         "cut_length_mm,angle_left_deg,angle_right_deg,"
@@ -2591,12 +2597,15 @@ def _cnc_bars_csv(
                 and (cut.get("angle_left") is None or cut.get("angle_right") is None)
             ):
                 raise DocumentaryError("cnc_incomplete_cut_angles")
+            label = (bar_codes or {}).get(
+                (bar.get("bar_index"), cut.get("sequence"))
+            ) or (cut_map or {}).get(_cut_key(cut), "")
             rows_out.append(",".join(_csv_cell(v) for v in (
                 bar.get("bar_index"),
                 bar.get("commercial_sku"),
                 bar.get("stock_length_mm"),
                 cut.get("sequence"),
-                (cut_map or {}).get(_cut_key(cut), ""),
+                label,
                 cut.get("piece_id"),
                 cut.get("length_mm"),
                 cut.get("angle_left"),
@@ -2613,11 +2622,14 @@ def _cnc_sheets_csv(
     optimization: dict[str, object],
     *,
     infill_map: dict[tuple[str, str, str], str] | None = None,
+    sheet_codes: dict[tuple[object, object], str] | None = None,
 ) -> str:
-    """DEKOPEN-CNC-SHEETS-V1: one row per nested placement, ordered by sheet
+    """DEKOPEN-CNC-SHEETS-V2: one row per nested placement, ordered by sheet
     then Y then X — deterministic input for a panel saw / glass table.
-    ``piece_label`` carries the same printed code the pack/DXF/labels carry,
-    so the nesting file reconciles without a second document."""
+    ``piece_label`` carries the same per-instance code the pack prints and
+    the peel-off label carries (P01-U01-I01), so the nesting file
+    reconciles without a second document. ``infill_map`` stays as the
+    spec-level fallback. Column spec: docs/formatos/corte-csv.md."""
     rows_out = [
         "sheet_index,purchasing_sku,sheet_width_mm,sheet_height_mm,"
         "x_mm,y_mm,width_mm,height_mm,rotated,piece_id,unit_index,bay_id,leaf_id,"
@@ -2632,6 +2644,9 @@ def _cnc_sheets_csv(
                 Decimal(str(p.get("y_mm") or 0)), Decimal(str(p.get("x_mm") or 0))
             ),
         ):
+            label = (sheet_codes or {}).get(
+                (sheet.get("sheet_index"), placement.get("sequence"))
+            ) or (infill_map or {}).get(_infill_key(placement), "")
             rows_out.append(",".join(_csv_cell(v) for v in (
                 sheet.get("sheet_index"),
                 sheet.get("purchasing_sku"),
@@ -2646,7 +2661,7 @@ def _cnc_sheets_csv(
                 placement.get("unit_index"),
                 placement.get("bay_id"),
                 placement.get("leaf_id"),
-                (infill_map or {}).get(_infill_key(placement), ""),
+                label,
             )))
     return "\n".join(rows_out) + "\n"
 
@@ -2713,9 +2728,12 @@ def export_cnc_files(
         if optimization.get("invalidated"):
             raise DocumentaryError("plan_invalidated")
         # Printed piece codes join the saw rows so a labeled stick finds its
-        # program line without a second file.
+        # program line without a second file — per-instance codes when the
+        # snapshot resolves, spec-group codes as fallback.
         cnc_cut_map: dict[tuple[str, ...], str] = {}
         cnc_infill_map: dict[tuple[str, str, str], str] = {}
+        cnc_bar_codes: dict[tuple[object, object], str] = {}
+        cnc_sheet_codes: dict[tuple[object, object], str] = {}
         if order.get("project_version_id"):
             version_row = one(
                 """
@@ -2730,21 +2748,55 @@ def export_cnc_files(
                 cnc_labels = _piece_labels(cnc_snapshot)
                 cnc_cut_map = _cut_member_map(cnc_snapshot, cnc_labels)
                 cnc_infill_map = _infill_code_map(cnc_snapshot, cnc_labels)
+                cnc_bars = [
+                    b
+                    for b in (optimization.get("bars") or {}).get(
+                        "workshop_cut_plan"
+                    )
+                    or []
+                    if isinstance(b, dict)
+                ]
+                cnc_bar_codes = {
+                    key: code
+                    for key, (code, _entity) in _bar_assignments(
+                        cnc_snapshot, cnc_labels, cnc_cut_map, cnc_bars
+                    ).items()
+                }
+                cnc_sheet_codes = {
+                    key: code
+                    for key, (code, _entity) in _sheet_assignments(
+                        cnc_snapshot,
+                        cnc_labels,
+                        [
+                            s
+                            for s in optimization.get("sheets") or []
+                            if isinstance(s, dict)
+                        ],
+                    ).items()
+                }
             except DocumentaryError:
                 cnc_cut_map = {}
                 cnc_infill_map = {}
+                cnc_bar_codes = {}
+                cnc_sheet_codes = {}
         fingerprint = _optimization_fingerprint(optimization)
         header = (
             f"# dekopen order={order['order_code']} plan={fingerprint[:12]}"
             f" emitted={datetime.now(timezone.utc).isoformat()}\n"
         )
-        files = {"bars.csv": header + _cnc_bars_csv(optimization, cut_map=cnc_cut_map)}
+        files = {
+            "bars.csv": header + _cnc_bars_csv(
+                optimization, cut_map=cnc_cut_map, bar_codes=cnc_bar_codes
+            )
+        }
         if optimization.get("sheets"):
             files["sheets.csv"] = header + _cnc_sheets_csv(
-                optimization, infill_map=cnc_infill_map
+                optimization,
+                infill_map=cnc_infill_map,
+                sheet_codes=cnc_sheet_codes,
             )
         export = {
-            "schema": "work_order_cnc_export_v2",
+            "schema": "work_order_cnc_export_v3",
             "optimization_fingerprint": fingerprint,
             "exported_at": datetime.now(timezone.utc).isoformat(),
             "actor_id": str(actor_id),
@@ -3223,25 +3275,49 @@ def export_dxf_files(
         })
         cut_map = _cut_member_map(snapshot, labels)
         infill_map = _infill_code_map(snapshot, labels)
+        dxf_bars = [
+            b
+            for b in (optimization.get("bars") or {}).get("workshop_cut_plan")
+            or []
+            if isinstance(b, dict)
+        ]
+        dxf_sheets = [
+            s for s in optimization.get("sheets") or [] if isinstance(s, dict)
+        ]
+        # Same per-instance codes the pack printed — (bar, seq) / (sheet,
+        # seq) → P01-U01-M01 — so the DXF text is identical to the label.
+        dxf_bar_codes = {
+            key: code
+            for key, (code, _entity) in _bar_assignments(
+                snapshot, labels, cut_map, dxf_bars
+            ).items()
+        }
+        dxf_sheet_codes = {
+            key: code
+            for key, (code, _entity) in _sheet_assignments(
+                snapshot, labels, dxf_sheets
+            ).items()
+        }
         codes: dict[str, str] = {}
-        for bar in (optimization.get("bars") or {}).get("workshop_cut_plan") or []:
-            if not isinstance(bar, dict):
-                continue
+        for bar in dxf_bars:
             for cut in bar.get("cuts") or []:
                 if isinstance(cut, dict) and cut.get("piece_id"):
                     code = cut_map.get(_cut_key(cut))
                     if code:
                         codes[str(cut["piece_id"])] = code
-        for sheet in optimization.get("sheets") or []:
-            if not isinstance(sheet, dict):
-                continue
+        for sheet in dxf_sheets:
             for placement in sheet.get("placements") or []:
                 if isinstance(placement, dict) and placement.get("piece_id"):
                     codes[str(placement["piece_id"])] = infill_map.get(
                         _infill_key(placement),
                         str(placement["piece_id"]),
                     )
-        files = dxf_files(optimization, codes=codes)
+        files = dxf_files(
+            optimization,
+            codes=codes,
+            bar_instance=dxf_bar_codes,
+            sheet_instance=dxf_sheet_codes,
+        )
         if not files:
             raise DocumentaryError("dxf_requires_optimization")
         export = {

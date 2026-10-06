@@ -3280,6 +3280,156 @@ def _cut_piece_ids(
     return out
 
 
+def _piece_pools(
+    piece_ids: dict[tuple[str, ...], dict[object, list[object]]],
+    labels: dict[str, dict[object, str]],
+) -> dict[tuple[str, ...], dict[object, list[object]]]:
+    """spec key → unit_index → ordered entity ids, each pool sorted by its
+    printed code so assignment is deterministic across artifacts."""
+    pools: dict[tuple[str, ...], dict[object, list[object]]] = {}
+    for key, units in piece_ids.items():
+        kind = "member" if key[0] == "PROFILE" else "reinforcement"
+        pools[key] = {
+            unit: sorted(
+                ids,
+                key=lambda entity_id: labels[kind].get(
+                    entity_id, str(entity_id or "")[:10]
+                ),
+            )
+            for unit, ids in units.items()
+        }
+    return pools
+
+
+def _claim_piece(
+    cut: dict[str, object],
+    pools: dict[tuple[str, ...], dict[object, list[object]]],
+    labels: dict[str, dict[object, str]],
+    cut_map: dict[tuple[str, ...], str],
+) -> tuple[str, object | None]:
+    """Claim the next physical piece for this cut inside its unit pool —
+    every artifact (PDF, CSV, DXF, labels) resolves the same code and the
+    same frozen entity id for the same placed cut. A cut outside its own
+    unit pool falls back to the spec-group label rather than stealing
+    another unit's identity."""
+    key = _cut_key(cut)
+    ids = (pools.get(key) or {}).get(str(cut.get("unit_index") or "")) or []
+    entity_id = ids.pop(0) if ids else None
+    kind = "member" if key[0] == "PROFILE" else "reinforcement"
+    if entity_id is not None:
+        return labels[kind].get(entity_id, str(entity_id or "")[:10]), entity_id
+    return cut_map.get(key) or "", None
+
+
+def _bar_assignments(
+    snapshot: dict[str, object],
+    labels: dict[str, dict[object, str]],
+    cut_map: dict[tuple[str, ...], str],
+    bars: list[dict[str, object]],
+) -> dict[tuple[object, object], tuple[str, object | None]]:
+    """(bar_index, sequence) → (piece code, entity id) — the one assignment
+    shared by the cut-pack diagram, the CNC CSV, the DXF marks and the
+    piece-label sheet, so every artifact prints the same identity."""
+    pools = _piece_pools(_cut_piece_ids(snapshot), labels)
+    assignments: dict[tuple[object, object], tuple[str, object | None]] = {}
+    for bar in bars:
+        for cut in _array(bar.get("cuts"), "invalid_work_order_bundle"):
+            code, entity_id = _claim_piece(cut, pools, labels, cut_map)
+            assignments[(bar.get("bar_index"), cut.get("sequence"))] = (
+                code,
+                entity_id,
+            )
+    return assignments
+
+
+def _infill_home(
+    snapshot: dict[str, object],
+) -> dict[object, object]:
+    """infill id → owning fact's ``repetition_index``, same join as
+    ``_member_home`` — a sheet placement's ``unit_index`` resolves which
+    frozen pane it cuts."""
+    home: dict[object, object] = {}
+    manufacturing = snapshot.get("manufacturing")
+    if not isinstance(manufacturing, list):
+        return home
+    for fact in manufacturing:
+        if not isinstance(fact, dict):
+            continue
+        for item in _array(fact.get("infills"), "invalid_manufacturing_fact"):
+            home[item.get("infill_id")] = fact.get("repetition_index")
+    return home
+
+
+def _infill_pools(
+    snapshot: dict[str, object],
+    labels: dict[str, dict[object, str]],
+) -> dict[tuple[str, str, str], dict[object, list[object]]]:
+    """(position, bay, leaf) → unit_index → ordered infill ids by printed
+    code — the per-unit pool behind sheet assignment."""
+    index = _infill_spec_index(snapshot)
+    home = _infill_home(snapshot)
+    pools: dict[tuple[str, str, str], dict[object, list[object]]] = {}
+    for key, ids in index.items():
+        units: dict[object, list[object]] = {}
+        for infill_id in ids:
+            units.setdefault(str(home.get(infill_id)), []).append(infill_id)
+        pools[key] = {
+            unit: sorted(
+                unit_ids,
+                key=lambda infill_id: labels["infill"].get(
+                    infill_id, str(infill_id or "")[:10]
+                ),
+            )
+            for unit, unit_ids in units.items()
+        }
+    return pools
+
+
+def _claim_infill(
+    piece: dict[str, object],
+    pools: dict[tuple[str, str, str], dict[object, list[object]]],
+    labels: dict[str, dict[object, str]],
+    *,
+    default_position: str = "",
+) -> tuple[str, object | None]:
+    """Claim the next infill for a sheet placement inside its unit pool —
+    a placement outside its own unit pool returns no entity rather than
+    stealing another unit's pane identity."""
+    key = _infill_key(
+        {**piece, "source_position_id": piece.get("source_position_id") or default_position}
+    )
+    ids = (pools.get(key) or {}).get(str(piece.get("unit_index") or "")) or []
+    entity_id = ids.pop(0) if ids else None
+    if entity_id is None:
+        return "", None
+    return labels["infill"].get(entity_id, str(entity_id or "")[:10]), entity_id
+
+
+def _sheet_assignments(
+    snapshot: dict[str, object],
+    labels: dict[str, dict[object, str]],
+    sheets: list[dict[str, object]],
+    *,
+    default_position: str = "",
+) -> dict[tuple[object, object], tuple[str, object | None]]:
+    """(sheet_index, sequence) → (infill code, infill id) — shared by the
+    sheet diagram, the CSV and the DXF labels."""
+    pools = _infill_pools(snapshot, labels)
+    assignments: dict[tuple[object, object], tuple[str, object | None]] = {}
+    for sheet in sheets:
+        for piece in _array(
+            sheet.get("placements"), "invalid_work_order_bundle"
+        ):
+            code, entity_id = _claim_infill(
+                piece, pools, labels, default_position=default_position
+            )
+            assignments[(sheet.get("sheet_index"), piece.get("sequence"))] = (
+                code,
+                entity_id,
+            )
+    return assignments
+
+
 def _member_op_marks(
     snapshot: dict[str, object],
 ) -> dict[str, str]:
@@ -3308,6 +3458,66 @@ def _member_op_marks(
         if op.host_kind == "MEMBER":
             marks[op.host] = "mec"
     return marks
+
+
+def _reinforcement_parents(
+    snapshot: dict[str, object], labels: dict[str, dict[object, str]]
+) -> dict[object, str]:
+    """reinforcement id → its host member's printed code — the parent
+    relation the refuerzos section of the cut pack prints."""
+    parents: dict[object, str] = {}
+    manufacturing = snapshot.get("manufacturing")
+    if not isinstance(manufacturing, list):
+        return parents
+    for fact in manufacturing:
+        if not isinstance(fact, dict):
+            continue
+        for item in _array(fact.get("reinforcements"), "invalid_manufacturing_fact"):
+            parents[item.get("reinforcement_id")] = labels["member"].get(
+                item.get("parent_member_id"),
+                str(item.get("parent_member_id") or "")[:10],
+            )
+    return parents
+
+
+def _member_ops(
+    snapshot: dict[str, object],
+) -> dict[str, list[str]]:
+    """member id → its machining operation kinds in plan order — same
+    engine pass as ``_member_op_marks``, kept as one helper so the marks
+    and the next-station map agree."""
+    manufacturing = snapshot.get("manufacturing")
+    if not isinstance(manufacturing, list) or not manufacturing:
+        return {}
+    try:
+        from dekopen_engine.manufacturing import ManufacturingFactsV1
+        from dekopen_engine.operations import operations_from_plan
+
+        fact_units = [
+            ManufacturingFactsV1.model_validate_json(json.dumps(fact))
+            for fact in manufacturing
+            if isinstance(fact, dict)
+        ]
+        ops = operations_from_plan(bars=[], fact_units=fact_units)
+    except Exception:
+        return {}
+    members: dict[str, list[str]] = {}
+    for op in ops:
+        if op.host_kind == "MEMBER":
+            members.setdefault(op.host, []).append(op.kind.value)
+    return members
+
+
+def _member_op_marks(
+    snapshot: dict[str, object],
+) -> dict[str, str]:
+    """member id → 'mec' when it carries machining ops — derived from
+    ``_member_ops`` so the mark and the next-station map never disagree."""
+    return {
+        member_id: "mec"
+        for member_id, kinds in _member_ops(snapshot).items()
+        if kinds
+    }
 
 
 def _cut_member_map(
@@ -3412,7 +3622,7 @@ def _infill_key(piece: dict[str, object]) -> tuple[str, str, str]:
 
 def _location(labels: dict[str, dict[object, str]], bay_id: object, leaf_id: object) -> str:
     bay = labels["bay"].get(bay_id, _short_id(bay_id))
-    if leaf_id is None:
+    if leaf_id in (None, ""):
         return str(bay)
     return f"{bay} / {labels['leaf'].get(leaf_id, _short_id(leaf_id))}"
 
@@ -4299,7 +4509,7 @@ def _opening_labels(tree: dict[str, object]) -> list[str]:
 _ROLE_ES = {
     "FRAME": "Marco", "SASH": "Hoja", "MULLION_V": "Montante",
     "MULLION_H": "Travesaño", "INVERSOR": "Inversor",
-    "GLAZING_BEAD": "Juntaquillo", "COUPLER": "Cople",
+    "GLAZING_BEAD": "Junquillo", "COUPLER": "Cople",
     "ADDITIONAL": "Adicional", "THRESHOLD": "Umbral", "CHANNEL": "Canal",
 }
 

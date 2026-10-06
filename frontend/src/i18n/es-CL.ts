@@ -1227,6 +1227,11 @@ export const messages = {
   "settings.docPaperLetter": "Carta",
   "settings.docPaperLegal": "Oficio",
   "settings.docPaperA4": "A4",
+  "settings.labelFormat": "Etiquetas de pieza",
+  "settings.labelFormatHint":
+    "Cómo se imprime la hoja de etiquetas del pack de corte: grilla en papel carta/A4 u oficio, o rollo térmico de etiquetadora.",
+  "settings.labelFormatGrid": "Grilla en hoja",
+  "settings.labelFormatRoll": "Rollo térmico 100×50 mm",
   "settings.docTermsPlazo": "Plazo de entrega",
   "settings.docTermsInstalacion": "Instalación",
   "settings.docTermsExclusiones": "Exclusiones",

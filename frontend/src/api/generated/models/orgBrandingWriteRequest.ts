@@ -7,6 +7,7 @@
  */
 import type { OrgBrandingWriteRequestDocPaperSize } from "./orgBrandingWriteRequestDocPaperSize";
 import type { OrgBrandingWriteRequestDocTerms } from "./orgBrandingWriteRequestDocTerms";
+import type { OrgBrandingWriteRequestWorkshopLabelFormat } from "./orgBrandingWriteRequestWorkshopLabelFormat";
 
 export interface OrgBrandingWriteRequest {
   /**
@@ -43,6 +44,9 @@ export interface OrgBrandingWriteRequest {
   vano_spread_tolerance_mm?: string | null;
   doc_paper_size?:
     | (typeof OrgBrandingWriteRequestDocPaperSize)[keyof typeof OrgBrandingWriteRequestDocPaperSize]
+    | null;
+  workshop_label_format?:
+    | (typeof OrgBrandingWriteRequestWorkshopLabelFormat)[keyof typeof OrgBrandingWriteRequestWorkshopLabelFormat]
     | null;
   /** @nullable */
   doc_terms?: OrgBrandingWriteRequestDocTerms;

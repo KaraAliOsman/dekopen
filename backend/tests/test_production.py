@@ -2431,7 +2431,7 @@ def test_export_cnc_files_writes_deterministic_csv(monkeypatch) -> None:
     assert "M-02" in lines[2] and "M-01" in lines[3]  # stored cut sequence
     assert lines[2].split(",")[3] == "1"  # sequence_in_bar column
     assert "45.0" in lines[2] and "90.0" in lines[3]  # saw angles exported
-    assert stored["schema"] == "work_order_cnc_export_v2"
+    assert stored["schema"] == "work_order_cnc_export_v3"
     assert stored["optimization_fingerprint"]
     sheets_csv = stored["files"]["sheets.csv"]
     assert "GLASS-4" in sheets_csv and "V-01" in sheets_csv
@@ -2523,8 +2523,8 @@ def test_export_dxf_files_writes_deterministic_geometry(monkeypatch) -> None:
     assert sorted(out["files"]) == ["bars.dxf", "sheet_1.dxf"]
     sheet = stored["files"]["sheet_1.dxf"]
     assert sheet.startswith("0\nSECTION\n2\nHEADER") and sheet.endswith("0\nEOF\n")
-    # ASCII-only labels (AC1015-era DXF) and AcDb subclass markers.
-    assert "AC1015" in sheet and "V-01-U2 800x600" in sheet
+    # UTF-8 labels (AC1027 DXF with $DWGCODEPAGE=UTF-8) and AcDb subclass markers.
+    assert "AC1027" in sheet and "V-01-U2 800x600" in sheet
     assert "100\nAcDbPolyline" in sheet and "100\nAcDbText" in sheet
     bars = stored["files"]["bars.dxf"]
     assert "M-02-U1 1200 45.0/45.0" in bars and "MARCO-60" in bars
