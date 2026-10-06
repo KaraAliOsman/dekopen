@@ -310,6 +310,63 @@ def deliver_payment_received(*, org_id: UUID, project_id: UUID, payment_id: UUID
     return {"sent": len(sent)}
 
 
+def deliver_pricing_decision(*, org_id: UUID, operation_id: UUID, outcome: str, decided_by: str) -> dict:
+    """P07 — aviso al estimador que pidió la operación comercial."""
+    operation = one(
+        "SELECT o.id, o.reason, o.requested_by_email, o.requested_by,"
+        " p.code AS project_code, p.name AS project_name, p.id AS project_id,"
+        " p.total_price_net::text AS net"
+        " FROM public.pricing_operations o"
+        " JOIN public.projects p ON p.id=o.project_id AND p.org_id=o.org_id"
+        " WHERE o.id=%s AND o.org_id=%s",
+        [str(operation_id), str(org_id)],
+        "pricing_operation_not_found",
+    )
+    recipient = str(operation.get("requested_by_email") or "").strip()
+    context = {
+        "operation_id": str(operation_id),
+        "project_id": str(operation["project_id"]),
+        "outcome": outcome,
+        "decided_by": decided_by,
+    }
+    if not recipient:
+        skipped = one(
+            "INSERT INTO public.mail_messages"
+            " (org_id,audience,template,to_email,subject,html_body,text_body,"
+            "  status,error,context)"
+            " VALUES (%s,'INTERNAL','pricing_decision','',%s,'','','SKIPPED',%s,%s::jsonb)"
+            " RETURNING id,status",
+            [
+                str(org_id),
+                f"Decisión de precios {operation.get('project_name')}",
+                "La operación no registró correo del solicitante.",
+                json.dumps(context),
+            ],
+        )
+        return {"id": str(skipped["id"]), "status": "SKIPPED"}
+    labels = {"APPLIED": "aprobada", "REJECTED": "rechazada", "WITHDRAWN": "retirada"}
+    rendered = templates.pricing_decision(
+        {
+            "project_name": operation.get("project_name"),
+            "project_code": operation.get("project_code"),
+            "operation_label": outcome,
+            "outcome_label": labels.get(outcome, outcome.lower()),
+            "decided_by": decided_by,
+            "net_label": operation.get("net"),
+            "reason": operation.get("reason"),
+            "pricing_url": f"{_frontend_origin()}/projects/{operation['project_id']}/pricing",
+        }
+    )
+    return _deliver(
+        org_id=org_id,
+        audience="INTERNAL",
+        template="pricing_decision",
+        to_email=recipient,
+        rendered=rendered,
+        context=context,
+    )
+
+
 def deliver_step_blocked(
     *, org_id: UUID, order_id: UUID, step_label: str, note: str, actor_id: UUID | None
 ) -> dict:
@@ -438,6 +495,7 @@ def dev_previews(*, org_id: UUID) -> list[dict[str, str]]:
 
 __all__ = [
     "deliver_payment_received",
+    "deliver_pricing_decision",
     "deliver_quote_approved",
     "deliver_quote_sent",
     "deliver_step_blocked",

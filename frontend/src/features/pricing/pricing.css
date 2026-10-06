@@ -551,3 +551,178 @@
 .pricing-fix {
   font-weight: 600;
 }
+
+/* ——— P07 — workspace v2: banda de margen, cascada exacta, Δ por impulsor ——— */
+
+/* Margin band gauge: min→max corridor with the objective tick and the
+ * realized marker — same tokens as the compare band. */
+.margin-band {
+  border: 1px solid var(--theme-border-subtle);
+  border-left: 3px solid var(--theme-accent);
+  border-radius: var(--radius-md);
+  background: var(--theme-surface-panel);
+  margin: var(--space-12) 0;
+  padding: var(--space-12) var(--space-16);
+}
+
+.margin-band h3 {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin: 0 0 var(--space-12);
+  text-transform: uppercase;
+  color: var(--theme-text-muted);
+}
+
+.margin-band__track {
+  position: relative;
+  height: 0.625rem;
+  background: var(--theme-surface-inset, var(--theme-border-subtle));
+  overflow: hidden;
+}
+
+.margin-band__corridor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--theme-accent);
+  opacity: 0.35;
+}
+
+.margin-band__objective {
+  position: absolute;
+  top: -0.125rem;
+  bottom: -0.125rem;
+  width: 2px;
+  background: var(--theme-accent);
+}
+
+.margin-band__marker {
+  position: absolute;
+  top: -0.25rem;
+  bottom: -0.25rem;
+  width: 4px;
+  margin-left: -2px;
+  background: var(--theme-text-primary);
+  outline: 1px solid var(--theme-surface-panel);
+}
+
+.margin-band__labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4) var(--space-16);
+  font-size: var(--text-xs);
+  color: var(--theme-text-secondary);
+  margin: var(--space-8) 0 0;
+  align-items: center;
+}
+
+.margin-band__labels strong {
+  color: var(--theme-text-primary);
+}
+
+/* Exact waterfall: group rows are cost families; landmark rows (subtotal /
+ * total) carry the weight. One table, no invented numbers. */
+.price-cascade {
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--theme-surface-panel);
+  margin: var(--space-12) 0;
+  padding: var(--space-12) var(--space-16);
+}
+
+.price-cascade h3,
+.delta-breakdown h3 {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin: 0 0 var(--space-12);
+  text-transform: uppercase;
+  color: var(--theme-text-muted);
+}
+
+.price-cascade__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.price-cascade__row td {
+  padding: var(--space-4) 0;
+  font-size: var(--text-sm);
+}
+
+.price-cascade__row td:last-child {
+  text-align: right;
+}
+
+.price-cascade__row--group td {
+  color: var(--theme-text-secondary);
+}
+
+.price-cascade__row--subtotal td {
+  border-top: 1px solid var(--theme-border-subtle);
+  font-weight: 600;
+}
+
+.price-cascade__row--total td {
+  border-top: 2px solid var(--theme-accent);
+  font-weight: 700;
+  font-size: var(--type-body);
+}
+
+.price-cascade__positions {
+  margin-top: var(--space-12);
+}
+
+.price-cascade__table--position caption {
+  text-align: left;
+  font-weight: 600;
+  padding: var(--space-8) 0 var(--space-4);
+  color: var(--theme-text-secondary);
+}
+
+/* Delta decomposition: the canonical driver order, signed contributions. */
+.delta-breakdown {
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--theme-surface-panel);
+  margin: var(--space-12) 0;
+  padding: var(--space-12) var(--space-16);
+}
+
+.delta-breakdown__baseline {
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.delta-breakdown__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.delta-breakdown__table th,
+.delta-breakdown__table td {
+  font-size: var(--text-sm);
+  padding: var(--space-4) 0;
+  text-align: left;
+}
+
+.delta-breakdown__table th {
+  color: var(--theme-text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.delta-breakdown__table tfoot td {
+  border-top: 2px solid var(--theme-accent);
+  font-weight: 700;
+}
+
+.delta-breakdown__table [data-negative] {
+  color: var(--theme-accent-ink);
+}

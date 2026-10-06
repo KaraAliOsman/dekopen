@@ -45,5 +45,10 @@ export interface PriceResponse {
   approved_by: string | null;
   /** @nullable */
   approved_at: string | null;
+  /** @nullable */
+  margin_realized: string | null;
+  band: unknown | null;
+  cascade: unknown | null;
+  delta: unknown | null;
   created_at: string;
 }

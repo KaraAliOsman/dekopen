@@ -10,12 +10,13 @@ from typing import Any
 
 from django.db import connection, transaction
 
-from documents.repository import DocumentaryError, documentary_backend
+from documents.repository import DocumentaryError, documentary_backend, rows
 from jobs.handlers import _claims_for
 from jobs.registry import JobContext, JobPermanentError, ProgressReporter, register
 from mail import service
 from mail.serializers import (
     PaymentReceivedSerializer,
+    PricingDecisionSerializer,
     QuoteApprovedSerializer,
     QuoteSentSerializer,
     StepBlockedSerializer,
@@ -25,6 +26,10 @@ _MAIL_ROLES = ("OWNER", "ESTIMATOR", "WORKSHOP_MANAGER")
 
 
 def _set_claims(context: JobContext) -> None:
+    """GUC transaccional con los claims del actor — DEBE llamarse dentro del
+    transaction.atomic(): set_config(is_local=true) fuera de la transacción
+    muere con el statement (autocommit) y las políticas RLS de mail_messages
+    rechazan con 42501."""
     if context.created_by is None:
         raise JobPermanentError("mail_actor_required")
     with connection.cursor() as cursor:
@@ -43,9 +48,9 @@ def _set_claims(context: JobContext) -> None:
 def quote_sent(
     payload: dict[str, Any], context: JobContext, report: ProgressReporter
 ) -> dict[str, Any]:
-    _set_claims(context)
     try:
         with transaction.atomic(), documentary_backend():
+            _set_claims(context)
             return service.deliver_quote_sent(
                 org_id=context.org_id,
                 project_id=payload["project_id"],
@@ -65,9 +70,9 @@ def quote_sent(
 def quote_approved(
     payload: dict[str, Any], context: JobContext, report: ProgressReporter
 ) -> dict[str, Any]:
-    _set_claims(context)
     try:
         with transaction.atomic(), documentary_backend():
+            _set_claims(context)
             return service.deliver_quote_approved(
                 org_id=context.org_id,
                 project_id=payload["project_id"],
@@ -86,13 +91,43 @@ def quote_approved(
 def payment_received(
     payload: dict[str, Any], context: JobContext, report: ProgressReporter
 ) -> dict[str, Any]:
-    _set_claims(context)
     try:
         with transaction.atomic(), documentary_backend():
+            _set_claims(context)
             return service.deliver_payment_received(
                 org_id=context.org_id,
                 project_id=payload["project_id"],
                 payment_id=payload["payment_id"],
+            )
+    except DocumentaryError as error:
+        raise JobPermanentError(error.code) from error
+
+
+@register(
+    "mail.pricing_decision",
+    roles=_MAIL_ROLES,
+    payload_serializer=PricingDecisionSerializer,
+    label="Aviso al solicitante: decisión de precios",
+)
+def pricing_decision(
+    payload: dict[str, Any], context: JobContext, report: ProgressReporter
+) -> dict[str, Any]:
+    actor_label = "el equipo"
+    if context.created_by is not None:
+        found = rows(
+            "SELECT email::text AS email FROM auth.users WHERE id = %s",
+            [str(context.created_by)],
+        )
+        if found:
+            actor_label = str(found[0]["email"])
+    try:
+        with transaction.atomic(), documentary_backend():
+            _set_claims(context)
+            return service.deliver_pricing_decision(
+                org_id=context.org_id,
+                operation_id=payload["operation_id"],
+                outcome=str(payload["outcome"]),
+                decided_by=actor_label,
             )
     except DocumentaryError as error:
         raise JobPermanentError(error.code) from error
@@ -107,9 +142,9 @@ def payment_received(
 def step_blocked(
     payload: dict[str, Any], context: JobContext, report: ProgressReporter
 ) -> dict[str, Any]:
-    _set_claims(context)
     try:
         with transaction.atomic(), documentary_backend():
+            _set_claims(context)
             return service.deliver_step_blocked(
                 org_id=context.org_id,
                 order_id=payload["order_id"],

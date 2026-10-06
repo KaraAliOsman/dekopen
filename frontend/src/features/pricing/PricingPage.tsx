@@ -68,6 +68,7 @@ const ERROR_KEYS: Record<string, Parameters<typeof t>[0]> = {
   commercial_revision_required: "pricing.errRevision",
   pricing_configuration_not_found: "pricing.errConfig",
   owner_approval_required: "pricing.errOwner",
+  owner_confirmation_required: "pricing.errOwnerConfirm",
   operation_not_withdrawable: "pricing.errWithdraw",
   pricing_permission_denied: "pricing.errDenied",
   negative_margin: "pricing.errNegative",
@@ -185,6 +186,8 @@ const fields: Record<string, Field[]> = {
   rules: [
     { name: "pricing_mode", label: "pricing.mode", options: modes },
     { name: "default_margin_pct", label: "pricing.margin", type: "percent", initial: "35" },
+    { name: "margin_min_pct", label: "pricing.marginMin", type: "percent", initial: "25" },
+    { name: "margin_max_pct", label: "pricing.marginMax", type: "percent", initial: "60" },
     { name: "tax_rate_pct", label: "pricing.tax", type: "percent", initial: "19" },
     { name: "waste_factor_pct", label: "pricing.waste", type: "percent", initial: "8" },
     { name: "labor_rate_per_m2", label: "pricing.labor", initial: "15000" },
@@ -659,6 +662,8 @@ const coverageKindLabels: Record<string, Parameters<typeof t>[0]> = {
   GLASS: "pricing.coverageKind.glass",
   HARDWARE: "pricing.coverageKind.hardware",
   REINFORCEMENT: "pricing.coverageKind.reinforcement",
+  PANEL: "pricing.coverageKind.panel",
+  FITTING: "pricing.coverageKind.fitting",
 };
 
 function CoverageList({ items }: { items: Row[] }): JSX.Element {
@@ -1103,6 +1108,274 @@ function marginText(net: string, cost: string, currency: string): string {
   return `${formatMoney(text, currency)} · ${margin.toFixed(1).replace(".", ",")} %`;
 }
 
+// ——— P07 workspace payloads — server-derived, rendered verbatim ———
+
+type BandPayload = {
+  min?: string;
+  objective?: string;
+  max?: string;
+  state?: string;
+};
+type CascadeRowPayload = { key?: string; amount?: string; kind?: string };
+type CascadePositionPayload = {
+  position_index?: number;
+  groups?: Record<string, string>;
+  materials?: string;
+  waste?: string;
+  labour?: string;
+  cost?: string;
+  margin?: string;
+  sell?: string;
+  list_price?: string;
+  discount?: string;
+  net?: string;
+};
+type CascadePayload = {
+  rows?: CascadeRowPayload[];
+  positions?: CascadePositionPayload[];
+  margin_realized?: string | null;
+};
+type DeltaDriverPayload = {
+  driver?: string;
+  net_delta?: string;
+  cost_delta?: string;
+  net_after?: string;
+};
+type DeltaPayload = {
+  baseline_revision?: string;
+  baseline_net?: string;
+  proposed_net?: string;
+  net_delta?: string;
+  drivers?: DeltaDriverPayload[];
+};
+
+function cascadeRowLabel(key: string): string {
+  return t(`pricing.cascadeRow.${key}` as never);
+}
+
+/** P07 — the org's declared margin band as a gauge: min→max corridor,
+ * the objective tick, and the realized marker. The state the server
+ * computed drives the chip — the UI never re-judges it. */
+function MarginBand({
+  band,
+  owner,
+  realized,
+}: {
+  band: BandPayload;
+  owner: boolean;
+  realized: string | null;
+}) {
+  const min = Number(band.min);
+  const max = Number(band.max);
+  const objective = Number(band.objective);
+  const value = realized === null || realized === undefined ? null : Number(realized);
+  if (![min, max, objective].every(Number.isFinite)) return null;
+  const span = max * 1.25 || 1;
+  const at = (v: number) => `${Math.min(100, Math.max(0, (v / span) * 100))}%`;
+  const state = band.state ?? "";
+  return (
+    <section className="margin-band" aria-label={t("pricing.marginBand")}>
+      <h3>{t("pricing.marginBand")}</h3>
+      <div className="margin-band__track">
+        <span
+          className="margin-band__corridor"
+          style={{ left: at(min), right: `${100 - (max / span) * 100}%` }}
+        />
+        <span className="margin-band__objective" style={{ left: at(objective) }} />
+        {value !== null && Number.isFinite(value) && (
+          <span className="margin-band__marker" style={{ left: at(value) }} />
+        )}
+      </div>
+      <p className="margin-band__labels">
+        <span>
+          {t("pricing.marginMin")} {pctDisplay(band.min)} %
+        </span>
+        <span>
+          {t("pricing.bandObjective")} {pctDisplay(band.objective)} %
+        </span>
+        <span>
+          {t("pricing.marginMax")} {pctDisplay(band.max)} %
+        </span>
+        {value !== null && (
+          <strong>
+            {t("pricing.bandRealized")} {pctDisplay(String(value))} %
+          </strong>
+        )}
+        <span className="status-chip" data-status={state === "IN_BAND" ? "approved" : "pending"}>
+          {t(`pricing.band.${state}` as never)}
+        </span>
+        {state !== "IN_BAND" && !owner && (
+          <span className="operation-warning">{t("pricing.bandPendingHint")}</span>
+        )}
+      </p>
+    </section>
+  );
+}
+
+/** P07 — the exact waterfall the engine closed: family groups, then the
+ * landmark rows (materiales → costo → margen → lista → neto → total). A
+ * position panel shows the same chain at line level. */
+function PriceCascade({
+  authorities,
+  cascade,
+  currency,
+}: {
+  authorities?: unknown[];
+  cascade: CascadePayload;
+  currency: string;
+}) {
+  const rows = cascade.rows ?? [];
+  const positions = cascade.positions ?? [];
+  if (!rows.length) return null;
+  return (
+    <section className="price-cascade">
+      <h3>{t("pricing.cascade")}</h3>
+      {(authorities ?? []).length > 0 && (
+        <details className="operation-authorities">
+          <summary>{t("pricing.authorities")}</summary>
+          <ul>
+            {(authorities ?? []).map((authority, index) => (
+              <li key={index}>{flattenAuthority(authority).join(" · ")}</li>
+            ))}
+          </ul>
+        </details>
+      )}
+      <table className="price-cascade__table">
+        <tbody>
+          {rows.map((row) => (
+            <tr
+              key={row.key}
+              className={`price-cascade__row price-cascade__row--${row.kind ?? "step"}`}
+            >
+              <td>{cascadeRowLabel(String(row.key))}</td>
+              <td className="operation-lines__money">
+                {formatMoney(String(row.amount ?? "0"), currency)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {positions.length > 0 && (
+        <details className="price-cascade__positions">
+          <summary>{t("pricing.cascadePosition")}</summary>
+          {positions.map((position) => (
+            <table
+              className="price-cascade__table price-cascade__table--position"
+              key={position.position_index}
+            >
+              <caption>#{position.position_index}</caption>
+              <tbody>
+                {Object.entries(position.groups ?? {})
+                  .filter(([, amount]) => Number(amount) !== 0)
+                  .map(([group, amount]) => (
+                    <tr key={group} className="price-cascade__row price-cascade__row--group">
+                      <td>{cascadeRowLabel(group)}</td>
+                      <td className="operation-lines__money">{formatMoney(amount, currency)}</td>
+                    </tr>
+                  ))}
+                {(
+                  [
+                    "materials",
+                    "waste",
+                    "labour",
+                    "cost",
+                    "margin",
+                    "sell",
+                    "list_price",
+                    "discount",
+                    "net",
+                  ] as const
+                ).map((key) => (
+                  <tr
+                    key={key}
+                    className={`price-cascade__row ${
+                      ["cost", "list_price", "net"].includes(key)
+                        ? "price-cascade__row--subtotal"
+                        : ""
+                    }`}
+                  >
+                    <td>{cascadeRowLabel(key === "cost" ? "cost_total" : key)}</td>
+                    <td className="operation-lines__money">
+                      {formatMoney(String(position[key] ?? "0"), currency)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ))}
+        </details>
+      )}
+    </section>
+  );
+}
+
+/** P07 — "¿Por qué cambió?": the driver's net contribution in the
+ * canonical order — the amounts sum to the total Δ by construction. */
+function DeltaBreakdown({ delta, currency }: { delta: DeltaPayload; currency: string }) {
+  const drivers = delta.drivers ?? [];
+  if (!drivers.length) return null;
+  const signed = (value: string | undefined) => {
+    const amount = Number(value ?? "0");
+    return (
+      <span data-negative={amount < 0 || undefined}>
+        {amount > 0 ? "+" : ""}
+        {formatMoney(String(value ?? "0"), currency)}
+      </span>
+    );
+  };
+  return (
+    <section className="delta-breakdown">
+      <h3>
+        {t("pricing.delta")}
+        {delta.baseline_revision && (
+          <span className="delta-breakdown__baseline">
+            {" "}
+            · {t("pricing.deltaBaseline")} {delta.baseline_revision}
+          </span>
+        )}
+      </h3>
+      <table className="delta-breakdown__table">
+        <thead>
+          <tr>
+            <th scope="col">{t("pricing.deltaLabel")}</th>
+            <th scope="col" className="operation-lines__money">
+              {t("pricing.deltaNet")}
+            </th>
+            <th scope="col" className="operation-lines__money">
+              {t("pricing.deltaCost")}
+            </th>
+            <th scope="col" className="operation-lines__money">
+              {t("pricing.deltaAfter")}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {drivers.map((driver) => (
+            <tr key={driver.driver}>
+              <td>{t(`pricing.deltaDriver.${driver.driver}` as never)}</td>
+              <td className="operation-lines__money">{signed(driver.net_delta)}</td>
+              <td className="operation-lines__money">{signed(driver.cost_delta)}</td>
+              <td className="operation-lines__money">
+                {formatMoney(String(driver.net_after ?? "0"), currency)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td>{t("pricing.deltaLabel")}</td>
+            <td className="operation-lines__money">{signed(delta.net_delta)}</td>
+            <td />
+            <td className="operation-lines__money">
+              {formatMoney(String(delta.proposed_net ?? "0"), currency)}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </section>
+  );
+}
+
 /** §03-D — the pricing decision surface: the estimator and the approver
  * read the SAME frozen numbers — per-position cost vs selling, project
  * margin, the recorded reason and who applied/rejected it. */
@@ -1341,6 +1614,28 @@ function OperationDecision({
         )}
       </div>
 
+      {(operation.band as BandPayload | null) && (
+        <MarginBand
+          band={operation.band as BandPayload}
+          owner={owner}
+          realized={operation.margin_realized ?? null}
+        />
+      )}
+      {(operation.cascade as CascadePayload | null)?.rows?.length ? (
+        <PriceCascade
+          authorities={operation.authorities ?? []}
+          cascade={operation.cascade as CascadePayload}
+          currency={operation.currency}
+        />
+      ) : (
+        <p className="operation-decision__meta">{t("pricing.noCascade")}</p>
+      )}
+      {(operation.delta as DeltaPayload | null)?.drivers?.length ? (
+        <DeltaBreakdown delta={operation.delta as DeltaPayload} currency={operation.currency} />
+      ) : (
+        <p className="operation-decision__meta">{t("pricing.noDelta")}</p>
+      )}
+
       <div className="operation-lines__wrap">
         <table className="operation-lines">
           <caption>{t("pricing.perPosition")}</caption>
@@ -1484,16 +1779,17 @@ function OperationDecision({
           ` · ${t("pricing.auditDecided")} ${formatDateTime(operation.approved_at)}`}
       </p>
 
-      {(operation.authorities ?? []).length > 0 && (
-        <details className="operation-authorities">
-          <summary>{t("pricing.authorities")}</summary>
-          <ul>
-            {(operation.authorities ?? []).map((authority, index) => (
-              <li key={index}>{flattenAuthority(authority).join(" · ")}</li>
-            ))}
-          </ul>
-        </details>
-      )}
+      {(operation.authorities ?? []).length > 0 &&
+        !(operation.cascade as CascadePayload | null)?.rows?.length && (
+          <details className="operation-authorities">
+            <summary>{t("pricing.authorities")}</summary>
+            <ul>
+              {(operation.authorities ?? []).map((authority, index) => (
+                <li key={index}>{flattenAuthority(authority).join(" · ")}</li>
+              ))}
+            </ul>
+          </details>
+        )}
 
       <div className="operation-decision__actions">
         {["PREVIEW", "PENDING"].includes(operation.state) &&
@@ -1732,6 +2028,17 @@ function CommercialOperations({
     if (!isOperation(value)) throw new Error("pricing.malformedOperation");
     setStale(false);
     setOperation(value);
+    // Fuera de banda para un estimador = pedir aprobación: la causa queda
+    // precargada (constitución §8) sin pisar un motivo ya escrito.
+    const band = value.band as BandPayload | null | undefined;
+    const outOfBand = band?.state === "BELOW_MIN" || band?.state === "ABOVE_MAX";
+    setReason((current) =>
+      outOfBand &&
+      !owner &&
+      (current.trim().length === 0 || current === t("pricing.firstQuoteReason"))
+        ? t("pricing.bandReason")
+        : current,
+    );
   }
   function apply(reject = false): Promise<boolean> {
     if (!operation) return Promise.resolve(false);
@@ -1801,8 +2108,10 @@ function CommercialOperations({
           event.preventDefault();
           const data = Object.fromEntries(new FormData(event.currentTarget));
           if (data.fx_snapshot_id === "") delete data.fx_snapshot_id;
+          // Margen vacío → la regla por defecto; vacío no es 0 %.
+          if (data.margin_pct === "" || data.margin_pct === undefined) delete data.margin_pct;
           // The UI collects percents; the authority stores fractions.
-          for (const key of ["discount_pct", "target_margin"] as const) {
+          for (const key of ["discount_pct", "target_margin", "margin_pct"] as const) {
             if (data[key] !== undefined && data[key] !== "")
               data[key] = String(Number(data[key]) / 100);
           }
@@ -1919,6 +2228,13 @@ function CommercialOperations({
             required
           />
         </label>
+        {selectedMode === "COST_PLUS_MARGIN" && (
+          <label>
+            {t("pricing.marginPct")}
+            <input name="margin_pct" type="number" step="0.1" min="0" max="99.9" placeholder="—" />
+            <span className="field-hint">{t("pricing.marginPctHint")}</span>
+          </label>
+        )}
         {selectedMode === "TARGET_GROSS_MARGIN_PROJECT" && (
           <label>
             {t("pricing.margin")}
@@ -2031,9 +2347,20 @@ function CommercialOperations({
             checked={confirmed}
             onChange={(event) => setConfirmed(event.target.checked)}
           />
-          {t("pricing.confirmDiscount")}
+          {(() => {
+            const band = operation?.band as BandPayload | null | undefined;
+            return band?.state === "BELOW_MIN" || band?.state === "ABOVE_MAX"
+              ? t("pricing.confirmBand")
+              : t("pricing.confirmDiscount");
+          })()}
         </label>
-        <button disabled={busy}>{t("pricing.preview")}</button>
+        <button disabled={busy}>
+          {(() => {
+            const band = operation?.band as BandPayload | null | undefined;
+            const outOfBand = band?.state === "BELOW_MIN" || band?.state === "ABOVE_MAX";
+            return outOfBand && !owner ? t("pricing.requestApproval") : t("pricing.preview");
+          })()}
+        </button>
       </form>
       {error && (
         <p role="alert">
