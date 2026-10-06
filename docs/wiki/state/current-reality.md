@@ -3,7 +3,7 @@ type: state
 status: active
 updated: 2026-10-06
 volatility: high
-verified_ref: 3f3cf8a66169efb31a0afaa04c657b9c71981d99
+verified_ref: 301ebfb65f75489ea3f4c2f444a8f625c189db3d
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
@@ -28,6 +28,7 @@ sources:
   - P12 producción PR https://github.com/KaraAliOsman/dekopen/pull/40
   - ED1 pase editorial PR https://github.com/KaraAliOsman/dekopen/pull/42
   - P13 pack corte etiquetas PR https://github.com/KaraAliOsman/dekopen/pull/44
+  - P06 bow acoplados PR https://github.com/KaraAliOsman/dekopen/pull/46
   - P17 asistente IA/trabajos/Orb branch devin/P17-asistente-orb
   - integracion/v1 merge 747c528b67d234d697624929ccbcc7098261ed54
   - open PR metadata observed 2026-09-27/28
@@ -390,6 +391,8 @@ Open PR (branch `devin/P13-pack-corte-etiquetas`, on `integracion/v1`):
 - Verificado: `make lint|typecheck|test|build|test-db` verdes (`PY=.venv/bin/python`; backend 1236, pgTAP 1080 incl. `181_p13_workshop_label_format`, integración 279, e2e Playwright).
 
 ## P06 bow/bay y conjuntos acoplados state
+
+Merged into `integracion/v1` as squash `301ebfb65f75489ea3f4c2f444a8f625c189db3d` (dekopen PR #46):
 
 Open PR (branch `devin/P06-bow-acoplados`, on `integracion/v1` post-ED1):
 
