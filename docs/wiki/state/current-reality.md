@@ -3,7 +3,7 @@ type: state
 status: active
 updated: 2026-10-06
 volatility: high
-verified_ref: c1ba32063f8177ce4b42a3703f57549061b18c4c
+verified_ref: a38622bb947a062efaaebc2b4e11a03b33d1ebc2
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
@@ -372,3 +372,16 @@ PR sobre `integracion/v1` (branch `devin/ED1-pase-editorial-ola1`); encargo sin 
 - **Probe de captura corregido**: `contrast-aa` compone alfa sobre el fondo real (falsos positivos teal del portal resueltos); el escáner de vocabulario excluye contextos de identificador (`code`, `pre`, `samp`, `kbd`, `.fmt-code`, `.ui-code`, `[data-code]`) — un SKU/código en mono ya no cuenta como enum-token.
 - **Limpieza**: alias muerto `--shadow-lg` eliminado de `tokens.css`; baseline de guardas regenerada sólo a la baja (`raw-status`, `font<11`, `hex-inline`, `shadow-off` → 0; `ui-tofixed` 87→2).
 - Verificado: `make lint|typecheck|test|build` verdes; ux:capture antes/después en `docs/redesign/captures/ed1/`; decisiones en sección ED1 de `valores-por-defecto.md`.
+
+## P13 pack de corte, etiquetas e identidad entre artefactos state
+
+Open PR (branch `devin/P13-pack-corte-etiquetas`, on `integracion/v1`):
+
+- `production/cut_pack.py` reescrito como pack imprimible para el operario de sierra: lista de corte apaisada con badge de origen por barra («barra nueva» / «retazo RT-…» + rack), diagrama SVG por barra con etiquetas por instancia y colocación por niveles, cierre exacto Decimal en `.bar-balance` («cierra exacto» / «diferencia sin asignar N mm») y línea de destino del remanente (folio `RT-` real leído de `inventory_remnants` con `origin_order_id`, o «folio RT- al cerrar el corte», o «→ desecho»).
+- Secciones: «Cortes agrupados — sierra manual» (misma spec agrupada con cantidad y lista de etiquetas — trazabilidad preservada), «Refuerzos y junquillos» con la etiqueta de la pieza padre, «Plan de láminas» + «Vidrios» (mm enteros, composición, cantidad, posición, destino), «Piezas no ubicadas» con motivo → acción de catálogo, e «Identidad» con QR `DEKOPEN|OT|CUTPACK|huella16`.
+- Hoja de etiquetas configurable por organización: `tenancy_organizations.workshop_label_format` (`GRID` default / `THERMAL_100X50`, migración `20270204000000` + grant a `documentary_backend`), `Ajustes › Documentos`, serializers + `org_branding.py` + openapi/orval regenerados. Grilla 64,7×38 mm en página `piece-labels` del papel documental, o página 100×50 mm rollo; etiqueta = código grande, OT+huella, posición/vano-hoja, rol ES, largo+ángulos+color, QR `DEKOPEN|OT|código|huella8`, siguiente estación (routing payload o `operation_station_map`); etiquetas de retazo anexan al final. La sección corre en `@page` nombrada y la grilla va en flujo de línea — un `display:flex` de WeasyPrint no fragmenta entre páginas.
+- Consistencia P02 por instancia (no por spec): `_bar_assignments`/`_sheet_assignments` en renderers.py resuelven `(bar|sheet_index, sequence) → (código, entity_id)` y las comparten PDF, `bars.csv`/`sheets.csv` (`_cnc_bars_csv`/`_cnc_sheets_csv` con `bar_codes`/`sheet_codes`, schema `work_order_cnc_export_v3`) y DXF (`dxf_files(bar_instance=, sheet_instance=)`); `test_same_codes_in_pdf_csv_dxf_and_labels` exige igualdad de conjuntos entre los 4 artefactos + etiqueta.
+- DXF sube a AC1027 + `$DWGCODEPAGE=UTF-8` — texto en español intacto (`Junquillo`, `Ñ`, `·R`); `_dxf_text` sólo mapea `⟳`→`(rot)`. Parseo verificado con `ezdxf==1.4.2` (nueva dependencia dev).
+- Legibilidad: piso de 8 pt en todo el pack (`.workshop th`, `.tb-label`, `.sign-label`, mono de barras y etiquetas ≥8 pt; texto SVG ≥3 mm de alto); `test_cut_pack_p13.py` verifica OTs de 1/12/100 posiciones — páginas acotadas, cero colisión de bbox de palabras, cierre exacto por barra.
+- Columnas CSV documentadas como formato genérico DEKOPEN en `docs/formatos/corte-csv.md` (ningún formato propietario de sierra/CNC). Decisión registrada en `valores-por-defecto.md` (etiquetas grilla por defecto). Capturas raster en `docs/redesign/captures/p13-pack-corte/` (lista de corte, vidrios, etiquetas).
+- Verificado: `make lint|typecheck|test|build|test-db` verdes (`PY=.venv/bin/python`; backend 1236, pgTAP 1080 incl. `181_p13_workshop_label_format`, integración 279, e2e Playwright).

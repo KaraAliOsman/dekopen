@@ -24,6 +24,7 @@ import { apiFetchBlob } from "../api/apiMutator";
 import type {
   ApiUrlEnum,
   DocPaperSizeEnum,
+  WorkshopLabelFormatEnum,
   ExtraArticleResponse,
   ExtraTemplateWriteRequest,
   MailStatus,
@@ -477,6 +478,7 @@ function OrgBrandingCard({ orgId }: { orgId: string }): JSX.Element {
     brand_color: "",
     doc_dekopen_credit: false,
     doc_paper_size: "LETTER" as DocPaperSizeEnum,
+    workshop_label_format: "GRID" as WorkshopLabelFormatEnum,
     doc_terms: {
       plazo_entrega: "",
       instalacion: "",
@@ -507,6 +509,8 @@ function OrgBrandingCard({ orgId }: { orgId: string }): JSX.Element {
         brand_color: response.data.brand_color ?? "",
         doc_dekopen_credit: response.data.doc_dekopen_credit ?? false,
         doc_paper_size: (response.data.doc_paper_size ?? "LETTER") as DocPaperSizeEnum,
+        workshop_label_format: (response.data.workshop_label_format ??
+          "GRID") as WorkshopLabelFormatEnum,
         doc_terms: {
           plazo_entrega: "",
           instalacion: "",
@@ -541,7 +545,10 @@ function OrgBrandingCard({ orgId }: { orgId: string }): JSX.Element {
   async function save(event: FormEvent): Promise<void> {
     event.preventDefault();
     const field = (
-      name: Exclude<keyof typeof form, "doc_dekopen_credit" | "doc_paper_size" | "doc_terms">,
+      name: Exclude<
+        keyof typeof form,
+        "doc_dekopen_credit" | "doc_paper_size" | "workshop_label_format" | "doc_terms"
+      >,
     ) => form[name].trim() || null;
     // Vacío se sella como omisión — el documento imprime solo las
     // condiciones que la organización declara.
@@ -563,6 +570,7 @@ function OrgBrandingCard({ orgId }: { orgId: string }): JSX.Element {
           brand_color: field("brand_color")?.toUpperCase() ?? null,
           doc_dekopen_credit: form.doc_dekopen_credit,
           doc_paper_size: form.doc_paper_size,
+          workshop_label_format: form.workshop_label_format,
           doc_terms: docTerms,
         },
         requestOptions,
@@ -729,6 +737,22 @@ function OrgBrandingCard({ orgId }: { orgId: string }): JSX.Element {
               <option value="LEGAL">{t("settings.docPaperLegal")}</option>
               <option value="A4">{t("settings.docPaperA4")}</option>
             </select>
+          </label>
+          <label>
+            {t("settings.labelFormat")}
+            <select
+              value={form.workshop_label_format}
+              onChange={(event) =>
+                setForm((prev) => ({
+                  ...prev,
+                  workshop_label_format: event.target.value as WorkshopLabelFormatEnum,
+                }))
+              }
+            >
+              <option value="GRID">{t("settings.labelFormatGrid")}</option>
+              <option value="THERMAL_100X50">{t("settings.labelFormatRoll")}</option>
+            </select>
+            <span className="settings-hint">{t("settings.labelFormatHint")}</span>
           </label>
           {(
             [

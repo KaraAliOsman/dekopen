@@ -25,6 +25,7 @@ Fuente inicial: `docs/design/CONSTITUCION.md`, seccion 11. Los encargos siguient
 | Opciones de herraje        | Vendibles por posicion con `price_delta_clp` (delta de venta); fuente seleccionada sin precio = error `hardware_option_price_missing`, nunca precio cero silencioso                                            | Documento al cliente / pricing    | implementado | D04                       |
 | Mecanizado de herrajes     | Declarado por componente como dato; sin coordenadas en catalogo la operacion queda `DECLARED_NOT_EMITTED` — no se inventan coordenadas                                                                         | OT (payload P14)                  | implementado | D04                       |
 | Clase siguiente al fallar  | Si una clase explicita falla y otra compatible existe, el mensaje la nombra con su delta CLP; si ninguna clase cabe, se sugiere dividir la bahia nombrando la clase mas pesada                                 | Motor (contexto de error)         | implementado | D04                       |
+| Etiquetas de pieza         | Grilla en la hoja del papel documental de la organizacion (Carta/Oficio/A4); alternativa rollo termico 100x50 mm para etiquetadoras de taller                                                                  | Ajustes > Documentos              | por defecto  | P13                       |
 
 ## Decisiones de implementacion — P01 (sistema de diseno v2)
 

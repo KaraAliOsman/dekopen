@@ -673,6 +673,10 @@ export const DOMAIN_LABELS: Record<string, L> = {
     LEGAL: l("Oficio", "neutral"),
     A4: l("A4", "neutral"),
   },
+  WorkshopLabelFormatEnum: {
+    GRID: l("Grilla en hoja", "neutral"),
+    THERMAL_100X50: l("Rollo térmico 100×50 mm", "neutral"),
+  },
 };
 
 /** Enums que NUNCA llegan a una pantalla — contratos internos del API.

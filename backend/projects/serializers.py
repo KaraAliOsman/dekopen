@@ -653,6 +653,7 @@ class OrgBrandingSerializer(serializers.Serializer):
     )
     doc_paper_size = serializers.CharField()
     doc_terms = serializers.DictField(child=serializers.CharField())
+    workshop_label_format = serializers.CharField()
 
 
 class OrgBrandingWriteSerializer(StrictSerializer):
@@ -689,6 +690,14 @@ class OrgBrandingWriteSerializer(StrictSerializer):
     )
     doc_paper_size = serializers.ChoiceField(
         choices=(("LETTER", "Carta"), ("LEGAL", "Oficio"), ("A4", "A4")),
+        required=False,
+        allow_null=True,
+    )
+    workshop_label_format = serializers.ChoiceField(
+        choices=(
+            ("GRID", "Grilla A4/Carta"),
+            ("THERMAL_100X50", "Rollo térmico 100×50 mm"),
+        ),
         required=False,
         allow_null=True,
     )

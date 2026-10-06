@@ -38,4 +38,5 @@ export interface OrgBranding {
   vano_spread_tolerance_mm: string | null;
   doc_paper_size: string;
   doc_terms: OrgBrandingDocTerms;
+  workshop_label_format: string;
 }

@@ -71,6 +71,7 @@ def _branding(row: dict) -> dict:
         ),
         "doc_paper_size": row.get("doc_paper_size") or "LETTER",
         "doc_terms": _doc_terms(row.get("doc_terms")),
+        "workshop_label_format": row.get("workshop_label_format") or "GRID",
     }
 
 
@@ -78,7 +79,7 @@ _FIELDS = (
     "name, tax_id, commercial_name, giro, brand_address, brand_phone,"
     " brand_email, brand_logo_key, brand_logo_sha256, brand_color,"
     " doc_dekopen_credit, vano_spread_tolerance_mm,"
-    " doc_paper_size, doc_terms"
+    " doc_paper_size, doc_terms, workshop_label_format"
 )
 
 # P09 — claves legales declaradas que el documento del cliente imprime en
@@ -93,6 +94,9 @@ _DOC_TERM_KEYS = (
     "jurisdiccion",
 )
 _DOC_PAPER_SIZES = ("LETTER", "LEGAL", "A4")
+# P13 — formato de la hoja de etiquetas del pack de corte: grilla sobre el
+# papel documental o rollo térmico 100×50 mm para etiquetadoras de taller.
+_LABEL_FORMATS = ("GRID", "THERMAL_100X50")
 
 
 def _doc_terms(raw: object) -> dict:
@@ -181,6 +185,18 @@ def _save_branding(*, org_id: UUID, data: dict) -> dict:
                 "El papel debe ser Carta, Oficio o A4.",
             )
         params.append(size)
+    if "workshop_label_format" in data:
+        assignments.append("workshop_label_format=%s")
+        label_format = str(
+            data.get("workshop_label_format") or ""
+        ).strip().upper()
+        if label_format not in _LABEL_FORMATS:
+            raise contract_error(
+                400,
+                "workshop_label_format_invalid",
+                "El formato de etiquetas debe ser grilla A4/Carta o rollo térmico 100×50 mm.",
+            )
+        params.append(label_format)
     if "doc_terms" in data:
         assignments.append("doc_terms=%s::jsonb")
         raw_terms = data.get("doc_terms")

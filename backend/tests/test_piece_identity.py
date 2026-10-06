@@ -11,11 +11,13 @@ from __future__ import annotations
 import re
 
 from documents.renderers import (
+    _bar_assignments,
     _cut_member_map,
     _infill_code_map,
     _infill_key,
     _piece_labels,
     _cut_key,
+    _sheet_assignments,
 )
 from production.dxf import dxf_files
 from production import service
@@ -25,8 +27,8 @@ from tests.test_production import _cutpack_optimization, _cutpack_snapshot
 
 _PIECE_RE = re.compile(r"P\d+-U\d+-[A-Z]+\d+(?:·R)?")
 _INFILL_RE = re.compile(r"P\d+-U\d+-I\d+")
-# AC1015 DXF is ASCII-only: '·R' travels as '-R' on machine text — same
-# piece identity, transport glyph. Normalize before comparing sets.
+# El DXF sale en UTF-8 (AC1027): '·R' viaja verbatim — el fallback '-R' en
+# el regex solo cubre archivos generados antes de este encargo.
 _DXF_RE = re.compile(r"P\d+-U\d+-[A-Z]+\d+(?:[-·]R)?|P\d+-U\d+-I\d+")
 
 
@@ -64,6 +66,7 @@ def _with_sheet(snapshot: dict, optimization: dict) -> None:
             "yield_pct": "91.0",
             "placements": [
                 {
+                    "sequence": 1,
                     "piece_id": "spec-i1",
                     "x_mm": "50",
                     "y_mm": "40",
@@ -103,28 +106,55 @@ def test_piece_labels_are_identical_across_artifacts() -> None:
     )
     pack_codes = set(_PIECE_RE.findall(html)) | set(_INFILL_RE.findall(html))
 
+    # Per-instance maps — the same assignments the pack resolved.
+    bars = optimization["bars"]["workshop_cut_plan"]
+    sheets = optimization["sheets"]
+    bar_codes = {
+        key: code
+        for key, (code, _e) in _bar_assignments(
+            snapshot, labels, cut_map, bars
+        ).items()
+    }
+    sheet_codes = {
+        key: code
+        for key, (code, _e) in _sheet_assignments(
+            snapshot, labels, sheets
+        ).items()
+    }
+
     # --- CNC CSVs ----------------------------------------------------------
-    bars_csv = service._cnc_bars_csv(optimization, cut_map=cut_map)
+    bars_csv = service._cnc_bars_csv(
+        optimization, cut_map=cut_map, bar_codes=bar_codes
+    )
     csv_codes = set(_PIECE_RE.findall(bars_csv))
-    sheets_csv = service._cnc_sheets_csv(optimization, infill_map=infill_map)
+    sheets_csv = service._cnc_sheets_csv(
+        optimization, infill_map=infill_map, sheet_codes=sheet_codes
+    )
     csv_codes |= set(_INFILL_RE.findall(sheets_csv))
     # the sheet row must resolve the same code the pack prints — a missing
     # label would leave the cell empty and break the reconciliation.
     assert "P02-U01-I01" in sheets_csv
+    # Per-instance, not spec-join: two identical cuts carry their own code.
+    assert bars_csv.count("P02-U01-M01") == 1
 
     # --- DXF ----------------------------------------------------------------
     codes: dict[str, str] = {}
-    for bar in optimization["bars"]["workshop_cut_plan"]:
+    for bar in bars:
         for cut in bar["cuts"]:
             code = cut_map.get(_cut_key(cut))
             if code:
                 codes[str(cut["piece_id"])] = code
-    for sheet in optimization["sheets"]:
+    for sheet in sheets:
         for placement in sheet["placements"]:
             codes[str(placement["piece_id"])] = infill_map.get(
                 _infill_key(placement), str(placement["piece_id"])
             )
-    files = dxf_files(optimization, codes=codes)
+    files = dxf_files(
+        optimization,
+        codes=codes,
+        bar_instance=bar_codes,
+        sheet_instance=sheet_codes,
+    )
     dxf_codes = set()
     for text in files.values():
         dxf_codes |= _dxf_codes(text)
