@@ -73,6 +73,7 @@ def _seed(responses):
                     "kind": "SHEET",
                     "status": "AVAILABLE",
                     "sheet_workshop_sku": "CH-44",
+                    "rack_location": "V-02",
                 }
             ],
             [
@@ -85,19 +86,6 @@ def _seed(responses):
             [{"id": uuid4(), "invoice_code": "FAC-3", "project_id": pid, "project_code": "PRJ-1"}],
             [{"id": uuid4(), "note_code": "GD-2", "order_code": "OT-9"}],
             [{"id": aid, "sku": "SIL-1", "name": "Silicona", "category": "SUPPLY"}],
-            [
-                {
-                    "id": uuid4(),
-                    "kind": "BAR",
-                    "rack_location": "R-07",
-                    "material": "PVC",
-                    "color": "blanco",
-                    "length_mm": 1240,
-                    "width_mm": None,
-                    "height_mm": None,
-                    "sku": "MRC-100",
-                }
-            ],
         ]
     )
     return pid, pos
@@ -126,15 +114,13 @@ def test_every_group_maps_row_to_result(fake_rows):
     assert len(by_group["articles"]) == 2
     assert by_group["orders"][0]["path"] == "/production"
     assert by_group["remnants"][0]["title"] == "RT-000045"
-    assert by_group["remnants"][0]["subtitle"] == "SHEET · AVAILABLE · CH-44"
+    assert by_group["remnants"][0]["subtitle"] == "SHEET · AVAILABLE · CH-44 · V-02"
+    assert by_group["remnants"][0]["path"] == "/inventory"
     assert by_group["receipts"][0]["title"] == "REC-000012"
     assert by_group["receipts"][0]["path"] == "/purchasing"
     assert by_group["documents"][0]["title"] == "FAC-3"
     assert by_group["documents"][1]["title"] == "GD-2"
     assert by_group["inventory"][0]["path"] == "/inventory"
-    assert by_group["remnants"][0]["title"] == "Retazo bar · MRC-100"
-    assert by_group["remnants"][0]["path"] == "/inventory"
-    assert "R-07" in by_group["remnants"][0]["subtitle"]
 
 
 def test_queries_are_org_scoped_and_pattern_safe(fake_rows):
@@ -197,9 +183,10 @@ def test_supplier_folios_resolve_under_documentary_role(fake_rows):
 def test_installer_stays_in_member_scope(fake_rows):
     calls, responses, documentary = fake_rows
     _seed(responses)
-    del responses[8]  # receipts group is not queried outside purchasing roles
+    del responses[9]  # receipts group is not queried outside purchasing roles
     out = service.search(uuid4(), "ot-9", role="INSTALLER")
     assert documentary == []
     groups = {item["group"] for item in out["results"]}
-    assert "receipts" not in groups
-    assert groups.isdisjoint({"clients", "documents"})
+    assert groups.isdisjoint(
+        {"clients", "documents", "quotations", "inventory", "remnants", "receipts"}
+    )

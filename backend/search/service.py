@@ -30,15 +30,17 @@ def _where(columns: tuple[str, ...]) -> str:
 
 
 # Groups an installer must never see: the client registry carries fiscal PII
-# (RUT), quotations leak the commercial margin surface, and the documents
-# group mixes invoices into the result set. Projects still surface
-# (dispatch/installation context) minus the commercial subtitle.
+# (RUT), quotations leak the commercial margin surface, the documents
+# group mixes invoices into the result set, and inventory/remnant/receipt
+# rows are floor stock the field role has no surface for. Projects still
+# surface (dispatch/installation context) minus the commercial subtitle.
 _INSTALLER_EXCLUDED_GROUPS = {
     "clients",
     "documents",
     "quotations",
     "inventory",
     "remnants",
+    "receipts",
 }
 
 
@@ -224,15 +226,21 @@ def search(org_id: UUID, query: str, role: str = "OWNER") -> dict:
             }
         )
 
-    # §8 — el folio es una dirección: teclear 'RT-000045' o 'REC-000012'
-    # en la paleta lleva directo a la entidad, igual que escanear su QR.
+    # §8 — el folio es una dirección: teclear 'RT-000045' en la paleta lleva
+    # directo al retazo, igual que escanear su QR; también lo encuentra su
+    # rack, material, la nota de etiqueta o el SKU del artículo origen
+    # (P03: «retazos por código o nombre»).
     for row in org(
-        "SELECT id, remnant_code, kind::text, status::text, sheet_workshop_sku"
+        "SELECT id, remnant_code, kind::text, status::text, sheet_workshop_sku,"
+        " rack_location"
         " FROM public.inventory_remnants"
         " WHERE org_id=%s AND (__WHERE__)"
         f" ORDER BY remnant_code LIMIT {GROUP_LIMIT}",
         "remnant_code",
         "sheet_workshop_sku",
+        "rack_location",
+        "material",
+        "notes",
     ):
         results.append(
             {
@@ -240,8 +248,9 @@ def search(org_id: UUID, query: str, role: str = "OWNER") -> dict:
                 "id": str(row["id"]),
                 "title": row["remnant_code"],
                 "subtitle": f"{row['kind']} · {row['status']}"
-                + (f" · {row['sheet_workshop_sku']}" if row["sheet_workshop_sku"] else ""),
-                "path": "/purchasing",
+                + (f" · {row['sheet_workshop_sku']}" if row["sheet_workshop_sku"] else "")
+                + (f" · {row['rack_location']}" if row["rack_location"] else ""),
+                "path": "/inventory",
             }
         )
 
@@ -317,59 +326,6 @@ def search(org_id: UUID, query: str, role: str = "OWNER") -> dict:
                 "id": str(row["id"]),
                 "title": row["sku"],
                 "subtitle": row["name"],
-                "path": "/inventory",
-            }
-        )
-
-    # Retazos — el sobrante físico no tiene código propio: se encuentra por
-    # rack, material o el SKU del artículo del que salió (§7, reutiliza
-    # inventory_remnants sin crear otra fuente de verdad).
-    for row in org(
-        "SELECT r.id, r.kind, r.rack_location, r.material, r.color,"
-        " r.length_mm, r.width_mm, r.height_mm,"
-        " COALESCE(ppm.commercial_sku, ra.commercial_sku,"
-        "          r.sheet_workshop_sku) AS sku"
-        " FROM public.inventory_remnants r"
-        " LEFT JOIN public.profile_purchase_mappings ppm"
-        "        ON ppm.id = r.stock_authority_id"
-        "       AND (ppm.org_id IS NULL OR ppm.org_id = r.org_id)"
-        " LEFT JOIN public.reinforcement_articles ra"
-        "       ON ra.id = r.stock_authority_id"
-        "       AND (ra.org_id IS NULL OR ra.org_id = r.org_id)"
-        " WHERE r.org_id=%s AND r.status::text <> 'SCRAPPED' AND (__WHERE__)"
-        f" ORDER BY r.created_at DESC LIMIT {GROUP_LIMIT}",
-        "r.rack_location",
-        "r.material",
-        "r.color",
-        "r.notes",
-        "COALESCE(ppm.commercial_sku, ra.commercial_sku,"
-        "       r.sheet_workshop_sku)",
-    ):
-        dims = (
-            f"{row['length_mm']:g} mm"
-            if row["kind"] == "BAR" and row.get("length_mm") is not None
-            else (
-                f"{row['width_mm']:g} × {row['height_mm']:g} mm"
-                if row["kind"] == "SHEET"
-                and row.get("width_mm") is not None
-                else ""
-            )
-        )
-        detail = " · ".join(
-            part
-            for part in (
-                dims,
-                str(row["material"]) if row.get("material") else "",
-                f"Rack {row['rack_location']}" if row.get("rack_location") else "",
-            )
-            if part
-        )
-        results.append(
-            {
-                "group": "remnants",
-                "id": str(row["id"]),
-                "title": f"Retazo {str(row['kind']).lower()} · {row['sku'] or '—'}",
-                "subtitle": detail or None,
                 "path": "/inventory",
             }
         )
