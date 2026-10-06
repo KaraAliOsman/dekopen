@@ -3,7 +3,7 @@ type: state
 status: active
 updated: 2026-10-06
 volatility: high
-verified_ref: 0bcf7fcf32bfb4fdca828853f4e127026655ff1f
+verified_ref: c1ba32063f8177ce4b42a3703f57549061b18c4c
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
@@ -26,6 +26,7 @@ sources:
   - P17 asistente/Orb PR https://github.com/KaraAliOsman/dekopen/pull/35
   - P07 workspace precios PR https://github.com/KaraAliOsman/dekopen/pull/33
   - P12 producción PR https://github.com/KaraAliOsman/dekopen/pull/40
+  - ED1 pase editorial PR https://github.com/KaraAliOsman/dekopen/pull/42
   - P17 asistente IA/trabajos/Orb branch devin/P17-asistente-orb
   - integracion/v1 merge 747c528b67d234d697624929ccbcc7098261ed54
   - open PR metadata observed 2026-09-27/28
@@ -358,6 +359,8 @@ Open PR (branch `devin/P12-produccion`, on `integracion/v1`):
 - Fixture: P-ESCALA seals + releases (~100 live OTs on the board; first optimized). e2e `production-operator.spec.ts` runs inside `make test-db` (operator completes a step, blocks the next order, manager sees it on the board and in «Hoy»).
 
 ## ED1 pase editorial de la ola 1 state
+
+Merged into `integracion/v1` as squash `c1ba32063f8177ce4b42a3703f57549061b18c4c` (dekopen PR #42):
 
 PR sobre `integracion/v1` (branch `devin/ED1-pase-editorial-ola1`); encargo sin funcionalidad nueva — coherencia, dedup y pulido del conjunto:
 
