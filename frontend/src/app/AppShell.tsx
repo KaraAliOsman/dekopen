@@ -50,6 +50,9 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
   const leafContext = useMemo(() => ({ leaf, setLeaf }), [leaf, setLeaf]);
   const [paletteRequest, setPaletteRequest] = useState(0);
   const [assistantRequest, setAssistantRequest] = useState(0);
+  /* §P17 — while the dock is open the workspace reserves its 400px so the
+   * drawer never covers right-edge page controls (audit e2e). */
+  const [dockOpen, setDockOpen] = useState(false);
   const [presenceJob, setPresenceJob] = useState<AiJob | null>(null);
   const onActiveJob = useCallback(
     (job: AiJob | null) =>
@@ -108,6 +111,8 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
   const org = auth.me?.active_organization;
   const role = org?.role;
   const canWrite = role === "OWNER" || role === "ESTIMATOR";
+  // hasAiSurface (shellUtils) mirrors _AGENT_CALLERS — floor roles get a
+  // 403 wall on every /ai/* call, so the whole assistant surface stays off.
 
   const parts = location.pathname.split("/").filter(Boolean);
   const projectId = parts[0] === "projects" && parts[1] !== undefined ? parts[1] : null;
@@ -189,7 +194,7 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
     <ShellLeafContext.Provider value={leafContext}>
       <AssistantSurfaceProvider>
         <div
-          className={`app-shell${railOpen ? " rail-open" : ""}${railCollapsed ? " rail-collapsed" : ""}`}
+          className={`app-shell${railOpen ? " rail-open" : ""}${railCollapsed ? " rail-collapsed" : ""}${dockOpen ? " app-shell--askdock" : ""}`}
           data-studio={isStudio || undefined}
           data-testid="app-shell"
         >
@@ -442,6 +447,7 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
               hideTrigger
               organizationId={org?.id ?? null}
               userId={auth.me?.user.id ?? null}
+              onOpenChange={setDockOpen}
             />
           ) : null}
         </div>

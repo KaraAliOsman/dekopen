@@ -169,6 +169,7 @@ export function AiSettingsCard({ orgId }: { orgId: string }): JSX.Element {
           <thead>
             <tr>
               <th>{t("settings.aiCapabilityCol")}</th>
+              <th>{t("settings.aiProvider")}</th>
               <th>{t("settings.aiModel")}</th>
               <th>{t("settings.aiCredits")}</th>
             </tr>
@@ -179,6 +180,12 @@ export function AiSettingsCard({ orgId }: { orgId: string }): JSX.Element {
               .map((capability) => (
                 <tr key={capability.capability} data-mode={capability.mode}>
                   <td>{capabilityLabel(capability.capability)}</td>
+                  <td className="settings-mono">
+                    {/* En el hilo nunca se dice el proveedor; en Ajustes el
+                     * estado real sí se muestra — en modo de prueba la
+                     * etiqueta pública es «Proveedor de prueba». */}
+                    {capability.mode === "test" ? t("ai.testMode") : capability.provider}
+                  </td>
                   <td className="settings-mono">{capability.model}</td>
                   <td>{capability.credits_cost}</td>
                 </tr>

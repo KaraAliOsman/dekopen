@@ -24637,6 +24637,14 @@ components:
           type: string
           format: uuid
           nullable: true
+        label:
+          type: string
+        actor:
+          type: string
+          nullable: true
+        object_label:
+          type: string
+          nullable: true
       required:
       - attempt
       - completed_at

@@ -38,15 +38,38 @@
   outline-offset: 3px;
 }
 .ask-dock__panel {
-  width: 340px;
-  max-height: 480px;
+  /* §P17 — drawer derecho de 400px: anclado al borde entre la barra
+   * superior y la barra de estado; la elevación la da el borde, no una
+   * sombra apoyada (constitución §elevation). */
+  position: fixed;
+  top: 47px;
+  right: 0;
+  bottom: 25px;
+  width: 400px;
+  max-width: 92vw;
   display: flex;
   flex-direction: column;
   background: var(--theme-surface-panel, #ffffff);
-  border: 1px solid var(--theme-border-subtle, #d9dfde);
-  border-radius: var(--r-2);
-  box-shadow: 0 8px 32px rgb(0 0 0 / 18%);
+  border-left: 1px solid var(--theme-border-subtle, #d9dfde);
+  box-shadow: -12px 0 32px rgb(9 14 13 / 14%);
   overflow: hidden;
+  z-index: 61;
+  animation: ask-dock-in 0.24s ease-out;
+}
+@keyframes ask-dock-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ask-dock__panel {
+    animation: none;
+  }
 }
 .ask-dock__header {
   display: flex;
@@ -768,6 +791,7 @@
 }
 .aiws-metrics h2 small {
   font-weight: 400;
+  font-size: var(--type-micro);
   text-transform: none;
   color: var(--theme-text-tertiary, #7b8a88);
 }
@@ -1173,4 +1197,128 @@
   gap: 0.5rem;
   padding: 1rem 0.75rem 0.75rem;
   text-align: center;
+}
+
+/* §P17 — tarjeta revisable de propuesta: el diff del modelo dibujado con el
+ * renderer real (antes → después), el veredicto del motor y las acciones. */
+.ops-card {
+  border: 1px solid var(--theme-border-subtle, #d9dfde);
+  border-radius: var(--r-2);
+  background: var(--theme-surface-raised, #f2f5f4);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ops-card__ops {
+  margin: 0;
+  padding-left: 18px;
+  font-size: var(--type-micro);
+  color: var(--theme-text-secondary, #41504c);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ops-card__diff {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 6px;
+}
+.ops-card__preview {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.ops-card__svg {
+  width: 100%;
+  height: 120px;
+  display: block;
+  background: var(--theme-surface-panel, #fff);
+  border: 1px solid var(--theme-border-subtle, #d9dfde);
+  border-radius: var(--r-1);
+}
+.ops-card__preview figcaption {
+  font-size: var(--type-micro);
+  color: var(--theme-text-muted, #5c6c68);
+  text-align: center;
+}
+.ops-card__arrow {
+  color: var(--theme-text-muted, #5c6c68);
+  font-size: var(--type-body);
+}
+.ops-card__verdict {
+  margin: 0;
+  font-size: var(--type-micro);
+  color: var(--theme-text-muted, #5c6c68);
+}
+.ops-card__verdict[data-ok="true"] {
+  color: var(--theme-accent, #0f817a);
+}
+.ops-card__verdict[data-ok="false"] {
+  color: var(--theme-danger, #b42318);
+}
+.ops-card__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* §P17 — fallo colapsado: la línea humana primero, el detalle técnico
+ * plegado. */
+.failure-collapse {
+  font-size: var(--type-micro);
+}
+.failure-collapse__line {
+  margin: 0;
+  color: var(--theme-danger, #b42318);
+}
+.failure-collapse__link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--theme-accent, #0f817a);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.failure-collapse__link:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.failure-collapse__code {
+  display: block;
+  margin-top: 4px;
+  padding: 6px 8px;
+  background: var(--theme-surface-inset, #f0f4f3);
+  border: 1px solid var(--theme-border-subtle, #d9dfde);
+  border-radius: var(--r-1);
+  font-family: var(--font-mono);
+  font-size: var(--type-micro);
+  color: var(--theme-text-secondary, #41504c);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* §P17 §8 — lote revisable: diff dibujado + Ug declarada por posición. */
+.ask-dock__batch-diff {
+  align-items: center;
+  display: flex;
+  flex-basis: 100%;
+  gap: 6px;
+}
+.ask-dock__batch-diff .ops-card__preview {
+  flex: 1;
+  margin: 0;
+}
+.ask-dock__batch-diff .ops-card__svg {
+  height: 64px;
+}
+.ask-dock__batch-ug {
+  color: var(--theme-text-secondary);
+  font-size: var(--type-micro);
+  font-variant-numeric: tabular-nums;
 }

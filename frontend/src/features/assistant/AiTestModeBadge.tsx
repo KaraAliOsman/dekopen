@@ -3,10 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { aiProviderStatus } from "../../api/generated/dekopen";
 import { t } from "../../i18n/es-CL";
 
-/** §IA3 — the org-visible honesty badge: whenever the org's AI answers come
- * from the explicit test mode (MOCK), every member sees "Modo de prueba" in
- * the topbar instead of believing the answers are the real provider. The
- * endpoint leaks no provider internals — only the serving mode. */
+/** §IA3+§P17 — la insignia discreta «Proveedor de prueba»: solo en DEV y
+ * solo cuando el modo de servicio es el de prueba. En producción el hilo
+ * nunca habla del proveedor — el estado real vive en Ajustes. */
 export function AiTestModeBadge({
   organizationId,
 }: {
@@ -26,7 +25,7 @@ export function AiTestModeBadge({
       return response.data;
     },
   });
-  if (query.data?.mock !== true) return null;
+  if (!import.meta.env.DEV || query.data?.mock !== true) return null;
   return (
     <span className="ai-test-mode-badge" role="status" title={t("ai.testModeHint")}>
       {t("ai.testMode")}

@@ -3,6 +3,14 @@
   min-width: 10rem;
 }
 
+/* La página corre en densidad office (32 px) pero el audit táctil exige
+ * ≥ 44 px en el viewport de taller: el filtro crece solo en móvil. */
+@media (max-width: 720px) {
+  .jobs-filter .ui-field__input {
+    height: var(--density-loose);
+  }
+}
+
 /* The jobs page shares .dashboard's two-lane grid — the queue itself spans
  * both lanes; a narrow job list would leave most of the page empty. */
 .jobs-list {
@@ -115,4 +123,59 @@
 
 .ai-activity-table tr[data-tone="alert"] td {
   background: var(--theme-warning-soft, rgba(194, 120, 3, 0.06));
+}
+
+/* §P17 — la cola como tabla legible: tipo, objeto, estado, duración, actor,
+ * resultado. La fila entera conserva el borde de tarjeta por celda. */
+.jobs-table-wrap {
+  grid-column: 1 / -1;
+  overflow-x: auto;
+}
+
+.jobs-table {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-collapse: collapse;
+  border-radius: var(--r-2);
+  font-size: var(--type-body);
+  min-width: 46rem;
+  width: 100%;
+}
+
+.jobs-table th {
+  border-bottom: 1px solid var(--theme-border-subtle);
+  color: var(--theme-text-secondary);
+  font-size: var(--type-micro);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 0.5rem 0.75rem;
+  text-align: start;
+  text-transform: uppercase;
+}
+
+.jobs-table td {
+  border-bottom: 1px solid var(--theme-border-subtle);
+  padding: 0.5rem 0.75rem;
+  vertical-align: top;
+}
+
+.jobs-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.jobs-table__time {
+  color: var(--theme-text-muted);
+  display: block;
+  font-size: var(--type-micro);
+  font-variant-numeric: tabular-nums;
+}
+
+.jobs-table__num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.jobs-table__actions {
+  text-align: end;
+  white-space: nowrap;
 }

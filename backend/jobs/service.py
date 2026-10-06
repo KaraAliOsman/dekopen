@@ -135,9 +135,15 @@ def get(*, org_id: UUID, job_id: UUID) -> dict[str, object] | None:
 def list_recent(
     *, org_id: UUID, job_type: str | None, state: str | None, limit: int, offset: int = 0
 ) -> list[dict[str, object]]:
-    return repository.list_jobs(
+    items = repository.list_jobs(
         org_id=org_id, job_type=job_type, state=state, limit=limit, offset=offset
     )
+    for item in items:
+        # §P17 — la etiqueta en español sale del registro del tipo; un tipo
+        # sin registrar (demo) conserva su nombre técnico.
+        spec = registry.spec_for(str(item.get("type") or ""))
+        item["label"] = spec.label if spec is not None else str(item.get("type") or "")
+    return items
 
 
 def retry(

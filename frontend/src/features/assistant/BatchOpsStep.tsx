@@ -6,6 +6,7 @@ import {
   pricingDesignBatchPreview,
   positionsRetrieve,
   positionsUpdate,
+  projectDesignOptions,
 } from "../../api/generated/dekopen";
 import type { AiAgentStep } from "../../api/generated/models/aiAgentStep";
 import type { PositionDesignRequest } from "../../api/generated/models/positionDesignRequest";
@@ -16,12 +17,9 @@ import { formatMoney } from "../../format";
 import { addDecimal, formatDecimal, parseDecimal, subtractDecimal } from "../projects/decimal";
 import type { DesignOp } from "../commands/types";
 import { applyDesignOps, describeDesignOp } from "../canvas/designOps";
-import {
-  elevationEnvelopeMm,
-  isProductModel,
-  isSingleUnit,
-  type ProductJson,
-} from "../canvas/productEditing";
+import { isProductModel, type ProductJson } from "../canvas/productEditing";
+import { designFromProduct } from "./designPayload";
+import { ProductPreviewFigure } from "./ProductPreviewFigure";
 
 type BatchItem = {
   position_id: string;
@@ -37,42 +35,58 @@ type Row = {
   detail?: PositionResponse;
   design?: PositionDesignRequest;
   product?: ProductJson;
+  /** §P17 §8 — el producto materializado después de las ops: el diff se
+   * dibuja con el renderer real, posición por posición. */
+  afterProduct?: ProductJson;
+  /** Ug declarada del vidrio (peor bay) antes/después — el motor no calcula
+   * Uw de marco; la tarjeta declara honestamente que la cifra es la Ug del
+   * vidrio de catálogo. */
+  ugBefore?: string | null;
+  ugAfter?: string | null;
   status: "loading" | "ready" | "unsupported" | "failed" | "applied" | "apply_failed";
   error?: string;
   unitBefore?: string | null;
   unitAfter?: string | null;
 };
 
-/** The same save-payload shape the editor builds: a lone unit persists in
- * the classic documentary shape, real assemblies as product-v2 — the engine
- * envelope check inside calculate_design/positions_update requires exactly
- * this projection. */
-function designFromProduct(
-  product: ProductJson,
-  systemId: string,
-  color: PositionDesignRequest["color"],
-): PositionDesignRequest {
-  const single = isSingleUnit(product) ? product.assembly.modules[0] : undefined;
-  const envelope = elevationEnvelopeMm(product);
-  return single !== undefined
-    ? {
-        system_id: systemId,
-        nominal_width_mm: single.width_mm,
-        nominal_height_mm: single.height_mm,
-        color,
-        parametric_tree: single.tree,
-      }
-    : {
-        system_id: systemId,
-        nominal_width_mm: envelope.width.toFixed(2),
-        nominal_height_mm: envelope.height.toFixed(2),
-        color,
-        parametric_tree: product,
-      };
-}
-
 function asOps(item: BatchItem): DesignOp[] {
   return (item.ops ?? []).filter((op): op is DesignOp => typeof (op as DesignOp).op === "string");
+}
+
+/** SKUs de vidrio sobre cada hoja del producto — el árbol paramétrico es
+ * la única verdad del modelo (los bays anidan bajo ROOT/divisores). */
+function collectGlassSkus(product: ProductJson | undefined): Set<string> {
+  const out = new Set<string>();
+  const walk = (node: unknown): void => {
+    if (!node || typeof node !== "object") return;
+    const record = node as {
+      type?: string;
+      glass_article_sku?: string | null;
+      children?: unknown[];
+    };
+    if (
+      record.type === "BAY" &&
+      typeof record.glass_article_sku === "string" &&
+      record.glass_article_sku !== ""
+    ) {
+      out.add(record.glass_article_sku);
+    }
+    for (const child of record.children ?? []) walk(child);
+  };
+  for (const module of product?.assembly.modules ?? []) walk(module.tree);
+  return out;
+}
+
+/** La peor (máxima) Ug declarada del conjunto — un lote que deja una hoja
+ * con vidrio peor no puede anunciar la mejor cifra. */
+function worstUg(skus: Set<string>, ugBySku: Map<string, string | null>): string | null {
+  let worst: string | null = null;
+  for (const sku of skus) {
+    const value = ugBySku.get(sku);
+    if (value == null) continue;
+    if (worst === null || Number(value) > Number(worst)) worst = value;
+  }
+  return worst;
 }
 
 function apiDetail(error: unknown, fallback: string): string {
@@ -132,6 +146,7 @@ export function BatchOpsStep({
             row.product = tree;
             // The canonical apply — identical to the editor's ops path.
             const next = applyDesignOps(tree, row.ops);
+            row.afterProduct = next;
             row.design = designFromProduct(next, detail.design.system_id, detail.design.color);
             row.status = "ready";
           } catch (error) {
@@ -187,6 +202,40 @@ export function BatchOpsStep({
             }
           }
         }
+      }
+      // §P17 §8 — el Δ térmico del lote: la Ug declarada de cada SKU de
+      // vidrio sale del catálogo de opciones del sistema (un fetch por
+      // sistema distinto). Es dato declarado — nunca un número inventado.
+      const systemIds = [
+        ...new Set(
+          resolved
+            .map((row) => row.detail?.design.system_id)
+            .filter((id): id is string => typeof id === "string" && id !== ""),
+        ),
+      ];
+      const ugBySku = new Map<string, string | null>();
+      await Promise.all(
+        systemIds.map(async (systemId) => {
+          try {
+            const response = await projectDesignOptions(systemId, headers);
+            if (response.status !== 200) return;
+            const products =
+              (
+                response.data as {
+                  glass_products?: { sku?: string; ug_w_m2k?: string | null }[];
+                }
+              ).glass_products ?? [];
+            for (const product of products) {
+              if (product.sku) ugBySku.set(product.sku, product.ug_w_m2k ?? null);
+            }
+          } catch {
+            /* Sin catálogo de opciones la tarjeta omite la línea Ug. */
+          }
+        }),
+      );
+      for (const row of resolved) {
+        row.ugBefore = worstUg(collectGlassSkus(row.product), ugBySku);
+        row.ugAfter = worstUg(collectGlassSkus(row.afterProduct), ugBySku);
       }
       if (seq === loadSeq.current) {
         setRows(resolved);
@@ -316,6 +365,34 @@ export function BatchOpsStep({
                         : `${formatMoney(row.unitBefore, currency)} → ${formatMoney(row.unitAfter, currency)}`
                       : "…"}
             </span>
+            {/* §P17 §8 — el diff dibujado y la Ug declarada: el antes/después
+             * sale del renderer real por posición; la Ug es el peor vidrio
+             * declarado en el catálogo (honestamente «Ug vidrio», no Uw —
+             * el motor no calcula Uw de marco). */}
+            {row.product && row.afterProduct && row.status !== "unsupported" ? (
+              <span className="ask-dock__batch-diff">
+                <ProductPreviewFigure
+                  product={row.product}
+                  label={t("assistant.cardBefore")}
+                  height={64}
+                />
+                <span className="ops-card__arrow" aria-hidden="true">
+                  →
+                </span>
+                <ProductPreviewFigure
+                  product={row.afterProduct}
+                  label={t("assistant.cardAfter")}
+                  height={64}
+                />
+              </span>
+            ) : null}
+            {row.ugBefore != null || row.ugAfter != null ? (
+              <span className="ask-dock__batch-ug">
+                {t("agent.batchUg")
+                  .replace("{before}", row.ugBefore ?? "—")
+                  .replace("{after}", row.ugAfter ?? "—")}
+              </span>
+            ) : null}
           </li>
         ))}
       </ul>

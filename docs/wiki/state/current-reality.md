@@ -23,7 +23,7 @@ sources:
   - P04 editor canvas-first PR https://github.com/KaraAliOsman/dekopen/pull/24
   - P09 DOC-01 propuesta PR https://github.com/KaraAliOsman/dekopen/pull/34
   - P03 shell/Hoy PR https://github.com/KaraAliOsman/dekopen/pull/32
-  - P03 shell/Hoy PR https://github.com/KaraAliOsman/dekopen/pull/32
+  - P17 asistente IA/trabajos/Orb branch devin/P17-asistente-orb
   - integracion/v1 merge 747c528b67d234d697624929ccbcc7098261ed54
   - open PR metadata observed 2026-09-27/28
   - AGENTS.md
@@ -316,3 +316,16 @@ Open PR (branch `devin/P09-doc01-propuesta`, rebased on `integracion/v1` post-P0
 - Descuento: `discount_pct > 1` se interpreta como porcentaje humano (`/100`); rótulo `10 %` entero / `12,5 %` fracción.
 - Tests `backend/tests/test_doc01_render.py` (38, PyMuPDF fijado `pymupdf==1.26.6` en requirements-dev): escalera de densidad 1/12/24/100, ≤45 páginas a 100 posiciones, sin página sólo-pie, sin solapamiento de bboxes de texto, total igual al motor, USD `US$`, sin hex ≥10 fuera del pie, wrap de nombres 120 caracteres, papel A4, QR con approval_url, reconciliación descuento+extras.
 - No hecho conocido: no existe modelo de cuotas — el "calendario de pagos" imprime `payment_terms` sellado (registrado en valores-por-defecto y en el PR).
+
+## P17 asistente IA + trabajos + Orb state
+
+Opened on branch `devin/P17-asistente-orb` (PR pendiente sobre `integracion/v1`); verification at HEAD of that branch:
+
+- `OrbState` (`frontend/src/features/assistant/states.ts`) is the single state vocabulary (idle/queued/thinking/working/waiting/success/error/canceled). `useAssistantPresence(context)` derives the Orb state from the org's most pressing `ai_job` scoped by surface+refs; the topbar launcher, dock header, avatars and empty states all read it; unknown states degrade to `idle` (frozen by unit tests).
+- `BotFigure`/`Orb` implement the owner's orb spec (adjuntos `docs/cola/adjuntos/bot/`): anthracite sphere + capsule eyes + state-colored orbital ring, sizes 16/20/28/64/160, unique SVG gradient ids per instance, `prefers-reduced-motion` freezes every animation — the Orb is the only continuously animated element and only while working (F8).
+- AskDekopen dock is a 400px contextual drawer: surface chip with the legible "where you are" (e.g. "Pos. 01 Segundo piso · P-000001"), per-screen suggestions (`SURFACE_SUGGESTIONS`), Preguntar (context_assist) / Agente (agent turns) tabs.
+- Reviewable artifacts: `OpsProposalCard` renders Antes/Después via `ProductPreviewFigure` (real `ProductFrontSvg` renderer) + engine verdict from `design_batch_preview`; apply runs the typed ops (Ctrl+Z undo verified live); discard + "Ver auditoría" open `/assistant?job=`. `BatchOpsStep` (§8) shows per-position diffs with declared Ug — the AI never prints a number the engine didn't compute.
+- Honest engine states: whole-batch 422 (no pricing rules/cost list) → card declares "Sin reglas de precio…" with apply still possible (save revalidates the same contract); per-item `ok:false` → apply blocked with cause. Provider failures collapse in `FailureCollapse` ("N intentos fallidos · Reintentar · Detalles técnicos"); the "Proveedor de prueba" badge mounts only in DEV when `member_status().mock`; real provider state lives in Ajustes › Inteligencia artificial (OWNER only).
+- Role parity: `canUseAssistant` mirrors `_AGENT_CALLERS` (nav/orb/badge/dock unmounted for OPERATOR/INSTALLER) and `canReadJobs` mirrors `_JOB_READERS` — floor roles see "Tu rol no puede ver los trabajos de la organización." instead of firing a 403-bound query; React Query doesn't retry 403s.
+- `/jobs` = legible queue: Spanish job type, human object code (Pos. NN · P-######), StatusChip state, duration, actor, result, state filter in the URL, 100-row pages with "Mostrar más", retry only when the backend allows it, "Abrir en el asistente" per agent row. Mobile status select ≥44px (`--density-loose` under 720px).
+- Verified live on the "Taller P17" fixture org (real pricing rules + 479-item cost list seeded): "divide la hoja en dos oscilobatientes" → card Δ +$103.822 → Aplicar (2 tilt-turn leaves, Neto $443.944, "Cambios sin guardar") → Ctrl+Z ($231.064) → audit job f5953da7… (8 créditos, 2192 tokens, "Esperando aprobación"); Orb thinking→working→waiting→success. Provider: MOCK (MiMo quota 429 documented in IA3); the surface declares "Respuesta determinista del proveedor MOCK". `make lint|typecheck|test|build` green; ux:capture `/assistant` 0 findings, `/jobs` only pre-existing shell-chrome findings; captures `docs/redesign/captures/p17-asistente-orb/`.

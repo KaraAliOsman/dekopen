@@ -5,7 +5,9 @@ import { ApiError } from "../../api/apiMutator";
 import { aiAsk, aiAskThread } from "../../api/generated/dekopen";
 import type { AiAskResponse } from "../../api/generated/models/aiAskResponse";
 import { t } from "../../i18n/es-CL";
-import { AgentBody, SURFACE_LABELS } from "./AgentBody";
+import { AgentBody } from "./AgentBody";
+import { useAssistantPresence } from "./useAssistantPresence";
+import { useAssistantWhereAmI } from "./useAssistantWhereAmI";
 import { BotFigure } from "./BotFigure";
 import { Orb, orbStateFor } from "./Orb";
 import { stableRefs, useAssistantContext } from "./assistantContext";
@@ -52,6 +54,15 @@ export function AskDekopen({
   hideTrigger?: boolean;
 }): JSX.Element | null {
   const { surface, refs } = useAssistantContext();
+  const whereAmI = useAssistantWhereAmI({ organizationId, surface, refs });
+  /* §P17 — el encabezado también refleja el trabajo más reciente del
+   * contexto: un job arrancado desde la sala /assistant aparece aquí sin
+   * reabrir el hilo. El estado propio del dock gana cuando existe. */
+  const { orbState: presenceState } = useAssistantPresence({
+    organizationId,
+    surface,
+    refs,
+  });
   const navigate = useNavigate();
   /* The dock remembers its expanded state across navigation and refresh —
    * closing it for one screen must not re-open on the next, and a running
@@ -232,12 +243,14 @@ export function AskDekopen({
                     ? orbStateFor(agentJobState)
                     : agentComposing
                       ? "input"
-                      : orbStateFor(agentJobState ?? undefined)
+                      : agentJobState
+                        ? orbStateFor(agentJobState)
+                        : presenceState
                   : busy
                     ? "thinking"
                     : question.trim()
                       ? "input"
-                      : "idle"
+                      : presenceState
               }
               size={26}
             />
@@ -260,8 +273,10 @@ export function AskDekopen({
                 {t("assistant.agentMode")}
               </button>
             </span>
+            {/* «Sabe dónde está el usuario»: el objeto real en lenguaje
+                humano («Pos. 03 Living · P-000012»), no el token técnico. */}
             <span className="ask-dock__surface" title={t("ask.surfaceHint")}>
-              {SURFACE_LABELS[surface] ?? surface}
+              {whereAmI}
             </span>
             <button
               type="button"
@@ -286,7 +301,7 @@ export function AskDekopen({
               <div className="ask-dock__thread" aria-live="polite" role="log">
                 {thread.length === 0 ? (
                   <div className="ask-dock__welcome">
-                    <BotFigure size={110} />
+                    <BotFigure size={110} welcome />
                     <p className="ask-dock__hint">{t("ask.hint")}</p>
                   </div>
                 ) : (
