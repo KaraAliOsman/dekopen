@@ -21,7 +21,7 @@
 | P03 | 1 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/32 | 473d027426321995fb90b071ca416a77cdbfe7fb | CI 6/6 verde; squash mergeado. Shell por flujo (riel agrupado, drawer <1024) + topbar (migas, switchers, Ctrl K, campana, ?) + «Hoy» por rol servido por /analytics/today con RLS; nav espejo de permisos backend (OPERATOR/INSTALLER sin 403s IA). |
 | P12 | 1 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/40 | 5bbd04ce401863faec5f35a0b6f7fe9b900603f5 | CI 6/6 verde; squash mergeado. Tablero por estación con filtros + deep-links, detalle OT cabecera fija + 10 pestañas (Piezas virtualizada <100 filas DOM con 2436 piezas), vista operario táctil 1024×768 oscuro con escaneo F9 y ≥44px. Bug RLS mail.step_blocked corregido. |
 | P17 | 1 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/35 | bb713d8710e22c89b41949a674e491e8e3124123 | CI 6/6 verde; squash mergeado. Orb vivo (useAssistantPresence, estados thinking→success), dock contextual 400px con sugerencias por pantalla, artefactos revisables (diff dibujado + Δ del motor + Aplicar deshacible + Auditoría), fallos colapsados, /jobs legible por rol con espejo _JOB_READERS. |
-| ED1 | ED1 | pendiente |  |  |  |
+| ED1 | ED1 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/42 | c1ba32063f8177ce4b42a3703f57549061b18c4c | CI 6/6 verde; squash mergeado. Pase editorial: dedup formatters/mapas de estado, glosario unificado (femenino "la operación"), caza slop (fuentes <11px, degradados, sombras off-scale), contrato honesto de capturas, baseline de guardas rebajada. 294 capturas 0 hallazgos. |
 | P06 | 2 | pendiente |  |  |  |
 | P08 | 2 | pendiente |  |  |  |
 | P13 | 2 | pendiente |  |  |  |
