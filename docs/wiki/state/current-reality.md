@@ -236,7 +236,6 @@ Before changing a capability:
 
 A fuller capability-by-capability reality map should be added only after a fresh systematic repository + running-product audit.
 
-
 ## [2026-10-05] D07 | del vano de obra a la medida de fabricación
 
 - `mounting_rules` (migración `20270105000000`): autoridad versionada inmutable por sistema×organización — los 5 tipos de montaje (`EN_VANO`, `PREMARCO`, `SOBRE_VANO`, `TRASLAPADO`, `RENOVACION`) con holgura/solape firmada por lado, ensanches y accesorios de fijación; semillas `SEED_SYNTHETIC` + `review_pending` para todo sistema sembrado.
@@ -245,7 +244,6 @@ A fuller capability-by-capability reality map should be added only after a fresh
 - Gate de producción: `release_production` rechaza `measurement_not_confirmed` con posiciones medidas sin confirmar; la rectificación en sucesor entra al diff documental con su Δ.
 - UI: chip "Vano × Fabricación · montaje" en el editor, inspector "Vano y montaje" con preview en vivo, cota doble en el lienzo (vano punteado + holgura por lado) y tolerancia org en Ajustes.
 - Verificado: `make lint|typecheck|test|build` y `make test-db` verdes (`PY=.venv/bin/python`); 14 goldens del motor; pgTAP 177 con trigger+check reales; tests de integración confirm/unconfirm/gate/revisión.
-
 
 ## [2026-10-05] IA3 | proveedor de IA real
 
@@ -258,7 +256,6 @@ A fuller capability-by-capability reality map should be added only after a fresh
 - UI: Ajustes › Inteligencia artificial (OWNER): estado, tabla por capacidad, Probar conexión, presupuesto y consumo del mes; panel "Actividad de IA" en /jobs con filtros; insignia "Modo de prueba" en el shell cuando MOCK sirve (miembros incluidos); el Orb lee fases del worker (`progress_phase`: contexto/modelo/propuesta); el job muestra su costo (créditos·tokens·≈USD).
 - MOCK seguro en prod: sólo `AI_GATEWAY_MOCK_ENABLED=1` explícito lo abre en producción — DEBUG no lo abre (test congelado). La clave del proveedor nunca sale del servidor (test: no llega al response ni al log).
 - Verificado: `make lint|typecheck|test|build` verdes; 23 tests nuevos `test_ia3_runtime.py` (reintento, timeout, presupuesto, fallback JSON, tools, gate MOCK, fuga de clave); evals MOCK 0/26 baseline + MIMO 0/26 por cuota documentados.
-
 
 ## [2026-10-06] P05 | dibujo técnico: geometría de glifos y cotas
 
@@ -320,7 +317,6 @@ Open PR (branch `devin/P09-doc01-propuesta`, rebased on `integracion/v1` post-P0
 - Tests `backend/tests/test_doc01_render.py` (38, PyMuPDF fijado `pymupdf==1.26.6` en requirements-dev): escalera de densidad 1/12/24/100, ≤45 páginas a 100 posiciones, sin página sólo-pie, sin solapamiento de bboxes de texto, total igual al motor, USD `US$`, sin hex ≥10 fuera del pie, wrap de nombres 120 caracteres, papel A4, QR con approval_url, reconciliación descuento+extras.
 - No hecho conocido: no existe modelo de cuotas — el "calendario de pagos" imprime `payment_terms` sellado (registrado en valores-por-defecto y en el PR).
 
-
 ## P17 asistente IA + trabajos + Orb state
 
 Merged into `integracion/v1` as squash `bb713d8710e22c89b41949a674e491e8e3124123` (dekopen PR #35):
@@ -340,8 +336,6 @@ Opened on branch `devin/P17-asistente-orb` (PR pendiente sobre `integracion/v1`)
 
 Merged into `integracion/v1` as squash `c7cde331c0c4763c4133928dcc4abe442a446b03` (dekopen PR #33):
 
-
-
 - `engine/.../cascade.py` nuevo: `price_cascade` (waterfall exacto proyecto+posición — familias de costo → merma → MO → residuo de redondeo → costo → margen → recargos venta → lista → descuento → neto → extras → IVA → total; tolera residual de cuantización ≤0,0001×unidades +0,51 en los hitos y lo expone como fila `rounding_residual`/`rounding`; una divergencia mayor sigue rechazando `inconsistent_pricing_result`), `delta_contributions` (Δ por impulsor, orden canónico `quantity→dimensions→glass→hardware→cost_list→fx→selections→commercial→discount→services`, telescopio exacto), `band_state` (IN_BAND/BELOW_MIN/ABOVE_MAX; `None`→BELOW_MIN).
 - `pricing_rules` gana `margin_min_pct`/`margin_max_pct` (0,25/0,60 por defecto, CHECK min<max y ≥0) vía migración `20270201000000_p07_margin_band.sql` + pgTAP `180`; editables en `/pricing` › Reglas (solo OWNER). `margin_pct` opcional en el request de precio.
 - Puerta de banda: preview fuera de banda de no-OWNER nace `PENDING`; OWNER fuera de banda exige `confirmed` (`owner_confirmation_required`); misma puerta en `apply_operation` (un PREVIEW viejo fuera de banda no se cuela). Frontend: botón pasa a "Solicitar aprobación" con motivo precargado.
@@ -350,7 +344,6 @@ Merged into `integracion/v1` as squash `c7cde331c0c4763c4133928dcc4abe442a446b03
 - Cobertura SKU: `coverage` une identidades de compra (perfil, refuerzo, vidrio técnica+compra, rellenos, paneles, kits de herraje, herraje compra, fijaciones) — lista los SKU emitidos sin costo vigente. Migración `20270202000000_p07_coverage_grants.sql` + pgTAP `181`: GRANT SELECT a `pricing_backend` en los 4 mapeos que le faltaban (vidrio/panel/herraje/fijación — el 42501 que devolvía 409) y política `*_pricing_read` en las 7 tablas cuyo `TO authenticated` las dejaba en filas vacías silenciosas.
 - Frontend `/projects/:id/pricing` + `/pricing/commercial`: `MarginBand` (gauge min→max con objetivo y realizado, chip de estado del servidor), `PriceCascade` (waterfall + cascada por posición + autoridades como procedencia), `DeltaBreakdown` (aportes por impulsor con neto/costo/neto resultante), campos de banda en `rules`, `margin_pct` en el formulario, confirmBand + errOwnerConfirm.
 - Verificado: `make lint|typecheck|test|build` verdes (`PY=.venv/bin/python`); 16 tests P07 motor (golden 12/100 posiciones cierra exacto), 48 tests de página, integración `test_margin_band_gates_preview_apply_and_notifies`; capturas en `docs/redesign/captures/p07-precios/`; decisiones en sección P07 de `valores-por-defecto.md`.
-
 
 ## P12 producción: tablero, OT y operario state
 
@@ -364,3 +357,15 @@ Open PR (branch `devin/P12-produccion`, on `integracion/v1`):
 - Backend (no migrations): `list_production_orders` returns `project_code`, `project_name`, `client_name`, `committed_date`, `steps_blocked`, `qc_blocked`, `plan_state`; `_board_context` batch-resolves documentary project names and earliest scheduled delivery.
 - Fixture: P-ESCALA seals + releases (~100 live OTs on the board; first optimized). e2e `production-operator.spec.ts` runs inside `make test-db` (operator completes a step, blocks the next order, manager sees it on the board and in «Hoy»).
 
+## ED1 pase editorial de la ola 1 state
+
+PR sobre `integracion/v1` (branch `devin/ED1-pase-editorial-ola1`); encargo sin funcionalidad nueva — coherencia, dedup y pulido del conjunto:
+
+- **Wire vs. display**: `fmtWire(value, decimals)` en `format.ts` es el único serializador del contrato máquina (decimales fijos `"1400.00"`/`"15.0"`); `fmtMmCanonical` queda sólo para inputs editables (decimal canónico, cero recorte); `fmtMm`/`formatDims` son presentación (espacio fino + agrupación). Todos los puntos wire del lienzo, posición y asistente migrados; `.toFixed()` desapareció de features (guarda `ui-tofixed` 87→2 — quedan la definición en `format.ts` y el muestrario dev `/dev/ui/mal`).
+- **Estado crudo**: guarda `ui-raw-status` a 0 — patrón sancionado `const xStatus = x.status` + `<StatusChip enumName value>`; fallbacks "—" por helper. `importStatus.ts` (catalogs) concentra etiqueta+tono del ciclo de importación, compartido entre `CatalogImportsPanel` y `ProjectImportsPanel`.
+- **Género del glosario**: los estados de operación de precio van en femenino (`pricing.operationState.*` + `domainLabels.PriceResponseStateEnum`: Aplicada/Rechazada/Retirada) — el estado describe «la operación».
+- **Piso tipográfico y mono**: `small` fijado a `--type-dense` (12 px) en `base.css` (el default UA caía a 10,8 px — 42 hallazgos `font-too-small` resueltos de una vez); `code/samp/kbd` heredan `--font-mono`; el código de serie en el listado de sistemas va en `<code>`.
+- **Ruido de red erradicado**: la ruta dev `/projects/demo/positions/g1/edit` ya no dispara `where-am-I` (refs vacías); `payment-integration` sólo se consulta con `isOwner` (adiós 403 del estimador); rutas de captura declaran `toleratedHttpStatuses` (410 de portal revocado/reemplazado) y `expectViolations` (muestrario dev).
+- **Probe de captura corregido**: `contrast-aa` compone alfa sobre el fondo real (falsos positivos teal del portal resueltos); el escáner de vocabulario excluye contextos de identificador (`code`, `pre`, `samp`, `kbd`, `.fmt-code`, `.ui-code`, `[data-code]`) — un SKU/código en mono ya no cuenta como enum-token.
+- **Limpieza**: alias muerto `--shadow-lg` eliminado de `tokens.css`; baseline de guardas regenerada sólo a la baja (`raw-status`, `font<11`, `hex-inline`, `shadow-off` → 0; `ui-tofixed` 87→2).
+- Verificado: `make lint|typecheck|test|build` verdes; ux:capture antes/después en `docs/redesign/captures/ed1/`; decisiones en sección ED1 de `valores-por-defecto.md`.
