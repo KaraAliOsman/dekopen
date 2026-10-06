@@ -181,6 +181,9 @@
   margin-top: 10px;
   font-size: var(--text-s, 13px);
 }
+.payments-table-scroll {
+  overflow-x: auto;
+}
 .payments-table th,
 .payments-table td {
   text-align: left;

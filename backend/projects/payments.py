@@ -173,38 +173,42 @@ def _movements(org_id: UUID, project_id: UUID) -> list[dict]:
                    p.amount, p.method,
                    p.voided_at IS NOT NULL AS voided, p.recorded_at AS at,
                    private.user_email(p.recorded_by) AS actor,
-                   r.receipt_code AS code, r.id AS document_id
+                   r.receipt_code AS code, r.id AS document_id,
+                   NULL AS status
             FROM public.project_payments p
             LEFT JOIN public.payment_receipts r ON r.payment_id = p.id
             WHERE p.org_id=%s AND p.project_id=%s
             UNION ALL
             SELECT 'payment_void', p.id, p.kind, p.amount, p.method,
                    TRUE, p.voided_at, private.user_email(p.voided_by),
-                   r.receipt_code, r.id
+                   r.receipt_code, r.id, NULL
             FROM public.project_payments p
             LEFT JOIN public.payment_receipts r ON r.payment_id = p.id
             WHERE p.org_id=%s AND p.project_id=%s AND p.voided_at IS NOT NULL
             UNION ALL
             SELECT 'link', l.id, l.kind, l.amount, NULL, FALSE,
                    l.created_at, private.user_email(l.created_by),
-                   l.status, NULL
+                   NULL, NULL, l.status
             FROM public.project_payment_links l
             WHERE l.org_id=%s AND l.project_id=%s
             UNION ALL
             SELECT 'invoice', i.id, NULL, NULL, NULL, FALSE, i.created_at,
-                   private.user_email(i.created_by), i.invoice_code, i.id
+                   private.user_email(i.created_by), i.invoice_code, i.id, NULL
             FROM public.project_invoices i
             WHERE i.org_id=%s AND i.project_id=%s
             UNION ALL
             SELECT 'credit_note', n.id, NULL, NULL, NULL, FALSE, n.created_at,
-                   private.user_email(n.created_by), n.credit_code, n.id
+                   private.user_email(n.created_by), n.credit_code, n.id, NULL
             FROM public.project_credit_notes n
             WHERE n.org_id=%s AND n.project_id=%s
             UNION ALL
             SELECT 'envio', e.id, NULL, NULL, NULL, FALSE,
                    COALESCE(e.sent_at, e.created_at),
-                   NULL, e.status::text, NULL
+                   private.user_email(e.sent_by),
+                   CONCAT('DTE ', d.dte_type, ' · folio ', d.folio), e.dte_id,
+                   e.status::text
             FROM public.sii_envios e
+            JOIN public.project_dtes d ON d.id = e.dte_id AND d.org_id = e.org_id
             WHERE e.org_id=%s AND e.project_id=%s
             ORDER BY 7 DESC
             """,
@@ -231,6 +235,7 @@ def _movements(org_id: UUID, project_id: UUID) -> list[dict]:
             "actor": row["actor"],
             "code": row["code"],
             "document_id": str(row["document_id"]) if row["document_id"] else None,
+            "status": row["status"],
         }
         for row in found
     ]

@@ -541,6 +541,7 @@ class CollectionMovementSerializer(serializers.Serializer):
     actor = serializers.CharField(allow_null=True)
     code = serializers.CharField(allow_null=True)
     document_id = serializers.CharField(allow_null=True)
+    status = serializers.CharField(allow_null=True)
 
 
 class ReminderDraftSerializer(serializers.Serializer):

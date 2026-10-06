@@ -25,4 +25,6 @@ export interface CollectionMovement {
   code: string | null;
   /** @nullable */
   document_id: string | null;
+  /** @nullable */
+  status: string | null;
 }

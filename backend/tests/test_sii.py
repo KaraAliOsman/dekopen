@@ -1281,6 +1281,48 @@ def test_tributario_composes_fiscal_cover_and_body():
     assert "Cía" in cover  # entity-escaped company name renders correctly
 
 
+def test_tributario_barcode_fits_real_size_ted():
+    # Un TED real lleva el CAF embebido (DA con RSAPK + FRMA + FRMT ≈ 1100
+    # caracteres) — a columns=6 eso eran >90 filas y el timbre explotaba.
+    caf = (
+        '<CAF version="1.0">\n  <DA>\n    <RE>76123456-0</RE>\n'
+        "    <RS>Ventanas del Sur SpA</RS>\n    <TD>33</TD>\n"
+        "    <RNG><D>1</D><H>100</H></RNG>\n    <FA>2026-10-01</FA>\n"
+        f"    <RSAPK><M>{'m' * 172}</M><E>Aw==</E></RSAPK>\n"
+        "    <IDK>100</IDK>\n  </DA>\n"
+        f'  <FRMA algoritmo="SHA1withRSA">{"f" * 172}</FRMA>\n'
+        "  <TSTED>2026-10-01T09:00:00</TSTED>\n</CAF>"
+    )
+    ted = (
+        '<TED version="1.0"><DD><RE>76123456-0</RE><TD>33</TD>'
+        "<F>7</F><FE>2026-10-02</FE><RR>76543210-3</RR>"
+        "<RSR>Cliente de Prueba Uno</RSR>"
+        "<MNT>119000</MNT><IT1>Ventana corredera termopanel</IT1>" + caf +
+        "<TSTED>2026-10-02T10:00:00</TSTED></DD>"
+        '<FRMT algoritmo="SHA1withRSA">' + "y" * 172 + "</FRMT></TED>"
+    )
+    dte_xml = _FIXTURE_DTE_XML.replace(
+        b'<TED version="1.0"><DD><RE>76123456-0</RE><TD>33</TD>'
+        b"<F>7</F><ND>0</ND><RR>76543210-3</RR><RSR>C</RSR>"
+        b"<MNT>1190</MNT><IT1>VENTANA</IT1><CAF/>"
+        b"<TSTED>2026-10-02T10:00:00</TSTED></DD>"
+        b'<FRMT algoritmo="SHA1withRSA">eA==</FRMT></TED>',
+        ted.encode("utf-8"),
+    )
+    from io import BytesIO
+
+    from pypdf import PdfWriter
+
+    from projects import sii_repr
+
+    body = PdfWriter()
+    body.add_blank_page(width=200, height=200)
+    buf = BytesIO()
+    body.write(buf)
+    out = sii_repr.compose_tributario_pdf(dte_xml=dte_xml, parent_pdf=buf.getvalue())
+    assert out.startswith(b"%PDF")
+
+
 def test_tributario_refuses_xml_without_ted():
     import pytest
 

@@ -20929,6 +20929,9 @@ components:
         document_id:
           type: string
           nullable: true
+        status:
+          type: string
+          nullable: true
       required:
       - actor
       - amount
@@ -20938,6 +20941,7 @@ components:
       - id
       - kind
       - method
+      - status
       - type
       - voided
     CollectionQuota:

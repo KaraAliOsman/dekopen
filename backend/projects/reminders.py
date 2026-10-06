@@ -18,7 +18,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from ai_gateway import service as gateway
-from authentication.errors import contract_error
+from authentication.errors import ContractAPIException, contract_error
 from documents.repository import documentary_backend
 from mail import service as mail_service
 from mail import templates
@@ -205,6 +205,15 @@ def send_reminder(
     salida — la fila mail_messages es la evidencia del envío."""
     project = project_row(org_id, project_id)
     to_email = str(project.get("client_email") or "").strip()
+    if not to_email and project.get("client_id"):
+        # El proyecto puede no llevar correo propio si el cliente vive en el
+        # registro de clientes — el fallback respeta la misma verdad.
+        from projects.clients import client_row
+
+        try:
+            to_email = str(client_row(org_id, project["client_id"]).get("email") or "").strip()
+        except ContractAPIException:
+            to_email = ""
     if not to_email:
         raise contract_error(
             422,

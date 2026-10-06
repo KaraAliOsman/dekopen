@@ -12,6 +12,7 @@ no provider mutation is retried after an uncertain outcome — recovery is a GET
 
 from __future__ import annotations
 
+import json
 from decimal import Decimal, InvalidOperation
 from uuid import UUID
 
@@ -443,7 +444,7 @@ def _settle(*, org_id: UUID, link_id: UUID, verified: dict, client: FlowClient) 
             over = Decimal(str(link["amount"])) - (
                 Decimal(str(live_deal["total"])) - Decimal(str(collected))
             )
-        note = f"Cobro en línea — link {link['id']}"
+        note = "Cobro en línea — link de pago"
         if over > 0:
             note += f" — excede el saldo por {over} (conciliar devolución)"
         payment = rows(
@@ -463,7 +464,7 @@ def _settle(*, org_id: UUID, link_id: UUID, verified: dict, client: FlowClient) 
                 str(Decimal(str(link["amount"]))),
                 f"FLOW {verified['flowOrder']}",
                 note,
-                None,
+                link["created_by"],
                 timezone.now(),
             ],
         )
@@ -517,20 +518,50 @@ def _settle(*, org_id: UUID, link_id: UUID, verified: dict, client: FlowClient) 
     return {"link": _public_link(link)}
 
 
+def _webhook_scope(*, link_id: UUID | None = None, flow_token: str | None = None) -> dict | None:
+    """Resolve the webhook's tenant + delegating actor through the SECURITY
+    DEFINER lookup — the public callback carries no JWT, so the org-scoped
+    policy cannot see the row until claims are asserted."""
+    found = rows(
+        "SELECT * FROM private.payment_link_public_scope(%s, %s)",
+        [str(link_id) if link_id else None, flow_token],
+    )
+    return found[0] if found else None
+
+
+def _delegate_claims(created_by) -> None:
+    """The callback proves itself via the opaque link id; the settle then
+    runs with the link creator's membership — the same delegation the
+    portal approval transition asserts on the decision's creator."""
+    if not created_by:
+        raise FlowError("payment_link_not_found")
+    claims = json.dumps({"sub": str(created_by)}, separators=(",", ":"))
+    rows("SELECT set_config('request.jwt.claims', %s, true)", [claims])
+
+
 def confirm_link(*, link_id: UUID, token: str) -> dict:
     """Public webhook: resolve the org through the opaque link id, then verify
-    server-side with the org's own credentials — callback fields are untrusted."""
-    with documentary_backend():
+    server-side with the org's own credentials — callback fields are untrusted.
+
+    One outer transaction: the delegated claims are transaction-local, so the
+    verified settle must commit inside the same tx that asserted them."""
+    with transaction.atomic(), documentary_backend():
+        scope = _webhook_scope(link_id=link_id)
+        if scope is None:
+            raise FlowError("payment_link_not_found")
+        _delegate_claims(scope["created_by"])
         found = rows(
-            "SELECT org_id FROM public.project_payment_links WHERE id=%s", [str(link_id)]
+            "SELECT * FROM public.project_payment_links WHERE org_id=%s AND id=%s",
+            [str(scope["org_id"]), str(link_id)],
         )
-    if not found:
-        raise FlowError("payment_link_not_found")
-    org_id = found[0]["org_id"]
-    integration = _integration_for_link(found[0])
-    client = _client(integration)
-    verified = _payment(client.payment_status(token))
-    return _settle(org_id=org_id, link_id=link_id, verified=verified, client=client)
+        if not found:
+            raise FlowError("payment_link_not_found")
+        link = found[0]
+        org_id = link["org_id"]
+        integration = _integration_for_link(link)
+        client = _client(integration)
+        verified = _payment(client.payment_status(token))
+        return _settle(org_id=org_id, link_id=link_id, verified=verified, client=client)
 
 
 def confirm_simulated(*, token: str) -> dict:
@@ -540,7 +571,11 @@ def confirm_simulated(*, token: str) -> dict:
     por ``_settle``, jamás por los campos del POST."""
     if not mock_enabled():
         raise FlowError("flow_payment_not_found")
-    with documentary_backend():
+    with transaction.atomic(), documentary_backend():
+        scope = _webhook_scope(flow_token=token)
+        if scope is None:
+            raise FlowError("payment_link_not_found")
+        _delegate_claims(scope["created_by"])
         found = rows(
             "SELECT * FROM public.project_payment_links WHERE flow_token=%s",
             [str(token)],
@@ -554,9 +589,11 @@ def confirm_simulated(*, token: str) -> dict:
             integration.get("payer_return_url")
             or f"{settings.BILLING_FRONTEND_ORIGIN}/pago/retorno"
         )
-    client = _client(integration)
-    verified = _payment(client.payment_status(token))
-    settled = _settle(org_id=org_id, link_id=link["id"], verified=verified, client=client)
+        client = _client(integration)
+        verified = _payment(client.payment_status(token))
+        settled = _settle(
+            org_id=org_id, link_id=link["id"], verified=verified, client=client
+        )
     return {**settled, "payer_return_url": return_url}
 
 

@@ -129,22 +129,25 @@ def test_movements_normalize_union_rows(monkeypatch):
              "amount": Decimal("250000"), "method": "TRANSFER",
              "voided": False, "at": timezone.now(),
              "actor": "dueno@taller.cl", "code": "RC-0001",
-             "document_id": uuid4()},
+             "document_id": uuid4(), "status": None},
             {"type": "envio", "id": uuid4(), "kind": None, "amount": None,
              "method": None, "voided": False, "at": "2026-10-02T10:00:00+00:00",
-             "actor": None, "code": "ACCEPTED", "document_id": None},
+             "actor": "dueno@taller.cl", "code": "DTE 33 · folio 1",
+             "document_id": uuid4(), "status": "OBSERVED"},
         ]
 
     monkeypatch.setattr(payments, "rows", fake_rows)
     movements = payments._movements(uuid4(), uuid4())
     # La línea de tiempo cruza pagos, anulaciones, links, facturas, notas de
-    # crédito y envíos SII — una sola consulta, actor resuelto en SQL.
+    # crédito y envíos SII — una sola consulta, actor resuelto en SQL y el
+    # estado aparte del código humano del documento (nunca enums crudos).
     assert "UNION ALL" in captured["sql"] and "private.user_email" in captured["sql"]
+    assert "e.sent_by" in captured["sql"]
     payment, envio = movements
     assert payment["type"] == "payment" and payment["amount"] == "250000"
     assert payment["actor"] == "dueno@taller.cl" and payment["code"] == "RC-0001"
-    assert envio["type"] == "envio" and envio["code"] == "ACCEPTED"
-    assert envio["actor"] is None
+    assert envio["type"] == "envio" and envio["status"] == "OBSERVED"
+    assert envio["code"] == "DTE 33 · folio 1" and envio["actor"] == "dueno@taller.cl"
 
 
 # ── Resumen: forma nueva del payload ──────────────────────────────────────

@@ -27,6 +27,7 @@ const CAPABILITY_KEYS: Record<string, TranslationKey> = {
   discount_suggest: "settings.aiCapability.discountSuggest",
   vision_ocr: "settings.aiCapability.visionOcr",
   fabricability: "settings.aiCapability.fabricability",
+  collection_reminder: "settings.aiCapability.collectionReminder",
 };
 
 function capabilityLabel(capability: string): string {

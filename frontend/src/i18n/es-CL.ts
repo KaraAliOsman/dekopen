@@ -1343,6 +1343,7 @@ export const messages = {
   "settings.aiCapability.discountSuggest": "Sugerencia de descuento",
   "settings.aiCapability.visionOcr": "Lectura de planos (visión)",
   "settings.aiCapability.fabricability": "Verificación de fabricabilidad",
+  "settings.aiCapability.collectionReminder": "Recordatorio de cobranza",
   "settings.aiCheck": "Probar conexión",
   "settings.aiChecking": "Probando…",
   "settings.aiCheckOk": "Conexión correcta · {ms} ms",
