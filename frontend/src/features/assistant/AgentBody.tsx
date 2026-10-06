@@ -88,10 +88,34 @@ interface TranscriptAgentTurn {
 }
 
 /** Transcript → thread: user entries pair with the agent/error entry that
- * answers them; a trailing user entry is a round still in flight. */
+ * answers them; a trailing user entry is a round still in flight. The
+ * recorded outcomes seed applied/declined per step — a dock reopened after
+ * an apply must show "Aplicado", never offer a second apply. */
 function threadFromJob(job: AiJobDetail): Turn[] {
   const turns: Turn[] = [];
   let pending: { text: string; replay: boolean; sig: string | null } | null = null;
+  const outcomeSets = new Map<number, { applied: Set<number>; declined: Set<number> }>();
+  for (const raw of (job.outcomes ?? []) as {
+    turn_index?: number;
+    step_index?: number;
+    action?: string;
+  }[]) {
+    const turnIndex = Number(raw?.turn_index);
+    const stepIndex = Number(raw?.step_index);
+    if (!Number.isInteger(turnIndex) || !Number.isInteger(stepIndex)) continue;
+    if (raw.action !== "applied" && raw.action !== "declined") continue;
+    const entry = outcomeSets.get(turnIndex) ?? {
+      applied: new Set<number>(),
+      declined: new Set<number>(),
+    };
+    if (raw.action === "applied") entry.applied.add(stepIndex);
+    else entry.declined.add(stepIndex);
+    outcomeSets.set(turnIndex, entry);
+  }
+  const seeded = (transcriptIndex: number) => ({
+    appliedOps: outcomeSets.get(transcriptIndex)?.applied ?? new Set<number>(),
+    declinedOps: outcomeSets.get(transcriptIndex)?.declined ?? new Set<number>(),
+  });
   const entries = (job.transcript ?? []) as TranscriptAgentTurn[];
   for (const [index, entry] of entries.entries()) {
     if (!entry || typeof entry !== "object") continue;
@@ -110,8 +134,7 @@ function threadFromJob(job: AiJobDetail): Turn[] {
         product: null,
         productSig: pending?.sig ?? null,
         transcriptIndex: index,
-        appliedOps: new Set(),
-        declinedOps: new Set(),
+        ...seeded(index),
       });
       pending = null;
     } else if (entry.role === "error") {
@@ -123,8 +146,7 @@ function threadFromJob(job: AiJobDetail): Turn[] {
         product: null,
         productSig: pending?.sig ?? null,
         transcriptIndex: index,
-        appliedOps: new Set(),
-        declinedOps: new Set(),
+        ...seeded(index),
       });
       pending = null;
     }
@@ -138,8 +160,7 @@ function threadFromJob(job: AiJobDetail): Turn[] {
       product: null,
       productSig: pending.sig,
       transcriptIndex: entries.length - 1,
-      appliedOps: new Set(),
-      declinedOps: new Set(),
+      ...seeded(entries.length - 1),
     });
   }
   // Jobs settled before transcript turns carried the result shape still
@@ -154,8 +175,7 @@ function threadFromJob(job: AiJobDetail): Turn[] {
       product: null,
       productSig: null,
       transcriptIndex: entries.length - 1,
-      appliedOps: new Set(),
-      declinedOps: new Set(),
+      ...seeded(entries.length - 1),
     });
   }
   return turns;

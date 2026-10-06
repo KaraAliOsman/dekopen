@@ -1261,7 +1261,7 @@ def _agent_output(input_payload: dict) -> dict:
     org_name = str(org.get("name") or "la organización")
     reply = (
         f"Revisé el contexto de {org_name} para “{goal[:120]}”. "
-        "Respuesta determinista del proveedor MOCK."
+        "Respuesta determinista del proveedor de prueba."
     )
     evidence = re.findall(
         r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",

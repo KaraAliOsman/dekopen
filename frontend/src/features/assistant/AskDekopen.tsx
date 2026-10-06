@@ -43,6 +43,7 @@ export function AskDekopen({
   userId = null,
   openRequested = 0,
   hideTrigger = false,
+  onOpenChange,
 }: {
   organizationId: string | null;
   /** Module-scope threads are keyed org+user — without it an org switch
@@ -52,6 +53,9 @@ export function AskDekopen({
    * without the floating trigger. */
   openRequested?: number;
   hideTrigger?: boolean;
+  /** §P17 — the shell reserves the drawer's width while open so the panel
+   * never covers right-edge page controls; unmount reports closed. */
+  onOpenChange?: (open: boolean) => void;
 }): JSX.Element | null {
   const { surface, refs } = useAssistantContext();
   const whereAmI = useAssistantWhereAmI({ organizationId, surface, refs });
@@ -91,6 +95,11 @@ export function AskDekopen({
   useEffect(() => {
     sessionStorage.setItem("dk:askdock", open ? "1" : "0");
   }, [open]);
+
+  useEffect(() => {
+    onOpenChange?.(open);
+    return () => onOpenChange?.(false);
+  }, [open, onOpenChange]);
 
   useEffect(() => {
     if (openRequested > 0) setOpen(true);
