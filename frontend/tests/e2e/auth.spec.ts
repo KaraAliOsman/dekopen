@@ -331,6 +331,8 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   await page.getByRole("link", { name: "Añadir vano", exact: true }).click();
   await page.getByLabel("Ubicación del vano", { exact: true }).fill("Fijo comercial");
   await page.getByLabel("Cantidad", { exact: true }).fill("2");
+  // The series field lives in the strip's Serie chip popover (P04).
+  await page.getByRole("button", { name: "Serie de perfiles", exact: true }).click();
   await page.getByRole("combobox", { name: "Serie de perfiles", exact: true }).selectOption({
     label: "Sistema Demo 60mm PVC — referencia sintética · Catálogo de demostración",
   });
@@ -543,6 +545,7 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   const compositeProject = (await (await compositeCreation).json()) as { id: string };
   await page.getByRole("link", { name: "Añadir vano", exact: true }).click();
   await page.getByLabel("Ubicación del vano", { exact: true }).fill("Fachada compuesta");
+  await page.getByRole("button", { name: "Serie de perfiles", exact: true }).click();
   await page.getByRole("combobox", { name: "Serie de perfiles", exact: true }).selectOption({
     label: "Sistema Demo 60mm PVC — referencia sintética · Catálogo de demostración",
   });
