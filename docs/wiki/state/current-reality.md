@@ -21,6 +21,7 @@ sources:
   - P05 dibujo técnico PR https://github.com/KaraAliOsman/dekopen/pull/25
   - P02 identificadores/formato PR https://github.com/KaraAliOsman/dekopen/pull/27
   - P04 editor canvas-first PR https://github.com/KaraAliOsman/dekopen/pull/24
+  - P09 DOC-01 propuesta PR https://github.com/KaraAliOsman/dekopen/pull/34
   - integracion/v1 merge 747c528b67d234d697624929ccbcc7098261ed54
   - open PR metadata observed 2026-09-27/28
   - AGENTS.md
@@ -290,6 +291,8 @@ P04 rebuilds the position editor into a CAD-like, canvas-first surface (branch `
 - Verified: `make lint|typecheck|test|build` green; ux:capture after-shots `docs/redesign/captures/p04-editor-canvas/` with zero new findings vs `baseline-2026-10-05` (the 18 remaining — svg gradient + inset-shadow accents — are pre-existing in the canvas glyphs/strip and belong to P05's scope).
 
 ## P09 DOC-01 propuesta comercial v2 state
+
+Merged into `integracion/v1` as squash `9731e0c790a7754bd420710f41646f7b2c08e674` (dekopen PR #34):
 
 Open PR (branch `devin/P09-doc01-propuesta`, rebased on `integracion/v1` post-P04):
 
