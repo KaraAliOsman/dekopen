@@ -307,7 +307,7 @@
  * direction arrow per moving leaf — the .sliding-arrow path previously
  * had no stroke and rendered invisible (review M3). */
 .sliding-track {
-  stroke: var(--theme-text-muted);
+  stroke: var(--signature-ink);
   stroke-width: 1.6;
   stroke-dasharray: 7 5;
   vector-effect: non-scaling-stroke;
@@ -315,7 +315,7 @@
 
 .sliding-arrow {
   fill: none;
-  stroke: var(--theme-text-primary);
+  stroke: var(--signature-ink);
   stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -574,4 +574,106 @@
 
 .glass-surcharge input[type="number"] {
   width: 3.5rem;
+}
+
+/* ---------- P05 simbología de apertura ---------- */
+
+/* Rótulo de vista declarada — ancla al borde superior de la lámina. */
+.view-legend {
+  fill: var(--theme-text-secondary);
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Umbral de puerta: el prim `sill` corre bajo toda hoja practicable de
+ * puerta — token de marca (el mismo acento del PDF), no tinta de glifo. */
+.opening-glyph path.glyph-sill {
+  stroke: var(--theme-mark);
+}
+
+/* Dirección inferida: una hoja corredera sin `travel` declarado conserva la
+ * convención de presentación, pero la lámina la marca — la asunción nunca
+ * lee como verdad de fabricación. */
+.glyph-inferred {
+  stroke-dasharray: 2 5 !important;
+  opacity: 0.72;
+}
+
+/* Marca de altura de manilla en vista técnica: tick en el canto libre de
+ * la hoja + cota desde el borde inferior del módulo. */
+.handle-datum line {
+  stroke: var(--theme-accent);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.handle-datum text {
+  fill: var(--theme-accent);
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-size: 19px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  user-select: none;
+}
+
+.handle-datum.is-invalid line,
+.handle-datum.is-invalid text {
+  stroke: var(--theme-danger, #d33);
+  fill: var(--theme-danger, #d33);
+}
+
+/* Cinta de planta bajo el alzado técnico de una corredera. */
+.sliding-plan .plan-wall {
+  fill: none;
+  stroke: var(--theme-text-secondary);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.sliding-plan .plan-rail {
+  stroke: var(--theme-text-muted);
+  stroke-width: 1.4;
+  stroke-dasharray: 8 5;
+  vector-effect: non-scaling-stroke;
+}
+
+.sliding-plan .plan-rail-no,
+.sliding-plan .plan-side {
+  fill: var(--theme-text-muted);
+  font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  user-select: none;
+}
+
+.sliding-plan .plan-side {
+  font-size: 15px;
+  letter-spacing: 0.06em;
+}
+
+.sliding-plan .plan-panel rect {
+  fill: var(--theme-surface-panel);
+  stroke: var(--theme-text-primary);
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+}
+
+.sliding-plan .plan-panel--fixed rect {
+  fill: none;
+  stroke-dasharray: 4 3;
+}
+
+.sliding-plan .plan-arrow {
+  fill: none;
+  stroke: var(--theme-text-primary);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
 }

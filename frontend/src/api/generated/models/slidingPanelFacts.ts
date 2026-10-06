@@ -6,12 +6,15 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { SlidingPanelFactsKindEnum } from "./slidingPanelFactsKindEnum";
+import type { SlidingPanelFactsTravel } from "./slidingPanelFactsTravel";
 
 export interface SlidingPanelFacts {
   slot: string;
   kind: SlidingPanelFactsKindEnum;
   /** @nullable */
   track: number | null;
+  travel: (typeof SlidingPanelFactsTravel)[keyof typeof SlidingPanelFactsTravel] | null;
+  travel_inferred: boolean;
   /** @nullable */
   leaf_id: string | null;
 }

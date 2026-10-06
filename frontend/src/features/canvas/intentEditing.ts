@@ -14,14 +14,22 @@ export const OPENINGS = [
   "DOOR_ENTRY",
 ] as const;
 
+/** Dirección de recorrido declarada de una hoja corredera, medida en el
+ * alzado visto desde el interior (contrato de simbología P05). */
+export type SlidingTravel = "LEFT" | "RIGHT";
+
 /** Ordered sliding topology of a bay (mandate §12): rail count plus one
- * panel per slot, left to right. MOVING panels ride `track` (0-based);
- * FIXED panels carry `track: null`.
+ * panel per slot, left to right. MOVING panels ride `track` (0-based,
+ * riel 0 = el más exterior); FIXED panels carry `track: null`. `travel`
+ * es la dirección declarada del panel móvil — los paneles guardados sin
+ * ella resuelven la convención documentada y se marcan "dirección
+ * inferida" (P05). FIXED declara `travel: null`.
  */
 export type SlidingPanel = {
   slot: string;
   kind: "MOVING" | "FIXED";
   track: number | null;
+  travel?: SlidingTravel | null;
 };
 
 export type SlidingLayout = {
@@ -38,28 +46,48 @@ export const SLIDING_PRESETS: Record<string, SlidingLayout> = {
   SLIDING_2L: {
     tracks: 2,
     panels: [
-      { slot: "S1", kind: "MOVING", track: 0 },
-      { slot: "S2", kind: "MOVING", track: 1 },
+      { slot: "S1", kind: "MOVING", track: 0, travel: "RIGHT" },
+      { slot: "S2", kind: "MOVING", track: 1, travel: "LEFT" },
     ],
   },
   SLIDING_3L: {
     tracks: 2,
     panels: [
-      { slot: "S1", kind: "MOVING", track: 0 },
-      { slot: "S2", kind: "MOVING", track: 1 },
-      { slot: "S3", kind: "MOVING", track: 0 },
+      { slot: "S1", kind: "MOVING", track: 0, travel: "RIGHT" },
+      { slot: "S2", kind: "MOVING", track: 1, travel: "RIGHT" },
+      { slot: "S3", kind: "MOVING", track: 0, travel: "LEFT" },
     ],
   },
   SLIDING_4L: {
     tracks: 2,
     panels: [
-      { slot: "S1", kind: "MOVING", track: 0 },
-      { slot: "S2", kind: "MOVING", track: 1 },
-      { slot: "S3", kind: "MOVING", track: 0 },
-      { slot: "S4", kind: "MOVING", track: 1 },
+      { slot: "S1", kind: "MOVING", track: 0, travel: "RIGHT" },
+      { slot: "S2", kind: "MOVING", track: 1, travel: "RIGHT" },
+      { slot: "S3", kind: "MOVING", track: 0, travel: "LEFT" },
+      { slot: "S4", kind: "MOVING", track: 1, travel: "LEFT" },
     ],
   },
 };
+
+/** Dirección resuelta de un panel corredero: su `travel` declarado, o la
+ * convención documentada — la mitad izquierda del vano viaja a la
+ * derecha, la mitad derecha a la izquierda (la hoja corre sobre su slot
+ * vecino). Devuelve null en FIXED: un fijo no viaja. */
+export function panelTravel(
+  panel: SlidingPanel,
+  index: number,
+  count: number,
+): SlidingTravel | null {
+  if (panel.kind === "FIXED") return null;
+  if (panel.travel) return panel.travel;
+  return index * 2 < count ? "RIGHT" : "LEFT";
+}
+
+/** true cuando la dirección del panel es la convención de presentación,
+ * no una declaración — las superficies la marcan "dirección inferida". */
+export function travelInferred(panel: SlidingPanel): boolean {
+  return panel.kind === "MOVING" && panel.travel == null;
+}
 
 const SLIDING_OPENINGS = new Set<Opening>(["SLIDING_2L", "SLIDING_3L", "SLIDING_4L", "SLIDING"]);
 
@@ -604,9 +632,22 @@ export function flipBay(node: IntentNode): IntentNode | null {
     const count = panels?.length ?? 0;
     if (count > 0) {
       const primary = Number(layout?.primary_index ?? 0);
+      const FLIP_TRAVEL: Record<SlidingTravel, SlidingTravel> = {
+        LEFT: "RIGHT",
+        RIGHT: "LEFT",
+      };
+      // El espejo intercambia los extremos: los paneles recorren de
+      // derecha a izquierda y cada travel declarado invierte su sentido;
+      // el riel no cambia (la vista es un espejo horizontal, no una
+      // rotación).
       flipped.sliding_layout = {
         tracks: layout?.tracks ?? 2,
-        panels: panels ? panels.map((panel) => ({ ...panel })) : [],
+        panels: (panels ?? [])
+          .map((panel) => ({
+            ...panel,
+            travel: panel.travel ? FLIP_TRAVEL[panel.travel] : (panel.travel ?? null),
+          }))
+          .reverse(),
         primary_index: count - 1 - primary,
       };
       changed = true;

@@ -512,13 +512,15 @@
 .opening-glyph polyline,
 .opening-glyph line,
 .opening-glyph path {
-  stroke: var(--theme-text-secondary);
+  /* La lámina conserva vidrio claro en ambos temas: la tinta del símbolo
+     es la del documento técnico (firma), no el texto del tema. */
+  stroke: var(--signature-ink);
   stroke-width: 2.4;
   vector-effect: non-scaling-stroke;
 }
 
 .opening-glyph circle {
-  fill: var(--theme-text-secondary);
+  fill: var(--signature-ink);
 }
 
 .canvas-dim {
@@ -798,7 +800,7 @@
 .opening-choice .opening-glyph polyline,
 .opening-choice .opening-glyph line,
 .opening-choice .opening-glyph path {
-  stroke: var(--theme-text-primary);
+  stroke: var(--signature-ink);
   stroke-width: 3;
 }
 
@@ -1331,4 +1333,37 @@
   font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
   font-variant-numeric: tabular-nums;
   font-size: 22px;
+}
+
+/* P05 — vista declarada + bloque de simbología junto a los niveles de
+ * detalle: mismas primitivas de grupo que .detail-levels. */
+.view-levels {
+  display: flex;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-md);
+  background: var(--theme-surface);
+  margin-top: var(--space-8);
+}
+
+.symbols-legend {
+  margin-top: var(--space-8);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-md);
+  background: var(--theme-surface);
+  padding: var(--space-8) var(--space-12);
+  font-size: var(--text-sm);
+  color: var(--theme-text-secondary);
+}
+
+.symbols-legend > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--theme-text-primary);
+}
+
+.symbols-legend > p {
+  margin: var(--space-8) 0 0;
+  line-height: 1.5;
 }

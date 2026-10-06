@@ -2856,6 +2856,22 @@ export const messages = {
   "assembly.equalizeAngles": "Igualar ángulos",
   "assembly.planView": "Vista en planta",
   "assembly.frontView": "Vista frontal",
+  // P05 — vista declarada del alzado y simbología de apertura.
+  "assembly.viewLabel": "Vista",
+  "assembly.viewInterior": "Vista interior",
+  "assembly.viewExterior": "Vista exterior",
+  "assembly.symbolsLegend": "Simbología",
+  "assembly.symbolsHint":
+    "Triángulo = hoja practicable (base en el eje). Continuo abre hacia el observador; discontinuo, en contra. Flecha = hoja corrediza en su dirección de desplazamiento. Fijo = sin marca.",
+  "assembly.travelDirection": "Desplazamiento",
+  "assembly.travelInward": "Inferido",
+  "assembly.travelLeft": "← izquierda",
+  "assembly.travelRight": "derecha →",
+  "assembly.travelInferred": "dirección inferida",
+  "assembly.travelInferredHint":
+    "esta hoja no declara desplazamiento; la lámina muestra la convención de presentación",
+  "assembly.planExterior": "EXTERIOR",
+  "assembly.planInterior": "INTERIOR",
   "assembly.calculating": "Calculando el conjunto…",
   "assembly.noPlan": "Aún no hay geometría de planta.",
   "assembly.calculateError": "No pudimos calcular el conjunto. Revisa los datos.",
@@ -2978,6 +2994,9 @@ export const messages = {
     "dos paños fijos juntos necesitan un poste — sepáralos con una división",
   "assembly.reason.slidingSameTrack": "dos corredizas juntas no pueden compartir el riel",
   "assembly.reason.slidingNoMoving": "la corredera necesita al menos un paño corredizo",
+  "assembly.reason.slidingJambTravel":
+    "un paño corredizo no puede desplazarse hacia un paño lateral sin espacio",
+  "assembly.reason.slidingFixedTravel": "un paño fijo no declara desplazamiento",
   "assembly.slidingLayout": "Distribución corredera",
   "assembly.handleHeight": "Altura de manilla (mm)",
   "assembly.slidingTracks": "Rieles",

@@ -317,6 +317,19 @@ class SlidingPanelKind(str, Enum):
     FIXED = "FIXED"  # glazed in-frame — an "O" panel
 
 
+class SlidingTravel(str, Enum):
+    """Direction a MOVING panel slides, in the interior-view elevation.
+
+    LEFT/RIGHT name the jamb the leaf travels toward. A declared travel is
+    manufacturing truth (the symbology contract and the plan cut read it);
+    panels saved before it existed resolve a presentation convention and
+    are flagged ``dirección inferida`` instead of silently trusting it.
+    """
+
+    LEFT = "LEFT"
+    RIGHT = "RIGHT"
+
+
 class SystemFamily(str, Enum):
     """Fabrication family a profile system belongs to (D01).
 
@@ -387,10 +400,23 @@ class SlidingPanel(EngineModel):
 
     slot: str
     kind: SlidingPanelKind
-    # 0-based rail index. Required on MOVING panels, must be null on FIXED —
+    # 0-based rail index; track 0 is the EXTERIOR-most rail (the plan cut
+    # draws it topmost and the interior viewer sees it behind the leaves
+    # on inner rails). Required on MOVING panels, must be null on FIXED —
     # a fixed pane has no rail. Two adjacent MOVING panels may not share a
     # track (they would collide before overlapping).
     track: int | None = None
+    # Declared slide direction of a MOVING panel — None only on FIXED
+    # (a fixed pane travels nowhere) and on MOVING panels saved before the
+    # symbology contract: those resolve the documented convention and are
+    # flagged "dirección inferida" wherever a direction is drawn.
+    travel: SlidingTravel | None = None
+
+    @model_validator(mode="after")
+    def _travel_matches_kind(self) -> "SlidingPanel":
+        if self.kind is SlidingPanelKind.FIXED and self.travel is not None:
+            raise ValueError("a FIXED panel declares no travel")
+        return self
 
 
 class SlidingLayout(EngineModel):
@@ -401,10 +427,13 @@ class SlidingLayout(EngineModel):
     slot left→right; adjacent slots overlap by the system's central
     overlap. X/O notation: MOVING=X, FIXED=O — e.g. O/X/X/O is
     panels [FIXED, MOVING@0, MOVING@1, FIXED] on 2 tracks.
+    `primary_index` is the IA2 stacking choice: which panel travels in
+    front of the other leaves (opens first).
     """
 
     tracks: int = Field(ge=1)
     panels: list[SlidingPanel] = Field(min_length=1)
+    primary_index: int | None = None
 
 
 class PlanPoint(EngineModel):

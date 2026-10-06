@@ -418,6 +418,8 @@ class SlidingPanelFactsSerializer(serializers.Serializer):
     slot = serializers.CharField()
     kind = serializers.ChoiceField(choices=["MOVING", "FIXED"])
     track = serializers.IntegerField(allow_null=True)
+    travel = serializers.ChoiceField(choices=["LEFT", "RIGHT"], allow_null=True)
+    travel_inferred = serializers.BooleanField()
     leaf_id = serializers.CharField(allow_null=True)
 
 
@@ -425,6 +427,7 @@ class SlidingLayoutFactsSerializer(serializers.Serializer):
     bay_id = serializers.CharField()
     tracks = serializers.IntegerField()
     panels = SlidingPanelFactsSerializer(many=True)
+    primary_index = serializers.IntegerField(allow_null=True)
 
 
 class ModuleEvaluationSerializer(serializers.Serializer):

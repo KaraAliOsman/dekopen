@@ -162,3 +162,12 @@ Append-only chronology. Keep newest entries at the bottom.
 - `EmptyIllustration` (5 láminas técnicas) en EmptyState + 404/500/sin conexión; Orb recoloreado cyan→teal en tokens.
 - Bugs hallados verificando en vivo y corregidos: `projects.currency` inexistente en `_project_mail_row` (JOIN a org), DRF `Response` sobre PNG → 500 (ahora `HttpResponse`), `DocumentaryError` transitoria → `JobPermanentError` en handlers `mail.*`.
 - Verificado: `make lint|typecheck|test|build` + `make test-db` verdes (`PY=.venv/bin/python`), entrega real `SENT sandbox` con color de org en `html_body`, capturas en `docs/redesign/captures/p25-marca/` y `.../marca/`; decisiones en sección P25 de `valores-por-defecto.md`.
+
+## [2026-10-06] P05 | dibujo técnico: geometría de glifos y cotas
+
+- Contrato de simbología único (`engine/.../opening_symbols.py` + gemelo `frontend/.../openingSymbols.ts`): `leaf_primitives`/`sliding_primitives` emiten primitivas simbólicas (`tri`/`arrow`/`handle`/`sill`/`none`), `glyph_paths` las convierte en `d` canónicas; 14 fixtures JSON congelan ambos lados por caso × vista (paridad exacta, divergencia rompe ambos tests).
+- `SlidingPanel.travel` (LEFT|RIGHT) declarado por hoja móvil; `validate_sliding_layout` rechaza viaje hacia jamba sin espacio y rieles compartidos entre móviles adyacentes; `panel_travel` resuelve la convención documentada y `inferred` marca "dirección inferida" en toda superficie.
+- Vista declarada: `view` interior/exterior en el editor (selector + espejo de lámina, mobiliario sin espejar, vista exterior de solo lectura); PDF declara "Vista interior" en toda figura; cotas enteras `tabular-nums` en canaletas fuera del dibujo; corte de planta corredera bajo el alzado (EXTERIOR/muro arriba, rieles numerados, flechas por slot).
+- Puerta en alzado = triángulos + umbral naranjo bajo toda hoja no fija (el arco de barrido solo existe en planta); DOC-01 técnica dibuja el corte de planta por bay corredizo.
+- `ui/icons.tsx` `OpeningGlyph` ahora dibuja el contrato real (antes era una aproximación a mano al 50 %); `SignatureSection` de /dev/ui lista el vocabulario completo.
+- Decisiones registradas en `docs/decisions/valores-por-defecto.md` (sección P05); contrato en `docs/PRD/opening-symbols.md` con ilustraciones generadas por el engine.

@@ -80,7 +80,7 @@ export const DOMAIN_LABELS: Record<string, L> = {
     EXTERIOR_LEFT: l("Apertura izquierda", "info"),
     EXTERIOR_RIGHT: l("Apertura derecha", "info"),
   },
-  HostMemberSideEnum: {
+  SlidingTravelEnum: {
     LEFT: l("Izquierda", "neutral"),
     RIGHT: l("Derecha", "neutral"),
   },
