@@ -15,7 +15,7 @@
 | P02 | 1 | pendiente |  |  |  |
 | P25 | 1 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/26 | 80860f3ef9fe1cf94abf1c564ff00506ef6686b0 | CI 6/6 verde; squash mergeado. Marca «La sección» + favicon auto-tema + correos white-label (5 plantillas, outbox RLS, sandbox) + brand_color AA en DOC-01/portal + láminas EmptyIllustration + Orb teal; 3 bugs reales corregidos. |
 | P04 | 1 | pendiente |  |  |  |
-| P05 | 1 | pendiente |  |  |  |
+| P05 | 1 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/25 | 2c04dcd64afb7cea16effb899ecaf33fe9e7aa67 | CI 6/6 verde; squash mergeado. Contrato de simbología único Python+TS con paridad de fixtures; SlidingPanel.travel + validación; vista declarada interior/exterior; cotas en canales; corte en planta corredera; puerta DIN + umbral; regresión sliding_layout corregida en E2E. |
 | P09 | 1 | pendiente |  |  |  |
 | P07 | 1 | pendiente |  |  |  |
 | P03 | 1 | pendiente |  |  |  |
