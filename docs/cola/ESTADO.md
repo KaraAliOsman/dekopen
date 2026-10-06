@@ -16,7 +16,7 @@
 | P25 | 1 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/26 | 80860f3ef9fe1cf94abf1c564ff00506ef6686b0 | CI 6/6 verde; squash mergeado. Marca «La sección» + favicon auto-tema + correos white-label (5 plantillas, outbox RLS, sandbox) + brand_color AA en DOC-01/portal + láminas EmptyIllustration + Orb teal; 3 bugs reales corregidos. |
 | P04 | 1 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/24 | 970ecbfc548800eaae19367e3294567d3863d39a | CI 6/6 verde; squash mergeado. Editor canvas-first: franja 48px, riel etiquetado + flyout Biblioteca, lienzo ≥60%/≥75% con fit/zoom/pan, inspector 320px + dock colapsable, guard de cambios, atajos, precio vivo via design_batch_preview, ghost de propuestas §8. |
 | P05 | 1 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/25 | 2c04dcd64afb7cea16effb899ecaf33fe9e7aa67 | CI 6/6 verde; squash mergeado. Contrato de simbología único Python+TS con paridad de fixtures; SlidingPanel.travel + validación; vista declarada interior/exterior; cotas en canales; corte en planta corredera; puerta DIN + umbral; regresión sliding_layout corregida en E2E. |
-| P09 | 1 | pendiente |  |  |  |
+| P09 | 1 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/34 | 9731e0c790a7754bd420710f41646f7b2c08e674 | CI 6/6 verde; squash mergeado. DOC-01 v2: portada condicional, tabla resumen, detalle por densidad, resumen comercial reconciliado, aceptación + QR con canales EMAIL/DOCUMENT (artefacto inmutable), pie con folio/huella, ajustes papel + doc_terms. |
 | P07 | 1 | pendiente |  |  |  |
 | P03 | 1 | pendiente |  |  |  |
 | P12 | 1 | pendiente |  |  |  |
