@@ -115,7 +115,7 @@ def pricing_decision(
     actor_label = "el equipo"
     if context.created_by is not None:
         found = rows(
-            "SELECT email::text AS email FROM auth.users WHERE id = %s",
+            "SELECT private.user_email(%s) AS email",
             [str(context.created_by)],
         )
         if found:

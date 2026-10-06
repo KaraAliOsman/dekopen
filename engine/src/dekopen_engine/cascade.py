@@ -15,6 +15,15 @@ list price minus cost minus sell surcharges, and ``discount`` is the list
 price minus the stored net — so the waterfall closes exactly in Decimal,
 absorbing the per-line quantization the engine itself applied.
 
+Stored snapshots are quantized (4 dp per unit, display-grid money on the
+project totals), so a stored ``unit_cost`` can sit a fraction of a
+cent-hundredth off its stored components' recomputed sum. Differences at
+that scale are quantization noise, not inconsistency: each check below
+tolerates ``QUANTUM_SLACK`` per unit (and ``MONEY_SLACK`` on the project
+landmarks) and surfaces the absorbed residue as an explicit
+``rounding_residual`` row instead of hiding it inside another family. A
+divergence beyond slack is a corrupt snapshot and still refuses.
+
 Delta decomposition ("¿Por qué cambió?"): the backend feeds an ordered
 list of scenarios — one per driver, in the documented canonical order —
 and each driver's contribution is the net difference between consecutive
@@ -54,6 +63,12 @@ COST_GROUP_BY_KIND = {
     "EXTRA": "extras_material",
 }
 GLASS_SURCHARGE_PREFIX = "GLASS_"
+
+# Tolerance floors for the close-checks, at the snapshot's declared grid:
+# 4 dp per-unit fields → half a mil per unit; stored money landmarks are
+# quantized at display precision (integer CLP) → half a unit plus slack.
+QUANTUM_SLACK = D("0.0001")
+MONEY_SLACK = D("0.51")
 
 # Canonical display order of the cost families — fixed so two renders of
 # the same operation can never disagree.
@@ -153,9 +168,11 @@ def _position_cascade(position: CascadePosition) -> dict[str, Any]:
         waste = position.materials_cost * position.waste_pct * qty
         labour = position.area_m2 * position.labour_per_m2 * qty
         cost = position.unit_cost * qty
-        if materials + waste + labour != cost:
+        rounding = cost - (materials + waste + labour)
+        if rounding != ZERO and abs(rounding) > qty * QUANTUM_SLACK:
             # The stored unit_cost must equal direct_cost — a snapshot that
-            # does not close would draw a lying waterfall.
+            # does not close would draw a lying waterfall. Sub-grid residue
+            # (quantization of the stored fields) surfaces as its own row.
             raise PricingError("inconsistent_pricing_result")
         sell = position.sell_delta * qty
         list_price = position.exact_unit_price * qty
@@ -169,6 +186,7 @@ def _position_cascade(position: CascadePosition) -> dict[str, Any]:
             "materials": materials,
             "waste": waste,
             "labour": labour,
+            "rounding": rounding,
             "cost": cost,
             "margin": margin,
             "sell": sell,
@@ -207,17 +225,24 @@ def price_cascade(
         materials = sum((entry["materials"] for entry in per_position), ZERO)
         waste = sum((entry["waste"] for entry in per_position), ZERO)
         labour = sum((entry["labour"] for entry in per_position), ZERO)
-        cost = sum((entry["cost"] for entry in per_position), ZERO)
         margin = sum((entry["margin"] for entry in per_position), ZERO)
         sell = sum((entry["sell"] for entry in per_position), ZERO)
         list_price = sum((entry["list_price"] for entry in per_position), ZERO)
         discount = sum((entry["discount"] for entry in per_position), ZERO)
         positions_net = sum((entry["net"] for entry in per_position), ZERO)
         net = positions_net + extras_net
+        total_qty = D(sum((position.quantity for position in positions), 0))
+        slack = total_qty * QUANTUM_SLACK + MONEY_SLACK
+        # The cost landmark closes against the recomposed direct sum: the
+        # residual thus covers both the stored total's own quantization and
+        # the per-position sub-grid residues.
+        cost_residual = total_cost - (materials + waste + labour)
+        net_residual = project_net - net
+        gross_residual = project_gross - net - project_tax
         if (
-            cost != total_cost
-            or net != project_net
-            or net + project_tax != project_gross
+            abs(cost_residual) > slack
+            or abs(net_residual) > slack
+            or abs(gross_residual) > slack
         ):
             raise PricingError("inconsistent_pricing_result")
         rows: list[CascadeRow] = [
@@ -230,20 +255,35 @@ def price_cascade(
                 CascadeRow("materials", materials, "subtotal"),
                 CascadeRow("waste", waste),
                 CascadeRow("labour", labour),
-                CascadeRow("cost_total", cost, "subtotal"),
+            ]
+        )
+        if cost_residual != ZERO:
+            rows.append(CascadeRow("rounding_residual", cost_residual))
+        rows.extend(
+            [
+                CascadeRow("cost_total", materials + waste + labour + cost_residual, "subtotal"),
+                # The residual is absorbed inside the cost landmark, so the
+                # margin row keeps the stored margin and the waterfall still
+                # telescopes: cost_total + margin + sell = list_price.
                 CascadeRow("margin", margin),
                 CascadeRow("sell_surcharges", sell),
                 CascadeRow("list_price", list_price, "subtotal"),
                 CascadeRow("discount", discount),
                 CascadeRow("positions_net", positions_net, "subtotal"),
                 CascadeRow("extras_net", extras_net),
-                CascadeRow("net", net, "subtotal"),
-                CascadeRow("tax", project_tax),
-                CascadeRow("gross", project_gross, "total"),
             ]
         )
+        if net_residual != ZERO:
+            rows.append(CascadeRow("rounding_residual", net_residual))
+        rows.append(CascadeRow("net", net + net_residual, "subtotal"))
+        rows.append(CascadeRow("tax", project_tax))
+        if gross_residual != ZERO:
+            rows.append(CascadeRow("rounding_residual", gross_residual))
+        rows.append(CascadeRow("gross", project_gross, "total"))
+        realized_net = net + net_residual
         margin_realized = (
-            (net - cost) / net if net > ZERO else None
+            (realized_net - total_cost) / realized_net
+            if realized_net > ZERO else None
         )
         return CascadeResult(
             rows=tuple(rows),

@@ -817,6 +817,7 @@ def _cascade_payload(snapshot, result, request):
                 'materials': str(item['materials']),
                 'waste': str(item['waste']),
                 'labour': str(item['labour']),
+                'rounding': str(item['rounding']),
                 'cost': str(item['cost']),
                 'margin': str(item['margin']),
                 'sell': str(item['sell']),

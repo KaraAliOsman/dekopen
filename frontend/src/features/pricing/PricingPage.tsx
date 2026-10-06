@@ -50,6 +50,7 @@ const optionLabels: Record<string, Parameters<typeof t>[0]> = {
   ARCHITECT: "pricing.architect",
   CONSTRUCTION: "pricing.construction",
   REINFORCEMENT: "pricing.coverageKind.reinforcement",
+  FITTING: "catalog.componentCategory.FITTING",
 };
 function optionLabel(value: string): string {
   const key = optionLabels[value];
@@ -122,6 +123,13 @@ function pctDisplay(value: unknown): string {
   const pct = Number(value) * 100;
   if (!Number.isFinite(pct)) return "0";
   return pct.toFixed(1).replace(".", ",");
+}
+/** A <input type=number> only accepts dot decimals — the comma display
+ * would render the field blank on edit. */
+function pctInput(value: unknown): string {
+  const pct = Number(value) * 100;
+  if (!Number.isFinite(pct)) return "0";
+  return String(Math.round(pct * 10) / 10);
 }
 /** Stored values are ISO; operators read DD-MM-AAAA everywhere else in the
  * product. Render the business format, keep the raw value for submission. */
@@ -601,7 +609,7 @@ function PricingWorkspace({ orgId }: { orgId: string }): JSX.Element {
                         ? editing?.[field.name] !== undefined &&
                           editing?.[field.name] !== null &&
                           editing?.[field.name] !== ""
-                          ? pctDisplay(editing[field.name])
+                          ? pctInput(editing[field.name])
                           : (field.initial ?? "0")
                         : String(editing?.[field.name] ?? field.initial ?? "")
                     }
@@ -1025,21 +1033,24 @@ function CostComposition({
   // not cuts, so identical SKUs aggregate into one row.
   const grouped = new Map<
     string,
-    { kind: string; sku: string; unit: string; qty: number; cents: bigint }
+    { kind: string; sku: string; unit: string; qtyScaled: bigint; cents: bigint }
   >();
   for (const component of entry.composition ?? []) {
     const key = `${component.kind}|${component.sku}|${component.unit}`;
     const existing = grouped.get(key);
     const cents = moneyCents(component.cost ?? "0") ?? 0n;
+    // Quantities are Decimals: accumulate on a 6dp integer scale so float
+    // addition never leaks artifacts like 5.6240000000000006 into the UI.
+    const qtyScaled = BigInt(Math.round(Number(component.quantity ?? 0) * 1e6));
     if (existing) {
-      existing.qty += Number(component.quantity);
+      existing.qtyScaled += qtyScaled;
       existing.cents += cents;
     } else {
       grouped.set(key, {
         kind: component.kind ?? "",
         sku: component.sku ?? "",
         unit: component.unit ?? "",
-        qty: Number(component.quantity),
+        qtyScaled,
         cents,
       });
     }
@@ -1059,7 +1070,7 @@ function CostComposition({
               <td>{optionLabel(component.kind)}</td>
               <td>{component.sku}</td>
               <td>
-                {component.qty} {optionLabel(component.unit)}
+                {Number(component.qtyScaled) / 1e6} {optionLabel(component.unit)}
               </td>
               <td>
                 {formatMoney(
@@ -1123,6 +1134,7 @@ type CascadePositionPayload = {
   materials?: string;
   waste?: string;
   labour?: string;
+  rounding?: string;
   cost?: string;
   margin?: string;
   sell?: string;
@@ -1278,6 +1290,7 @@ function PriceCascade({
                     "materials",
                     "waste",
                     "labour",
+                    "rounding",
                     "cost",
                     "margin",
                     "sell",
@@ -1465,7 +1478,11 @@ function OperationDecision({
     diff !== null && Number(baselineGross) > 0 ? (diff / Number(baselineGross)) * 100 : null;
   // Per-position delta: the live price_net of the bound revision vs the
   // proposed line_net — same position index, same currency, never a guess.
-  const canLineDelta = isBoundProject && sameCurrency;
+  // Only a live applied quote (pricing_current) is a real baseline: with no
+  // applied quote the live net is modelled, not quoted, and the delta would
+  // echo the whole amount like a change. The header already explains the
+  // absence with 'sin comparación'.
+  const canLineDelta = isBoundProject && sameCurrency && !!boundProject?.pricing_current;
   // Category rollup: every cost component across all positions aggregated by
   // kind — the 'why' behind the total, in exact cents (no float artifacts).
   const kindTotals = new Map<string, bigint>();
@@ -2028,6 +2045,18 @@ function CommercialOperations({
     if (!isOperation(value)) throw new Error("pricing.malformedOperation");
     setStale(false);
     setOperation(value);
+    // The just-created operation belongs in the history immediately —
+    // waiting for a manual Recargar made submissions look lost. Upsert
+    // locally instead of refetching: a reload here would race the next
+    // preview's request generation.
+    setHistory((current) => {
+      if (!Array.isArray(current)) return current;
+      const index = current.findIndex((item) => item.id === value.id);
+      if (index === -1) return [value, ...current];
+      const next = [...current];
+      next[index] = value;
+      return next;
+    });
     // Fuera de banda para un estimador = pedir aprobación: la causa queda
     // precargada (constitución §8) sin pisar un motivo ya escrito.
     const band = value.band as BandPayload | null | undefined;

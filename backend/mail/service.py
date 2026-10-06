@@ -47,12 +47,12 @@ def _workshop_url() -> str:
 
 def staff_emails(*, org_id: UUID, roles: tuple[str, ...]) -> list[str]:
     """Emails de inicio de sesión del personal con esos roles en el org —
-    el join con auth.users nunca sale del tenant: la membresía es el límite."""
+    la membresía del propio tenant es el límite. La lectura sale por
+    private.org_member_emails: los roles backend no pueden leer auth.users
+    directamente (el rol de migraciones no puede otorgar el schema auth —
+    ver migración 20261212)."""
     found = rows(
-        "SELECT u.email::text AS email FROM public.tenancy_memberships m"
-        " JOIN auth.users u ON u.id = m.user_id"
-        " WHERE m.org_id = %s AND m.is_active AND m.role::text = ANY(%s)"
-        " ORDER BY m.created_at",
+        "SELECT org_member_emails AS email FROM private.org_member_emails(%s, %s)",
         [str(org_id), list(roles)],
     )
     return [str(row["email"]) for row in found if row.get("email")]
@@ -377,10 +377,7 @@ def deliver_step_blocked(
     )
     actor_label = "—"
     if actor_id is not None:
-        actor = rows(
-            "SELECT email::text AS email FROM auth.users WHERE id = %s",
-            [str(actor_id)],
-        )
+        actor = rows("SELECT private.user_email(%s) AS email", [str(actor_id)])
         if actor:
             actor_label = str(actor[0]["email"])
     rendered = templates.work_order_blocked(

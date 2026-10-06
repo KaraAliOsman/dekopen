@@ -933,6 +933,8 @@ export const messages = {
   "pricing.cascadeRow.materials": "Materiales",
   "pricing.cascadeRow.waste": "Merma",
   "pricing.cascadeRow.labour": "Proceso y mano de obra",
+  "pricing.cascadeRow.rounding": "Ajuste de redondeo",
+  "pricing.cascadeRow.rounding_residual": "Residuo de redondeo",
   "pricing.cascadeRow.cost_total": "Costo total",
   "pricing.cascadeRow.margin": "Margen",
   "pricing.cascadeRow.sell_surcharges": "Recargos de venta",

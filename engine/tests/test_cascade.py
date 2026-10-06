@@ -214,6 +214,74 @@ def test_cascade_refuses_inconsistent_totals() -> None:
     assert error.value.code == "inconsistent_pricing_result"
 
 
+def test_cascade_absorbs_subgrid_rounding_as_explicit_row() -> None:
+    """A stored snapshot quantized at 4dp can sit fractions of a
+    cent-hundredth off its recomputed components — quantization noise the
+    cascade surfaces as `rounding_residual` instead of refusing, while the
+    landmarks keep the stored totals as the authority and rows still close
+    in Decimal."""
+    # Stored at the snapshot's declared grid (4dp); its unquantized source
+    # was finer, so recomputing direct cost from the components leaves a
+    # −0.000032-per-unit residue — exactly what production snapshots carry.
+    position = _position(
+        index=1,
+        quantity=1,
+        materials=D("52000.0004"),
+        waste=D("0.0800"),
+        labour_per_m2=D("3000.0000"),
+        area_m2=D("1.6000"),
+        unit_cost=D("60960.0004"),
+        exact=D("81000"),
+    )
+    assert (
+        position.materials_cost
+        + position.materials_cost * position.waste_pct
+        + position.area_m2 * position.labour_per_m2
+        != position.unit_cost
+    )  # −0.000004 residue
+    totals = _totals([position])
+    cascade = price_cascade(
+        [position],
+        extras_net=D("0"),
+        project_net=totals.project_net,
+        project_tax=totals.project_tax,
+        project_gross=totals.project_gross,
+        total_cost=position.unit_cost,
+    )
+    amounts = {row.key: row.amount for row in cascade.rows}
+    residual = amounts.get("rounding_residual")
+    direct = (
+        position.materials_cost
+        + position.materials_cost * position.waste_pct
+        + position.area_m2 * position.labour_per_m2
+    )
+    assert residual == position.unit_cost - direct
+    # The waterfall telescopes exactly to the stored total again.
+    composed = amounts["materials"] + amounts["waste"] + amounts["labour"]
+    assert composed + residual == amounts["cost_total"] == position.unit_cost
+    assert (
+        amounts["cost_total"] + amounts["margin"] + amounts["sell_surcharges"]
+        == amounts["list_price"]
+    )
+    assert cascade.positions[0]["rounding"] == residual
+
+
+def test_cascade_still_refuses_residual_beyond_slack() -> None:
+    """A 2-cent divergence is inconsistency, not quantization."""
+    position = _position(index=1, unit_cost=D("80000.02"))
+    totals = _totals([position])
+    with pytest.raises(PricingError) as error:
+        price_cascade(
+            [position],
+            extras_net=D("0"),
+            project_net=totals.project_net,
+            project_tax=totals.project_tax,
+            project_gross=totals.project_gross,
+            total_cost=position.unit_cost,
+        )
+    assert error.value.code == "inconsistent_pricing_result"
+
+
 def test_cascade_rejects_nonfinite_and_empty() -> None:
     with pytest.raises(PricingError):
         price_cascade(
