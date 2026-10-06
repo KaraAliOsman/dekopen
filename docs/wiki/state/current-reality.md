@@ -24,6 +24,7 @@ sources:
   - P09 DOC-01 propuesta PR https://github.com/KaraAliOsman/dekopen/pull/34
   - P03 shell/Hoy PR https://github.com/KaraAliOsman/dekopen/pull/32
   - P17 asistente/Orb PR https://github.com/KaraAliOsman/dekopen/pull/35
+  - P07 workspace precios PR https://github.com/KaraAliOsman/dekopen/pull/33
   - P17 asistente IA/trabajos/Orb branch devin/P17-asistente-orb
   - integracion/v1 merge 747c528b67d234d697624929ccbcc7098261ed54
   - open PR metadata observed 2026-09-27/28
@@ -335,7 +336,9 @@ Opened on branch `devin/P17-asistente-orb` (PR pendiente sobre `integracion/v1`)
 
 ## P07 pricing workspace v2 state
 
-Branch `devin/p07-precios` (PR hacia `integracion/v1`; SHA pendiente de merge):
+Merged into `integracion/v1` as squash `c7cde331c0c4763c4133928dcc4abe442a446b03` (dekopen PR #33):
+
+
 
 - `engine/.../cascade.py` nuevo: `price_cascade` (waterfall exacto proyecto+posición — familias de costo → merma → MO → residuo de redondeo → costo → margen → recargos venta → lista → descuento → neto → extras → IVA → total; tolera residual de cuantización ≤0,0001×unidades +0,51 en los hitos y lo expone como fila `rounding_residual`/`rounding`; una divergencia mayor sigue rechazando `inconsistent_pricing_result`), `delta_contributions` (Δ por impulsor, orden canónico `quantity→dimensions→glass→hardware→cost_list→fx→selections→commercial→discount→services`, telescopio exacto), `band_state` (IN_BAND/BELOW_MIN/ABOVE_MAX; `None`→BELOW_MIN).
 - `pricing_rules` gana `margin_min_pct`/`margin_max_pct` (0,25/0,60 por defecto, CHECK min<max y ≥0) vía migración `20270201000000_p07_margin_band.sql` + pgTAP `180`; editables en `/pricing` › Reglas (solo OWNER). `margin_pct` opcional en el request de precio.
