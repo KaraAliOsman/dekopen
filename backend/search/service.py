@@ -11,10 +11,16 @@ from __future__ import annotations
 from uuid import UUID
 
 from catalogs.service import visibility_sql
+from documents.repository import documentary_backend
 from pricing.repository import rows
 
 MAX_QUERY_LEN = 80
 GROUP_LIMIT = 6
+
+# Supplier-order folios live behind documentary RLS (`orders` exposes only
+# WORKSHOP_OT to `authenticated`); the member roles that can open /purchasing
+# are the ones the documentary policies also let read those rows.
+_PURCHASING_READERS = {"OWNER", "ESTIMATOR", "WORKSHOP_MANAGER"}
 
 
 def _where(columns: tuple[str, ...]) -> str:
@@ -154,14 +160,30 @@ def search(org_id: UUID, query: str, role: str = "OWNER") -> dict:
             }
         )
 
-    for row in org(
-        "SELECT id, order_code, order_type::text AS kind, status::text AS status"
-        " FROM public.orders"
-        " WHERE org_id=%s AND (__WHERE__)"
-        f" ORDER BY updated_at DESC LIMIT {GROUP_LIMIT}",
-        "order_code",
-        "supplier_name",
-    ):
+    # §8 — el folio es una dirección: teclear 'OC-000123' o 'OT-P-000009-REV-A-01'
+    # lleva directo a la orden. Las OC de proveedor quedan detrás de RLS
+    # documental, así que los roles con acceso a compras resuelven bajo
+    # `documentary_backend`; el resto ve sólo las OT de su scope de miembro.
+    if role in _PURCHASING_READERS:
+        with documentary_backend():
+            order_rows = org(
+                "SELECT id, order_code, order_type::text AS kind, status::text AS status"
+                " FROM public.orders"
+                " WHERE org_id=%s AND (__WHERE__)"
+                f" ORDER BY updated_at DESC LIMIT {GROUP_LIMIT}",
+                "order_code",
+                "supplier_name",
+            )
+    else:
+        order_rows = org(
+            "SELECT id, order_code, order_type::text AS kind, status::text AS status"
+            " FROM public.orders"
+            " WHERE org_id=%s AND (__WHERE__)"
+            f" ORDER BY updated_at DESC LIMIT {GROUP_LIMIT}",
+            "order_code",
+            "supplier_name",
+        )
+    for row in order_rows:
         results.append(
             {
                 "group": "orders",
@@ -193,23 +215,28 @@ def search(org_id: UUID, query: str, role: str = "OWNER") -> dict:
             }
         )
 
-    for row in org(
-        "SELECT r.id, r.receipt_code, o.order_code"
-        " FROM public.order_receipts r JOIN public.orders o ON o.id = r.order_id"
-        " WHERE r.org_id=%s AND o.org_id=%s AND (__WHERE__)"
-        f" ORDER BY r.receipt_code LIMIT {GROUP_LIMIT}",
-        "r.receipt_code",
-        org_params=2,
-    ):
-        results.append(
-            {
-                "group": "receipts",
-                "id": str(row["id"]),
-                "title": row["receipt_code"],
-                "subtitle": row["order_code"],
-                "path": "/purchasing",
-            }
-        )
+    # El JOIN a `orders` sólo resuelve bajo el rol documental: en scope de
+    # miembro las OC de proveedor no existen y la fila de recepción se perdía.
+    if role in _PURCHASING_READERS:
+        with documentary_backend():
+            receipt_rows = org(
+                "SELECT r.id, r.receipt_code, o.order_code"
+                " FROM public.order_receipts r JOIN public.orders o ON o.id = r.order_id"
+                " WHERE r.org_id=%s AND o.org_id=%s AND (__WHERE__)"
+                f" ORDER BY r.receipt_code LIMIT {GROUP_LIMIT}",
+                "r.receipt_code",
+                org_params=2,
+            )
+        for row in receipt_rows:
+            results.append(
+                {
+                    "group": "receipts",
+                    "id": str(row["id"]),
+                    "title": row["receipt_code"],
+                    "subtitle": row["order_code"],
+                    "path": "/purchasing",
+                }
+            )
 
     for row in org(
         "SELECT i.id, i.invoice_code, i.project_id, pr.code AS project_code"

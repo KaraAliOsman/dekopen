@@ -277,10 +277,10 @@ export function TracePieceMatches({
                     {op.member_label ? `${op.member_label} · ` : ""}
                     {op.sequence_no ? `${op.sequence_no}. ` : ""}
                     {opKindLabel(op.kind)}
-                    {op.u_mm ? ` · u ${op.u_mm} mm` : ""}
+                    {op.u_mm ? ` · u ${fmtMm(op.u_mm)} mm` : ""}
                     {op.reference ? ` · ${opReferenceLabel(op.reference)}` : ""}
                     {op.face ? ` · ${opFaceLabel(op.face)}` : ""}
-                    {op.depth_mm ? ` · ${op.depth_mm} mm` : ""}
+                    {op.depth_mm ? ` · ${fmtMm(op.depth_mm)} mm` : ""}
                     {op.tool_id ? ` · ${op.tool_id}` : ""}
                   </li>
                 ))}
