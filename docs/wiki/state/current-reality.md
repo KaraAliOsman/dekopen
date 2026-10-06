@@ -3,7 +3,7 @@ type: state
 status: active
 updated: 2026-10-05
 volatility: high
-verified_ref: d7dc6a9c83d19958ca7730930ec27381c30c967c
+verified_ref: 9a968b6041b69cc16f76400925fe9dd036627b48
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
@@ -16,6 +16,7 @@ sources:
   - D05 colores/acabados PR https://github.com/KaraAliOsman/dekopen/pull/15
   - IA2 AI ops/tools PR https://github.com/KaraAliOsman/dekopen/pull/16
   - D06 accesorios/extras PR https://github.com/KaraAliOsman/dekopen/pull/17
+  - IA3 proveedor real PR https://github.com/KaraAliOsman/dekopen/pull/22
   - integracion/v1 merge 747c528b67d234d697624929ccbcc7098261ed54
   - open PR metadata observed 2026-09-27/28
   - AGENTS.md
