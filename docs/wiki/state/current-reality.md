@@ -3,7 +3,7 @@ type: state
 status: active
 updated: 2026-10-06
 volatility: high
-verified_ref: 428aeee2
+verified_ref: f67c3c8b12ab174e38e4b8bb452f422e00d88b07
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
@@ -29,6 +29,7 @@ sources:
   - ED1 pase editorial PR https://github.com/KaraAliOsman/dekopen/pull/42
   - P13 pack corte etiquetas PR https://github.com/KaraAliOsman/dekopen/pull/44
   - P06 bow acoplados PR https://github.com/KaraAliOsman/dekopen/pull/46
+  - P15 compras inventario PR https://github.com/KaraAliOsman/dekopen/pull/47
   - P15 compras/inventario branch devin/P15-compras-inventario
   - P17 asistente IA/trabajos/Orb branch devin/P17-asistente-orb
   - integracion/v1 merge 747c528b67d234d697624929ccbcc7098261ed54
@@ -407,6 +408,8 @@ Open PR (branch `devin/P06-bow-acoplados`, on `integracion/v1` post-ED1):
 
 
 ## P15 compras, recepción, inventario y retazos state
+
+Merged into `integracion/v1` as squash `f67c3c8b12ab174e38e4b8bb452f422e00d88b07` (dekopen PR #47):
 
 PR sobre `integracion/v1` (branch `devin/P15-compras-inventario`):
 

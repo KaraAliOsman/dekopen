@@ -25,7 +25,7 @@
 | P06 | 2 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/46 | 301ebfb65f75489ea3f4c2f444a8f625c189db3d | CI 6/6 verde; squash mergeado. Bow/bay y acoplados en el editor canvas: franja Planta con cotas+ángulos editables (input+arrastre, snapping 8 imanes), coples filtrados por envolvente de catálogo, elevación Desarrollada/Proyectada, precio por módulo en chip, 6 plantillas. 3 defectos reales corregidos en QA. |
 | P08 | 2 | pendiente |  |  |  |
 | P13 | 2 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/44 | 3f3cf8a66169efb31a0afaa04c657b9c71981d99 | CI 6/6 verde; squash mergeado. Pack de corte para sierra (bloques por barra, badges RT-, SVG con etiquetas por instancia, cierre Decimal), etiquetas configurables GRID|THERMAL_100X50 con QR+siguiente estación, identidad por instancia idéntica en PDF/CSV/DXF/QR (test de conjuntos), DXF UTF-8 verificado con ezdxf. |
-| P15 | 2 | pendiente |  |  |  |
+| P15 | 2 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/47 | f67c3c8b12ab174e38e4b8bb452f422e00d88b07 | CI 6/6 verde; squash mergeado. Compras/Inventario separados, propuesta por proveedor sellada en OC, envío correo+PDF con clic humano, recepción con guía/sobre-recepción confirmada, retazos RT- primera clase (mover/reservar/desechar/QR/alerta viejos), libro auditado, oferta de retazo decidida por motor. |
 | P11 | 2 | pendiente |  |  |  |
 | P14 | 2 | pendiente |  |  |  |
 | P16 | 2 | pendiente |  |  |  |
