@@ -47,9 +47,7 @@ function purchaseUnitLabel(unit: string | null | undefined, qty?: number): strin
   if (!known.has(normalized)) return "";
   const plural = qty === undefined || unitPlural.select(qty) !== "one";
   return t(
-    `purchasing.unitValue.${normalized}${plural ? ".other" : ".one"}` as Parameters<
-      typeof t
-    >[0],
+    `purchasing.unitValue.${normalized}${plural ? ".other" : ".one"}` as Parameters<typeof t>[0],
   );
 }
 

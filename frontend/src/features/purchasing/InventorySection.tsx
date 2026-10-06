@@ -153,9 +153,7 @@ const _UNIT_ALIAS: Record<string, string> = {
 
 function stockUnitLabel(unit: string): string {
   const normalized = _UNIT_ALIAS[unit.toUpperCase()] ?? unit.toUpperCase();
-  const key = `purchasing.unitValue.${normalized}.one` as Parameters<
-    typeof t
-  >[0];
+  const key = `purchasing.unitValue.${normalized}.one` as Parameters<typeof t>[0];
   const label = t(key);
   return label === key ? "" : label;
 }
@@ -438,9 +436,7 @@ export function InventorySection({
                 </td>
                 <td>
                   {item.name}
-                  {stockUnitLabel(item.unit)
-                    ? ` · ${stockUnitLabel(item.unit)}`
-                    : ""}
+                  {stockUnitLabel(item.unit) ? ` · ${stockUnitLabel(item.unit)}` : ""}
                   {item.spec_text ? (
                     <small className="purchasing-hint">
                       <br />
