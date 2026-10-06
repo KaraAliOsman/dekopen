@@ -6,7 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { AnnotationRequest } from "./annotationRequest";
-import type { ModeEnum } from "./modeEnum";
+import type { EngineInspectRequestModeEnum } from "./engineInspectRequestModeEnum";
 import type { StructuralInputRequest } from "./structuralInputRequest";
 
 export interface EngineInspectRequestRequest {
@@ -29,5 +29,5 @@ export interface EngineInspectRequestRequest {
   parametric_tree: unknown;
   annotations?: AnnotationRequest[];
   structural_inputs?: StructuralInputRequest[];
-  mode?: ModeEnum;
+  mode?: EngineInspectRequestModeEnum;
 }

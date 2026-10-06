@@ -134,6 +134,12 @@ SPECTACULAR_SETTINGS = {
             "OWNER", "ESTIMATOR", "WORKSHOP_MANAGER", "INSTALLER", "OPERATOR",
         ],
         "AiAgentHistoryRoleEnum": ["user", "agent"],
+        # §IA3 — distinct 'mode' enums across AI serializers would otherwise
+        # collide: the run mode, the per-route serving mode and the overall
+        # provider mode are three different value sets.
+        "AiAgentRunModeEnum": ["new", "resume"],
+        "AiRouteModeEnum": ["live", "test", "unconfigured"],
+        "AiProviderModeEnum": ["live", "test", "partial", "unconfigured"],
         "QcResultEnum": ["PASS", "FAIL"],
         "UnitEnum": ["kit"],
         "PurchaseUnitEnum": ["BAR"],

@@ -6,6 +6,7 @@ import { ApiError } from "../api/apiMutator";
 import { jobsList, jobsRetry } from "../api/generated/dekopen";
 import type { JobRun } from "../api/generated/models";
 import { useAuthSession } from "../auth/AuthSessionProvider";
+import { AiActivityPanel } from "../features/assistant/AiActivityPanel";
 import { jobErrorKey } from "../features/jobs/jobError";
 import { formatDateTime } from "../format";
 import { EmptyState, PageHeader } from "../ui";
@@ -222,6 +223,7 @@ export function JobsPage(): JSX.Element {
           {query.isFetching ? t("dashboard.attentionLoading") : t("jobs.loadMore")}
         </button>
       )}
+      {org != null && <AiActivityPanel orgId={org.id} isOwner={org.role === "OWNER"} />}
     </section>
   );
 }

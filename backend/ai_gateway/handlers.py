@@ -164,8 +164,13 @@ def ai_agent_run(
         raise JobPermanentError("ai_job_canceled") from None
     except Exception as error:
         # Same post-rollback bookkeeping the request path used — the failure
-        # must outlive the round that produced it.
+        # must outlive the round that produced it. §IA3: provider failures
+        # carry an `invocation` entry — record it in this fresh transaction
+        # so the activity panel sees the failed call, not a missing gap.
         code = _error_code(error)
+        from ai_gateway import invocations  # lazy — module imports jobs
+
+        invocations.record_attached(error)
         with transaction.atomic():
             with connection.cursor() as cursor:
                 _set_claims(cursor, context)

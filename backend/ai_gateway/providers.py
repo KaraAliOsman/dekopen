@@ -14,6 +14,7 @@ import ipaddress
 import json
 import logging
 import os
+import random
 import re
 import socket
 import time
@@ -63,16 +64,39 @@ def _timeout_seconds(provider: str) -> float:
     return value
 
 
+# Transient retries: transport blips and 5xx answers deserve a bounded
+# backoff retry, quota/auth/rejection do not. Route retry_max overrides the
+# env default of 2; both are capped at 4 so a wedged endpoint cannot hold a
+# worker loop hostage.
+def _retries_max(provider: str) -> int:
+    """AI_GATEWAY_{P}_RETRIES — retries after the first attempt on a
+    transient failure. Default 2, range 0..4; malformed refuses the
+    provider outright like a malformed timeout."""
+    raw = os.environ.get(f"AI_GATEWAY_{provider}_RETRIES", "")
+    if not raw:
+        return 2
+    try:
+        value = int(raw)
+    except ValueError as error:
+        raise ProviderError("ai_provider_unavailable") from error
+    if not 0 <= value <= 4:
+        raise ProviderError("ai_provider_unavailable")
+    return value
+
+
 def _mock_enabled() -> bool:
     """Whether the deterministic MOCK provider may serve this deployment.
-    Explicit AI_GATEWAY_MOCK_ENABLED wins either way; otherwise it serves
-    only development (DEBUG) and the test suite (pytest sets
-    PYTEST_CURRENT_TEST) — a production stack can never answer silently
-    with fabricated content."""
+    Explicit AI_GATEWAY_MOCK_ENABLED wins either way — it is the only channel
+    that can enable MOCK under ENVIRONMENT=production (the explicit "Modo de
+    prueba" flag). Without it, MOCK serves development (DEBUG) and the test
+    suite (PYTEST_CURRENT_TEST) only — DEBUG or a stray pytest process can
+    never turn fabricated answers on in a production stack."""
     explicit = os.environ.get("AI_GATEWAY_MOCK_ENABLED", "").lower()
     if explicit in {"1", "true", "yes"}:
         return True
     if explicit in {"0", "false", "no"}:
+        return False
+    if os.environ.get("ENVIRONMENT", "") == "production":
         return False
     return os.environ.get("DEBUG", "").lower() in {"1", "true", "yes"} or bool(
         os.environ.get("PYTEST_CURRENT_TEST")
@@ -109,27 +133,73 @@ def _resolve_provider_hosts(hostname: str) -> list[str] | None:
     return [str(address)] if address.is_global else None
 
 
-class ProviderError(Exception):
-    """Sanitized provider failure — never carries credentials or payloads."""
+def _retry_after_seconds(raw: str | None) -> float | None:
+    """Parse a Retry-After header value in seconds (HTTP-date forms are
+    ignored — capped at 30s so a hostile header can't park a worker)."""
+    if not raw:
+        return None
+    try:
+        value = float(raw)
+    except ValueError:
+        return None
+    return min(max(value, 0.0), 30.0)
 
-    def __init__(self, code: str):
+
+def _strict_json_options(options: dict) -> dict:
+    """Drop tool calling and pin strict JSON output — the degraded contract
+    a provider without tools support still satisfies: the model answers the
+    same document shape the caller validates."""
+    fallback = {
+        key: value
+        for key, value in options.items()
+        if key not in ("tools", "tool_choice")
+    }
+    fallback["json_output"] = True
+    return fallback
+
+
+class ProviderError(Exception):
+    """Sanitized provider failure — never carries credentials or payloads.
+
+    ``transient`` marks a failure the caller may retry after a short backoff
+    (timeouts, connect failures, 5xx/408/425, 429 with Retry-After). Quota,
+    auth, rejection and mock-disabled errors are terminal — retrying them
+    only burns time and can replay a billed call."""
+
+    def __init__(
+        self,
+        code: str,
+        *,
+        transient: bool = False,
+        retry_after: float | None = None,
+    ):
         self.code = code
+        self.transient = transient
+        self.retry_after = retry_after
         super().__init__(code)
 
 
 class HttpProvider:
     """Generic JSON invocation endpoint: POST {model, capability, input}."""
 
-    def __init__(self, *, provider: str):
+    def __init__(
+        self,
+        *,
+        provider: str,
+        timeout_s: float | None = None,
+        retry_max: int | None = None,
+    ):
         self.provider = provider
         self.api_key = os.environ.get(f"AI_GATEWAY_{provider}_API_KEY", "")
         self.base_url = os.environ.get(f"AI_GATEWAY_{provider}_BASE_URL", "").rstrip("/")
         if not self.api_key or not self.base_url:
             raise ProviderError("ai_provider_unavailable")
-        # AI_GATEWAY_{P}_TIMEOUT_S bounds the whole HTTP exchange. A malformed
-        # value is a deployment mistake — it fails visibly, never clamps
-        # silently to an operator-surprising bound.
-        self.timeout = _timeout_seconds(provider)
+        # AI_GATEWAY_{P}_TIMEOUT_S bounds the whole HTTP exchange; the route's
+        # timeout_s pins a per-capability bound on top. A malformed env value
+        # is a deployment mistake — it fails visibly, never clamps silently.
+        self.timeout = float(timeout_s) if timeout_s is not None else _timeout_seconds(provider)
+        # Route retry_max (0..4, DB-checked) overrides the env default.
+        self.retry_max = _retries_max(provider) if retry_max is None else int(retry_max)
         # Provider URLs are operator config, but a compromised value must not
         # turn the gateway into an authenticated proxy for internal services:
         # https-only, no userinfo/query/fragment, and the host must resolve
@@ -209,7 +279,7 @@ class HttpProvider:
             stream = response.iter_bytes(65536) if response.is_stream_consumed else response.iter_raw()
             for chunk in stream:
                 if time.monotonic() - started > self.timeout:
-                    raise ProviderError("ai_provider_error")
+                    raise ProviderError("ai_provider_timeout", transient=True)
                 content += chunk
                 if len(content) > MAX_BODY_BYTES:
                     raise ProviderError("ai_provider_output_too_large")
@@ -283,7 +353,117 @@ class HttpProvider:
                 )
             except (httpx.ConnectError, httpx.ConnectTimeout) as error:
                 last_error = error
-        raise ProviderError("ai_provider_error") from last_error
+        # Every pinned answer refused the connection — a transient transport
+        # failure the retry loop may re-attempt on a later tick.
+        raise ProviderError("ai_provider_error", transient=True) from last_error
+
+    def _request_retried(
+        self,
+        *,
+        route: dict,
+        capability: str,
+        input_payload: dict,
+        provider_options: dict,
+        client: httpx.Client | None,
+        operation_key: str | None,
+        requested_model: str,
+    ) -> bytes:
+        """The request with its transient-retry budget. Only transient
+        failures retry — transport timeouts/connect errors and classified
+        transient statuses. Quota, auth and rejection are terminal: a retry
+        there wastes the caller's window and can replay a billed call."""
+        attempt = 0
+        while True:
+            try:
+                return self._request(
+                    route=route,
+                    capability=capability,
+                    input_payload=input_payload,
+                    provider_options=provider_options,
+                    client=client,
+                    operation_key=operation_key,
+                )
+            except httpx.HTTPStatusError as error:
+                mapped = self._classify_status(error, capability, requested_model)
+                if mapped.transient and attempt < self.retry_max:
+                    self._sleep_retry(mapped, attempt, capability)
+                    attempt += 1
+                    continue
+                raise mapped from error
+            except ProviderError as error:
+                if error.transient and attempt < self.retry_max:
+                    self._sleep_retry(error, attempt, capability)
+                    attempt += 1
+                    continue
+                raise
+            except httpx.TransportError as error:
+                if attempt < self.retry_max:
+                    self._sleep_retry(
+                        ProviderError("ai_provider_error", transient=True),
+                        attempt,
+                        capability,
+                    )
+                    attempt += 1
+                    continue
+                # Budget exhausted — the failure stays marked transient:
+                # a transport blip is what it is; the bound was policy.
+                raise ProviderError("ai_provider_error", transient=True) from error
+
+    @staticmethod
+    def _sleep_retry(error: "ProviderError", attempt: int, capability: str) -> None:
+        delay = 0.4 * (2 ** attempt) + random.uniform(0, 0.1)
+        if error.retry_after is not None:
+            delay = max(delay, min(error.retry_after, 30.0))
+        delay = min(delay, 30.0)
+        logger.warning(
+            "AI provider transient failure (capability=%s attempt=%s): %s"
+            " — retrying in %.1fs",
+            capability,
+            attempt + 1,
+            error.code,
+            delay,
+        )
+        time.sleep(delay)
+
+    _TRANSIENT_STATUSES = frozenset({408, 425, 500, 502, 503, 504})
+
+    def _classify_status(
+        self,
+        error: httpx.HTTPStatusError,
+        capability: str,
+        requested_model: str,
+    ) -> ProviderError:
+        """Map an answered HTTP status to the sanitized contract. Transient
+        statuses (5xx family, 408, 425) and a 429 that carries Retry-After
+        are retryable; a bare 429 means quota exhausted — terminal."""
+        response = error.response
+        status = response.status_code
+        retry_after = _retry_after_seconds(response.headers.get("retry-after"))
+        # The provider answered — the status class is the diagnosis an
+        # operator needs (bad key vs bad model vs spent quota), and the
+        # effective model identifies which pin/override was actually sent.
+        logger.warning(
+            "AI provider %s answered %s (model=%s capability=%s)",
+            self.provider,
+            status,
+            requested_model,
+            capability,
+        )
+        if status in (401, 403):
+            return ProviderError("ai_provider_auth")
+        if status == 429:
+            return ProviderError(
+                "ai_provider_quota",
+                transient=retry_after is not None,
+                retry_after=retry_after,
+            )
+        if status in self._TRANSIENT_STATUSES:
+            return ProviderError(
+                "ai_provider_error", transient=True, retry_after=retry_after
+            )
+        if 400 <= status < 500:
+            return ProviderError("ai_provider_rejected")
+        return ProviderError("ai_provider_error")
 
     def invoke(
         self,
@@ -297,90 +477,95 @@ class HttpProvider:
         document_path: str | None = None,
     ) -> dict[str, Any]:
         started = time.monotonic()
-        options = provider_options or {}
+        options = dict(provider_options or {})
         # The model must fit the provenance column BEFORE the paid call runs —
         # an env override longer than VARCHAR(120) would otherwise fail the
         # sealed audit after inference already happened.
         requested_model = self._requested_model(route)
         if not (0 < len(requested_model) <= 120):
             raise ProviderError("ai_provider_error")
-        try:
-            # Ephemeral fetch URLs are resolved at wire time, never carried in
-            # input_payload: the audited input hash must stay identical across
-            # retries even though a fresh signed URL is minted each attempt.
-            # document_path arrives only from the service's org-scoped source
-            # resolution — a request can name an owned document row but can
-            # never choose the object key that gets signed.
-            wire_input = dict(input_payload)
-            if document_path:
-                from documents.repository import DocumentaryError
-                from documents.storage import SupabaseDocumentStorage
+        # Ephemeral fetch URLs are resolved at wire time, never carried in
+        # input_payload: the audited input hash must stay identical across
+        # retries even though a fresh signed URL is minted each attempt.
+        # document_path arrives only from the service's org-scoped source
+        # resolution — a request can name an owned document row but can
+        # never choose the object key that gets signed.
+        wire_input = dict(input_payload)
+        if document_path:
+            from documents.repository import DocumentaryError
+            from documents.storage import SupabaseDocumentStorage
 
+            try:
+                wire_input["document_url"] = SupabaseDocumentStorage().signed_url(
+                    document_path
+                )
+            except DocumentaryError as error:
+                raise ProviderError("ai_provider_unavailable") from error
+            if input_payload.get("kind") == "IMAGE":
+                # True multimodal: the image bytes ride inside the request
+                # as a data URI so the provider never has to fetch the
+                # document itself. Larger files keep the signed URL, which
+                # the wire layer still emits as an image_url part.
                 try:
-                    wire_input["document_url"] = SupabaseDocumentStorage().signed_url(
-                        document_path
+                    raw = SupabaseDocumentStorage().download_bounded(
+                        document_path, _IMAGE_WIRE_MAX_BYTES
                     )
-                except DocumentaryError as error:
-                    raise ProviderError("ai_provider_unavailable") from error
-                if input_payload.get("kind") == "IMAGE":
-                    # True multimodal: the image bytes ride inside the request
-                    # as a data URI so the provider never has to fetch the
-                    # document itself. Larger files keep the signed URL, which
-                    # the wire layer still emits as an image_url part.
-                    try:
-                        raw = SupabaseDocumentStorage().download_bounded(
-                            document_path, _IMAGE_WIRE_MAX_BYTES
-                        )
-                        if raw is not None:
-                            wire_input["_document_image"] = {
-                                "mime": _image_mime(document_path),
-                                "data": base64.b64encode(raw).decode("ascii"),
-                            }
-                    except (DocumentaryError, httpx.HTTPError):
-                        pass
-            content = self._request(
-                route=route,
-                capability=capability,
-                input_payload=wire_input,
-                provider_options=options,
-                client=client,
-                operation_key=operation_key,
-            )
-            parsed = self._parse_response(content)
-            tokens_prompt = int(parsed["tokens_prompt"])
-            tokens_completion = int(parsed["tokens_completion"])
-            # Usage feeds an INT4 audit column — a malformed or impossible count
-            # is a provider error, not an audit-time database exception raised
-            # after the paid call already succeeded.
-            if not (
-                0 <= tokens_prompt <= 2_147_483_647 and 0 <= tokens_completion <= 2_147_483_647
-            ):
-                raise TypeError("provider token usage is outside the audit range")
-        except ProviderError:
-            raise
-        except httpx.HTTPStatusError as error:
-            # The provider answered — the status class is the diagnosis an
-            # operator needs (bad key vs bad model vs spent quota), and the
-            # effective model identifies which pin/override was actually sent.
-            status = error.response.status_code
-            logger.warning(
-                "AI provider %s answered %s (model=%s capability=%s)",
-                self.provider,
-                status,
-                requested_model,
-                capability,
-            )
-            if status in (401, 403):
-                raise ProviderError("ai_provider_auth") from error
-            if status == 429:
-                raise ProviderError("ai_provider_quota") from error
-            if 400 <= status < 500:
-                raise ProviderError("ai_provider_rejected") from error
-            raise ProviderError("ai_provider_error") from error
-        except (httpx.HTTPError, TypeError, ValueError) as error:
-            raise ProviderError("ai_provider_error") from error
+                    if raw is not None:
+                        wire_input["_document_image"] = {
+                            "mime": _image_mime(document_path),
+                            "data": base64.b64encode(raw).decode("ascii"),
+                        }
+                except (DocumentaryError, httpx.HTTPError):
+                    pass
+        tools_fallback = False
+        while True:
+            try:
+                content = self._request_retried(
+                    route=route,
+                    capability=capability,
+                    input_payload=wire_input,
+                    provider_options=options,
+                    client=client,
+                    operation_key=operation_key,
+                    requested_model=requested_model,
+                )
+            except ProviderError as error:
+                # A caller that asked for tool calling degrades once to strict
+                # JSON when the endpoint rejects the tools parameter — the
+                # model answers the same document contract and server-side
+                # query steps still execute.
+                if (
+                    error.code == "ai_provider_rejected"
+                    and options.get("tools")
+                    and not tools_fallback
+                ):
+                    tools_fallback = True
+                    logger.warning(
+                        "AI provider %s rejected tool calling (capability=%s);"
+                        " retrying without tools under strict JSON",
+                        self.provider,
+                        capability,
+                    )
+                    options = _strict_json_options(options)
+                    continue
+                raise
+            try:
+                parsed = self._parse_response(content)
+                tokens_prompt = int(parsed["tokens_prompt"])
+                tokens_completion = int(parsed["tokens_completion"])
+                # Usage feeds an INT4 audit column — a malformed or impossible
+                # count is a provider error, not an audit-time database
+                # exception raised after the paid call already succeeded.
+                if not (
+                    0 <= tokens_prompt <= 2_147_483_647
+                    and 0 <= tokens_completion <= 2_147_483_647
+                ):
+                    raise TypeError("provider token usage is outside the audit range")
+            except (TypeError, ValueError, KeyError) as error:
+                raise ProviderError("ai_provider_error") from error
+            break
         response_model = parsed.get("model")
-        return {
+        result: dict[str, Any] = {
             "output": parsed["output"],
             "tokens_prompt": tokens_prompt,
             "tokens_completion": tokens_completion,
@@ -395,7 +580,13 @@ class HttpProvider:
                 else requested_model
             ),
         }
-
+        if parsed.get("tool_calls"):
+            result["tool_calls"] = parsed["tool_calls"]
+        if parsed.get("assistant_message") is not None:
+            result["assistant_message"] = parsed["assistant_message"]
+        if tools_fallback:
+            result["tools_fallback"] = True
+        return result
     def _requested_model(self, route: dict) -> str:
         """Model the request will run on; subclasses may override the route."""
         return str(route["provider_model"])
@@ -439,6 +630,40 @@ _DEFAULT_SYSTEM = (
 )
 
 
+def _parse_tool_calls(raw: Any) -> list[dict]:
+    """Normalize choices[0].message.tool_calls into {id, name, arguments}
+    triples — arguments arrive as a JSON string on OpenAI-compatible
+    endpoints; anything malformed is skipped, never crashes the round."""
+    if not isinstance(raw, list) or not raw:
+        return []
+    calls: list[dict] = []
+    for item in raw[:8]:
+        function = item.get("function") if isinstance(item, dict) else None
+        if not isinstance(function, dict):
+            continue
+        name = function.get("name")
+        if not isinstance(name, str) or not name.strip():
+            continue
+        arguments = function.get("arguments")
+        if isinstance(arguments, str):
+            try:
+                parsed_args = json.loads(arguments)
+            except ValueError:
+                parsed_args = {"_raw": arguments}
+        elif isinstance(arguments, dict):
+            parsed_args = arguments
+        else:
+            parsed_args = {}
+        calls.append(
+            {
+                "id": str(item.get("id") or f"call_{len(calls)}")[:80],
+                "name": name.strip()[:120],
+                "arguments": parsed_args,
+            }
+        )
+    return calls
+
+
 class OpenAICompatibleProvider(HttpProvider):
     """OpenAI-compatible chat-completions transport (Xiaomi MiMo, OpenAI,
     OpenRouter, …). Inherits the pinned-host request machinery; only the wire
@@ -457,8 +682,10 @@ class OpenAICompatibleProvider(HttpProvider):
       "json_output" — truthy requests response_format={"type": "json_object"}
     input_payload is serialized whole as the user message."""
 
-    def __init__(self, *, provider: str):
-        super().__init__(provider=provider)
+    def __init__(
+        self, *, provider: str, timeout_s=None, retry_max=None
+    ):
+        super().__init__(provider=provider, timeout_s=timeout_s, retry_max=retry_max)
         self._model = os.environ.get(f"AI_GATEWAY_{provider}_MODEL", "")
 
     def _wire_request(
@@ -512,19 +739,44 @@ class OpenAICompatibleProvider(HttpProvider):
                 if not key.startswith("_")
             }
             user_content = json.dumps(clean_payload, ensure_ascii=False, default=str)
+        messages: list[dict] = [
+            {
+                "role": "system",
+                "content": str(provider_options.get("system") or _DEFAULT_SYSTEM),
+            }
+        ]
+        # Prior turns/tool transcripts the caller feeds forward — server-side
+        # options only, never client input. Each must be a plain {role,
+        # content[, tool_calls]} message dict.
+        extra = provider_options.get("extra_messages")
+        if isinstance(extra, list):
+            messages.extend(
+                message
+                for message in extra
+                if isinstance(message, dict) and isinstance(message.get("role"), str)
+            )
+        messages.append({"role": "user", "content": user_content})
         body: dict[str, Any] = {
             "model": self._requested_model(route),
-            "messages": [
-                {
-                    "role": "system",
-                    "content": str(provider_options.get("system") or _DEFAULT_SYSTEM),
-                },
-                {"role": "user", "content": user_content},
-            ],
+            "messages": messages,
             "temperature": 0,
         }
         if provider_options.get("json_output"):
             body["response_format"] = {"type": "json_object"}
+        # Native tool calling: callers pass OpenAI-shaped tool specs; the
+        # model answers choices[0].message.tool_calls the server executes.
+        tools = provider_options.get("tools")
+        if isinstance(tools, list) and tools:
+            body["tools"] = [
+                tool for tool in tools if isinstance(tool, dict)
+            ][:16]
+            tool_choice = provider_options.get("tool_choice")
+            if isinstance(tool_choice, str) and tool_choice in (
+                "auto",
+                "none",
+                "required",
+            ):
+                body["tool_choice"] = tool_choice
         return path, body
 
     def _requested_model(self, route: dict) -> str:
@@ -557,18 +809,31 @@ class OpenAICompatibleProvider(HttpProvider):
         if not isinstance(choices, list) or not choices:
             raise TypeError("provider returned no choices")
         message = choices[0].get("message") if isinstance(choices[0], dict) else None
-        output = message.get("content") if isinstance(message, dict) else None
-        if not isinstance(output, str):
+        if not isinstance(message, dict):
+            raise TypeError("provider returned no message")
+        output = message.get("content")
+        tool_calls = _parse_tool_calls(message.get("tool_calls"))
+        if not isinstance(output, str) and not tool_calls:
             raise TypeError("provider output is not a string")
         usage = body.get("usage") or {}
         if not isinstance(usage, dict):
             raise TypeError("provider usage is not an object")
-        return {
-            "output": output,
+        result: dict[str, Any] = {
+            "output": output if isinstance(output, str) else "",
             "tokens_prompt": int(usage.get("prompt_tokens") or 0),
             "tokens_completion": int(usage.get("completion_tokens") or 0),
             "model": body["model"] if isinstance(body.get("model"), str) else None,
         }
+        if tool_calls:
+            result["tool_calls"] = tool_calls
+            # The assistant message verbatim so a caller can echo it back
+            # into a follow-up request's message list.
+            result["assistant_message"] = {
+                key: value
+                for key, value in message.items()
+                if key in ("role", "content", "tool_calls")
+            }
+        return result
 
 
 _COUNT_RE = re.compile(r"(\d+)\s*(m[oó]dulos?|vanos?|unidades?|pa[nñ]os?)")
@@ -1498,7 +1763,13 @@ def provider_for(route: dict):
         if not _mock_enabled():
             raise ProviderError("ai_provider_mock_disabled")
         return MockProvider()
+    # Per-capability transport options from ai_routes: NULL keeps the
+    # provider's env/default bound.
+    timeout_s = route.get("timeout_s")
+    retry_max = route.get("retry_max")
     protocol = os.environ.get(f"AI_GATEWAY_{name}_PROTOCOL", "").lower()
     if protocol == "openai" or (not protocol and name in _OPENAI_PROTOCOL_PROVIDERS):
-        return OpenAICompatibleProvider(provider=name)
-    return HttpProvider(provider=name)
+        return OpenAICompatibleProvider(
+            provider=name, timeout_s=timeout_s, retry_max=retry_max
+        )
+    return HttpProvider(provider=name, timeout_s=timeout_s, retry_max=retry_max)

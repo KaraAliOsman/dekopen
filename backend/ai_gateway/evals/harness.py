@@ -46,7 +46,7 @@ _CAPABILITIES = ("design_assist", "agent", "context_assist", "design_alternative
 
 # Pin de provider_model por proveedor cuando no hay `AI_GATEWAY_{P}_MODEL` —
 # el valor que las migraciones fijan en ai_routes (vigente:
-# 20261230003000_ia2_mimo_wire_model):
+# 20261230003000_ia2_mimo_wire_model + 20270106000000_ia3_provider_runtime):
 # el endpoint de la credencial sirve `mimo-v2.6-pro`; el pin primalabs que
 # reemplazó responde 400 en este endpoint (causa raíz IA1-1).
 _WIRE_MODEL_PINS = {"MIMO": "mimo-v2.6-pro"}

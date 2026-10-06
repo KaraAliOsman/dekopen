@@ -11,6 +11,7 @@ import { useTheme } from "../theme/ThemeProvider";
 import { CommandPalette } from "../features/commands/CommandPalette";
 import type { AiJob } from "../api/generated/models/aiJob";
 import { AiPresence } from "../features/assistant/AiPresence";
+import { AiTestModeBadge } from "../features/assistant/AiTestModeBadge";
 import { AskDekopen } from "../features/assistant/AskDekopen";
 import { STATE_LABELS } from "../features/assistant/states";
 import { AssistantSurfaceProvider } from "../features/assistant/assistantContext";
@@ -369,6 +370,9 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
                       />
                       {t("shell.aiEntry")}
                     </button>
+                    {/* §IA3 — MOCK serving means every member must see the
+                        test-mode badge; the orb alone can't carry honesty. */}
+                    <AiTestModeBadge organizationId={org?.id ?? null} />
                     {presenceJob ? (
                       <button
                         type="button"

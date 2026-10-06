@@ -143,3 +143,13 @@ Append-only chronology. Keep newest entries at the bottom.
 - Errores corregidos en caliente: BOM renderizaba `kind` crudo (MOSQUITO_SCREEN) — ahora `assembly.fittingKind` con fallback `catalog.extraKind`; identidad de piezas con `numeric_collapsed` para no romper el binding `"1500.00"` ≡ `"1500"`.
 - Hallazgo E2E corregido: en vanos de un solo módulo `designPayload()` plegaba a la forma clásica (IntentNode pelado) y `product.extras` se perdía al guardar — ahora una posición simple CON extras persiste como `product-v2`, y `pickStarter` conserva `extras` al cambiar de starter (antes borraba las declaradas por plantilla).
 - Verificado: lint/typecheck/test/build verdes, `make test-db` (pgTAP + integracion + e2e), goldens vierteaguas/instalacion-ml, 30 capturas antes/despues (incl. 2 paginas DOC-01) en `docs/redesign/captures/d06-accesorios-extras/`, ux:capture sin hallazgos nuevos.
+
+
+## [2026-10-05] IA3 | proveedor de IA real
+
+- Encargo IA3 (ola D2): proveedor de IA real confiable y con costo controlado, branch `devin/IA3-proveedor-real` sobre `integracion/v1`.
+- Transporte: reintentos acotados en transitorios (default 2, cap 4, backoff exponencial + Retry-After), timeout por ruta, tool calling nativo con fallback a JSON estricto una sola vez, `tools_enabled` por ruta.
+- Durabilidad: `ai_invocations` registra cada llamada post-commit/post-rollback; `est_cost_usd` sellado con la auditoría; presupuesto mensual por org con `ai_budget_exceeded` suave.
+- MiMo repineado `mimo-v2.6-pro`; sonda: cuota token-plan agotada (429 en 26/26 evals) — pendiente credencial pay-as-you-go para la verificación real, causa exacta en el PR.
+- OWNER: Ajustes › IA (estado, modelos, probar conexión, presupuesto, consumo); /jobs gana panel Actividad de IA filtrable; miembros ven badge "Modo de prueba" cuando MOCK sirve; el agente reporta fases (contexto/modelo/propuesta) al Orb.
+- Decisiones en `docs/decisions/valores-por-defecto.md` sección IA3; config en `.env.example` + `docs/operations/AI_PROVIDERS.md`.

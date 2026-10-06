@@ -17,6 +17,7 @@ import {
 import type { AiAgentStep } from "../../api/generated/models/aiAgentStep";
 import type { AiJob } from "../../api/generated/models/aiJob";
 import type { AiJobDetail } from "../../api/generated/models/aiJobDetail";
+import type { AiJobDetailCost } from "../../api/generated/models/aiJobDetailCost";
 import type { AiJobLive } from "../../api/generated/models/aiJobLive";
 import type { DesignOp } from "../commands/types";
 import { describeDesignOp, designAssistProduct, productFingerprint } from "../canvas/designOps";
@@ -30,7 +31,8 @@ import { Orb, orbStateFor } from "./Orb";
 import { STATE_LABELS } from "./states";
 import { SURFACE_LABELS } from "./surfaces";
 import { jobErrorKey } from "../jobs/jobError";
-import { t } from "../../i18n/es-CL";
+import { formatMoney } from "../../format";
+import { t, type TranslationKey } from "../../i18n/es-CL";
 
 /* ------------------------------------------------------------------ */
 /* §07-H — AI workspace: durable jobs with real state, a transcript     */
@@ -150,15 +152,40 @@ function relativeTime(iso: string | undefined): string {
   return new Date(then).toLocaleDateString("es-CL", { day: "numeric", month: "short" });
 }
 
-/** The worker reports numeric checkpoints on the job_runs row; the band
- * reads as a phase label so a live run shows what it is doing. */
+/** §IA3 — the worker names its own intermediate state on job_runs
+ * (context/model/proposal); the band prefers that honest label over the
+ * percent heuristic, which stays as the fallback for jobs that predate the
+ * phase channel. */
+const LIVE_PHASE_KEYS: Record<string, TranslationKey> = {
+  context: "aiws.live.context",
+  model: "aiws.live.model",
+  proposal: "aiws.live.proposal",
+};
+
 function livePhase(live: AiJobLive | null | undefined): string {
+  const phase = live && typeof live.phase === "string" ? live.phase : null;
+  if (phase !== null && phase in LIVE_PHASE_KEYS) {
+    return t(LIVE_PHASE_KEYS[phase] ?? "aiws.live.context");
+  }
   const progress = live && typeof live.progress === "number" ? (live.progress as number) : 0;
   if (progress < 15) return t("aiws.live.queued");
   if (progress < 40) return t("aiws.live.context");
   if (progress < 70) return t("aiws.live.consulting");
   if (progress < 90) return t("aiws.live.writing");
   return t("aiws.live.finishing");
+}
+
+/** Job spend line — the attributed provider cost of this run's rounds. */
+function jobCostLine(cost: AiJobDetailCost | undefined): string | null {
+  if (cost === null || cost === undefined || typeof cost !== "object") return null;
+  const credits = Number((cost as { credits?: unknown }).credits ?? 0);
+  const tokens = Number((cost as { tokens?: unknown }).tokens ?? 0);
+  const usd = (cost as { est_cost_usd?: unknown }).est_cost_usd;
+  if (!Number.isFinite(credits) || credits <= 0) return null;
+  return t("aiws.costLine")
+    .replace("{credits}", String(credits))
+    .replace("{tokens}", String(tokens))
+    .replace("{usd}", typeof usd === "string" ? ` · ≈ ${formatMoney(usd, "USD")}` : "");
 }
 
 const JOBS_PAGE_SIZE = 30;
@@ -868,6 +895,7 @@ export function AssistantWorkspacePage(): JSX.Element {
                 {(job.state === "FAILED" || job.state === "FAILED_RETRYABLE") && job.error_code
                   ? ` · ${t(jobErrorKey(job.error_code))}`
                   : ""}
+                {jobCostLine(job.cost) !== null ? ` · ${jobCostLine(job.cost)}` : ""}
               </p>
             </div>
             <div className="aiws-head__actions">

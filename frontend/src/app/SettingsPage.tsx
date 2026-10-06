@@ -33,6 +33,7 @@ import type {
 } from "../api/generated/models";
 import { PageHeader } from "../ui";
 import { useAuthSession } from "../auth/AuthSessionProvider";
+import { AiSettingsCard } from "../features/assistant/AiSettingsCard";
 import { formatDate } from "../format";
 import { t, tDynamic, type TranslationKey } from "../i18n/es-CL";
 import { MOD_K_HINT, MOD_KEY_HINT } from "../platform";
@@ -1024,6 +1025,17 @@ export function SettingsPage(): JSX.Element {
             <FlowIntegrationCard orgId={org.id} />
             <SiiCafCard orgId={org.id} />
             <SiiCertificateCard orgId={org.id} />
+          </div>
+        </section>
+      )}
+
+      {isOwner && org !== undefined && (
+        <section aria-labelledby="settings-group-ai" className="settings-group">
+          <h2 id="settings-group-ai" className="settings-group__title">
+            {t("settings.groupAi")}
+          </h2>
+          <div className="settings-grid">
+            <AiSettingsCard orgId={org.id} />
           </div>
         </section>
       )}

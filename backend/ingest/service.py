@@ -259,6 +259,12 @@ def extract_for_import(*, org_id: UUID, import_id: UUID, actor_id: UUID) -> dict
                 warnings.append("import.vision_no_candidates")
         except ProviderError as error:
             warnings.append(f"import.vision_failed:{error.code}")
+            # §IA3 — the failed call still lands in the invocation log; the
+            # transaction is alive here (the warning path continues), so the
+            # row commits with the job.
+            from ai_gateway import invocations
+
+            invocations.record_attached(error)
         except Exception as error:
             code = getattr(error, "contract_code", "ai_gateway_error")
             warnings.append(f"import.vision_failed:{code}")

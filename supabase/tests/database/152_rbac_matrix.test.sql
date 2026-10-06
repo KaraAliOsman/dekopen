@@ -52,7 +52,7 @@ INSERT INTO public.ai_audit_logs (
 VALUES (
     '33333333-3333-4333-8333-333333333333',
     'cccccccc-0000-4000-8000-000000000001',
-    'design_assist', 'primalabs-ai/MiMo-V2.6-Pro-RL', 'v1', now() + interval '30 days',
+    'design_assist', 'mimo-v2.6-pro', 'v1', now() + interval '30 days',
     '{}'::jsonb, '{}'::jsonb, 'hash'
 );
 

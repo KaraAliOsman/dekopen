@@ -169,18 +169,27 @@ completo del contrato.
 
 ### 1. El proveedor configurado responde 429 en el 100 % de las llamadas — toda superficie IA está caída
 
-`backend/ai_gateway/providers.py:375-376` convierte HTTP 429 en
+`backend/ai_gateway/providers.py:454-457` convierte HTTP 429 en
 `ai_provider_quota` → `proveedor_error`. Evidencia:
 `2026-10-05-mimo.json` — 26/26 casos con `error.code == "ai_provider_quota"`
 y cero llamadas efectivas (la sonda directa repitió 429 durante >2 min, así
 que es cuota, no rate-limit transitorio). Impacto: nada de lo demás importa
 mientras el proveedor esté agotado — el Orb, el asistente del editor y el
-agente devuelven error al usuario final **hoy**. Además: el endpoint vivo de
-esta credencial es `https://token-plan-sgp.xiaomimimo.com/v1` con modelo
-`mimo-v2.6-pro`; la migración `20261203000000_primalabs_mimo_pin.sql` pina
-`primalabs-ai/MiMo-V2.6-Pro-RL`, que este endpoint rechaza con 400 y
-`api.primalabs.ai` rechaza la clave con 401 — la ruta pineada y la credencial
-real ya divergen.
+agente devuelven error al usuario final **hoy**.
+
+**Actualización IA3 (2026-10-05):** la ruta pineada ya converge con la
+credencial real — la migración `20270106000000_ia3_provider_runtime.sql`
+repinea `provider_model` a `mimo-v2.6-pro` sobre
+`https://token-plan-sgp.xiaomimimo.com/v1` (la migración
+`20261203000000_primalabs_mimo_pin.sql` pinaba
+`primalabs-ai/MiMo-V2.6-Pro-RL`, que el endpoint rechazaba con 400 y
+`api.primalabs.ai` rechazaba la clave con 401). El modelo correcto ahora
+sale por el wire — la llamada muere en 429 por cuota del plan, que es el
+único pendiente que queda fuera del código: la llave token-plan sólo sirve
+para desarrollo/pruebas interactivas; producción necesita una credencial
+pay-as-you-go. Los 26 casos se re-corrieron con el pin corregido y el
+resultado es idéntico (26/26 `ai_provider_quota`) — queda demostrado que el
+fallo es de plan, no de código ni de modelo.
 
 ### 2. `_summary` exige `product["modules"]` plano — toda op sobre una posición persistida muere con `unsupported_product`
 

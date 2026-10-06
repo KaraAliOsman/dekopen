@@ -66,7 +66,15 @@ def _patch_env(monkeypatch, *, org=None, route=None, rows_impl=None, provider=No
             return [{"id": uuid4()}]
         return []
 
-    monkeypatch.setattr(service, "rows", rows_impl or default_rows)
+    impl = rows_impl or default_rows
+    monkeypatch.setattr(service, "rows", impl)
+    # §IA3 — the budget reads and the invocation log live in
+    # ai_gateway.invocations, whose `rows` is a separate module reference.
+    # Feed it the same fake and drop the on_commit write (no live tx here).
+    monkeypatch.setattr(service.invocations, "rows", impl)
+    monkeypatch.setattr(service.invocations, "log_call", lambda entry: None)
+    monkeypatch.setattr(service.invocations, "record", lambda entry: True)
+    monkeypatch.setattr(service.transaction, "on_commit", lambda fn: None)
     if provider is not None:
         monkeypatch.setattr(service, "provider_for", lambda route: provider)
     return debited

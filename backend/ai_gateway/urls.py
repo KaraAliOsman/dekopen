@@ -1,6 +1,7 @@
 from django.urls import path
 
 from ai_gateway.views import (
+    AiActivityView,
     AiAgentView,
     AiAskView,
     AiInvokeView,
@@ -11,6 +12,9 @@ from ai_gateway.views import (
     AiJobView,
     AiMetricsView,
     AiOpsContractView,
+    AiProviderCheckView,
+    AiProviderStatusView,
+    AiSettingsView,
 )
 
 urlpatterns = [
@@ -36,4 +40,17 @@ urlpatterns = [
     ),
     path("metrics/", AiMetricsView.as_view(), name="ai-metrics"),
     path("ops-contract/", AiOpsContractView.as_view(), name="ai-ops-contract"),
+    # §IA3 — provider status, owner settings, connection probe, activity.
+    path(
+        "provider/status/",
+        AiProviderStatusView.as_view(),
+        name="ai-provider-status",
+    ),
+    path("settings/", AiSettingsView.as_view(), name="ai-settings"),
+    path(
+        "provider/check/",
+        AiProviderCheckView.as_view(),
+        name="ai-provider-check",
+    ),
+    path("activity/", AiActivityView.as_view(), name="ai-activity"),
 ]
