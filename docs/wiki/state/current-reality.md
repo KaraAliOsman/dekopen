@@ -3,7 +3,7 @@ type: state
 status: active
 updated: 2026-10-06
 volatility: high
-verified_ref: cd64b5ae6fe60c09e104af73cf0cdc0e8b3b0a2f
+verified_ref: 4980c4006cf503e70abc535dba03ce70691b683c
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
@@ -450,4 +450,4 @@ Open PR (branch `devin/P11-cobranza-facturacion`, on `integracion/v1` post-P13):
 - **Hoy**: la cola del dueño lista cobranza pendiente (`status IN APPROVED/IN_PRODUCTION/COMPLETED` con `total > collected`) y marca «recordatorio preparado» cuando ya existe borrador (`reminder_drafted` via LATERAL a `ai_audit_logs`).
 - Migración `20270213000000_p11_cobranza.sql`: `project_payment_links.expires_at` (TTL 72 h, backfill), `sii_envios` check +`OBSERVED`, ruta `collection_reminder`, grants de lectura del rastro IA. Migración `20270214000000_p11_webhook_scope.sql`: `private.payment_link_public_scope` (SECURITY DEFINER) resuelve `{org_id, project_id, created_by}` por id/token opaco — el webhook público delega las claims del `created_by` y todo el settle corre dentro de una sola tx (antes 500 `payment_link_not_found` por claims tx-local expiradas + RLS ciego al anónimo).
 - Post-verificación: timbre PDF417 con TED real (CAF embebido ~1100+ chars) — minify XML + columnas ≤30 + redundancia 5→0 (`sii_repr.py`); timeline con `status` localizado + actor `sent_by` del envío; `recorded_by` del pago por link = `created_by`; nota del ledger sin UUID; scroll-x de tablas ≤1280 px; recordatorio con fallback `clients.email`.
-- Verificado: `make lint|typecheck|test|build|test-db` verdes (`PY=.venv/bin/python`); pgTAP 1080 (126_ai_gateway cuenta 10 capacidades); integración 279; e2e 20/20; unitarios cobranza en `test_p11_cobranza.py`; settle público verificado en vivo (POST anónimo → 302 → PAID → RC); decisiones en `valores-por-defecto.md` sección P11.
+- Verificado: `make lint|typecheck|test|build|test-db` verdes (`PY=.venv/bin/python`); pgTAP 1087 (126_ai_gateway cuenta 10 capacidades; 183_p11_webhook_scope cubre la función del webhook); integración 279; e2e 20/20; backend 1290; unitarios cobranza en `test_p11_cobranza.py`; settle público verificado en vivo (POST anónimo → 302 → PAID → RC); decisiones en `valores-por-defecto.md` sección P11.
