@@ -584,3 +584,37 @@ description: Local dev-stack recipe for DEKOPEN E2E testing — Supabase CLI sta
 - **OWNER TOTP bootstrap**: fixture creates no MFA — `INSERT INTO auth.mfa_factors (id,user_id,factor_type,status,secret,created_at,updated_at) VALUES (uuid,uid,'totp','verified',<base32>,now(),now())` (created_at/updated_at NOT NULL) + store same secret in `.fixture-state.json` `totp["<email>"]`.
 - **aal2 token via REST (curl aal2-gated APIs like /ai/ops-contract/)**: `POST /auth/v1/token?grant_type=password` (apikey: anon) → aal1 token; `GET /auth/v1/user` → `factors[0].id`; `POST /auth/v1/factors/<id>/challenge` → challenge_id; TOTP via hmac(base32decode(secret), time//30, sha1); `POST /auth/v1/factors/<id>/verify {challenge_id, code}` → aal2 token; `curl -H "Authorization: Bearer <aal2>"`.
 - **Probes vs consumption**: `/ai/provider/check/` writes `kind='probe'` rows (visible in activity) but month usage counts `kind='call'` only — probes never raise "Con error" or consume budget.
+
+## P25 additions (brand/mail E2E)
+
+- **Stale code trap generalizes**: `runserver --noreload` serves the code from
+  launch time — after ANY backend commit kill and relaunch with env sourced,
+  or fixes appear absent (verified: a portal payload change looked missing
+  until restart).
+- **Zero-factor OWNER TOTP enroll via UI** (no SQL): if admin API shows
+  `factors: []`, the MFA sheet offers "Configurar autenticador" → manual
+  secret at `data-testid="totp-secret"` → 6-digit code via stdlib TOTP
+  (`base64.b32decode(secret)` + hmac-sha1 + `struct.pack('>Q', t//30)`) →
+  "Verificar" lands on dashboard as Propietario.
+- **Fixture accounts** (`.fixture-state.json`): `demo-estimator@…` (ESTIMATOR,
+  no MFA, best default), `demo-manager@…` (WORKSHOP_MANAGER), `demo-owner@…`
+  (aal2), `demo-multi@…` (org selector → pick "Ventanas del Sur SpA" via
+  `.org-option`).
+- **browser_console async**: promise results aren't serialized — write to
+  `window.__x` in `.then()` and read `window.__x` on the next call.
+- **Endpoint checks without cookie tricks**: in-page
+  `fetch('/api/v1/…', {headers:{'X-Organization-ID': orgId}})` exercises the
+  same auth path as the app; assert status/content-type directly (verified
+  `branding/logo/` → 200 `image/png`).
+- **OfflineOverlay**: `window.dispatchEvent(new Event('offline'))` hits the
+  real component; dispatch `'online'` to clear.
+- **iframe mail previews**: `/dev/correos` (DEV-only; 404 unless DEBUG or
+  MAIL_DEV_PREVIEWS=1) renders `iframe.dev-mail__frame` — assert
+  `frame.srcdoc` contains `data:image/png;base64` + org hex instead of
+  shooting every template.
+- **Mobile viewport without devtools**: `wmctrl -r :ACTIVE: -b
+  remove,maximized_vert,maximized_horz && wmctrl -r :ACTIVE: -e
+  0,300,10,430,740`.
+- **Dark login capture**: `dekopen.theme` in localStorage only applies inside
+  the shell — to shoot a dark login, toggle dark while logged in, sign out,
+  then `/login` renders dark.
