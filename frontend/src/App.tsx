@@ -5,7 +5,7 @@ import { t } from "./i18n/es-CL";
 
 import { AppShell } from "./app/AppShell";
 import { RouteErrorBoundary } from "./app/RouteErrorBoundary";
-import { DashboardPage } from "./app/DashboardPage";
+import { HoyPage } from "./app/HoyPage";
 import { JobsPage } from "./app/JobsPage";
 import { NotFoundPage } from "./app/NotFoundPage";
 import { OfflineOverlay } from "./app/OfflineOverlay";
@@ -93,6 +93,21 @@ const ProductionPage = lazy(async () => {
   return { default: module.ProductionPage };
 });
 
+const QuotationsPage = lazy(async () => {
+  const module = await import("./features/quotations/QuotationsPage");
+  return { default: module.QuotationsPage };
+});
+
+const DeliveriesPage = lazy(async () => {
+  const module = await import("./features/deliveries/DeliveriesPage");
+  return { default: module.DeliveriesPage };
+});
+
+const InventoryPage = lazy(async () => {
+  const module = await import("./features/inventory/InventoryPage");
+  return { default: module.InventoryPage };
+});
+
 const PortalQuotePage = lazy(async () => {
   const module = await import("./features/portal/PortalQuotePage");
   return { default: module.PortalQuotePage };
@@ -121,10 +136,6 @@ const DevMailPage = lazy(async () => {
   return { default: module.DevMailPage };
 });
 
-function isFloorRole(role: string | undefined): boolean {
-  return ["INSTALLER", "OPERATOR"].includes(role ?? "");
-}
-
 function HomeRedirect(): JSX.Element {
   const auth = useAuthSession();
   if (auth.status === "loading" || auth.status === "resolving") {
@@ -135,31 +146,12 @@ function HomeRedirect(): JSX.Element {
     return <Navigate to="/select-organization" replace />;
   }
   if (auth.status === "ready") {
-    // Floor roles live on the production floor — the commercial dashboard
-    // would deny its queries and greet them with errors.
-    const home = isFloorRole(auth.me?.active_organization?.role) ? "/production" : "/dashboard";
-    // A magic link can land on `/` instead of /auth/callback when the site
-    // URL differs from the requested origin — still honor the stashed
-    // destination rather than dropping it on the dashboard.
-    return <Navigate to={consumeReturnTo(home)} replace />;
+    // «Hoy» le sirve a los cinco roles — es el único hogar: cada quien ve
+    // qué tiene que hacer hoy y por qué.
+    return <Navigate to={consumeReturnTo("/dashboard")} replace />;
   }
   // Anonymous visitors get the public product presentation, not a bare login.
   return <LandingPage />;
-}
-
-/** /dashboard is a commercial surface: its queries are role-gated, so a floor
- * role deep-linking here met a wall of 403s. Redirect them to the floor home
- * instead (review: OPERATOR on /dashboard). */
-function DashboardRoute(): JSX.Element {
-  const auth = useAuthSession();
-  if (isFloorRole(auth.me?.active_organization?.role)) {
-    return <Navigate to="/production" replace />;
-  }
-  return (
-    <AppShell>
-      <DashboardPage />
-    </AppShell>
-  );
 }
 
 export function AppRoutes(): JSX.Element {
@@ -319,7 +311,9 @@ export function AppRoutes(): JSX.Element {
           path="/dashboard"
           element={
             <ReadyGuard>
-              <DashboardRoute />
+              <AppShell>
+                <HoyPage />
+              </AppShell>
             </ReadyGuard>
           }
         />
@@ -431,11 +425,45 @@ export function AppRoutes(): JSX.Element {
             </ReadyGuard>
           }
         />
+        <Route
+          path="/quotations"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("quotations.loading")}</p>}>
+                  <QuotationsPage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route
+          path="/deliveries"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("deliveries.loading")}</p>}>
+                  <DeliveriesPage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route
+          path="/inventory"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("inventory.loading")}</p>}>
+                  <InventoryPage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
         {/* Bare guesses land on their real surface instead of silently
-         * bouncing home — /inventory lives inside Purchasing, /settings
-         * inside General. */}
+         * bouncing home — /settings lives inside General. */}
         <Route path="/settings" element={<Navigate to="/settings/general" replace />} />
-        <Route path="/inventory" element={<Navigate to="/purchasing" replace />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
       <OfflineOverlay />

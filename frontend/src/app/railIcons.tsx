@@ -58,6 +58,26 @@ const P = {
       <path d="M2.5 3.4h9M2.5 7h9M2.5 10.6h5.5" />
     </>
   ),
+  quotations: (
+    <>
+      <path d="M3 1.8h6.4L12 4.4V12H3z" />
+      <path d="M9.4 1.8v2.8H12M5.2 7h3.6M5.2 9.6h3.6" />
+    </>
+  ),
+  inventory: (
+    <>
+      <path d="M2 4.6h10v7H2z" />
+      <path d="M2 7.8h10M7 4.6v7" />
+    </>
+  ),
+  deliveries: (
+    <>
+      <path d="M1.8 8.8h8.4V4.4H1.8z" />
+      <path d="M10.2 6.4h1.6l1.4 1.8v0.6h-3" />
+      <circle cx="4.4" cy="10.8" r="1.1" />
+      <circle cx="9.6" cy="10.8" r="1.1" />
+    </>
+  ),
   settings: (
     <>
       <circle cx="7" cy="7" r="2" />
@@ -70,10 +90,13 @@ const routeIcon: Record<string, keyof typeof P> = {
   "/dashboard": "dashboard",
   "/projects": "projects",
   "/clients": "clients",
+  "/quotations": "quotations",
   "/pricing/commercial": "sales",
   "/catalogs/systems": "catalog",
   "/purchasing": "purchasing",
+  "/inventory": "inventory",
   "/production": "production",
+  "/deliveries": "deliveries",
   "/assistant": "assistant",
   "/jobs": "jobs",
   "/settings/general": "settings",

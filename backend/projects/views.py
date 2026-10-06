@@ -30,6 +30,7 @@ from projects import (
     org_branding,
     payment_links,
     payments,
+    quotations,
     receipts,
     service,
     sii,
@@ -82,6 +83,7 @@ from projects.serializers import (
     PositionWriteSerializer,
     ProjectListResponseSerializer,
     ProjectResponseSerializer,
+    QuotationListResponseSerializer,
     ProjectUpdateSerializer,
     ProjectWriteSerializer,
     ResetPricingSerializer,
@@ -124,6 +126,21 @@ class ProjectsView(APIView):
         data = validate(ProjectWriteSerializer, request.data)
         with scope(request, WRITE_ROLES) as (token, _, org):
             return response(service.create_project(org, token.user_id, data), status=201)
+
+
+class QuotationsView(APIView):
+    """Lista transversal de cotizaciones: estado comercial real por
+    proyecto, incluyendo «vista por el cliente» del enlace vigente.
+    Comercial puro — el taller no cotiza (READ_ROLES menos WM)."""
+
+    @extend_schema(
+        operation_id="quotations_list",
+        responses={200: QuotationListResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def get(self, request):
+        with scope(request, ("OWNER", "ESTIMATOR")) as (_, _, org):
+            return response(quotations.list_quotations(org))
 
 
 class ProjectView(APIView):

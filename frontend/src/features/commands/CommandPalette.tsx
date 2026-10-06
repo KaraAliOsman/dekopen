@@ -47,6 +47,7 @@ const SEARCH_GROUP_LABEL: Record<string, TranslationKey> = {
   receipts: "search.groupReceipts",
   documents: "search.groupDocuments",
   inventory: "search.groupInventory",
+  quotations: "search.groupQuotations",
 };
 
 export function CommandPalette({

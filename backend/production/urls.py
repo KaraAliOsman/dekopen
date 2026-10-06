@@ -1,6 +1,7 @@
 from django.urls import path
 
 from production.views import (
+    ProductionDeliveriesView,
     ProductionOrderDeliveryConfirmationView,
     ProductionOrderDeliveryConfirmView,
     ProductionOrderDeliveryTransitionView,
@@ -54,6 +55,11 @@ urlpatterns = [
         "station-queue/",
         ProductionStationQueueView.as_view(),
         name="production-station-queue",
+    ),
+    path(
+        "deliveries/",
+        ProductionDeliveriesView.as_view(),
+        name="production-deliveries",
     ),
     path("orders/", ProductionOrderListView.as_view(), name="production-orders"),
     path(

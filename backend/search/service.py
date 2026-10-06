@@ -30,9 +30,10 @@ def _where(columns: tuple[str, ...]) -> str:
 
 
 # Groups an installer must never see: the client registry carries fiscal PII
-# (RUT) and the documents group mixes invoices into the result set. Projects
-# still surface (dispatch/installation context) minus the commercial subtitle.
-_INSTALLER_EXCLUDED_GROUPS = {"clients", "documents"}
+# (RUT), quotations leak the commercial margin surface, and the documents
+# group mixes invoices into the result set. Projects still surface
+# (dispatch/installation context) minus the commercial subtitle.
+_INSTALLER_EXCLUDED_GROUPS = {"clients", "documents", "quotations"}
 
 
 def search(org_id: UUID, query: str, role: str = "OWNER") -> dict:
@@ -81,6 +82,29 @@ def search(org_id: UUID, query: str, role: str = "OWNER") -> dict:
                 "title": row["name"],
                 "subtitle": row.get("rut"),
                 "path": "/clients",
+            }
+        )
+
+    for row in org(
+        "SELECT p.id, p.code, p.name, p.client_name, p.current_revision"
+        " FROM public.projects p"
+        " WHERE p.org_id=%s AND (__WHERE__)"
+        " AND EXISTS ("
+        "     SELECT 1 FROM public.project_versions v"
+        "     WHERE v.project_id = p.id AND v.org_id = p.org_id"
+        " )"
+        f" ORDER BY p.updated_at DESC LIMIT {GROUP_LIMIT}",
+        "p.name",
+        "p.code",
+        "p.client_name",
+    ):
+        results.append(
+            {
+                "group": "quotations",
+                "id": str(row["id"]),
+                "title": f"{row['code']} · {row['current_revision']}",
+                "subtitle": f"{row['name']} · {row['client_name']}",
+                "path": f"/projects/{row['id']}",
             }
         )
 

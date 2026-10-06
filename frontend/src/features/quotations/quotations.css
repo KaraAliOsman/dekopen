@@ -1,0 +1,50 @@
+.quotations-table__wrap {
+  overflow-x: auto;
+}
+
+.quotations-table {
+  border-collapse: collapse;
+  min-width: 52rem;
+  width: 100%;
+}
+
+.quotations-table th {
+  color: var(--theme-text-secondary);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.quotations-table td {
+  border-top: 1px solid var(--theme-border-subtle);
+  padding: 0.625rem 0.75rem;
+  vertical-align: middle;
+}
+
+.quotations-project {
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  text-decoration: none;
+}
+
+.quotations-code {
+  color: var(--theme-text-primary);
+  font-family: var(--font-mono, "IBM Plex Mono", monospace);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.quotations-name {
+  color: var(--theme-text-secondary);
+  font-size: 0.82rem;
+}
+
+.quotations-table .mono {
+  font-family: var(--font-mono, "IBM Plex Mono", monospace);
+  font-size: 0.85rem;
+}

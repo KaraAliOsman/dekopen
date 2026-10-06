@@ -1322,6 +1322,73 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/analytics/today/:
+    get:
+      operationId: analytics_today_queue
+      description: |-
+        La cola «qué tengo que hacer hoy» del rol que entra — una sola
+        lectura con los ítems ya fraseados y enlazados por el backend.
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - analytics
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TodayQueue'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/auth/me/:
     get:
       operationId: auth_me
@@ -10094,6 +10161,93 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/production/deliveries/:
+    get:
+      operationId: production_deliveries
+      description: |-
+        Hoja de ruta del despacho: todas las entregas del tenant con su OT,
+        proyecto y estado real. El equipo de instalación y el jefe de taller
+        trabajan desde aquí; el comercial no despacha.
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - DELIVERED
+          - FAILED
+          - ON_ROUTE
+          - SCHEDULED
+      - in: query
+        name: when
+        schema:
+          type: string
+          enum:
+          - all
+          - open
+          - overdue
+          - today
+        description: Ventana en la zona de la organización
+      tags:
+      - production
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryListResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/production/orders/:
     get:
       operationId: production_orders
@@ -17263,6 +17417,74 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/quotations/:
+    get:
+      operationId: quotations_list
+      description: |-
+        Lista transversal de cotizaciones: estado comercial real por
+        proyecto, incluyendo «vista por el cliente» del enlace vigente.
+        Comercial puro — el taller no cotiza (READ_ROLES menos WM).
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - projects
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuotationListResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/search/:
     get:
       operationId: global_search
@@ -20865,6 +21087,87 @@ components:
       - order_id
       - payment_id
       - signed_url
+    DeliveryListItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        order_id:
+          type: string
+          format: uuid
+        order_code:
+          type: string
+        order_status:
+          type: string
+        project_id:
+          type: string
+          format: uuid
+        project_code:
+          type: string
+        project_name:
+          type: string
+        client_name:
+          type: string
+        scheduled_date:
+          type: string
+        time_window:
+          type: string
+        status:
+          type: string
+        address:
+          type: string
+        contact_name:
+          type: string
+          nullable: true
+        contact_phone:
+          type: string
+          nullable: true
+        installer_name:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        unit_indexes:
+          type: array
+          items: {}
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - address
+      - client_name
+      - contact_name
+      - contact_phone
+      - created_at
+      - id
+      - installer_name
+      - notes
+      - order_code
+      - order_id
+      - order_status
+      - project_code
+      - project_id
+      - project_name
+      - scheduled_date
+      - status
+      - time_window
+      - unit_indexes
+      - updated_at
+    DeliveryListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeliveryListItem'
+      required:
+      - items
     DeliveryPaymentRequestRequest:
       type: object
       properties:
@@ -29124,6 +29427,106 @@ components:
         * `PER_M2` - PER_M2
         * `PER_LINEAR_METER` - PER_LINEAR_METER
         * `FIXED` - FIXED
+    QuotationApproval:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        view_count:
+          type: integer
+        first_viewed_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_viewed_at:
+          type: string
+          format: date-time
+          nullable: true
+        decided_by:
+          type: string
+          nullable: true
+        decided_at:
+          type: string
+          format: date-time
+          nullable: true
+        decided_note:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - created_at
+      - decided_at
+      - decided_by
+      - decided_note
+      - expires_at
+      - first_viewed_at
+      - id
+      - last_viewed_at
+      - status
+      - view_count
+    QuotationItem:
+      type: object
+      properties:
+        project_id:
+          type: string
+          format: uuid
+        project_code:
+          type: string
+        project_name:
+          type: string
+        client_name:
+          type: string
+        project_status:
+          type: string
+        current_revision:
+          type: string
+        currency:
+          type: string
+        total_price_gross:
+          type: string
+        versions_count:
+          type: integer
+        last_sealed_at:
+          type: string
+          format: date-time
+          nullable: true
+        approval:
+          allOf:
+          - $ref: '#/components/schemas/QuotationApproval'
+          nullable: true
+        quote_state:
+          type: string
+      required:
+      - approval
+      - client_name
+      - currency
+      - current_revision
+      - last_sealed_at
+      - project_code
+      - project_id
+      - project_name
+      - project_status
+      - quote_state
+      - total_price_gross
+      - versions_count
+    QuotationListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuotationItem'
+      required:
+      - items
     RailTypeEnum:
       enum:
       - dual
@@ -31046,6 +31449,92 @@ components:
         * `AM` - AM
         * `PM` - PM
         * `JORNADA` - JORNADA
+    TodayQueue:
+      type: object
+      properties:
+        schema:
+          type: string
+        role:
+          type: string
+        date:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TodayQueueItem'
+        panels:
+          type: array
+          items:
+            $ref: '#/components/schemas/TodayQueuePanel'
+      required:
+      - date
+      - items
+      - panels
+      - role
+      - schema
+    TodayQueueItem:
+      type: object
+      properties:
+        kind:
+          type: string
+        urgency:
+          $ref: '#/components/schemas/UrgencyEnum'
+        phrase:
+          type: string
+        reason:
+          type: string
+          nullable: true
+        entity_code:
+          type: string
+          nullable: true
+        entity_label:
+          type: string
+          nullable: true
+        to:
+          type: string
+        cta:
+          type: string
+        count:
+          type: integer
+          nullable: true
+      required:
+      - count
+      - cta
+      - entity_code
+      - entity_label
+      - kind
+      - phrase
+      - reason
+      - to
+      - urgency
+    TodayQueuePanel:
+      type: object
+      properties:
+        kind:
+          type: string
+        title:
+          type: string
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/TodayQueuePanelRow'
+      required:
+      - kind
+      - rows
+      - title
+    TodayQueuePanelRow:
+      type: object
+      properties:
+        label:
+          type: string
+        value:
+          type: string
+        count:
+          type: integer
+      required:
+      - count
+      - label
+      - value
     TypologyLimit:
       type: object
       properties:
@@ -31087,6 +31576,18 @@ components:
       description: |-
         * `WINDOW` - WINDOW
         * `DOOR` - DOOR
+    UrgencyEnum:
+      enum:
+      - overdue
+      - today
+      - soon
+      - when_free
+      type: string
+      description: |-
+        * `overdue` - overdue
+        * `today` - today
+        * `soon` - soon
+        * `when_free` - when_free
     User:
       type: object
       properties:

@@ -38,6 +38,15 @@ def _seed(responses):
             [{"id": uuid4(), "name": "Inmobiliaria Sur", "rut": "76.123.456-7"}],
             [
                 {
+                    "id": pid,
+                    "code": "PRJ-1",
+                    "name": "Hotel Sur",
+                    "client_name": "Inmobiliaria",
+                    "current_revision": "B",
+                }
+            ],
+            [
+                {
                     "id": pos,
                     "project_id": pid,
                     "location_tag": "D101",
@@ -97,6 +106,8 @@ def test_every_group_maps_row_to_result(fake_rows):
     assert by_group["projects"][0]["title"] == "PRJ-1 · Hotel Sur"
     assert by_group["projects"][0]["path"] == f"/projects/{pid}"
     assert by_group["clients"][0]["title"] == "Inmobiliaria Sur"
+    assert by_group["quotations"][0]["title"] == "PRJ-1 · B"
+    assert by_group["quotations"][0]["path"] == f"/projects/{pid}"
     assert by_group["positions"][0]["path"] == f"/projects/{pid}/positions/{pos}/edit"
     assert by_group["systems"][0]["title"] == "DEMO_60 · Demo 60"
     assert len(by_group["articles"]) == 2

@@ -86,6 +86,7 @@ import type {
   DeliveryConfirmRequestRequest,
   DeliveryConfirmResponse,
   DeliveryConfirmationAccess,
+  DeliveryListResponse,
   DeliveryResponse,
   DeliveryScheduleRequestRequest,
   DeliveryTransitionRequestRequest,
@@ -205,6 +206,7 @@ import type {
   PriceRequestRequest,
   PriceResponse,
   ProcessProfileOptionList,
+  ProductionDeliveriesParams,
   ProductionOrderDeliveryConfirmationParams,
   ProductionOrderDetail,
   ProductionOrderDispatchNoteParams,
@@ -228,6 +230,7 @@ import type {
   ProjectServicesResponse,
   ProjectWriteRequest,
   PurchasingState,
+  QuotationListResponse,
   RemakeRequestRequest,
   Remnant,
   RemnantCreateRequest,
@@ -263,6 +266,7 @@ import type {
   SystemResponse,
   SystemWorkspace,
   SystemWriteRequest,
+  TodayQueue,
   Wallet,
   WithdrawRequest,
   WorkCenter,
@@ -1730,6 +1734,81 @@ export const analyticsOperationalSummary = async (
   options?: Parameters<typeof apiMutator>[1],
 ): Promise<analyticsOperationalSummaryResponse> => {
   return apiMutator<analyticsOperationalSummaryResponse>(getAnalyticsOperationalSummaryUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export type analyticsTodayQueueResponse200 = {
+  data: TodayQueue;
+  status: 200;
+};
+
+export type analyticsTodayQueueResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type analyticsTodayQueueResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type analyticsTodayQueueResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type analyticsTodayQueueResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type analyticsTodayQueueResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type analyticsTodayQueueResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type analyticsTodayQueueResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type analyticsTodayQueueResponseSuccess = analyticsTodayQueueResponse200 & {
+  headers: Headers;
+};
+export type analyticsTodayQueueResponseError = (
+  | analyticsTodayQueueResponse400
+  | analyticsTodayQueueResponse401
+  | analyticsTodayQueueResponse403
+  | analyticsTodayQueueResponse404
+  | analyticsTodayQueueResponse409
+  | analyticsTodayQueueResponse422
+  | analyticsTodayQueueResponse503
+) & {
+  headers: Headers;
+};
+
+export type analyticsTodayQueueResponse =
+  analyticsTodayQueueResponseSuccess | analyticsTodayQueueResponseError;
+
+export const getAnalyticsTodayQueueUrl = () => {
+  return `/api/v1/analytics/today/`;
+};
+
+/**
+ * La cola «qué tengo que hacer hoy» del rol que entra — una sola
+ * lectura con los ítems ya fraseados y enlazados por el backend.
+ */
+export const analyticsTodayQueue = async (
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<analyticsTodayQueueResponse> => {
+  return apiMutator<analyticsTodayQueueResponse>(getAnalyticsTodayQueueUrl(), {
     ...options,
     method: "GET",
   });
@@ -11346,6 +11425,95 @@ export const productionCncWorkspace = async (
   });
 };
 
+export type productionDeliveriesResponse200 = {
+  data: DeliveryListResponse;
+  status: 200;
+};
+
+export type productionDeliveriesResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type productionDeliveriesResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type productionDeliveriesResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type productionDeliveriesResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type productionDeliveriesResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type productionDeliveriesResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type productionDeliveriesResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type productionDeliveriesResponseSuccess = productionDeliveriesResponse200 & {
+  headers: Headers;
+};
+export type productionDeliveriesResponseError = (
+  | productionDeliveriesResponse400
+  | productionDeliveriesResponse401
+  | productionDeliveriesResponse403
+  | productionDeliveriesResponse404
+  | productionDeliveriesResponse409
+  | productionDeliveriesResponse422
+  | productionDeliveriesResponse503
+) & {
+  headers: Headers;
+};
+
+export type productionDeliveriesResponse =
+  productionDeliveriesResponseSuccess | productionDeliveriesResponseError;
+
+export const getProductionDeliveriesUrl = (params?: ProductionDeliveriesParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v1/production/deliveries/?${stringifiedParams}`
+    : `/api/v1/production/deliveries/`;
+};
+
+/**
+ * Hoja de ruta del despacho: todas las entregas del tenant con su OT,
+ * proyecto y estado real. El equipo de instalación y el jefe de taller
+ * trabajan desde aquí; el comercial no despacha.
+ */
+export const productionDeliveries = async (
+  params?: ProductionDeliveriesParams,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<productionDeliveriesResponse> => {
+  return apiMutator<productionDeliveriesResponse>(getProductionDeliveriesUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
 export type productionOrdersResponse200 = {
   data: ProductionOrderList;
   status: 200;
@@ -18967,6 +19135,81 @@ export const purchasingCreateEligibility = async (
       body: JSON.stringify(eligibilityRequestRequest),
     },
   );
+};
+
+export type quotationsListResponse200 = {
+  data: QuotationListResponse;
+  status: 200;
+};
+
+export type quotationsListResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type quotationsListResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type quotationsListResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type quotationsListResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type quotationsListResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type quotationsListResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type quotationsListResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type quotationsListResponseSuccess = quotationsListResponse200 & {
+  headers: Headers;
+};
+export type quotationsListResponseError = (
+  | quotationsListResponse400
+  | quotationsListResponse401
+  | quotationsListResponse403
+  | quotationsListResponse404
+  | quotationsListResponse409
+  | quotationsListResponse422
+  | quotationsListResponse503
+) & {
+  headers: Headers;
+};
+
+export type quotationsListResponse = quotationsListResponseSuccess | quotationsListResponseError;
+
+export const getQuotationsListUrl = () => {
+  return `/api/v1/quotations/`;
+};
+
+/**
+ * Lista transversal de cotizaciones: estado comercial real por
+ * proyecto, incluyendo «vista por el cliente» del enlace vigente.
+ * Comercial puro — el taller no cotiza (READ_ROLES menos WM).
+ */
+export const quotationsList = async (
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<quotationsListResponse> => {
+  return apiMutator<quotationsListResponse>(getQuotationsListUrl(), {
+    ...options,
+    method: "GET",
+  });
 };
 
 export type globalSearchResponse200 = {
