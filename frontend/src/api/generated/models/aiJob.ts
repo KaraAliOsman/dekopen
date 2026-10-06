@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { AiAgentResult } from "./aiAgentResult";
+import type { AiJobCost } from "./aiJobCost";
 import type { AiJobLive } from "./aiJobLive";
 import type { AiJobRefs } from "./aiJobRefs";
 
@@ -25,6 +26,8 @@ export interface AiJob {
   outcomes?: unknown[];
   /** @nullable */
   live?: AiJobLive;
+  /** @nullable */
+  cost?: AiJobCost;
   created_at: string;
   updated_at: string;
   /** @nullable */

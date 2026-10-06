@@ -8,6 +8,8 @@
 import type {
   AdminResponse,
   AdminWriteRequest,
+  AiActivity,
+  AiActivityParams,
   AiAgentAccepted,
   AiAgentRequestRequest,
   AiAskRequestRequest,
@@ -25,6 +27,10 @@ import type {
   AiMetrics,
   AiMetricsParams,
   AiOpsContract,
+  AiProviderCheck,
+  AiProviderStatus,
+  AiSettings,
+  AiSettingsWriteRequest,
   AllocationRequestRequest,
   AllocationResponse,
   ApplyRequest,
@@ -268,6 +274,93 @@ import type {
 } from "./models";
 
 import { apiMutator } from "../apiMutator";
+export type aiActivityResponse200 = {
+  data: AiActivity;
+  status: 200;
+};
+
+export type aiActivityResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type aiActivityResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type aiActivityResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type aiActivityResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type aiActivityResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type aiActivityResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type aiActivityResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type aiActivityResponseSuccess = aiActivityResponse200 & {
+  headers: Headers;
+};
+export type aiActivityResponseError = (
+  | aiActivityResponse400
+  | aiActivityResponse401
+  | aiActivityResponse403
+  | aiActivityResponse404
+  | aiActivityResponse409
+  | aiActivityResponse422
+  | aiActivityResponse503
+) & {
+  headers: Headers;
+};
+
+export type aiActivityResponse = aiActivityResponseSuccess | aiActivityResponseError;
+
+export const getAiActivityUrl = (params?: AiActivityParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v1/ai/activity/?${stringifiedParams}`
+    : `/api/v1/ai/activity/`;
+};
+
+/**
+ * The org's invocation log — the /jobs panel's AI activity source.
+ * OWNER reads it; rows are content-free (no prompts, no outputs).
+ */
+export const aiActivity = async (
+  params?: AiActivityParams,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<aiActivityResponse> => {
+  return apiMutator<aiActivityResponse>(getAiActivityUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
 export type aiAgentResponse202 = {
   data: AiAgentAccepted;
   status: 202;
@@ -1255,6 +1348,317 @@ export const aiOpsContract = async (
   return apiMutator<aiOpsContractResponse>(getAiOpsContractUrl(), {
     ...options,
     method: "GET",
+  });
+};
+
+export type aiProviderCheckResponse200 = {
+  data: AiProviderCheck;
+  status: 200;
+};
+
+export type aiProviderCheckResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type aiProviderCheckResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type aiProviderCheckResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type aiProviderCheckResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type aiProviderCheckResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type aiProviderCheckResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type aiProviderCheckResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type aiProviderCheckResponseSuccess = aiProviderCheckResponse200 & {
+  headers: Headers;
+};
+export type aiProviderCheckResponseError = (
+  | aiProviderCheckResponse400
+  | aiProviderCheckResponse401
+  | aiProviderCheckResponse403
+  | aiProviderCheckResponse404
+  | aiProviderCheckResponse409
+  | aiProviderCheckResponse422
+  | aiProviderCheckResponse503
+) & {
+  headers: Headers;
+};
+
+export type aiProviderCheckResponse = aiProviderCheckResponseSuccess | aiProviderCheckResponseError;
+
+export const getAiProviderCheckUrl = () => {
+  return `/api/v1/ai/provider/check/`;
+};
+
+/**
+ * "Probar conexión" — one minimal live call against the cheapest
+ * enabled route, recorded as kind='probe'. OWNER only.
+ */
+export const aiProviderCheck = async (
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<aiProviderCheckResponse> => {
+  return apiMutator<aiProviderCheckResponse>(getAiProviderCheckUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export type aiProviderStatusResponse200 = {
+  data: AiProviderStatus;
+  status: 200;
+};
+
+export type aiProviderStatusResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type aiProviderStatusResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type aiProviderStatusResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type aiProviderStatusResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type aiProviderStatusResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type aiProviderStatusResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type aiProviderStatusResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type aiProviderStatusResponseSuccess = aiProviderStatusResponse200 & {
+  headers: Headers;
+};
+export type aiProviderStatusResponseError = (
+  | aiProviderStatusResponse400
+  | aiProviderStatusResponse401
+  | aiProviderStatusResponse403
+  | aiProviderStatusResponse404
+  | aiProviderStatusResponse409
+  | aiProviderStatusResponse422
+  | aiProviderStatusResponse503
+) & {
+  headers: Headers;
+};
+
+export type aiProviderStatusResponse =
+  aiProviderStatusResponseSuccess | aiProviderStatusResponseError;
+
+export const getAiProviderStatusUrl = () => {
+  return `/api/v1/ai/provider/status/`;
+};
+
+/**
+ * Compact serving-mode read — every member may see whether the org's
+ * AI answers come from the real provider or the explicit test mode (the
+ * "Modo de prueba" badge reads this). Provider/model stay sealed: the
+ * response carries only mode + mock, never the key.
+ */
+export const aiProviderStatus = async (
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<aiProviderStatusResponse> => {
+  return apiMutator<aiProviderStatusResponse>(getAiProviderStatusUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export type aiSettingsResponse200 = {
+  data: AiSettings;
+  status: 200;
+};
+
+export type aiSettingsResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type aiSettingsResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type aiSettingsResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type aiSettingsResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type aiSettingsResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type aiSettingsResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type aiSettingsResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type aiSettingsResponseSuccess = aiSettingsResponse200 & {
+  headers: Headers;
+};
+export type aiSettingsResponseError = (
+  | aiSettingsResponse400
+  | aiSettingsResponse401
+  | aiSettingsResponse403
+  | aiSettingsResponse404
+  | aiSettingsResponse409
+  | aiSettingsResponse422
+  | aiSettingsResponse503
+) & {
+  headers: Headers;
+};
+
+export type aiSettingsResponse = aiSettingsResponseSuccess | aiSettingsResponseError;
+
+export const getAiSettingsUrl = () => {
+  return `/api/v1/ai/settings/`;
+};
+
+/**
+ * Settings › Inteligencia artificial — OWNER only: capability routes,
+ * the monthly credit budget and this month's consumption.
+ */
+export const aiSettings = async (
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<aiSettingsResponse> => {
+  return apiMutator<aiSettingsResponse>(getAiSettingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export type aiSettingsUpdateResponse200 = {
+  data: AiSettings;
+  status: 200;
+};
+
+export type aiSettingsUpdateResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type aiSettingsUpdateResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type aiSettingsUpdateResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type aiSettingsUpdateResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type aiSettingsUpdateResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type aiSettingsUpdateResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type aiSettingsUpdateResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type aiSettingsUpdateResponseSuccess = aiSettingsUpdateResponse200 & {
+  headers: Headers;
+};
+export type aiSettingsUpdateResponseError = (
+  | aiSettingsUpdateResponse400
+  | aiSettingsUpdateResponse401
+  | aiSettingsUpdateResponse403
+  | aiSettingsUpdateResponse404
+  | aiSettingsUpdateResponse409
+  | aiSettingsUpdateResponse422
+  | aiSettingsUpdateResponse503
+) & {
+  headers: Headers;
+};
+
+export type aiSettingsUpdateResponse =
+  aiSettingsUpdateResponseSuccess | aiSettingsUpdateResponseError;
+
+export const getAiSettingsUpdateUrl = () => {
+  return `/api/v1/ai/settings/`;
+};
+
+/**
+ * Settings › Inteligencia artificial — OWNER only: capability routes,
+ * the monthly credit budget and this month's consumption.
+ */
+export const aiSettingsUpdate = async (
+  aiSettingsWriteRequest?: AiSettingsWriteRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<aiSettingsUpdateResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<aiSettingsUpdateResponse>(getAiSettingsUpdateUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+    body: JSON.stringify(aiSettingsWriteRequest),
   });
 };
 

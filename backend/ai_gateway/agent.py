@@ -107,6 +107,76 @@ ARTIFACT_TOOLS = {
     "document_preview": "generate_document_preview",
 }
 
+# §IA3 — native tool calling. Each QUERY_TOOLS name becomes a function the
+# provider may call; the first surface that owns a name wins so colliding
+# labels (customer_comms → get_project) resolve to the canonical surface.
+NATIVE_TOOL_SURFACES: dict[str, str] = {}
+for _surface, _tool in QUERY_TOOLS.items():
+    NATIVE_TOOL_SURFACES.setdefault(_tool, _surface)
+
+
+def _query_tool_specs() -> list[dict]:
+    """OpenAI-style function specs for every query tool the agent may call.
+    The one argument is `refs` — the same identity map the JSON steps use, so
+    the same validator (_queries) executes calls from either channel."""
+    specs: list[dict] = []
+    seen: set[str] = set()
+    for surface, name in QUERY_TOOLS.items():
+        if name in seen:
+            continue
+        seen.add(name)
+        needed = REQUIRED_REFS.get(surface, ())
+        hint = (
+            " Requiere refs: " + ", ".join(needed) + "."
+            if needed
+            else " No requiere refs."
+        )
+        specs.append(
+            {
+                "name": name,
+                "description": (
+                    f"Consulta la proyección '{surface}' de la organización."
+                    + hint
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "refs": {
+                            "type": "object",
+                            "description": "Identificadores observados en "
+                            "proyecciones anteriores (uuid o código).",
+                        }
+                    },
+                    "additionalProperties": True,
+                },
+            }
+        )
+    return specs
+
+
+def _tool_call_steps(envelope: dict) -> list[dict]:
+    """Translate the provider's native tool_calls into query steps so the
+    model's intent flows through the single audited query channel — dedupe,
+    observed-refs enforcement and REQUIRED_REFS validation all keep working."""
+    steps: list[dict] = []
+    for call in envelope.get("tool_calls") or []:
+        if not isinstance(call, dict):
+            continue
+        surface = NATIVE_TOOL_SURFACES.get(str(call.get("name") or ""))
+        if surface is None:
+            continue
+        args = call.get("arguments")
+        if not isinstance(args, dict):
+            args = {}
+        refs = args.get("refs")
+        if not isinstance(refs, dict):
+            # Tolerate flat arguments — some providers emit the fields
+            # directly instead of nesting under "refs".
+            refs = args
+        steps.append({"kind": "query", "surface": surface, "refs": refs})
+    return steps[:MAX_QUERIES]
+
+
 MAX_GOAL = 2000
 MAX_REPLY = 4000
 # §IA2-6 — los topes de ejecución viven en ai_gateway.limits (pasos,
@@ -886,13 +956,18 @@ def _act(
     metrics_row: Any = None,
     progress: Any = None,
 ) -> dict:
-    def _report(value: float) -> None:
+    def _report(value: float, phase: str | None = None) -> None:
         # Progress lands on the job_runs row — the only channel a reader can
-        # see while this transaction holds the ai_jobs row uncommitted.
+        # see while this transaction holds the ai_jobs row uncommitted. The
+        # phase label rides with it (§IA3) so the Orb can say *what* is
+        # happening, not just how far along it is.
         if callable(progress):
-            progress(value)
+            try:
+                progress(value, phase)
+            except TypeError:  # reporters that only accept the percent
+                progress(value)
 
-    _report(15)
+    _report(15, "context")
     context = build_context(org_id, surface, refs)
     contexts = [context]
     seen_queries = {_query_key(surface, refs)}
@@ -920,7 +995,7 @@ def _act(
                 "ai_agent_timeout",
                 "El agente agotó su tiempo disponible; intenta una meta más acotada.",
             )
-        _report(20 + round_index * 20)
+        _report(20 + round_index * 20, "model")
         envelope = gateway.invoke(
             org_id=org_id,
             user_id=user_id,
@@ -933,6 +1008,11 @@ def _act(
             provider_options={
                 "system": WORKFLOW_SYSTEM.get(surface, AGENT_SYSTEM),
                 "json_output": True,
+                # §IA3 — the model may call the query tools natively; the
+                # service strips this when the route has tools_enabled off,
+                # and the provider falls back to strict JSON on rejection.
+                "tools": _query_tool_specs(),
+                "tool_choice": "auto",
             },
             input_payload={
                 "goal": goal,
@@ -970,18 +1050,29 @@ def _act(
         try:
             document = json.loads(envelope["output"])
         except (json.JSONDecodeError, TypeError):
-            raise contract_error(
-                502,
-                "ai_agent_bad_output",
-                "El agente devolvió una respuesta inválida.",
-            ) from None
+            # A pure tool-calling turn may carry no JSON content at all —
+            # the calls themselves are the document.
+            if envelope.get("tool_calls"):
+                document = {}
+            else:
+                raise contract_error(
+                    502,
+                    "ai_agent_bad_output",
+                    "El agente devolvió una respuesta inválida.",
+                ) from None
         if not isinstance(document, dict):
             raise contract_error(
                 502,
                 "ai_agent_bad_output",
                 "El agente devolvió una respuesta inválida.",
             )
-        _report(30 + round_index * 20)
+        tool_steps = _tool_call_steps(envelope)
+        if tool_steps:
+            steps = document.get("steps")
+            document["steps"] = (
+                steps if isinstance(steps, list) else []
+            ) + tool_steps
+        _report(30 + round_index * 20, "context")
         tool_observations = _tools(
             org_id=org_id,
             document=document,
@@ -1015,6 +1106,12 @@ def _act(
             break
 
     reply = document.get("reply") if isinstance(document.get("reply"), str) else ""
+    if not reply.strip():
+        # Some providers put the assistant text in the raw message when the
+        # last round was a tool-calling turn — take it before failing.
+        assistant = envelope.get("assistant_message") or {}
+        if isinstance(assistant.get("content"), str):
+            reply = assistant["content"]
     reply = reply.strip()[:MAX_REPLY]
     if not reply:
         raise contract_error(
@@ -1022,7 +1119,7 @@ def _act(
             "ai_agent_bad_output",
             "El agente devolvió una respuesta inválida.",
         )
-    _report(80)
+    _report(80, "proposal")
     # Multi-turn grounding: numbers in earlier turns of this job stay
     # citable — but only when the history was rebuilt server-side from the
     # stored transcript (resume). A first-run history is arbitrary client

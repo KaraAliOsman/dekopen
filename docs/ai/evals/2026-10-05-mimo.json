@@ -17,7 +17,7 @@
         "provider_errors": [
           "ai_provider_quota"
         ],
-        "elapsed_ms": 1020
+        "elapsed_ms": 987
       },
       "outcome": {},
       "error": {
@@ -54,7 +54,7 @@
         "provider_errors": [
           "ai_provider_quota"
         ],
-        "elapsed_ms": 680
+        "elapsed_ms": 645
       },
       "outcome": {},
       "error": {
@@ -91,7 +91,7 @@
         "provider_errors": [
           "ai_provider_quota"
         ],
-        "elapsed_ms": 635
+        "elapsed_ms": 642
       },
       "outcome": {},
       "error": {
@@ -128,7 +128,7 @@
         "provider_errors": [
           "ai_provider_quota"
         ],
-        "elapsed_ms": 633
+        "elapsed_ms": 636
       },
       "outcome": {},
       "error": {
@@ -165,7 +165,7 @@
         "provider_errors": [
           "ai_provider_quota"
         ],
-        "elapsed_ms": 647
+        "elapsed_ms": 662
       },
       "outcome": {},
       "error": {
@@ -202,7 +202,7 @@
         "provider_errors": [
           "ai_provider_quota"
         ],
-        "elapsed_ms": 657
+        "elapsed_ms": 660
       },
       "outcome": {},
       "error": {
@@ -239,7 +239,7 @@
         "provider_errors": [
           "ai_provider_quota"
         ],
-        "elapsed_ms": 695
+        "elapsed_ms": 652
       },
       "outcome": {},
       "error": {
@@ -276,7 +276,7 @@
         "provider_errors": [
           "ai_provider_quota"
         ],
-        "elapsed_ms": 638
+        "elapsed_ms": 668
       },
       "outcome": {},
       "error": {
@@ -313,7 +313,7 @@
         "provider_errors": [
           "ai_provider_quota"
         ],
-        "elapsed_ms": 665
+        "elapsed_ms": 848
       },
       "outcome": {},
       "error": {
@@ -350,7 +350,7 @@
         "provider_errors": [
           "ai_provider_quota"
         ],
-        "elapsed_ms": 644
+        "elapsed_ms": 842
       },
       "outcome": {},
       "error": {
@@ -387,7 +387,7 @@
         "provider_errors": [
           "ai_provider_quota"
         ],
-        "elapsed_ms": 637
+        "elapsed_ms": 654
       },
       "outcome": {},
       "error": {
@@ -424,7 +424,7 @@
         "provider_errors": [
           "ai_provider_quota"
         ],
-        "elapsed_ms": 617
+        "elapsed_ms": 667
       },
       "outcome": {},
       "error": {
@@ -461,7 +461,7 @@
         "provider_errors": [
           "ai_provider_quota"
         ],
-        "elapsed_ms": 631
+        "elapsed_ms": 662
       },
       "outcome": {},
       "error": {
@@ -498,7 +498,7 @@
         "provider_errors": [
           "ai_provider_quota"
         ],
-        "elapsed_ms": 632
+        "elapsed_ms": 887
       },
       "outcome": {},
       "error": {
@@ -535,7 +535,7 @@
         "provider_errors": [
           "ai_provider_quota"
         ],
-        "elapsed_ms": 684
+        "elapsed_ms": 883
       },
       "outcome": {},
       "error": {
@@ -572,7 +572,7 @@
         "provider_errors": [
           "ai_provider_quota"
         ],
-        "elapsed_ms": 624
+        "elapsed_ms": 685
       },
       "outcome": {},
       "error": {
@@ -609,7 +609,7 @@
         "provider_errors": [
           "ai_provider_quota"
         ],
-        "elapsed_ms": 673
+        "elapsed_ms": 875
       },
       "outcome": {},
       "error": {
@@ -646,7 +646,7 @@
         "provider_errors": [
           "ai_provider_quota"
         ],
-        "elapsed_ms": 646
+        "elapsed_ms": 643
       },
       "outcome": {},
       "error": {
@@ -683,7 +683,7 @@
         "provider_errors": [
           "ai_provider_quota"
         ],
-        "elapsed_ms": 621
+        "elapsed_ms": 836
       },
       "outcome": {},
       "error": {
@@ -720,7 +720,7 @@
         "provider_errors": [
           "ai_provider_quota"
         ],
-        "elapsed_ms": 647
+        "elapsed_ms": 871
       },
       "outcome": {},
       "error": {
@@ -757,7 +757,7 @@
         "provider_errors": [
           "ai_provider_quota"
         ],
-        "elapsed_ms": 640
+        "elapsed_ms": 883
       },
       "outcome": {},
       "error": {
@@ -794,7 +794,7 @@
         "provider_errors": [
           "ai_provider_quota"
         ],
-        "elapsed_ms": 717
+        "elapsed_ms": 637
       },
       "outcome": {},
       "error": {
@@ -831,7 +831,7 @@
         "provider_errors": [
           "ai_provider_quota"
         ],
-        "elapsed_ms": 633
+        "elapsed_ms": 887
       },
       "outcome": {},
       "error": {
@@ -868,7 +868,7 @@
         "provider_errors": [
           "ai_provider_quota"
         ],
-        "elapsed_ms": 676
+        "elapsed_ms": 859
       },
       "outcome": {},
       "error": {
@@ -905,7 +905,7 @@
         "provider_errors": [
           "ai_provider_quota"
         ],
-        "elapsed_ms": 667
+        "elapsed_ms": 847
       },
       "outcome": {},
       "error": {
@@ -942,7 +942,7 @@
         "provider_errors": [
           "ai_provider_quota"
         ],
-        "elapsed_ms": 676
+        "elapsed_ms": 846
       },
       "outcome": {},
       "error": {
@@ -968,7 +968,7 @@
   "passed": 0,
   "meta": {
     "harness": "ai_gateway.evals",
-    "tag": "baseline",
+    "tag": "",
     "provider": "MIMO",
     "model": null
   },

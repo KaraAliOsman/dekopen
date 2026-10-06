@@ -341,6 +341,11 @@ def extract_catalog_import(*, org_id: UUID, import_id: UUID, actor_id: UUID) -> 
                 warnings.append("catalog.compile_no_candidates")
         except ProviderError as error:
             warnings.append(f"catalog.compile_failed:{error.code}")
+            # §IA3 — failed provider call recorded in the invocation log
+            # while the warning path keeps the transaction alive.
+            from ai_gateway import invocations
+
+            invocations.record_attached(error)
         except Exception as error:
             code = getattr(error, "contract_code", "ai_gateway_error")
             warnings.append(f"catalog.compile_failed:{code}")

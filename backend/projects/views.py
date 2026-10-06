@@ -10,8 +10,9 @@ from rest_framework.views import APIView
 from rest_framework.parsers import FormParser
 from rest_framework.permissions import AllowAny
 
+from ai_gateway import invocations
 from ai_gateway.providers import ProviderError
-from authentication.errors import contract_error
+from authentication.errors import ContractAPIException, contract_error
 from engine_api.repository import SystemNotFound, UnsupportedCatalogContract
 from authentication.serializers import ACTIVE_ORGANIZATION_HEADER
 from billing.flow import FlowError
@@ -324,41 +325,48 @@ class PositionDesignAssistView(APIView):
     )
     def post(self, request, position_id):
         data = validate(DesignAssistRequestSerializer, request.data)
-        with scope(request, WRITE_ROLES) as (token, _, org):
-            try:
-                position = service.position_row(org, position_id)
-                # Ops validate against the position's own catalog authority —
-                # the client's system_id is only the fallback for a position
-                # that doesn't declare one yet (review AI-11).
-                return response(
-                    design_assist.assist(
-                        org_id=org,
-                        user_id=token.user_id,
-                        position=position,
-                        product=data["product"],
-                        prompt=str(data["prompt"]),
-                        operation_key=str(data["operation_key"]),
-                        system_id=position.get("system_id") or data["system_id"],
+        try:
+            with scope(request, WRITE_ROLES) as (token, _, org):
+                try:
+                    position = service.position_row(org, position_id)
+                    # Ops validate against the position's own catalog authority —
+                    # the client's system_id is only the fallback for a position
+                    # that doesn't declare one yet (review AI-11).
+                    return response(
+                        design_assist.assist(
+                            org_id=org,
+                            user_id=token.user_id,
+                            position=position,
+                            product=data["product"],
+                            prompt=str(data["prompt"]),
+                            operation_key=str(data["operation_key"]),
+                            system_id=position.get("system_id") or data["system_id"],
+                        )
                     )
-                )
-            except ProviderError as error:
-                raise contract_error(
-                    503,
-                    error.code,
-                    "El proveedor de IA no está disponible en este momento.",
-                ) from None
-            except SystemNotFound as error:
-                raise contract_error(
-                    404,
-                    "system_not_found",
-                    "La serie no está disponible para este taller.",
-                ) from error
-            except UnsupportedCatalogContract as error:
-                raise contract_error(
-                    422,
-                    "technical_authority_required",
-                    "Revisa las compatibilidades del catálogo de esta serie.",
-                ) from error
+                except SystemNotFound as error:
+                    raise contract_error(
+                        404,
+                        "system_not_found",
+                        "La serie no está disponible para este taller.",
+                    ) from error
+                except UnsupportedCatalogContract as error:
+                    raise contract_error(
+                        422,
+                        "technical_authority_required",
+                        "Revisa las compatibilidades del catálogo de esta serie.",
+                    ) from error
+        except ProviderError as error:
+            # §IA3 — outside the scope so the failed call records AFTER the
+            # request transaction rolled back (entry rides error.invocation).
+            invocations.record_attached(error)
+            raise contract_error(
+                503,
+                error.code,
+                "El proveedor de IA no está disponible en este momento.",
+            ) from None
+        except ContractAPIException as error:
+            invocations.record_attached(error)
+            raise
 
 
 class PositionDesignAlternativesView(APIView):
@@ -376,39 +384,44 @@ class PositionDesignAlternativesView(APIView):
     )
     def post(self, request, position_id):
         data = validate(DesignAlternativesRequestSerializer, request.data)
-        with scope(request, WRITE_ROLES) as (token, _, org):
-            try:
-                return response(
-                    design_alternatives.alternatives(
-                        org_id=org,
-                        user_id=token.user_id,
-                        position=service.position_row(org, position_id),
-                        brief=str(data["brief"]),
-                        count=int(data.get("count") or 2),
-                        operation_key=str(data["operation_key"]),
-                        system_id=data["system_id"],
-                        width_mm=data.get("width_mm"),
-                        height_mm=data.get("height_mm"),
+        try:
+            with scope(request, WRITE_ROLES) as (token, _, org):
+                try:
+                    return response(
+                        design_alternatives.alternatives(
+                            org_id=org,
+                            user_id=token.user_id,
+                            position=service.position_row(org, position_id),
+                            brief=str(data["brief"]),
+                            count=int(data.get("count") or 2),
+                            operation_key=str(data["operation_key"]),
+                            system_id=data["system_id"],
+                            width_mm=data.get("width_mm"),
+                            height_mm=data.get("height_mm"),
+                        )
                     )
-                )
-            except ProviderError as error:
-                raise contract_error(
-                    503,
-                    error.code,
-                    "El proveedor de IA no está disponible en este momento.",
-                ) from None
-            except SystemNotFound as error:
-                raise contract_error(
-                    404,
-                    "system_not_found",
-                    "La serie no está disponible para este taller.",
-                ) from error
-            except UnsupportedCatalogContract as error:
-                raise contract_error(
-                    422,
-                    "technical_authority_required",
-                    "Revisa las compatibilidades del catálogo de esta serie.",
-                ) from error
+                except SystemNotFound as error:
+                    raise contract_error(
+                        404,
+                        "system_not_found",
+                        "La serie no está disponible para este taller.",
+                    ) from error
+                except UnsupportedCatalogContract as error:
+                    raise contract_error(
+                        422,
+                        "technical_authority_required",
+                        "Revisa las compatibilidades del catálogo de esta serie.",
+                    ) from error
+        except ProviderError as error:
+            invocations.record_attached(error)
+            raise contract_error(
+                503,
+                error.code,
+                "El proveedor de IA no está disponible en este momento.",
+            ) from None
+        except ContractAPIException as error:
+            invocations.record_attached(error)
+            raise
 
 
 class ProjectPaymentsView(APIView):

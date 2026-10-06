@@ -149,9 +149,22 @@ export const DOMAIN_LABELS: Record<string, L> = {
     NOTE: l("Nota", "neutral"),
     QC_CHECK: l("Control de calidad", "info"),
   },
-  ModeEnum: {
+  EngineInspectRequestModeEnum: {
     DESIGN: l("Diseño", "neutral"),
     WORKSHOP_QC: l("QC de taller", "info"),
+  },
+  /* §IA3 — provider state labels; the member-facing chip shows only
+     mode/mock, and the OWNER settings card localizes through es-CL keys. */
+  AiProviderModeEnum: {
+    live: l("Proveedor real activo", "ok"),
+    test: l("Modo de prueba", "warn"),
+    partial: l("Configuración parcial", "warn"),
+    unconfigured: l("Sin credencial", "danger"),
+  },
+  AiRouteModeEnum: {
+    live: l("Proveedor real", "ok"),
+    test: l("Modo de prueba", "warn"),
+    unconfigured: l("Sin configurar", "danger"),
   },
   CutMaterialEnum: {
     PVC: l("PVC", "neutral"),

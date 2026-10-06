@@ -71,11 +71,12 @@ def _execute(job: dict[str, object], *, worker_id: str) -> None:
 
     repository.renew_lock(job_id=job_id, worker_id=worker_id)
 
-    def report(progress: float) -> None:
+    def report(progress: float, phase: str | None = None) -> None:
         repository.report_progress(
             job_id=job_id,
             worker_id=worker_id,
             progress=max(0.0, min(progress, 99.0)),
+            phase=phase,
         )
 
     context = registry.JobContext(

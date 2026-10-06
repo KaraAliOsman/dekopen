@@ -574,3 +574,13 @@ description: Local dev-stack recipe for DEKOPEN E2E testing — Supabase CLI sta
   node → Acoplador select → COPLE-60 for 0°). Guardar enables at "Geometría
   válida" even with fabricación-incompleta observations in some builds; fully
   assigned modules clear all observations.
+
+## ai_gateway (IA3) surfaces
+
+- **Modes — env AND DB must agree**: LIVE needs `AI_GATEWAY_MIMO_API_KEY`+`BASE_URL` set, `AI_GATEWAY_MOCK_ENABLED=0`/unset AND `ai_routes.provider='MIMO'`; TEST needs `AI_GATEWAY_MOCK_ENABLED=1` AND `UPDATE ai_routes SET provider='MOCK'`. `MOCK_ENABLED` alone doesn't reroute. Restart `runserver --noreload` AND `runjobs` after either change.
+- **Worker required**: `manage.py runjobs --poll 1.5` — agent jobs are async; no worker = QUEUED forever. MOCK rounds finish <250ms; to verify phase UI inject a RUNNING `ai_jobs`+`job_runs` row with `progress_phase='context'|'model'|'proposal'` and open `/assistant?job=<id>`.
+- **pgrep footgun**: `pgrep -f "manage[.]py" | xargs kill` can match your own exec shell's cmdline — `ps aux | grep -E 'manage[.]py (runserver|runjobs)'` and kill explicit PIDs; `cd` does not carry to a second `setsid` in one call (use absolute manage.py path).
+- **Headless capture reuse**: `frontend/scripts/ux-capture/auth.ts` `loginAs(page, email, {totp, orgName})` does real magic-link+TOTP login; standalone scripts must live under `frontend/scripts/` (module resolution is file-relative — /tmp scripts can't import @playwright/test); `context.storageState()` once → loop `{viewport, colorScheme, url}`; theme = colorScheme, not localStorage.
+- **OWNER TOTP bootstrap**: fixture creates no MFA — `INSERT INTO auth.mfa_factors (id,user_id,factor_type,status,secret,created_at,updated_at) VALUES (uuid,uid,'totp','verified',<base32>,now(),now())` (created_at/updated_at NOT NULL) + store same secret in `.fixture-state.json` `totp["<email>"]`.
+- **aal2 token via REST (curl aal2-gated APIs like /ai/ops-contract/)**: `POST /auth/v1/token?grant_type=password` (apikey: anon) → aal1 token; `GET /auth/v1/user` → `factors[0].id`; `POST /auth/v1/factors/<id>/challenge` → challenge_id; TOTP via hmac(base32decode(secret), time//30, sha1); `POST /auth/v1/factors/<id>/verify {challenge_id, code}` → aal2 token; `curl -H "Authorization: Bearer <aal2>"`.
+- **Probes vs consumption**: `/ai/provider/check/` writes `kind='probe'` rows (visible in activity) but month usage counts `kind='call'` only — probes never raise "Con error" or consume budget.

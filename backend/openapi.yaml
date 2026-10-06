@@ -4,6 +4,96 @@ info:
   version: 1.0.0
   description: Authenticated tenant and engine API boundary.
 paths:
+  /api/v1/ai/activity/:
+    get:
+      operationId: ai_activity
+      description: |-
+        The org's invocation log — the /jobs panel's AI activity source.
+        OWNER reads it; rows are content-free (no prompts, no outputs).
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: query
+        name: before
+        schema:
+          type: string
+          format: date-time
+        description: Keyset cursor — rows strictly older than this created_at (pass
+          the last row's created_at).
+      - in: query
+        name: capability
+        schema:
+          type: string
+      - in: query
+        name: limit
+        schema:
+          type: integer
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - blocked
+          - error
+          - ok
+      tags:
+      - ai
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiActivity'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/ai/agent/:
     post:
       operationId: ai_agent
@@ -845,6 +935,286 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AiOpsContract'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/ai/provider/check/:
+    post:
+      operationId: ai_provider_check
+      description: |-
+        "Probar conexión" — one minimal live call against the cheapest
+        enabled route, recorded as kind='probe'. OWNER only.
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - ai
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiProviderCheck'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/ai/provider/status/:
+    get:
+      operationId: ai_provider_status
+      description: |-
+        Compact serving-mode read — every member may see whether the org's
+        AI answers come from the real provider or the explicit test mode (the
+        "Modo de prueba" badge reads this). Provider/model stay sealed: the
+        response carries only mode + mock, never the key.
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - ai
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiProviderStatus'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/ai/settings/:
+    get:
+      operationId: ai_settings
+      description: |-
+        Settings › Inteligencia artificial — OWNER only: capability routes,
+        the monthly credit budget and this month's consumption.
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - ai
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiSettings'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+    put:
+      operationId: ai_settings_update
+      description: |-
+        Settings › Inteligencia artificial — OWNER only: capability routes,
+        the monthly credit budget and this month's consumption.
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - ai
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AiSettingsWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AiSettingsWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AiSettingsWriteRequest'
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiSettings'
           description: ''
         '400':
           content:
@@ -17265,6 +17635,15 @@ components:
       required:
       - reason
       - values
+    AiActivity:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AiInvocation'
+      required:
+      - items
     AiAgentAccepted:
       type: object
       description: |-
@@ -17529,6 +17908,109 @@ components:
       - answer
       - created_at
       - question
+    AiBudget:
+      type: object
+      properties:
+        monthly_credit_budget:
+          type: integer
+          nullable: true
+        spent_this_month:
+          type: integer
+        exceeded:
+          type: boolean
+      required:
+      - exceeded
+      - spent_this_month
+    AiCapabilityStatus:
+      type: object
+      description: |-
+        One capability's effective serving route — the ops-facing view the
+        owner verifies. `model` is the provider-side label, `public_name` the
+        white-label the audit rows carry.
+      properties:
+        capability:
+          type: string
+        provider:
+          type: string
+        model:
+          type: string
+        public_name:
+          type: string
+        mode:
+          $ref: '#/components/schemas/AiRouteModeEnum'
+        credits_cost:
+          type: integer
+        timeout_s:
+          type: integer
+          nullable: true
+        retry_max:
+          type: integer
+        tools_enabled:
+          type: boolean
+        enabled:
+          type: boolean
+      required:
+      - capability
+      - credits_cost
+      - enabled
+      - mode
+      - model
+      - provider
+      - public_name
+      - retry_max
+      - tools_enabled
+    AiInvocation:
+      type: object
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+        capability:
+          type: string
+          nullable: true
+        tool_name:
+          type: string
+          nullable: true
+        operation_key:
+          type: string
+          nullable: true
+        mode:
+          type: string
+        public_model:
+          type: string
+          nullable: true
+        tokens_prompt:
+          type: integer
+        tokens_completion:
+          type: integer
+        latency_ms:
+          type: integer
+        credits:
+          type: integer
+        est_cost_usd:
+          type: string
+          nullable: true
+        status:
+          type: string
+        error_code:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+        user_id:
+          type: string
+          nullable: true
+      required:
+      - created_at
+      - credits
+      - id
+      - kind
+      - latency_ms
+      - mode
+      - status
+      - tokens_completion
+      - tokens_prompt
     AiInvokeRequestRequest:
       type: object
       properties:
@@ -17569,6 +18051,14 @@ components:
           type: integer
         credits_debited:
           type: integer
+        tool_calls:
+          type: array
+          items: {}
+        assistant_message:
+          type: object
+          additionalProperties: {}
+        tools_fallback:
+          type: boolean
       required:
       - audit_id
       - capability
@@ -17615,6 +18105,10 @@ components:
           type: array
           items: {}
         live:
+          type: object
+          additionalProperties: {}
+          nullable: true
+        cost:
           type: object
           additionalProperties: {}
           nullable: true
@@ -17676,6 +18170,10 @@ components:
           type: array
           items: {}
         live:
+          type: object
+          additionalProperties: {}
+          nullable: true
+        cost:
           type: object
           additionalProperties: {}
           nullable: true
@@ -17816,6 +18314,85 @@ components:
       - ops
       - scopes
       - version
+    AiProviderCheck:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        error_code:
+          type: string
+          nullable: true
+        latency_ms:
+          type: integer
+        model:
+          type: string
+      required:
+      - latency_ms
+      - ok
+    AiProviderModeEnum:
+      enum:
+      - live
+      - test
+      - partial
+      - unconfigured
+      type: string
+      description: |-
+        * `live` - live
+        * `test` - test
+        * `partial` - partial
+        * `unconfigured` - unconfigured
+    AiProviderStatus:
+      type: object
+      description: |-
+        Member-facing mode read — provider/model stay sealed behind the
+        owner-only settings endpoint.
+      properties:
+        mode:
+          $ref: '#/components/schemas/AiProviderModeEnum'
+        mock:
+          type: boolean
+      required:
+      - mock
+      - mode
+    AiRouteModeEnum:
+      enum:
+      - live
+      - test
+      - unconfigured
+      type: string
+      description: |-
+        * `live` - live
+        * `test` - test
+        * `unconfigured` - unconfigured
+    AiSettings:
+      type: object
+      properties:
+        mode:
+          $ref: '#/components/schemas/AiProviderModeEnum'
+        capabilities:
+          type: array
+          items:
+            $ref: '#/components/schemas/AiCapabilityStatus'
+        budget:
+          $ref: '#/components/schemas/AiBudget'
+        usage:
+          type: object
+          additionalProperties: {}
+      required:
+      - budget
+      - capabilities
+      - mode
+      - usage
+    AiSettingsWriteRequest:
+      type: object
+      description: The owner-set monthly ceiling, in wallet credits. null lifts the
+        cap.
+      properties:
+        monthly_credit_budget:
+          type: integer
+          maximum: 10000000
+          minimum: 0
+          nullable: true
     AllocationRequestRequest:
       type: object
       properties:
@@ -21286,6 +21863,14 @@ components:
       - panels
       - profile_cuts
       - reinforcements
+    EngineInspectRequestModeEnum:
+      enum:
+      - DESIGN
+      - WORKSHOP_QC
+      type: string
+      description: |-
+        * `DESIGN` - DESIGN
+        * `WORKSHOP_QC` - WORKSHOP_QC
     EngineInspectRequestRequest:
       type: object
       properties:
@@ -21320,7 +21905,7 @@ components:
             $ref: '#/components/schemas/StructuralInputRequest'
         mode:
           allOf:
-          - $ref: '#/components/schemas/ModeEnum'
+          - $ref: '#/components/schemas/EngineInspectRequestModeEnum'
           default: DESIGN
       required:
       - color
@@ -24330,14 +24915,6 @@ components:
         * `CARD` - CARD
         * `CHECK` - CHECK
         * `OTHER` - OTHER
-    ModeEnum:
-      enum:
-      - DESIGN
-      - WORKSHOP_QC
-      type: string
-      description: |-
-        * `DESIGN` - DESIGN
-        * `WORKSHOP_QC` - WORKSHOP_QC
     ModuleEvaluation:
       type: object
       properties:

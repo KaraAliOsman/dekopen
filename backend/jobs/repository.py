@@ -92,6 +92,7 @@ def requeue_terminal(
             attempt = 0,
             max_attempts = %s,
             progress = 0,
+            progress_phase = NULL,
             error = NULL,
             result = NULL,
             locked_by = NULL,
@@ -261,6 +262,7 @@ def release_stale(*, now: datetime | None = None) -> int:
             """
             UPDATE public.job_runs
             SET state = CASE WHEN attempt >= max_attempts THEN 'FAILED' ELSE 'QUEUED' END,
+                progress_phase = NULL,
                 locked_by = NULL,
                 locked_at = NULL,
                 completed_at = CASE WHEN attempt >= max_attempts THEN NOW() ELSE completed_at END,
@@ -301,18 +303,28 @@ def release_stale(*, now: datetime | None = None) -> int:
         return released
 
 
-def report_progress(*, job_id: UUID, worker_id: str, progress: float) -> None:
+def report_progress(
+    *,
+    job_id: UUID,
+    worker_id: str,
+    progress: float,
+    phase: str | None = None,
+) -> None:
     """Record progress and renew the lease in one write; raises LockLostError
     when the lease is gone so the handler aborts instead of finishing a job
-    that now belongs to another worker."""
+    that now belongs to another worker. `phase` is the named intermediate
+    state (IA3: "consulting"/"engine"/"proposal") the UI renders next to the
+    numeric percent — NULL keeps the last reported phase."""
     with connection.cursor() as cursor:
         cursor.execute(
             """
             UPDATE public.job_runs
-            SET progress = %s, locked_at = NOW(), updated_at = NOW()
+            SET progress = %s,
+                progress_phase = COALESCE(%s, progress_phase),
+                locked_at = NOW(), updated_at = NOW()
             WHERE id = %s AND locked_by = %s AND state = 'RUNNING'
             """,
-            [progress, str(job_id), worker_id],
+            [progress, phase, str(job_id), worker_id],
         )
         if cursor.rowcount == 0:
             raise LockLostError(job_id)
@@ -343,6 +355,7 @@ def succeed(*, job_id: UUID, worker_id: str, result: dict[str, object]) -> None:
         set_clause="""
             state = 'SUCCEEDED',
             progress = 100.00,
+            progress_phase = NULL,
             result = %s::jsonb,
             error = NULL,
             locked_by = NULL,
@@ -370,6 +383,7 @@ def fail_or_retry(
         worker_id=worker_id,
         set_clause=f"""
             {state_update},
+            progress_phase = NULL,
             error = %s::jsonb,
             locked_by = NULL,
             locked_at = NULL,
@@ -389,6 +403,7 @@ def fail_permanent(*, job_id: UUID, worker_id: str, error: dict[str, object]) ->
         worker_id=worker_id,
         set_clause="""
             state = 'FAILED',
+            progress_phase = NULL,
             error = %s::jsonb,
             locked_by = NULL,
             locked_at = NULL,

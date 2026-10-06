@@ -221,3 +221,16 @@ A fuller capability-by-capability reality map should be added only after a fresh
 - Gate de producción: `release_production` rechaza `measurement_not_confirmed` con posiciones medidas sin confirmar; la rectificación en sucesor entra al diff documental con su Δ.
 - UI: chip "Vano × Fabricación · montaje" en el editor, inspector "Vano y montaje" con preview en vivo, cota doble en el lienzo (vano punteado + holgura por lado) y tolerancia org en Ajustes.
 - Verificado: `make lint|typecheck|test|build` y `make test-db` verdes (`PY=.venv/bin/python`); 14 goldens del motor; pgTAP 177 con trigger+check reales; tests de integración confirm/unconfirm/gate/revisión.
+
+
+## [2026-10-05] IA3 | proveedor de IA real
+
+- `ai_invocations` (migración `20270106000000`): log durable sin contenido por llamada (capability, modelo público, tokens, créditos, `est_cost_usd`, estado ok/error/blocked, `kind=call|probe`); la fila de error se escribe post-rollback vía `error.invocation` + `record_attached`, la de éxito via `on_commit` en la tx del caller. RLS: OWNER/ESTIMATOR/WORKSHOP_MANAGER leen, `ai_backend` inserta.
+- `ai_org_settings.monthly_credit_budget`: techo mensual en créditos wallet verificado dentro del lock (`ai_budget_exceeded` 409, bloqueo suave que el OWNER ajusta en Ajustes).
+- `ai_model_prices` + `ai_audit_logs.est_cost_usd`: costo USD estimado sellado por llamada; NULL sin tarifa (la UI dice "Sin tarifa registrada").
+- `ai_routes` gana `timeout_s`, `retry_max`, `tools_enabled`; reintentos sólo transitorios (5xx/408/425/timeout/429+Retry-After) con backoff acotado; rechazo con tools → un reintento JSON estricto (`tools_fallback`).
+- Proveedor MIMO repineado a `mimo-v2.6-pro` en `token-plan-sgp.xiaomimimo.com/v1` (el pin `primalabs-ai/...RL` divergía de la credencial y moría en 400/401). Los 26 evals IA1 corren con el pin corregido → 26/26 `ai_provider_quota`: la credencial token-plan está sin cuota; verificación real queda pendiente de una credencial pay-as-you-go (no es fallo de código).
+- API nueva: `GET /ai/provider/status/` (miembros, {mode, mock}), `GET|PUT /ai/settings/` (OWNER), `POST /ai/provider/check/` (probe real sin débito), `GET /ai/activity/` (filtros capability/estado, keyset).
+- UI: Ajustes › Inteligencia artificial (OWNER): estado, tabla por capacidad, Probar conexión, presupuesto y consumo del mes; panel "Actividad de IA" en /jobs con filtros; insignia "Modo de prueba" en el shell cuando MOCK sirve (miembros incluidos); el Orb lee fases del worker (`progress_phase`: contexto/modelo/propuesta); el job muestra su costo (créditos·tokens·≈USD).
+- MOCK seguro en prod: sólo `AI_GATEWAY_MOCK_ENABLED=1` explícito lo abre en producción — DEBUG no lo abre (test congelado). La clave del proveedor nunca sale del servidor (test: no llega al response ni al log).
+- Verificado: `make lint|typecheck|test|build` verdes; 23 tests nuevos `test_ia3_runtime.py` (reintento, timeout, presupuesto, fallback JSON, tools, gate MOCK, fuga de clave); evals MOCK 0/26 baseline + MIMO 0/26 por cuota documentados.

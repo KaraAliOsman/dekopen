@@ -5,6 +5,7 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { AiInvokeResponseAssistantMessage } from "./aiInvokeResponseAssistantMessage";
 
 export interface AiInvokeResponse {
   audit_id: string;
@@ -15,4 +16,7 @@ export interface AiInvokeResponse {
   tokens_completion: number;
   latency_ms: number;
   credits_debited: number;
+  tool_calls?: unknown[];
+  assistant_message?: AiInvokeResponseAssistantMessage;
+  tools_fallback?: boolean;
 }

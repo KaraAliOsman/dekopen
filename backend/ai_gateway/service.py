@@ -16,7 +16,10 @@ import json
 from typing import Any
 from uuid import UUID
 
+from django.db import transaction
+
 from authentication.errors import contract_error
+from ai_gateway import invocations
 from ai_gateway.providers import ProviderError, provider_for
 from billing import wallet
 from documents.repository import DocumentaryError, rows
@@ -105,7 +108,7 @@ def _input_hash(input_payload: dict) -> str:
 
 def _response(*, audit: dict, capability: str, route: dict, result: dict) -> dict:
     """The white-label invoke envelope — replayed verbatim on idempotent retries."""
-    return {
+    envelope = {
         "audit_id": str(audit["id"]),
         "capability": capability,
         "model": route["public_name"],
@@ -115,6 +118,35 @@ def _response(*, audit: dict, capability: str, route: dict, result: dict) -> dic
         "latency_ms": int(result["latency_ms"]),
         "credits_debited": int(route["credits_cost"]),
     }
+    # Native tool calling rides through verbatim: the agent loop executes
+    # tool_calls server-side; the audit row stores them inside
+    # output_payload (already sealed member-readable contract fields).
+    for key in ("tool_calls", "assistant_message"):
+        if result.get(key):
+            envelope[key] = result[key]
+    if result.get("tools_fallback"):
+        envelope["tools_fallback"] = True
+    return envelope
+
+
+def _estimate_cost_usd(*, provider: str, model: str, result: dict) -> Any:
+    """Tokens × the registered price sheet — Decimal, or None when the model
+    has no price row (honest absence: never estimate from nothing)."""
+    from decimal import Decimal
+
+    found = rows(
+        "SELECT usd_per_mtok_input, usd_per_mtok_output"
+        " FROM public.ai_model_prices WHERE provider=%s AND provider_model=%s",
+        [provider, model],
+    )
+    if not found:
+        return None
+    price = found[0]
+    return (
+        Decimal(result["tokens_prompt"]) * Decimal(str(price["usd_per_mtok_input"]))
+        + Decimal(result["tokens_completion"])
+        * Decimal(str(price["usd_per_mtok_output"]))
+    ) / Decimal("1000000")
 
 
 def _replay(
@@ -162,14 +194,15 @@ def _audit(
     input_payload: dict,
     result: dict,
     response: dict,
+    est_cost_usd: Any = None,
 ) -> dict | None:
     inserted = rows(
         "INSERT INTO public.ai_audit_logs("
         "org_id, user_id, tool_name, model_used, prompt_version, retention_until,"
         " input_payload, output_payload, points_debited,"
         " tokens_prompt, tokens_completion, latency_ms, state_hash_before,"
-        " operation_key, route_id)"
-        " VALUES(%s,%s,%s,%s,%s, now() + %s * interval '1 day',%s,%s,%s,%s,%s,%s,%s,%s,%s)"
+        " operation_key, route_id, est_cost_usd)"
+        " VALUES(%s,%s,%s,%s,%s, now() + %s * interval '1 day',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
         " ON CONFLICT (org_id, operation_key) WHERE operation_key IS NOT NULL DO NOTHING"
         " RETURNING *",
         [
@@ -191,6 +224,7 @@ def _audit(
             _input_hash(input_payload),
             operation_key,
             str(route["id"]),
+            est_cost_usd,
         ],
     )
     if inserted:
@@ -268,11 +302,51 @@ def invoke(
         # Pre-invocation hook: balance is checked while the org row is locked,
         # before any provider request exists — never debit after the fact.
         if int(organization["credits_balance"]) < credits:
-            raise contract_error(
+            error = contract_error(
                 409,
                 "insufficient_credits",
                 "No quedan créditos suficientes para esta operación de IA.",
             )
+            error.invocation = invocations.build_entry(
+                org_id=org_id,
+                user_id=user_id,
+                capability=capability,
+                tool_name=tool_name or capability,
+                operation_key=operation_key,
+                mode="test" if str(route["provider"]).upper() == "MOCK" else "live",
+                public_model=str(route["public_name"]),
+                status="blocked",
+                error_code="insufficient_credits",
+            )
+            raise error
+        # §IA3 — monthly budget soft block: the org's own ceiling in wallet
+        # credits, measured against this month's sealed debits. A breached
+        # budget is a soft stop — the owner lifts it in Settings, no plan
+        # change required. Both reads run inside the wallet lock so a burst
+        # of concurrent calls can't sail past the cap.
+        budget = invocations.monthly_budget(org_id)
+        if budget is not None:
+            spent = invocations.month_credits_spent(org_id)
+            if spent + credits > budget:
+                error = contract_error(
+                    409,
+                    "ai_budget_exceeded",
+                    "Llegaste al presupuesto mensual de IA de tu organización. "
+                    "Ajusta el límite en Ajustes › Inteligencia artificial "
+                    "o espera al próximo mes.",
+                )
+                error.invocation = invocations.build_entry(
+                    org_id=org_id,
+                    user_id=user_id,
+                    capability=capability,
+                    tool_name=tool_name or capability,
+                    operation_key=operation_key,
+                    mode="test" if str(route["provider"]).upper() == "MOCK" else "live",
+                    public_model=str(route["public_name"]),
+                    status="blocked",
+                    error_code="ai_budget_exceeded",
+                )
+                raise error
         # A declared source resolves to its canonical object key under the
         # active org; the provider signs exactly that path at wire time —
         # never a path the request supplied.
@@ -280,17 +354,36 @@ def invoke(
     # The provider call runs OUTSIDE the wallet lock — holding the org row
     # FOR UPDATE across a network call would serialize every tenant request
     # behind provider latency (and a hung provider behind its full timeout).
-    result = provider_for(route).invoke(
-        route=route,
-        capability=capability,
-        input_payload=input_payload,
-        provider_options=provider_options,
-        document_path=document_path,
-        # The wire key is org-namespaced: a real provider dedupes on the
-        # header globally, so the raw org-scoped key alone would collide
-        # across tenants sharing a capability-level key prefix.
-        operation_key=f"{org_id}:{operation_key}",
-    )
+    try:
+        result = provider_for(route).invoke(
+            route=route,
+            capability=capability,
+            input_payload=input_payload,
+            provider_options=_effective_options(route, provider_options),
+            document_path=document_path,
+            # The wire key is org-namespaced: a real provider dedupes on the
+            # header globally, so the raw org-scoped key alone would collide
+            # across tenants sharing a capability-level key prefix.
+            operation_key=f"{org_id}:{operation_key}",
+        )
+    except ProviderError as error:
+        # The failure row rides the exception: the caller's post-rollback
+        # bookkeeping (error_recorder on requests, the job handler on
+        # worker runs) writes it once the doomed transaction unwound.
+        entry = invocations.build_entry(
+            org_id=org_id,
+            user_id=user_id,
+            capability=capability,
+            tool_name=tool_name or capability,
+            operation_key=operation_key,
+            mode="test" if str(route["provider"]).upper() == "MOCK" else "live",
+            public_model=str(route["public_name"]),
+            status="error",
+            error_code=error.code,
+        )
+        error.invocation = entry
+        invocations.log_call(entry)
+        raise
     if len(str(result["output"])) > MAX_OUTPUT_CHARS:
         raise ProviderError("ai_provider_output_too_large")
     with wallet.financial_transaction(org_id):
@@ -306,6 +399,13 @@ def invoke(
         )
         if replay is not None:
             return replay
+        # Estimated provider cost sealed with the audit — Decimal from the
+        # price sheet over the effective model (env override or pin).
+        est_cost = _estimate_cost_usd(
+            provider=str(route["provider"]),
+            model=str(result.get("model") or route["provider_model"]),
+            result=result,
+        )
         audit = _audit(
             org_id=org_id,
             user_id=user_id,
@@ -314,6 +414,7 @@ def invoke(
             operation_key=operation_key,
             input_payload=input_payload,
             result=result,
+            est_cost_usd=est_cost,
             response={
                 "capability": capability,
                 "model": route["public_name"],
@@ -335,7 +436,38 @@ def invoke(
                 input_hash=input_hash,
             )
         wallet.debit(org_id, credits, audit["id"])
+        # The committed call lands in the org's invocation log when the
+        # caller's transaction commits — on_commit keeps the log honest
+        # (a rolled-back round writes nothing; the error path covers it).
+        entry = invocations.build_entry(
+            org_id=org_id,
+            user_id=user_id,
+            capability=capability,
+            tool_name=tool_name or capability,
+            operation_key=operation_key,
+            mode="test" if str(route["provider"]).upper() == "MOCK" else "live",
+            public_model=str(route["public_name"]),
+            tokens_prompt=int(result["tokens_prompt"]),
+            tokens_completion=int(result["tokens_completion"]),
+            latency_ms=int(result["latency_ms"]),
+            credits=credits,
+            est_cost_usd=est_cost,
+            status="ok",
+        )
+        invocations.log_call(entry)
+        transaction.on_commit(lambda: invocations.record(entry))
         return _response(audit=audit, capability=capability, route=route, result=result)
+
+
+def _effective_options(route: dict, provider_options: dict | None) -> dict:
+    """Route-level feature gates applied server-side: a route with
+    tools_enabled=false never sends tool specs even if the caller asked —
+    operators can disable tool calling per capability without a deploy."""
+    options = dict(provider_options or {})
+    if route.get("tools_enabled") is False:
+        options.pop("tools", None)
+        options.pop("tool_choice", None)
+    return options
 
 
 __all__ = ["ProviderError", "invoke"]

@@ -10,9 +10,10 @@
  * * `DESIGN` - DESIGN
  * * `WORKSHOP_QC` - WORKSHOP_QC
  */
-export type ModeEnum = (typeof ModeEnum)[keyof typeof ModeEnum];
+export type EngineInspectRequestModeEnum =
+  (typeof EngineInspectRequestModeEnum)[keyof typeof EngineInspectRequestModeEnum];
 
-export const ModeEnum = {
+export const EngineInspectRequestModeEnum = {
   DESIGN: "DESIGN",
   WORKSHOP_QC: "WORKSHOP_QC",
 } as const;

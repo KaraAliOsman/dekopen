@@ -85,7 +85,7 @@ def test_worker_executes_handler_and_reports_success(monkeypatch) -> None:
     succeeded: dict[str, object] = {}
     progress_values: list[float] = []
 
-    def record_progress(*, job_id, worker_id, progress):
+    def record_progress(*, job_id, worker_id, progress, phase=None):
         progress_values.append(progress)
 
     monkeypatch.setattr(repository, "renew_lock", lambda **kwargs: None)

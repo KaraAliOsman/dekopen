@@ -361,7 +361,7 @@ def live_runs(*, org_id: UUID, job_ids: list) -> dict:
     with job_service.job_backend():
         found = rows(
             "SELECT payload->>'ai_job_id' AS ai_job_id, state, progress,"
-            " updated_at FROM public.job_runs"
+            " progress_phase, updated_at FROM public.job_runs"
             " WHERE org_id = %s AND type = 'ai.agent.run'"
             " AND payload->>'ai_job_id' = ANY(%s::text[])"
             " ORDER BY created_at DESC",
@@ -375,6 +375,10 @@ def live_runs(*, org_id: UUID, job_ids: list) -> dict:
         latest[key] = {
             "state": run["state"],
             "progress": float(run["progress"] or 0),
+            # §IA3 — the named intermediate state the worker reports; the UI
+            # renders "Consultando el proyecto"/"Calculando con el motor"
+            # from this instead of guessing from the percent.
+            "phase": run["progress_phase"],
             "updated_at": str(run["updated_at"]),
         }
     return latest
@@ -384,7 +388,7 @@ def get_job(*, org_id: UUID, user_id: UUID, job_id: UUID) -> dict | None:
     found = rows(
         "SELECT id, org_id, user_id, surface, refs, goal, state, plan,"
         " transcript, artifacts, warnings, result, error_code, outcomes,"
-        " created_at, updated_at, completed_at"
+        " operation_key, created_at, updated_at, completed_at"
         " FROM public.ai_jobs WHERE id = %s AND org_id = %s AND user_id = %s",
         [str(job_id), str(org_id), str(user_id)],
     )
@@ -392,6 +396,11 @@ def get_job(*, org_id: UUID, user_id: UUID, job_id: UUID) -> dict | None:
         return None
     job = _decode(found[0])
     job["live"] = live_runs(org_id=org_id, job_ids=[job_id]).get(job["id"])
+    # §IA3 — spend attributed to this job's operation key (all its rounds).
+    if job.get("operation_key"):
+        from ai_gateway import invocations  # lazy — invocations imports jobs
+
+        job["cost"] = invocations.job_cost(org_id, str(job["operation_key"]))
     return job
 
 
