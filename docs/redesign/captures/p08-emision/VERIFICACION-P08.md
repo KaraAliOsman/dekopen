@@ -136,3 +136,15 @@ de renderizar; #4 `latestRevision` usa la revisión vigente (`at(-1)`); #3 el
 checklist declara `inspector_blocked` por posición; #1 el panel de cambios
 globales envuelve el árbol clásico (`wrapTreeAsProduct`) para correr las ops
 por el registro del editor en vez de declarar «unsupported» en todo.
+
+## Addendum 2 — fix del defecto #1 verificado E2E (cambios globales)
+
+Tras el fix `wrapTreeAsProduct` en `GlobalChangesPanel.preview()`:
+vidrio DVH-20 → 5/5 `ready` con costos reales (`design-batch-preview` 200),
+Aplicar → 5× PUT 200 «5 de 5 posiciones actualizadas», Deshacer → 5× PUT 200
+revertidos. Acabado FOILED: `batch-preview` 422 se declara honesto («sin
+costo referencial» + notice del backend) y apply → 5/5 real. LOWE-24 sin
+mapping de compra: apply a nivel diseño OK; el rechazo
+`glass_purchase_mapping_missing_or_ambiguous` se difiere al freeze (hueco
+cross-system #5 conocido). Capturas `smoke2-*.png`. Menor restante: enums
+de acabado ahora traducidos vía `projects.color.*`.
