@@ -120,3 +120,19 @@ pos5 a DVH-20.
 - `evidence-*.png` — capturas manuales del flujo real (19).
 - `COT-P-000002-REV-A.pdf` / `-REV-B.pdf` — evidencia de inmutabilidad.
 - `report.json` / `index.html` — reporte ux:capture.
+
+## Addendum post-rebase (sobre P06+ED1+P13+P15) — smoke PASS
+
+Re-verificado en navegador real tras el rebase sobre `integracion/v1` final:
+checklist 9/9 con compuerta real (bloqueó emisión por regla crítica del
+inspector hasta corregir el vidrio), preview DOC-01 renderiza (defecto #2
+resuelto — huella poblada), emit REV-A limpio, coexistencia y persistencia de
+«Vigencia de la cotización» (P08) + «Etiquetas de pieza» (P13) en Ajustes,
+portal + «Solicitar cambios» → Hoy/campana, claro/oscuro limpio.
+Capturas `smoke-*.png` en este directorio.
+
+Defectos #1–#4 corregidos en rama: #2 preview canonicaliza el snapshot antes
+de renderizar; #4 `latestRevision` usa la revisión vigente (`at(-1)`); #3 el
+checklist declara `inspector_blocked` por posición; #1 el panel de cambios
+globales envuelve el árbol clásico (`wrapTreeAsProduct`) para correr las ops
+por el registro del editor en vez de declarar «unsupported» en todo.
