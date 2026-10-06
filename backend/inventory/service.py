@@ -16,7 +16,7 @@ from uuid import UUID
 from django.db import transaction
 
 from dekopen_engine.documentary_canonical import documentary_sha256_v1
-from documents.repository import DocumentaryError, documentary_backend, one, rows
+from documents.repository import DocumentaryError, documentary_backend, next_human_code, one, rows
 from pricing.repository import json_text
 
 
@@ -228,7 +228,7 @@ def order_receiving(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
         )
         receipts = rows(
             """
-            SELECT id, receipt_key, note, received_by, created_at
+            SELECT id, receipt_key, receipt_code, note, received_by, created_at
             FROM public.order_receipts
             WHERE order_id = %s AND org_id = %s
             ORDER BY created_at
@@ -345,12 +345,16 @@ def receive_order(
                 [str(order_id), str(org_id)],
             )
         }
+        # Folio REC- bajo el lock de la clave idempotente: la función
+        # serializa por org con su propio advisory lock, tomado siempre
+        # después del de receipt_key (orden de locks consistente).
         receipt = one(
             """
-            INSERT INTO public.order_receipts(org_id, order_id, receipt_key, note, received_by)
-            VALUES (%s, %s, %s, %s, %s) RETURNING id
+            INSERT INTO public.order_receipts(org_id, order_id, receipt_key, receipt_code, note, received_by)
+            VALUES (%s, %s, %s, %s, %s, %s) RETURNING id, receipt_code
             """,
-            [str(org_id), str(order_id), receipt_key, note, str(actor_id)],
+            [str(org_id), str(order_id), receipt_key,
+             next_human_code(org_id, "order_receipts"), note, str(actor_id)],
         )
         receipt_id = receipt["id"]
         for entry in lines:

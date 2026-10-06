@@ -110,6 +110,22 @@ def one(
     return result[0]
 
 
+def next_human_code(org_id: UUID | str, kind: str) -> str:
+    """Org-scoped human folio — 'OC-000123' purchase orders,
+    'RT-000045' remnants, 'REC-000012' purchase receipts.
+
+    private.next_human_code serializes concurrent allocations per org with
+    a transaction advisory lock, so two simultaneous inserts get distinct
+    consecutive codes; a rollback frees the lock without burning a number."""
+    return str(
+        one(
+            "SELECT private.next_human_code(%s::uuid, %s) AS code",
+            [str(org_id), kind],
+            code="human_code_allocation_failed",
+        )["code"]
+    )
+
+
 @contextmanager
 def documentary_backend() -> Iterator[None]:
     """Switch to the documentary role, restoring the caller's role on exit.

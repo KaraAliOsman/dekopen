@@ -11,6 +11,7 @@ import type { StockKindEnum } from "./stockKindEnum";
 
 export interface Remnant {
   id: string;
+  remnant_code: string;
   kind: StockKindEnum;
   /** @nullable */
   stock_authority_id: string | null;

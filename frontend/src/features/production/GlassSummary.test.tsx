@@ -43,7 +43,7 @@ describe("GlassSummary", () => {
     expect(screen.getByText("4-16-4 Float Incoloro")).toBeTruthy();
     expect(screen.getByText("4.4.2-12-4 Laminado")).toBeTruthy();
     // two identical panes collapse into one dims row, order qty 2 → 4
-    expect(screen.getByText("680×1310 mm")).toBeTruthy();
+    expect(screen.getByText("680×1 310 mm")).toBeTruthy();
     expect(screen.getByText("4")).toBeTruthy();
     // exact decimal sums: 2×0.8908=1.7816 → ×2 units = 3.5632; total 4.8474
     expect(screen.getByText("3.5632 m²")).toBeTruthy();

@@ -37,6 +37,46 @@ architecture. Don't escalate those.
   require an explicit human action. No silent irreversibility.
 - AI writes are audited before they are applied (`ai_audit_logs`).
 
+## Human identifiers and number format (§3.3)
+
+Every entity a person names aloud carries a stable org-scoped human code, and
+every visible number follows the closed format table in
+`docs/design/CONSTITUCION.md` §3.3.
+
+| Magnitude | Format | Example |
+|---|---|---|
+| mm (cotas, cortes, vanos) | integer, thin space U+2009 thousands separator | `2 400 × 1 800 mm` |
+| mm with declared precision | decimal comma per the authority | `1 249,5 mm` |
+| CLP | `$` + dot thousands, no decimals | `$1.435.471` |
+| USD / UF | 2 decimals / 4 decimals | `US$ 1.234,50` · `UF 38,4521` |
+| Percentage | 1 decimal, comma | `32,5 %` |
+| Area | 2 decimals | `2,16 m²` |
+| Weight | 1 decimal | `38,4 kg` |
+| Uw / Ug | 2 decimals | `1,40 W/m²K` |
+| Date | `dd-mm-aaaa` America/Santiago | `04-10-2026` |
+
+Rules that hold across surfaces:
+
+- Human codes are allocated by `private.next_human_code(org_id, kind)` under a
+  per-org advisory lock and sealed by `private.guard_human_code` triggers:
+  `OC-######` (purchase orders; pre-seal rows keep `PO-`), `RT-######`
+  (remnants), `REC-######` (receipts), plus the existing `OT-…` work-order and
+  `P##` position codes. The code is the address: global search resolves `OC-000012`,
+  `RT-000003`, `REC-000004` and OT/position codes.
+- A roll-back leaves a hole in the sequence — acceptable and documented; a code
+  that was never issued is never recycled into another row.
+- Frontend display formatting lives in `frontend/src/format.ts` (`fmtMm`,
+  `fmtMoney`, `fmtArea`, `fmtWeight`, `fmtUvalue`, `fmtPct`, `fmtDate`,
+  `shortTechnicalId`); `<EntityCode>` in `ui/format.tsx` is the only component
+  allowed to show technical IDs.
+- **Input boundary:** editable or persisted values stay canonical machine
+  decimal — dot separator, no grouping (`fmtMmCanonical`, never `fmtMm`).
+  Machine exports (CSV cells, DXF labels) also stay canonical/ASCII so they
+  round-trip.
+- No raw UUID or hash ≥ 10 hex chars on client or workshop surfaces; fingerprints
+  appear only abbreviated (8 hex) in document footers/titleblocks. QR payloads
+  keep the full technical data.
+
 ## Product judgment
 
 - Users see workshop language: what is wrong, why it matters, what it affects,

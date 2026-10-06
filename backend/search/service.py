@@ -172,6 +172,45 @@ def search(org_id: UUID, query: str, role: str = "OWNER") -> dict:
             }
         )
 
+    # §8 — el folio es una dirección: teclear 'RT-000045' o 'REC-000012'
+    # en la paleta lleva directo a la entidad, igual que escanear su QR.
+    for row in org(
+        "SELECT id, remnant_code, kind::text, status::text, sheet_workshop_sku"
+        " FROM public.inventory_remnants"
+        " WHERE org_id=%s AND (__WHERE__)"
+        f" ORDER BY remnant_code LIMIT {GROUP_LIMIT}",
+        "remnant_code",
+        "sheet_workshop_sku",
+    ):
+        results.append(
+            {
+                "group": "remnants",
+                "id": str(row["id"]),
+                "title": row["remnant_code"],
+                "subtitle": f"{row['kind']} · {row['status']}"
+                + (f" · {row['sheet_workshop_sku']}" if row["sheet_workshop_sku"] else ""),
+                "path": "/purchasing",
+            }
+        )
+
+    for row in org(
+        "SELECT r.id, r.receipt_code, o.order_code"
+        " FROM public.order_receipts r JOIN public.orders o ON o.id = r.order_id"
+        " WHERE r.org_id=%s AND o.org_id=%s AND (__WHERE__)"
+        f" ORDER BY r.receipt_code LIMIT {GROUP_LIMIT}",
+        "r.receipt_code",
+        org_params=2,
+    ):
+        results.append(
+            {
+                "group": "receipts",
+                "id": str(row["id"]),
+                "title": row["receipt_code"],
+                "subtitle": row["order_code"],
+                "path": "/purchasing",
+            }
+        )
+
     for row in org(
         "SELECT i.id, i.invoice_code, i.project_id, pr.code AS project_code"
         " FROM public.project_invoices i JOIN public.projects pr ON pr.id = i.project_id"

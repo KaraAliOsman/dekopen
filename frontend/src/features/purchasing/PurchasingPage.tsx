@@ -154,7 +154,7 @@ type ReceivingState = {
   lines: ReceivingLine[];
   receipts: Array<{
     id: string;
-    receipt_key: string;
+    receipt_code: string;
     created_at: string;
     note: string | null;
   }>;
@@ -1911,7 +1911,7 @@ function ReceivingPanel({
               <caption>{t("purchasing.receiveHistory")}</caption>
               <thead>
                 <tr>
-                  <th>{t("purchasing.receiptKey")}</th>
+                  <th>{t("purchasing.receiptCode")}</th>
                   <th>{t("purchasing.receiptDate")}</th>
                   <th>{t("purchasing.receiptNote")}</th>
                 </tr>
@@ -1919,7 +1919,7 @@ function ReceivingPanel({
               <tbody>
                 {state.receipts.map((receipt) => (
                   <tr key={receipt.id}>
-                    <td>{receipt.receipt_key}</td>
+                    <td>{receipt.receipt_code}</td>
                     <td>{formatDateTime(receipt.created_at)}</td>
                     <td>{receipt.note || "—"}</td>
                   </tr>

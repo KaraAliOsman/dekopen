@@ -268,7 +268,7 @@ def test_client_document_escapes_input_and_never_contains_raw_cost() -> None:
     html = _doc01(revision_snapshot())
     assert "Cliente &lt;Seguro&gt;" in html
     assert "60000.00" not in html
-    assert "$\u00a0119.000" in html
+    assert "$119.000" in html
 
 
 def test_client_quote_includes_deterministic_opening_drawings() -> None:
@@ -422,8 +422,8 @@ def test_client_quote_renders_discount_fraction_as_percent() -> None:
     snapshot["positions"][0]["discount_pct"] = "0.10"  # type: ignore[index]
     snapshot["positions"][0]["price_net"] = "119000"  # type: ignore[index]
     html = _doc01(snapshot)
-    assert "-10%" in html
-    assert "descuento del 10%" in html
+    assert "-10,0 %" in html
+    assert "descuento del 10,0 %" in html
     assert "0.1 %" not in html and "0.1%" not in html
 
 
@@ -508,8 +508,8 @@ def test_workshop_order_prints_annotations_drawing_and_assembly_matrix() -> None
         ],
     }]
     html = _doc03(snapshot)
-    assert "100.00, 500.00, 900.00" in html
-    assert "150.00" in html
+    assert "100, 500, 900" in html
+    assert "150" in html
     assert "Matriz de ensamble" in html
     assert "BELONGS_TO_LEAF" in html and "REINFORCES" in html
     # heterogeneous endpoints resolve to the printed physical piece codes —
@@ -519,16 +519,16 @@ def test_workshop_order_prints_annotations_drawing_and_assembly_matrix() -> None
     matrix = html.split("Matriz de ensamble", 1)[1]
     assert "a" * 64 not in matrix and "b" * 64 not in matrix
     assert "c" * 64 not in matrix and "e" * 64 not in matrix
-    assert "1050.00" in html
+    assert "1\u2009050" in html
     assert "<svg" in html
 
 
 def test_qc_is_blank_and_cost_report_uses_frozen_not_recorded_authority() -> None:
     qc = _doc06(revision_snapshot())
-    assert "Diferencia ≤ 1.50 mm" in qc
+    assert "Diferencia ≤ 1,5 mm" in qc
     assert "________________" in qc
     cost = _doc07(revision_snapshot())
-    assert "$\u00a060.000" in cost
+    assert "$60.000" in cost
     assert "NO REGISTRADA" in cost
     assert "valor: —" in cost
     invalid = {**revision_snapshot(), "realized_waste": {"status": "RECORDED", "value": "0"}}

@@ -4,7 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { projectsList, projectsRetrieve } from "../../api/generated/dekopen";
 
 import type { PriceResponse, ProjectResponse } from "../../api/generated/models";
-import { formatDateTime } from "../../format";
+import { formatDateTime, shortTechnicalId } from "../../format";
 import { formatMoney } from "../../format";
 import { apiMutator, ApiError } from "../../api/apiMutator";
 import { actionErrorDetail } from "../errors";
@@ -115,12 +115,12 @@ function contextLabel(value: unknown): string {
 }
 
 const ISO_DAY = /^(\d{4})-(\d{2})-(\d{2})/;
-/** Rates store as fractions (0.35); people think in percents. Render the
- * percent value with at most two decimals — never float artifacts. */
+/** Rates store as fractions (0.35); people think in percents — §3.3 a un
+ * decimal con coma. */
 function pctDisplay(value: unknown): string {
   const pct = Number(value) * 100;
   if (!Number.isFinite(pct)) return "0";
-  return pct.toFixed(2).replace(/\.?0+$/, "");
+  return pct.toFixed(1).replace(".", ",");
 }
 /** Stored values are ISO; operators read DD-MM-AAAA everywhere else in the
  * product. Render the business format, keep the raw value for submission. */
@@ -724,7 +724,7 @@ function auditRecordLabel(entity: string, record: Record<string, unknown> | null
     if (typeof value === "string" && value !== "") return value;
   }
   const id = record["entity_id"] ?? record["id"];
-  return typeof id === "string" ? `${entity} ${id.slice(0, 8)}` : entity;
+  return typeof id === "string" ? `${entity} ${shortTechnicalId(id)}` : entity;
 }
 
 function auditValue(value: unknown): string {
@@ -1068,12 +1068,13 @@ function CostComposition({
       </table>
       <p className="cost-composition__math">
         {t("pricing.materials")} {formatMoney(entry.materials_cost ?? "0", currency)} +{" "}
-        {t("pricing.wasteShort")} {pctDisplay(entry.waste_pct)}%
+        {t("pricing.wasteShort")} {pctDisplay(entry.waste_pct)} %
         {labour !== null &&
           ` + ${t("pricing.laborShort")} ${formatMoney(String(labour), currency)}`}{" "}
         → {t("pricing.unitCost")} {formatMoney(entry.unit_cost ?? "0", currency)}
-        {marginPct !== null && ` · ${t("pricing.marginRealized")} ${marginPct.toFixed(1)}%`}
-        {discount > 0 && ` · ${t("pricing.discount")} ${pctDisplay(discount)}%`} →{" "}
+        {marginPct !== null &&
+          ` · ${t("pricing.marginRealized")} ${marginPct.toFixed(1).replace(".", ",")} %`}
+        {discount > 0 && ` · ${t("pricing.discount")} ${pctDisplay(discount)} %`} →{" "}
         {formatMoney(lineNet, currency)}
       </p>
     </div>
@@ -1099,7 +1100,7 @@ function marginText(net: string, cost: string, currency: string): string {
   const cents = diffCents % 100n;
   const signed = diffCents < 0n ? "-" : "";
   const text = `${signed}${whole < 0n ? -whole : whole}.${`${cents < 0n ? -cents : cents}`.padStart(2, "0")}`;
-  return `${formatMoney(text, currency)} · ${margin.toFixed(1)} %`;
+  return `${formatMoney(text, currency)} · ${margin.toFixed(1).replace(".", ",")} %`;
 }
 
 /** §03-D — the pricing decision surface: the estimator and the approver
@@ -1283,7 +1284,7 @@ function OperationDecision({
                 <small>
                   {" "}
                   ({diffPct > 0 ? "+" : ""}
-                  {diffPct.toFixed(1)}%)
+                  {diffPct.toFixed(1).replace(".", ",")} %)
                 </small>
               )}
             </strong>

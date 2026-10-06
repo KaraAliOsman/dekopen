@@ -99,13 +99,13 @@ describe("API-owned canvas outputs", () => {
     );
 
     expect(screen.getByText("FIXED")).toBeInTheDocument();
-    expect(screen.getByTestId("canvas-glass-dimension")).toHaveTextContent("876.54 × 765.43 mm");
+    expect(screen.getByTestId("canvas-glass-dimension")).toHaveTextContent("876,54 × 765,43 mm");
     expect(screen.getByTestId("fixed-glass")).toHaveAttribute("data-width-mm", "876.54");
 
     rerender(<CanvasTechnicalResults response={sentinelResponse} />);
-    expect(screen.getByTestId("technical-frame")).toHaveTextContent("1111.25 × 1222.5 mm");
-    expect(screen.getByTestId("technical-reinforcement")).toHaveTextContent("1066.6 mm");
-    expect(screen.getByTestId("technical-glass")).toHaveTextContent("876.54 × 765.43 mm");
-    expect(screen.getByTestId("technical-bead")).toHaveTextContent("777.75 mm");
+    expect(screen.getByTestId("technical-frame")).toHaveTextContent("1 111,25 × 1 222,5 mm");
+    expect(screen.getByTestId("technical-reinforcement")).toHaveTextContent("1 066,6 mm");
+    expect(screen.getByTestId("technical-glass")).toHaveTextContent("876,54 × 765,43 mm");
+    expect(screen.getByTestId("technical-bead")).toHaveTextContent("777,75 mm");
   });
 });

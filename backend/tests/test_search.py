@@ -49,6 +49,22 @@ def _seed(responses):
                     "status": "IN_PROGRESS",
                 }
             ],
+            [
+                {
+                    "id": uuid4(),
+                    "remnant_code": "RT-000045",
+                    "kind": "SHEET",
+                    "status": "AVAILABLE",
+                    "sheet_workshop_sku": "CH-44",
+                }
+            ],
+            [
+                {
+                    "id": uuid4(),
+                    "receipt_code": "REC-000012",
+                    "order_code": "OC-000123",
+                }
+            ],
             [{"id": uuid4(), "invoice_code": "FAC-3", "project_id": pid, "project_code": "PRJ-1"}],
             [{"id": uuid4(), "note_code": "GD-2", "order_code": "OT-9"}],
             [{"id": aid, "sku": "SIL-1", "name": "Silicona", "category": "SUPPLY"}],
@@ -77,6 +93,10 @@ def test_every_group_maps_row_to_result(fake_rows):
     assert by_group["systems"][0]["title"] == "DEMO_60 · Demo 60"
     assert len(by_group["articles"]) == 2
     assert by_group["orders"][0]["path"] == "/production"
+    assert by_group["remnants"][0]["title"] == "RT-000045"
+    assert by_group["remnants"][0]["subtitle"] == "SHEET · AVAILABLE · CH-44"
+    assert by_group["receipts"][0]["title"] == "REC-000012"
+    assert by_group["receipts"][0]["path"] == "/purchasing"
     assert by_group["documents"][0]["title"] == "FAC-3"
     assert by_group["documents"][1]["title"] == "GD-2"
     assert by_group["inventory"][0]["path"] == "/purchasing"

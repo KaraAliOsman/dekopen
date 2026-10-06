@@ -908,7 +908,7 @@ it("shows unit price, per-line discount and the position thumbnail on the decisi
   // line_net is a position TOTAL — unit price and discount sit next to it.
   await screen.findByText(t("pricing.unitPrice"));
   expect(screen.getByText(formatMoney("31578.9474", "CLP"))).toBeInTheDocument();
-  expect(screen.getByText("−5 %")).toBeInTheDocument();
+  expect(screen.getByText("−5,0 %")).toBeInTheDocument();
   expect(screen.getByText(formatMoney("90000", "CLP"))).toBeInTheDocument();
   // A legible drawing of the position, not a generic icon.
   expect(document.querySelector(".operation-lines__vano svg")).not.toBeNull();

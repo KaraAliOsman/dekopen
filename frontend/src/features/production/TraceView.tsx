@@ -63,6 +63,7 @@ type TraceMovement = {
 
 type TraceRemnant = {
   id?: string;
+  remnant_code?: string;
   kind?: string;
   status?: string;
   length_mm?: string;
@@ -211,6 +212,7 @@ export function TraceStock({ stock }: { stock: ProductionOrderTraceStock }) {
         <ul className="production-trace-remnants">
           {remnants.map((remnant) => (
             <li key={remnant.id}>
+              {remnant.remnant_code ? <strong>{remnant.remnant_code} · </strong> : null}
               {remnant.rack_location ? <strong>{remnant.rack_location} · </strong> : null}
               {stockKindLabel(remnant.kind)} · {remnantStatusLabel(remnant.status)}
               {remnant.length_mm ? ` · ${fmtMm(remnant.length_mm)} mm` : ""}

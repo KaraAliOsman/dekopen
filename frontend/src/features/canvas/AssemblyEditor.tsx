@@ -1775,7 +1775,7 @@ function TechnicalPanel({
                     {cuts.map((cut, index) => (
                       <tr key={`${cut.sku}-${index}`}>
                         <td>{cut.sku}</td>
-                        <td>{Number(cut.length_mm).toFixed(0)}</td>
+                        <td>{fmtMm(cut.length_mm)}</td>
                         <td>{cut.qty}</td>
                       </tr>
                     ))}
@@ -1798,7 +1798,7 @@ function TechnicalPanel({
                       <tr key={`${glass.bay_id}-${index}`}>
                         <td>{glass.article_sku ?? "—"}</td>
                         <td>
-                          {Number(glass.width_mm).toFixed(0)} × {Number(glass.height_mm).toFixed(0)}
+                          {fmtMm(glass.width_mm)} × {fmtMm(glass.height_mm)}
                         </td>
                       </tr>
                     ))}
@@ -1821,7 +1821,7 @@ function TechnicalPanel({
                       <tr key={`${panel.bay_id}-${index}`}>
                         <td>{panel.sku}</td>
                         <td>
-                          {Number(panel.width_mm).toFixed(0)} × {Number(panel.height_mm).toFixed(0)}
+                          {fmtMm(panel.width_mm)} × {fmtMm(panel.height_mm)}
                         </td>
                       </tr>
                     ))}
@@ -2581,7 +2581,7 @@ export function AssemblyEditor({
   // state, and save still requires the fresh engine verdict upstream.
   const evaluating = isPending && inputs.systemId !== null;
   const planBox = couplings.length > 0 && evaluation?.plan ? planBounds(evaluation.plan) : null;
-  const statusText = `${front.totalW.toFixed(0)} × ${front.height.toFixed(0)} mm`;
+  const statusText = `${fmtMm(front.totalW.toFixed(0))} × ${fmtMm(front.height.toFixed(0))} mm`;
   // Labels derive from actual product membership — selection ids are
   // arbitrary strings, so a coupling legitimately named "coupling-x" must
   // still resolve (prefix sniffing would hide it).
@@ -3064,7 +3064,7 @@ export function AssemblyEditor({
               rows={[
                 [
                   t("inspector.dimensions"),
-                  `${Number(selectedModule.width_mm).toFixed(0)} × ${Number(selectedModule.height_mm).toFixed(0)} mm`,
+                  `${fmtMm(Number(selectedModule.width_mm).toFixed(0))} × ${fmtMm(Number(selectedModule.height_mm).toFixed(0))} mm`,
                 ],
                 [
                   t("assembly.opening"),
