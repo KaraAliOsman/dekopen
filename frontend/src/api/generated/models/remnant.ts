@@ -55,7 +55,11 @@ export interface Remnant {
   /** @nullable */
   origin_order_code?: string | null;
   /** @nullable */
+  consumed_order_code?: string | null;
+  /** @nullable */
   article_sku?: string | null;
+  /** @nullable */
+  age_days?: number | null;
   created_at: string;
   updated_at: string;
 }

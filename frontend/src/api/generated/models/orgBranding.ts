@@ -39,4 +39,5 @@ export interface OrgBranding {
   doc_paper_size: string;
   doc_terms: OrgBrandingDocTerms;
   workshop_label_format: string;
+  remnant_alert_days: number;
 }

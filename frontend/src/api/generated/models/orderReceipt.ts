@@ -14,5 +14,9 @@ export interface OrderReceipt {
   note: string | null;
   /** @nullable */
   received_by: string | null;
+  /** @nullable */
+  supplier_delivery_ref?: string | null;
+  /** @nullable */
+  supplier_delivery_date?: string | null;
   created_at: string;
 }

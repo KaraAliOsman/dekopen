@@ -13,6 +13,7 @@ import base64
 import json
 import logging
 import os
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 from django.conf import settings
@@ -280,6 +281,87 @@ def deliver_quote_sent(*, org_id: UUID, project_id: UUID, token: str) -> dict:
         audience="CLIENT",
         template="quote_sent",
         to_email=client_email,
+        rendered=rendered,
+        context=context,
+    )
+
+
+def deliver_order_sent(*, org_id: UUID, order_id: UUID, sent_to: str) -> dict:
+    """Proveedor: la OC emitida se le notifica por correo — el outbox es la
+    evidencia (sandbox por defecto; el proveedor SMTP se activa en
+    docs/ACTIVACION.md). Sin correo de proveedor declarado la fila queda
+    SKIPPED, como la cotización sin correo de cliente."""
+    order = one(
+        "SELECT order_code, supplier_name, supplier_details::text AS details,"
+        " expected_at FROM public.orders WHERE id = %s AND org_id = %s",
+        [str(order_id), str(org_id)],
+        "order_not_found",
+    )
+    details = json.loads(order["details"]) if isinstance(order["details"], str) else (
+        order["details"] or {}
+    )
+    supplier_email = str(sent_to or details.get("email") or "").strip()
+    lines = rows(
+        "SELECT line_snapshot->>'purchasing_sku' AS sku, quantity AS qty,"
+        " line_snapshot->>'unit' AS unit, line_snapshot->>'unit_price' AS unit_price"
+        " FROM public.order_requirement_lines"
+        " WHERE order_id = %s AND org_id = %s ORDER BY id",
+        [str(order_id), str(org_id)],
+    )
+    context = {"order_id": str(order_id), "order_code": str(order["order_code"])}
+    if not supplier_email:
+        skipped = one(
+            "INSERT INTO public.mail_messages"
+            " (org_id,audience,template,to_email,subject,html_body,text_body,"
+            "  status,error,context)"
+            " VALUES (%s,'SUPPLIER','order_sent','',%s,'','','SKIPPED',%s,%s::jsonb)"
+            " RETURNING id,status",
+            [
+                str(org_id),
+                f"OC {order['order_code']}",
+                "El proveedor no tiene correo registrado.",
+                json.dumps(context),
+            ],
+        )
+        return {"id": str(skipped["id"]), "status": "SKIPPED"}
+    currency_row = one(
+        "SELECT currency FROM public.tenancy_organizations WHERE id = %s",
+        [str(org_id)],
+        "organization_not_found",
+    )
+    mail_lines = [
+        {
+            "sku": line["sku"],
+            "qty": line["qty"],
+            "unit": line["unit"],
+            "line_total": (
+                _money_label(
+                    Decimal(str(line["qty"])) * Decimal(str(line["unit_price"])),
+                    currency_row["currency"],
+                )
+                if line.get("unit_price") is not None
+                else None
+            ),
+        }
+        for line in lines
+    ]
+    expected = order.get("expected_at")
+    rendered = templates.order_sent(
+        {
+            **_org_mail_brand(org_id=org_id),
+            "order_code": str(order["order_code"]),
+            "supplier_name": str(order["supplier_name"]),
+            "lines": mail_lines,
+            "expected_label": (
+                expected.strftime("%d-%m-%Y") if hasattr(expected, "strftime") else ""
+            ),
+        }
+    )
+    return _deliver(
+        org_id=org_id,
+        audience="SUPPLIER",
+        template="order_sent",
+        to_email=supplier_email,
         rendered=rendered,
         context=context,
     )

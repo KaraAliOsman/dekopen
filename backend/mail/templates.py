@@ -301,6 +301,73 @@ _MAGIC_LINK_TEMPLATE_PATH = (
 )
 
 
+def order_sent(ctx: dict) -> RenderedMail:
+    """Proveedor: orden de compra emitida — folio OC, líneas y entrega
+    esperada. White-label de la org emisora, como el correo al cliente."""
+    org_name = escape(str(ctx["org_name"]))
+    accent = str(ctx["accent"])
+    order_code = escape(str(ctx["order_code"]))
+    supplier_name = escape(str(ctx.get("supplier_name") or "proveedor"))
+    lines = ctx.get("lines") or []
+    expected = escape(str(ctx.get("expected_label") or ""))
+    rows_html = "".join(
+        "<tr>"
+        f'<td style="padding:4px 8px;border-bottom:1px solid {_G300};'
+        f'font-family:{_MONO};font-size:12px;color:{_INK}">{escape(str(line.get("sku") or "—"))}</td>'
+        f'<td style="padding:4px 8px;border-bottom:1px solid {_G300};'
+        f'font-family:{_MONO};font-size:12px;color:{_INK};text-align:right">'
+        f'{escape(str(line.get("qty") or "—"))} {escape(str(line.get("unit") or ""))}</td>'
+        + (
+            f'<td style="padding:4px 8px;border-bottom:1px solid {_G300};'
+            f'font-family:{_MONO};font-size:12px;color:{_INK};text-align:right">'
+            f'{escape(str(line["line_total"]))}</td>'
+            if line.get("line_total") else "<td></td>"
+        )
+        + "</tr>"
+        for line in lines[:60]
+    )
+    table = (
+        f'<table role="presentation" cellpadding="0" cellspacing="0" width="100%"'
+        f' style="margin:8px 0 16px;border-top:1px solid {_G300}">{rows_html}</table>'
+    )
+    intro = (
+        f"{org_name} emite la orden de compra <strong>{order_code}</strong>"
+        f" a nombre de <strong>{supplier_name}</strong>."
+    )
+    delivery = (
+        f"La entrega esperada es <strong>{expected}</strong>." if expected else ""
+    )
+    body = _client_body(
+        [f"Estimado/a {supplier_name}:", intro, table + delivery]
+    )
+    contact = str(ctx.get("org_contact") or "")
+    footer = (
+        (escape(contact) + "<br>" if contact else "")
+        + "Este correo fue generado por el sistema de compras; responda a la "
+        "dirección de contacto del emisor."
+    )
+    html = _client_shell(
+        accent=accent, header=f"{org_name} — {order_code}", body=body,
+        footer_lines=footer,
+    )
+    text_lines = "\n".join(
+        f"  {line.get('sku') or '—'}  × {line.get('qty') or '—'} {line.get('unit') or ''}"
+        + (f"  · {line['line_total']}" if line.get("line_total") else "")
+        for line in lines[:60]
+    )
+    text = (
+        f"{supplier_name}:\n\n{ctx['org_name']} emite la orden de compra "
+        f"{ctx['order_code']}.\n\n{text_lines}\n"
+        + (f"\nEntrega esperada: {expected}\n" if expected else "")
+        + (f"\n{contact}\n" if contact else "")
+    )
+    return RenderedMail(
+        subject=f"{ctx['org_name']} — Orden de compra {ctx['order_code']}",
+        html=html,
+        text=text,
+    )
+
+
 def magic_link(ctx: dict) -> RenderedMail:
     """Vista previa del magic-link real: se renderiza desde la misma
     plantilla que sirve GoTrue (supabase/templates/magic_link.html) con
@@ -330,4 +397,5 @@ RENDERERS = {
     "payment_received": payment_received,
     "pricing_decision": pricing_decision,
     "work_order_blocked": work_order_blocked,
+    "order_sent": order_sent,
 }

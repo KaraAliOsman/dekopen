@@ -68,11 +68,22 @@ _SELECT = """
 """
 
 
+def _alert_days(org_id: UUID) -> int:
+    row = one(
+        "SELECT remnant_alert_days FROM public.tenancy_organizations WHERE id = %s",
+        [str(org_id)],
+        "organization_not_found",
+    )
+    return int(row["remnant_alert_days"])
+
+
 def list_remnants(
     *,
     org_id: UUID,
     kind: str | None = None,
     status: str | None = None,
+    physical_stock_identity: UUID | None = None,
+    stock_identity: str | None = None,
 ) -> dict[str, object]:
     clauses = ["org_id = %s"]
     parameters: list[object] = [str(org_id)]
@@ -86,6 +97,26 @@ def list_remnants(
             raise DocumentaryError("remnant_status_unknown")
         clauses.append("status = %s")
         parameters.append(status)
+    if physical_stock_identity is not None:
+        clauses.append("physical_stock_identity = %s")
+        parameters.append(str(physical_stock_identity))
+    if stock_identity:
+        # Clave del pool de cobertura: psi para barras, workshop_sku para
+        # placas — un solo filtro basta porque nunca coinciden en un registro.
+        # Los retazos escritos antes de guardar psi sólo conocen su
+        # stock_authority_id, así que también resolvemos autoridad → psi.
+        clauses.append(
+            "(physical_stock_identity::text = %s OR sheet_workshop_sku = %s"
+            " OR stock_authority_id IN ("
+            "   SELECT id FROM public.profile_purchase_mappings"
+            "    WHERE physical_stock_identity::text = %s"
+            "   UNION"
+            "   SELECT id FROM public.reinforcement_articles"
+            "    WHERE physical_stock_identity::text = %s))"
+        )
+        parameters.extend(
+            [stock_identity, stock_identity, stock_identity, stock_identity]
+        )
     items = rows(
         f"{_SELECT} WHERE {' AND '.join(clauses)}"
         " ORDER BY kind, status, length_mm NULLS LAST, width_mm NULLS LAST, id"
@@ -116,10 +147,20 @@ def list_remnants(
         if order_ids
         else {}
     )
+    now = datetime.now(timezone.utc)
     remnants = [_remnant_row(r) for r in items]
     for entry in remnants:
         entry["reserved_order_code"] = codes.get(entry["reserved_order_id"])
         entry["origin_order_code"] = codes.get(entry["origin_order_id"])
+        entry["consumed_order_code"] = codes.get(entry["consumed_order_id"])
+        created = entry["created_at"]
+        if isinstance(created, str):
+            created = datetime.fromisoformat(created.replace("Z", "+00:00"))
+        entry["age_days"] = (
+            max((now - created).days, 0)
+            if isinstance(created, datetime)
+            else None
+        )
     # Resolve the bar authority into the commercial SKU a rack worker reads —
     # a remnant with no article identity is just an anonymous drop. Sheet
     # remnants already carry sheet_workshop_sku.
@@ -139,7 +180,7 @@ def list_remnants(
         entry["article_sku"] = (
             skus.get(entry["stock_authority_id"]) if entry["stock_authority_id"] else None
         )
-    return {"remnants": remnants}
+    return {"remnants": remnants, "alert_days": _alert_days(org_id)}
 
 
 def list_bar_authorities(*, org_id: UUID) -> dict[str, object]:
@@ -210,6 +251,12 @@ def create_remnant(
     elif sheet_workshop_sku is None or width_mm is None or height_mm is None \
             or width_mm <= 0 or height_mm <= 0:
         raise DocumentaryError("remnant_sheet_dims_invalid")
+    if physical_stock_identity is None and stock_authority_id is not None:
+        # La autoridad de compra es la fuente canónica de la identidad física
+        # — sin psi el retazo queda invisible para el pool de cobertura.
+        physical_stock_identity = _authority_psi(
+            org_id, stock_authority_id
+        )
     with transaction.atomic(), documentary_backend():
         created = one(
             """
@@ -305,6 +352,11 @@ def reserve_remnants(
     )
     if len(claimed) != len(set(remnant_ids)):
         raise DocumentaryError("remnant_unavailable")
+    _remnant_movements_bulk(
+        org_id=org_id,
+        remnant_ids=[row["id"] for row in claimed],
+        movement_type="RESERVATION", order_id=order_id,
+    )
 
 
 def release_reservations(*, org_id: UUID, order_id: UUID) -> int:
@@ -318,6 +370,11 @@ def release_reservations(*, org_id: UUID, order_id: UUID) -> int:
         RETURNING id
         """,
         [datetime.now(timezone.utc), str(org_id), str(order_id)],
+    )
+    _remnant_movements_bulk(
+        org_id=org_id,
+        remnant_ids=[row["id"] for row in released],
+        movement_type="RELEASE", order_id=order_id,
     )
     return len(released)
 
@@ -335,13 +392,163 @@ def consume_order_remnants(*, org_id: UUID, order_id: UUID) -> int:
         """,
         [str(order_id), datetime.now(timezone.utc), str(org_id), str(order_id)],
     )
+    _remnant_movements_bulk(
+        org_id=org_id,
+        remnant_ids=[row["id"] for row in consumed],
+        movement_type="CONSUMPTION", order_id=order_id,
+    )
     return len(consumed)
+
+
+def _remnant_movement(
+    *, org_id: UUID, remnant_id: UUID, movement_type: str,
+    order_id: UUID | None = None, note: str | None = None,
+    rack_location: str | None = None,
+    actor_id: UUID | None = None, actor_label: str | None = None,
+) -> None:
+    """Ledger entry for a remnant event — the offcut is real material, so
+    moving, reserving, consuming or scrapping it leaves the same audited
+    trace as any stock item. Called inside the writer's transaction."""
+    rows(
+        """
+        INSERT INTO public.inventory_movements(
+            org_id, remnant_id, movement_type, order_id, note,
+            rack_location, actor_id, actor_label)
+        VALUES (%s, %s, %s::public.inventory_movement_type, %s, %s, %s, %s, %s)
+        RETURNING id
+        """,
+        [
+            str(org_id), str(remnant_id), movement_type,
+            str(order_id) if order_id else None, note,
+            rack_location,
+            str(actor_id) if actor_id else None, actor_label,
+        ],
+    )
+
+
+def _remnant_movements_bulk(
+    *, org_id: UUID, remnant_ids: list[object], movement_type: str,
+    order_id: UUID | None = None, note: str | None = None,
+    actor_id: UUID | None = None, actor_label: str | None = None,
+) -> None:
+    """One ledger row per remnant from a bulk update's RETURNING list — the
+    plan-driven claims also belong in the book of movements."""
+    for remnant_id in remnant_ids:
+        _remnant_movement(
+            org_id=org_id, remnant_id=UUID(str(remnant_id)),
+            movement_type=movement_type, order_id=order_id,
+            note=note, actor_id=actor_id, actor_label=actor_label,
+        )
+
+
+def move_remnant(
+    *, org_id: UUID, remnant_id: UUID, rack_location: str,
+    actor_id: UUID, actor_label: str | None = None,
+) -> dict[str, object]:
+    """Relocate a remnant to another rack — the physical place of the piece
+    is part of its identity, so the move is a ledger event."""
+    rack = (rack_location or "").strip()
+    if not rack:
+        raise DocumentaryError("remnant_rack_required")
+    with transaction.atomic(), documentary_backend():
+        row = one(
+            f"{_SELECT} WHERE id = %s AND org_id = %s FOR UPDATE",
+            [str(remnant_id), str(org_id)],
+            "remnant_not_found",
+        )
+        if row["status"] in ("CONSUMED", "SCRAPPED"):
+            raise DocumentaryError("remnant_not_movable")
+        if str(row["rack_location"] or "") == rack:
+            refreshed = row
+        else:
+            rows(
+                """
+                UPDATE public.inventory_remnants
+                SET rack_location = %s, updated_at = %s
+                WHERE id = %s AND org_id = %s RETURNING id
+                """,
+                [rack, datetime.now(timezone.utc), str(remnant_id), str(org_id)],
+            )
+            _remnant_movement(
+                org_id=org_id, remnant_id=remnant_id, movement_type="MOVE",
+                order_id=(
+                    UUID(str(row["reserved_order_id"]))
+                    if row["reserved_order_id"] else None
+                ),
+                note=(
+                    f"Desde {row['rack_location']}"
+                    if row["rack_location"] else "Sin ubicación previa"
+                ),
+                rack_location=rack,
+                actor_id=actor_id, actor_label=actor_label,
+            )
+            refreshed = one(
+                f"{_SELECT} WHERE id = %s AND org_id = %s",
+                [str(remnant_id), str(org_id)],
+                "remnant_not_found",
+            )
+    return _remnant_row(refreshed)
+
+
+def reserve_remnant_for_order(
+    *, org_id: UUID, remnant_id: UUID, order_id: UUID,
+    actor_id: UUID, actor_label: str | None = None,
+) -> dict[str, object]:
+    """Manual claim: the warehouse lead hands a specific drop to a specific
+    work order. Whether the piece actually fits is decided by the engine at
+    optimize time — this only books the physical remnant for that OT so
+    nobody else takes it."""
+    with transaction.atomic(), documentary_backend():
+        order = one(
+            "SELECT id, order_type::text, status::text FROM public.orders "
+            "WHERE id = %s AND org_id = %s FOR UPDATE",
+            [str(order_id), str(org_id)],
+            "work_order_not_found",
+        )
+        if str(order["order_type"]) != "WORKSHOP_OT":
+            raise DocumentaryError("remnant_reserve_work_order_required")
+        if str(order["status"]) in (
+            "CANCELLED", "COMPLETED", "DISPATCHED", "INSTALLED", "FULFILLED",
+        ):
+            raise DocumentaryError("remnant_reserve_order_closed")
+        row = one(
+            f"{_SELECT} WHERE id = %s AND org_id = %s FOR UPDATE",
+            [str(remnant_id), str(org_id)],
+            "remnant_not_found",
+        )
+        if row["status"] != "AVAILABLE":
+            raise DocumentaryError("remnant_unavailable")
+        rows(
+            """
+            UPDATE public.inventory_remnants
+            SET status = 'RESERVED', reserved_order_id = %s, updated_at = %s
+            WHERE id = %s AND org_id = %s RETURNING id
+            """,
+            [str(order_id), datetime.now(timezone.utc),
+             str(remnant_id), str(org_id)],
+        )
+        _remnant_movement(
+            org_id=org_id, remnant_id=remnant_id, movement_type="RESERVATION",
+            order_id=order_id, actor_id=actor_id, actor_label=actor_label,
+        )
+        refreshed = one(
+            f"{_SELECT} WHERE id = %s AND org_id = %s",
+            [str(remnant_id), str(org_id)],
+            "remnant_not_found",
+        )
+    return _remnant_row(refreshed)
 
 
 def scrap_remnant(
     *, org_id: UUID, remnant_id: UUID, actor_id: UUID,
+    reason: str, actor_label: str | None = None,
 ) -> dict[str, object]:
-    """Mark an offcut as scrap — physically too damaged/short to reuse."""
+    """Mark an offcut as scrap — physically too damaged/short to reuse. The
+    reason is mandatory evidence: a destroyed piece of material always has a
+    why."""
+    motive = (reason or "").strip()
+    if not motive:
+        raise DocumentaryError("remnant_scrap_reason_required")
     with transaction.atomic(), documentary_backend():
         row = one(
             f"{_SELECT} WHERE id = %s AND org_id = %s FOR UPDATE",
@@ -360,6 +567,15 @@ def scrap_remnant(
             """,
             [datetime.now(timezone.utc), str(remnant_id), str(org_id)],
         )
+        _remnant_movement(
+            org_id=org_id, remnant_id=remnant_id, movement_type="SCRAP",
+            order_id=(
+                UUID(str(row["origin_order_id"]))
+                if row["origin_order_id"] else None
+            ),
+            note=motive, rack_location=row["rack_location"],
+            actor_id=actor_id, actor_label=actor_label,
+        )
         refreshed = one(
             f"{_SELECT} WHERE id = %s AND org_id = %s",
             [str(remnant_id), str(org_id)],
@@ -370,6 +586,7 @@ def scrap_remnant(
 
 def unreserve_remnant(
     *, org_id: UUID, remnant_id: UUID, actor_id: UUID,
+    actor_label: str | None = None,
 ) -> dict[str, object]:
     """Return a RESERVED remnant to the pool — the operator decided this plan
     won't cut it after all. The reserving order's plan must stop claiming the
@@ -415,6 +632,13 @@ def unreserve_remnant(
             WHERE id = %s AND org_id = %s RETURNING id
             """,
             [datetime.now(timezone.utc), str(remnant_id), str(org_id)],
+        )
+        _remnant_movement(
+            org_id=org_id, remnant_id=remnant_id, movement_type="RELEASE",
+            order_id=(
+                UUID(str(order_id)) if order_id else None
+            ),
+            actor_id=actor_id, actor_label=actor_label,
         )
         if order_id:
             _evict_remnant_claim(
@@ -488,6 +712,20 @@ def _evict_remnant_claim(
     )
 
 
+def _authority_psi(org_id: UUID, stock_authority_id: object) -> str | None:
+    """psi (physical_stock_identity) de la autoridad de compra de un retazo —
+    la única fuente canónica de la identidad física de la barra."""
+    for table in ("profile_purchase_mappings", "reinforcement_articles"):
+        found = rows(
+            f"SELECT physical_stock_identity FROM public.{table} "
+            "WHERE id = %s AND (org_id = %s OR org_id IS NULL)",
+            [str(stock_authority_id), str(org_id)],
+        )
+        if found and found[0].get("physical_stock_identity"):
+            return str(found[0]["physical_stock_identity"])
+    return None
+
+
 def record_produced_remnants(
     *,
     org_id: UUID,
@@ -502,16 +740,18 @@ def record_produced_remnants(
     # next_human_code takes the org lock once per tx — repeated calls inside
     # this loop are cheap and keep every produced drop foliated in order.
     for bar in produced_bars:
+        authority = bar["stock_authority_id"]
         rows(
             """
             INSERT INTO public.inventory_remnants(
-                org_id, kind, stock_authority_id, length_mm,
-                origin, origin_order_id, remnant_code
-            ) VALUES (%s, 'BAR', %s::uuid, %s, 'PRODUCTION', %s, %s)
+                org_id, kind, stock_authority_id, physical_stock_identity,
+                length_mm, origin, origin_order_id, remnant_code
+            ) VALUES (%s, 'BAR', %s::uuid, %s::uuid, %s, 'PRODUCTION', %s, %s)
             RETURNING id
             """,
             [
-                str(org_id), str(bar["stock_authority_id"]),
+                str(org_id), str(authority),
+                _authority_psi(org_id, authority) if authority else None,
                 str(bar["remainder_mm"]), str(order_id),
                 next_human_code(org_id, "inventory_remnants"),
             ],
@@ -567,7 +807,8 @@ def remnant_label(*, org_id: UUID, remnant_id: UUID) -> dict[str, object]:
         # before the raw identity UUID.
         identity = (
             " · ".join(
-                part for part in (remnant.get("material"), remnant.get("color"))
+                str(part)
+                for part in (remnant.get("material"), remnant.get("color"))
                 if part
             )
             or remnant["physical_stock_identity"]

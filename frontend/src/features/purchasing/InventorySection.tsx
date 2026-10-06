@@ -3,12 +3,29 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { ApiError } from "../../api/apiMutator";
 import { fmtMm, fmtQty, shortTechnicalId } from "../../format";
 import { t } from "../../i18n/es-CL";
-import { formatDateTime } from "../../format";
+import { formatDate, formatDateTime } from "../../format";
 import { useConfirm } from "../../ui";
 import { traceNoteLabel } from "../production/labels";
+import { ORDER_STATUS_KEY } from "../production/board";
 import { EntityCode } from "../../ui/format";
 
 type RequestFn = <T>(path: string, method?: string, body?: unknown) => Promise<T>;
+
+type ReservedBy = { order_id: string; order_code: string; quantity: string };
+
+export type StockItem = {
+  item_id: string;
+  sku: string;
+  name: string;
+  unit: string;
+  on_hand_qty: string;
+  reserved_qty: string;
+  available_qty: string;
+  incoming_qty?: string;
+  racks?: string[] | string | null;
+  spec_text?: string;
+  reserved_by?: ReservedBy[];
+};
 
 type Remnant = {
   id: string;
@@ -28,17 +45,25 @@ type Remnant = {
   reserved_order_id: string | null;
   reserved_order_code: string | null;
   origin_order_code: string | null;
+  consumed_order_code: string | null;
   rack_location: string | null;
   notes: string | null;
+  age_days?: number | null;
   created_at: string;
 };
 
 type Movement = {
   id: string;
-  item_id: string;
+  item_id: string | null;
+  remnant_id?: string | null;
+  remnant_code?: string | null;
+  sku?: string | null;
+  item_name?: string | null;
   movement_type: string;
-  quantity: string;
+  quantity: string | null;
   order_id: string | null;
+  order_code?: string | null;
+  receipt_code?: string | null;
   lot_code: string | null;
   rack_location: string | null;
   note: string | null;
@@ -46,18 +71,7 @@ type Movement = {
   created_at: string;
 };
 
-type StockIdentity = {
-  item_id: string;
-  sku: string;
-  name: string;
-  racks?: string | null;
-};
-
-function remnantAge(createdAt: string): string {
-  const days = Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 86_400_000));
-  if (days === 0) return t("inventory.ageNew");
-  return `${days} ${t(days === 1 ? "inventory.ageDay" : "inventory.ageDays")}`;
-}
+type WorkOrder = { id: string; order_code: string; status: string };
 
 type BarAuthority = {
   id: string;
@@ -83,6 +97,14 @@ const MOVEMENT_TYPE: ReadonlySet<string> = new Set([
   "ADJUSTMENT",
   "RETURN",
   "SCRAP",
+  "MOVE",
+]);
+// Una OT abierta puede recibir una reserva de retazo; las cerradas no.
+const OPEN_ORDER_STATUSES: ReadonlySet<string> = new Set([
+  "DRAFT",
+  "RELEASED",
+  "IN_PROGRESS",
+  "HOLD",
 ]);
 
 function remnantStatusLabel(status: string): string {
@@ -117,9 +139,30 @@ function remnantDims(r: Remnant): string {
   return "—";
 }
 
-/** Stock + offcut pool + movement ledger — the inventory half of the
- * purchasing workspace. Reads stay open to estimator roles; writes are
- * workshop-manager only (the API enforces the same split). */
+function rackList(racks: StockItem["racks"]): string {
+  if (!racks) return "—";
+  return Array.isArray(racks) ? racks.join(", ") : racks;
+}
+
+const _UNIT_ALIAS: Record<string, string> = {
+  UNIT: "EA",
+  SET: "KIT",
+  PIECE: "EA",
+  PCS: "EA",
+};
+
+function stockUnitLabel(unit: string): string {
+  const normalized = _UNIT_ALIAS[unit.toUpperCase()] ?? unit.toUpperCase();
+  const key = `purchasing.unitValue.${normalized}.one` as Parameters<typeof t>[0];
+  const label = t(key);
+  return label === key ? "" : label;
+}
+
+/** Inventario del taller: qué hay, dónde está, para qué está reservado y
+ * qué sobra. Stock con su desglose de reserva por OT, retazos con acciones
+ * de bodega (mover, reservar a OT, desechar con motivo, etiqueta QR) y el
+ * libro de movimientos con actor, documento y rack. Las lecturas están
+ * abiertas a los roles de taller; las escrituras son de jefatura. */
 export function InventorySection({
   request,
   canWrite,
@@ -127,17 +170,25 @@ export function InventorySection({
 }: {
   request: RequestFn;
   canWrite: boolean;
-  stockItems: StockIdentity[];
+  stockItems: StockItem[];
 }): JSX.Element {
   const confirm = useConfirm();
   const [remnants, setRemnants] = useState<Remnant[]>([]);
+  const [alertDays, setAlertDays] = useState(30);
   const [movements, setMovements] = useState<Movement[]>([]);
+  const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [statusFilter, setStatusFilter] = useState("AVAILABLE");
+  const [stockQuery, setStockQuery] = useState("");
   const [remnantQuery, setRemnantQuery] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [adjustItem, setAdjustItem] = useState<string | null>(null);
+  const [action, setAction] = useState<{
+    kind: "move" | "scrap" | "reserve";
+    remnant: Remnant;
+  } | null>(null);
+  const [actionValue, setActionValue] = useState("");
   const [adjustForm, setAdjustForm] = useState({
     movement_type: "ADJUSTMENT",
     quantity: "",
@@ -167,8 +218,11 @@ export function InventorySection({
   } | null>(null);
 
   const load = useCallback(() => {
-    void request<{ remnants?: Remnant[] }>("inventory/remnants/")
-      .then((data) => setRemnants(data.remnants ?? []))
+    void request<{ remnants?: Remnant[]; alert_days?: number }>("inventory/remnants/")
+      .then((data) => {
+        setRemnants(data.remnants ?? []);
+        if (typeof data.alert_days === "number") setAlertDays(data.alert_days);
+      })
       .catch(() => setRemnants([]));
     void request<{ movements?: Movement[] }>("inventory/movements/")
       .then((data) => setMovements(data.movements ?? []))
@@ -179,6 +233,20 @@ export function InventorySection({
   }, [request]);
 
   useEffect(load, [load]);
+
+  // Las OT se cargan al abrir una reserva — no contaminan la carga base.
+  useEffect(() => {
+    if (!action || action.kind !== "reserve") return;
+    void request<{ orders?: WorkOrder[] }>("production/orders/")
+      .then((data) =>
+        setWorkOrders(
+          (data.orders ?? []).filter(
+            (order) => OPEN_ORDER_STATUSES.has(order.status) && order.order_code?.startsWith("OT"),
+          ),
+        ),
+      )
+      .catch(() => setWorkOrders([]));
+  }, [action, request]);
 
   async function run(task: Promise<unknown>, fallback: string): Promise<boolean> {
     setBusy(true);
@@ -201,13 +269,20 @@ export function InventorySection({
     }
   }
 
-  const itemNames = new Map(stockItems.map((s) => [s.item_id, `${s.sku} · ${s.name}`]));
   const authorityNames = new Map(
     authorities.map((a) => [
       a.id,
       `${a.commercial_sku}${a.stock_color ? ` · ${a.stock_color}` : ""}`,
     ]),
   );
+  const stockVisible = stockItems.filter((item) => {
+    const q = stockQuery.trim().toLowerCase();
+    if (!q) return true;
+    return [item.sku, item.name, item.spec_text ?? "", rackList(item.racks)]
+      .join(" ")
+      .toLowerCase()
+      .includes(q);
+  });
   const visible = remnants.filter((r) => {
     if (r.status !== statusFilter) return false;
     const q = remnantQuery.trim().toLowerCase();
@@ -221,6 +296,8 @@ export function InventorySection({
       r.color ?? "",
       r.rack_location ?? "",
       r.notes ?? "",
+      r.reserved_order_code ?? "",
+      r.origin_order_code ?? "",
     ]
       .join(" ")
       .toLowerCase()
@@ -292,8 +369,109 @@ export function InventorySection({
       .catch(() => setLabel(null));
   }
 
+  function openAction(kind: "move" | "scrap" | "reserve", remnant: Remnant): void {
+    setActionValue(kind === "move" ? (remnant.rack_location ?? "") : "");
+    setAction({ kind, remnant });
+  }
+
+  function submitAction(event: FormEvent): void {
+    event.preventDefault();
+    if (!action) return;
+    const { kind, remnant } = action;
+    const base = `inventory/remnants/${remnant.id}`;
+    const tasks: Record<typeof kind, { path: string; body: unknown; fallback: string }> = {
+      move: {
+        path: `${base}/move/`,
+        body: { rack_location: actionValue.trim() },
+        fallback: "inventory.moveError",
+      },
+      scrap: {
+        path: `${base}/scrap/`,
+        body: { reason: actionValue.trim() },
+        fallback: "inventory.remnantScrapError",
+      },
+      reserve: {
+        path: `${base}/reserve/`,
+        body: { order_id: actionValue },
+        fallback: "inventory.reserveError",
+      },
+    };
+    const task = tasks[kind];
+    void run(request(task.path, "POST", task.body), task.fallback).then((ok) => {
+      if (ok) setAction(null);
+    });
+  }
+
   return (
     <section className="purchasing-stock" aria-label={t("inventory.title")}>
+      <h2>{t("inventory.stockTitle")}</h2>
+      <p className="purchasing-hint">{t("inventory.stockHint")}</p>
+      <label className="purchasing-stock-search">
+        {t("inventory.stockSearch")}
+        <input
+          type="search"
+          value={stockQuery}
+          onChange={(e) => setStockQuery(e.target.value)}
+          placeholder={t("inventory.stockSearchHint")}
+        />
+      </label>
+      {stockVisible.length > 0 ? (
+        <table>
+          <thead>
+            <tr>
+              <th>{t("inventory.stockSku")}</th>
+              <th>{t("inventory.stockName")}</th>
+              <th>{t("inventory.stockOnHand")}</th>
+              <th>{t("inventory.stockReserved")}</th>
+              <th>{t("inventory.stockAvailable")}</th>
+              <th>{t("inventory.stockIncoming")}</th>
+              <th>{t("inventory.stockRacks")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stockVisible.map((item) => (
+              <tr key={item.item_id}>
+                <td>
+                  <EntityCode value={item.sku} />
+                </td>
+                <td>
+                  {item.name}
+                  {stockUnitLabel(item.unit) ? ` · ${stockUnitLabel(item.unit)}` : ""}
+                  {item.spec_text ? (
+                    <small className="purchasing-hint">
+                      <br />
+                      {item.spec_text}
+                    </small>
+                  ) : null}
+                </td>
+                <td>{fmtQty(item.on_hand_qty)}</td>
+                <td>
+                  {fmtQty(item.reserved_qty)}
+                  {(item.reserved_by ?? []).map((entry) => (
+                    <small key={entry.order_id} className="purchasing-hint" title={entry.order_id}>
+                      <br />
+                      {t("inventory.reservedBy")} {entry.order_code}: {fmtQty(entry.quantity)}
+                    </small>
+                  ))}
+                </td>
+                <td>{fmtQty(item.available_qty)}</td>
+                <td>
+                  {item.incoming_qty && item.incoming_qty !== "0" ? (
+                    <strong className="purchasing-coverage-received">
+                      {fmtQty(item.incoming_qty)}
+                    </strong>
+                  ) : (
+                    "0"
+                  )}
+                </td>
+                <td>{rackList(item.racks)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p className="purchasing-hint">{t("inventory.noStock")}</p>
+      )}
       {canWrite && stockItems.length > 0 ? (
         <details className="inventory-adjust">
           <summary>{t("inventory.adjustTitle")}</summary>
@@ -517,84 +695,196 @@ export function InventorySection({
               <th>{t("inventory.rack")}</th>
               <th>{t("inventory.origin")}</th>
               <th>{t("inventory.reservedFor")}</th>
-              <th>{t("inventory.registered")}</th>
+              <th>{t("inventory.age")}</th>
               <th>{t("inventory.actions")}</th>
             </tr>
           </thead>
           <tbody>
-            {visible.map((r) => (
-              <tr key={r.id}>
-                <td className="inventory-remnant-code">{r.remnant_code}</td>
-                <td>{remnantKindLabel(r.kind)}</td>
-                <td>
-                  {r.kind === "SHEET"
-                    ? (r.sheet_workshop_sku ?? "—")
-                    : (r.article_sku ??
-                      authorityNames.get(r.stock_authority_id ?? "") ??
-                      ([r.material, r.color].filter(Boolean).join(" · ") || "—"))}
-                  {r.notes ? <span className="purchasing-hint"> — {r.notes}</span> : null}
-                </td>
-                <td>{remnantDims(r)}</td>
-                <td>{r.rack_location ?? "—"}</td>
-                <td>
-                  {remnantOriginLabel(r.origin)}
-                  {r.origin_order_code ? ` · ${r.origin_order_code}` : ""}
-                </td>
-                <td>{r.status === "RESERVED" ? (r.reserved_order_code ?? "—") : "—"}</td>
-                <td>
-                  {remnantAge(r.created_at)}
-                  <span className="purchasing-hint"> · {formatDateTime(r.created_at)}</span>
-                </td>
-                <td>
-                  <button type="button" className="secondary" onClick={() => showLabel(r)}>
-                    {t("inventory.label")}
-                  </button>
-                  {canWrite && r.status === "RESERVED" ? (
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={busy}
-                      onClick={() =>
-                        void run(
-                          request(`inventory/remnants/${r.id}/release/`, "POST", {}),
-                          "inventory.remnantReleaseError",
-                        )
-                      }
-                    >
-                      {t("inventory.release")}
+            {visible.map((r) => {
+              const isOld =
+                r.status === "AVAILABLE" && r.age_days != null && r.age_days >= alertDays;
+              return (
+                <tr key={r.id} className={isOld ? "inventory-remnant-old" : undefined}>
+                  <td className="inventory-remnant-code">{r.remnant_code}</td>
+                  <td>{remnantKindLabel(r.kind)}</td>
+                  <td>
+                    {r.kind === "SHEET"
+                      ? (r.sheet_workshop_sku ?? "—")
+                      : (r.article_sku ??
+                        authorityNames.get(r.stock_authority_id ?? "") ??
+                        ([r.material, r.color].filter(Boolean).join(" · ") || "—"))}
+                    {r.notes ? <span className="purchasing-hint"> — {r.notes}</span> : null}
+                  </td>
+                  <td>{remnantDims(r)}</td>
+                  <td>{r.rack_location ?? "—"}</td>
+                  <td>
+                    {remnantOriginLabel(r.origin)}
+                    {r.origin_order_code ? ` · ${r.origin_order_code}` : ""}
+                    {r.status === "CONSUMED" && r.consumed_order_code ? (
+                      <>
+                        {" · "}
+                        {t("inventory.consumedBy")} {r.consumed_order_code}
+                      </>
+                    ) : null}
+                  </td>
+                  <td>{r.status === "RESERVED" ? (r.reserved_order_code ?? "—") : "—"}</td>
+                  <td>
+                    {r.age_days == null
+                      ? formatDate(r.created_at)
+                      : r.age_days === 0
+                        ? t("inventory.ageNew")
+                        : `${r.age_days} ${t(r.age_days === 1 ? "inventory.ageDay" : "inventory.ageDays")}`}
+                    {isOld ? (
+                      <small
+                        className="inventory-age-alert"
+                        role="note"
+                        title={t("inventory.ageOld").replace("{días}", String(r.age_days))}
+                      >
+                        {" "}
+                        {t("inventory.ageOldBadge")}
+                      </small>
+                    ) : null}
+                  </td>
+                  <td>
+                    <button type="button" className="secondary" onClick={() => showLabel(r)}>
+                      {t("inventory.label")}
                     </button>
-                  ) : null}
-                  {canWrite && r.status === "AVAILABLE" ? (
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={busy}
-                      onClick={() =>
-                        void confirm({
-                          title: t("inventory.scrapConfirmTitle"),
-                          body: t("inventory.scrapConfirmBody"),
-                          confirmLabel: t("inventory.scrap"),
-                          danger: true,
-                        }).then((ok) => {
-                          if (!ok) return;
+                    {canWrite && r.status !== "CONSUMED" && r.status !== "SCRAPPED" ? (
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={busy}
+                        onClick={() => openAction("move", r)}
+                      >
+                        {t("inventory.move")}
+                      </button>
+                    ) : null}
+                    {canWrite && r.status === "AVAILABLE" ? (
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={busy}
+                        onClick={() => openAction("reserve", r)}
+                      >
+                        {t("inventory.reserve")}
+                      </button>
+                    ) : null}
+                    {canWrite && r.status === "RESERVED" ? (
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={busy}
+                        onClick={() =>
                           void run(
-                            request(`inventory/remnants/${r.id}/scrap/`, "POST", {}),
-                            "inventory.remnantScrapError",
-                          );
-                        })
-                      }
-                    >
-                      {t("inventory.scrap")}
-                    </button>
-                  ) : null}
-                </td>
-              </tr>
-            ))}
+                            request(`inventory/remnants/${r.id}/release/`, "POST", {}),
+                            "inventory.remnantReleaseError",
+                          )
+                        }
+                      >
+                        {t("inventory.release")}
+                      </button>
+                    ) : null}
+                    {canWrite && r.status === "AVAILABLE" ? (
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={busy}
+                        onClick={() =>
+                          void confirm({
+                            title: t("inventory.scrapConfirmTitle"),
+                            body: t("inventory.scrapConfirmBody"),
+                            confirmLabel: t("inventory.scrap"),
+                            danger: true,
+                          }).then((ok) => {
+                            if (!ok) return;
+                            openAction("scrap", r);
+                          })
+                        }
+                      >
+                        {t("inventory.scrap")}
+                      </button>
+                    ) : null}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       ) : (
         <p className="purchasing-hint">{t("inventory.noRemnants")}</p>
       )}
+      {action ? (
+        <form noValidate className="inventory-remnant-form" onSubmit={submitAction}>
+          <p className="purchasing-hint">
+            <strong>{action.remnant.remnant_code}</strong> · {remnantDims(action.remnant)}
+            {action.remnant.rack_location ? ` · rack ${action.remnant.rack_location}` : ""}
+          </p>
+          {action.kind === "move" ? (
+            <>
+              <label>
+                {t("inventory.moveTo")}
+                <input
+                  required
+                  value={actionValue}
+                  onChange={(e) => setActionValue(e.target.value)}
+                />
+              </label>
+              <p className="purchasing-hint">{t("inventory.moveHint")}</p>
+            </>
+          ) : null}
+          {action.kind === "scrap" ? (
+            <>
+              <label>
+                {t("inventory.scrapReason")}
+                <input
+                  required
+                  value={actionValue}
+                  onChange={(e) => setActionValue(e.target.value)}
+                />
+              </label>
+              <p className="purchasing-hint">{t("inventory.scrapReasonHint")}</p>
+            </>
+          ) : null}
+          {action.kind === "reserve" ? (
+            <>
+              <label>
+                {t("inventory.reserveTo")}
+                <select
+                  required
+                  value={actionValue}
+                  onChange={(e) => setActionValue(e.target.value)}
+                >
+                  <option value="" disabled>
+                    {t("inventory.reservePick")}
+                  </option>
+                  {workOrders.map((order) => (
+                    <option key={order.id} value={order.id}>
+                      {order.order_code} ·{" "}
+                      {t(ORDER_STATUS_KEY[order.status] ?? "production.orderReleased")}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {workOrders.length === 0 ? (
+                <p className="purchasing-hint">{t("inventory.noOpenOrders")}</p>
+              ) : null}
+              <p className="purchasing-hint">{t("inventory.reserveHint")}</p>
+            </>
+          ) : null}
+          <div className="inventory-action-row">
+            <button type="submit" disabled={busy}>
+              {action.kind === "move"
+                ? t("inventory.moveSubmit")
+                : action.kind === "scrap"
+                  ? t("inventory.scrapSubmit")
+                  : t("inventory.reserveSubmit")}
+            </button>
+            <button type="button" className="secondary" onClick={() => setAction(null)}>
+              {t("ui.cancel")}
+            </button>
+          </div>
+        </form>
+      ) : null}
       {label ? (
         <div className="inventory-label" role="figure" aria-label={t("inventory.label")}>
           <div className="qr" dangerouslySetInnerHTML={{ __html: label.qr_svg }} />
@@ -616,16 +906,18 @@ export function InventorySection({
           </div>
         </div>
       ) : null}
-      {movements.length > 0 ? (
-        <details className="inventory-movements">
-          <summary>{t("inventory.movements")}</summary>
+      <details className="inventory-movements" open>
+        <summary>{t("inventory.movements")}</summary>
+        {movements.length > 0 ? (
           <table>
             <thead>
               <tr>
                 <th>{t("inventory.movementWhen")}</th>
                 <th>{t("inventory.movementType")}</th>
-                <th>{t("inventory.movementItem")}</th>
+                <th>{t("inventory.movementSubject")}</th>
                 <th>{t("inventory.movementQty")}</th>
+                <th>{t("inventory.movementDoc")}</th>
+                <th>{t("inventory.movementLot")}</th>
                 <th>{t("inventory.movementRack")}</th>
                 <th>{t("inventory.movementWho")}</th>
                 <th>{t("inventory.movementNote")}</th>
@@ -636,19 +928,32 @@ export function InventorySection({
                 <tr key={m.id}>
                   <td>{formatDateTime(m.created_at)}</td>
                   <td>{movementLabel(m.movement_type)}</td>
-                  <td>{itemNames.get(m.item_id) ?? shortTechnicalId(m.item_id)}</td>
-                  <td>{fmtQty(m.quantity)}</td>
+                  <td>
+                    {m.remnant_code ? (
+                      <span className="inventory-remnant-code">{m.remnant_code}</span>
+                    ) : m.sku ? (
+                      <>
+                        <EntityCode value={m.sku} />
+                        {m.item_name ? ` · ${m.item_name}` : ""}
+                      </>
+                    ) : (
+                      shortTechnicalId(m.item_id ?? m.remnant_id ?? "")
+                    )}
+                  </td>
+                  <td>{m.quantity == null ? "—" : fmtQty(m.quantity)}</td>
+                  <td>{m.order_code ?? m.receipt_code ?? "—"}</td>
+                  <td>{m.lot_code ?? "—"}</td>
                   <td>{m.rack_location ?? "—"}</td>
                   <td>{m.actor_label ?? "—"}</td>
-                  <td title={m.note ?? undefined}>
-                    {m.note ? traceNoteLabel(m.note) : (m.lot_code ?? "—")}
-                  </td>
+                  <td title={m.note ?? undefined}>{m.note ? traceNoteLabel(m.note) : "—"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </details>
-      ) : null}
+        ) : (
+          <p className="purchasing-hint">{t("inventory.noRemnants")}</p>
+        )}
+      </details>
       {message ? <p className="purchasing-message">{message}</p> : null}
     </section>
   );

@@ -516,6 +516,7 @@ export const DOMAIN_LABELS: Record<string, L> = {
     ADJUSTMENT: l("Ajuste", "warn"),
     RETURN: l("Devolución", "info"),
     SCRAP: l("Desecho", "danger"),
+    MOVE: l("Traslado", "info"),
   },
   InventoryMovementRequestMovementTypeEnum: {
     ADJUSTMENT: l("Ajuste", "warn"),

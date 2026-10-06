@@ -878,14 +878,17 @@ function WorkshopRulesCard({ orgId }: { orgId: string }): JSX.Element {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
   const [tolerance, setTolerance] = useState("");
+  const [remnantDays, setRemnantDays] = useState("");
   const requestOptions = { headers: { "X-Organization-ID": orgId } };
 
   useEffect(() => {
     void (async () => {
       try {
         const response = await organizationBrandingGet(requestOptions);
-        if (response.status === 200)
+        if (response.status === 200) {
           setTolerance(response.data.vano_spread_tolerance_mm ?? "10.00");
+          setRemnantDays(String(response.data.remnant_alert_days ?? 30));
+        }
       } catch {
         /* la tarjeta principal ya reporta el fallo de carga */
       }
@@ -896,15 +899,24 @@ function WorkshopRulesCard({ orgId }: { orgId: string }): JSX.Element {
     event.preventDefault();
     setBusy(true);
     setMessage(null);
+    const days = Number.parseInt(remnantDays.trim(), 10);
+    if (!Number.isFinite(days) || days < 1 || days > 365) {
+      setMessage({ text: t("settings.remnantDaysError"), error: true });
+      setBusy(false);
+      return;
+    }
     try {
       const response = await organizationBrandingSave(
-        { vano_spread_tolerance_mm: tolerance.trim() || null },
+        {
+          vano_spread_tolerance_mm: tolerance.trim() || null,
+          remnant_alert_days: days,
+        },
         requestOptions,
       );
       if (response.status !== 200) throw new ApiError(response.status, response.data);
-      setMessage({ text: t("settings.brandingSaved"), error: false });
+      setMessage({ text: t("settings.workshopSaved"), error: false });
     } catch {
-      setMessage({ text: t("settings.brandingSaveError"), error: true });
+      setMessage({ text: t("settings.workshopSaveError"), error: true });
     } finally {
       setBusy(false);
     }
@@ -925,9 +937,19 @@ function WorkshopRulesCard({ orgId }: { orgId: string }): JSX.Element {
             onChange={(event) => setTolerance(event.target.value)}
           />
         </label>
+        <label>
+          {t("settings.remnantDays")}
+          <input
+            inputMode="numeric"
+            maxLength={3}
+            value={remnantDays}
+            onChange={(event) => setRemnantDays(event.target.value)}
+          />
+        </label>
+        <p className="settings-hint">{t("settings.remnantDaysHint")}</p>
         <div className="payments-form-actions">
           <button type="submit" className="primary-action" disabled={busy}>
-            {t("settings.brandingSave")}
+            {t("settings.workshopSave")}
           </button>
         </div>
       </form>

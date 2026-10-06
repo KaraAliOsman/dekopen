@@ -99,6 +99,7 @@ class RequirementAllocationView(APIView):
                 actor_id=token.user_id,
                 requirement_id=requirement_id,
                 eligibility_id=data["supplier_eligibility_id"],
+                unit_price=data.get("unit_price"),
             )
         return Response(output)
 
@@ -134,7 +135,7 @@ class SendOrderView(APIView):
     )
     def post(self, request, order_id: UUID):
         data = validate(SendOrderRequestSerializer, request.data)
-        with documentary_scope(request, _ALLOWED) as (token, _, org_id):
+        with documentary_scope(request, _ALLOWED) as (token, tenant, org_id):
             output = send_order(
                 org_id=org_id,
                 actor_id=token.user_id,
@@ -142,6 +143,7 @@ class SendOrderView(APIView):
                 confirmed=data["confirmed"],
                 expected_at=data.get("expected_at"),
                 sent_to=data.get("sent_to"),
+                role=tenant.active_organization.role,
             )
         return Response(output)
 

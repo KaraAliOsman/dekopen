@@ -93,6 +93,8 @@ def test_openapi_contains_only_authorized_shot_11_paths_and_bearer_security() ->
         "/api/v1/inventory/remnants/{remnant_id}/label/",
         "/api/v1/inventory/remnants/{remnant_id}/release/",
         "/api/v1/inventory/remnants/{remnant_id}/scrap/",
+        "/api/v1/inventory/remnants/{remnant_id}/move/",
+        "/api/v1/inventory/remnants/{remnant_id}/reserve/",
         "/api/v1/analytics/summary/",
         "/api/v1/analytics/today/",
         "/api/v1/portal/quotes/{token}/",

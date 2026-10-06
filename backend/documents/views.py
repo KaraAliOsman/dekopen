@@ -116,6 +116,9 @@ DOCUMENTARY_ERROR_DETAILS = {
     "order_state_invalid": (
         "El pedido no admite esa acción en su estado actual; revisa recepciones y estado."
     ),
+    "receipt_over_received": (
+        "La recepción excede lo pedido en una o más líneas; confirma la sobre-recepción."
+    ),
     "order_type_allocation_incomplete": (
         "Hay necesidades pendientes sin asignación a un pedido; revisa la selección por tipo."
     ),

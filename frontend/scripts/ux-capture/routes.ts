@@ -128,7 +128,13 @@ export const ROUTES: CaptureRoute[] = [
     touchAudit: true,
   },
   { name: "purchasing", path: "/purchasing", role: "manager" },
-  { name: "inventory-alias", path: "/inventory", role: "manager" },
+  {
+    name: "inventory-alias",
+    path: "/inventory",
+    role: "manager",
+    extraMobile: true,
+    touchAudit: true,
+  },
   { name: "jobs-manager", path: "/jobs", role: "manager" },
 
   // ---- operator ----------------------------------------------------------

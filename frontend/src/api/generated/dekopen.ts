@@ -236,6 +236,9 @@ import type {
   RemnantCreateRequest,
   RemnantLabel,
   RemnantList,
+  RemnantMoveRequestRequest,
+  RemnantReserveRequestRequest,
+  RemnantScrapRequestRequest,
   ResetPricingRequest,
   RevisionCompareResponse,
   SearchResponse,
@@ -8386,6 +8389,89 @@ export const inventoryRemnantLabel = async (
   });
 };
 
+export type inventoryRemnantMoveResponse200 = {
+  data: Remnant;
+  status: 200;
+};
+
+export type inventoryRemnantMoveResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type inventoryRemnantMoveResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type inventoryRemnantMoveResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type inventoryRemnantMoveResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type inventoryRemnantMoveResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type inventoryRemnantMoveResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type inventoryRemnantMoveResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type inventoryRemnantMoveResponseSuccess = inventoryRemnantMoveResponse200 & {
+  headers: Headers;
+};
+export type inventoryRemnantMoveResponseError = (
+  | inventoryRemnantMoveResponse400
+  | inventoryRemnantMoveResponse401
+  | inventoryRemnantMoveResponse403
+  | inventoryRemnantMoveResponse404
+  | inventoryRemnantMoveResponse409
+  | inventoryRemnantMoveResponse422
+  | inventoryRemnantMoveResponse503
+) & {
+  headers: Headers;
+};
+
+export type inventoryRemnantMoveResponse =
+  inventoryRemnantMoveResponseSuccess | inventoryRemnantMoveResponseError;
+
+export const getInventoryRemnantMoveUrl = (remnantId: string) => {
+  return `/api/v1/inventory/remnants/${remnantId}/move/`;
+};
+
+export const inventoryRemnantMove = async (
+  remnantId: string,
+  remnantMoveRequestRequest: RemnantMoveRequestRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<inventoryRemnantMoveResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<inventoryRemnantMoveResponse>(getInventoryRemnantMoveUrl(remnantId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+    body: JSON.stringify(remnantMoveRequestRequest),
+  });
+};
+
 export type inventoryRemnantReleaseResponse200 = {
   data: Remnant;
   status: 200;
@@ -8458,6 +8544,89 @@ export const inventoryRemnantRelease = async (
   });
 };
 
+export type inventoryRemnantReserveResponse200 = {
+  data: Remnant;
+  status: 200;
+};
+
+export type inventoryRemnantReserveResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type inventoryRemnantReserveResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type inventoryRemnantReserveResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type inventoryRemnantReserveResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type inventoryRemnantReserveResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type inventoryRemnantReserveResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type inventoryRemnantReserveResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type inventoryRemnantReserveResponseSuccess = inventoryRemnantReserveResponse200 & {
+  headers: Headers;
+};
+export type inventoryRemnantReserveResponseError = (
+  | inventoryRemnantReserveResponse400
+  | inventoryRemnantReserveResponse401
+  | inventoryRemnantReserveResponse403
+  | inventoryRemnantReserveResponse404
+  | inventoryRemnantReserveResponse409
+  | inventoryRemnantReserveResponse422
+  | inventoryRemnantReserveResponse503
+) & {
+  headers: Headers;
+};
+
+export type inventoryRemnantReserveResponse =
+  inventoryRemnantReserveResponseSuccess | inventoryRemnantReserveResponseError;
+
+export const getInventoryRemnantReserveUrl = (remnantId: string) => {
+  return `/api/v1/inventory/remnants/${remnantId}/reserve/`;
+};
+
+export const inventoryRemnantReserve = async (
+  remnantId: string,
+  remnantReserveRequestRequest: RemnantReserveRequestRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<inventoryRemnantReserveResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<inventoryRemnantReserveResponse>(getInventoryRemnantReserveUrl(remnantId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+    body: JSON.stringify(remnantReserveRequestRequest),
+  });
+};
+
 export type inventoryRemnantScrapResponse200 = {
   data: Remnant;
   status: 200;
@@ -8522,11 +8691,22 @@ export const getInventoryRemnantScrapUrl = (remnantId: string) => {
 
 export const inventoryRemnantScrap = async (
   remnantId: string,
+  remnantScrapRequestRequest: RemnantScrapRequestRequest,
   options?: Parameters<typeof apiMutator>[1],
 ): Promise<inventoryRemnantScrapResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
   return apiMutator<inventoryRemnantScrapResponse>(getInventoryRemnantScrapUrl(remnantId), {
     ...options,
     method: "POST",
+    headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+    body: JSON.stringify(remnantScrapRequestRequest),
   });
 };
 

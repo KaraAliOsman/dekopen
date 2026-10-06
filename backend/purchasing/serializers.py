@@ -1,5 +1,7 @@
 """Strict supplier eligibility and order action transports for S19."""
 
+from decimal import Decimal
+
 from rest_framework import serializers
 
 from documents.serializers import ArtifactResponseSerializer, StrictSerializer
@@ -45,6 +47,10 @@ class EligibilityRequestSerializer(StrictSerializer):
 
 class AllocationRequestSerializer(StrictSerializer):
     supplier_eligibility_id = serializers.UUIDField()
+    unit_price = serializers.DecimalField(
+        max_digits=14, decimal_places=4, min_value=Decimal("0"),
+        required=False, allow_null=True,
+    )
 
 
 class ConfirmBatchRequestSerializer(StrictSerializer):
@@ -57,6 +63,15 @@ class SendOrderRequestSerializer(StrictSerializer):
     expected_at = serializers.DateField(required=False, allow_null=True, default=None)
     sent_to = serializers.CharField(
         required=False, allow_null=True, allow_blank=True, max_length=200, default=None
+    )
+
+
+class AllocationSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    requirement_line_id = serializers.UUIDField()
+    supplier_eligibility_id = serializers.UUIDField()
+    unit_price = serializers.DecimalField(
+        max_digits=14, decimal_places=4, allow_null=True, required=False
     )
 
 
@@ -110,9 +125,13 @@ class OrderResponseSerializer(serializers.Serializer):
     released_qty = serializers.CharField(required=False, allow_null=True)
     damaged_qty = serializers.CharField(required=False, allow_null=True)
     receipt_count = serializers.CharField(required=False, allow_null=True)
+    total_amount = serializers.CharField(required=False, allow_null=True)
+    unpriced_lines = serializers.IntegerField(required=False)
     lines_preview = serializers.ListField(
         child=serializers.DictField(), required=False
     )
+    mail = serializers.DictField(required=False, allow_null=True)
+    document_job = serializers.DictField(required=False, allow_null=True)
 
 
 class OrderIndexItemSerializer(serializers.Serializer):

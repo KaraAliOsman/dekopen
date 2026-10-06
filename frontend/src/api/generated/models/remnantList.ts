@@ -9,4 +9,5 @@ import type { Remnant } from "./remnant";
 
 export interface RemnantList {
   remnants: Remnant[];
+  alert_days?: number;
 }
