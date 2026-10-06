@@ -24,7 +24,7 @@
 | ED1 | ED1 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/42 | c1ba32063f8177ce4b42a3703f57549061b18c4c | CI 6/6 verde; squash mergeado. Pase editorial: dedup formatters/mapas de estado, glosario unificado (femenino "la operación"), caza slop (fuentes <11px, degradados, sombras off-scale), contrato honesto de capturas, baseline de guardas rebajada. 294 capturas 0 hallazgos. |
 | P06 | 2 | pendiente |  |  |  |
 | P08 | 2 | pendiente |  |  |  |
-| P13 | 2 | pendiente |  |  |  |
+| P13 | 2 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/44 | 3f3cf8a66169efb31a0afaa04c657b9c71981d99 | CI 6/6 verde; squash mergeado. Pack de corte para sierra (bloques por barra, badges RT-, SVG con etiquetas por instancia, cierre Decimal), etiquetas configurables GRID|THERMAL_100X50 con QR+siguiente estación, identidad por instancia idéntica en PDF/CSV/DXF/QR (test de conjuntos), DXF UTF-8 verificado con ezdxf. |
 | P15 | 2 | pendiente |  |  |  |
 | P11 | 2 | pendiente |  |  |  |
 | P14 | 2 | pendiente |  |  |  |

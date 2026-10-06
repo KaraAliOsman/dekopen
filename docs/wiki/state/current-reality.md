@@ -3,7 +3,7 @@ type: state
 status: active
 updated: 2026-10-06
 volatility: high
-verified_ref: a38622bb947a062efaaebc2b4e11a03b33d1ebc2
+verified_ref: 3f3cf8a66169efb31a0afaa04c657b9c71981d99
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
@@ -27,6 +27,7 @@ sources:
   - P07 workspace precios PR https://github.com/KaraAliOsman/dekopen/pull/33
   - P12 producción PR https://github.com/KaraAliOsman/dekopen/pull/40
   - ED1 pase editorial PR https://github.com/KaraAliOsman/dekopen/pull/42
+  - P13 pack corte etiquetas PR https://github.com/KaraAliOsman/dekopen/pull/44
   - P17 asistente IA/trabajos/Orb branch devin/P17-asistente-orb
   - integracion/v1 merge 747c528b67d234d697624929ccbcc7098261ed54
   - open PR metadata observed 2026-09-27/28
@@ -374,6 +375,8 @@ PR sobre `integracion/v1` (branch `devin/ED1-pase-editorial-ola1`); encargo sin 
 - Verificado: `make lint|typecheck|test|build` verdes; ux:capture antes/después en `docs/redesign/captures/ed1/`; decisiones en sección ED1 de `valores-por-defecto.md`.
 
 ## P13 pack de corte, etiquetas e identidad entre artefactos state
+
+Merged into `integracion/v1` as squash `3f3cf8a66169efb31a0afaa04c657b9c71981d99` (dekopen PR #44):
 
 Open PR (branch `devin/P13-pack-corte-etiquetas`, on `integracion/v1`):
 
