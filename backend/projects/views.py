@@ -3,6 +3,7 @@
 import json
 from datetime import datetime
 
+from django.http import HttpResponse
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -195,22 +196,29 @@ class ProjectSuccessorView(APIView):
     def post(self, request, project_id):
         with scope(request, WRITE_ROLES) as (_, _, org):
             data = validate(SuccessorRequestSerializer, request.data)
-            value = service.start_successor(
-                org, project_id, data["expected_current_revision"]
-            )
+            value = service.start_successor(org, project_id, data["expected_current_revision"])
         created = value.pop("successor_created")
         return response(value, status=201 if created else 200)
 
 
 class ProjectResetPricingView(APIView):
-    @extend_schema(operation_id="projects_reset_pricing", request=ResetPricingSerializer,
-                   responses={200: ProjectResponseSerializer, **ERRORS}, **SCHEMA)
+    @extend_schema(
+        operation_id="projects_reset_pricing",
+        request=ResetPricingSerializer,
+        responses={200: ProjectResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
     def post(self, request, project_id):
         data = validate(ResetPricingSerializer, request.data)
         with scope(request, WRITE_ROLES) as (_, _, org):
-            return response(service.reset_draft_pricing(
-                org, project_id, data["expected_operation_id"], data["reason"],
-            ))
+            return response(
+                service.reset_draft_pricing(
+                    org,
+                    project_id,
+                    data["expected_operation_id"],
+                    data["reason"],
+                )
+            )
 
 
 class PositionView(APIView):
@@ -262,6 +270,7 @@ class PositionView(APIView):
 
 class PositionMeasurementResolveView(APIView):
     """Live vano→fabricación preview for the editor — engine resolves, nothing persists."""
+
     parser_classes = [DecimalJSONParser]
 
     @extend_schema(
@@ -289,6 +298,7 @@ class PositionMeasurementResolveView(APIView):
 class PositionMeasurementConfirmView(APIView):
     """Explicit human confirmation of the fabrication measure — the
     production gate evidence."""
+
     parser_classes = [DecimalJSONParser]
 
     @extend_schema(
@@ -492,9 +502,7 @@ class ProjectPaymentLinkRecoverView(APIView):
     def post(self, request, project_id, link_id):
         with scope(request, WRITE_ROLES) as (_, _, org):
             try:
-                return response(
-                    payment_links.recover_link(org_id=org, link_id=link_id)
-                )
+                return response(payment_links.recover_link(org_id=org, link_id=link_id))
             except FlowError as error:
                 raise contract_error(
                     503, error.code, "El link requiere verificación del proveedor."
@@ -587,7 +595,12 @@ class OrganizationBrandingView(APIView):
 class OrganizationBrandingLogoView(APIView):
     @extend_schema(
         operation_id="organization_branding_logo_upload",
-        request={"multipart/form-data": {"type": "object", "properties": {"file": {"type": "string", "format": "binary"}}}},
+        request={
+            "multipart/form-data": {
+                "type": "object",
+                "properties": {"file": {"type": "string", "format": "binary"}},
+            }
+        },
         responses={200: OrgBrandingSerializer, **ERRORS},
         **SCHEMA,
     )
@@ -607,7 +620,9 @@ class OrganizationBrandingLogoView(APIView):
     def get(self, request):
         with scope(request, READ_ROLES) as (_, _, org):
             content, content_type = org_branding.logo_bytes(org_id=org)
-        return Response(
+        # HttpResponse, no DRF Response — el renderer JSON no sabe serializar
+        # bytes crudos y devuelve 500 en lugar de la imagen.
+        return HttpResponse(
             content,
             content_type=content_type,
             headers={"Cache-Control": "private, max-age=300"},
@@ -657,9 +672,7 @@ class ProjectPaymentReceiptView(APIView):
     def get(self, request, project_id, payment_id):
         with scope(request, READ_ROLES) as (_, _, org):
             return response(
-                receipts.receipt_access(
-                    org_id=org, project_id=project_id, payment_id=payment_id
-                )
+                receipts.receipt_access(org_id=org, project_id=project_id, payment_id=payment_id)
             )
 
 
@@ -676,9 +689,7 @@ class ProjectInvoicesView(APIView):
         with scope(request, WRITE_ROLES) as (token, _, org):
             project = service.project_row(org, project_id)
             return response(
-                invoices.issue_invoice(
-                    org_id=org, project=project, actor_id=token.user_id
-                ),
+                invoices.issue_invoice(org_id=org, project=project, actor_id=token.user_id),
                 status=201,
             )
 
@@ -694,9 +705,7 @@ class ProjectInvoiceAccessView(APIView):
     def get(self, request, project_id, invoice_id):
         with scope(request, READ_ROLES) as (_, _, org):
             return response(
-                invoices.invoice_access(
-                    org_id=org, project_id=project_id, invoice_id=invoice_id
-                )
+                invoices.invoice_access(org_id=org, project_id=project_id, invoice_id=invoice_id)
             )
 
 
@@ -775,9 +784,7 @@ class ProjectInvoiceDteView(APIView):
     def get(self, request, project_id, invoice_id):
         with scope(request, READ_ROLES) as (_, _, org):
             return response(
-                sii.dte_access(
-                    org_id=org, project_id=project_id, invoice_id=invoice_id
-                )
+                sii.dte_access(org_id=org, project_id=project_id, invoice_id=invoice_id)
             )
 
 
@@ -908,9 +915,7 @@ class SiiCertificateView(APIView):
     )
     def get(self, request):
         with scope(request, READ_ROLES) as (_, _, org):
-            return response(
-                {"certificate": sii_envio.certificate_status(org_id=org)}
-            )
+            return response({"certificate": sii_envio.certificate_status(org_id=org)})
 
     @extend_schema(
         operation_id="sii_certificate_upload",

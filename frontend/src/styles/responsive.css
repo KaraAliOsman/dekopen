@@ -77,9 +77,9 @@
     text-align: center;
   }
 
-  /* Compact mark: the wordmark collapses to its square glyph. */
-  .app-shell[data-studio] .app-rail__brand .brand {
-    font-size: 0;
+  /* Compact mark: el wordmark se colapsa a su glifo cuadrado. */
+  .app-shell[data-studio] .app-rail__brand .brand-wordmark {
+    font-size: 0 !important;
     justify-content: center;
   }
 

@@ -6,6 +6,7 @@ import {
   catalogExtraarticleList,
   catalogServicearticleList,
   getOrganizationBrandingLogoReadUrl,
+  mailStatus,
   organizationBrandingGet,
   organizationBrandingLogoDelete,
   organizationBrandingLogoUpload,
@@ -24,6 +25,7 @@ import type {
   ApiUrlEnum,
   ExtraArticleResponse,
   ExtraTemplateWriteRequest,
+  MailStatus,
   Membership,
   PaymentIntegrationStatus,
   MembershipRoleEnum,
@@ -441,6 +443,21 @@ function SiiCertificateCard({ orgId }: { orgId: string }): JSX.Element {
   );
 }
 
+/** WCAG AA contra papel blanco (4.5:1) — la misma matemática linearizada
+ * que `backend/documents/brand.py`, duplicada para avisar antes de
+ * guardar: si el color cae al fallback teal-800 el aviso aparece aquí. */
+function brandColorPassesAa(hex: string): boolean {
+  const channel = (slice: string): number => {
+    const c = parseInt(slice, 16) / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const lum =
+    0.2126 * channel(hex.slice(1, 3)) +
+    0.7152 * channel(hex.slice(3, 5)) +
+    0.0722 * channel(hex.slice(5, 7));
+  return 1.05 / (lum + 0.05) >= 4.5;
+}
+
 function OrgBrandingCard({ orgId }: { orgId: string }): JSX.Element {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [pickFile, setPickFile] = useState<File | null>(null);
@@ -453,8 +470,17 @@ function OrgBrandingCard({ orgId }: { orgId: string }): JSX.Element {
     brand_address: "",
     brand_phone: "",
     brand_email: "",
+    brand_color: "",
+    doc_dekopen_credit: false,
   });
   const requestOptions = { headers: { "X-Organization-ID": orgId } };
+  // El color por defecto del control ES el token teal-800 — se resuelve
+  // del CSS, nunca de un literal (guard de hex del §10).
+  const [tealFallback] = useState(() =>
+    typeof document === "undefined"
+      ? ""
+      : getComputedStyle(document.documentElement).getPropertyValue("--teal-800").trim(),
+  );
 
   const load = useCallback(async () => {
     try {
@@ -466,6 +492,8 @@ function OrgBrandingCard({ orgId }: { orgId: string }): JSX.Element {
         brand_address: response.data.brand_address ?? "",
         brand_phone: response.data.brand_phone ?? "",
         brand_email: response.data.brand_email ?? "",
+        brand_color: response.data.brand_color ?? "",
+        doc_dekopen_credit: response.data.doc_dekopen_credit ?? false,
       });
       if (response.data.brand_logo_key) {
         try {
@@ -491,7 +519,8 @@ function OrgBrandingCard({ orgId }: { orgId: string }): JSX.Element {
 
   async function save(event: FormEvent): Promise<void> {
     event.preventDefault();
-    const field = (name: keyof typeof form) => form[name].trim() || null;
+    const field = (name: Exclude<keyof typeof form, "doc_dekopen_credit">) =>
+      form[name].trim() || null;
     setBusy(true);
     setMessage(null);
     try {
@@ -502,6 +531,8 @@ function OrgBrandingCard({ orgId }: { orgId: string }): JSX.Element {
           brand_address: field("brand_address"),
           brand_phone: field("brand_phone"),
           brand_email: field("brand_email"),
+          brand_color: field("brand_color")?.toUpperCase() ?? null,
+          doc_dekopen_credit: form.doc_dekopen_credit,
         },
         requestOptions,
       );
@@ -611,6 +642,44 @@ function OrgBrandingCard({ orgId }: { orgId: string }): JSX.Element {
             onChange={(event) => setForm((prev) => ({ ...prev, brand_email: event.target.value }))}
           />
         </label>
+        <label>
+          {t("settings.brandColor")}
+          <span className="settings-branding-color">
+            <input
+              aria-label={t("settings.brandColor")}
+              type="color"
+              value={/^#[0-9A-Fa-f]{6}$/.test(form.brand_color) ? form.brand_color : tealFallback}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, brand_color: event.target.value.toUpperCase() }))
+              }
+            />
+            <input
+              maxLength={7}
+              placeholder="#RRGGBB"
+              value={form.brand_color}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, brand_color: event.target.value.toUpperCase() }))
+              }
+            />
+          </span>
+          <span className="settings-hint">{t("settings.brandColorHint")}</span>
+          {form.brand_color !== "" &&
+          /^#[0-9A-Fa-f]{6}$/.test(form.brand_color) &&
+          !brandColorPassesAa(form.brand_color) ? (
+            <span className="form-error">{t("settings.brandColorWarning")}</span>
+          ) : null}
+        </label>
+        <label className="settings-branding-credit">
+          <input
+            checked={form.doc_dekopen_credit}
+            onChange={(event) =>
+              setForm((prev) => ({ ...prev, doc_dekopen_credit: event.target.checked }))
+            }
+            type="checkbox"
+          />
+          {t("settings.brandCredit")}
+          <span className="settings-hint">{t("settings.brandCreditHint")}</span>
+        </label>
         <div className="payments-form-actions">
           <button type="submit" className="primary-action" disabled={busy}>
             {t("settings.brandingSave")}
@@ -638,6 +707,67 @@ function OrgBrandingCard({ orgId }: { orgId: string }): JSX.Element {
           )}
         </div>
       </form>
+    </div>
+  );
+}
+
+/** P25 — estado de la bandeja de correo transaccional: proveedor activo
+ * (sandbox por defecto), remitente y conteo de la última semana. El
+ * adaptador real se activa por variables de entorno (ver ACTIVACION.md). */
+function MailStatusCard({ orgId }: { orgId: string }): JSX.Element {
+  const [status, setStatus] = useState<MailStatus | null>(null);
+  const [failed, setFailed] = useState(false);
+  const requestOptions = { headers: { "X-Organization-ID": orgId } };
+
+  useEffect(() => {
+    let cancelled = false;
+    void mailStatus(requestOptions)
+      .then((response) => {
+        if (!cancelled && response.status === 200) setStatus(response.data);
+        if (!cancelled && response.status !== 200) setFailed(true);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId]);
+
+  return (
+    <div className="settings-card">
+      <h3 className="eyebrow">{t("settings.mailTitle")}</h3>
+      <p className="settings-hint">{t("settings.mailHint")}</p>
+      {failed && <p className="form-error">{t("settings.mailLoadError")}</p>}
+      {status !== null && (
+        <dl className="settings-mail-grid">
+          <div>
+            <dt>{t("settings.mailProvider")}</dt>
+            <dd>
+              {status.provider === "smtp"
+                ? t("settings.mailProviderSmtp")
+                : t("settings.mailProviderSandbox")}
+            </dd>
+          </div>
+          <div>
+            <dt>{t("settings.mailFrom")}</dt>
+            <dd>{status.from_address}</dd>
+          </div>
+          <div>
+            <dt>{t("settings.mailQueued")}</dt>
+            <dd>{status.queued}</dd>
+          </div>
+          <div>
+            <dt>{t("settings.mailSent7d")}</dt>
+            <dd>{status.sent_7d}</dd>
+          </div>
+          <div>
+            <dt>{t("settings.mailFailed7d")}</dt>
+            <dd>{status.failed_7d}</dd>
+          </div>
+        </dl>
+      )}
     </div>
   );
 }
@@ -1010,6 +1140,7 @@ export function SettingsPage(): JSX.Element {
           </h2>
           <div className="settings-grid">
             <OrgBrandingCard orgId={org.id} />
+            <MailStatusCard orgId={org.id} />
             <WorkshopRulesCard orgId={org.id} />
             <OrgExtrasCard orgId={org.id} />
           </div>

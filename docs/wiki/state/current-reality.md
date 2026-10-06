@@ -59,6 +59,19 @@ Hard invariants documented by the repo include:
 - workshop-language validation;
 - Oknosoft/WindowBuilder as a domain reference.
 
+## P25 state
+
+PR abierto a `integracion/v1` (pendiente de merge) desde `devin/P25-marca`:
+
+- Marca canónica «La sección»: anillo cuadrado 24×24 con muro 2.5 y alma de 2 a 1/3 (la sección de perfil que el producto dibuja); `SECTION_PATH` único en `frontend/src/brand/BrandMark.tsx` (currentColor — una geometría pinta claro/oscuro), wordmark con la O reemplazada por la marca (~0.73em), DocLockup «La cota» para portadas internas/correos.
+- `favicon.svg` se auto-colorea por `@media (prefers-color-scheme: dark)` interno (`.ink` #161c1f → #fcfdfc) — las capturas deben emular `colorScheme`, no recolorear el SVG; `manifest.webmanifest` + PNG 16/32/180/192/512 rasterizados; `theme-color` teal-800 sobre papel g-50 (maskable con safe-zone 78 %).
+- Acceso/onboarding como hoja técnica (`auth/AuthSheet.tsx` + `styles/auth.css`): papel `--theme-canvas`, marco con inglete, una acción por hoja; onboarding usa `ui/Stepper` (se corrigieron sus estados `is-done`/`is-current`/`is-blocked`).
+- Correos transaccionales (`backend/mail/`): outbox `public.mail_messages` (fila materializada pre-envío, audiencia CLIENT/INTERNAL, QUEUED/SENT/FAILED/SKIPPED, RLS solo roles comerciales), 5 plantillas es-CL «usted» (magic link en `supabase/templates/`, quote_sent, quote_approved, payment_received, step_blocked), provider `sandbox` por defecto / `smtp` con CID inline, emisión por jobs `mail.*` dentro de la transacción del caso de uso, vista previa dev-only en `/dev/correos` (`mail/views.py` reescribe CID a data-URI).
+- White-label: `brand_color` #RRGGBB en `tenancy_organizations` (CHECK SQL), validado AA 4.5:1 contra papel blanco en `documents/brand.py` con fallback teal-800; el portal del cliente aplica el color como override local de `--theme-accent*` (leído del snapshot sellado en `_sealed_organization` — una renombría posterior NO rescribe cotizaciones ya emitidas); logo content-addressed `org_<id>/branding/logo_<sha12>.<ext>` con verificación sha256 en lectura; `doc_dekopen_credit` oculta «Generado con DEKOPEN» salvo opt-in.
+- `EmptyIllustration` (elevation/bar/document/order/bench — lámina técnica 120×80) en `EmptyState.illustration` (proyectos, producción, `NotFoundPage`, `RouteErrorBoundary`, `OfflineOverlay`); Orb recoloreado de cyan a familia teal en tokens sin tocar su API.
+- Bugs reales corregidos en verificación: (1) `mail.service._project_mail_row` seleccionaba `projects.currency` inexistente — ahora JOIN a `tenancy_organizations` (los jobs `mail.*` fallaban con `UndefinedColumn`); (2) `OrganizationBrandingLogoView.get` devolvía DRF `Response` sobre bytes PNG → 500 `UnicodeDecodeError` — ahora `HttpResponse`; (3) `DocumentaryError` en handlers `mail.*` se trataba como transitorio — ahora `JobPermanentError` (alineado con el handler de artifacts).
+- Verificado: `make lint|typecheck|test|build` verdes y `make test-db` (pgTAP 1023 tests incl. `179_p25_brand_mail.test.sql`, integración 273, e2e 12, replay Postgres-16) con `PY=.venv/bin/python`; entrega real comprobada `SENT sandbox` con `brand_color` #B45309 embebido en `html_body`; capturas en `docs/redesign/captures/p25-marca/` + `docs/redesign/captures/marca/`; decisiones en `docs/decisions/valores-por-defecto.md` sección P25.
+
 ## D06 state
 
 Merged into `integracion/v1` as squash `d7dc6a9c83d19958ca7730930ec27381c30c967c` (dekopen PR #17):

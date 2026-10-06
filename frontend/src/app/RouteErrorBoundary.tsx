@@ -1,5 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+
 import { t } from "../i18n/es-CL";
+import { EmptyIllustration } from "../ui";
 
 type Props = { children: ReactNode };
 type State = { error: Error | null };
@@ -25,15 +27,20 @@ export class RouteErrorBoundary extends Component<Props, State> {
     return (
       <main className="route-error" role="alert">
         <div className="route-error-card">
+          <EmptyIllustration kind="document" />
           <h1>{t("app.errorTitle")}</h1>
           <p>{t("app.errorBody")}</p>
           <div className="route-error-actions">
-            <button type="button" onClick={() => window.location.reload()}>
+            <button
+              className="ui-button ui-button--primary"
+              type="button"
+              onClick={() => window.location.reload()}
+            >
               {t("app.errorReload")}
             </button>
             <button
               type="button"
-              className="route-error-secondary"
+              className="route-error-secondary ui-button"
               onClick={() => {
                 this.setState({ error: null });
                 window.location.assign("/");

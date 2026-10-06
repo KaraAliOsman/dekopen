@@ -20,8 +20,9 @@ import {
 import type { SystemResponse } from "../../api/generated/models/systemResponse";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
 import { roleLabel } from "../../app/shellUtils";
+import { Wordmark } from "../../brand";
 import { t } from "../../i18n/es-CL";
-import { EmptyState, StatusBadge } from "../../ui";
+import { EmptyState, StatusBadge, Stepper } from "../../ui";
 
 type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
@@ -314,29 +315,26 @@ export function OnboardingPage(): JSX.Element {
   return (
     <section className="onboarding" aria-labelledby="onboarding-title">
       <header className="onboarding-head">
+        <div className="onboarding-brand">
+          <Wordmark size={14} />
+          <span className="brand-os">{t("app.brandOs")}</span>
+        </div>
         <p className="eyebrow">{t("onboarding.eyebrow")}</p>
         <h1 id="onboarding-title">{t("onboarding.title")}</h1>
         <p className="onboarding-sub">{t("onboarding.subtitle")}</p>
       </header>
 
-      <ol className="onboarding-steps" aria-label={t("onboarding.title")}>
-        {STEP_LABELS.map((label, index) => {
+      <Stepper
+        onStep={(key) => setStep(Number(key) as Step)}
+        steps={STEP_LABELS.map((label, index) => {
           const n = index as Step;
-          const state = stepIsDone(n, done) ? "done" : n === step ? "current" : "pending";
-          return (
-            <li key={label} className={`onboarding-step is-${state}`}>
-              <button
-                type="button"
-                onClick={() => setStep(n)}
-                aria-current={n === step ? "step" : undefined}
-              >
-                <span className="onboarding-step__index">{index + 1}</span>
-                {t(label)}
-              </button>
-            </li>
-          );
+          return {
+            key: String(index),
+            label: t(label),
+            state: stepIsDone(n, done) ? "done" : n === step ? "current" : "pending",
+          };
         })}
-      </ol>
+      />
 
       <div className="onboarding-panel">
         {step === 0 && org && (

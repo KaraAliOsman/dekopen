@@ -7,6 +7,8 @@ import { AppShell } from "./app/AppShell";
 import { RouteErrorBoundary } from "./app/RouteErrorBoundary";
 import { DashboardPage } from "./app/DashboardPage";
 import { JobsPage } from "./app/JobsPage";
+import { NotFoundPage } from "./app/NotFoundPage";
+import { OfflineOverlay } from "./app/OfflineOverlay";
 import { SettingsPage } from "./app/SettingsPage";
 import { AuthCallbackPage } from "./auth/AuthCallbackPage";
 import { ReadyGuard, SessionGuard } from "./auth/AuthGuards";
@@ -22,6 +24,7 @@ export const DEV_ONLY_ROUTE_PATHS = [
   "/benchmark",
   "/dev/ui",
   "/dev/ui/mal",
+  "/dev/correos",
 ] as const;
 
 export function visibleDevOnlyRoutePaths(
@@ -111,6 +114,11 @@ const DevUiPage = lazy(async () => {
 const DevUiContrast = lazy(async () => {
   const module = await import("./dev/DevUiContrast");
   return { default: module.DevUiContrast };
+});
+
+const DevMailPage = lazy(async () => {
+  const module = await import("./dev/DevMailPage");
+  return { default: module.DevMailPage };
 });
 
 function isFloorRole(role: string | undefined): boolean {
@@ -232,6 +240,18 @@ export function AppRoutes(): JSX.Element {
                 <Suspense fallback={<p role="status" />}>
                   <DevUiContrast />
                 </Suspense>
+              }
+            />
+            <Route
+              path="/dev/correos"
+              element={
+                <ReadyGuard>
+                  <AppShell>
+                    <Suspense fallback={<p role="status" />}>
+                      <DevMailPage />
+                    </Suspense>
+                  </AppShell>
+                </ReadyGuard>
               }
             />
           </>
@@ -416,8 +436,9 @@ export function AppRoutes(): JSX.Element {
          * inside General. */}
         <Route path="/settings" element={<Navigate to="/settings/general" replace />} />
         <Route path="/inventory" element={<Navigate to="/purchasing" replace />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
+      <OfflineOverlay />
     </RouteErrorBoundary>
   );
 }

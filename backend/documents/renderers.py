@@ -14,6 +14,7 @@ from dekopen_engine.contour import Contour, contour_points
 from dekopen_engine.models import Opening, OpeningSpec, PlanPoint, UnitKind
 from dekopen_engine.openings import opening_leaf_name_es, spec_display_name_es
 from dekopen_engine.product import ElevationMember, elevation_layout
+from documents.brand import effective_brand_color
 from documents.repository import DocumentaryError
 from engine_api.adapter import (
     InvalidEngineRequest,
@@ -384,12 +385,26 @@ def _url_fetcher(url: str, *args: object, **kwargs: object) -> object:
     raise DocumentaryError(f"External PDF resource forbidden: {url}")
 
 
-_MITER = (
-    '<svg class="miter" width="8mm" height="8mm" viewBox="0 0 32 32" '
-    'xmlns="http://www.w3.org/2000/svg">'
-    f'<path d="M0,0 L32,0 L32,32 Z" fill="{_PAPER}" stroke="{_TEAL_800}" '
-    'stroke-width="2"/></svg>'
-)
+def _miter(accent: str) -> str:
+    return (
+        '<svg class="miter" width="8mm" height="8mm" viewBox="0 0 32 32" '
+        'xmlns="http://www.w3.org/2000/svg">'
+        f'<path d="M0,0 L32,0 L32,32 Z" fill="{_PAPER}" stroke="{accent}" '
+        'stroke-width="2"/></svg>'
+    )
+
+
+def _brand_accent(organization: dict | None) -> str:
+    """Acento de marca del masthead: el primario declarado por la org cuando
+    pasa la validación AA contra papel; teal-800 (la marca propia) en caso
+    contrario. Documento white-label: el acento acompaña al emisor, no a
+    DEKOPEN."""
+    if isinstance(organization, dict):
+        color, passed = effective_brand_color(organization.get("brand_color"))
+        if passed:
+            return color
+    return _TEAL_800
+
 
 
 _LOGO_MAX_BYTES = 512 * 1024
@@ -434,11 +449,14 @@ def _logo_uri(organization: dict | None) -> str | None:
 
 
 def _brand_block(organization: dict | None) -> str:
-    """White-label masthead brand: the org's logo or commercial name leads;
-    'Generado con DEKOPEN' stays as the discreet tool attribution. A snapshot
-    frozen before branding renders the bare DEKOPEN wordmark."""
+    """White-label masthead brand: the org's logo or commercial name leads,
+    colored by its declared primario (AA-checked). 'Generado con DEKOPEN'
+    only prints when the org opted in (`doc_dekopen_credit`) — client
+    documents are white-label by default. A snapshot frozen before branding
+    renders the bare DEKOPEN wordmark."""
     org = organization if isinstance(organization, dict) else {}
     uri = _logo_uri(org)
+    accent = _brand_accent(org)
     name = (
         _value(org.get("commercial_name"))
         if _value(org.get("commercial_name")) != "—"
@@ -447,8 +465,8 @@ def _brand_block(organization: dict | None) -> str:
     if uri:
         # Logo + commercial name together — the name must survive the logo.
         name_line = (
-            f'<div class="brand" style="font-size:9pt;letter-spacing:1.2pt">'
-            f'{escape(name)}</div>'
+            f'<div class="brand" style="font-size:9pt;letter-spacing:1.2pt;'
+            f'color:{accent}">{escape(name)}</div>'
             if name != "—"
             else ""
         )
@@ -457,10 +475,10 @@ def _brand_block(organization: dict | None) -> str:
         if name == "—":
             brand = '<div class="brand">DEKOPEN<span class="mark"></span></div>'
         else:
-            brand = f'<div class="brand">{escape(name)}</div>'
+            brand = f'<div class="brand" style="color:{accent}">{escape(name)}</div>'
     attribution = (
         '<div class="brand-sub">Generado con DEKOPEN</div>'
-        if isinstance(organization, dict) and organization.get("name")
+        if org.get("name") and org.get("doc_dekopen_credit")
         else ""
     )
     return f"<div>{brand}{attribution}</div>"
@@ -1314,13 +1332,13 @@ def _revision_header(
         "</div>"
     )
     header = (
-        f'<div class="masthead">{_MITER}{_brand_block(organization)}'
+        f'<div class="masthead">{_miter(_brand_accent(organization))}{_brand_block(organization)}'
         '<div class="meta">'
         f"{issuer}"
         f"<strong>{escape(project_code)}</strong><br>"
         f"{escape(doc_code)} · Rev. {escape(_rev_display(revision))}<br>"
         f"{escape(_cldate(sealed_at))}</div></div>"
-        '<div class="rule-stack"></div>'
+        f'<div class="rule-stack" style="border-top-color:{_brand_accent(organization)}"></div>'
         f"<h1>{escape(title)}</h1>"
     )
     return f'<main class="{class_name}">{titleblock}{header}', bom_hash
@@ -2982,11 +3000,11 @@ def _receipt_body(payload: dict[str, object]) -> str:
     )
     body = (
         f'<main>{titleblock}'
-        f'<div class="masthead">{_MITER}{_brand_block(organization)}'
+        f'<div class="masthead">{_miter(_brand_accent(organization))}{_brand_block(organization)}'
         '<div class="meta">'
         f"<strong>{escape(receipt_code)}</strong><br>"
         f"Comprobante de pago<br>{escape(_cldate(issued_at))}</div></div>"
-        '<div class="rule-stack"></div>'
+        f'<div class="rule-stack" style="border-top-color:{_brand_accent(organization)}"></div>'
         "<h1>Comprobante de pago</h1>"
         f"{voided_block}"
         '<section class="hero"><p>Recibido de</p>'
@@ -3080,13 +3098,13 @@ def _dispatch_note_body(payload: dict[str, object]) -> str:
     )
     body = (
         f'<main>{titleblock}'
-        f'<div class="masthead">{_MITER}{_brand_block(organization)}'
+        f'<div class="masthead">{_miter(_brand_accent(organization))}{_brand_block(organization)}'
         '<div class="meta">'
         f"<strong>{escape(note_code)}</strong><br>"
         f"Guía de despacho<br>{escape(_cldate(issued_at))}</div></div>"
     )
     body += (
-        '<div class="rule-stack"></div>'
+        f'<div class="rule-stack" style="border-top-color:{_brand_accent(organization)}"></div>'
         "<h1>Guía de despacho</h1>"
         '<section class="hero"><p>Destinatario</p>'
         f"<h2>{escape(_value(project.get('client_name')))}</h2>"
@@ -3418,11 +3436,11 @@ def _invoice_body(payload: dict[str, object]) -> str:
     )
     body = (
         f'<main>{titleblock}'
-        f'<div class="masthead">{_MITER}{_brand_block(organization)}'
+        f'<div class="masthead">{_miter(_brand_accent(organization))}{_brand_block(organization)}'
         '<div class="meta">'
         f"<strong>{escape(invoice_code)}</strong><br>"
         f"Factura<br>{escape(_cldate(issued_at))}</div></div>"
-        '<div class="rule-stack"></div>'
+        f'<div class="rule-stack" style="border-top-color:{_brand_accent(organization)}"></div>'
         "<h1>Factura</h1>"
         '<section class="hero"><p>Facturar a</p>'
         f"<h2>{escape(_value(project.get('client_name')))}</h2>"
@@ -3554,11 +3572,11 @@ def _credit_note_body(payload: dict[str, object]) -> str:
     )
     body = (
         f'<main>{titleblock}'
-        f'<div class="masthead">{_MITER}{_brand_block(organization)}'
+        f'<div class="masthead">{_miter(_brand_accent(organization))}{_brand_block(organization)}'
         '<div class="meta">'
         f"<strong>{escape(credit_code)}</strong><br>"
         f"Nota de crédito<br>{escape(_cldate(issued_at))}</div></div>"
-        '<div class="rule-stack"></div>'
+        f'<div class="rule-stack" style="border-top-color:{_brand_accent(organization)}"></div>'
         "<h1>Nota de crédito</h1>"
         '<section class="hero"><p>Acreditar a</p>'
         f"<h2>{escape(_value(project.get('client_name')))}</h2>"
@@ -3701,11 +3719,11 @@ def _delivery_pod_body(payload: dict[str, object], signature_b64: str) -> str:
     )
     body = (
         f'<main>{titleblock}'
-        f'<div class="masthead">{_MITER}{_brand_block(organization)}'
+        f'<div class="masthead">{_miter(_brand_accent(organization))}{_brand_block(organization)}'
         '<div class="meta">'
         f"<strong>{escape(confirmation_code)}</strong><br>"
         f"Comprobante de entrega<br>{escape(_cldate(issued_at))}</div></div>"
-        '<div class="rule-stack"></div>'
+        f'<div class="rule-stack" style="border-top-color:{_brand_accent(organization)}"></div>'
         "<h1>Comprobante de entrega</h1>"
         '<section class="hero"><p>Recibido por</p>'
         f"<h2>{escape(_value(receiver.get('name')))}</h2>"

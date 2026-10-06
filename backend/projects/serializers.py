@@ -614,6 +614,8 @@ class OrgBrandingSerializer(serializers.Serializer):
     brand_email = serializers.CharField(allow_null=True, allow_blank=True)
     brand_logo_key = serializers.CharField(allow_null=True, allow_blank=True)
     brand_logo_sha256 = serializers.CharField(allow_null=True, allow_blank=True)
+    brand_color = serializers.CharField(allow_null=True, allow_blank=True)
+    doc_dekopen_credit = serializers.BooleanField()
     vano_spread_tolerance_mm = serializers.DecimalField(
         max_digits=6, decimal_places=2, coerce_to_string=True, allow_null=True
     )
@@ -635,6 +637,14 @@ class OrgBrandingWriteSerializer(StrictSerializer):
     brand_email = serializers.CharField(
         allow_null=True, allow_blank=True, required=False, max_length=255
     )
+    brand_color = serializers.RegexField(
+        regex=r"^#[0-9A-Fa-f]{6}$",
+        allow_null=True,
+        allow_blank=True,
+        required=False,
+        max_length=7,
+    )
+    doc_dekopen_credit = serializers.BooleanField(required=False)
     vano_spread_tolerance_mm = DecimalStringField(
         max_digits=6,
         decimal_places=2,

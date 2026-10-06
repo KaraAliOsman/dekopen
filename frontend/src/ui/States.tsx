@@ -1,19 +1,24 @@
 import { type PropsWithChildren, type ReactNode, useEffect, useState } from "react";
 
 import { t } from "../i18n/es-CL";
+import { EmptyIllustration, type EmptyIllustrationKind } from "./EmptyIllustration";
 import { DimLoader } from "./Signature";
 
 export function EmptyState({
   title,
   body,
   action,
+  illustration,
 }: {
   title: string;
   body?: string;
   action?: ReactNode;
+  /** Lámina técnica de la pieza que falta (P25) — opcional. */
+  illustration?: EmptyIllustrationKind;
 }): JSX.Element {
   return (
     <div className="ui-empty">
+      {illustration ? <EmptyIllustration kind={illustration} /> : null}
       <p className="ui-empty__title">{title}</p>
       {body ? <p className="ui-empty__body">{body}</p> : null}
       {action ? <div className="ui-empty__action">{action}</div> : null}

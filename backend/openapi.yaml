@@ -7663,6 +7663,139 @@ paths:
               schema:
                 $ref: '#/components/schemas/JobRun'
           description: ''
+  /api/v1/mail/dev-previews/:
+    get:
+      operationId: mail_dev_previews
+      description: |-
+        Las cinco plantillas con la marca real del org — solo desarrollo.
+        /dev/correos las dibuja; en producción el endpoint no existe.
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - mail
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MailPreview'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/mail/status/:
+    get:
+      operationId: mail_status
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - mail
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MailStatus'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/organization/branding/:
     get:
       operationId: organization_branding_get
@@ -24679,6 +24812,50 @@ components:
       description: |-
         * `EMITTED` - EMITTED
         * `DECLARED_NOT_EMITTED` - DECLARED_NOT_EMITTED
+    MailPreview:
+      type: object
+      properties:
+        template:
+          type: string
+        audience:
+          type: string
+        subject:
+          type: string
+        html:
+          type: string
+        text:
+          type: string
+      required:
+      - audience
+      - html
+      - subject
+      - template
+      - text
+    MailStatus:
+      type: object
+      properties:
+        provider:
+          type: string
+        configured:
+          type: boolean
+        from_address:
+          type: string
+        queued:
+          type: integer
+        sent_7d:
+          type: integer
+        failed_7d:
+          type: integer
+        skipped_7d:
+          type: integer
+      required:
+      - configured
+      - failed_7d
+      - from_address
+      - provider
+      - queued
+      - sent_7d
+      - skipped_7d
     MaterialEnum:
       enum:
       - PVC
@@ -25596,6 +25773,11 @@ components:
         brand_logo_sha256:
           type: string
           nullable: true
+        brand_color:
+          type: string
+          nullable: true
+        doc_dekopen_credit:
+          type: boolean
         vano_spread_tolerance_mm:
           type: string
           format: decimal
@@ -25603,11 +25785,13 @@ components:
           nullable: true
       required:
       - brand_address
+      - brand_color
       - brand_email
       - brand_logo_key
       - brand_logo_sha256
       - brand_phone
       - commercial_name
+      - doc_dekopen_credit
       - giro
       - name
       - tax_id
@@ -25635,6 +25819,16 @@ components:
           type: string
           nullable: true
           maxLength: 255
+        brand_color:
+          nullable: true
+          oneOf:
+          - type: string
+            maxLength: 7
+            pattern: ^#[0-9A-Fa-f]{6}$
+          - type: string
+            maxLength: 0
+        doc_dekopen_credit:
+          type: boolean
         vano_spread_tolerance_mm:
           type: string
           format: decimal
@@ -26817,8 +27011,15 @@ components:
         brand_logo_url:
           type: string
           nullable: true
+        brand_color:
+          type: string
+          nullable: true
+        dekopen_credit:
+          type: boolean
+          default: false
       required:
       - brand_address
+      - brand_color
       - brand_email
       - brand_logo_url
       - brand_phone

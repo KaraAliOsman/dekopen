@@ -360,6 +360,16 @@ def record_payment(*, org_id: UUID, project_id: UUID, actor_id: UUID, data: dict
                 project_id=str(project_id),
                 payment_id=str(payment["id"]),
             )
+            # P25: aviso interno de cobro — el handler re-lee el pago
+            # comprometido y escribe mail_messages vía outbox.
+            emit(
+                "mail.payment_received",
+                org_id=org_id,
+                actor_id=actor_id,
+                idempotency_key=f"mail:payment:{payment['id']}",
+                project_id=str(project_id),
+                payment_id=str(payment["id"]),
+            )
     return {
         "payment": _payment_public(payment, receipt),
         "receipt": receipt,

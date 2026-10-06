@@ -4,6 +4,7 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { t, type TranslationKey } from "../i18n/es-CL";
 
 import { useAuthSession } from "../auth/AuthSessionProvider";
+import { Wordmark } from "../brand";
 import { MOD_K_HINT } from "../platform";
 import { useProject } from "../features/projects/useProject";
 import { telemetry } from "../telemetry/telemetry";
@@ -219,7 +220,7 @@ export function AppShell({ children }: PropsWithChildren): JSX.Element {
           />
           <aside className="app-rail">
             <div className="app-rail__brand">
-              <span className="brand">{t("app.brand")}</span>
+              <Wordmark size={14} />
             </div>
             <OrgSwitcher />
             <nav className="app-rail__nav" aria-label={t("shell.navigation")}>

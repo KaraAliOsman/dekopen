@@ -405,25 +405,6 @@
   top: -4px;
 }
 
-.brand {
-  align-items: center;
-  color: var(--theme-accent-ink);
-  display: flex;
-  font-size: 0.8125rem;
-  font-weight: 700;
-  gap: 0.375rem;
-  letter-spacing: 0.02em;
-}
-
-.brand::before {
-  background: var(--theme-mark);
-  border-radius: var(--r-1);
-  content: "";
-  display: inline-block;
-  height: 0.625rem;
-  width: 0.625rem;
-}
-
 .crumbs__list {
   align-items: center;
   display: flex;

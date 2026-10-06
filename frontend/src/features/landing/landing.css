@@ -16,9 +16,10 @@
   z-index: 10;
 }
 
-.landing-brand .brand {
-  font-weight: 700;
-  letter-spacing: 0.06em;
+.landing-brand {
+  align-items: baseline;
+  display: inline-flex;
+  gap: 0.35rem;
 }
 
 .landing-brand .brand-os {

@@ -34,13 +34,13 @@ Este indice no contiene secretos. Los valores reales se cargan como variables de
 
 ## Correo con dominio propio
 
-| Campo        | Detalle                                                                                                               |
-| ------------ | --------------------------------------------------------------------------------------------------------------------- |
-| Estado       | Diferida; Mailpit cubre local.                                                                                        |
-| Adaptador    | Backend de notificaciones/correo que use el proveedor elegido.                                                        |
-| Variables    | `EMAIL_BACKEND`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_FROM`, `EMAIL_USE_TLS`. |
-| Activacion   | Verificar dominio, SPF/DKIM/DMARC, cargar credenciales del proveedor y probar magic link/cotizacion enviada.          |
-| Verificacion | Correo recibido en bandeja externa, enlaces validos y sin secretos en logs.                                           |
+| Campo        | Detalle                                                                                                                                                                                                                                                                        |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Estado       | Diferida; `MAIL_PROVIDER=sandbox` (default) registra cada correo en `public.mail_messages` sin entregarlo — la bandeja es la evidencia. Mailpit cubre local cuando `MAIL_PROVIDER=smtp` apunta a él.                                                                              |
+| Adaptador    | `backend/mail/providers.py`: `MAIL_PROVIDER=smtp` entrega vía `EmailMultiAlternatives` con el logo white-label como imagen CID inline. Las plantillas (5 transaccionales, es-CL usted) viven en `backend/mail/templates.py`; el magic link de GoTrue en `supabase/templates/magic_link.html`. |
+| Variables    | `MAIL_PROVIDER` (`sandbox`\|`smtp`), `MAIL_FROM`, `MAIL_SMTP_HOST`, `MAIL_SMTP_PORT`, `MAIL_SMTP_USER`, `MAIL_SMTP_PASSWORD`, `MAIL_SMTP_TLS` (`1`/`0`), `MAIL_DEV_PREVIEWS` (`1` habilita `/dev/correos` fuera de DEBUG).                                                          |
+| Activacion   | Verificar dominio, SPF/DKIM/DMARC, cargar credenciales SMTP en backend y worker `runjobs`, y disparar un envío real (compartir cotización). La bandeja se vacía con `python backend/manage.py mail_flush` o el worker continuo.                                                    |
+| Verificacion | Correo recibido en bandeja externa con logo propio y acento de marca (o fallback teal-800 si el color no pasa AA 4.5:1), enlaces válidos, estado `SENT` en `mail_messages` y sin secretos en logs.                                                                                  |
 
 ## Webhooks productivos
 

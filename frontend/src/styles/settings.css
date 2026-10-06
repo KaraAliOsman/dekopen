@@ -83,6 +83,51 @@
   object-fit: contain;
 }
 
+/* P25 — color de marca: muestra cuadrada + campo hex en la misma línea. */
+.settings-branding-color {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.settings-branding-color input[type="color"] {
+  block-size: 2rem;
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-1);
+  cursor: pointer;
+  inline-size: 2.5rem;
+  padding: 2px;
+}
+
+.settings-branding-credit {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+  grid-column: 1 / -1;
+}
+
+.settings-branding-credit .settings-hint {
+  display: block;
+  margin: 2px 0 0;
+}
+
+.settings-mail-grid {
+  display: grid;
+  gap: 6px 16px;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  margin: 10px 0 0;
+}
+
+.settings-mail-grid dt {
+  color: var(--theme-text-muted);
+  font-size: var(--type-micro);
+}
+
+.settings-mail-grid dd {
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+}
+
 /* Shared ledger/credential forms — these classes are used by settings,
    projects and cobranza surfaces, so they must not live in feature CSS
    that only loads on one route. */

@@ -20,6 +20,7 @@ urlpatterns: list[URLPattern | URLResolver] = [
     path("api/v1/analytics/", include("analytics.urls")),
     path("api/v1/", include("portal.urls")),
     path("api/v1/purchasing/", include("purchasing.urls")),
+    path("api/v1/mail/", include("mail.urls")),
     path("api/v1/pricing/", include("pricing.urls")),
     path("api/v1/auth/", include("authentication.urls")),
     path("api/v1/engine/", include("engine_api.urls")),

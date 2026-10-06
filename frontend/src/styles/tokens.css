@@ -388,23 +388,24 @@
   --mat-glass-pane: #e9f2f1;
   --mat-signature-ink: #1a1f24;
 
-  /* Orb DEKOPEN — 2D plano. La esfera es la identidad (oscura en ambos
-     temas); solo el borde adapta. */
+  /* Orb DEKOPEN — 2D plano. La esfera es la identidad (grafito en ambos
+     temas); el acento cromático es el teal de la marca (P25: se retira el
+     cyan fuera de paleta); solo el borde adapta. */
   --orb-mid: #2a3238;
   --orb-deep: #171e23;
   --orb-edge: rgb(10 15 18 / 55%);
-  --orb-eye: #0fd8ea;
-  --orb-eye-hi: #7cf3ff;
-  --orb-ribbon: #0fd8ea;
-  --orb-ribbon-soft: rgb(15 216 234 / 42%);
+  --orb-eye: var(--teal-400);
+  --orb-eye-hi: var(--teal-200);
+  --orb-ribbon: var(--teal-400);
+  --orb-ribbon-soft: rgb(72 188 175 / 42%);
 }
 :root[data-theme="dark"],
 [data-theme-scope="dark"] {
   --orb-edge: rgb(233 242 241 / 16%);
-  --orb-eye: #12ddf0;
-  --orb-eye-hi: #96f6ff;
-  --orb-ribbon: #12ddf0;
-  --orb-ribbon-soft: rgb(18 221 240 / 48%);
+  --orb-eye: var(--teal-400);
+  --orb-eye-hi: var(--teal-200);
+  --orb-ribbon: var(--teal-400);
+  --orb-ribbon-soft: rgb(72 188 175 / 48%);
 }
 
 /* ------------------------------------------------------------------ *
@@ -628,4 +629,48 @@
   display: flex;
   gap: var(--space-8);
   justify-content: center;
+}
+
+/* P25 — páginas de sistema (404 / sin conexión) comparten la tarjeta de
+ * error con lámina: paper sobre banco, una acción. */
+.app-error-page {
+  display: grid;
+  min-height: 60vh;
+  padding: var(--space-32);
+  place-items: center;
+}
+
+.app-error-card {
+  align-items: center;
+  display: grid;
+  gap: var(--space-12);
+  justify-items: center;
+  max-width: 26rem;
+  text-align: center;
+}
+
+.app-error-card h1 {
+  font-size: var(--type-title-l);
+  margin: 0;
+}
+
+.app-error-card p {
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.app-error-card__actions {
+  display: flex;
+  gap: var(--space-8);
+  justify-content: center;
+}
+
+/* Sin conexión: overlay completo — el taller no se dibuja sin red. */
+.app-offline {
+  background: var(--theme-bg-canvas);
+  display: grid;
+  inset: 0;
+  place-items: center;
+  position: fixed;
+  z-index: 90;
 }

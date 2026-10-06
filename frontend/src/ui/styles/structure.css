@@ -67,19 +67,24 @@
   margin: 0;
   padding: 0;
 }
-.ui-stepper__step {
+.ui-stepper__item {
   align-items: center;
   display: flex;
   flex: 1;
 }
-.ui-stepper__step:not(:last-child)::after {
+.ui-stepper__step {
+  align-items: center;
+  display: flex;
+  flex: none;
+}
+.ui-stepper__item:not(:last-child)::after {
   background: var(--border-default);
   content: "";
   flex: 1;
   height: 1px;
   margin: 0 var(--space-8);
 }
-.ui-stepper__step.is-complete:not(:last-child)::after {
+.ui-stepper__item.is-done:not(:last-child)::after {
   background: var(--interactive);
 }
 .ui-stepper__index {
@@ -96,12 +101,15 @@
   margin-right: var(--space-6);
   width: 1.25rem;
 }
-.ui-stepper__step.is-active .ui-stepper__index {
+.ui-stepper__item.is-blocked .ui-stepper__index {
+  border-style: dashed;
+}
+.ui-stepper__item.is-current .ui-stepper__index {
   background: var(--interactive-fill);
   border-color: var(--interactive-fill);
   color: var(--on-interactive-fill);
 }
-.ui-stepper__step.is-complete .ui-stepper__index {
+.ui-stepper__item.is-done .ui-stepper__index {
   background: var(--interactive);
   border-color: var(--interactive);
   color: var(--on-interactive-fill);
@@ -109,7 +117,7 @@
 .ui-stepper__label {
   font-size: var(--type-dense);
 }
-.ui-stepper__step.is-active .ui-stepper__label {
+.ui-stepper__item.is-current .ui-stepper__label {
   font-weight: 600;
 }
 .ui-stat {

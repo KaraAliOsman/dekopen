@@ -55,6 +55,12 @@ verify_enabled = true
 [auth.rate_limit]
 email_sent = 100
 
+# P25: el magic-link sale con la marca DEKOPEN (hoja técnica, teal-800).
+# Misma fuente que la vista previa de /dev/correos.
+[auth.email.template.magic_link]
+subject = "DEKOPEN — su enlace de ingreso"
+content_path = "./supabase/templates/magic_link.html"
+
 [edge_runtime]
 enabled = false
 

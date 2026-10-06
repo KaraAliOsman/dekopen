@@ -7,6 +7,7 @@ a logo key can never render a different image.
 from __future__ import annotations
 
 import hashlib
+import re  # regex solo para validar brand_color en _save_branding
 from uuid import UUID
 
 from django.db import transaction
@@ -14,6 +15,20 @@ from django.db import transaction
 from authentication.errors import contract_error
 from documents.repository import DocumentaryError, documentary_backend, one
 from documents.storage import SupabaseDocumentStorage
+
+# Re-export: la utilidad AA vive en documents.brand (módulo hoja);
+# settings y el módulo de correo la consumen desde aquí.
+from documents.brand import effective_brand_color  # noqa: F401
+
+__all__ = [
+    "effective_brand_color",
+    "get_branding",
+    "branding_for_snapshot",
+    "save_branding",
+    "save_logo",
+    "clear_logo",
+    "logo_bytes",
+]
 
 
 _MAX_LOGO_BYTES = 512 * 1024
@@ -46,6 +61,8 @@ def _branding(row: dict) -> dict:
         "brand_email": row.get("brand_email"),
         "brand_logo_key": row.get("brand_logo_key"),
         "brand_logo_sha256": row.get("brand_logo_sha256"),
+        "brand_color": row.get("brand_color"),
+        "doc_dekopen_credit": bool(row.get("doc_dekopen_credit")),
         "vano_spread_tolerance_mm": (
             None
             if row.get("vano_spread_tolerance_mm") is None
@@ -56,7 +73,8 @@ def _branding(row: dict) -> dict:
 
 _FIELDS = (
     "name, tax_id, commercial_name, giro, brand_address, brand_phone,"
-    " brand_email, brand_logo_key, brand_logo_sha256, vano_spread_tolerance_mm"
+    " brand_email, brand_logo_key, brand_logo_sha256, brand_color,"
+    " doc_dekopen_credit, vano_spread_tolerance_mm"
 )
 
 
@@ -94,7 +112,6 @@ _BRAND_FIELDS = {
     "brand_email": 255,
 }
 
-
 def _save_branding(*, org_id: UUID, data: dict) -> dict:
     # A key absent from the validated payload keeps the stored value — a
     # key sent null clears it. Distinction matters: the workshop-rules card
@@ -107,6 +124,19 @@ def _save_branding(*, org_id: UUID, data: dict) -> dict:
         assignments.append(f"{field}=%s")
         raw = data.get(field)
         params.append(_blank(raw)[:limit] if raw else None)
+    if "brand_color" in data:
+        assignments.append("brand_color=%s")
+        raw_color = _blank(data.get("brand_color"))
+        if raw_color is not None and not re.fullmatch(r"#[0-9A-Fa-f]{6}", raw_color):
+            raise contract_error(
+                400,
+                "brand_color_invalid",
+                "El color de marca debe ser un valor #RRGGBB (ej. #075F5A).",
+            )
+        params.append(raw_color.upper() if raw_color else None)
+    if "doc_dekopen_credit" in data:
+        assignments.append("doc_dekopen_credit=%s")
+        params.append(bool(data.get("doc_dekopen_credit")))
     if "vano_spread_tolerance_mm" in data:
         assignments.append("vano_spread_tolerance_mm=%s")
         params.append(data.get("vano_spread_tolerance_mm"))

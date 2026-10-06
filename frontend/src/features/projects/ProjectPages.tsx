@@ -1826,7 +1826,9 @@ function ProjectWorkspace({
                 </Link>
               )}
             </div>
-            {project.position_count === 0 && <p>{t("projects.noPositions")}</p>}
+            {project.position_count === 0 && (
+              <EmptyState illustration="elevation" title={t("projects.noPositions")} />
+            )}
             <div className="position-grid" role="listbox" aria-label={t("projects.positions")}>
               {project.positions?.map((position, positionIndex) => {
                 const status = positionStatusKey(project, position);
@@ -2143,7 +2145,7 @@ function ProjectWorkspace({
               </tbody>
             </table>
           </div>
-          {visible.length === 0 && <EmptyState title={t("projects.empty")} />}
+          {visible.length === 0 && <EmptyState illustration="bench" title={t("projects.empty")} />}
         </>
       )}
     </section>

@@ -384,6 +384,8 @@ export * from "./machiningDeclaration";
 export * from "./machiningDeclarationKindEnum";
 export * from "./machiningDeclarationStatus";
 export * from "./machiningDeclarationStatusEnum";
+export * from "./mailPreview";
+export * from "./mailStatus";
 export * from "./materialEnum";
 export * from "./materialRecheck";
 export * from "./materialRecheckStockReservationsItem";
