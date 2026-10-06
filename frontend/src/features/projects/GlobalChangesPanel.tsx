@@ -13,7 +13,7 @@ import type { DesignBatchPreviewItemRequestDesign } from "../../api/generated/mo
 import type { PositionDesignRequest } from "../../api/generated/models/positionDesignRequest";
 import type { PositionResponse } from "../../api/generated/models/positionResponse";
 import type { DesignOp } from "../commands/types";
-import { t, type TranslationKey } from "../../i18n/es-CL";
+import { t, tOptional, type TranslationKey } from "../../i18n/es-CL";
 import { formatMoney } from "../../format";
 import { addDecimal, formatDecimal, parseDecimal, subtractDecimal } from "./decimal";
 import { applyDesignOps, describeDesignOp, describeScopeOp } from "../canvas/designOps";
@@ -181,10 +181,15 @@ export function GlobalChangesPanel({
               }
             }
             for (const item of data.color_options ?? []) {
-              if (item.code) colors.set(item.code, item.name || item.code);
+              if (item.code) {
+                colors.set(
+                  item.code,
+                  item.name || tOptional(`projects.color.${item.code}`) || item.code,
+                );
+              }
             }
             for (const code of data.colors ?? []) {
-              if (!colors.has(code)) colors.set(code, code);
+              if (!colors.has(code)) colors.set(code, tOptional(`projects.color.${code}`) ?? code);
             }
             for (const item of data.panel_choices ?? []) {
               if (item.sku) panels.set(item.sku, item.name || item.sku);
