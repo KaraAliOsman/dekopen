@@ -144,10 +144,20 @@ function rackList(racks: StockItem["racks"]): string {
   return Array.isArray(racks) ? racks.join(", ") : racks;
 }
 
+const _UNIT_ALIAS: Record<string, string> = {
+  UNIT: "EA",
+  SET: "KIT",
+  PIECE: "EA",
+  PCS: "EA",
+};
+
 function stockUnitLabel(unit: string): string {
-  const key = `purchasing.unitLabel.${unit}` as Parameters<typeof t>[0];
+  const normalized = _UNIT_ALIAS[unit.toUpperCase()] ?? unit.toUpperCase();
+  const key = `purchasing.unitValue.${normalized}.one` as Parameters<
+    typeof t
+  >[0];
   const label = t(key);
-  return label === key ? unit : label;
+  return label === key ? "" : label;
 }
 
 /** Inventario del taller: qué hay, dónde está, para qué está reservado y
@@ -427,7 +437,10 @@ export function InventorySection({
                   <EntityCode value={item.sku} />
                 </td>
                 <td>
-                  {item.name} · {stockUnitLabel(item.unit)}
+                  {item.name}
+                  {stockUnitLabel(item.unit)
+                    ? ` · ${stockUnitLabel(item.unit)}`
+                    : ""}
                   {item.spec_text ? (
                     <small className="purchasing-hint">
                       <br />

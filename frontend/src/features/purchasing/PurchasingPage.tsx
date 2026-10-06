@@ -33,12 +33,24 @@ function categoryLabel(category: string): string {
 }
 
 const unitPlural = new Intl.PluralRules("es-CL");
+const UNIT_ALIAS: Record<string, string> = {
+  UNIT: "EA",
+  SET: "KIT",
+  PIECE: "EA",
+  PCS: "EA",
+};
+
 function purchaseUnitLabel(unit: string | null | undefined, qty?: number): string {
   if (!unit) return "";
+  const normalized = UNIT_ALIAS[unit.toUpperCase()] ?? unit.toUpperCase();
   const known: ReadonlySet<string> = new Set(["EA", "BAR", "KIT", "SHEET", "M", "M2", "KG"]);
-  if (!known.has(unit)) return unit;
+  if (!known.has(normalized)) return "";
   const plural = qty === undefined || unitPlural.select(qty) !== "one";
-  return t(`purchasing.unitValue.${unit}${plural ? ".other" : ".one"}` as Parameters<typeof t>[0]);
+  return t(
+    `purchasing.unitValue.${normalized}${plural ? ".other" : ".one"}` as Parameters<
+      typeof t
+    >[0],
+  );
 }
 
 function qtyNumber(value: string | number | null | undefined): number | undefined {
@@ -1284,7 +1296,8 @@ function OrderCard({
         <ul className="purchasing-order-lines">
           {order.lines_preview.map((line, index) => (
             <li key={index}>
-              <EntityCode value={line.sku} /> × {fmtQty(line.qty)} {line.unit}
+              <EntityCode value={line.sku} /> × {fmtQty(line.qty)}{" "}
+              {purchaseUnitLabel(line.unit, qtyNumber(line.qty))}
               {line.unit_price ? ` · ${formatMoney(line.unit_price, "CLP")}` : ""}
             </li>
           ))}
