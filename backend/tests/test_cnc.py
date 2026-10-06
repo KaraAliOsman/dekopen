@@ -221,7 +221,7 @@ def test_declared_gaps_surface_annotations_and_hardware() -> None:
         version_snapshot={
             "positions": [
                 {
-                    "position_id": "P1",
+                    "id": "P1",
                     "bay_id": "b1",
                     "leaf_id": "l1",
                     "workshop_annotations": [
@@ -254,6 +254,24 @@ def test_declared_gaps_surface_annotations_and_hardware() -> None:
     assert "LOCK_PREP" not in by_kind
     # Every gap carries a stable id
     assert all(gap["gap_id"] for gap in gaps)
+
+
+def test_declared_gaps_filter_positions_by_sealed_id() -> None:
+    """Sealed snapshot positions carry `id`, not `position_id` — the order's
+    payload position_id must match it or every annotation leaks/hides."""
+    bundle = _bundle(
+        position_id="P1",
+        version_snapshot={
+            "positions": [
+                {"id": "P1", "workshop_annotations": [
+                    {"bottom_drain_holes_mm": "4"}]},
+                {"id": "P2", "workshop_annotations": [
+                    {"closing_points_perimeter_mm": "6"}]},
+            ]
+        },
+    )
+    gaps = cnc._declared_gaps(bundle)
+    assert {g["kind"] for g in gaps} == {"DRAINAGE"}
 
 
 def test_gap_machine_checks_name_the_cause() -> None:

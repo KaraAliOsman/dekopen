@@ -11,6 +11,7 @@ import { ApiError } from "../../api/apiMutator";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
 import { fmtMm } from "../../format";
 import { t, tOptional } from "../../i18n/es-CL";
+import { ORDER_STATUS_KEY } from "./board";
 
 type CncTool = {
   id: string;
@@ -277,6 +278,30 @@ export function CncWorkspace() {
     }
   }
 
+  async function toggleToolActive(tool: CncTool) {
+    setBusy(true);
+    try {
+      await productionCncToolUpdate(tool.id, { active: !tool.active });
+      await load();
+    } catch (err) {
+      setError(extractError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleMachineActive(machine: CncMachine) {
+    setBusy(true);
+    try {
+      await productionCncMachineUpdate(machine.id, { active: !machine.active });
+      await load();
+    } catch (err) {
+      setError(extractError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function saveMachine() {
     if (!machineForm) return;
     setBusy(true);
@@ -403,9 +428,12 @@ export function CncWorkspace() {
                     </thead>
                     <tbody>
                       {data.machines.map((machine) => (
-                        <tr key={machine.id}>
+                        <tr key={machine.id} className={machine.active ? "" : "cnc-row-inactive"}>
                           <td>
                             <strong>{machine.code}</strong>
+                            {!machine.active ? (
+                              <div className="cnc-member-meta">{t("production.cncInactive")}</div>
+                            ) : null}
                             <div className="cnc-member-meta">
                               {[
                                 machine.name,
@@ -454,7 +482,7 @@ export function CncWorkspace() {
                             ) : null}
                           </td>
                           {canWrite ? (
-                            <td>
+                            <td className="cnc-actions">
                               <button
                                 type="button"
                                 className="cnc-add"
@@ -481,6 +509,16 @@ export function CncWorkspace() {
                                 }
                               >
                                 {t("ui.edit")}
+                              </button>
+                              <button
+                                type="button"
+                                className="cnc-add"
+                                disabled={busy}
+                                onClick={() => void toggleMachineActive(machine)}
+                              >
+                                {machine.active
+                                  ? t("production.cncDeactivate")
+                                  : t("production.cncActivate")}
                               </button>
                             </td>
                           ) : null}
@@ -804,7 +842,7 @@ export function CncWorkspace() {
                               : t("production.cncAllKinds")}
                           </td>
                           {canWrite ? (
-                            <td>
+                            <td className="cnc-actions">
                               <button
                                 type="button"
                                 className="cnc-add"
@@ -822,6 +860,16 @@ export function CncWorkspace() {
                                 }
                               >
                                 {t("ui.edit")}
+                              </button>
+                              <button
+                                type="button"
+                                className="cnc-add"
+                                disabled={busy}
+                                onClick={() => void toggleToolActive(tool)}
+                              >
+                                {tool.active
+                                  ? t("production.cncDeactivate")
+                                  : t("production.cncActivate")}
                               </button>
                             </td>
                           ) : null}
@@ -971,7 +1019,11 @@ export function CncWorkspace() {
                             <td>
                               <strong>{order.order_code}</strong>
                             </td>
-                            <td>{tOptional(`production.order${orderStatus}`) ?? "—"}</td>
+                            <td>
+                              {ORDER_STATUS_KEY[orderStatus]
+                                ? t(ORDER_STATUS_KEY[orderStatus])
+                                : "—"}
+                            </td>
                             <td>
                               {order.programs_total === 0
                                 ? "—"

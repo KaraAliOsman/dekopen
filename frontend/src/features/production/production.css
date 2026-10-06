@@ -1372,11 +1372,35 @@ div:has(> table.production-plan) {
 }
 .cnc-table th,
 .cnc-table td {
-  word-break: break-word;
+  /* Guion natural en vez de corte de palabra («profundi-dad», nunca
+   * «profundida d»); los botones de acción nunca se parten. */
+  overflow-wrap: normal;
+  hyphens: auto;
+}
+.cnc-table td .cnc-add,
+.cnc-actions {
+  white-space: nowrap;
+}
+.cnc-actions {
+  text-align: right;
+}
+.cnc-actions .cnc-add + .cnc-add {
+  margin-left: 0.35rem;
 }
 .cnc-workspace-grid > div {
   min-width: 0;
   overflow-x: auto;
+}
+/* La matriz miembro×máquina puede crecer con el parque de máquinas: a ancho
+ * estrecho el scroll va dentro del contenedor, nunca en la página. */
+.cnc-matrix-scroll {
+  overflow-x: auto;
+}
+.cnc-matrix-scroll .cnc-table {
+  min-width: 34rem;
+}
+.cnc-gaps .cnc-table {
+  min-width: 30rem;
 }
 .cnc-member-meta {
   font-size: 0.75rem;
@@ -1469,6 +1493,38 @@ div:has(> table.production-plan) {
   padding: 0.2rem 0.4rem;
   border-bottom: 1px dashed var(--theme-border, #d8d4cd);
   text-align: left;
+}
+/* A 390 px una tabla de diez columnas no se lee: cada operación se apila
+ * como ficha con su etiqueta antes del valor. */
+@media (max-width: 700px) {
+  .cnc-ops thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .cnc-ops tr {
+    display: block;
+    border-bottom: 1px solid var(--theme-border, #d8d4cd);
+    padding: 0.35rem 0;
+  }
+  .cnc-ops td {
+    display: block;
+    border-bottom: none;
+    padding: 0.1rem 0.4rem;
+  }
+  .cnc-ops td::before {
+    content: attr(data-th) " · ";
+    color: var(--theme-text-muted, #6b675f);
+    font-size: 0.75rem;
+  }
+  .cnc-ops td[data-th="#"]::before {
+    content: none;
+  }
+  .cnc-ops td[data-th="#"] {
+    font-weight: 600;
+  }
 }
 .cnc-programs {
   margin-top: 0.75rem;
@@ -1739,6 +1795,7 @@ div:has(> table.production-plan) {
 /* Declared-not-emitted section. */
 .cnc-gaps {
   margin-top: 0.9rem;
+  overflow-x: auto;
 }
 .cnc-gaps h4 {
   margin: 0 0 0.35rem;
@@ -1770,6 +1827,7 @@ div:has(> table.production-plan) {
   padding: 0.4rem 0.5rem;
   background: var(--theme-bg, #faf9f7);
   font-size: 0.8rem;
+  overflow-x: auto;
 }
 .cnc-diff-counts {
   margin: 0 0 0.3rem;

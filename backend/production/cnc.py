@@ -811,7 +811,7 @@ def _declared_gaps(bundle: dict[str, object]) -> list[dict[str, object]]:
     for position in version_snapshot.get("positions") or []:
         if not isinstance(position, dict):
             continue
-        if position_id and str(position.get("position_id")) != position_id:
+        if position_id and str(position.get("id")) != position_id:
             continue
         for item in position.get("workshop_annotations") or []:
             if not isinstance(item, dict):

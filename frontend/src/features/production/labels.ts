@@ -19,6 +19,15 @@ export function cutRoleLabel(role: string | null | undefined): string {
   return known.has(role) ? t(`production.role.${role}` as Parameters<typeof t>[0]) : role;
 }
 
+/** Semantic leaf slot: PRIMARY for a single-leaf bay, L1..LN for multi-leaf. */
+export function leafSlotLabel(slot: string | null | undefined): string {
+  if (slot === null || slot === undefined || slot === "") return "—";
+  if (slot === "PRIMARY") return t("production.leafSlot.primary");
+  const leaf = /^L(\d+)$/.exec(slot);
+  if (leaf) return `${t("production.leafSlot.leaf")} ${leaf[1]}`;
+  return slot;
+}
+
 const OP_KINDS: ReadonlySet<string> = new Set([
   "SAW_CUT",
   "DRILL",

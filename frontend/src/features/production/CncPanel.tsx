@@ -11,6 +11,7 @@ import { fmtMm, shortTechnicalId } from "../../format";
 import { t, tOptional } from "../../i18n/es-CL";
 import {
   cutRoleLabel,
+  leafSlotLabel,
   opBasisLabel,
   opFaceLabel,
   opKindLabel,
@@ -110,7 +111,7 @@ type CncGap = {
 
 type CncIssue = {
   code: string;
-  detail?: string;
+  detail?: string | Record<string, string>;
 } & Record<string, unknown>;
 
 type CncReadinessData = {
@@ -188,28 +189,59 @@ const DETAIL_KEYS: Record<string, string> = {
   member_label: "pieza",
   tool_id: "herramienta",
   required_kind: "operación",
+  required_tool: "herramienta",
   depth_mm: "profundidad",
   max_depth_mm: "prof. máx",
   member_length_mm: "largo pieza",
   max_member_length_mm: "largo máx",
+  machine_limit_mm: "límite máquina",
+  safe_margin_mm: "margen seguro",
   clamp_zone: "mordaza",
+  clamp_label: "mordaza",
   margin_mm: "margen",
   coordinate_system: "coordenadas",
   face: "cara",
   kind: "operación",
+  op_kind: "operación",
   u_mm: "u",
   postprocessor_id: "emisor",
+  reference: "referencia",
+  basis: "regla",
 };
+
+/* Campos que no se muestran: la máquina ya encabeza su veredicto, `host` es
+ * la etiqueta de la pieza (redundante junto al encabezado) y `reason` llega
+ * del backend en inglés — la etiqueta del código ya lo dice en español. */
+const DETAIL_SKIP = new Set(["host", "machine", "machine_id", "reason", "host_label"]);
+
+/** Un valor de detalle siempre en español: enums por su labeler, distancias
+ * por fmtMm, identificadores de taller (herramienta, mordaza, emisor) como
+ * vienen declarados. */
+function detailValueText(key: string, value: string): string {
+  if (["kind", "required_kind", "op_kind"].includes(key)) return opKindLabel(value);
+  if (key === "face") return opFaceLabel(value);
+  if (key === "coordinate_system") return tOptional(`production.cncCoord_${value}`) ?? value;
+  if (key === "reference") return opReferenceLabel(value);
+  if (key === "basis") return opBasisLabel(value);
+  if (key === "tool_id" || key === "required_tool")
+    return tOptional(`production.cncToolId_${value}`) ?? value;
+  if (key.endsWith("_mm")) return fmtMm(value);
+  return value;
+}
+
+function detailText(detail: Record<string, string>): string {
+  return Object.entries(detail)
+    .filter(([k, v]) => !DETAIL_SKIP.has(k) && v !== "")
+    .map(([k, v]) => `${DETAIL_KEYS[k] ?? k} ${detailValueText(k, v)}`)
+    .join(" · ");
+}
 
 /** Verdict detail values rendered in words, not `k=v` — a reader knows what
  * "broca DR-8 no cubre 12 mm" means, not what the code field is called. */
 function blockerText(blocker: CncVerdict): string {
   const key = `production.cncBlock_${blocker.code}`;
   const label = tOptional(key) ?? t("production.cncBlockGeneric");
-  const values = Object.entries(blocker.detail)
-    .filter(([k]) => k !== "host" && blocker.detail[k] !== "")
-    .map(([k, v]) => `${DETAIL_KEYS[k] ?? k} ${v}`)
-    .join(" · ");
+  const values = detailText(blocker.detail);
   return values ? `${label} — ${values}` : label;
 }
 
@@ -218,10 +250,11 @@ function issueText(issue: CncIssue): string {
   const label = tOptional(key) ?? t("production.cncIssueGeneric");
   const context = Object.entries(issue)
     .filter(([k]) => !["code", "detail"].includes(k))
-    .map(([k, v]) => `${DETAIL_KEYS[k] ?? k} ${v}`)
+    .map(([k, v]) => `${DETAIL_KEYS[k] ?? k} ${detailValueText(k, String(v))}`)
     .join(" · ");
-  const detail = typeof issue.detail === "string" ? issue.detail : "";
-  return [label, context, detail].filter(Boolean).join(" — ");
+  /* issue.detail llega del motor en inglés — la etiqueta del código ya da la
+   * causa en español; el contexto (pieza, operación, máquina) va traducido. */
+  return [label, context].filter(Boolean).join(" — ");
 }
 
 export function CncPanel({ orderId, canWrite }: { orderId: string; canWrite: boolean }) {
@@ -380,38 +413,40 @@ export function CncPanel({ orderId, canWrite }: { orderId: string; canWrite: boo
               {data.members.length === 0 ? (
                 <p className="cnc-empty">{t("production.cncNoOps")}</p>
               ) : (
-                <table className="cnc-table">
-                  <thead>
-                    <tr>
-                      <th>{t("production.cncMember")}</th>
-                      <th>{t("production.cncOps")}</th>
-                      {data.machines.map((machine) => (
-                        <th key={machine.id}>{machine.code}</th>
+                <div className="cnc-matrix-scroll">
+                  <table className="cnc-table">
+                    <thead>
+                      <tr>
+                        <th>{t("production.cncMember")}</th>
+                        <th>{t("production.cncOps")}</th>
+                        {data.machines.map((machine) => (
+                          <th key={machine.id}>{machine.code}</th>
+                        ))}
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.members.map((member) => (
+                        <CncMemberRow
+                          key={member.member_id}
+                          member={member}
+                          machines={data.machines}
+                          canWrite={canWrite}
+                          busy={busy}
+                          expanded={expanded === member.member_id}
+                          onToggle={() =>
+                            setExpanded((value) =>
+                              value === member.member_id ? null : member.member_id,
+                            )
+                          }
+                          selectedOp={selectedOp}
+                          onSelectOp={(id) => setSelectedOp(id)}
+                          onGenerate={(machineId) => void generate(machineId, member.member_id)}
+                        />
                       ))}
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.members.map((member) => (
-                      <CncMemberRow
-                        key={member.member_id}
-                        member={member}
-                        machines={data.machines}
-                        canWrite={canWrite}
-                        busy={busy}
-                        expanded={expanded === member.member_id}
-                        onToggle={() =>
-                          setExpanded((value) =>
-                            value === member.member_id ? null : member.member_id,
-                          )
-                        }
-                        selectedOp={selectedOp}
-                        onSelectOp={(id) => setSelectedOp(id)}
-                        onGenerate={(machineId) => void generate(machineId, member.member_id)}
-                      />
-                    ))}
-                  </tbody>
-                </table>
+                    </tbody>
+                  </table>
+                </div>
               )}
               {data.declared_gaps?.length ? <DeclaredGaps gaps={data.declared_gaps} /> : null}
               {data.programs.length ? (
@@ -566,7 +601,7 @@ function MemberCard({
             member.role ? cutRoleLabel(member.role) : null,
             member.material ? (MATERIAL_LABELS[member.material] ?? member.material) : null,
             member.axis ? (AXIS_LABELS[member.axis] ?? member.axis) : null,
-            member.leaf_slot,
+            member.leaf_slot ? leafSlotLabel(member.leaf_slot) : null,
           ]
             .filter(Boolean)
             .join(" · ")}
@@ -598,16 +633,16 @@ function MemberCard({
               className={selectedOp === op.operation_id ? "cnc-op-row is-selected" : "cnc-op-row"}
               onClick={() => onSelectOp(selectedOp === op.operation_id ? null : op.operation_id)}
             >
-              <td>{index + 1}</td>
-              <td>{opLabel(op)}</td>
-              <td>{opFaceLabel(op.face)}</td>
-              <td>{fmtMm(op.u_mm)}</td>
-              <td>{fmtMm(op.x_mm)}</td>
-              <td>{fmtMm(op.y_mm)}</td>
-              <td>{opReferenceLabel(op.reference)}</td>
-              <td>{fmtMm(op.depth_mm)}</td>
-              <td>{op.tool_id ?? "—"}</td>
-              <td>{opBasisLabel(op.basis)}</td>
+              <td data-th="#">{index + 1}</td>
+              <td data-th={t("production.cncOpKind")}>{opLabel(op)}</td>
+              <td data-th={t("production.cncFace")}>{opFaceLabel(op.face)}</td>
+              <td data-th="u (mm)">{fmtMm(op.u_mm)}</td>
+              <td data-th="X (mm)">{fmtMm(op.x_mm)}</td>
+              <td data-th="Y (mm)">{fmtMm(op.y_mm)}</td>
+              <td data-th={t("production.cncReference")}>{opReferenceLabel(op.reference)}</td>
+              <td data-th={t("production.cncDepth")}>{fmtMm(op.depth_mm)}</td>
+              <td data-th={t("production.cncTool")}>{op.tool_id ?? "—"}</td>
+              <td data-th={t("production.cncBasis")}>{opBasisLabel(op.basis)}</td>
             </tr>
           ))}
         </tbody>
@@ -792,8 +827,16 @@ function ProgramDiffView({ diff }: { diff: ProgramDiff }) {
                 <tr key={`${change.operation_id}-${field}`}>
                   <td>{shortTechnicalId(change.operation_id)}</td>
                   <td>{DETAIL_KEYS[field] ?? field}</td>
-                  <td>{String(values.from ?? "—")}</td>
-                  <td>{String(values.to ?? "—")}</td>
+                  <td>
+                    {values.from === null || values.from === undefined
+                      ? "—"
+                      : detailValueText(field, String(values.from))}
+                  </td>
+                  <td>
+                    {values.to === null || values.to === undefined
+                      ? "—"
+                      : detailValueText(field, String(values.to))}
+                  </td>
                 </tr>
               )),
             )}
