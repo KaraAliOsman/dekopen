@@ -7,7 +7,7 @@ import pytest
 
 from dekopen_engine.documentary_canonical import file_sha256
 from documents.artifacts import _require_document_role
-from documents.renderers import _doc01, _doc02, _doc03, _doc06, _doc07, render_pdf_document
+from documents.renderers import _doc01, _doc02, _doc03, _doc06, _doc07, _position_svg, render_pdf_document
 from documents.repository import DocumentaryError
 from documents.serializers import HandleIntentSerializer
 from documents.storage import SIGNED_URL_TTL_SECONDS, SupabaseDocumentStorage
@@ -286,6 +286,55 @@ def test_client_quote_includes_deterministic_opening_drawings() -> None:
     # Each sliding panel still emits its travel arrow in the product card.
     assert sliding_html.count('<path d="M ') >= 2
     assert _doc01(sliding) == sliding_html
+
+
+def test_client_quote_draws_frozen_sliding_layout_not_schematic() -> None:
+    """P05 regression — frozen `sliding_layout` dicts store string
+    kind/track/travel values, and engine models only accept enum
+    instances. The renderer must coerce them, or every issued sliding
+    elevation silently degrades to a 2-panel schematic that discards the
+    real layout and every declared travel."""
+    snapshot = revision_snapshot()
+    snapshot["positions"][0]["parametric_tree"] = {  # type: ignore[index]
+        "version": "product-v2",
+        "assembly": {
+            "modules": [{
+                "id": "m1", "width_mm": "3600.00", "height_mm": "1600.00",
+                "tree": {
+                    "id": "m1", "type": "BAY", "opening_type": "SLIDING_4L",
+                    "glass_thickness_mm": "4.00",
+                    "glass_spec": "4-12-4 Float Incoloro",
+                    "sliding_layout": {
+                        "tracks": 2,
+                        "panels": [
+                            {"slot": "O1", "kind": "FIXED"},
+                            {"slot": "X1", "kind": "MOVING",
+                             "track": 0, "travel": "RIGHT"},
+                            {"slot": "X2", "kind": "MOVING",
+                             "track": 1, "travel": "LEFT"},
+                            {"slot": "O2", "kind": "FIXED"},
+                        ],
+                    },
+                    "children": [],
+                },
+            }],
+            "couplings": [],
+        },
+    }
+    html = _doc01(snapshot)
+    card_svg = html[html.index("<svg") : html.index("</svg>")]
+    # O/X/X/O: exactly 4 leaf rects (FIXED panes included — the leaf
+    # outline is the only `fill="none"` rect stroked with the bay edge
+    # color), exactly 2 travel arrows (MOVING only), and declared travel
+    # is honored — no `stroke-opacity` inferred flag anywhere.
+    assert card_svg.count('fill="none" stroke="#98A2A5"') == 4
+    assert card_svg.count('<path d="M ') == 2
+    assert "stroke-opacity" not in card_svg
+    # The same frozen layout feeds the technical elevation's plan cut —
+    # rail numbers and side labels must come from the real layout too.
+    tech_svg = _position_svg(snapshot["positions"][0], commercial=False)  # type: ignore[arg-type]
+    assert "INTERIOR" in tech_svg and "EXTERIOR" in tech_svg
+    assert "stroke-opacity" not in tech_svg
 
 
 def test_client_quote_renders_door_openings() -> None:

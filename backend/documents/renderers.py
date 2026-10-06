@@ -21,6 +21,7 @@ from dekopen_engine.models import (
     SlidingLayout,
     SlidingPanel,
     SlidingPanelKind,
+    SlidingTravel,
     UnitKind,
 )
 from dekopen_engine.opening_symbols import (
@@ -702,6 +703,48 @@ def _glyph_paths_out(
         )
 
 
+def _parse_sliding_layout(raw: object) -> SlidingLayout | None:
+    """Rebuild a ``SlidingLayout`` from a frozen-tree dict.
+
+    Engine models require enum *instances*, and frozen payloads store the
+    string values — coerce ``kind``/``travel`` before constructing, or
+    every issued sliding document silently degrades to the 2-panel
+    schematic. Returns None when the dict is not a usable layout."""
+    if not isinstance(raw, dict):
+        return None
+    raw_panels = raw.get("panels")
+    if not isinstance(raw_panels, list) or not raw_panels:
+        return None
+    panels: list[SlidingPanel] = []
+    for i, raw_panel in enumerate(raw_panels):
+        if not isinstance(raw_panel, dict):
+            return None
+        try:
+            kind = SlidingPanelKind(str(raw_panel.get("kind") or "MOVING"))
+            travel_raw = raw_panel.get("travel")
+            travel = SlidingTravel(str(travel_raw)) if travel_raw else None
+            track_raw = raw_panel.get("track")
+            panels.append(
+                SlidingPanel(
+                    slot=str(raw_panel.get("slot") or f"P{i + 1}"),
+                    kind=kind,
+                    track=int(track_raw) if track_raw is not None else None,
+                    travel=travel,
+                )
+            )
+        except (TypeError, ValueError):
+            return None
+    primary_raw = raw.get("primary_index")
+    try:
+        return SlidingLayout(
+            tracks=int(raw.get("tracks") or 1),
+            panels=panels,
+            primary_index=int(primary_raw) if primary_raw is not None else None,
+        )
+    except (TypeError, ValueError):
+        return None
+
+
 def _legacy_leaf_specs(
     opening: str, node: dict[str, object]
 ) -> tuple[list[Opening], "UnitKind"]:
@@ -872,13 +915,7 @@ def _svg_elements(node: dict[str, object], x: Decimal, y: Decimal,
         # The layout owns the semantics: track assignment + declared travel.
         # A frozen tree saved before `travel` resolves direction by the
         # documented convention and the arrow carries `inferred`.
-        parsed_layout: SlidingLayout | None = None
-        raw_layout = node.get("sliding_layout")
-        if isinstance(raw_layout, dict):
-            try:
-                parsed_layout = SlidingLayout.model_validate(raw_layout)
-            except ValueError:
-                parsed_layout = None
+        parsed_layout = _parse_sliding_layout(node.get("sliding_layout"))
         if parsed_layout is None or not parsed_layout.panels:
             leaf_count = {"SLIDING_2L": 2, "SLIDING_3L": 3, "SLIDING_4L": 4}.get(
                 str(opening), 2
@@ -1348,13 +1385,7 @@ def _position_svg(
         strip_stroke = height / Decimal("120") if height > 0 else Decimal("2")
         plan_bottom = height
         for bx, _by, bw, _bh, bay_node in sliding_bays:
-            bay_layout: SlidingLayout | None = None
-            raw_layout = bay_node.get("sliding_layout")
-            if isinstance(raw_layout, dict):
-                try:
-                    bay_layout = SlidingLayout.model_validate(raw_layout)
-                except ValueError:
-                    bay_layout = None
+            bay_layout = _parse_sliding_layout(bay_node.get("sliding_layout"))
             if bay_layout is None or not bay_layout.panels:
                 leaf_count = {
                     "SLIDING_2L": 2, "SLIDING_3L": 3, "SLIDING_4L": 4
@@ -1881,8 +1912,10 @@ def _doc01(snapshot: dict[str, object]) -> str:
             spec_items.append(
                 f'<li><span class="plabel">Límites</span> {escape(limits_line)}</li>'
             )
+        # El rótulo de la lámina declara la vista real — la tabla de la
+        # tarjeta repite la misma lectura (interior por defecto, §P05).
         spec_items.append(
-            '<li><span class="plabel">Vista</span> Exterior</li>'
+            '<li><span class="plabel">Vista</span> Interior</li>'
         )
         spec_items.append(
             f'<li><span class="plabel">Vidrio / relleno</span> {escape(specs)}</li>'
