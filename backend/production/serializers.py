@@ -558,6 +558,11 @@ class CncMachineRequestSerializer(StrictSerializer):
     units = serializers.CharField(required=False, max_length=20)
     encoding = serializers.CharField(required=False, max_length=40)
     active = serializers.BooleanField(required=False)
+    machine_type = serializers.CharField(required=False, max_length=30)
+    axes_count = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    travel_x_mm = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    travel_y_mm = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    travel_z_mm = serializers.CharField(required=False, allow_null=True, allow_blank=True)
 
 
 class CncMachineSerializer(serializers.Serializer):
@@ -579,6 +584,12 @@ class CncMachineSerializer(serializers.Serializer):
     units = serializers.CharField()
     encoding = serializers.CharField()
     active = serializers.BooleanField()
+    machine_type = serializers.CharField(required=False)
+    axes_count = serializers.IntegerField(required=False, allow_null=True)
+    travel_x_mm = serializers.CharField(required=False, allow_null=True)
+    travel_y_mm = serializers.CharField(required=False, allow_null=True)
+    travel_z_mm = serializers.CharField(required=False, allow_null=True)
+    emitter_implemented = serializers.BooleanField(required=False)
 
 
 class CncMachineListSerializer(serializers.Serializer):
@@ -589,10 +600,22 @@ class CncToolListSerializer(serializers.Serializer):
     tools = CncToolSerializer(many=True)
 
 
+class CncAuditEventSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    entity = serializers.CharField()
+    entity_id = serializers.CharField()
+    entity_code = serializers.CharField()
+    action = serializers.CharField()
+    actor_id = serializers.CharField(allow_null=True)
+    changed = serializers.DictField(required=False)
+    created_at = serializers.CharField()
+
+
 class CncWorkspaceSerializer(serializers.Serializer):
     machines = CncMachineSerializer(many=True)
     tools = CncToolSerializer(many=True)
     orders = serializers.ListField()
+    audit = serializers.ListField(required=False)
 
 
 class CncGenerateRequestSerializer(StrictSerializer):
@@ -603,7 +626,9 @@ class CncGenerateRequestSerializer(StrictSerializer):
 class CncReadinessSerializer(serializers.Serializer):
     order_id = serializers.CharField()
     order_code = serializers.CharField()
+    plan = serializers.DictField(required=False)
     members = serializers.ListField()
+    declared_gaps = serializers.ListField(required=False)
     issues = serializers.ListField(required=False)
     machines = CncMachineSerializer(many=True)
     programs = serializers.ListField()
@@ -623,6 +648,15 @@ class CncProgramSerializer(serializers.Serializer):
 
 class CncProgramListSerializer(serializers.Serializer):
     programs = serializers.ListField()
+
+
+class CncProgramCompareSerializer(serializers.Serializer):
+    base = serializers.DictField()
+    other = serializers.DictField()
+    added = serializers.ListField()
+    removed = serializers.ListField()
+    changed = serializers.ListField()
+    counts = serializers.DictField()
 
 
 class CncToolPatchSerializer(StrictSerializer):
@@ -656,3 +690,8 @@ class CncMachinePatchSerializer(StrictSerializer):
     units = serializers.CharField(required=False, max_length=20)
     encoding = serializers.CharField(required=False, max_length=40)
     active = serializers.BooleanField(required=False)
+    machine_type = serializers.CharField(required=False, max_length=30)
+    axes_count = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    travel_x_mm = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    travel_y_mm = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    travel_z_mm = serializers.CharField(required=False, allow_null=True, allow_blank=True)

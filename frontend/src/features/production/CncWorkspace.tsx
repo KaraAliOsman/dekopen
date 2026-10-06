@@ -38,6 +38,23 @@ type CncMachine = {
   tool_ids: string[];
   postprocessor_id: string;
   active: boolean;
+  machine_type: string;
+  axes_count: number | null;
+  travel_x_mm: string | null;
+  travel_y_mm: string | null;
+  travel_z_mm: string | null;
+  emitter_implemented?: boolean;
+};
+
+type CncAuditEvent = {
+  id: string;
+  entity: string;
+  entity_id: string;
+  entity_code: string;
+  action: string;
+  actor_id: string | null;
+  changed?: Record<string, { from: unknown; to: unknown }>;
+  created_at: string;
 };
 
 type WorkspaceData = {
@@ -50,6 +67,7 @@ type WorkspaceData = {
     programs_total: number;
     programs_current: number;
   }[];
+  audit?: CncAuditEvent[];
 };
 
 const TOOL_KINDS = [
@@ -81,6 +99,69 @@ const OP_KINDS = [
 ];
 
 const FACES = ["OUTSIDE_FACE", "INSIDE_FACE", "TOP_EDGE", "BOTTOM_EDGE", "START_EDGE", "END_EDGE"];
+
+const MACHINE_TYPES = ["MACHINING_CENTER", "ROUTER", "SAW_DRILL_LINE", "COPY_ROUTER", "OTHER"];
+
+const MACHINE_TYPE_LABELS: Record<string, string> = {
+  MACHINING_CENTER: "production.cncMachineTypeCenter",
+  ROUTER: "production.cncMachineTypeRouter",
+  SAW_DRILL_LINE: "production.cncMachineTypeSawDrill",
+  COPY_ROUTER: "production.cncMachineTypeCopy",
+  OTHER: "production.cncMachineTypeOther",
+};
+
+function machineTypeLabel(machineType: string): string {
+  return tOptional(MACHINE_TYPE_LABELS[machineType] ?? "") ?? t("production.cncMachineTypeOther");
+}
+
+const AUDIT_ACTIONS: Record<string, string> = {
+  created: "production.cncAuditCreated",
+  updated: "production.cncAuditUpdated",
+  deactivated: "production.cncAuditDeactivated",
+  reactivated: "production.cncAuditReactivated",
+};
+
+const AUDIT_FIELDS: Record<string, string> = {
+  code: "código",
+  name: "nombre",
+  kind: "tipo",
+  active: "activa",
+  diameter_mm: "⌀ mm",
+  working_length_mm: "largo útil",
+  max_depth_mm: "profundidad",
+  compatible_kinds: "operaciones",
+  manufacturer: "fabricante",
+  model: "modelo",
+  controller_family: "control",
+  coordinate_systems: "coordenadas",
+  supported_kinds: "operaciones",
+  supported_faces: "caras",
+  max_member_length_mm: "largo máx",
+  safe_margin_mm: "margen",
+  clamp_zones: "mordazas",
+  tool_ids: "magazine",
+  postprocessor_id: "emisor",
+  postprocessor_version: "versión emisor",
+  units: "unidades",
+  encoding: "codificación",
+  machine_type: "tipo",
+  axes_count: "ejes",
+  travel_x_mm: "carrera X",
+  travel_y_mm: "carrera Y",
+  travel_z_mm: "carrera Z",
+};
+
+function auditText(event: CncAuditEvent): string {
+  const action = tOptional(AUDIT_ACTIONS[event.action] ?? "") ?? event.action;
+  const entity =
+    event.entity === "machine" ? t("production.cncAuditMachine") : t("production.cncAuditTool");
+  const fields = Object.entries(event.changed ?? {})
+    .map(([key]) => AUDIT_FIELDS[key] ?? key)
+    .join(", ");
+  return fields
+    ? `${entity} ${event.entity_code} — ${action} (${fields})`
+    : `${entity} ${event.entity_code} — ${action}`;
+}
 
 const KIND_LABELS: Record<string, string> = {
   SAW_CUT: "production.cncKindSaw",
@@ -206,6 +287,12 @@ export function CncWorkspace() {
       model: String(machineForm.model ?? ""),
       max_member_length_mm: String(machineForm.max_member_length_mm || "") || null,
       safe_margin_mm: String(machineForm.safe_margin_mm || "") || null,
+      machine_type: String(machineForm.machine_type || "MACHINING_CENTER"),
+      axes_count: String(machineForm.axes_count || "") || null,
+      travel_x_mm: String(machineForm.travel_x_mm || "") || null,
+      travel_y_mm: String(machineForm.travel_y_mm || "") || null,
+      travel_z_mm: String(machineForm.travel_z_mm || "") || null,
+      postprocessor_id: String(machineForm.postprocessor_id || "neutral-ops-v1"),
       supported_kinds: (machineForm.supported_kinds as string[] | undefined)?.length
         ? (machineForm.supported_kinds as string[])
         : null,
@@ -281,6 +368,12 @@ export function CncWorkspace() {
                           model: "",
                           max_member_length_mm: "",
                           safe_margin_mm: "",
+                          machine_type: "MACHINING_CENTER",
+                          axes_count: "3",
+                          travel_x_mm: "",
+                          travel_y_mm: "",
+                          travel_z_mm: "",
+                          postprocessor_id: "neutral-ops-v1",
                           supported_kinds: [],
                           supported_faces: [],
                           tool_ids: [],
@@ -298,11 +391,13 @@ export function CncWorkspace() {
                     <thead>
                       <tr>
                         <th>{t("production.cncMachineCode")}</th>
-                        <th>{t("production.cncMachineName")}</th>
+                        <th>{t("production.cncMachineType")}</th>
+                        <th>{t("production.cncMachineAxes")}</th>
                         <th>{t("production.cncMachineEnvelope")}</th>
                         <th>{t("production.cncMachineKinds")}</th>
                         <th>{t("production.cncMachineFaces")}</th>
                         <th>{t("production.cncMachineMagazine")}</th>
+                        <th>{t("production.cncMachineEmitter")}</th>
                         {canWrite ? <th /> : null}
                       </tr>
                     </thead>
@@ -311,15 +406,33 @@ export function CncWorkspace() {
                         <tr key={machine.id}>
                           <td>
                             <strong>{machine.code}</strong>
-                            {machine.manufacturer
-                              ? ` · ${machine.manufacturer} ${machine.model}`
-                              : ""}
+                            <div className="cnc-member-meta">
+                              {[
+                                machine.name,
+                                machine.manufacturer || machine.model
+                                  ? `${machine.manufacturer} ${machine.model}`.trim()
+                                  : "",
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </div>
                           </td>
-                          <td>{machine.name}</td>
+                          <td>{machineTypeLabel(machine.machine_type)}</td>
+                          <td>{machine.axes_count ?? "—"}</td>
                           <td>
                             {machine.max_member_length_mm
                               ? `≤ ${fmtMm(machine.max_member_length_mm)} mm`
                               : "—"}
+                            {machine.travel_x_mm || machine.travel_y_mm || machine.travel_z_mm
+                              ? ` · ${[
+                                  machine.travel_x_mm,
+                                  machine.travel_y_mm,
+                                  machine.travel_z_mm,
+                                ]
+                                  .filter(Boolean)
+                                  .map((v) => fmtMm(v))
+                                  .join("×")} mm`
+                              : ""}
                           </td>
                           <td>
                             {machine.supported_kinds
@@ -332,6 +445,14 @@ export function CncWorkspace() {
                               : t("production.cncAllFaces")}
                           </td>
                           <td>{machine.tool_ids.length}</td>
+                          <td>
+                            {machine.postprocessor_id}
+                            {machine.emitter_implemented === false ? (
+                              <div className="cnc-emitter-missing">
+                                {t("production.cncGapCauseEmitter")}
+                              </div>
+                            ) : null}
+                          </td>
                           {canWrite ? (
                             <td>
                               <button
@@ -346,6 +467,13 @@ export function CncWorkspace() {
                                     model: machine.model,
                                     max_member_length_mm: machine.max_member_length_mm ?? "",
                                     safe_margin_mm: machine.safe_margin_mm ?? "",
+                                    machine_type: machine.machine_type ?? "MACHINING_CENTER",
+                                    axes_count:
+                                      machine.axes_count != null ? String(machine.axes_count) : "",
+                                    travel_x_mm: machine.travel_x_mm ?? "",
+                                    travel_y_mm: machine.travel_y_mm ?? "",
+                                    travel_z_mm: machine.travel_z_mm ?? "",
+                                    postprocessor_id: machine.postprocessor_id ?? "neutral-ops-v1",
                                     supported_kinds: machine.supported_kinds ?? [],
                                     supported_faces: machine.supported_faces ?? [],
                                     tool_ids: machine.tool_ids,
@@ -447,6 +575,94 @@ export function CncWorkspace() {
                             setMachineForm({
                               ...machineForm,
                               safe_margin_mm: e.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                    </div>
+                    <div className="cnc-form-row">
+                      <label>
+                        {t("production.cncMachineType")}
+                        <select
+                          value={String(machineForm.machine_type ?? "MACHINING_CENTER")}
+                          onChange={(e) =>
+                            setMachineForm({
+                              ...machineForm,
+                              machine_type: e.target.value,
+                            })
+                          }
+                        >
+                          {MACHINE_TYPES.map((machineType) => (
+                            <option key={machineType} value={machineType}>
+                              {machineTypeLabel(machineType)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        {t("production.cncMachineAxes")}
+                        <input
+                          value={String(machineForm.axes_count ?? "")}
+                          inputMode="numeric"
+                          placeholder="3"
+                          onChange={(e) =>
+                            setMachineForm({
+                              ...machineForm,
+                              axes_count: e.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        {t("production.cncMachineEmitter")}
+                        <input
+                          value={String(machineForm.postprocessor_id ?? "")}
+                          placeholder="neutral-ops-v1"
+                          onChange={(e) =>
+                            setMachineForm({
+                              ...machineForm,
+                              postprocessor_id: e.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                    </div>
+                    <div className="cnc-form-row">
+                      <label>
+                        {t("production.cncMachineTravelX")}
+                        <input
+                          value={String(machineForm.travel_x_mm ?? "")}
+                          inputMode="decimal"
+                          onChange={(e) =>
+                            setMachineForm({
+                              ...machineForm,
+                              travel_x_mm: e.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        {t("production.cncMachineTravelY")}
+                        <input
+                          value={String(machineForm.travel_y_mm ?? "")}
+                          inputMode="decimal"
+                          onChange={(e) =>
+                            setMachineForm({
+                              ...machineForm,
+                              travel_y_mm: e.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        {t("production.cncMachineTravelZ")}
+                        <input
+                          value={String(machineForm.travel_z_mm ?? "")}
+                          inputMode="decimal"
+                          onChange={(e) =>
+                            setMachineForm({
+                              ...machineForm,
+                              travel_z_mm: e.target.value,
                             })
                           }
                         />
@@ -571,9 +787,12 @@ export function CncWorkspace() {
                     </thead>
                     <tbody>
                       {data.tools.map((tool) => (
-                        <tr key={tool.id}>
+                        <tr key={tool.id} className={tool.active ? "" : "cnc-row-inactive"}>
                           <td>
                             <strong>{tool.code}</strong>
+                            {!tool.active ? (
+                              <div className="cnc-member-meta">{t("production.cncInactive")}</div>
+                            ) : null}
                           </td>
                           <td>{tool.name}</td>
                           <td>{toolKindLabel(tool.kind)}</td>
@@ -765,6 +984,24 @@ export function CncWorkspace() {
                   </table>
                 )}
               </div>
+              {data.audit?.length ? (
+                <div>
+                  <h3>{t("production.cncAudit")}</h3>
+                  <ul className="cnc-audit">
+                    {data.audit.map((event) => (
+                      <li key={event.id}>
+                        <span className="cnc-audit-date">
+                          {new Date(event.created_at).toLocaleString("es-CL", {
+                            dateStyle: "short",
+                            timeStyle: "short",
+                          })}
+                        </span>
+                        {auditText(event)}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </div>
           )}
         </div>

@@ -47,6 +47,7 @@ from production.views import (
     CncReadinessView,
     CncProgramListView,
     CncProgramFileView,
+    CncProgramCompareView,
 )
 
 urlpatterns = [
@@ -250,6 +251,11 @@ urlpatterns = [
         "orders/<uuid:order_id>/cnc/programs/",
         CncProgramListView.as_view(),
         name="production-order-cnc-programs",
+    ),
+    path(
+        "cnc/programs/<uuid:program_id>/compare/<uuid:other_id>/",
+        CncProgramCompareView.as_view(),
+        name="production-cnc-program-compare",
     ),
     path(
         "cnc/programs/<uuid:program_id>/file/<str:filename>",

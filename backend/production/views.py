@@ -47,6 +47,7 @@ from production.serializers import (
     CncMachinePatchSerializer,
     CncMachineRequestSerializer,
     CncMachineSerializer,
+    CncProgramCompareSerializer,
     CncProgramListSerializer,
     CncProgramSerializer,
     CncReadinessSerializer,
@@ -1158,7 +1159,8 @@ class CncToolDetailView(APIView):
         with public_production_errors():
             with documentary_scope(request, _WRITERS) as (token, _, org_id):
                 output = cnc.update_tool(
-                    org_id=org_id, tool_id=tool_id, data=data
+                    org_id=org_id, tool_id=tool_id,
+                    actor_id=token.user_id, data=data
                 )
         return Response(output)
 
@@ -1206,7 +1208,8 @@ class CncMachineDetailView(APIView):
         with public_production_errors():
             with documentary_scope(request, _WRITERS) as (token, _, org_id):
                 output = cnc.update_machine(
-                    org_id=org_id, machine_id=machine_id, data=data
+                    org_id=org_id, machine_id=machine_id,
+                    actor_id=token.user_id, data=data
                 )
         return Response(output)
 
@@ -1266,6 +1269,23 @@ class CncProgramListView(APIView):
                     actor_id=token.user_id,
                 )
         return Response(output, status=201)
+
+
+class CncProgramCompareView(APIView):
+    @extend_schema(
+        operation_id="production_cnc_program_compare",
+        parameters=[ACTIVE_ORGANIZATION_HEADER],
+        request=None,
+        responses={200: CncProgramCompareSerializer, **ERRORS},
+        tags=["production", "cnc"],
+    )
+    def get(self, request, program_id: UUID, other_id: UUID):
+        with public_production_errors():
+            with documentary_scope(request, _READERS) as (_, _, org_id):
+                output = cnc.program_compare(
+                    org_id=org_id, program_id=program_id, other_id=other_id
+                )
+        return Response(output)
 
 
 class CncProgramFileView(APIView):
