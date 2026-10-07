@@ -292,7 +292,12 @@ export const DOMAIN_LABELS: Record<string, L> = {
     CHECK: l("Cheque", "neutral"),
     OTHER: l("Otro", "neutral"),
   },
-  CurrencyEnum: {
+  OrgCurrencyEnum: {
+    CLP: l("Peso chileno", "neutral"),
+    USD: l("Dólar", "neutral"),
+    UF: l("Unidad de fomento", "neutral"),
+  },
+  PricingCurrencyEnum: {
     CLP: l("Peso chileno", "neutral"),
     USD: l("Dólar", "neutral"),
   },
@@ -708,15 +713,35 @@ export const DOMAIN_LABELS: Record<string, L> = {
     POSITION: l("Posición", "neutral"),
     MATERIALS_PCT: l("% de materiales", "neutral"),
   },
-  /* ---------- Documentos por organización ---------- */
-  DocPaperSizeEnum: {
+  /* ---------- P22 — documentos y taller por organización ---------- */
+  OrgDocumentsSettingsDocPaperSizeEnum: {
     LETTER: l("Carta", "neutral"),
     LEGAL: l("Oficio", "neutral"),
     A4: l("A4", "neutral"),
   },
-  WorkshopLabelFormatEnum: {
+  OrgBrandingWriteDocPaperSizeEnum: {
+    LETTER: l("Carta", "neutral"),
+    LEGAL: l("Oficio", "neutral"),
+    A4: l("A4", "neutral"),
+  },
+  OrgProductionSettingsWorkshopLabelFormatEnum: {
     GRID: l("Grilla en hoja", "neutral"),
     THERMAL_100X50: l("Rollo térmico 100×50 mm", "neutral"),
+  },
+  OrgBrandingWriteWorkshopLabelFormatEnum: {
+    GRID: l("Grilla en hoja", "neutral"),
+    THERMAL_100X50: l("Rollo térmico 100×50 mm", "neutral"),
+  },
+  /* ---------- P22 — ficha de cliente e invitaciones ---------- */
+  ClientKindEnum: {
+    PERSON: l("Persona natural", "neutral"),
+    COMPANY: l("Empresa", "neutral"),
+  },
+  OrgInviteRoleEnum: {
+    ESTIMATOR: l("Estimador", "neutral"),
+    WORKSHOP_MANAGER: l("Jefe de taller", "neutral"),
+    OPERATOR: l("Operador", "neutral"),
+    INSTALLER: l("Instalador", "neutral"),
   },
 };
 

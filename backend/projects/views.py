@@ -28,6 +28,7 @@ from projects import (
     invoices,
     measurement,
     org_branding,
+    org_settings,
     payment_links,
     payments,
     quotations,
@@ -38,7 +39,11 @@ from projects import (
     sii_envio,
 )
 from projects.serializers import (
+    ClientDetailResponseSerializer,
+    ClientDuplicatesResponseSerializer,
     ClientListResponseSerializer,
+    ClientMergeSerializer,
+    ClientNoteWriteSerializer,
     ClientResponseSerializer,
     ClientUpdateSerializer,
     ClientWriteSerializer,
@@ -48,6 +53,21 @@ from projects.serializers import (
     CollectionReminderSendSerializer,
     OrgBrandingSerializer,
     OrgBrandingWriteSerializer,
+    OrgCommercialSettingsSerializer,
+    OrgCompanySettingsSerializer,
+    OrgDocumentPreviewResponseSerializer,
+    OrgDocumentPreviewSerializer,
+    OrgDocumentsSettingsSerializer,
+    OrgIntegrationsResponseSerializer,
+    OrgInviteSerializer,
+    OrgInvitationSerializer,
+    OrgMemberUpdateSerializer,
+    OrgMembersResponseSerializer,
+    OrgNumberingResponseSerializer,
+    OrgProductionSettingsSerializer,
+    OrgSectionResponseSerializer,
+    OrgSecuritySettingsSerializer,
+    OrgSettingsResponseSerializer,
     PaymentIntegrationSerializer,
     PaymentIntegrationStatusSerializer,
     PaymentLinkCreateSerializer,
@@ -1096,12 +1116,35 @@ class ClientsView(APIView):
 
     @extend_schema(
         operation_id="clients_list",
+        parameters=[
+            ACTIVE_ORGANIZATION_HEADER,
+            OpenApiParameter(
+                "q",
+                str,
+                description="Búsqueda por nombre o RUT (normalizado).",
+            ),
+            OpenApiParameter(
+                "filtro",
+                str,
+                enum=["activos", "saldo"],
+                description="activos = con proyectos activos; saldo = con saldo pendiente.",
+            ),
+        ],
+        tags=["projects"],
         responses={200: ClientListResponseSerializer, **ERRORS},
-        **SCHEMA,
     )
     def get(self, request):
         with scope(request, READ_ROLES) as (_, _, org):
-            return response({"items": clients.list_clients(org)})
+            query = request.query_params.get("q") or None
+            raw_filter = request.query_params.get("filtro")
+            filter_kind = {"activos": "active", "saldo": "balance"}.get(raw_filter)
+            return response(
+                {
+                    "items": clients.list_clients(
+                        org, query=query, filter_kind=filter_kind
+                    )
+                }
+            )
 
     @extend_schema(
         operation_id="clients_create",
@@ -1120,12 +1163,12 @@ class ClientView(APIView):
 
     @extend_schema(
         operation_id="clients_retrieve",
-        responses={200: ClientResponseSerializer, **ERRORS},
+        responses={200: ClientDetailResponseSerializer, **ERRORS},
         **SCHEMA,
     )
     def get(self, request, client_id):
         with scope(request, READ_ROLES) as (_, _, org):
-            return response(clients.client_public(org, client_id))
+            return response(clients.client_detail(org, client_id))
 
     @extend_schema(
         operation_id="clients_update",
@@ -1149,3 +1192,240 @@ class ClientView(APIView):
         with scope(request, WRITE_ROLES) as (_, _, org):
             clients.deactivate_client(org, client_id)
             return Response(status=204)
+
+
+class ClientNotesView(APIView):
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="clients_add_note",
+        request=ClientNoteWriteSerializer,
+        responses={201: ClientDetailResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def post(self, request, client_id):
+        data = validate(ClientNoteWriteSerializer, request.data)
+        with scope(request, WRITE_ROLES) as (token, _, org):
+            clients.add_note(
+                org, client_id, token.user_id, token.email or "—", data["body"]
+            )
+            return response(clients.client_detail(org, client_id), status=201)
+
+
+class ClientDuplicatesView(APIView):
+    @extend_schema(
+        operation_id="clients_duplicates",
+        responses={200: ClientDuplicatesResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def get(self, request):
+        with scope(request, READ_ROLES) as (_, _, org):
+            return response({"items": clients.duplicates(org)})
+
+
+class ClientMergeView(APIView):
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="clients_merge",
+        request=ClientMergeSerializer,
+        responses={200: ClientDetailResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def post(self, request, client_id):
+        data = validate(ClientMergeSerializer, request.data)
+        with scope(request, WRITE_ROLES) as (token, _, org):
+            return response(
+                clients.merge_clients(
+                    org,
+                    data["survivor_id"],
+                    client_id,
+                    token.user_id,
+                    token.email or "—",
+                )
+            )
+
+
+# ---------------------------------------------------------------------------
+# P22 — Ajustes por dominio.
+
+
+class OrganizationSettingsView(APIView):
+    @extend_schema(
+        operation_id="organization_settings_read",
+        responses={200: OrgSettingsResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def get(self, request):
+        with scope(request, READ_ROLES) as (_, _, org):
+            return response(org_settings.settings_snapshot(org))
+
+
+class OrganizationCompanySettingsView(APIView):
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="organization_settings_company_update",
+        request=OrgCompanySettingsSerializer,
+        responses={200: OrgSettingsResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def put(self, request):
+        data = validate(OrgCompanySettingsSerializer, request.data, partial=True)
+        with scope(request, WRITE_ROLES) as (_, _, org):
+            return response(org_settings.save_company(org, data))
+
+
+class OrganizationCommercialSettingsView(APIView):
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="organization_settings_commercial_update",
+        request=OrgCommercialSettingsSerializer,
+        responses={200: OrgSectionResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def put(self, request):
+        data = validate(OrgCommercialSettingsSerializer, request.data, partial=True)
+        with scope(request, WRITE_ROLES) as (_, _, org):
+            return response(org_settings.save_commercial(org, data))
+
+
+class OrganizationDocumentsSettingsView(APIView):
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="organization_settings_documents_update",
+        request=OrgDocumentsSettingsSerializer,
+        responses={200: OrgSectionResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def put(self, request):
+        data = validate(OrgDocumentsSettingsSerializer, request.data, partial=True)
+        with scope(request, WRITE_ROLES) as (_, _, org):
+            return response(org_settings.save_documents(org, data))
+
+
+class OrganizationProductionSettingsView(APIView):
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="organization_settings_production_update",
+        request=OrgProductionSettingsSerializer,
+        responses={200: OrgSectionResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def put(self, request):
+        data = validate(OrgProductionSettingsSerializer, request.data, partial=True)
+        with scope(request, WRITE_ROLES) as (_, _, org):
+            return response(org_settings.save_production(org, data))
+
+
+class OrganizationSecurityView(APIView):
+    """El interruptor 2FA de la org es decisión del dueño — la plantilla
+    no lo mueve (OWNER explícito, no WRITE_ROLES)."""
+
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="organization_security_update",
+        request=OrgSecuritySettingsSerializer,
+        responses={200: OrgSectionResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def put(self, request):
+        data = validate(OrgSecuritySettingsSerializer, request.data)
+        with scope(request, ("OWNER",)) as (_, _, org):
+            return response(org_settings.save_security(org, data))
+
+
+class OrganizationNumberingView(APIView):
+    @extend_schema(
+        operation_id="organization_numbering_read",
+        responses={200: OrgNumberingResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def get(self, request):
+        with scope(request, READ_ROLES) as (_, _, org):
+            return response(org_settings.numbering(org))
+
+
+class OrganizationIntegrationsView(APIView):
+    @extend_schema(
+        operation_id="organization_integrations_read",
+        responses={200: OrgIntegrationsResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def get(self, request):
+        with scope(request, READ_ROLES) as (_, _, org):
+            return response(org_settings.integrations(org))
+
+
+class OrganizationMembersView(APIView):
+    """Usuarios y roles: la membresía la administra el dueño; invitar usa el
+    correo como identificador (nunca un UUID visible)."""
+
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="organization_members_list",
+        responses={200: OrgMembersResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def get(self, request):
+        with scope(request, ("OWNER",)) as (_, _, org):
+            return response(org_settings.list_members(org))
+
+    @extend_schema(
+        operation_id="organization_members_invite",
+        request=OrgInviteSerializer,
+        responses={201: OrgInvitationSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def post(self, request):
+        data = validate(OrgInviteSerializer, request.data)
+        with scope(request, ("OWNER",)) as (token, _, org):
+            return response(
+                org_settings.invite_member(
+                    org, data["email"], data["role"],
+                    token.user_id, token.email or "—",
+                ),
+                status=201,
+            )
+
+
+class OrganizationMemberView(APIView):
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="organization_member_update",
+        request=OrgMemberUpdateSerializer,
+        responses={200: OrgMembersResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def patch(self, request, membership_id):
+        data = validate(OrgMemberUpdateSerializer, request.data, partial=True)
+        with scope(request, ("OWNER",)) as (token, _, org):
+            return response(
+                org_settings.update_member(org, membership_id, data, token.user_id)
+            )
+
+
+class OrganizationDocumentPreviewView(APIView):
+    """Vista previa real del papel con el borrador de marca/documentos —
+    responde el HTML del render DOC-01 (mini hoja), no una aproximación."""
+
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="organization_document_preview",
+        request=OrgDocumentPreviewSerializer,
+        responses={200: OrgDocumentPreviewResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def post(self, request):
+        data = validate(OrgDocumentPreviewSerializer, request.data, partial=True)
+        with scope(request, READ_ROLES) as (_, _, org):
+            return response(
+                {"html": org_settings.document_preview(org, data)}
+            )

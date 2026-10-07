@@ -64,9 +64,14 @@ import type {
   ChangeResult,
   CheckoutInputRequest,
   CheckoutResult,
+  ClientDetailResponse,
+  ClientDuplicatesResponse,
   ClientListResponse,
+  ClientMergeRequest,
+  ClientNoteWriteRequest,
   ClientResponse,
   ClientWriteRequest,
+  ClientsListParams,
   CloneProjectRequest,
   CncExport,
   CncGenerateRequestRequest,
@@ -182,6 +187,19 @@ import type {
   OrderResponse,
   OrgBranding,
   OrgBrandingWriteRequest,
+  OrgCommercialSettingsRequest,
+  OrgCompanySettingsRequest,
+  OrgDocumentPreviewRequest,
+  OrgDocumentPreviewResponse,
+  OrgDocumentsSettingsRequest,
+  OrgIntegrationsResponse,
+  OrgInvitation,
+  OrgInviteRequest,
+  OrgMembersResponse,
+  OrgNumberingResponse,
+  OrgProductionSettingsRequest,
+  OrgSecuritySettingsRequest,
+  OrgSettingsResponse,
   OrganizationBrandingLogoUploadBody,
   PackingLabels,
   PackingManifest,
@@ -193,6 +211,7 @@ import type {
   PatchedExtraArticleWriteRequest,
   PatchedKitWriteRequest,
   PatchedLinkExpiryRequest,
+  PatchedOrgMemberUpdateRequest,
   PatchedProjectUpdateRequest,
   PatchedServiceArticleWriteRequest,
   PatchedSystemWriteRequest,
@@ -6539,14 +6558,27 @@ export type clientsListResponseError = (
 
 export type clientsListResponse = clientsListResponseSuccess | clientsListResponseError;
 
-export const getClientsListUrl = () => {
-  return `/api/v1/clients/`;
+export const getClientsListUrl = (params?: ClientsListParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v1/clients/?${stringifiedParams}`
+    : `/api/v1/clients/`;
 };
 
 export const clientsList = async (
+  params?: ClientsListParams,
   options?: Parameters<typeof apiMutator>[1],
 ): Promise<clientsListResponse> => {
-  return apiMutator<clientsListResponse>(getClientsListUrl(), {
+  return apiMutator<clientsListResponse>(getClientsListUrl(params), {
     ...options,
     method: "GET",
   });
@@ -6634,7 +6666,7 @@ export const clientsCreate = async (
 };
 
 export type clientsRetrieveResponse200 = {
-  data: ClientResponse;
+  data: ClientDetailResponse;
   status: 200;
 };
 
@@ -6855,6 +6887,241 @@ export const clientsDeactivate = async (
   return apiMutator<clientsDeactivateResponse>(getClientsDeactivateUrl(clientId), {
     ...options,
     method: "DELETE",
+  });
+};
+
+export type clientsMergeResponse200 = {
+  data: ClientDetailResponse;
+  status: 200;
+};
+
+export type clientsMergeResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type clientsMergeResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type clientsMergeResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type clientsMergeResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type clientsMergeResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type clientsMergeResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type clientsMergeResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type clientsMergeResponseSuccess = clientsMergeResponse200 & {
+  headers: Headers;
+};
+export type clientsMergeResponseError = (
+  | clientsMergeResponse400
+  | clientsMergeResponse401
+  | clientsMergeResponse403
+  | clientsMergeResponse404
+  | clientsMergeResponse409
+  | clientsMergeResponse422
+  | clientsMergeResponse503
+) & {
+  headers: Headers;
+};
+
+export type clientsMergeResponse = clientsMergeResponseSuccess | clientsMergeResponseError;
+
+export const getClientsMergeUrl = (clientId: string) => {
+  return `/api/v1/clients/${clientId}/merge/`;
+};
+
+export const clientsMerge = async (
+  clientId: string,
+  clientMergeRequest: ClientMergeRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<clientsMergeResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<clientsMergeResponse>(getClientsMergeUrl(clientId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+    body: JSON.stringify(clientMergeRequest),
+  });
+};
+
+export type clientsAddNoteResponse201 = {
+  data: ClientDetailResponse;
+  status: 201;
+};
+
+export type clientsAddNoteResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type clientsAddNoteResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type clientsAddNoteResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type clientsAddNoteResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type clientsAddNoteResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type clientsAddNoteResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type clientsAddNoteResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type clientsAddNoteResponseSuccess = clientsAddNoteResponse201 & {
+  headers: Headers;
+};
+export type clientsAddNoteResponseError = (
+  | clientsAddNoteResponse400
+  | clientsAddNoteResponse401
+  | clientsAddNoteResponse403
+  | clientsAddNoteResponse404
+  | clientsAddNoteResponse409
+  | clientsAddNoteResponse422
+  | clientsAddNoteResponse503
+) & {
+  headers: Headers;
+};
+
+export type clientsAddNoteResponse = clientsAddNoteResponseSuccess | clientsAddNoteResponseError;
+
+export const getClientsAddNoteUrl = (clientId: string) => {
+  return `/api/v1/clients/${clientId}/notes/`;
+};
+
+export const clientsAddNote = async (
+  clientId: string,
+  clientNoteWriteRequest: ClientNoteWriteRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<clientsAddNoteResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<clientsAddNoteResponse>(getClientsAddNoteUrl(clientId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+    body: JSON.stringify(clientNoteWriteRequest),
+  });
+};
+
+export type clientsDuplicatesResponse200 = {
+  data: ClientDuplicatesResponse;
+  status: 200;
+};
+
+export type clientsDuplicatesResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type clientsDuplicatesResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type clientsDuplicatesResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type clientsDuplicatesResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type clientsDuplicatesResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type clientsDuplicatesResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type clientsDuplicatesResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type clientsDuplicatesResponseSuccess = clientsDuplicatesResponse200 & {
+  headers: Headers;
+};
+export type clientsDuplicatesResponseError = (
+  | clientsDuplicatesResponse400
+  | clientsDuplicatesResponse401
+  | clientsDuplicatesResponse403
+  | clientsDuplicatesResponse404
+  | clientsDuplicatesResponse409
+  | clientsDuplicatesResponse422
+  | clientsDuplicatesResponse503
+) & {
+  headers: Headers;
+};
+
+export type clientsDuplicatesResponse =
+  clientsDuplicatesResponseSuccess | clientsDuplicatesResponseError;
+
+export const getClientsDuplicatesUrl = () => {
+  return `/api/v1/clients/duplicates/`;
+};
+
+export const clientsDuplicates = async (
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<clientsDuplicatesResponse> => {
+  return apiMutator<clientsDuplicatesResponse>(getClientsDuplicatesUrl(), {
+    ...options,
+    method: "GET",
   });
 };
 
@@ -9595,6 +9862,92 @@ export const organizationBrandingLogoDelete = async (
   );
 };
 
+export type organizationDocumentPreviewResponse200 = {
+  data: OrgDocumentPreviewResponse;
+  status: 200;
+};
+
+export type organizationDocumentPreviewResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type organizationDocumentPreviewResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type organizationDocumentPreviewResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type organizationDocumentPreviewResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type organizationDocumentPreviewResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type organizationDocumentPreviewResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type organizationDocumentPreviewResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type organizationDocumentPreviewResponseSuccess = organizationDocumentPreviewResponse200 & {
+  headers: Headers;
+};
+export type organizationDocumentPreviewResponseError = (
+  | organizationDocumentPreviewResponse400
+  | organizationDocumentPreviewResponse401
+  | organizationDocumentPreviewResponse403
+  | organizationDocumentPreviewResponse404
+  | organizationDocumentPreviewResponse409
+  | organizationDocumentPreviewResponse422
+  | organizationDocumentPreviewResponse503
+) & {
+  headers: Headers;
+};
+
+export type organizationDocumentPreviewResponse =
+  organizationDocumentPreviewResponseSuccess | organizationDocumentPreviewResponseError;
+
+export const getOrganizationDocumentPreviewUrl = () => {
+  return `/api/v1/organization/document-preview/`;
+};
+
+/**
+ * Vista previa real del papel con el borrador de marca/documentos —
+ * responde el HTML del render DOC-01 (mini hoja), no una aproximación.
+ */
+export const organizationDocumentPreview = async (
+  orgDocumentPreviewRequest?: OrgDocumentPreviewRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<organizationDocumentPreviewResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<organizationDocumentPreviewResponse>(getOrganizationDocumentPreviewUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+    body: JSON.stringify(orgDocumentPreviewRequest),
+  });
+};
+
 export type organizationExtrasConfigReadResponse200 = {
   data: ExtrasConfigResponse;
   status: 200;
@@ -9751,6 +10104,900 @@ export const organizationExtrasConfigUpdate = async (
       body: JSON.stringify(extrasConfigWriteRequest),
     },
   );
+};
+
+export type organizationMembersListResponse200 = {
+  data: OrgMembersResponse;
+  status: 200;
+};
+
+export type organizationMembersListResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type organizationMembersListResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type organizationMembersListResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type organizationMembersListResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type organizationMembersListResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type organizationMembersListResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type organizationMembersListResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type organizationMembersListResponseSuccess = organizationMembersListResponse200 & {
+  headers: Headers;
+};
+export type organizationMembersListResponseError = (
+  | organizationMembersListResponse400
+  | organizationMembersListResponse401
+  | organizationMembersListResponse403
+  | organizationMembersListResponse404
+  | organizationMembersListResponse409
+  | organizationMembersListResponse422
+  | organizationMembersListResponse503
+) & {
+  headers: Headers;
+};
+
+export type organizationMembersListResponse =
+  organizationMembersListResponseSuccess | organizationMembersListResponseError;
+
+export const getOrganizationMembersListUrl = () => {
+  return `/api/v1/organization/members/`;
+};
+
+/**
+ * Usuarios y roles: la membresía la administra el dueño; invitar usa el
+ * correo como identificador (nunca un UUID visible).
+ */
+export const organizationMembersList = async (
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<organizationMembersListResponse> => {
+  return apiMutator<organizationMembersListResponse>(getOrganizationMembersListUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export type organizationMembersInviteResponse201 = {
+  data: OrgInvitation;
+  status: 201;
+};
+
+export type organizationMembersInviteResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type organizationMembersInviteResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type organizationMembersInviteResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type organizationMembersInviteResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type organizationMembersInviteResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type organizationMembersInviteResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type organizationMembersInviteResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type organizationMembersInviteResponseSuccess = organizationMembersInviteResponse201 & {
+  headers: Headers;
+};
+export type organizationMembersInviteResponseError = (
+  | organizationMembersInviteResponse400
+  | organizationMembersInviteResponse401
+  | organizationMembersInviteResponse403
+  | organizationMembersInviteResponse404
+  | organizationMembersInviteResponse409
+  | organizationMembersInviteResponse422
+  | organizationMembersInviteResponse503
+) & {
+  headers: Headers;
+};
+
+export type organizationMembersInviteResponse =
+  organizationMembersInviteResponseSuccess | organizationMembersInviteResponseError;
+
+export const getOrganizationMembersInviteUrl = () => {
+  return `/api/v1/organization/members/`;
+};
+
+/**
+ * Usuarios y roles: la membresía la administra el dueño; invitar usa el
+ * correo como identificador (nunca un UUID visible).
+ */
+export const organizationMembersInvite = async (
+  orgInviteRequest: OrgInviteRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<organizationMembersInviteResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<organizationMembersInviteResponse>(getOrganizationMembersInviteUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+    body: JSON.stringify(orgInviteRequest),
+  });
+};
+
+export type organizationMemberUpdateResponse200 = {
+  data: OrgMembersResponse;
+  status: 200;
+};
+
+export type organizationMemberUpdateResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type organizationMemberUpdateResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type organizationMemberUpdateResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type organizationMemberUpdateResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type organizationMemberUpdateResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type organizationMemberUpdateResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type organizationMemberUpdateResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type organizationMemberUpdateResponseSuccess = organizationMemberUpdateResponse200 & {
+  headers: Headers;
+};
+export type organizationMemberUpdateResponseError = (
+  | organizationMemberUpdateResponse400
+  | organizationMemberUpdateResponse401
+  | organizationMemberUpdateResponse403
+  | organizationMemberUpdateResponse404
+  | organizationMemberUpdateResponse409
+  | organizationMemberUpdateResponse422
+  | organizationMemberUpdateResponse503
+) & {
+  headers: Headers;
+};
+
+export type organizationMemberUpdateResponse =
+  organizationMemberUpdateResponseSuccess | organizationMemberUpdateResponseError;
+
+export const getOrganizationMemberUpdateUrl = (membershipId: string) => {
+  return `/api/v1/organization/members/${membershipId}/`;
+};
+
+export const organizationMemberUpdate = async (
+  membershipId: string,
+  patchedOrgMemberUpdateRequest?: PatchedOrgMemberUpdateRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<organizationMemberUpdateResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<organizationMemberUpdateResponse>(
+    getOrganizationMemberUpdateUrl(membershipId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+      body: JSON.stringify(patchedOrgMemberUpdateRequest),
+    },
+  );
+};
+
+export type organizationSettingsReadResponse200 = {
+  data: OrgSettingsResponse;
+  status: 200;
+};
+
+export type organizationSettingsReadResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type organizationSettingsReadResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type organizationSettingsReadResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type organizationSettingsReadResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type organizationSettingsReadResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type organizationSettingsReadResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type organizationSettingsReadResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type organizationSettingsReadResponseSuccess = organizationSettingsReadResponse200 & {
+  headers: Headers;
+};
+export type organizationSettingsReadResponseError = (
+  | organizationSettingsReadResponse400
+  | organizationSettingsReadResponse401
+  | organizationSettingsReadResponse403
+  | organizationSettingsReadResponse404
+  | organizationSettingsReadResponse409
+  | organizationSettingsReadResponse422
+  | organizationSettingsReadResponse503
+) & {
+  headers: Headers;
+};
+
+export type organizationSettingsReadResponse =
+  organizationSettingsReadResponseSuccess | organizationSettingsReadResponseError;
+
+export const getOrganizationSettingsReadUrl = () => {
+  return `/api/v1/organization/settings/`;
+};
+
+export const organizationSettingsRead = async (
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<organizationSettingsReadResponse> => {
+  return apiMutator<organizationSettingsReadResponse>(getOrganizationSettingsReadUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export type organizationSettingsCommercialUpdateResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type organizationSettingsCommercialUpdateResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type organizationSettingsCommercialUpdateResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type organizationSettingsCommercialUpdateResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type organizationSettingsCommercialUpdateResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type organizationSettingsCommercialUpdateResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type organizationSettingsCommercialUpdateResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type organizationSettingsCommercialUpdateResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type organizationSettingsCommercialUpdateResponseSuccess =
+  organizationSettingsCommercialUpdateResponse200 & {
+    headers: Headers;
+  };
+export type organizationSettingsCommercialUpdateResponseError = (
+  | organizationSettingsCommercialUpdateResponse400
+  | organizationSettingsCommercialUpdateResponse401
+  | organizationSettingsCommercialUpdateResponse403
+  | organizationSettingsCommercialUpdateResponse404
+  | organizationSettingsCommercialUpdateResponse409
+  | organizationSettingsCommercialUpdateResponse422
+  | organizationSettingsCommercialUpdateResponse503
+) & {
+  headers: Headers;
+};
+
+export type organizationSettingsCommercialUpdateResponse =
+  | organizationSettingsCommercialUpdateResponseSuccess
+  | organizationSettingsCommercialUpdateResponseError;
+
+export const getOrganizationSettingsCommercialUpdateUrl = () => {
+  return `/api/v1/organization/settings/commercial/`;
+};
+
+export const organizationSettingsCommercialUpdate = async (
+  orgCommercialSettingsRequest?: OrgCommercialSettingsRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<organizationSettingsCommercialUpdateResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<organizationSettingsCommercialUpdateResponse>(
+    getOrganizationSettingsCommercialUpdateUrl(),
+    {
+      ...options,
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+      body: JSON.stringify(orgCommercialSettingsRequest),
+    },
+  );
+};
+
+export type organizationSettingsCompanyUpdateResponse200 = {
+  data: OrgSettingsResponse;
+  status: 200;
+};
+
+export type organizationSettingsCompanyUpdateResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type organizationSettingsCompanyUpdateResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type organizationSettingsCompanyUpdateResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type organizationSettingsCompanyUpdateResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type organizationSettingsCompanyUpdateResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type organizationSettingsCompanyUpdateResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type organizationSettingsCompanyUpdateResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type organizationSettingsCompanyUpdateResponseSuccess =
+  organizationSettingsCompanyUpdateResponse200 & {
+    headers: Headers;
+  };
+export type organizationSettingsCompanyUpdateResponseError = (
+  | organizationSettingsCompanyUpdateResponse400
+  | organizationSettingsCompanyUpdateResponse401
+  | organizationSettingsCompanyUpdateResponse403
+  | organizationSettingsCompanyUpdateResponse404
+  | organizationSettingsCompanyUpdateResponse409
+  | organizationSettingsCompanyUpdateResponse422
+  | organizationSettingsCompanyUpdateResponse503
+) & {
+  headers: Headers;
+};
+
+export type organizationSettingsCompanyUpdateResponse =
+  organizationSettingsCompanyUpdateResponseSuccess | organizationSettingsCompanyUpdateResponseError;
+
+export const getOrganizationSettingsCompanyUpdateUrl = () => {
+  return `/api/v1/organization/settings/company/`;
+};
+
+export const organizationSettingsCompanyUpdate = async (
+  orgCompanySettingsRequest?: OrgCompanySettingsRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<organizationSettingsCompanyUpdateResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<organizationSettingsCompanyUpdateResponse>(
+    getOrganizationSettingsCompanyUpdateUrl(),
+    {
+      ...options,
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+      body: JSON.stringify(orgCompanySettingsRequest),
+    },
+  );
+};
+
+export type organizationSettingsDocumentsUpdateResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type organizationSettingsDocumentsUpdateResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type organizationSettingsDocumentsUpdateResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type organizationSettingsDocumentsUpdateResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type organizationSettingsDocumentsUpdateResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type organizationSettingsDocumentsUpdateResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type organizationSettingsDocumentsUpdateResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type organizationSettingsDocumentsUpdateResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type organizationSettingsDocumentsUpdateResponseSuccess =
+  organizationSettingsDocumentsUpdateResponse200 & {
+    headers: Headers;
+  };
+export type organizationSettingsDocumentsUpdateResponseError = (
+  | organizationSettingsDocumentsUpdateResponse400
+  | organizationSettingsDocumentsUpdateResponse401
+  | organizationSettingsDocumentsUpdateResponse403
+  | organizationSettingsDocumentsUpdateResponse404
+  | organizationSettingsDocumentsUpdateResponse409
+  | organizationSettingsDocumentsUpdateResponse422
+  | organizationSettingsDocumentsUpdateResponse503
+) & {
+  headers: Headers;
+};
+
+export type organizationSettingsDocumentsUpdateResponse =
+  | organizationSettingsDocumentsUpdateResponseSuccess
+  | organizationSettingsDocumentsUpdateResponseError;
+
+export const getOrganizationSettingsDocumentsUpdateUrl = () => {
+  return `/api/v1/organization/settings/documents/`;
+};
+
+export const organizationSettingsDocumentsUpdate = async (
+  orgDocumentsSettingsRequest?: OrgDocumentsSettingsRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<organizationSettingsDocumentsUpdateResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<organizationSettingsDocumentsUpdateResponse>(
+    getOrganizationSettingsDocumentsUpdateUrl(),
+    {
+      ...options,
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+      body: JSON.stringify(orgDocumentsSettingsRequest),
+    },
+  );
+};
+
+export type organizationIntegrationsReadResponse200 = {
+  data: OrgIntegrationsResponse;
+  status: 200;
+};
+
+export type organizationIntegrationsReadResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type organizationIntegrationsReadResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type organizationIntegrationsReadResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type organizationIntegrationsReadResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type organizationIntegrationsReadResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type organizationIntegrationsReadResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type organizationIntegrationsReadResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type organizationIntegrationsReadResponseSuccess =
+  organizationIntegrationsReadResponse200 & {
+    headers: Headers;
+  };
+export type organizationIntegrationsReadResponseError = (
+  | organizationIntegrationsReadResponse400
+  | organizationIntegrationsReadResponse401
+  | organizationIntegrationsReadResponse403
+  | organizationIntegrationsReadResponse404
+  | organizationIntegrationsReadResponse409
+  | organizationIntegrationsReadResponse422
+  | organizationIntegrationsReadResponse503
+) & {
+  headers: Headers;
+};
+
+export type organizationIntegrationsReadResponse =
+  organizationIntegrationsReadResponseSuccess | organizationIntegrationsReadResponseError;
+
+export const getOrganizationIntegrationsReadUrl = () => {
+  return `/api/v1/organization/settings/integrations/`;
+};
+
+export const organizationIntegrationsRead = async (
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<organizationIntegrationsReadResponse> => {
+  return apiMutator<organizationIntegrationsReadResponse>(getOrganizationIntegrationsReadUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export type organizationNumberingReadResponse200 = {
+  data: OrgNumberingResponse;
+  status: 200;
+};
+
+export type organizationNumberingReadResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type organizationNumberingReadResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type organizationNumberingReadResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type organizationNumberingReadResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type organizationNumberingReadResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type organizationNumberingReadResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type organizationNumberingReadResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type organizationNumberingReadResponseSuccess = organizationNumberingReadResponse200 & {
+  headers: Headers;
+};
+export type organizationNumberingReadResponseError = (
+  | organizationNumberingReadResponse400
+  | organizationNumberingReadResponse401
+  | organizationNumberingReadResponse403
+  | organizationNumberingReadResponse404
+  | organizationNumberingReadResponse409
+  | organizationNumberingReadResponse422
+  | organizationNumberingReadResponse503
+) & {
+  headers: Headers;
+};
+
+export type organizationNumberingReadResponse =
+  organizationNumberingReadResponseSuccess | organizationNumberingReadResponseError;
+
+export const getOrganizationNumberingReadUrl = () => {
+  return `/api/v1/organization/settings/numbering/`;
+};
+
+export const organizationNumberingRead = async (
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<organizationNumberingReadResponse> => {
+  return apiMutator<organizationNumberingReadResponse>(getOrganizationNumberingReadUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export type organizationSettingsProductionUpdateResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type organizationSettingsProductionUpdateResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type organizationSettingsProductionUpdateResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type organizationSettingsProductionUpdateResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type organizationSettingsProductionUpdateResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type organizationSettingsProductionUpdateResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type organizationSettingsProductionUpdateResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type organizationSettingsProductionUpdateResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type organizationSettingsProductionUpdateResponseSuccess =
+  organizationSettingsProductionUpdateResponse200 & {
+    headers: Headers;
+  };
+export type organizationSettingsProductionUpdateResponseError = (
+  | organizationSettingsProductionUpdateResponse400
+  | organizationSettingsProductionUpdateResponse401
+  | organizationSettingsProductionUpdateResponse403
+  | organizationSettingsProductionUpdateResponse404
+  | organizationSettingsProductionUpdateResponse409
+  | organizationSettingsProductionUpdateResponse422
+  | organizationSettingsProductionUpdateResponse503
+) & {
+  headers: Headers;
+};
+
+export type organizationSettingsProductionUpdateResponse =
+  | organizationSettingsProductionUpdateResponseSuccess
+  | organizationSettingsProductionUpdateResponseError;
+
+export const getOrganizationSettingsProductionUpdateUrl = () => {
+  return `/api/v1/organization/settings/production/`;
+};
+
+export const organizationSettingsProductionUpdate = async (
+  orgProductionSettingsRequest?: OrgProductionSettingsRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<organizationSettingsProductionUpdateResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<organizationSettingsProductionUpdateResponse>(
+    getOrganizationSettingsProductionUpdateUrl(),
+    {
+      ...options,
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+      body: JSON.stringify(orgProductionSettingsRequest),
+    },
+  );
+};
+
+export type organizationSecurityUpdateResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type organizationSecurityUpdateResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type organizationSecurityUpdateResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type organizationSecurityUpdateResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type organizationSecurityUpdateResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type organizationSecurityUpdateResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type organizationSecurityUpdateResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type organizationSecurityUpdateResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type organizationSecurityUpdateResponseSuccess = organizationSecurityUpdateResponse200 & {
+  headers: Headers;
+};
+export type organizationSecurityUpdateResponseError = (
+  | organizationSecurityUpdateResponse400
+  | organizationSecurityUpdateResponse401
+  | organizationSecurityUpdateResponse403
+  | organizationSecurityUpdateResponse404
+  | organizationSecurityUpdateResponse409
+  | organizationSecurityUpdateResponse422
+  | organizationSecurityUpdateResponse503
+) & {
+  headers: Headers;
+};
+
+export type organizationSecurityUpdateResponse =
+  organizationSecurityUpdateResponseSuccess | organizationSecurityUpdateResponseError;
+
+export const getOrganizationSecurityUpdateUrl = () => {
+  return `/api/v1/organization/settings/security/`;
+};
+
+/**
+ * El interruptor 2FA de la org es decisión del dueño — la plantilla
+ * no lo mueve (OWNER explícito, no WRITE_ROLES).
+ */
+export const organizationSecurityUpdate = async (
+  orgSecuritySettingsRequest: OrgSecuritySettingsRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<organizationSecurityUpdateResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<organizationSecurityUpdateResponse>(getOrganizationSecurityUpdateUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+    body: JSON.stringify(orgSecuritySettingsRequest),
+  });
 };
 
 export type portalPaymentStatusResponse200 = {

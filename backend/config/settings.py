@@ -164,6 +164,12 @@ SPECTACULAR_SETTINGS = {
         "WhiteColorEnum": ["WHITE"],
         "PaymentStatusEnum": ["NO_DEAL", "PENDING", "PARTIAL", "PAID"],
         "PaymentKindEnum": ["ANTICIPO", "PARCIAL", "SALDO"],
+        # P22 — 'kind' aparece en pagos y en el tipo de cliente: el del
+        # cliente es persona natural vs empresa (etiquetas incluidas para
+        # que el hash del override coincida con el ChoiceField).
+        "ClientKindEnum": [("PERSON", "Persona natural"), ("COMPANY", "Empresa")],
+        "OrgCurrencyEnum": ["CLP", "USD", "UF"],
+        "PricingCurrencyEnum": ["CLP", "USD"],
         "VerticalReferenceEnum": ["OUTER_TOP", "OUTER_BOTTOM", "LEAF_TOP", "LEAF_BOTTOM"],
         # P05 — sliding travel and door handedness share the LEFT/RIGHT
         # value set: keep one component name for both serializer fields.

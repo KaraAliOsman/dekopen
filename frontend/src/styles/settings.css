@@ -335,3 +335,105 @@
   margin: var(--space-8) 0 var(--space-4);
   text-transform: uppercase;
 }
+
+/* P22 — ajustes por dominio: navegación lateral. */
+.settings-layout {
+  align-items: start;
+  display: grid;
+  gap: var(--space-16);
+  grid-template-columns: 12rem 1fr;
+  margin-top: var(--space-16);
+}
+
+.settings-nav {
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-2);
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+  position: sticky;
+  top: var(--space-16);
+}
+
+.settings-nav__link {
+  border-bottom: 1px solid var(--theme-border-subtle);
+  color: var(--theme-text-secondary);
+  display: block;
+  padding: var(--space-8) var(--space-12);
+  text-decoration: none;
+}
+
+.settings-nav__link:last-child {
+  border-bottom: 0;
+}
+
+.settings-nav__link:hover {
+  color: var(--theme-text-primary);
+}
+
+.settings-nav__link.is-active {
+  border-left: 3px solid var(--theme-accent);
+  color: var(--theme-text-primary);
+  font-weight: 600;
+  padding-left: calc(var(--space-12) - 3px);
+}
+
+.settings-nav__link.is-disabled {
+  color: var(--theme-text-secondary);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.settings-card--disabled {
+  opacity: 0.65;
+}
+
+.settings-content .settings-group {
+  margin-top: 0;
+}
+
+.settings-preview {
+  border-top: 1px solid var(--theme-border-subtle);
+  margin-top: var(--space-12);
+  padding-top: var(--space-8);
+}
+
+.settings-preview__frame {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-2);
+  display: block;
+  height: 22rem;
+  width: 100%;
+}
+
+.settings-integration {
+  border-bottom: 1px solid var(--theme-border-subtle);
+  padding: var(--space-6) 0;
+}
+
+.settings-integration:last-child {
+  border-bottom: 0;
+}
+
+.settings-members-actions {
+  align-items: center;
+  display: flex;
+  gap: var(--space-8);
+}
+
+@media (max-width: 760px) {
+  .settings-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-nav {
+    display: flex;
+    flex-wrap: wrap;
+    position: static;
+  }
+
+  .settings-nav__link {
+    border-bottom: 0;
+  }
+}

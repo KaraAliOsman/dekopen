@@ -5582,6 +5582,19 @@ paths:
           format: uuid
         description: Active organization; validated against the JWT user's active
           memberships.
+      - in: query
+        name: filtro
+        schema:
+          type: string
+          enum:
+          - activos
+          - saldo
+        description: activos = con proyectos activos; saldo = con saldo pendiente.
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Búsqueda por nombre o RUT (normalizado).
       tags:
       - projects
       security:
@@ -5730,7 +5743,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClientResponse'
+                $ref: '#/components/schemas/ClientDetailResponse'
           description: ''
         '400':
           content:
@@ -5871,6 +5884,222 @@ paths:
       responses:
         '204':
           description: No response body
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/clients/{client_id}/merge/:
+    post:
+      operationId: clients_merge
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: client_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - projects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientMergeRequest'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientDetailResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/clients/{client_id}/notes/:
+    post:
+      operationId: clients_add_note
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: client_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - projects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientNoteWriteRequest'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientDetailResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/clients/duplicates/:
+    get:
+      operationId: clients_duplicates
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - projects
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientDuplicatesResponse'
+          description: ''
         '400':
           content:
             application/json:
@@ -8532,6 +8761,78 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/organization/document-preview/:
+    post:
+      operationId: organization_document_preview
+      description: |-
+        Vista previa real del papel con el borrador de marca/documentos —
+        responde el HTML del render DOC-01 (mini hoja), no una aproximación.
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - projects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrgDocumentPreviewRequest'
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgDocumentPreviewResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/organization/extras-config/:
     get:
       operationId: organization_extras_config_read
@@ -8628,6 +8929,745 @@ paths:
               schema:
                 $ref: '#/components/schemas/ExtrasConfigResponse'
           description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/organization/members/:
+    get:
+      operationId: organization_members_list
+      description: |-
+        Usuarios y roles: la membresía la administra el dueño; invitar usa el
+        correo como identificador (nunca un UUID visible).
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - projects
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgMembersResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+    post:
+      operationId: organization_members_invite
+      description: |-
+        Usuarios y roles: la membresía la administra el dueño; invitar usa el
+        correo como identificador (nunca un UUID visible).
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - projects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrgInviteRequest'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgInvitation'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/organization/members/{membership_id}/:
+    patch:
+      operationId: organization_member_update
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: membership_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - projects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOrgMemberUpdateRequest'
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgMembersResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/organization/settings/:
+    get:
+      operationId: organization_settings_read
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - projects
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgSettingsResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/organization/settings/commercial/:
+    put:
+      operationId: organization_settings_commercial_update
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - projects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrgCommercialSettingsRequest'
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          description: No response body
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/organization/settings/company/:
+    put:
+      operationId: organization_settings_company_update
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - projects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrgCompanySettingsRequest'
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgSettingsResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/organization/settings/documents/:
+    put:
+      operationId: organization_settings_documents_update
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - projects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrgDocumentsSettingsRequest'
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          description: No response body
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/organization/settings/integrations/:
+    get:
+      operationId: organization_integrations_read
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - projects
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgIntegrationsResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/organization/settings/numbering/:
+    get:
+      operationId: organization_numbering_read
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - projects
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgNumberingResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/organization/settings/production/:
+    put:
+      operationId: organization_settings_production_update
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - projects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrgProductionSettingsRequest'
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          description: No response body
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/organization/settings/security/:
+    put:
+      operationId: organization_security_update
+      description: |-
+        El interruptor 2FA de la org es decisión del dueño — la plantilla
+        no lo mueve (OWNER explícito, no WRITE_ROLES).
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - projects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrgSecuritySettingsRequest'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          description: No response body
         '400':
           content:
             application/json:
@@ -20997,15 +22037,445 @@ components:
       - operation_key
       - redirect_url
       - state
+    ClientAddressRequest:
+      type: object
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 120
+        address:
+          type: string
+          minLength: 1
+        comuna:
+          type: string
+          maxLength: 60
+        is_default:
+          type: boolean
+      required:
+      - address
+      - label
+    ClientAddressResponse:
+      type: object
+      properties:
+        label:
+          type: string
+          maxLength: 120
+        address:
+          type: string
+        comuna:
+          type: string
+          maxLength: 60
+        is_default:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - address
+      - id
+      - label
+      - updated_at
+    ClientContactRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        role_label:
+          type: string
+          maxLength: 80
+        email:
+          oneOf:
+          - type: string
+            format: email
+          - type: string
+            maxLength: 0
+        phone:
+          type: string
+          maxLength: 50
+        is_primary:
+          type: boolean
+      required:
+      - name
+    ClientContactResponse:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        role_label:
+          type: string
+          maxLength: 80
+        email:
+          oneOf:
+          - type: string
+            format: email
+          - type: string
+            maxLength: 0
+        phone:
+          type: string
+          maxLength: 50
+        is_primary:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - name
+      - updated_at
+    ClientDetailResponse:
+      type: object
+      properties:
+        client:
+          $ref: '#/components/schemas/ClientResponse'
+        contacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClientContactResponse'
+        addresses:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClientAddressResponse'
+        notes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClientNoteResponse'
+        projects:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClientProjectItem'
+        quotations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClientQuotationItem'
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClientPaymentItem'
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClientDocumentItem'
+        merges:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClientMergeItem'
+        totals:
+          $ref: '#/components/schemas/ClientTotals'
+      required:
+      - addresses
+      - client
+      - contacts
+      - documents
+      - merges
+      - notes
+      - payments
+      - projects
+      - quotations
+      - totals
+    ClientDocumentItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        project_code:
+          type: string
+        document_type:
+          type: string
+        format:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - created_at
+      - document_type
+      - format
+      - id
+      - project_code
+      - project_id
+    ClientDuplicateClient:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        rut:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - created_at
+      - id
+      - name
+      - rut
+    ClientDuplicateGroup:
+      type: object
+      properties:
+        rut:
+          type: string
+        clients:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClientDuplicateClient'
+      required:
+      - clients
+      - rut
+    ClientDuplicatesResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClientDuplicateGroup'
+      required:
+      - items
+    ClientKindEnum:
+      enum:
+      - PERSON
+      - COMPANY
+      type: string
+      description: |-
+        * `PERSON` - Persona natural
+        * `COMPANY` - Empresa
+    ClientListItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        rut:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        address:
+          type: string
+        giro:
+          type: string
+          nullable: true
+        comuna:
+          type: string
+          nullable: true
+        kind:
+          type: string
+        is_active:
+          type: boolean
+        merged_into:
+          type: string
+          nullable: true
+        merged_at:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        projects_count:
+          type: integer
+        active_projects:
+          type: integer
+        balance:
+          type: string
+      required:
+      - active_projects
+      - address
+      - balance
+      - comuna
+      - created_at
+      - email
+      - giro
+      - id
+      - is_active
+      - kind
+      - merged_at
+      - merged_into
+      - name
+      - phone
+      - projects_count
+      - rut
+      - updated_at
     ClientListResponse:
       type: object
       properties:
         items:
           type: array
           items:
-            $ref: '#/components/schemas/ClientResponse'
+            $ref: '#/components/schemas/ClientListItem'
       required:
       - items
+    ClientMergeItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        survivor_id:
+          type: string
+          format: uuid
+        merged_client_id:
+          type: string
+          format: uuid
+        actor_label:
+          type: string
+        detail:
+          type: object
+          additionalProperties: {}
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - actor_label
+      - created_at
+      - detail
+      - id
+      - merged_client_id
+      - survivor_id
+    ClientMergeRequest:
+      type: object
+      properties:
+        survivor_id:
+          type: string
+          format: uuid
+      required:
+      - survivor_id
+    ClientNoteResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        author_label:
+          type: string
+        body:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - author_label
+      - body
+      - created_at
+      - id
+    ClientNoteWriteRequest:
+      type: object
+      properties:
+        body:
+          type: string
+          minLength: 1
+      required:
+      - body
+    ClientPaymentItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        project_code:
+          type: string
+        kind:
+          type: string
+        amount:
+          type: string
+        method:
+          type: string
+        receipt_code:
+          type: string
+          nullable: true
+        voided:
+          type: boolean
+        recorded_at:
+          type: string
+          format: date-time
+      required:
+      - amount
+      - id
+      - kind
+      - method
+      - project_code
+      - project_id
+      - receipt_code
+      - recorded_at
+      - voided
+    ClientProjectItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+        delivery_address:
+          type: string
+        billed:
+          type: string
+        collected:
+          type: string
+        balance:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - balance
+      - billed
+      - code
+      - collected
+      - created_at
+      - delivery_address
+      - id
+      - name
+      - status
+    ClientQuotationItem:
+      type: object
+      properties:
+        project_id:
+          type: string
+          format: uuid
+        revision_code:
+          type: string
+        emitted_at:
+          type: string
+          format: date-time
+        total_price_gross:
+          type: string
+          nullable: true
+        currency:
+          type: string
+      required:
+      - currency
+      - emitted_at
+      - project_id
+      - revision_code
+      - total_price_gross
     ClientResponse:
       type: object
       properties:
@@ -21028,25 +22498,53 @@ components:
         comuna:
           type: string
           nullable: true
-        notes:
+        kind:
           type: string
         is_active:
           type: boolean
+        merged_into:
+          type: string
+          nullable: true
+        merged_at:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
         updated_at:
           type: string
           format: date-time
       required:
       - address
       - comuna
+      - created_at
       - email
       - giro
       - id
       - is_active
+      - kind
+      - merged_at
+      - merged_into
       - name
-      - notes
       - phone
       - rut
       - updated_at
+    ClientTotals:
+      type: object
+      properties:
+        billed:
+          type: string
+        collected:
+          type: string
+        balance:
+          type: string
+        currency:
+          type: string
+      required:
+      - balance
+      - billed
+      - collected
+      - currency
     ClientWriteRequest:
       type: object
       properties:
@@ -21074,8 +22572,18 @@ components:
         comuna:
           type: string
           maxLength: 20
-        notes:
-          type: string
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/ClientKindEnum'
+          default: COMPANY
+        contacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClientContactRequest'
+        addresses:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClientAddressRequest'
       required:
       - name
     CloneProjectRequest:
@@ -22073,14 +23581,6 @@ components:
         * `monthly` - monthly
         * `pack` - pack
         * `legacy` - legacy
-    CurrencyEnum:
-      enum:
-      - CLP
-      - USD
-      type: string
-      description: |-
-        * `CLP` - CLP
-        * `USD` - USD
     CutBar:
       type: object
       properties:
@@ -23143,16 +24643,6 @@ components:
             type: integer
             minimum: 1
           nullable: true
-    DocPaperSizeEnum:
-      enum:
-      - LETTER
-      - LEGAL
-      - A4
-      type: string
-      description: |-
-        * `LETTER` - Carta
-        * `LEGAL` - Oficio
-        * `A4` - A4
     DocumentTypeEnum:
       enum:
       - DOC-01
@@ -28584,6 +30074,16 @@ components:
       - tax_id
       - vano_spread_tolerance_mm
       - workshop_label_format
+    OrgBrandingWriteDocPaperSizeEnum:
+      enum:
+      - LETTER
+      - LEGAL
+      - A4
+      type: string
+      description: |-
+        * `LETTER` - Carta
+        * `LEGAL` - Oficio
+        * `A4` - A4
     OrgBrandingWriteRequest:
       type: object
       properties:
@@ -28625,12 +30125,12 @@ components:
         doc_paper_size:
           nullable: true
           oneOf:
-          - $ref: '#/components/schemas/DocPaperSizeEnum'
+          - $ref: '#/components/schemas/OrgBrandingWriteDocPaperSizeEnum'
           - $ref: '#/components/schemas/NullEnum'
         workshop_label_format:
           nullable: true
           oneOf:
-          - $ref: '#/components/schemas/WorkshopLabelFormatEnum'
+          - $ref: '#/components/schemas/OrgBrandingWriteWorkshopLabelFormatEnum'
           - $ref: '#/components/schemas/NullEnum'
         remnant_alert_days:
           type: integer
@@ -28647,6 +30147,347 @@ components:
           maximum: 365
           minimum: 1
           nullable: true
+    OrgBrandingWriteWorkshopLabelFormatEnum:
+      enum:
+      - GRID
+      - THERMAL_100X50
+      type: string
+      description: |-
+        * `GRID` - Grilla A4/Carta
+        * `THERMAL_100X50` - Rollo térmico 100×50 mm
+    OrgCommercialSettingsRequest:
+      type: object
+      properties:
+        currency:
+          $ref: '#/components/schemas/OrgCurrencyEnum'
+        tax_rate_pct:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,2}(?:\.\d{0,4})?$
+        default_margin_pct:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,2}(?:\.\d{0,4})?$
+        margin_min_pct:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,2}(?:\.\d{0,4})?$
+          nullable: true
+        margin_max_pct:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,2}(?:\.\d{0,4})?$
+          nullable: true
+        discount_approval_threshold_pct:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,2}(?:\.\d{0,4})?$
+        doc_validity_days:
+          type: integer
+          maximum: 365
+          minimum: 1
+    OrgCompanySettingsRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        tax_id:
+          type: string
+          maxLength: 50
+        commercial_name:
+          type: string
+          maxLength: 255
+        giro:
+          type: string
+          maxLength: 255
+        brand_address:
+          type: string
+          maxLength: 255
+        brand_phone:
+          type: string
+          maxLength: 64
+        brand_email:
+          type: string
+          maxLength: 255
+        brand_color:
+          type: string
+          nullable: true
+          minLength: 1
+          pattern: ^#[0-9A-Fa-f]{6}$
+    OrgCurrencyEnum:
+      enum:
+      - CLP
+      - USD
+      - UF
+      type: string
+      description: |-
+        * `CLP` - CLP
+        * `USD` - USD
+        * `UF` - UF
+    OrgDocumentPreviewRequest:
+      type: object
+      properties:
+        commercial_name:
+          type: string
+        name:
+          type: string
+        tax_id:
+          type: string
+        giro:
+          type: string
+        brand_address:
+          type: string
+        brand_phone:
+          type: string
+        brand_email:
+          type: string
+        brand_color:
+          type: string
+        doc_paper_size:
+          type: string
+        doc_dekopen_credit:
+          type: boolean
+        doc_terms:
+          type: object
+          additionalProperties:
+            type: string
+            maxLength: 4000
+          nullable: true
+    OrgDocumentPreviewResponse:
+      type: object
+      properties:
+        html:
+          type: string
+      required:
+      - html
+    OrgDocumentsSettingsDocPaperSizeEnum:
+      enum:
+      - LETTER
+      - LEGAL
+      - A4
+      type: string
+      description: |-
+        * `LETTER` - LETTER
+        * `LEGAL` - LEGAL
+        * `A4` - A4
+    OrgDocumentsSettingsRequest:
+      type: object
+      properties:
+        doc_paper_size:
+          $ref: '#/components/schemas/OrgDocumentsSettingsDocPaperSizeEnum'
+        doc_terms:
+          type: object
+          additionalProperties:
+            type: string
+            maxLength: 4000
+          nullable: true
+        doc_dekopen_credit:
+          type: boolean
+    OrgIntegrationItem:
+      type: object
+      properties:
+        key:
+          type: string
+        name:
+          type: string
+        state:
+          type: string
+        detail:
+          type: string
+        activation:
+          type: string
+      required:
+      - activation
+      - detail
+      - key
+      - name
+      - state
+    OrgIntegrationsResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrgIntegrationItem'
+        runbook:
+          type: string
+      required:
+      - items
+      - runbook
+    OrgInvitation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        role:
+          type: string
+        status:
+          type: string
+        invited_label:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - created_at
+      - email
+      - id
+      - invited_label
+      - role
+      - status
+    OrgInviteRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+          maxLength: 255
+        role:
+          $ref: '#/components/schemas/OrgInviteRoleEnum'
+      required:
+      - email
+      - role
+    OrgInviteRoleEnum:
+      enum:
+      - ESTIMATOR
+      - WORKSHOP_MANAGER
+      - OPERATOR
+      - INSTALLER
+      type: string
+      description: |-
+        * `ESTIMATOR` - ESTIMATOR
+        * `WORKSHOP_MANAGER` - WORKSHOP_MANAGER
+        * `OPERATOR` - OPERATOR
+        * `INSTALLER` - INSTALLER
+    OrgMember:
+      type: object
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        role:
+          type: string
+        is_active:
+          type: boolean
+        totp_enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - created_at
+      - email
+      - is_active
+      - membership_id
+      - role
+      - totp_enabled
+      - user_id
+    OrgMembersResponse:
+      type: object
+      properties:
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrgMember'
+        invitations:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrgInvitation'
+      required:
+      - invitations
+      - members
+    OrgNumberingItem:
+      type: object
+      properties:
+        kind:
+          type: string
+        prefix:
+          type: string
+        next:
+          type: integer
+        pattern:
+          type: string
+      required:
+      - kind
+      - next
+      - pattern
+      - prefix
+    OrgNumberingResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrgNumberingItem'
+        read_only:
+          type: boolean
+      required:
+      - items
+      - read_only
+    OrgProductionSettingsRequest:
+      type: object
+      properties:
+        vano_spread_tolerance_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          nullable: true
+        remnant_alert_days:
+          type: integer
+          maximum: 365
+          minimum: 1
+        workshop_label_format:
+          $ref: '#/components/schemas/OrgProductionSettingsWorkshopLabelFormatEnum'
+    OrgProductionSettingsWorkshopLabelFormatEnum:
+      enum:
+      - GRID
+      - THERMAL_100X50
+      type: string
+      description: |-
+        * `GRID` - GRID
+        * `THERMAL_100X50` - THERMAL_100X50
+    OrgSecuritySettingsRequest:
+      type: object
+      properties:
+        require_totp:
+          type: boolean
+      required:
+      - require_totp
+    OrgSettingsResponse:
+      type: object
+      properties:
+        company:
+          type: object
+          additionalProperties: {}
+        commercial:
+          type: object
+          additionalProperties: {}
+        documents:
+          type: object
+          additionalProperties: {}
+        production:
+          type: object
+          additionalProperties: {}
+        security:
+          type: object
+          additionalProperties: {}
+      required:
+      - commercial
+      - company
+      - documents
+      - production
+      - security
     OrientationEnum:
       enum:
       - EXTERIOR_DOWN
@@ -28891,8 +30732,18 @@ components:
         comuna:
           type: string
           maxLength: 20
-        notes:
-          type: string
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/ClientKindEnum'
+          default: COMPANY
+        contacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClientContactRequest'
+        addresses:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClientAddressRequest'
         expected_updated_at:
           type: string
           format: date-time
@@ -29153,6 +31004,13 @@ components:
         expires_at:
           type: string
           format: date-time
+    PatchedOrgMemberUpdateRequest:
+      type: object
+      properties:
+        role:
+          $ref: '#/components/schemas/MembershipRoleEnum'
+        is_active:
+          type: boolean
     PatchedProjectUpdateRequest:
       type: object
       properties:
@@ -29667,7 +31525,7 @@ components:
           type: string
           nullable: true
         currency:
-          $ref: '#/components/schemas/CurrencyEnum'
+          $ref: '#/components/schemas/PricingCurrencyEnum'
         status:
           $ref: '#/components/schemas/PaymentStatusEnum'
         sealed_revision:
@@ -29746,7 +31604,7 @@ components:
           type: string
           nullable: true
         currency:
-          $ref: '#/components/schemas/CurrencyEnum'
+          $ref: '#/components/schemas/PricingCurrencyEnum'
         status:
           $ref: '#/components/schemas/PaymentStatusEnum'
         sealed_revision:
@@ -30561,7 +32419,7 @@ components:
           default: DEFAULT
           maxLength: 100
         currency:
-          $ref: '#/components/schemas/CurrencyEnum'
+          $ref: '#/components/schemas/PricingCurrencyEnum'
         effective_date:
           type: string
           format: date
@@ -30632,7 +32490,7 @@ components:
         state:
           $ref: '#/components/schemas/PriceResponseStateEnum'
         currency:
-          $ref: '#/components/schemas/CurrencyEnum'
+          $ref: '#/components/schemas/PricingCurrencyEnum'
         lines:
           type: array
           items:
@@ -30737,6 +32595,14 @@ components:
         * `APPLIED` - APPLIED
         * `REJECTED` - REJECTED
         * `WITHDRAWN` - WITHDRAWN
+    PricingCurrencyEnum:
+      enum:
+      - CLP
+      - USD
+      type: string
+      description: |-
+        * `CLP` - CLP
+        * `USD` - USD
     PricingModeEnum:
       enum:
       - COST_PLUS_MARGIN
@@ -31934,7 +33800,7 @@ components:
           format: uuid
           nullable: true
         currency:
-          $ref: '#/components/schemas/CurrencyEnum'
+          $ref: '#/components/schemas/PricingCurrencyEnum'
         position_count:
           type: integer
         updated_at:
@@ -35221,14 +37087,6 @@ components:
       - bay_id
       - label
       - leaf_id
-    WorkshopLabelFormatEnum:
-      enum:
-      - GRID
-      - THERMAL_100X50
-      type: string
-      description: |-
-        * `GRID` - Grilla A4/Carta
-        * `THERMAL_100X50` - Rollo térmico 100×50 mm
     WorkshopLeafTarget:
       type: object
       properties:

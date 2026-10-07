@@ -3150,3 +3150,42 @@ input.quotation-share__url {
   background: var(--theme-warning-soft);
   font-weight: 600;
 }
+||||||| ac98c582
+
+/* P22 — ficha de cliente: subfilas de contactos/obras, notas y duplicados. */
+.clients-subrow {
+  align-items: center;
+  display: grid;
+  gap: var(--space-8);
+  grid-template-columns: repeat(4, 1fr) auto auto;
+  margin-block: var(--space-8);
+}
+
+.clients-inline-check {
+  align-items: center;
+  display: flex;
+  gap: var(--space-4);
+  white-space: nowrap;
+}
+
+.clients-note-form {
+  display: flex;
+  gap: var(--space-8);
+  margin-top: var(--space-8);
+}
+
+.clients-note-form input {
+  flex: 1;
+}
+
+.clients-duplicates {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--warn, var(--theme-border-subtle));
+  border-radius: var(--r-2);
+  margin-block: var(--space-8);
+  padding: var(--space-8) var(--space-12);
+}
+
+.clients-row-name .status-badge {
+  margin-left: var(--space-8);
+}

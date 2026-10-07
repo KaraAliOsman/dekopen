@@ -65,6 +65,11 @@ class AuthMeView(APIView):
         token = verified_request_token(request)
         user = authenticated_request_user(request)
         with authenticated_rls_context(token.claims):
+            # Auto-reclamo: invitaciones pendientes del correo verificado se
+            # convierten en membresías activas antes de resolver el tenant.
+            from projects.org_settings import claim_own_invitations
+
+            claim_own_invitations(token.email, token.user_id)
             memberships = MembershipRepository().list_active_for_user(token.user_id)
             tenant = resolve_tenant_context(
                 memberships,

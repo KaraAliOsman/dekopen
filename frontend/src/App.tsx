@@ -416,7 +416,7 @@ export function AppRoutes(): JSX.Element {
           }
         />
         <Route
-          path="/settings/general"
+          path="/settings/:section"
           element={
             <ReadyGuard>
               <AppShell>
