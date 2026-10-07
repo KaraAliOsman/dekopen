@@ -29571,6 +29571,10 @@ components:
           type: object
           additionalProperties: {}
           nullable: true
+        confirmation:
+          type: object
+          additionalProperties: {}
+          nullable: true
         measurement:
           type: object
           additionalProperties: {}

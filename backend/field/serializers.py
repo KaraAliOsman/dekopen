@@ -417,6 +417,7 @@ class FieldOrderCardSerializer(serializers.Serializer):
     project = serializers.DictField()
     position = serializers.DictField(allow_null=True)
     delivery = serializers.DictField(allow_null=True)
+    confirmation = serializers.DictField(allow_null=True, required=False)
     measurement = serializers.DictField(allow_null=True)
     checklists = InstallationCheckSerializer(many=True)
     incidents = IncidentSerializer(many=True)

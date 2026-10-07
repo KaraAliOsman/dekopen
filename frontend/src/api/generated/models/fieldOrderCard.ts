@@ -5,6 +5,7 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { FieldOrderCardConfirmation } from "./fieldOrderCardConfirmation";
 import type { FieldOrderCardDelivery } from "./fieldOrderCardDelivery";
 import type { FieldOrderCardMeasurement } from "./fieldOrderCardMeasurement";
 import type { FieldOrderCardOrder } from "./fieldOrderCardOrder";
@@ -21,6 +22,8 @@ export interface FieldOrderCard {
   position: FieldOrderCardPosition;
   /** @nullable */
   delivery: FieldOrderCardDelivery;
+  /** @nullable */
+  confirmation?: FieldOrderCardConfirmation;
   /** @nullable */
   measurement: FieldOrderCardMeasurement;
   checklists: InstallationCheck[];

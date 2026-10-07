@@ -353,6 +353,7 @@ export * from "./fieldCrewRequestRequest";
 export * from "./fieldDispatchPlanParams";
 export * from "./fieldIncidentsListParams";
 export * from "./fieldOrderCard";
+export * from "./fieldOrderCardConfirmation";
 export * from "./fieldOrderCardDelivery";
 export * from "./fieldOrderCardMeasurement";
 export * from "./fieldOrderCardOrder";

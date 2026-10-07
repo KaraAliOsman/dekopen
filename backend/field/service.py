@@ -427,6 +427,14 @@ def field_order_card(*, org_id: UUID, order_id: UUID) -> dict:
             "WHERE order_id = %s AND org_id = %s ORDER BY reported_at DESC",
             [str(order_id), str(org_id)],
         )
+        confirmation_rows = rows(
+            """
+            SELECT id, confirmation_code, issued_at
+            FROM public.delivery_confirmations
+            WHERE org_id = %s AND order_id = %s
+            """,
+            [str(org_id), str(order_id)],
+        )
         # Garantía: meses sellados en la revisión aprobada + fecha de
         # instalación/recepción de la OT.
         warranty = _warranty_block(org_id=org_id, order=order)
@@ -476,6 +484,19 @@ def field_order_card(*, org_id: UUID, order_id: UUID) -> dict:
         },
         "position": position_public,
         "delivery": delivery,
+        "confirmation": (
+            {
+                "id": str(confirmation_rows[0]["id"]),
+                "confirmation_code": confirmation_rows[0]["confirmation_code"],
+                "issued_at": (
+                    str(confirmation_rows[0]["issued_at"])
+                    if confirmation_rows[0]["issued_at"]
+                    else None
+                ),
+            }
+            if confirmation_rows
+            else None
+        ),
         "measurement": measurement_public,
         "checklists": [_check_public(row) for row in checklist_rows],
         "incidents": [_incident_public(row, order["order_code"], project.get("code"))
@@ -611,7 +632,13 @@ def load_check(*, org_id: UUID, delivery_id: UUID, scanned_codes: list[str], act
             text = (code or "").strip()
             unit_match = _UNIT_LABEL_RE.match(text)
             if unit_match and unit_match.group(1) == order_code:
-                scanned_units.add(int(unit_match.group(2)))
+                unit_index = int(unit_match.group(2))
+                if unit_index in trip_units:
+                    scanned_units.add(unit_index)
+                else:
+                    # Etiqueta de esta OT pero fuera del viaje — un bulto
+                    # fantasma no puede quedar «cargado» en silencio.
+                    unexpected.append(text)
                 continue
             qr_match = _QR_RE.match(text)
             if qr_match and qr_match.group(1) == order_code:
@@ -621,7 +648,11 @@ def load_check(*, org_id: UUID, delivery_id: UUID, scanned_codes: list[str], act
                     continue
                 unit_label = _UNIT_LABEL_RE.match(label_code)
                 if unit_label:
-                    scanned_units.add(int(unit_label.group(2)))
+                    unit_index = int(unit_label.group(2))
+                    if unit_index in trip_units:
+                        scanned_units.add(unit_index)
+                    else:
+                        unexpected.append(text)
                     continue
             unexpected.append(text)
         missing = sorted(trip_units - scanned_units)

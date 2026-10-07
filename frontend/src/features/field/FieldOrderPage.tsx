@@ -10,6 +10,7 @@ import {
   fieldOrderCard,
   mountingRulesList,
   productionOrderDeliveryConfirm,
+  productionOrderDeliveryConfirmation,
 } from "../../api/generated/dekopen";
 import type {
   FieldOrderCard,
@@ -99,6 +100,11 @@ type MutableCard = {
     unit_index: number | null;
     note: string | null;
   }[];
+  confirmation: {
+    id: string;
+    confirmation_code: string;
+    issued_at: string | null;
+  } | null;
   warranty: {
     months: number | null;
     until: string | null;
@@ -120,20 +126,27 @@ export function FieldOrderPage(): JSX.Element {
   const { orderId = "" } = useParams();
   const queryClient = useQueryClient();
   const [pending, setPending] = useState(0);
+  const [online, setOnline] = useState(navigator.onLine);
 
   useEffect(() => {
     if (!org) return;
     const refresh = () => setPending(outboxList(org.id).length);
     refresh();
     const flush = async () => {
-      await outboxFlush(org.id);
-      setPending(outboxList(org.id).length);
+      const result = await outboxFlush(org.id);
+      setOnline(result.online);
+      setPending(result.remaining);
       void queryClient.invalidateQueries({ queryKey: ["field-order", orderId] });
     };
     void flush();
     const onOnline = () => void flush();
+    const onOffline = () => setOnline(false);
     window.addEventListener("online", onOnline);
-    return () => window.removeEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
   }, [org, orderId, queryClient]);
 
   const card = useQuery<MutableCard>({
@@ -200,9 +213,13 @@ export function FieldOrderPage(): JSX.Element {
           {t("field.backAgenda")}
         </Link>
       </header>
-      {pending > 0 ? (
-        <div className="field-outbox" role="status">
-          <span>{t("field.outboxPending").replace("{count}", String(pending))}</span>
+      {pending > 0 || !online ? (
+        <div className={`field-outbox${!online ? " field-outbox--offline" : ""}`} role="status">
+          <span>
+            {!online
+              ? t("field.offline")
+              : t("field.outboxPending").replace("{count}", String(pending))}
+          </span>
         </div>
       ) : null}
 
@@ -348,6 +365,7 @@ function MeasurementSection({
     };
     setBusy(true);
     setError(null);
+    setSaved(null);
     if (!navigator.onLine) {
       outboxEnqueue(orgId, {
         path: `/api/v1/field/orders/${orderId}/measurement/`,
@@ -523,6 +541,7 @@ function ChecklistSection({
         label: t("field.opChecklist"),
       });
       setQueued(true);
+      setSavedUnit("");
       onQueued();
     };
     if (!navigator.onLine) {
@@ -655,6 +674,8 @@ function IncidentSection({
         label: t("field.opIncident"),
       });
       setQueued(true);
+      setSaved(false);
+      setOpen(false);
       onQueued();
     };
     if (!navigator.onLine) {
@@ -802,6 +823,23 @@ function ReceptionSection({
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [actaBusy, setActaBusy] = useState(false);
+
+  const openActa = () => {
+    setActaBusy(true);
+    setError(null);
+    void productionOrderDeliveryConfirmation(orderId, undefined, {
+      headers: { "X-Organization-ID": orgId },
+    })
+      .then((response) => {
+        if (response.status !== 200 || !response.data.signed_url) {
+          throw new ApiError(response.status, response.data);
+        }
+        window.open(response.data.signed_url, "_blank", "noopener");
+      })
+      .catch(() => setError(t("field.actaFailed")))
+      .finally(() => setActaBusy(false));
+  };
 
   const canSign = card.order.status === "DISPATCHED" && (card.delivery?.status ?? "") !== "";
   const confirmable =
@@ -842,7 +880,23 @@ function ReceptionSection({
   return (
     <section className="field-card">
       <h2>{t("field.receptionTitle")}</h2>
-      {done ? (
+      {card.confirmation ? (
+        <>
+          <p className="field-message field-message--ok">
+            {t("field.actaSealed").replace("{code}", card.confirmation.confirmation_code)}
+          </p>
+          <div className="field-actions">
+            <button
+              className="field-button field-button--ghost"
+              disabled={actaBusy}
+              onClick={openActa}
+              type="button"
+            >
+              {actaBusy ? t("field.saving") : t("field.viewActa")}
+            </button>
+          </div>
+        </>
+      ) : done ? (
         <p className="field-message field-message--ok">{t("field.receptionDone")}</p>
       ) : !confirmable ? (
         <p className="field-visit">{t("field.receptionNotYet")}</p>
