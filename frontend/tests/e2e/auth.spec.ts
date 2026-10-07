@@ -356,7 +356,10 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
     },
   });
   expect(branding.status(), await branding.text()).toBe(200);
-  await page.getByRole("link", { name: "Añadir vano", exact: true }).click();
+  await page
+    .locator(".positions-toolbar")
+    .getByRole("link", { name: "Añadir vano", exact: true })
+    .click();
   await page.getByLabel("Ubicación del vano", { exact: true }).fill("Fijo comercial");
   await page.getByLabel("Cantidad", { exact: true }).fill("2");
   // The series field lives in the strip's Serie chip popover (P04).
@@ -409,12 +412,10 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
       .getByText("Aplicada", { exact: true }),
   ).toBeVisible();
   await page.goto(`/projects/${draft.id}`);
-  await expect(
-    page
-      .locator("dd")
-      .filter({ hasText: formatMoney(quote.project_gross, "CLP") })
-      .first(),
-  ).toBeVisible();
+  // The hub header shows the applied gross on every tab (P21).
+  await expect(page.locator(".project-head__total")).toHaveText(
+    formatMoney(quote.project_gross, "CLP"),
+  );
   const persisted = await request.get(`${djangoUrl}/api/v1/projects/${draft.id}/`, { headers });
   expect(persisted.status()).toBe(200);
   const project = await persisted.json();
@@ -438,11 +439,9 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   );
   // The quotation panel lives inside the facts rail's collapsed "Cotización"
   // section — expand it once; it stays open for the whole emission flow.
-  await page
-    .locator("details.project-facts__section")
-    .filter({ hasText: "Cotización" })
-    .locator("summary")
-    .click();
+  // La cotización vive en la pestaña «Cotización» del hub (P21): el panel se
+  // monta al visitarla y queda montado para todo el flujo de emisión.
+  await page.getByRole("tab", { name: "Cotización", exact: true }).click();
   await page.getByRole("button", { name: "Preparar emisión", exact: true }).click();
   await prepA;
   await page.getByLabel("Condiciones de pago", { exact: true }).fill("50% anticipo, 50% entrega");
@@ -494,8 +493,10 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   expect((await successor).status()).toBe(201);
   await expect(page.getByText("Borrador", { exact: true })).toBeVisible();
   await expect(page.getByText("Revisión B", { exact: true })).toBeVisible();
-  // The desk grid is select-then-act: pick the vano row so the side pane
-  // offers Abrir diseño.
+  // The desk grid is select-then-act: back on the hub's Posiciones tab
+  // (the emission flow leaves us in Cotización), pick the vano row so the
+  // side pane offers Abrir diseño.
+  await page.getByRole("tab", { name: "Posiciones", exact: true }).click();
   await page
     .locator(".position-grid [role='option']")
     .filter({ hasText: "Fijo comercial" })
@@ -526,11 +527,9 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
       response.request().method() === "GET" &&
       response.url().includes(`/api/v1/documents/projects/${draft.id}/inputs/`),
   );
-  await page
-    .locator("details.project-facts__section")
-    .filter({ hasText: "Cotización" })
-    .locator("summary")
-    .click();
+  // La cotización vive en la pestaña «Cotización» del hub (P21): el panel se
+  // monta al visitarla y queda montado para todo el flujo de emisión.
+  await page.getByRole("tab", { name: "Cotización", exact: true }).click();
   await page.getByRole("button", { name: "Preparar emisión", exact: true }).click();
   await prepB;
   await expect(page.getByLabel("Condiciones de pago", { exact: true })).toHaveValue(
@@ -583,7 +582,10 @@ test("SHOT-10 OWNER prices and emits immutable quotation revisions", async ({ pa
   );
   await page.getByRole("button", { name: "Guardar", exact: true }).click();
   const compositeProject = (await (await compositeCreation).json()) as { id: string };
-  await page.getByRole("link", { name: "Añadir vano", exact: true }).click();
+  await page
+    .locator(".positions-toolbar")
+    .getByRole("link", { name: "Añadir vano", exact: true })
+    .click();
   await page.getByLabel("Ubicación del vano", { exact: true }).fill("Fachada compuesta");
   await page.getByRole("button", { name: "Serie de perfiles", exact: true }).click();
   await page.getByRole("combobox", { name: "Serie de perfiles", exact: true }).selectOption({

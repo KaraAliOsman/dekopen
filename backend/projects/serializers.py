@@ -323,6 +323,15 @@ class DeletePositionSerializer(StrictSerializer):
     expected_updated_at = serializers.DateTimeField()
 
 
+class PositionMoveSerializer(StrictSerializer):
+    """Explicit reorder of the printed position order — `position_index` is
+    server-owned, so a PUT can never edit it directly; the move endpoint
+    shifts the whole run atomically under the position's optimistic lock."""
+
+    to_index = serializers.IntegerField(min_value=1)
+    expected_updated_at = serializers.DateTimeField()
+
+
 class PaymentRecordSerializer(StrictSerializer):
     operation_key = serializers.CharField(min_length=8, max_length=80)
     kind = serializers.ChoiceField(choices=("ANTICIPO", "PARCIAL", "SALDO"))

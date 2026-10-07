@@ -83,6 +83,7 @@ from projects.serializers import (
     MeasurementConfirmSerializer,
     MeasurementResolveResponseSerializer,
     MeasurementResolveSerializer,
+    PositionMoveSerializer,
     PositionResponseSerializer,
     PositionUpdateSerializer,
     PositionWriteSerializer,
@@ -288,6 +289,28 @@ class PositionView(APIView):
         with scope(request, WRITE_ROLES) as (_, _, org):
             service.delete_position(org, position_id, data["expected_updated_at"])
         return Response(status=204)
+
+
+class PositionMoveView(APIView):
+    """Explicit reorder — the estimator arranges the print order of the
+    quotation lines; the service rewrites the whole 1..N run atomically."""
+
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="positions_move",
+        request=PositionMoveSerializer,
+        responses={200: PositionResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def post(self, request, position_id):
+        data = validate(PositionMoveSerializer, request.data)
+        with scope(request, WRITE_ROLES) as (_, _, org):
+            return response(
+                service.move_position(
+                    org, position_id, data["to_index"], data["expected_updated_at"]
+                )
+            )
 
 
 class PositionMeasurementResolveView(APIView):

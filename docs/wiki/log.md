@@ -319,3 +319,12 @@ Append-only chronology. Keep newest entries at the bottom.
 - Sistema visual: escala de capas completada (`--z-raise`, `--z-raise-top`, `--z-menu`), un solo scrim (`--scrim-overlay`), tintas `-ink` para warn/persona, skeleton sin shimmer, `ui-empty-inline` único, `ui-button--primary` único, ~1.300 literales de espaciado → tokens y ~420 fallbacks var() muertos fuera.
 - Baseline de guards: de 6 reglas/68 violaciones a 1 regla (`ui-motion>280` 21 — animaciones legítimas). Rutas nuevas auditadas por ux:capture: production-order(+blocked), quotations; deliveries corregido a rol manager.
 - Verificado `make lint|typecheck|test|build` verde (`PY=.venv/bin/python`); decisiones en sección ED2 de `valores-por-defecto.md`; capturas `docs/redesign/captures/ed2/` (antes/después).
+
+## [2026-10-07] P21 | página de proyecto: hub del estimador con posiciones de verdad
+
+- `/projects/<id>` deja de ser pila de acordeones: hub de 8 pestañas (Posiciones predeterminada, Servicios, Cotización, Precio, Cobranza, Producción, Documentos, Actividad) que monta los paneles mergeados de la ola 2 sin reescribirlos. `?tab=` canónico; `?section=` heredado sigue resolviendo al dueño actual del flujo.
+- Encabezado: identidad (código+nombre, cliente, obra), stepper comercial, total con IVA y vigencia, y una sola acción siguiente por estado derivada de capacidades (`projectNextAction`) — nunca un CTA muerto.
+- Posiciones de verdad: grilla con render real o lista densa de 12 columnas (scroll dentro de su zona, precedente P15), agrupación por ubicación/tipología/sistema, edición de medidas y cantidad en fila, multiselección con barra de lote (duplicar/ubicación/cantidad/cambios globales §8/eliminar) y navegación por teclado (flechas, Enter, Supr, Alt+↑↓ para reordenar).
+- API nueva: `POST /positions/<id>/move/` — el índice de orden no es campo escribible del PUT; la transacción renumera el rango y conserva el candado `expected_updated_at`.
+- Lecciones: la especificidad `elemento:pseudo` (0,1,1) vence a una clase plana (0,1,0) — la tinta de `.ui-button--primary` se redeclara en `:hover` para que los enlace-boton no queden turquesa-sobre-turquesa; los paneles perezosos permanecen montados ocultos, así que los tests deben clicar la pestaña antes de buscar contenido; `pgrep -f "manage[.]py"` es el matasanos correcto (un pkill suelto mata tu propio shell).
+- Verificado: `make lint|typecheck|test|build|test-db` verde; e2e auth+projects; ux:capture 48 tomas sin hallazgos; decisiones P21 en `valores-por-defecto.md`.

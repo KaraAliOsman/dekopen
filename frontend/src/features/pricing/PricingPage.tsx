@@ -276,7 +276,7 @@ const sectionLabels = [
 ] as const;
 type Row = Record<string, string | boolean | null>;
 
-function usePricingRequest(orgId: string): RequestFn {
+export function usePricingRequest(orgId: string): RequestFn {
   // Each request gets its own controller, registered in a live set aborted on
   // unmount. A single shared controller cannot work: a child effect (e.g. the
   // mount history load) may fire before this component's own effect assigns
@@ -1827,7 +1827,7 @@ function OperationDecision({
     </article>
   );
 }
-function CommercialOperations({
+export function CommercialOperations({
   request,
   owner,
   boundProjectId,

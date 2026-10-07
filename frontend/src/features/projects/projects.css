@@ -56,7 +56,9 @@
   outline: 2px solid var(--theme-accent);
   outline-offset: 2px;
 }
-.projects-page a {
+/* Button-styled links keep their own ink — the blanket accent rule used to
+ * repaint `a.ui-button--primary` teal-on-teal (ux:capture contrast-aa). */
+.projects-page a:not(.ui-button):not(.primary-action) {
   color: var(--theme-accent);
 }
 .projects-page [role="alert"] {
@@ -97,22 +99,6 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   column-gap: var(--space-24);
   row-gap: var(--space-4);
-}
-/* The right-rail inspector is ~280px: a 3-col grid there shreds values
- * mid-token («Neto $247.2 99»). Label-left/value-right rows never split a
- * token and survive long location tags. */
-.position-detail .project-metadata {
-  grid-template-columns: auto minmax(0, 1fr);
-  column-gap: var(--space-12);
-  row-gap: var(--space-6);
-}
-.position-detail .project-metadata > div {
-  display: contents;
-}
-.position-detail .project-metadata dd {
-  margin: 0;
-  overflow-wrap: normal;
-  text-align: right;
 }
 .project-metadata dt {
   color: var(--theme-text-secondary);
@@ -1284,52 +1270,40 @@ p.handle-pending {
   font-weight: 600;
 }
 
-/* R3 — the project desk: facts rail (left) · positions grid (center) ·
-   selected-vano detail (right). The three panes track the job, not the
-   database — facts collapse when the estimator needs the room. */
-.project-desk {
-  align-items: start;
+/* P21 — el hub del proyecto: cabecera + pestañas. La superficie deja de
+   ser pila de acordeones y pasa a ser banco de trabajo: grilla de
+   posiciones reales a la izquierda, ficha del vano enfocado a la derecha
+   (el mismo patrón dos-columnas del desk, sin el riel de acordeones). */
+
+.project-hub {
   display: grid;
-  gap: var(--space-16);
-  grid-template-columns: minmax(15rem, 19rem) minmax(0, 1fr) minmax(15rem, 21rem);
+  gap: var(--space-12);
 }
 
-/* An open workflow section (quote/payments/imports/compare) is real work —
- * the emission form needs far more than the idle rail's 15–19rem; steal from
- * the positions column while it is open (review WM4). Desktop only — under
- * the 1100px breakpoint the desk stays a single column. */
-@media (min-width: 1101px) {
-  .project-desk[data-facts-open] {
-    grid-template-columns: minmax(26rem, 34vw) minmax(0, 1fr) minmax(13rem, 17rem);
-  }
-
-  /* Emission is a form-heavy workflow — the rail gets the workspace width
-   * while it is open, the positions grid shrinks to a reference column. */
-  .project-desk[data-facts-open="quote"] {
-    grid-template-columns: minmax(38rem, 55vw) minmax(0, 1fr) minmax(11rem, 14rem);
-  }
+.project-tab {
+  min-width: 0;
 }
 
-.project-facts {
-  background: var(--theme-surface-panel);
-  border: 1px solid var(--theme-border-subtle);
-  border-radius: var(--radius-lg);
-  max-height: calc(100vh - 11rem);
-  overflow: auto;
-  padding: var(--space-12);
-  position: sticky;
-  top: var(--space-12);
+.project-tab__hint {
+  color: var(--theme-text-muted);
 }
 
-.project-facts[data-collapsed] {
-  padding: var(--space-8);
+.project-facts-block {
+  border-top: 1px solid var(--theme-border-subtle);
+  margin-top: var(--space-16);
+  padding-top: var(--space-12);
 }
 
-.project-facts__head {
+.project-facts-block__head {
   align-items: center;
   display: flex;
   gap: var(--space-8);
   justify-content: space-between;
+}
+
+.project-facts-block__title {
+  font-size: 1rem;
+  margin: 0;
 }
 
 .project-facts__list {
@@ -1338,7 +1312,7 @@ p.handle-pending {
   /* 10.5rem keeps names/tags from column-cramming into mid-token wraps; the
    * hyphenation below turns unavoidable long-word splits into real breaks. */
   grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
-  margin: var(--space-12) 0 0;
+  margin: var(--space-8) 0 0;
 }
 
 .project-facts__list dd {
@@ -1346,131 +1320,95 @@ p.handle-pending {
   min-width: 0;
 }
 
-.project-facts__section {
-  border-top: 1px solid var(--theme-border-subtle);
-  margin-top: var(--space-12);
-  padding-top: var(--space-8);
-}
-
-.project-facts__section > summary {
-  cursor: pointer;
-  font-weight: 600;
-  padding: var(--space-4) 0;
-}
-
-.position-grid {
+/* Toolbar de posiciones: vista · agrupación · conteo · altas. */
+.positions-toolbar {
+  align-items: flex-end;
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  gap: var(--space-8) var(--space-12);
+}
+
+.positions-toolbar__view {
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  overflow: hidden;
+}
+
+.positions-toolbar__view button {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  padding: var(--space-4) var(--space-8);
+}
+
+.positions-toolbar__view button[aria-pressed="true"] {
+  background: var(--theme-surface-sunken);
+  font-weight: 600;
+}
+
+.positions-toolbar__group {
+  align-items: center;
+  display: inline-flex;
   gap: var(--space-6);
 }
 
-.position-row {
-  position: relative;
+.positions-toolbar__count {
+  color: var(--theme-text-secondary);
+  font-size: 0.8125rem;
+}
+
+.positions-toolbar__actions {
+  display: flex;
+  gap: var(--space-8);
+  margin-left: auto;
+}
+
+/* Barra de lote — aparece sólo con selección; las acciones progresivas
+   reportan avance en línea (diff antes de aplicar vive en el panel de
+   cambios globales). */
+.positions-batch {
   align-items: center;
   background: var(--theme-surface-panel);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-md);
-  cursor: pointer;
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--space-8);
-  grid-template-columns: 5.5rem minmax(6rem, 1fr) 8.5rem 4.5rem auto;
-  padding: var(--space-8) var(--space-12);
+  margin-top: var(--space-8);
+  padding: var(--space-6) var(--space-12);
+  position: sticky;
+  top: var(--space-8);
+  z-index: var(--z-sticky);
 }
 
-.position-row:hover {
-  border-color: var(--theme-accent);
+.positions-batch__count {
+  font-weight: 600;
 }
 
-.position-row[data-selected] {
-  border-color: var(--theme-accent);
-}
-
-.position-row[data-selected]::before {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 2px;
-  background: var(--theme-accent);
-}
-
-.position-row:focus-visible {
-  outline: 2px solid var(--theme-accent);
-  outline-offset: 1px;
-}
-
-.position-row__thumb {
-  background: var(--theme-bg-canvas);
-  border: 1px solid var(--theme-border-subtle);
-  border-radius: var(--radius-sm);
-  display: block;
-  height: 4.25rem;
-  overflow: hidden;
-  width: 5.5rem;
-}
-
-/* The studio render is sized for cards — inside the row it must fit the
- * thumb cell instead of cropping the product's edges. */
-.position-row__thumb svg,
-.position-row__thumb .position-thumb,
-.position-row__thumb .position-thumb-host {
-  display: block;
-  height: 100%;
-  object-fit: contain;
-  width: 100%;
-}
-
-.position-row__loc {
-  display: -webkit-box;
-  font-weight: 500;
-  min-width: 0;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  /* A location name is the position's identity — "Cocina, ventana sobre
-   * mesón" clipped to "Cocina, ventana sobre…" reads as a different vano;
-   * wrap to two lines instead of truncating (review WM7). */
-  white-space: normal;
-}
-
-.position-row__dims {
+.positions-batch__progress {
   color: var(--theme-text-secondary);
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  margin-left: auto;
 }
 
-.position-row__spec {
-  color: var(--theme-text-muted);
-  font-size: 0.8125rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* Área: grilla/lista + ficha lateral del vano enfocado. */
+.positions-area {
+  align-items: start;
+  display: grid;
+  gap: var(--space-16);
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 20rem);
+  margin-top: var(--space-12);
 }
 
-/* Mobile: the five-column row can't fit 390 px — stack it into a two-row
- * grid (thumb + identity, then specs/qty/status) instead of h-scrolling. */
-@media (max-width: 640px) {
-  .position-row {
-    grid-template-columns: 4rem 1fr;
-    row-gap: var(--space-6);
-  }
-
-  .position-row__thumb {
-    grid-row: span 3;
-    height: 5rem;
-    width: 4rem;
-  }
-
-  .position-row__spec,
-  .position-row__dims {
-    white-space: normal;
+@media (max-width: 1100px) {
+  .positions-area {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
-.position-row__qty-input {
-  max-width: 4.25rem;
-}
-
-.project-desk__side {
+.positions-side {
   background: var(--theme-surface-panel);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-lg);
@@ -1481,33 +1419,449 @@ p.handle-pending {
   top: var(--space-12);
 }
 
-.project-desk__hint {
+@media (max-width: 1100px) {
+  .positions-side {
+    max-height: none;
+    position: static;
+  }
+}
+
+.positions-side__hint {
   color: var(--theme-text-muted);
 }
 
-.position-detail__thumb .position-thumb,
-.position-detail__thumb .position-thumb-studio {
+.positions-side__thumb .position-thumb,
+.positions-side__thumb .position-thumb-studio {
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--r-1);
-  height: 12rem;
+  height: 11rem;
   object-fit: contain;
   width: 100%;
 }
 
-.position-detail .project-metadata {
+.positions-side__facts {
+  display: grid;
+  gap: var(--space-4) var(--space-12);
+  grid-template-columns: 1fr 1fr;
+  margin: var(--space-12) 0;
+}
+
+.positions-side__facts dt {
+  color: var(--theme-text-secondary);
+  font-size: var(--type-micro);
+}
+
+.positions-side__facts dd {
+  font-variant-numeric: tabular-nums;
+  min-width: 0;
+}
+
+.positions-side__issues {
+  border-left: 2px solid var(--warn-ink);
+  color: var(--warn-ink);
+  font-size: 0.8125rem;
+  list-style: none;
+  margin: 0 0 var(--space-8);
+  padding: 0 0 0 var(--space-8);
+}
+
+.positions-side__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
   margin: var(--space-8) 0 var(--space-12);
 }
 
-@media (max-width: 1100px) {
-  .project-desk {
-    grid-template-columns: minmax(0, 1fr);
-  }
+.positions-side__move {
+  display: inline-flex;
+  gap: var(--space-4);
+}
 
-  .project-facts,
-  .project-desk__side {
-    max-height: none;
-    position: static;
-  }
+/* Lista densa — una fila por vano, doce columnas reales (N.º/ubicación/
+   tipología/vano-fab/sistema/color/vidrio/cant./P.unitario/total/estado). */
+.position-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
+  /* La lista densa declara 62rem de columnas: bajo ~66rem de ancho útil se
+   * desplaza dentro de su propia área (precedente P15: scroll-x de tablas),
+   * nunca tapada por la ficha lateral ni cortando el documento. */
+  overflow-x: auto;
+  padding-bottom: var(--space-4);
+}
+
+.position-grid--dense {
+  gap: 0;
+}
+
+/* La grilla agrupa por piso/recinto/eje — el título del grupo manda sobre
+   la repetición visual de cada fila. */
+.position-group + .position-group {
+  margin-top: var(--space-8);
+}
+
+.position-group__title {
+  align-items: baseline;
+  display: flex;
+  font-size: 0.875rem;
+  gap: var(--space-8);
+  margin: 0 0 var(--space-6);
+}
+
+.position-group__count {
+  color: var(--theme-text-muted);
+  font-size: var(--type-micro);
+  font-weight: 400;
+}
+
+.position-line {
+  align-items: center;
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  cursor: pointer;
+  display: grid;
+  font-size: 0.8125rem;
+  gap: var(--space-8);
+  grid-template-columns:
+    1.25rem 4.25rem minmax(7rem, 1.1fr) minmax(5.5rem, 0.9fr) minmax(5.5rem, 0.9fr)
+    minmax(5rem, 0.9fr) minmax(6.5rem, 1fr) minmax(5.5rem, 0.9fr) 4.25rem minmax(5.5rem, 0.9fr)
+    minmax(5.5rem, 0.9fr) minmax(4.5rem, 0.8fr);
+  min-width: 62rem;
+  padding: var(--space-6) var(--space-8);
+  position: relative;
+}
+
+.position-line > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.position-line--head {
+  background: transparent;
+  border: 0;
+  color: var(--theme-text-muted);
+  cursor: default;
+  font-size: var(--type-micro);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding-bottom: var(--space-4);
+  text-transform: uppercase;
+}
+
+.position-line:hover {
+  border-color: var(--theme-accent);
+}
+
+.position-line--head:hover {
+  border-color: transparent;
+}
+
+.position-line[data-selected] {
+  border-color: var(--theme-accent);
+}
+
+.position-line[data-selected]::before {
+  background: var(--theme-accent);
+  content: "";
+  inset: 0 auto 0 0;
+  position: absolute;
+  width: 2px;
+}
+
+.position-line:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 1px;
+}
+
+.position-line__thumb {
+  background: var(--theme-bg-canvas);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-sm);
+  display: block;
+  height: 3rem;
+  overflow: hidden;
+  width: 4.25rem;
+}
+
+.position-line__thumb svg,
+.position-line__thumb .position-thumb,
+.position-line__thumb .position-thumb-host {
+  display: block;
+  height: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+
+.position-line__loc {
+  font-weight: 500;
+}
+
+.position-line__index {
+  color: var(--theme-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.position-line__dims {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.position-line__fab {
+  color: var(--theme-text-muted);
+  font-size: var(--type-micro);
+  white-space: nowrap;
+}
+
+.position-check {
+  align-items: center;
+  display: inline-flex;
+}
+
+/* F4 — la cota se edita en la fila: dos campos mm tabulados, el × es
+   separador literal (no un botón). */
+.position-dims {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.position-dims--edit {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--space-4);
+}
+
+.position-dims__input {
+  font-variant-numeric: tabular-nums;
+  max-width: 3.75rem;
+  padding: 1px var(--space-4);
+  text-align: end;
+}
+
+.position-dims.is-invalid .position-dims__input {
+  border-color: var(--warn-ink);
+}
+
+.position-dims__unit {
+  color: var(--theme-text-muted);
+  font-size: var(--type-micro);
+}
+
+.is-numeric {
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+/* Grilla — tarjetas con render real del vano (vista interior) para leer
+   el proyecto de un vistazo. */
+.position-cards {
+  display: grid;
+  gap: var(--space-8);
+  grid-template-columns: repeat(auto-fill, minmax(14.5rem, 1fr));
+}
+
+.position-card {
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  display: grid;
+  gap: var(--space-6);
+  padding: var(--space-8);
+  position: relative;
+}
+
+.position-card:hover {
+  border-color: var(--theme-accent);
+}
+
+.position-card[data-selected] {
+  border-color: var(--theme-accent);
+}
+
+.position-card[data-selected]::before {
+  background: var(--theme-accent);
+  content: "";
+  inset: 0 auto 0 0;
+  position: absolute;
+  width: 2px;
+}
+
+.position-card:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 1px;
+}
+
+.position-card__check {
+  left: var(--space-8);
+  position: absolute;
+  top: var(--space-8);
+}
+
+.position-card__check input {
+  background: var(--theme-surface-panel);
+}
+
+.position-card__estado {
+  position: absolute;
+  right: var(--space-8);
+  top: var(--space-8);
+}
+
+.position-card__thumb {
+  background: var(--theme-bg-canvas);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-sm);
+  height: 9.5rem;
+  overflow: hidden;
+}
+
+.position-card__thumb svg,
+.position-card__thumb .position-thumb,
+.position-card__thumb .position-thumb-host {
+  display: block;
+  height: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+
+.position-card__id {
+  align-items: baseline;
+  display: flex;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.position-card__index {
+  color: var(--theme-text-muted);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.position-card__loc {
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.position-card__dims {
+  color: var(--theme-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.position-card__spec {
+  color: var(--theme-text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  gap: var(--space-4);
+}
+
+.position-card__spec > span + span::before {
+  content: "· ";
+  margin-right: var(--space-4);
+}
+
+.position-card__row {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.position-card__price {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* Altas: quick-add con la biblioteca de tipologías real e importador. */
+.quick-add__form {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.quick-add__hint {
+  color: var(--theme-text-muted);
+  font-size: 0.8125rem;
+}
+
+.quick-add__error {
+  color: var(--warn-ink);
+}
+
+.positions-import__head {
+  align-items: center;
+  display: flex;
+  gap: var(--space-8);
+  margin-bottom: var(--space-8);
+}
+
+.positions-empty__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  justify-content: center;
+}
+
+.batch-form {
+  display: grid;
+  gap: var(--space-8);
+}
+
+/* Producción + documentos — filas de hecho, no widgets. */
+.project-orders,
+.project-artifacts {
+  display: grid;
+  gap: var(--space-6);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.project-order,
+.project-artifact {
+  align-items: center;
+  background: var(--theme-surface-panel);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12);
+}
+
+.project-order__code {
+  min-width: 9rem;
+}
+
+.project-order__progress {
+  font-variant-numeric: tabular-nums;
+}
+
+.project-order__next {
+  color: var(--theme-text-secondary);
+  margin-left: auto;
+}
+
+.project-artifact__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-artifact__meta {
+  color: var(--theme-text-muted);
+  font-size: 0.8125rem;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.position-row__qty-input {
+  max-width: 4.25rem;
 }
 
 .imports-evidence-toggle {
@@ -1542,7 +1896,8 @@ p.handle-pending {
   color: var(--warn-ink);
 }
 
-/* §03-C/F — project workspace header + commercial track */
+/* §03-C/F + P21 — header del hub: identidad (código+nombre, cliente,
+   obra), total con IVA + vigencia y UNA acción siguiente por estado. */
 .project-head {
   margin-bottom: var(--space-12);
 }
@@ -1554,8 +1909,48 @@ p.handle-pending {
   justify-content: space-between;
 }
 
-.project-head__row h1 {
+.project-head__identity {
+  min-width: 0;
+}
+
+.project-head__title {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+
+.project-head__name {
+  font-size: 1.25rem;
   margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.project-head__aside {
+  flex-shrink: 0;
+  text-align: end;
+}
+
+.project-head__total {
+  font-size: 1.375rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  margin: 0;
+}
+
+.project-head__iva {
+  color: var(--theme-text-secondary);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  margin: var(--space-4) 0 0;
+}
+
+.project-head__secondary {
+  align-items: center;
+  display: flex;
+  gap: var(--space-8);
+  margin-top: var(--space-8);
 }
 
 .projects-row__code {
@@ -1631,14 +2026,6 @@ p.handle-pending {
 
 .project-activity__empty {
   color: var(--theme-text-muted);
-}
-
-.project-head__code {
-  color: var(--theme-text-muted);
-  font-family: "IBM Plex Mono", "JetBrains Mono", monospace;
-  font-size: 0.75rem;
-  font-weight: 400;
-  white-space: nowrap;
 }
 
 .project-head__meta {

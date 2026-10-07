@@ -1,9 +1,9 @@
 ---
 type: state
 status: active
-updated: 2026-10-06
+updated: 2026-10-07
 volatility: high
-verified_ref: 26757d403f29f446b1f6a934690a636a0a82c575
+verified_ref: 1c2e07957566706057330a1423ee0926d099c638
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
@@ -504,3 +504,15 @@ PR sobre `integracion/v1` (branch `devin/ED2-pase-editorial-ola2`); encargo sin 
 - **Rutas auditadas**: `ux:capture` cubre `production-order`, `production-order-blocked` y `quotations`; `deliveries` se captura como manager (rol correcto).
 - Verificado: `make lint|typecheck|test|build` verdes (`PY=.venv/bin/python`; engine 714, backend 1301, frontend 692); capturas antes/después en `docs/redesign/captures/ed2/`; decisiones en sección ED2 de `valores-por-defecto.md`.
 - **Ronda de verificación UI** (grabación sobre fixture): corregidos `changesRequested` crudo (clave `quotations.state.changesRequested` + tono person), `REV-A` → `formatRevision` en cotizaciones/pipeline/tablero/precio/traza, y orden de cascada del bloque táctil OT (al final de `production.css`; el input «Buscar pieza» quedaba en 32 px). Re-capturas afectadas con 0 findings.
+
+## P21 hub del proyecto: centro de trabajo del estimador
+
+- `/projects/<id>` es ahora un hub de 8 pestañas (`ProjectHub.tsx`): Posiciones (predeterminada) · Servicios · Cotización · Precio · Cobranza · Producción · Documentos · Actividad. Los paneles de la ola 2 (`ProjectQuotationPanel` P08, cobranza P11, precio P07, servicios D06, documentos, actividad) se montan como pestañas sin reescribirse; la pila de acordeones anterior se eliminó completa. `?tab=<id>` es canónico; `?section=quote|services|payments|imports|compare` sigue resolviendo vía `SECTION_TO_TAB` para enlaces antiguos de «Hoy»/campana.
+- Encabezado: código+ nombre, cliente enlazado, obra/dirección, stepper del ciclo comercial, total con IVA + vigencia, y UNA acción siguiente por estado (`projectNextAction`: borrador → añadir/cotizar/emitir; cotizado → compartir o «esperando respuesta» si el enlace sigue vivo; aprobado → abono/saldo/liberar según rol; en producción → ir a producción). Roles sin permiso ven encabezado honesto sin CTA muerto.
+- Posiciones (`ProjectPositionsTab.tsx`): grilla con render real del producto (thumbnail del canvas) o lista densa de 12 columnas (`?vista=`), agrupación `?grupo=ubicacion|tipologia|sistema` con contador plural-real, columna Estado derivada (`positionStatusKey`: borrador→evaluada→con precio→congelada→en producción — nunca columna nueva), columna «falta» honesta vía `positionIssues`.
+- Edición en fila: medidas ancho×alto por posición (Enter/blur confirma, Escape revierte) vía `set_total_width`/`set_height` sobre el árbol paramétrico + PUT con candado optimista; cantidad igual. Tipologías no decodificables declaran la limitación.
+- Lote: checkbox/roving-tabindex → barra con Duplicar, Cambiar ubicación, Cambiar cantidad, Cambios globales (§8 con preview Δ costo del motor y deshacer), Eliminar — cada acción muestra progreso `done/total`.
+- Reorden: nuevo `POST /api/v1/positions/<id>/move/` `{to_index, expected_updated_at}` porque `position_index` no es escribible por PUT; UI = `Alt+↑/↓` o botones Subir/Bajar en la lista sin agrupar. Sin arrastrar-y-soltar (el orden es folio impreso).
+- Pestañas perezosas: los paneles se montan al primer uso y quedan montados ocultos — tests/e2e navegan con `role="tab"` clic.
+- Backend nuevo cubierto por pgTAP/RLS + tests de integración del move (permiso, orden, candado); la ruta entra en el allowlist de `test_openapi.py`.
+- Verificado: `make lint|typecheck|test|build|test-db` (`PY=.venv/bin/python`); e2e auth+projects verde contra stack real; ux:capture 48 tomas 0 hallazgos; capturas `docs/redesign/captures/p21-proyecto-hub/`; decisiones en sección P21 de `valores-por-defecto.md`.
