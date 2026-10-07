@@ -3,7 +3,7 @@ type: state
 status: active
 updated: 2026-10-07
 volatility: high
-verified_ref: bd5b8f126952f599b7c63705feb3d4f2d81e2770
+verified_ref: ad31bf73a47afc3e8ad5ee5f15558cae58c4ca27
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
@@ -39,6 +39,7 @@ sources:
   - P22 clientes ajustes PR https://github.com/KaraAliOsman/dekopen/pull/61
   - D08 tipologías avanzadas PR https://github.com/KaraAliOsman/dekopen/pull/65
   - P10 portal propuesta PR https://github.com/KaraAliOsman/dekopen/pull/64
+  - P18 térmico OGUC PR https://github.com/KaraAliOsman/dekopen/pull/69
   - P18 térmico OGUC branch devin/P18-termico-normativa
   - P15 compras/inventario branch devin/P15-compras-inventario
   - P08 emisión/cotización branch devin/P08-cotizacion-emision
@@ -576,3 +577,13 @@ PR sobre `integracion/v1` (branch `devin/P22-clientes-ajustes`): la configuraci�
 - **Vista previa documental**: `render_document_html(..., embed_fonts=True)` embebe los Plex TTF como `data:` solo en el HTML de pantalla — el `<iframe>` no puede leer `file://` del servidor; el PDF sellado sigue con `_url_fetcher` congelado. Mismo patrón en `org_settings.document_preview` (`_CSS_EMBEDDED`).
 - **Migración** `20270220000000_p22_clientes_ajustes.sql` + pgTAP `183` (27 asserts); guard `to_regclass('auth.users')` en el backfill DO para pg vainilla.
 - Verificado: `make lint|typecheck|test|build|test-db` verdes (`PY=.venv/bin/python`); pgTAP 1162, integración 281, e2e 27/27, pg16 vainilla limpio, vitest 692; ux:capture 72 shots 0 hallazgos (corregidos enums crudos en estaciones, `file://` de fuentes en preview, overflow del stepper); capturas en `docs/redesign/captures/p22-clientes-ajustes/`; decisiones en sección P22 de `valores-por-defecto.md`.
+
+## P18 desempeño térmico y normativa chilena (OGUC 4.1.10) state
+
+Merged into `integracion/v1` as squash `ad31bf73a47afc3e8ad5ee5f15558cae58c4ca27` (dekopen PR #69):
+
+Detalle completo en `docs/wiki/log.md` — entrada «[2026-10-07] P18 | desempeño térmico y normativa chilena: Uw, aire y zona térmica (OGUC 4.1.10)».
+
+- Uw por ISO 10077-1 en motor puro (`dekopen_engine/thermal.py`) con `UNKNOWN` + faltantes declarados; clases aire/agua/viento con informe de ensayo y alcance (`TEST_SCOPE_EXCEEDED`); zona térmica A–I + orientación por posición; veredicto por proyecto — sin datos certificados no hay afirmación (VERIFIED puede «Cumple», DECLARED incumplido «No cumple», DEMO nunca veredicta).
+- `GET /projects/<id>/thermal/` + `GET /positions/<id>/thermal-alternatives/` (§8: alternativa conforme más barata con Δ de precio real, «Sin dato» si `pricing_rules` no es legible por el rol — defecto RLS hallado y corregido vía e2e); tab Térmico en proyecto + ficha por posición con traza F6; tab Desempeño térmico en catálogo; anexo DOC-01 solo VERIFIED.
+- Migración `20270219000000` (renombrada por colisión con D08): `glazing_spacers`, `system_frame_uf`, `system_performance_tests`, `projects.thermal_zone/thermal_use/thermal_wall_areas`, `project_positions.thermal_orientation` — todas con `data_provenance` + sello técnico bajo guard P16. pgTAP 1211, integración 290, e2e 37/37.

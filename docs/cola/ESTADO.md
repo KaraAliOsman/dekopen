@@ -36,6 +36,6 @@
 | P23 | 3 | pendiente |  |  |  |
 | D08 | 3 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/65 | 773342c6278c2f06ef47a9d74bc9fb662736d4bc | CI 6/6 verde; squash mergeado. 6 tipologías avanzadas (HST/PSK/plegable/pivotante/guillotina/puerta corredera) con slice vertical completo, gating por catálogo con §8 "La admiten:", contrato typology_incompatible 400 revivido, bug sliding_layout de starters corregido. |
 | P19 | 3 | pendiente |  |  |  |
-| P18 | 3 | pendiente |  |  |  |
+| P18 | 3 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/69 | ad31bf73a47afc3e8ad5ee5f15558cae58c4ca27 | CI 6/6 verde; squash mergeado. Uw ISO 10077-1 con UNKNOWN+faltantes, clases aire/agua/viento con informe+alcance, zona térmica A-I+orientación, veredicto honesto por autoridad, §8 alternativa conforme con Δ real, tab Térmico+ficha posición+traza F6, anexo DOC-01 solo VERIFIED. Bug RLS pricing_rules corregido. |
 | P24 | 4 | pendiente |  |  |  |
 | P20 | 5 | pendiente |  |  |  |
