@@ -44,3 +44,10 @@ No se capturó: el cambio es aditivo (el grupo "Avanzadas" no existía en la bas
 
 - `despues/shots/`: arnés `ux:capture` (Playwright + storageState del fixture) con stack local levantado.
 - `despues/manual/`: sesión interactiva en el navegador de la VM (Chrome, login ESTIMATOR real), viewports fijados con `wmctrl`; tema oscuro vía `localStorage["dekopen.theme"]`.
+
+## Delta post-rebase (P21+P22 mergeados)
+
+- `rebase-biblioteca-bloqueadas-la-admiten.png` — bloqueadas bajo DEMO_60 con "La admiten" nombrando series reales.
+- `rebase-avanzadas-admitidas-elevation90.png` — grupo Avanzadas admitido bajo DEMO_ELEVACION_90.
+- `rebase-hst-evaluado-ok.png` — starter HST evalúa "Geometría válida" (regresión sliding_layout sigue corregida).
+- `rebase-biblioteca-1024x768-claro.png` — sin scroll horizontal ni cortes a 1024 claro (shell post-P21: hamburguesa + rail Inspector).

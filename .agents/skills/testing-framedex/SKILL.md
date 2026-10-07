@@ -821,3 +821,15 @@ Devin Secrets needed: none (all keys come from `supabase status` / .fixture-stat
 - **To capture the request the UI sends**, patch `window.fetch` AFTER load
   (navigation drops the patch); for a fresh JWT read `access_token` out of
   the logged-in tab's localStorage instead of re-logging (tokens ~1h).
+- **Full stack restart after container loss**: `supabase stop`/docker
+  prune drops the named volumes — `supabase start` recreates
+  schema+seed but `auth.users` is empty and stored sessions die.
+  Recovery: `supabase start` (never `db reset` mid-session) →
+  `SUPABASE_SERVICE_ROLE_KEY=$SERVICE_KEY python scripts/dev_fixture.py`
+  → re-login via magic-link. Fixture IDs are NOT stable across runs —
+  re-read `.fixture-state.json` (e.g. `projects.borrador.id`), never
+  trust IDs from earlier sessions.
+- **Post-P21 shell**: `/projects/<id>/positions/new?system=<uuid>`
+  unchanged; below ~1100 CSS px the left nav collapses to a hamburger
+  and the inspector hides behind an "Inspector" rail button; the library
+  flyout is "Biblioteca de diseños" (same `B`).
