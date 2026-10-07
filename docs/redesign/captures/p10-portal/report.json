@@ -1,0 +1,810 @@
+{
+  "summary": {
+    "generated_at": "2026-10-07T11:04:52.540Z",
+    "routes": 80,
+    "routes_with_findings": [],
+    "total_findings": 0
+  },
+  "results": [
+    {
+      "route": "portal-vigente",
+      "url": "/cotizacion/yqal_tgBHQrQd9Q3vcMkDklnVpv25lp6fWzXAIyRqps",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/portal-vigente--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/yqal_tgBHQrQd9Q3vcMkDklnVpv25lp6fWzXAIyRqps"
+    },
+    {
+      "route": "portal-vigente",
+      "url": "/cotizacion/yqal_tgBHQrQd9Q3vcMkDklnVpv25lp6fWzXAIyRqps",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/portal-vigente--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/yqal_tgBHQrQd9Q3vcMkDklnVpv25lp6fWzXAIyRqps"
+    },
+    {
+      "route": "portal-vigente",
+      "url": "/cotizacion/yqal_tgBHQrQd9Q3vcMkDklnVpv25lp6fWzXAIyRqps",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/portal-vigente--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/yqal_tgBHQrQd9Q3vcMkDklnVpv25lp6fWzXAIyRqps"
+    },
+    {
+      "route": "portal-vigente",
+      "url": "/cotizacion/yqal_tgBHQrQd9Q3vcMkDklnVpv25lp6fWzXAIyRqps",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/portal-vigente--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/yqal_tgBHQrQd9Q3vcMkDklnVpv25lp6fWzXAIyRqps"
+    },
+    {
+      "route": "portal-vigente",
+      "url": "/cotizacion/yqal_tgBHQrQd9Q3vcMkDklnVpv25lp6fWzXAIyRqps",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/portal-vigente--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/yqal_tgBHQrQd9Q3vcMkDklnVpv25lp6fWzXAIyRqps"
+    },
+    {
+      "route": "portal-vigente",
+      "url": "/cotizacion/yqal_tgBHQrQd9Q3vcMkDklnVpv25lp6fWzXAIyRqps",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/portal-vigente--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/yqal_tgBHQrQd9Q3vcMkDklnVpv25lp6fWzXAIyRqps"
+    },
+    {
+      "route": "portal-vigente",
+      "url": "/cotizacion/yqal_tgBHQrQd9Q3vcMkDklnVpv25lp6fWzXAIyRqps",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/portal-vigente--390x844--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/yqal_tgBHQrQd9Q3vcMkDklnVpv25lp6fWzXAIyRqps"
+    },
+    {
+      "route": "portal-vigente",
+      "url": "/cotizacion/yqal_tgBHQrQd9Q3vcMkDklnVpv25lp6fWzXAIyRqps",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/portal-vigente--390x844--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/yqal_tgBHQrQd9Q3vcMkDklnVpv25lp6fWzXAIyRqps"
+    },
+    {
+      "route": "portal-aprobada",
+      "url": "/cotizacion/2bCj6db1FngvnBQaQpBOO8OItJN2T4tBZTEIBiw9o0Q",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/portal-aprobada--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/2bCj6db1FngvnBQaQpBOO8OItJN2T4tBZTEIBiw9o0Q"
+    },
+    {
+      "route": "portal-aprobada",
+      "url": "/cotizacion/2bCj6db1FngvnBQaQpBOO8OItJN2T4tBZTEIBiw9o0Q",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/portal-aprobada--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/2bCj6db1FngvnBQaQpBOO8OItJN2T4tBZTEIBiw9o0Q"
+    },
+    {
+      "route": "portal-aprobada",
+      "url": "/cotizacion/2bCj6db1FngvnBQaQpBOO8OItJN2T4tBZTEIBiw9o0Q",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/portal-aprobada--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/2bCj6db1FngvnBQaQpBOO8OItJN2T4tBZTEIBiw9o0Q"
+    },
+    {
+      "route": "portal-aprobada",
+      "url": "/cotizacion/2bCj6db1FngvnBQaQpBOO8OItJN2T4tBZTEIBiw9o0Q",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/portal-aprobada--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/2bCj6db1FngvnBQaQpBOO8OItJN2T4tBZTEIBiw9o0Q"
+    },
+    {
+      "route": "portal-aprobada",
+      "url": "/cotizacion/2bCj6db1FngvnBQaQpBOO8OItJN2T4tBZTEIBiw9o0Q",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/portal-aprobada--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/2bCj6db1FngvnBQaQpBOO8OItJN2T4tBZTEIBiw9o0Q"
+    },
+    {
+      "route": "portal-aprobada",
+      "url": "/cotizacion/2bCj6db1FngvnBQaQpBOO8OItJN2T4tBZTEIBiw9o0Q",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/portal-aprobada--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/2bCj6db1FngvnBQaQpBOO8OItJN2T4tBZTEIBiw9o0Q"
+    },
+    {
+      "route": "portal-aprobada",
+      "url": "/cotizacion/2bCj6db1FngvnBQaQpBOO8OItJN2T4tBZTEIBiw9o0Q",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/portal-aprobada--390x844--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/2bCj6db1FngvnBQaQpBOO8OItJN2T4tBZTEIBiw9o0Q"
+    },
+    {
+      "route": "portal-aprobada",
+      "url": "/cotizacion/2bCj6db1FngvnBQaQpBOO8OItJN2T4tBZTEIBiw9o0Q",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/portal-aprobada--390x844--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/2bCj6db1FngvnBQaQpBOO8OItJN2T4tBZTEIBiw9o0Q"
+    },
+    {
+      "route": "portal-revocada",
+      "url": "/cotizacion/ZbxhQ8EgVJIoNc2_tQdRX7kzns5wA8T8_RHyDag0Jvo",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/portal-revocada--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/ZbxhQ8EgVJIoNc2_tQdRX7kzns5wA8T8_RHyDag0Jvo"
+    },
+    {
+      "route": "portal-revocada",
+      "url": "/cotizacion/ZbxhQ8EgVJIoNc2_tQdRX7kzns5wA8T8_RHyDag0Jvo",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/portal-revocada--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/ZbxhQ8EgVJIoNc2_tQdRX7kzns5wA8T8_RHyDag0Jvo"
+    },
+    {
+      "route": "portal-revocada",
+      "url": "/cotizacion/ZbxhQ8EgVJIoNc2_tQdRX7kzns5wA8T8_RHyDag0Jvo",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/portal-revocada--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/ZbxhQ8EgVJIoNc2_tQdRX7kzns5wA8T8_RHyDag0Jvo"
+    },
+    {
+      "route": "portal-revocada",
+      "url": "/cotizacion/ZbxhQ8EgVJIoNc2_tQdRX7kzns5wA8T8_RHyDag0Jvo",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/portal-revocada--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/ZbxhQ8EgVJIoNc2_tQdRX7kzns5wA8T8_RHyDag0Jvo"
+    },
+    {
+      "route": "portal-revocada",
+      "url": "/cotizacion/ZbxhQ8EgVJIoNc2_tQdRX7kzns5wA8T8_RHyDag0Jvo",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/portal-revocada--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/ZbxhQ8EgVJIoNc2_tQdRX7kzns5wA8T8_RHyDag0Jvo"
+    },
+    {
+      "route": "portal-revocada",
+      "url": "/cotizacion/ZbxhQ8EgVJIoNc2_tQdRX7kzns5wA8T8_RHyDag0Jvo",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/portal-revocada--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/ZbxhQ8EgVJIoNc2_tQdRX7kzns5wA8T8_RHyDag0Jvo"
+    },
+    {
+      "route": "portal-revocada",
+      "url": "/cotizacion/ZbxhQ8EgVJIoNc2_tQdRX7kzns5wA8T8_RHyDag0Jvo",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/portal-revocada--390x844--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/ZbxhQ8EgVJIoNc2_tQdRX7kzns5wA8T8_RHyDag0Jvo"
+    },
+    {
+      "route": "portal-revocada",
+      "url": "/cotizacion/ZbxhQ8EgVJIoNc2_tQdRX7kzns5wA8T8_RHyDag0Jvo",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/portal-revocada--390x844--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/ZbxhQ8EgVJIoNc2_tQdRX7kzns5wA8T8_RHyDag0Jvo"
+    },
+    {
+      "route": "portal-expirada",
+      "url": "/cotizacion/h7ifx0LJlUeJlOL3dO1mo5BIaTRe6dkTKmE3O0cOVLg",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/portal-expirada--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/h7ifx0LJlUeJlOL3dO1mo5BIaTRe6dkTKmE3O0cOVLg"
+    },
+    {
+      "route": "portal-expirada",
+      "url": "/cotizacion/h7ifx0LJlUeJlOL3dO1mo5BIaTRe6dkTKmE3O0cOVLg",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/portal-expirada--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/h7ifx0LJlUeJlOL3dO1mo5BIaTRe6dkTKmE3O0cOVLg"
+    },
+    {
+      "route": "portal-expirada",
+      "url": "/cotizacion/h7ifx0LJlUeJlOL3dO1mo5BIaTRe6dkTKmE3O0cOVLg",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/portal-expirada--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/h7ifx0LJlUeJlOL3dO1mo5BIaTRe6dkTKmE3O0cOVLg"
+    },
+    {
+      "route": "portal-expirada",
+      "url": "/cotizacion/h7ifx0LJlUeJlOL3dO1mo5BIaTRe6dkTKmE3O0cOVLg",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/portal-expirada--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/h7ifx0LJlUeJlOL3dO1mo5BIaTRe6dkTKmE3O0cOVLg"
+    },
+    {
+      "route": "portal-expirada",
+      "url": "/cotizacion/h7ifx0LJlUeJlOL3dO1mo5BIaTRe6dkTKmE3O0cOVLg",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/portal-expirada--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/h7ifx0LJlUeJlOL3dO1mo5BIaTRe6dkTKmE3O0cOVLg"
+    },
+    {
+      "route": "portal-expirada",
+      "url": "/cotizacion/h7ifx0LJlUeJlOL3dO1mo5BIaTRe6dkTKmE3O0cOVLg",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/portal-expirada--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/h7ifx0LJlUeJlOL3dO1mo5BIaTRe6dkTKmE3O0cOVLg"
+    },
+    {
+      "route": "portal-expirada",
+      "url": "/cotizacion/h7ifx0LJlUeJlOL3dO1mo5BIaTRe6dkTKmE3O0cOVLg",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/portal-expirada--390x844--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/h7ifx0LJlUeJlOL3dO1mo5BIaTRe6dkTKmE3O0cOVLg"
+    },
+    {
+      "route": "portal-expirada",
+      "url": "/cotizacion/h7ifx0LJlUeJlOL3dO1mo5BIaTRe6dkTKmE3O0cOVLg",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/portal-expirada--390x844--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/h7ifx0LJlUeJlOL3dO1mo5BIaTRe6dkTKmE3O0cOVLg"
+    },
+    {
+      "route": "portal-reemplazada",
+      "url": "/cotizacion/U7TCjRznSQd09Vtkof5EybKc8G5-xTw_GXtoEoctV7I",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/portal-reemplazada--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/U7TCjRznSQd09Vtkof5EybKc8G5-xTw_GXtoEoctV7I"
+    },
+    {
+      "route": "portal-reemplazada",
+      "url": "/cotizacion/U7TCjRznSQd09Vtkof5EybKc8G5-xTw_GXtoEoctV7I",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/portal-reemplazada--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/U7TCjRznSQd09Vtkof5EybKc8G5-xTw_GXtoEoctV7I"
+    },
+    {
+      "route": "portal-reemplazada",
+      "url": "/cotizacion/U7TCjRznSQd09Vtkof5EybKc8G5-xTw_GXtoEoctV7I",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/portal-reemplazada--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/U7TCjRznSQd09Vtkof5EybKc8G5-xTw_GXtoEoctV7I"
+    },
+    {
+      "route": "portal-reemplazada",
+      "url": "/cotizacion/U7TCjRznSQd09Vtkof5EybKc8G5-xTw_GXtoEoctV7I",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/portal-reemplazada--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/U7TCjRznSQd09Vtkof5EybKc8G5-xTw_GXtoEoctV7I"
+    },
+    {
+      "route": "portal-reemplazada",
+      "url": "/cotizacion/U7TCjRznSQd09Vtkof5EybKc8G5-xTw_GXtoEoctV7I",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/portal-reemplazada--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/U7TCjRznSQd09Vtkof5EybKc8G5-xTw_GXtoEoctV7I"
+    },
+    {
+      "route": "portal-reemplazada",
+      "url": "/cotizacion/U7TCjRznSQd09Vtkof5EybKc8G5-xTw_GXtoEoctV7I",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/portal-reemplazada--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/U7TCjRznSQd09Vtkof5EybKc8G5-xTw_GXtoEoctV7I"
+    },
+    {
+      "route": "portal-reemplazada",
+      "url": "/cotizacion/U7TCjRznSQd09Vtkof5EybKc8G5-xTw_GXtoEoctV7I",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/portal-reemplazada--390x844--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/U7TCjRznSQd09Vtkof5EybKc8G5-xTw_GXtoEoctV7I"
+    },
+    {
+      "route": "portal-reemplazada",
+      "url": "/cotizacion/U7TCjRznSQd09Vtkof5EybKc8G5-xTw_GXtoEoctV7I",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/portal-reemplazada--390x844--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/U7TCjRznSQd09Vtkof5EybKc8G5-xTw_GXtoEoctV7I"
+    },
+    {
+      "route": "portal-rechazada",
+      "url": "/cotizacion/qzKuVUcr5gjsSlA9iBbGWiMA1lxzff3sXURIVynSAFs",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/portal-rechazada--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/qzKuVUcr5gjsSlA9iBbGWiMA1lxzff3sXURIVynSAFs"
+    },
+    {
+      "route": "portal-rechazada",
+      "url": "/cotizacion/qzKuVUcr5gjsSlA9iBbGWiMA1lxzff3sXURIVynSAFs",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/portal-rechazada--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/qzKuVUcr5gjsSlA9iBbGWiMA1lxzff3sXURIVynSAFs"
+    },
+    {
+      "route": "portal-rechazada",
+      "url": "/cotizacion/qzKuVUcr5gjsSlA9iBbGWiMA1lxzff3sXURIVynSAFs",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/portal-rechazada--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/qzKuVUcr5gjsSlA9iBbGWiMA1lxzff3sXURIVynSAFs"
+    },
+    {
+      "route": "portal-rechazada",
+      "url": "/cotizacion/qzKuVUcr5gjsSlA9iBbGWiMA1lxzff3sXURIVynSAFs",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/portal-rechazada--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/qzKuVUcr5gjsSlA9iBbGWiMA1lxzff3sXURIVynSAFs"
+    },
+    {
+      "route": "portal-rechazada",
+      "url": "/cotizacion/qzKuVUcr5gjsSlA9iBbGWiMA1lxzff3sXURIVynSAFs",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/portal-rechazada--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/qzKuVUcr5gjsSlA9iBbGWiMA1lxzff3sXURIVynSAFs"
+    },
+    {
+      "route": "portal-rechazada",
+      "url": "/cotizacion/qzKuVUcr5gjsSlA9iBbGWiMA1lxzff3sXURIVynSAFs",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/portal-rechazada--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/qzKuVUcr5gjsSlA9iBbGWiMA1lxzff3sXURIVynSAFs"
+    },
+    {
+      "route": "portal-rechazada",
+      "url": "/cotizacion/qzKuVUcr5gjsSlA9iBbGWiMA1lxzff3sXURIVynSAFs",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/portal-rechazada--390x844--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/qzKuVUcr5gjsSlA9iBbGWiMA1lxzff3sXURIVynSAFs"
+    },
+    {
+      "route": "portal-rechazada",
+      "url": "/cotizacion/qzKuVUcr5gjsSlA9iBbGWiMA1lxzff3sXURIVynSAFs",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/portal-rechazada--390x844--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/qzKuVUcr5gjsSlA9iBbGWiMA1lxzff3sXURIVynSAFs"
+    },
+    {
+      "route": "portal-cambios",
+      "url": "/cotizacion/l-RGwDwD-RKNk1lHo-LHpRDMix9q6zDobs6icWDU6V4",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/portal-cambios--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/l-RGwDwD-RKNk1lHo-LHpRDMix9q6zDobs6icWDU6V4"
+    },
+    {
+      "route": "portal-cambios",
+      "url": "/cotizacion/l-RGwDwD-RKNk1lHo-LHpRDMix9q6zDobs6icWDU6V4",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/portal-cambios--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/l-RGwDwD-RKNk1lHo-LHpRDMix9q6zDobs6icWDU6V4"
+    },
+    {
+      "route": "portal-cambios",
+      "url": "/cotizacion/l-RGwDwD-RKNk1lHo-LHpRDMix9q6zDobs6icWDU6V4",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/portal-cambios--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/l-RGwDwD-RKNk1lHo-LHpRDMix9q6zDobs6icWDU6V4"
+    },
+    {
+      "route": "portal-cambios",
+      "url": "/cotizacion/l-RGwDwD-RKNk1lHo-LHpRDMix9q6zDobs6icWDU6V4",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/portal-cambios--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/l-RGwDwD-RKNk1lHo-LHpRDMix9q6zDobs6icWDU6V4"
+    },
+    {
+      "route": "portal-cambios",
+      "url": "/cotizacion/l-RGwDwD-RKNk1lHo-LHpRDMix9q6zDobs6icWDU6V4",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/portal-cambios--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/l-RGwDwD-RKNk1lHo-LHpRDMix9q6zDobs6icWDU6V4"
+    },
+    {
+      "route": "portal-cambios",
+      "url": "/cotizacion/l-RGwDwD-RKNk1lHo-LHpRDMix9q6zDobs6icWDU6V4",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/portal-cambios--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/l-RGwDwD-RKNk1lHo-LHpRDMix9q6zDobs6icWDU6V4"
+    },
+    {
+      "route": "portal-cambios",
+      "url": "/cotizacion/l-RGwDwD-RKNk1lHo-LHpRDMix9q6zDobs6icWDU6V4",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/portal-cambios--390x844--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/l-RGwDwD-RKNk1lHo-LHpRDMix9q6zDobs6icWDU6V4"
+    },
+    {
+      "route": "portal-cambios",
+      "url": "/cotizacion/l-RGwDwD-RKNk1lHo-LHpRDMix9q6zDobs6icWDU6V4",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/portal-cambios--390x844--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/l-RGwDwD-RKNk1lHo-LHpRDMix9q6zDobs6icWDU6V4"
+    },
+    {
+      "route": "portal-parcial",
+      "url": "/cotizacion/Sqe2Y0eUVQzkgWdbB7FMOCaYxiD0UNdvakzHMy15Aq4",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/portal-parcial--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/Sqe2Y0eUVQzkgWdbB7FMOCaYxiD0UNdvakzHMy15Aq4"
+    },
+    {
+      "route": "portal-parcial",
+      "url": "/cotizacion/Sqe2Y0eUVQzkgWdbB7FMOCaYxiD0UNdvakzHMy15Aq4",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/portal-parcial--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/Sqe2Y0eUVQzkgWdbB7FMOCaYxiD0UNdvakzHMy15Aq4"
+    },
+    {
+      "route": "portal-parcial",
+      "url": "/cotizacion/Sqe2Y0eUVQzkgWdbB7FMOCaYxiD0UNdvakzHMy15Aq4",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/portal-parcial--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/Sqe2Y0eUVQzkgWdbB7FMOCaYxiD0UNdvakzHMy15Aq4"
+    },
+    {
+      "route": "portal-parcial",
+      "url": "/cotizacion/Sqe2Y0eUVQzkgWdbB7FMOCaYxiD0UNdvakzHMy15Aq4",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/portal-parcial--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/Sqe2Y0eUVQzkgWdbB7FMOCaYxiD0UNdvakzHMy15Aq4"
+    },
+    {
+      "route": "portal-parcial",
+      "url": "/cotizacion/Sqe2Y0eUVQzkgWdbB7FMOCaYxiD0UNdvakzHMy15Aq4",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/portal-parcial--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/Sqe2Y0eUVQzkgWdbB7FMOCaYxiD0UNdvakzHMy15Aq4"
+    },
+    {
+      "route": "portal-parcial",
+      "url": "/cotizacion/Sqe2Y0eUVQzkgWdbB7FMOCaYxiD0UNdvakzHMy15Aq4",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/portal-parcial--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/Sqe2Y0eUVQzkgWdbB7FMOCaYxiD0UNdvakzHMy15Aq4"
+    },
+    {
+      "route": "portal-parcial",
+      "url": "/cotizacion/Sqe2Y0eUVQzkgWdbB7FMOCaYxiD0UNdvakzHMy15Aq4",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/portal-parcial--390x844--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/Sqe2Y0eUVQzkgWdbB7FMOCaYxiD0UNdvakzHMy15Aq4"
+    },
+    {
+      "route": "portal-parcial",
+      "url": "/cotizacion/Sqe2Y0eUVQzkgWdbB7FMOCaYxiD0UNdvakzHMy15Aq4",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/portal-parcial--390x844--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/Sqe2Y0eUVQzkgWdbB7FMOCaYxiD0UNdvakzHMy15Aq4"
+    },
+    {
+      "route": "portal-usd",
+      "url": "/cotizacion/aunBqgoH0FFIGQW3TZeSHAftpNgAe1298zhYwfdUP6c",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/portal-usd--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/aunBqgoH0FFIGQW3TZeSHAftpNgAe1298zhYwfdUP6c"
+    },
+    {
+      "route": "portal-usd",
+      "url": "/cotizacion/aunBqgoH0FFIGQW3TZeSHAftpNgAe1298zhYwfdUP6c",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/portal-usd--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/aunBqgoH0FFIGQW3TZeSHAftpNgAe1298zhYwfdUP6c"
+    },
+    {
+      "route": "portal-usd",
+      "url": "/cotizacion/aunBqgoH0FFIGQW3TZeSHAftpNgAe1298zhYwfdUP6c",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/portal-usd--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/aunBqgoH0FFIGQW3TZeSHAftpNgAe1298zhYwfdUP6c"
+    },
+    {
+      "route": "portal-usd",
+      "url": "/cotizacion/aunBqgoH0FFIGQW3TZeSHAftpNgAe1298zhYwfdUP6c",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/portal-usd--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/aunBqgoH0FFIGQW3TZeSHAftpNgAe1298zhYwfdUP6c"
+    },
+    {
+      "route": "portal-usd",
+      "url": "/cotizacion/aunBqgoH0FFIGQW3TZeSHAftpNgAe1298zhYwfdUP6c",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/portal-usd--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/aunBqgoH0FFIGQW3TZeSHAftpNgAe1298zhYwfdUP6c"
+    },
+    {
+      "route": "portal-usd",
+      "url": "/cotizacion/aunBqgoH0FFIGQW3TZeSHAftpNgAe1298zhYwfdUP6c",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/portal-usd--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/aunBqgoH0FFIGQW3TZeSHAftpNgAe1298zhYwfdUP6c"
+    },
+    {
+      "route": "portal-usd",
+      "url": "/cotizacion/aunBqgoH0FFIGQW3TZeSHAftpNgAe1298zhYwfdUP6c",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/portal-usd--390x844--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/aunBqgoH0FFIGQW3TZeSHAftpNgAe1298zhYwfdUP6c"
+    },
+    {
+      "route": "portal-usd",
+      "url": "/cotizacion/aunBqgoH0FFIGQW3TZeSHAftpNgAe1298zhYwfdUP6c",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/portal-usd--390x844--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/aunBqgoH0FFIGQW3TZeSHAftpNgAe1298zhYwfdUP6c"
+    },
+    {
+      "route": "portal-vitrina",
+      "url": "/cotizacion/uWiqeD9iuRbg3LrEqBLeBSC7kjnTPDBWTmhdbt9M4vI",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/portal-vitrina--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/uWiqeD9iuRbg3LrEqBLeBSC7kjnTPDBWTmhdbt9M4vI"
+    },
+    {
+      "route": "portal-vitrina",
+      "url": "/cotizacion/uWiqeD9iuRbg3LrEqBLeBSC7kjnTPDBWTmhdbt9M4vI",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/portal-vitrina--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/uWiqeD9iuRbg3LrEqBLeBSC7kjnTPDBWTmhdbt9M4vI"
+    },
+    {
+      "route": "portal-vitrina",
+      "url": "/cotizacion/uWiqeD9iuRbg3LrEqBLeBSC7kjnTPDBWTmhdbt9M4vI",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/portal-vitrina--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/uWiqeD9iuRbg3LrEqBLeBSC7kjnTPDBWTmhdbt9M4vI"
+    },
+    {
+      "route": "portal-vitrina",
+      "url": "/cotizacion/uWiqeD9iuRbg3LrEqBLeBSC7kjnTPDBWTmhdbt9M4vI",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/portal-vitrina--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/uWiqeD9iuRbg3LrEqBLeBSC7kjnTPDBWTmhdbt9M4vI"
+    },
+    {
+      "route": "portal-vitrina",
+      "url": "/cotizacion/uWiqeD9iuRbg3LrEqBLeBSC7kjnTPDBWTmhdbt9M4vI",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/portal-vitrina--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/uWiqeD9iuRbg3LrEqBLeBSC7kjnTPDBWTmhdbt9M4vI"
+    },
+    {
+      "route": "portal-vitrina",
+      "url": "/cotizacion/uWiqeD9iuRbg3LrEqBLeBSC7kjnTPDBWTmhdbt9M4vI",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/portal-vitrina--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/uWiqeD9iuRbg3LrEqBLeBSC7kjnTPDBWTmhdbt9M4vI"
+    },
+    {
+      "route": "portal-vitrina",
+      "url": "/cotizacion/uWiqeD9iuRbg3LrEqBLeBSC7kjnTPDBWTmhdbt9M4vI",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/portal-vitrina--390x844--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/uWiqeD9iuRbg3LrEqBLeBSC7kjnTPDBWTmhdbt9M4vI"
+    },
+    {
+      "route": "portal-vitrina",
+      "url": "/cotizacion/uWiqeD9iuRbg3LrEqBLeBSC7kjnTPDBWTmhdbt9M4vI",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/portal-vitrina--390x844--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/uWiqeD9iuRbg3LrEqBLeBSC7kjnTPDBWTmhdbt9M4vI"
+    }
+  ]
+}

@@ -5,6 +5,7 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { DecisionEvent } from "./decisionEvent";
 
 export interface ApprovalRecord {
   id: string;
@@ -17,6 +18,7 @@ export interface ApprovalRecord {
   decided_at: string | null;
   /** @nullable */
   decided_note: string | null;
+  evidence?: DecisionEvent | null;
   expires_at: string;
   created_at: string;
   /** @nullable */

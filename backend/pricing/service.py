@@ -476,6 +476,14 @@ def preview(org_id, actor, request):
     if mode == PricingMode.TARGET_GROSS_MARGIN_PROJECT and discount:
         raise PricingError('target_margin_already_defines_final_price')
     cost_lines, priced_lines, technical = [], [], []
+    # P10 — una alternativa (`is_option`) se precifica por línea pero queda
+    # fuera del total del trato: "no incluida en el precio". Su neto existe
+    # en `lines` para que el aplicador selle su precio, pero el neto/IVA/
+    # bruto del proyecto solo cuentan las posiciones incluidas.
+    option_indexes = {
+        int(p['position_index']) for p in positions if p.get('is_option')
+    }
+    unit_costs: dict[int, Decimal] = {}
     selection_extra = D('0')
     with localcontext() as context:
         context.prec = 80
@@ -483,6 +491,7 @@ def preview(org_id, actor, request):
             try:
                 cost, area, result, formation = position_cost(repo,position,calculation_rules)
                 index = position['position_index']
+                unit_costs[index] = cost
                 cost_lines.append((index,cost*position['quantity']))
                 # D04 deltas are sell additions; under a project target margin
                 # they ride as undiscounted additions like project extras.
@@ -491,6 +500,7 @@ def preview(org_id, actor, request):
                                     + D(formation['extra_sell_delta'])) * position['quantity']
                 technical.append({'position_id':position['id'],
                                   'position_index':index,
+                                  'is_option':index in option_indexes,
                                   'unit_cost':str(cost.quantize(D('0.0001'))),
                                   'quantity':int(position['quantity']),
                                   'width_mm':str(position['width_mm']),
@@ -544,13 +554,59 @@ def preview(org_id, actor, request):
         if mode == PricingMode.TARGET_GROSS_MARGIN_PROJECT and selection_extra:
             # Other modes already carry the delta inside each unit price.
             extra_amounts.append(selection_extra)
-        output = (target_project(cost_lines,request['target_margin'],request['currency'],rules['tax_rate_pct'],extra_amounts)
-                  if mode == PricingMode.TARGET_GROSS_MARGIN_PROJECT
-                  else finish_lines(priced_lines,request['currency'],rules['tax_rate_pct'],extra_amounts))
+        # El trato se cierra solo sobre las posiciones incluidas; si toda la
+        # cotización son alternativas no hay trato que totalizar.
+        included_priced = [
+            line for line in priced_lines if line.position_index not in option_indexes
+        ]
+        included_costs = [
+            pair for pair in cost_lines if pair[0] not in option_indexes
+        ]
+        if not included_costs or (
+            mode != PricingMode.TARGET_GROSS_MARGIN_PROJECT and not included_priced
+        ):
+            raise contract_error(
+                422,
+                'options_need_base_position',
+                'La cotización necesita al menos una posición incluida en el total — '
+                'las alternativas no suman al precio.')
+        if mode == PricingMode.TARGET_GROSS_MARGIN_PROJECT:
+            output = target_project(included_costs,request['target_margin'],request['currency'],rules['tax_rate_pct'],extra_amounts)
+            # En objetivo, la alternativa se ofrece al mismo margen del
+            # trato — su precio es convención declarada, no reasignación.
+            option_lines_built = [
+                CommercialLine(
+                    index,
+                    int(next(p['quantity'] for p in positions if p['position_index'] == index)),
+                    unit_costs[index],
+                    unit_price(
+                        PricingMode.COST_PLUS_MARGIN,
+                        cost=unit_costs[index],
+                        margin=D(str(request['target_margin']))),
+                    discount)
+                for index in sorted(option_indexes)
+            ]
+        else:
+            output = finish_lines(included_priced,request['currency'],rules['tax_rate_pct'],extra_amounts)
+            option_lines_built = [
+                line for line in priced_lines if line.position_index in option_indexes
+            ]
+        option_output = (
+            finish_lines(option_lines_built,request['currency'],rules['tax_rate_pct'],[])
+            if option_lines_built else None)
+        merged_lines = tuple(sorted(
+            tuple(output.lines) + (tuple(option_output.lines) if option_output else ()))
+        )
+        deal_cost = sum((D(str(cost)) for _, cost in included_costs), D('0'))
+        option_net = (
+            sum((D(str(net)) for _, net in option_output.lines), D('0'))
+            if option_output else None)
     # P07 — la banda de margen es puerta de decisión: el estimador que
     # cotiza fuera de banda pide aprobación; el dueño confirma explícito.
     # El margen realizado es (neto−costo)/neto — sobre la venta, jamás markup.
-    project_cost = sum((D(str(cost)) for _, cost in cost_lines), D('0'))
+    # El margen del trato se mide sobre el trato: costo y neto de las
+    # posiciones incluidas — una alternativa ni lo engorda ni lo diluye.
+    project_cost = deal_cost
     margin_realized = (
         (output.project_net - project_cost) / output.project_net
         if output.project_net > 0 else None)
@@ -576,12 +632,20 @@ def preview(org_id, actor, request):
     # computed unit; the target-margin mode has no per-line discount, so
     # its unit readout is the allocated line net over quantity.
     quantities = {position['position_index']: int(position['quantity']) for position in positions}
+    # `result_view` es el resultado que se guarda: las líneas cubren todas
+    # las posiciones (incluidas + alternativas, para que apply selle cada
+    # price_net) y los totales solo el trato incluido.
+    result_view = {**asdict(output),
+                   'lines': merged_lines,
+                   'option_indexes': sorted(option_indexes),
+                   'deal_cost_net': str(deal_cost),
+                   'option_net': str(option_net) if option_net is not None else None}
     if mode == PricingMode.TARGET_GROSS_MARGIN_PROJECT:
         line_detail = [
             {'position_index': index, 'quantity': quantities[index],
              'unit_price': str((D(str(net)) / quantities[index]).quantize(D('0.0001'))),
              'discount_pct': '0'}
-            for index, net in output.lines]
+            for index, net in merged_lines]
     else:
         line_detail = [
             {'position_index': line.position_index, 'quantity': quantities[line.position_index],
@@ -596,7 +660,7 @@ def preview(org_id, actor, request):
         [org_id,project['id'],request['_actor_id'],request.get('_actor_email'),
          json_text({key:value for key,value in request.items() if not key.startswith('_')}),
          json_text({'rules':rules,'authorities':repo.authorities,'positions':technical,'cost_lines':cost_lines}),
-         json_text({**asdict(output),'line_detail':line_detail,
+         json_text({**result_view,'line_detail':line_detail,
                     'margin_realized':str(margin_realized) if margin_realized is not None else None,
                     'band':band,
                     'service_lines':[line.model_dump(mode='json')
@@ -625,7 +689,7 @@ def preview(org_id, actor, request):
     } for p in technical]
     stored = {'request':{key:value for key,value in request.items() if not key.startswith('_')},
               'input_snapshot':{'rules':rules,'authorities':repo.authorities,'positions':technical,'cost_lines':cost_lines},
-              'result':{**asdict(output),'line_detail':line_detail,
+              'result':{**result_view,'line_detail':line_detail,
                         'margin_realized':str(margin_realized) if margin_realized is not None else None,
                         'band':band,
                         'service_lines':[line.model_dump(mode='json') for line in service_lines]}}
@@ -638,7 +702,7 @@ def preview(org_id, actor, request):
             'discount_pct':str(discount),
             'pricing_mode':request.get('pricing_mode') or '',
             'segment':request.get('segment') or '',
-            'currency':request['currency'],**asdict(output),
+            'currency':request['currency'],**result_view,
             'line_detail':line_detail,
             'margin_realized':str(margin_realized) if margin_realized is not None else None,
             'band':band,
@@ -650,7 +714,7 @@ def preview(org_id, actor, request):
                       for item in request.get('extras') or []],
             'service_lines':[line.model_dump(mode='json') for line in service_lines],
             'cost_lines':[{'position_index':index,'line_cost':str(cost)} for index,cost in costs],
-            'total_cost':str(sum((cost for _, cost in costs), D('0'))),
+            'total_cost':str(deal_cost),
             'positions_breakdown':breakdown,
             'authorities':repo.authorities,
             'rules':{key:str(rules[key]) for key in
@@ -753,9 +817,14 @@ def _operation_econ(snapshot, result, request):
         discount = D(str(request.get('discount_pct') or '0'))
     except (KeyError, TypeError, ArithmeticError):
         return None
+    # P10 — las alternativas no participan del trato: quedan fuera de la
+    # cascada y del delta (sus líneas sí viajan en result['lines']).
+    options = {int(index) for index in result.get('option_indexes') or []}
     econ = {}
     for entry in snapshot.get('positions') or []:
         index = int(entry['position_index'])
+        if index in options:
+            continue
         if index not in lines or 'unit_cost' not in entry:
             continue
         unit_cost = D(str(entry['unit_cost']))
@@ -850,7 +919,13 @@ def _cascade_payload(snapshot, result, request):
             )
         except (KeyError, TypeError, ArithmeticError):
             return None
-    if len(positions) != len(result.get('lines') or []):
+    # La cascada cuadra con las líneas del trato — las alternativas quedan
+    # fuera de posiciones y de líneas comparadas.
+    options = {int(index) for index in result.get('option_indexes') or []}
+    deal_lines = [
+        pair for pair in (result.get('lines') or [])
+        if int(pair[0]) not in options]
+    if len(positions) != len(deal_lines):
         # A position without economics would silently drop a waterfall row.
         return None
     try:
@@ -860,7 +935,8 @@ def _cascade_payload(snapshot, result, request):
             project_net=D(str(result['project_net'])),
             project_tax=D(str(result['project_tax'])),
             project_gross=D(str(result['project_gross'])),
-            total_cost=D(str(sum((D(str(c)) for _, c in snapshot.get('cost_lines') or []), D('0')))),
+            total_cost=D(str(result.get('deal_cost_net')
+                             or sum((D(str(c)) for _, c in snapshot.get('cost_lines') or []), D('0')))),
         )
     except (PricingError, KeyError, TypeError, ArithmeticError):
         return None
@@ -1308,9 +1384,14 @@ def apply_operation(org_id, actor_id, role, operation_id, reason, confirmed, rej
             cursor.execute('UPDATE public.project_positions SET cost_net=%s,price_net=%s,discount_pct=%s,'
                            'updated_at=now() WHERE id=%s AND org_id=%s',
                            [costs[index],prices[index],request['discount_pct'],position['id'],org_id])
+        # El costo del proyecto es el costo del trato: las alternativas
+        # quedan fuera (su price_net/cost_net propios sí se sellaron arriba).
+        deal_cost = (D(str(output['deal_cost_net']))
+                     if output.get('deal_cost_net') is not None
+                     else sum(costs.values(),D('0')))
         cursor.execute('UPDATE public.projects SET total_cost_net=%s,total_price_net=%s,total_price_tax=%s,'
                        'total_price_gross=%s,updated_at=now() WHERE id=%s AND org_id=%s',
-                       [sum(costs.values(),D('0')),output['project_net'],output['project_tax'],
+                       [deal_cost,output['project_net'],output['project_tax'],
                         output['project_gross'],project['id'],org_id])
         cursor.execute("UPDATE public.pricing_operations SET state='APPLIED',approved_by=%s,approved_at=clock_timestamp(),reason=%s "
                        'WHERE id=%s AND org_id=%s',[actor_id,reason,operation_id,org_id])

@@ -17,6 +17,7 @@ export interface PositionResponse {
   location_tag: string | null;
   quantity: number;
   typology: string;
+  is_option: boolean;
   price_net: string;
   discount_pct: string;
   design: PositionDesign;

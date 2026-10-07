@@ -18,4 +18,10 @@ export interface DecideRequestRequest {
   decided_rut?: string;
   /** @maxLength 500 */
   note?: string;
+  accepted?: boolean;
+  /**
+   * @items.minLength 1
+   * @items.maxLength 64
+   */
+  marked_position_ids?: string[];
 }

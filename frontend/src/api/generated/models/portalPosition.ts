@@ -18,6 +18,7 @@ export interface PortalPosition {
   typology: string | null;
   /** @nullable */
   location_tag: string | null;
+  is_option?: boolean;
   width_mm: string;
   height_mm: string;
   /** @nullable */

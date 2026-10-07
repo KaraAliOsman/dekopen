@@ -252,6 +252,9 @@ svg:not(.miter) { max-width: 100%; height: auto; display: block; } svg text { fo
 .service-lines li { padding: 1mm 0; border-bottom: 0.5pt solid #CDD5D6; }
 .service-lines p { margin: 0; font-size: 8.5pt; color: #465158; line-height: 1.7; }
 .service-lines .service-note { margin-top: 1.2mm; font-size: 7.5pt; color: #727D82; }
+.alt-options { margin: 0 0 5mm; }
+.alt-options h2 { margin: 0 0 2mm; font-size: 11pt; }
+.alt-options .alt-note { margin: 1.5mm 0 0; font-size: 8pt; color: #465158; }
 .terms { border-left: 2pt solid #CDD5D6; padding-left: 5mm; }
 .terms p { margin: 1.2mm 0; }
 .terms .tlabel { color: #727D82; font-size: 6.5pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5pt; }
@@ -2074,34 +2077,43 @@ def _doc01(snapshot: dict[str, object], *, render_context: dict | None = None) -
     # Identical openings collapse into one group; the sealed tree signature
     # keeps mirrored/handedness pairs apart so the rendered figure never
     # lies about which product the customer is buying.
-    groups: dict[tuple[object, ...], dict[str, object]] = {}
-    for position in positions:
-        specs = ", ".join(_position_glass_specs(position)) or "Panel sándwich"
-        tree_sig = json.dumps(
-            position.get("parametric_tree"), sort_keys=True, default=str
-        )
-        key = (
-            _value(position.get("typology")), _value(position.get("width_mm")),
-            _value(position.get("height_mm")), specs,
-            _value(position.get("color_interior")),
-            _value(position.get("color_exterior")),
-            _value(position.get("price_net")),
-            _value(position.get("discount_pct")), tree_sig,
-        )
-        bucket = groups.setdefault(key, {
-            "indexes": [], "locations": [], "quantity": Decimal("0"),
-            "price_net": Decimal("0"), "specs": specs, "priced": True,
-            "ref_position": position,
-        })
-        bucket["indexes"].append(_value(position.get("position_index")))
-        location = _value(position.get("location_tag"))
-        if location and location not in bucket["locations"]:
-            bucket["locations"].append(location)
-        bucket["quantity"] += _num(position.get("quantity"))
-        if position.get("price_net") is None:
-            bucket["priced"] = False
-        else:
-            bucket["price_net"] += _num(position.get("price_net"))
+    def _group(rows: list[dict[str, object]]) -> dict[tuple[object, ...], dict[str, object]]:
+        found: dict[tuple[object, ...], dict[str, object]] = {}
+        for position in rows:
+            specs = ", ".join(_position_glass_specs(position)) or "Panel sándwich"
+            tree_sig = json.dumps(
+                position.get("parametric_tree"), sort_keys=True, default=str
+            )
+            key = (
+                _value(position.get("typology")), _value(position.get("width_mm")),
+                _value(position.get("height_mm")), specs,
+                _value(position.get("color_interior")),
+                _value(position.get("color_exterior")),
+                _value(position.get("price_net")),
+                _value(position.get("discount_pct")), tree_sig,
+            )
+            bucket = found.setdefault(key, {
+                "indexes": [], "locations": [], "quantity": Decimal("0"),
+                "price_net": Decimal("0"), "specs": specs, "priced": True,
+                "ref_position": position,
+            })
+            bucket["indexes"].append(_value(position.get("position_index")))
+            location = _value(position.get("location_tag"))
+            if location and location not in bucket["locations"]:
+                bucket["locations"].append(location)
+            bucket["quantity"] += _num(position.get("quantity"))
+            if position.get("price_net") is None:
+                bucket["priced"] = False
+            else:
+                bucket["price_net"] += _num(position.get("price_net"))
+        return found
+
+    # P10 — las alternativas nunca se funden con posiciones del trato ni
+    # suman en los totales: se agrupan aparte y se dibujan en su sección.
+    included_positions = [p for p in positions if not p.get("is_option")]
+    option_positions = [p for p in positions if p.get("is_option")]
+    groups = _group(included_positions)
+    option_groups = _group(option_positions)
 
     # Sell-side unit price — the sealed `line_detail` (pre-discount exact
     # unit, "3 Stück × E-Preis = Gesamt"); the position total falls back
@@ -2117,7 +2129,7 @@ def _doc01(snapshot: dict[str, object], *, render_context: dict | None = None) -
         for item in (line_detail if isinstance(line_detail, list) else [])
         if isinstance(item, dict) and item.get("unit_price") is not None
     }
-    for bucket in groups.values():
+    for bucket in (*groups.values(), *option_groups.values()):
         ref = bucket["ref_position"]
         detail_unit = unit_by_index.get(_value(ref.get("position_index")))
         if detail_unit is not None:
@@ -2613,6 +2625,50 @@ def _doc01(snapshot: dict[str, object], *, render_context: dict | None = None) -
                 f"{price_block}</div></figure>"
             )
         body += "</div>"
+
+    # ── Alternativas (P10) ─────────────────────────────────────────────
+    # Convención del rubro: la Alternativposition se muestra con su dibujo
+    # y su precio, declarada fuera del total — si el cliente la elige, la
+    # propuesta se re-emite con ella incluida.
+    if option_groups:
+        alt_rows = []
+        for key, bucket in option_groups.items():
+            ref = bucket["ref_position"]
+            alt_rows.append([
+                _list(bucket["indexes"]),
+                _Raw(_figure(ref, "alt" + bucket["indexes"][0])),
+                _TYPOLOGY_ES.get(key[0], key[0])
+                + (" · " + _list(bucket["locations"])
+                   if bucket["locations"] else ""),
+                f"{_dim(key[1])} × {_dim(key[2])}",
+                bucket["quantity"],
+                _money(bucket["unit_net"], currency)
+                if bucket["unit_net"] is not None
+                else "",
+                _money(bucket["line_total"], currency)
+                if bucket["line_total"] is not None
+                else "",
+            ])
+        body += (
+            '<div class="alt-options"><h2>Alternativas</h2>'
+            '<table class="resumen mini"><colgroup>'
+            '<col style="width:7%"><col style="width:11%">'
+            '<col style="width:20%"><col style="width:13%">'
+            '<col style="width:8%"><col style="width:20%">'
+            '<col style="width:21%"></colgroup>'
+            "<thead><tr><th>Pos.</th><th>Vista</th><th>Tipología · Ubicación</th>"
+            "<th>Ancho × Alto</th><th>Cant.</th><th>P. unit. neto</th>"
+            "<th>Total neto</th></tr></thead><tbody>"
+            + "".join(
+                _row(row, ["", "mini-fig", "", "dimension", "dimension",
+                           "dimension", "dimension"])
+                for row in alt_rows
+            )
+            + "</tbody></table>"
+            '<p class="alt-note"><strong>No incluidas en el total de esta '
+            "propuesta.</strong> Si desea incorporar alguna alternativa, "
+            "avísenos y emitimos una revisión con ella incluida.</p></div>"
+        )
 
     services = _service_lines(snapshot)
     if services:

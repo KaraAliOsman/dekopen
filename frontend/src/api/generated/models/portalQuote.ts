@@ -5,22 +5,27 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { DecisionEvent } from "./decisionEvent";
 import type { PortalOrganization } from "./portalOrganization";
 import type { PortalPayment } from "./portalPayment";
 import type { PortalPosition } from "./portalPosition";
+import type { PortalQuoteDocTerms } from "./portalQuoteDocTerms";
 import type { PortalQuoteExtrasItem } from "./portalQuoteExtrasItem";
 
 export interface PortalQuote {
   schema: string;
+  state: string;
   organization: PortalOrganization;
   project_code: string;
   project_name: string;
   client_name: string;
   revision_code: string;
+  current_revision: string;
   emitted_at: string;
   currency: string;
   /** @nullable */
   payment_terms: string | null;
+  doc_terms?: PortalQuoteDocTerms;
   /** @nullable */
   notes_commercial: string | null;
   /** @nullable */
@@ -32,8 +37,10 @@ export interface PortalQuote {
   extras: PortalQuoteExtrasItem[];
   positions: PortalPosition[];
   payment: PortalPayment | null;
+  follow_available: boolean;
   /** @nullable */
-  payment_url: string | null;
+  acceptance_text: string | null;
+  decision_event: DecisionEvent | null;
   /** @nullable */
   valid_until: string | null;
   validity_expired: boolean;

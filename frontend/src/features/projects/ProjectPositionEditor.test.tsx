@@ -136,6 +136,7 @@ function position(
     project_id: projectId,
     position_index: 3,
     location_tag: location,
+    is_option: false,
     quantity: 4,
     typology: "FIXED",
     price_net: "0",
@@ -444,6 +445,7 @@ it("loads a classic position as a compositional product and saves it back unchan
     {
       location_tag: "Dormitorio",
       quantity: 7,
+      is_option: false,
       // Single-unit products fold back to the classic documentary shape.
       design: position().design,
       expected_updated_at: position().updated_at,
@@ -659,6 +661,7 @@ it("copies a position through create, preserving its exact design", async () => 
     {
       location_tag: "Copia cocina",
       quantity: source.quantity,
+      is_option: false,
       design: source.design,
     },
     { headers: { "X-Organization-ID": "org-a" } },

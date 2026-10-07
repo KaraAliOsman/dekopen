@@ -18,5 +18,6 @@ export interface PositionUpdateRequest {
   quantity: number;
   design: PositionDesignRequest;
   measurement?: PositionMeasurementRequest | null;
+  is_option?: boolean;
   expected_updated_at: string;
 }

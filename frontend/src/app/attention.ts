@@ -47,6 +47,15 @@ export function attentionEntries(ops: OperationalSummary | undefined): Attention
       warn: false,
     },
     {
+      // El cliente pidió ajustes y el estimador aún no responde — una
+      // cotización con cambios pedidos es una venta esperando respuesta.
+      key: "dashboard.quotesChanges",
+      action: "attention.action.reviewChanges",
+      count: Number(prep.quotes_changes ?? 0),
+      to: "/projects?status=QUOTED",
+      warn: true,
+    },
+    {
       key: "dashboard.stepsBlocked",
       action: "attention.action.unblock",
       count: Number(prep.steps_blocked ?? 0),

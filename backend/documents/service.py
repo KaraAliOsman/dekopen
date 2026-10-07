@@ -153,7 +153,14 @@ def _pricing_state_matches(
             or D(str(position["discount_pct"])) != discount
         ):
             raise DocumentaryError("applied_pricing_binding_mismatch")
-    expected_cost = _stored_money(sum(costs.values(), D("0")))
+    # P10 — el costo del trato excluye las alternativas (is_option): su costo
+    # línea se sella igual, pero no entra en el total_cost_net aplicado.
+    included = {
+        int(position["position_index"])
+        for position in positions
+        if not position.get("is_option")
+    }
+    expected_cost = _stored_money(sum(costs[index] for index in included))
     expected_net = _stored_money(D(str(result.get("project_net"))))
     expected_tax = _stored_money(D(str(result.get("project_tax"))))
     expected_gross = _stored_money(D(str(result.get("project_gross"))))
@@ -1700,6 +1707,9 @@ def _revision_snapshot(
             "position_index": int(position["position_index"]),
             "quantity": quantity,
             "typology": str(position["typology"]),
+            # P10 — alternativa declarada: el portal y DOC-01 la marcan
+            # "no incluida en el total" sin re-derivarla del live.
+            "is_option": bool(position.get("is_option")),
             "system_id": system_id,
             "width_mm": D(str(position["width_mm"])),
             "height_mm": D(str(position["height_mm"])),

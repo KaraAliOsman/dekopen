@@ -1,12 +1,24 @@
-import { CSSProperties, FormEvent, useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import {
+  CSSProperties,
+  FormEvent,
+  PointerEvent as ReactPointerEvent,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { useNavigate, useParams } from "react-router-dom";
 
 import { ApiError } from "../../api/apiMutator";
-import { portalQuoteDecide, portalQuoteRetrieve } from "../../api/generated/dekopen";
+import {
+  portalQuoteDecide,
+  portalQuoteFollow,
+  portalQuotePay,
+  portalQuoteRetrieve,
+} from "../../api/generated/dekopen";
 import type { PortalPosition, PortalQuote } from "../../api/generated/models";
 import type { PositionDesign } from "../../api/generated/models";
-import { t, typologyLabel } from "../../i18n/es-CL";
-import { formatRevision } from "../../format";
+import { t, tOptional, typologyLabel } from "../../i18n/es-CL";
+import { formatRevision, isValidRut } from "../../format";
 import { PositionThumb, THUMB_MEMBERS } from "../projects/PositionThumb";
 import {
   addDecimal,
@@ -21,7 +33,7 @@ import {
 import { finishFace, type MemberFinish } from "../canvas/finishes";
 import { reSkinMembers, tintMembers, type MemberGeometry } from "../canvas/members";
 import "./portal.css";
-import { formatDate, formatMoney, formatPercent } from "../../format";
+import { formatDate, formatDateTime, formatMoney, formatPercent } from "../../format";
 
 const money = formatMoney;
 
@@ -163,16 +175,135 @@ function groupPositions(positions: PortalPosition[]): {
   return [...groups.values()];
 }
 
+/** Zoom overlay — lightbox grande con paneo por arrastre, pinch táctil y
+ * zoom por rueda/botones. El render sellado se inspecciona a detalle:
+ * manillas, divisiones y aperturas se comprueban con los dedos. */
+function ZoomOverlay({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}): JSX.Element {
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ distance: number; scale: number } | null>(null);
+  const stage = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [onClose]);
+
+  const down = (event: ReactPointerEvent<HTMLDivElement>) => {
+    (event.target as HTMLElement).setPointerCapture?.(event.pointerId);
+    pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (pointers.current.size === 2) {
+      const [a, b] = [...pointers.current.values()];
+      if (a && b) {
+        pinch.current = {
+          distance: Math.hypot(a.x - b.x, a.y - b.y),
+          scale,
+        };
+      }
+    }
+  };
+  const move = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const point = pointers.current.get(event.pointerId);
+    if (!point) return;
+    const dx = event.clientX - point.x;
+    const dy = event.clientY - point.y;
+    pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (pointers.current.size === 2 && pinch.current) {
+      const [a, b] = [...pointers.current.values()];
+      if (a && b) {
+        const distance = Math.hypot(a.x - b.x, a.y - b.y);
+        if (pinch.current.distance > 0) {
+          setScale(
+            Math.min(6, Math.max(0.5, pinch.current.scale * (distance / pinch.current.distance))),
+          );
+        }
+      }
+      return;
+    }
+    setOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
+  };
+  const up = (event: ReactPointerEvent<HTMLDivElement>) => {
+    pointers.current.delete(event.pointerId);
+    if (pointers.current.size < 2) pinch.current = null;
+  };
+  const zoom = (factor: number) => setScale((prev) => Math.min(6, Math.max(0.5, prev * factor)));
+
+  return (
+    <div className="portal-zoom" role="dialog" aria-modal="true" aria-label={title}>
+      <button type="button" className="portal-zoom__backdrop" onClick={onClose} tabIndex={-1} />
+      <div className="portal-zoom__bar">
+        <span className="portal-zoom__title">{title}</span>
+        <div className="portal-zoom__tools" role="group" aria-label={t("portal.zoomTools")}>
+          <button type="button" onClick={() => zoom(0.8)} aria-label={t("portal.zoomOut")}>
+            −
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setScale(1);
+              setOffset({ x: 0, y: 0 });
+            }}
+          >
+            {t("portal.zoomReset")}
+          </button>
+          <button type="button" onClick={() => zoom(1.25)} aria-label={t("portal.zoomIn")}>
+            +
+          </button>
+          <button type="button" className="portal-zoom__close" onClick={onClose}>
+            {t("portal.zoomClose")}
+          </button>
+        </div>
+      </div>
+      <div
+        ref={stage}
+        className="portal-zoom__stage"
+        onPointerDown={down}
+        onPointerMove={move}
+        onPointerUp={up}
+        onPointerCancel={up}
+        onWheel={(event) => zoom(event.deltaY < 0 ? 1.15 : 0.87)}
+      >
+        <div
+          className="portal-zoom__content"
+          style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` }}
+        >
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PositionGroupCard({
   group,
   currency,
   taxRate,
+  option,
+  onZoom,
 }: {
   group: ReturnType<typeof groupPositions>[number];
   currency: string;
   // IVA-included line totals reconcile with the headline Total — a customer
   // thinks in gross, so the card leads with it when the rate is derivable.
   taxRate: DecimalValue | null;
+  option?: boolean;
+  onZoom: (payload: { title: string; body: React.ReactNode }) => void;
 }): JSX.Element {
   const { position } = group;
   const [variant, setVariant] = useState<"studio" | "elevation">("studio");
@@ -189,10 +320,27 @@ function PositionGroupCard({
     group.locations.length > 0
       ? compactList(group.locations)
       : `Pos. ${compactList(group.indexes)}`;
+  const title = `${typologyLabel(position.typology)} ${Math.round(Number(position.width_mm))} × ${Math.round(Number(position.height_mm))} mm`;
+  const figure = (
+    <PositionThumb design={positionDesign(position)} variant={variant} members={members} />
+  );
   return (
-    <article className="portal-position">
+    <article className="portal-position" data-option={option ? "true" : undefined}>
       <div className="portal-position__thumb">
-        <PositionThumb design={positionDesign(position)} variant={variant} members={members} />
+        {figure}
+        <button
+          type="button"
+          className="portal-position__zoom"
+          onClick={() =>
+            onZoom({
+              title,
+              body: figure,
+            })
+          }
+          aria-label={t("portal.zoomFigure")}
+        >
+          <span className="portal-position__zoomhint">{t("portal.zoomFigure")}</span>
+        </button>
         <div className="portal-position__views" role="group" aria-label={t("portal.views")}>
           <button
             type="button"
@@ -211,9 +359,13 @@ function PositionGroupCard({
             {t("portal.viewTechnical")}
           </button>
         </div>
+        <p className="portal-position__viewname">
+          {variant === "studio" ? t("portal.viewStudioName") : t("portal.viewTechnicalName")}
+        </p>
       </div>
       <div className="portal-position__body">
         <p className="portal-position__id">
+          {option ? <span className="portal-option-tag">{t("portal.optionTag")}</span> : null}
           {locations}
           {group.quantity > 1 ? (
             <span className="portal-position__count">×{group.quantity}</span>
@@ -274,8 +426,120 @@ function PositionGroupCard({
             ) : null}
           </strong>
         </p>
+        {option ? <p className="portal-option-note">{t("portal.optionExcluded")}</p> : null}
       </div>
     </article>
+  );
+}
+
+/** Cada estado terminal tiene su página dedicada — qué pasó, con quién
+ * hablar y qué hacer después, nunca un 410 pelado. */
+function StatePage({
+  quote,
+  issuer,
+  contact,
+  accentStyle,
+  kind,
+}: {
+  quote: PortalQuote;
+  issuer: string;
+  contact: string;
+  accentStyle: CSSProperties | undefined;
+  kind: "revoked" | "link_expired" | "validity_expired" | "superseded";
+}): JSX.Element {
+  const navigate = useNavigate();
+  const { token = "" } = useParams();
+  const [busy, setBusy] = useState(false);
+  const [followError, setFollowError] = useState<string | null>(null);
+  const titles: Record<typeof kind, string> = {
+    revoked: t("portal.stateRevoked"),
+    link_expired: t("portal.stateLinkExpired"),
+    validity_expired: t("portal.stateValidityExpired"),
+    superseded: t("portal.stateSuperseded"),
+  };
+  const bodies: Record<typeof kind, string> = {
+    revoked: t("portal.stateRevokedBody"),
+    link_expired: t("portal.stateLinkExpiredBody"),
+    validity_expired: t("portal.stateValidityExpiredBody"),
+    superseded: t("portal.stateSupersededBody"),
+  };
+
+  async function follow(): Promise<void> {
+    setBusy(true);
+    try {
+      const response = await portalQuoteFollow(token);
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      const next = response.data.follow_token;
+      if (next) {
+        // El token cambia en la ruta — el efecto [token] re-lee y el portal
+        // muestra la revisión vigente sin recarga de página.
+        navigate(`/cotizacion/${next}`, { replace: true });
+      } else {
+        setFollowError(t("portal.followError"));
+      }
+    } catch (error) {
+      setFollowError(
+        error instanceof ApiError
+          ? (errorDetail(error.payload) ?? t("portal.followError"))
+          : t("portal.followError"),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <main className="portal-page" style={accentStyle}>
+      <article className="portal-proposal">
+        <header className="portal-proposal__head">
+          <div className="portal-proposal__issuer">
+            {quote.organization?.brand_logo_url ? (
+              <img
+                className="portal-proposal__logo"
+                src={quote.organization.brand_logo_url}
+                alt={issuer}
+              />
+            ) : null}
+            <p className="portal-proposal__org">{issuer}</p>
+            {contact ? <p className="portal-proposal__taxid">{contact}</p> : null}
+          </div>
+          <div className="portal-proposal__refs">
+            <h1>{t("portal.proposalTitle")}</h1>
+            <p className="portal-proposal__ref">
+              {quote.project_code} · {formatRevision(quote.revision_code)}
+              {kind === "superseded" ? ` → ${formatRevision(quote.current_revision)}` : ""}
+            </p>
+          </div>
+        </header>
+        <section className="portal-state">
+          <h2 className="portal-state__title">{titles[kind]}</h2>
+          <p className="portal-state__body">{bodies[kind]}</p>
+          {contact ? (
+            <p className="portal-state__contact">
+              {t("portal.stateContact")} {contact}
+            </p>
+          ) : null}
+          {kind === "superseded" && quote.follow_available ? (
+            <button
+              type="button"
+              className="primary-action portal-state__follow"
+              disabled={busy}
+              onClick={() => void follow()}
+            >
+              {t("portal.followCurrent")}
+            </button>
+          ) : null}
+          {followError ? (
+            <p role="alert" className="portal-decision__error">
+              {followError}
+            </p>
+          ) : null}
+        </section>
+        {quote.organization?.dekopen_credit !== false ? (
+          <footer className="portal-proposal__brand">{t("portal.brand")}</footer>
+        ) : null}
+      </article>
+    </main>
   );
 }
 
@@ -286,8 +550,13 @@ export function PortalQuotePage(): JSX.Element {
   const [name, setName] = useState("");
   const [rut, setRut] = useState("");
   const [note, setNote] = useState("");
+  const [accepted, setAccepted] = useState(false);
+  const [marked, setMarked] = useState<Set<string>>(new Set());
+  const [payerEmail, setPayerEmail] = useState("");
   const [busy, setBusy] = useState(false);
+  const [paying, setPaying] = useState(false);
   const [decideError, setDecideError] = useState<string | null>(null);
+  const [zoom, setZoom] = useState<{ title: string; body: React.ReactNode } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -296,8 +565,6 @@ export function PortalQuotePage(): JSX.Element {
         const response = await portalQuoteRetrieve(token);
         if (!active) return;
         if (response.status !== 200) {
-          // Revoked/expired/superseded links carry a precise public detail —
-          // a generic "check the link" would blame the customer's URL.
           setError(
             response.status === 404
               ? t("portal.notFound")
@@ -308,8 +575,6 @@ export function PortalQuotePage(): JSX.Element {
         setQuote(response.data);
       } catch (error) {
         if (!active) return;
-        // apiMutator throws on non-OK — the link's real state (revoked 410,
-        // expired 410, gone 404) must surface, not a generic load error.
         setError(
           error instanceof ApiError
             ? error.status === 404
@@ -324,17 +589,33 @@ export function PortalQuotePage(): JSX.Element {
     };
   }, [token]);
 
-  // The only page a customer ever sees carries the issuer's name in the tab.
+  // La página que el cliente ve se identifica con el fabricante: pestaña y
+  // favicon llevan su nombre y su marca, no los de DEKOPEN.
   useEffect(() => {
-    const issuer = quote?.organization?.commercial_name || quote?.organization?.name || "";
+    const org = quote?.organization;
+    const issuer = org?.commercial_name || org?.name || "";
     document.title = issuer
       ? `${issuer} · ${t("portal.proposalTitle")} · ${quote?.project_code ?? ""}`
       : t("portal.proposalTitle");
+    const logo = org?.brand_logo_url;
+    if (!logo) return;
+    let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = "icon";
+      document.head.appendChild(link);
+    }
+    const previous = link.href;
+    link.href = logo;
+    return () => {
+      link.href = previous;
+    };
   }, [quote]);
 
   async function decide(decision: "APPROVED" | "DECLINED" | "CHANGES_REQUESTED"): Promise<void> {
     if (!name.trim() || busy) return;
-    if (decision !== "APPROVED" && !note.trim()) return;
+    if (decision === "APPROVED" && (!isValidRut(rut) || !rut.trim() || !accepted)) return;
+    if (decision === "CHANGES_REQUESTED" && !note.trim()) return;
     setBusy(true);
     try {
       const response = await portalQuoteDecide(token, {
@@ -342,6 +623,8 @@ export function PortalQuotePage(): JSX.Element {
         decided_by: name.trim(),
         decided_rut: rut.trim() || undefined,
         note: note.trim() || undefined,
+        accepted: decision === "APPROVED" ? accepted : undefined,
+        marked_position_ids: [...marked],
       });
       if (response.status !== 200) {
         throw new ApiError(response.status, response.data);
@@ -366,6 +649,27 @@ export function PortalQuotePage(): JSX.Element {
     }
   }
 
+  async function pay(): Promise<void> {
+    if (paying) return;
+    setPaying(true);
+    try {
+      const response = await portalQuotePay(token, {
+        payer_email: payerEmail.trim() || undefined,
+      });
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      const url = response.data.payment_url;
+      if (!url) throw new Error("no_payment_url");
+      window.location.assign(url);
+    } catch (error) {
+      setDecideError(
+        error instanceof ApiError
+          ? (errorDetail(error.payload) ?? t("portal.payError"))
+          : t("portal.payError"),
+      );
+      setPaying(false);
+    }
+  }
+
   if (error !== null) {
     return (
       <main className="portal-page">
@@ -385,31 +689,12 @@ export function PortalQuotePage(): JSX.Element {
     );
   }
 
-  // CHANGES_REQUESTED no cierra la decisión: el enlace sigue vivo para
-  // que el cliente confirme aprobar/rechazar después de pedir ajustes.
-  const decided =
-    quote.approval_status !== "PENDING" && quote.approval_status !== "CHANGES_REQUESTED";
-  // Line-level IVA: net + tax are the sealed truth — the implied rate lets
-  // product cards show the gross the customer will actually pay.
-  const netTotal = quote.total_price_net ? parseDecimal(quote.total_price_net) : null;
-  const taxTotal = quote.total_price_tax ? parseDecimal(quote.total_price_tax) : null;
-  const taxRate =
-    netTotal !== null && taxTotal !== null && netTotal.numerator !== 0n
-      ? divideDecimal(taxTotal, netTotal)
-      : null;
   const org = quote.organization;
   const issuer = org?.commercial_name || org?.name || "DEKOPEN";
   const issuerContact =
     [org?.brand_address, org?.brand_phone, org?.brand_email]
       .filter((part) => part != null && part !== "")
       .join(" · ") || "";
-  const groups = groupPositions(quote.positions);
-  // White-label (P25): el acento del portal es el color de marca del
-  // fabricante — ya llega validado AA desde el backend — como override
-  // local del token de acento. Sin color válido, hereda el teal DEKOPEN.
-  // La tinta sobre el relleno de marca se elige por luminancia: el AA del
-  // backend se mide sobre papel, y en tema oscuro un acento profundo igual
-  // exige papel encima (rgb(7,95,90) sobre rgb(15,20,22) da 2.31 < 4.5).
   const accentStyle = org?.brand_color
     ? ({
         "--theme-accent": org.brand_color,
@@ -418,12 +703,81 @@ export function PortalQuotePage(): JSX.Element {
         "--theme-accent-onfill": brandOnFill(org.brand_color),
       } as CSSProperties)
     : undefined;
+
+  // Estados dedicados — cada uno explica qué pasó con este enlace.
+  if (quote.state === "revoked") {
+    return (
+      <StatePage
+        quote={quote}
+        issuer={issuer}
+        contact={issuerContact}
+        accentStyle={accentStyle}
+        kind="revoked"
+      />
+    );
+  }
+  if (quote.state === "link_expired") {
+    return (
+      <StatePage
+        quote={quote}
+        issuer={issuer}
+        contact={issuerContact}
+        accentStyle={accentStyle}
+        kind="link_expired"
+      />
+    );
+  }
+  if (quote.state === "validity_expired") {
+    return (
+      <StatePage
+        quote={quote}
+        issuer={issuer}
+        contact={issuerContact}
+        accentStyle={accentStyle}
+        kind="validity_expired"
+      />
+    );
+  }
+  if (quote.state === "superseded") {
+    return (
+      <StatePage
+        quote={quote}
+        issuer={issuer}
+        contact={issuerContact}
+        accentStyle={accentStyle}
+        kind="superseded"
+      />
+    );
+  }
+
+  const state = quote.state ?? "live";
+  const canDecide = state === "live" || state === "changes_requested";
+  // Line-level IVA: net + tax are the sealed truth — the implied rate lets
+  // product cards show the gross the customer will actually pay.
+  const netTotal = quote.total_price_net ? parseDecimal(quote.total_price_net) : null;
+  const taxTotal = quote.total_price_tax ? parseDecimal(quote.total_price_tax) : null;
+  const taxRate =
+    netTotal !== null && taxTotal !== null && netTotal.numerator !== 0n
+      ? divideDecimal(taxTotal, netTotal)
+      : null;
+  const included = (quote.positions ?? []).filter((position) => !position.is_option);
+  const options = (quote.positions ?? []).filter((position) => position.is_option);
+  const groups = groupPositions(included);
+  const optionGroups = groupPositions(options);
+  // La vigencia se lee en días — "quedan N días" es lo que la persona entiende.
+  const daysLeft = (() => {
+    if (!quote.valid_until) return null;
+    const until = Date.parse(`${quote.valid_until}T23:59:59`);
+    if (Number.isNaN(until)) return null;
+    return Math.max(0, Math.ceil((until - Date.now()) / 86400000));
+  })();
   // The hero is the customer's own largest glazed unit — rendered, not stock.
   const hero = groups.reduce<ReturnType<typeof groupPositions>[number] | null>((best, group) => {
     const area = Number(group.position.width_mm) * Number(group.position.height_mm);
     const bestArea = best ? Number(best.position.width_mm) * Number(best.position.height_mm) : -1;
     return area > bestArea ? group : best;
   }, null);
+  const event = quote.decision_event;
 
   return (
     <main className="portal-page" style={accentStyle}>
@@ -432,9 +786,8 @@ export function PortalQuotePage(): JSX.Element {
           <div className="portal-proposal__issuer">
             {org?.brand_logo_url ? (
               <img className="portal-proposal__logo" src={org.brand_logo_url} alt={issuer} />
-            ) : (
-              <p className="portal-proposal__org">{issuer}</p>
-            )}
+            ) : null}
+            <p className="portal-proposal__org">{issuer}</p>
             {org?.tax_id ? <p className="portal-proposal__taxid">{org.tax_id}</p> : null}
             {issuerContact ? <p className="portal-proposal__taxid">{issuerContact}</p> : null}
           </div>
@@ -449,6 +802,15 @@ export function PortalQuotePage(): JSX.Element {
               <p className="portal-proposal__ref">
                 {t("portal.validUntil")}{" "}
                 <time dateTime={quote.valid_until}>{formatDate(quote.valid_until)}</time>
+                {daysLeft !== null ? (
+                  <span className="portal-daysleft">
+                    {" "}
+                    ·{" "}
+                    {daysLeft === 1
+                      ? t("portal.daysLeftOne")
+                      : t("portal.daysLeft").replace("{count}", String(daysLeft))}
+                  </span>
+                ) : null}
               </p>
             ) : null}
           </div>
@@ -456,11 +818,32 @@ export function PortalQuotePage(): JSX.Element {
 
         {hero !== null ? (
           <figure className="portal-proposal__hero">
-            <PositionThumb
-              design={positionDesign(hero.position)}
-              variant="studio"
-              members={positionMembers(hero.position)}
-            />
+            <div className="portal-proposal__hero-render">
+              <PositionThumb
+                design={positionDesign(hero.position)}
+                variant="studio"
+                members={positionMembers(hero.position)}
+              />
+              <button
+                type="button"
+                className="portal-position__zoom"
+                onClick={() =>
+                  setZoom({
+                    title: `${typologyLabel(hero.position.typology)} ${Math.round(Number(hero.position.width_mm))} × ${Math.round(Number(hero.position.height_mm))} mm`,
+                    body: (
+                      <PositionThumb
+                        design={positionDesign(hero.position)}
+                        variant="studio"
+                        members={positionMembers(hero.position)}
+                      />
+                    ),
+                  })
+                }
+                aria-label={t("portal.zoomFigure")}
+              >
+                <span className="portal-position__zoomhint">{t("portal.zoomFigure")}</span>
+              </button>
+            </div>
             <figcaption>
               {typologyLabel(hero.position.typology)} · {Math.round(Number(hero.position.width_mm))}{" "}
               × {Math.round(Number(hero.position.height_mm))} mm
@@ -505,7 +888,7 @@ export function PortalQuotePage(): JSX.Element {
           </dl>
         </section>
 
-        {quote.positions.length > 0 ? (
+        {groups.length > 0 ? (
           <section className="portal-proposal__positions">
             <h2>{t("portal.positions")}</h2>
             <div className="portal-positions">
@@ -515,6 +898,26 @@ export function PortalQuotePage(): JSX.Element {
                   group={group}
                   currency={quote.currency}
                   taxRate={taxRate}
+                  onZoom={setZoom}
+                />
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {optionGroups.length > 0 ? (
+          <section className="portal-proposal__positions portal-options">
+            <h2>{t("portal.optionsTitle")}</h2>
+            <p className="portal-options__note">{t("portal.optionsNote")}</p>
+            <div className="portal-positions">
+              {optionGroups.map((group) => (
+                <PositionGroupCard
+                  key={group.key}
+                  group={group}
+                  currency={quote.currency}
+                  taxRate={taxRate}
+                  option
+                  onZoom={setZoom}
                 />
               ))}
             </div>
@@ -528,56 +931,83 @@ export function PortalQuotePage(): JSX.Element {
           </section>
         ) : null}
 
-        {(quote.payment_terms || quote.payment) && (
-          <section className="portal-proposal__commercial">
-            {quote.payment_terms ? (
-              <div className="portal-terms">
-                <h3>{t("portal.terms")}</h3>
-                <p>{quote.payment_terms}</p>
-              </div>
-            ) : null}
-            {quote.payment ? (
-              <dl className="portal-payment">
-                <div>
-                  <dt>{t("portal.paymentLabel")}</dt>
-                  <dd>
-                    <span
-                      className={`portal-payment__state portal-payment__state--${quote.payment.status.toLowerCase()}`}
-                    >
-                      {t(
-                        quote.payment.status === "PAID"
-                          ? "portal.payment.PAID"
-                          : quote.payment.status === "PARTIAL"
-                            ? "portal.payment.PARTIAL"
-                            : "portal.payment.PENDING",
-                      )}
-                    </span>
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t("portal.collected")}</dt>
-                  <dd>{money(quote.payment.collected, quote.currency)}</dd>
-                </div>
-                <div>
-                  <dt>{t("portal.balance")}</dt>
-                  <dd>{money(quote.payment.balance, quote.currency)}</dd>
-                </div>
+        <section className="portal-proposal__commercial">
+          {quote.payment_terms ? (
+            <div className="portal-terms">
+              <h3>{t("portal.terms")}</h3>
+              <p>{quote.payment_terms}</p>
+            </div>
+          ) : null}
+          {quote.doc_terms && Object.keys(quote.doc_terms).length > 0 ? (
+            <div className="portal-terms">
+              <h3>{t("portal.conditions")}</h3>
+              <dl className="portal-condlist">
+                {Object.entries(quote.doc_terms).map(([key, value]) => (
+                  <div key={key}>
+                    <dt>{tOptional(`portal.term.${key}`) ?? key}</dt>
+                    <dd>{String(value)}</dd>
+                  </div>
+                ))}
               </dl>
-            ) : null}
-            {quote.payment_url && !quote.superseded && !quote.validity_expired ? (
-              <a
+            </div>
+          ) : null}
+          {quote.payment ? (
+            <dl className="portal-payment">
+              <div>
+                <dt>{t("portal.paymentLabel")}</dt>
+                <dd>
+                  <span
+                    className={`portal-payment__state portal-payment__state--${quote.payment.status.toLowerCase()}`}
+                  >
+                    {t(
+                      quote.payment.status === "PAID"
+                        ? "portal.payment.PAID"
+                        : quote.payment.status === "PARTIAL"
+                          ? "portal.payment.PARTIAL"
+                          : "portal.payment.PENDING",
+                    )}
+                  </span>
+                </dd>
+              </div>
+              <div>
+                <dt>{t("portal.collected")}</dt>
+                <dd>{money(quote.payment.collected, quote.currency)}</dd>
+              </div>
+              <div>
+                <dt>{t("portal.balance")}</dt>
+                <dd>{money(quote.payment.balance, quote.currency)}</dd>
+              </div>
+            </dl>
+          ) : null}
+          {quote.payment?.payable ? (
+            <div className="portal-paybox">
+              <label htmlFor="portal-payer" className="portal-paybox__label">
+                {t("portal.payerEmail")}
+              </label>
+              <input
+                id="portal-payer"
+                type="email"
+                maxLength={120}
+                value={payerEmail}
+                onChange={(event) => setPayerEmail(event.target.value)}
+                placeholder={t("portal.payerEmailPlaceholder")}
+              />
+              <button
+                type="button"
                 className="portal-pay"
-                href={quote.payment_url}
-                target="_blank"
-                rel="noopener noreferrer"
+                disabled={paying}
+                onClick={() => void pay()}
               >
-                {quote.payment
-                  ? `${t("portal.payBalance")} ${money(quote.payment.balance, quote.currency)}`
-                  : t("portal.payNow")}
-              </a>
-            ) : null}
-          </section>
-        )}
+                {paying
+                  ? t("portal.payBusy")
+                  : `${t("portal.payBalance")} ${money(quote.payment.balance, quote.currency)}`}
+              </button>
+              {quote.payment.simulated ? (
+                <p className="portal-paybox__sim">{t("portal.paySimulated")}</p>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
 
         {quote.quote_pdf_url ? (
           <a
@@ -597,61 +1027,51 @@ export function PortalQuotePage(): JSX.Element {
           <li
             className="portal-step"
             data-state={
-              quote.approval_status === "APPROVED"
+              state === "approved"
                 ? "done"
-                : quote.approval_status === "DECLINED"
+                : state === "declined"
                   ? "declined"
-                  : quote.approval_status === "CHANGES_REQUESTED"
+                  : state === "changes_requested"
                     ? "changes"
                     : "current"
             }
           >
             {t("portal.stepDecision")}
           </li>
-          <li
-            className="portal-step"
-            data-state={quote.approval_status === "APPROVED" ? "current" : "pending"}
-          >
+          <li className="portal-step" data-state={state === "approved" ? "current" : "pending"}>
             {t("portal.stepProduction")}
           </li>
         </ol>
 
-        {decided ? (
-          <div
-            className="portal-decided"
-            data-state={quote.approval_status === "APPROVED" ? "approved" : "declined"}
-            role="status"
-          >
-            <p className="portal-decided__state">
-              {quote.approval_status === "APPROVED"
-                ? t("portal.wasApproved")
-                : t("portal.wasDeclined")}
-            </p>
-            <p>
-              {quote.approval_status === "APPROVED"
-                ? t("portal.wasApprovedDetail")
-                : t("portal.wasDeclinedDetail")}
-            </p>
+        {state === "approved" ? (
+          <div className="portal-decided" data-state="approved" role="status">
+            <p className="portal-decided__state">{t("portal.wasApproved")}</p>
+            <p>{t("portal.wasApprovedDetail")}</p>
+            {event?.acceptance_text ? (
+              <p className="portal-evidence">
+                <span className="portal-evidence__label">{t("portal.evidence")}</span>“
+                {event.acceptance_text}”
+                {event.created_at ? ` · ${formatDateTime(event.created_at)}` : ""}
+              </p>
+            ) : null}
+            {issuerContact ? <p className="portal-decided__contact">{issuerContact}</p> : null}
+          </div>
+        ) : state === "declined" ? (
+          <div className="portal-decided" data-state="declined" role="status">
+            <p className="portal-decided__state">{t("portal.wasDeclined")}</p>
+            <p>{t("portal.wasDeclinedDetail")}</p>
             {issuerContact ? <p className="portal-decided__contact">{issuerContact}</p> : null}
           </div>
         ) : (
           <>
-            {quote.approval_status === "CHANGES_REQUESTED" && (
+            {state === "changes_requested" && (
               <div className="portal-decided" data-state="changes" role="status">
                 <p className="portal-decided__state">{t("portal.wasChangesRequested")}</p>
                 <p>{t("portal.wasChangesRequestedDetail")}</p>
                 {issuerContact ? <p className="portal-decided__contact">{issuerContact}</p> : null}
               </div>
             )}
-            {quote.superseded ? (
-              <p className="portal-decided" role="status">
-                {t("portal.superseded")}
-              </p>
-            ) : quote.validity_expired ? (
-              <p className="portal-decided" role="status">
-                {t("portal.validityExpired")}
-              </p>
-            ) : (
+            {canDecide ? (
               <form
                 noValidate
                 className="portal-decision"
@@ -684,6 +1104,32 @@ export function PortalQuotePage(): JSX.Element {
                   </dl>
                   <p className="portal-decision__hint">{t("portal.approveHint")}</p>
                 </div>
+                {options.length > 0 ? (
+                  <fieldset className="portal-decision__options">
+                    <legend>{t("portal.markOptions")}</legend>
+                    {options.map((position) => (
+                      <label key={position.id} className="portal-decision__option">
+                        <input
+                          type="checkbox"
+                          checked={marked.has(position.id)}
+                          onChange={(event_) => {
+                            setMarked((prev) => {
+                              const next = new Set(prev);
+                              if (event_.target.checked) next.add(position.id);
+                              else next.delete(position.id);
+                              return next;
+                            });
+                          }}
+                        />
+                        <span>
+                          {position.location_tag?.trim() || `Pos. ${position.position_index ?? ""}`}{" "}
+                          · {typologyLabel(position.typology)}
+                        </span>
+                      </label>
+                    ))}
+                    <p className="portal-decision__notehint">{t("portal.markOptionsHint")}</p>
+                  </fieldset>
+                ) : null}
                 <label htmlFor="portal-name">{t("portal.nameLabel")}</label>
                 <input
                   id="portal-name"
@@ -694,7 +1140,7 @@ export function PortalQuotePage(): JSX.Element {
                   disabled={busy}
                   autoComplete="name"
                 />
-                <label htmlFor="portal-rut">{t("portal.rutLabel")}</label>
+                <label htmlFor="portal-rut">{t("portal.rutLabelRequired")}</label>
                 <input
                   id="portal-rut"
                   maxLength={32}
@@ -702,7 +1148,13 @@ export function PortalQuotePage(): JSX.Element {
                   onChange={(event) => setRut(event.target.value)}
                   disabled={busy}
                   placeholder={t("portal.rutPlaceholder")}
+                  inputMode="text"
                 />
+                {rut.trim() && !isValidRut(rut) ? (
+                  <p className="portal-decision__notehint" role="alert">
+                    {t("portal.rutInvalid")}
+                  </p>
+                ) : null}
                 <label htmlFor="portal-note">{t("portal.noteLabel")}</label>
                 <textarea
                   id="portal-note"
@@ -713,13 +1165,25 @@ export function PortalQuotePage(): JSX.Element {
                   disabled={busy}
                   placeholder={t("portal.notePlaceholder")}
                 />
+                <label className="portal-decision__accept">
+                  <input
+                    type="checkbox"
+                    checked={accepted}
+                    onChange={(event) => setAccepted(event.target.checked)}
+                    disabled={busy}
+                  />
+                  <span>{quote.acceptance_text ?? t("portal.acceptFallback")}</span>
+                </label>
                 {decideError !== null ? (
                   <p role="alert" className="portal-decision__error">
                     {decideError}
                   </p>
                 ) : null}
                 <div className="projects-actions">
-                  <button className="primary-action" disabled={busy || !name.trim()}>
+                  <button
+                    className="primary-action"
+                    disabled={busy || !name.trim() || !rut.trim() || !isValidRut(rut) || !accepted}
+                  >
                     {t("portal.approve")}
                   </button>
                   <button
@@ -732,22 +1196,27 @@ export function PortalQuotePage(): JSX.Element {
                   <button
                     type="button"
                     className="danger-action"
-                    disabled={busy || !name.trim() || !note.trim()}
+                    disabled={busy || !name.trim()}
                     onClick={() => void decide("DECLINED")}
                   >
                     {t("portal.decline")}
                   </button>
                 </div>
-                {!note.trim() ? (
-                  <p className="portal-decision__notehint">{t("portal.noteRequired")}</p>
-                ) : null}
+                <p className="portal-decision__notehint">{t("portal.decisionHint")}</p>
               </form>
-            )}
+            ) : null}
           </>
         )}
 
-        <footer className="portal-proposal__brand">{t("portal.brand")}</footer>
+        {org?.dekopen_credit !== false ? (
+          <footer className="portal-proposal__brand">{t("portal.brand")}</footer>
+        ) : null}
       </article>
+      {zoom ? (
+        <ZoomOverlay title={zoom.title} onClose={() => setZoom(null)}>
+          {zoom.body}
+        </ZoomOverlay>
+      ) : null}
     </main>
   );
 }

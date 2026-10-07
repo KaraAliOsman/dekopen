@@ -164,6 +164,12 @@ def run_auth_e2e(env: Mapping[str, str], *test_args: str) -> None:
     _free_port(5173)
     node = executable("node")
     backend_env = dict(env)
+    # Proveedor Flow simulado: el portal de cotización ejerce el cobro
+    # completo (CTA → checkout simulado → retorno) sin red real. El
+    # retorno del pagador apunta al mismo origen que sirve Vite.
+    backend_env["FLOW_WS_MOCK"] = "1"
+    backend_env.setdefault("FRONTEND_ORIGIN", "http://127.0.0.1:5173")
+    backend_env.setdefault("BILLING_FRONTEND_ORIGIN", "http://127.0.0.1:5173")
     frontend_env = {
         key: value for key, value in env.items()
         if key not in {"DATABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "SECRET_KEY", "JWT_SECRET"}

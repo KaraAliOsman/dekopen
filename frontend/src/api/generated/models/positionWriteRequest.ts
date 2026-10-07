@@ -18,4 +18,5 @@ export interface PositionWriteRequest {
   quantity: number;
   design: PositionDesignRequest;
   measurement?: PositionMeasurementRequest | null;
+  is_option?: boolean;
 }
