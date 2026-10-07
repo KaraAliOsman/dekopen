@@ -1,0 +1,120 @@
+{
+  "id": "hst-elevacion",
+  "name": "Corredera elevable (HST) — esquema A",
+  "box": {
+    "x": 0,
+    "y": 0,
+    "w": 2400,
+    "h": 1600
+  },
+  "input": {
+    "kind": "sliding",
+    "unit": "WINDOW",
+    "movement": "LIFT_SLIDE",
+    "tracks": 1,
+    "panels": [
+      {
+        "slot": "O1",
+        "kind": "FIXED",
+        "track": null,
+        "travel": null
+      },
+      {
+        "slot": "X1",
+        "kind": "MOVING",
+        "track": 0,
+        "travel": "RIGHT"
+      }
+    ]
+  },
+  "views": {
+    "interior": {
+      "stiles": 0,
+      "leaves": [
+        {
+          "prims": [
+            {
+              "k": "none",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": []
+        },
+        {
+          "prims": [
+            {
+              "k": "lift_arrow",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": "RIGHT",
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 1627.2 800 H 1748.16 V 690.56 H 1851.84 V 800 H 1972.8 M 2050.56 744.7 L 1972.8 800 L 2050.56 855.3",
+              "dash": null
+            }
+          ]
+        }
+      ]
+    },
+    "exterior": {
+      "stiles": 0,
+      "leaves": [
+        {
+          "prims": [
+            {
+              "k": "none",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": []
+        },
+        {
+          "prims": [
+            {
+              "k": "lift_arrow",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": "RIGHT",
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 1627.2 800 H 1748.16 V 690.56 H 1851.84 V 800 H 1972.8 M 2050.56 744.7 L 1972.8 800 L 2050.56 855.3",
+              "dash": null
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

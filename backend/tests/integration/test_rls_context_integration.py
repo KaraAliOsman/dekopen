@@ -497,7 +497,7 @@ def test_shot06_all_28_catalog_fields_reach_typed_engine(real_rows: RLSFixtures)
     expected_fields = expected.model_dump()
     actual_fields["available_hardware_kits"] = sorted(actual_fields["available_hardware_kits"], key=lambda k: k["sku"])
     expected_fields["available_hardware_kits"] = sorted(expected_fields["available_hardware_kits"], key=lambda k: k["sku"])
-    assert len(SystemParams.model_fields) == len(actual_fields) == 39
+    assert len(SystemParams.model_fields) == len(actual_fields) == 42
     # The demo seed declares the same synthetic per-article masses the engine
     # fixture carries — mass authority must reach the typed model
     # field-for-field rather than arriving through a fallback.

@@ -50,6 +50,8 @@
               "apex_at": "0.4",
               "dash": false,
               "dir": "RIGHT",
+              "vdir": null,
+              "axis_dir": null,
               "inferred": false,
               "side": null,
               "at_mm": null
@@ -70,6 +72,8 @@
               "apex_at": "0.4",
               "dash": false,
               "dir": "RIGHT",
+              "vdir": null,
+              "axis_dir": null,
               "inferred": false,
               "side": null,
               "at_mm": null
@@ -90,6 +94,8 @@
               "apex_at": "0.4",
               "dash": false,
               "dir": "LEFT",
+              "vdir": null,
+              "axis_dir": null,
               "inferred": false,
               "side": null,
               "at_mm": null
@@ -110,6 +116,8 @@
               "apex_at": "0.4",
               "dash": false,
               "dir": "LEFT",
+              "vdir": null,
+              "axis_dir": null,
               "inferred": false,
               "side": null,
               "at_mm": null
@@ -135,6 +143,8 @@
               "apex_at": "0.4",
               "dash": false,
               "dir": "RIGHT",
+              "vdir": null,
+              "axis_dir": null,
               "inferred": false,
               "side": null,
               "at_mm": null
@@ -155,6 +165,8 @@
               "apex_at": "0.4",
               "dash": false,
               "dir": "RIGHT",
+              "vdir": null,
+              "axis_dir": null,
               "inferred": false,
               "side": null,
               "at_mm": null
@@ -175,6 +187,8 @@
               "apex_at": "0.4",
               "dash": false,
               "dir": "LEFT",
+              "vdir": null,
+              "axis_dir": null,
               "inferred": false,
               "side": null,
               "at_mm": null
@@ -195,6 +209,8 @@
               "apex_at": "0.4",
               "dash": false,
               "dir": "LEFT",
+              "vdir": null,
+              "axis_dir": null,
               "inferred": false,
               "side": null,
               "at_mm": null

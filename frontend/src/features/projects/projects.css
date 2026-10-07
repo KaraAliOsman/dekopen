@@ -1094,6 +1094,28 @@ p.handle-pending {
   font-size: 0.75rem;
   color: var(--theme-text-secondary);
 }
+/* D08 §8 — tipologías que la serie activa no declara: se muestran con su
+ * causa y las series que sí las admiten, nunca se esconden ni se inventan. */
+.typology-blocked__summary {
+  color: var(--theme-text-secondary);
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: var(--space-4) 0;
+}
+.starter-card--blocked {
+  cursor: default;
+  opacity: 0.65;
+}
+.starter-card-cause {
+  color: var(--theme-text-muted);
+  font-size: 0.72rem;
+}
+.starter-card-admitting {
+  color: var(--info-ink);
+  font-size: 0.72rem;
+  min-height: 1em;
+}
 
 .projects-payments {
   margin-top: var(--space-12);

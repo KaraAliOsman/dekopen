@@ -15,6 +15,7 @@ from dekopen_engine import (
     EffectiveProfileArticle,
     EngineResult,
     HingeSide,
+    IncompatibleTypologyError,
     LeafRole,
     NodeType,
     Opening,
@@ -209,7 +210,7 @@ def parse_parametric_node(payload: object) -> ParametricNode:
 
 
 _OPENING_FIELDS = {"movement", "hinge_side", "direction", "leaf_role", "fixed_in_sash"}
-_LEAF_FIELDS = {"slot", "opening"}
+_LEAF_FIELDS = {"slot", "opening", "axis_offset_mm"}
 
 
 def _parse_opening(payload: object) -> Opening:
@@ -266,10 +267,20 @@ def _parse_leaves(payload: object) -> list[BayLeaf]:
                 f"leaves[{index}] contains unsupported fields: "
                 f"{sorted(unexpected)}"
             )
+        axis_raw = raw.get("axis_offset_mm")
+        axis_offset: Decimal | None = None
+        if axis_raw is not None:
+            try:
+                axis_offset = Decimal(str(axis_raw))
+            except InvalidOperation as error:
+                raise InvalidEngineRequest(
+                    f"leaves[{index}].axis_offset_mm must be numeric"
+                ) from error
         leaves.append(
             BayLeaf(
                 slot=_require_str(raw.get("slot"), f"leaves[{index}].slot"),
                 opening=_parse_opening(raw.get("opening")),
+                axis_offset_mm=axis_offset,
             )
         )
     return leaves
@@ -553,6 +564,11 @@ def calculate_from_api(
     )
     try:
         return calculate_geometry(root, params, color_selection=selection)
+    except IncompatibleTypologyError:
+        # DomainRejection is a ValueError — let it through untranslated so
+        # the view can answer typology_incompatible with the systems that
+        # do admit the opening (D08's "no disponible con causa" contract).
+        raise
     except NotImplementedError as error:
         raise UnsupportedEngineContract(str(error)) from error
     except ValueError as error:

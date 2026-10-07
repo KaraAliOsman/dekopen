@@ -31,11 +31,16 @@ export const APEX_AT = 0.4;
 export type ElevationView = "interior" | "exterior";
 
 export type GlyphPrimitive = {
-  k: "tri" | "arrow" | "handle" | "sill" | "none";
+  k: "tri" | "arrow" | "lift_arrow" | "varrow" | "axis" | "handle" | "sill" | "none";
   hinge?: "LEFT" | "RIGHT" | "TOP" | "BOTTOM" | null;
   apex_at?: number;
   dash?: boolean;
   dir?: "LEFT" | "RIGHT" | null;
+  /** Dirección vertical resuelta de una guillotina. */
+  vdir?: "UP" | "DOWN" | null;
+  /** Orientación del eje pivotante: "v" (desde el canto izquierdo) o
+   * "h" (desde el canto superior), a la distancia `at_mm`. */
+  axis_dir?: "v" | "h" | null;
   /** true cuando la dirección es la convención de presentación, no una
    * declaración del producto — las superficies la marcan
    * "dirección inferida". */
@@ -75,7 +80,12 @@ function isOperable(opening: OpeningSpecPayload): boolean {
 export function leafPrimitives(
   opening: OpeningSpecPayload,
   view: ElevationView = "interior",
-  opts: { unit?: string; handle_mm?: number | null } = {},
+  opts: {
+    unit?: string;
+    handle_mm?: number | null;
+    axis_mm?: number | null;
+    slot?: string | null;
+  } = {},
 ): GlyphPrimitive[] {
   const movement = opening.movement;
   if (movement === "FIXED") return [{ k: "none" }];
@@ -83,20 +93,40 @@ export function leafPrimitives(
   const hinge = opening.hinge_side;
   const prims: GlyphPrimitive[] = [];
   if (
-    (movement === "TURN" ||
-      movement === "TILT_TURN" ||
-      movement === "FOLD" ||
-      movement === "PIVOT_V") &&
+    (movement === "TURN" || movement === "TILT_TURN" || movement === "FOLD") &&
     (hinge === "LEFT" || hinge === "RIGHT")
   ) {
     prims.push({ k: "tri", hinge, apex_at: APEX_AT, dash });
   }
-  if (movement === "TILT_TURN" || movement === "TILT" || movement === "BOTTOM_HUNG") {
+  if (
+    movement === "TILT_TURN" ||
+    movement === "TILT" ||
+    movement === "BOTTOM_HUNG" ||
+    // Osciloparalela: el basculante (triángulo inferior) + la flecha.
+    movement === "PARALLEL_SLIDE"
+  ) {
     prims.push({ k: "tri", hinge: "BOTTOM", apex_at: APEX_AT, dash });
   } else if (movement === "TOP_HUNG") {
     prims.push({ k: "tri", hinge: "TOP", apex_at: APEX_AT, dash });
   }
-  if (movement.endsWith("SLIDE")) {
+  if (movement === "PIVOT_V" || movement === "PIVOT_H") {
+    // Pivotante: el eje declarado es el símbolo, nunca un triángulo.
+    prims.push({
+      k: "axis",
+      axis_dir: movement === "PIVOT_V" ? "v" : "h",
+      at_mm: opts.axis_mm ?? null,
+      dash,
+    });
+  }
+  if (movement === "LIFT_SLIDE") {
+    // HST — flecha de desplazamiento con quiebro de elevación.
+    prims.push({ k: "lift_arrow", dir: null, dash, inferred: true });
+  } else if (movement === "VERTICAL_SLIDE") {
+    // Guillotina — flecha vertical; la hoja BOTTOM sube, la TOP baja.
+    const vdir =
+      opts.slot === "BOTTOM" ? ("UP" as const) : opts.slot === "TOP" ? ("DOWN" as const) : null;
+    prims.push({ k: "varrow", vdir, dash, inferred: vdir === null });
+  } else if (movement.endsWith("SLIDE")) {
     // A spec-level sliding leaf carries no travel — the layout does; the
     // double-headed arrow only declares "this leaf slides".
     prims.push({ k: "arrow", dir: null, dash, inferred: true });
@@ -117,17 +147,23 @@ export function leafPrimitives(
 export function slidingPrimitives(
   layout: SlidingLayout,
   _view: ElevationView = "interior",
+  movement = "SLIDE",
 ): GlyphPrimitive[][] {
   const count = layout.panels.length;
   return layout.panels.map((panel, index) => {
     if (panel.kind === "FIXED") return [{ k: "none" }];
-    return [
+    const arrowKind = movement === "LIFT_SLIDE" ? ("lift_arrow" as const) : ("arrow" as const);
+    const prims: GlyphPrimitive[] = [
       {
-        k: "arrow",
+        k: arrowKind,
         dir: panelTravel(panel, index, count),
         inferred: travelInferred(panel),
       },
     ];
+    if (movement === "PARALLEL_SLIDE") {
+      prims.unshift({ k: "tri", hinge: "BOTTOM", apex_at: APEX_AT });
+    }
+    return prims;
   });
 }
 
@@ -227,6 +263,66 @@ export function glyphPaths(
         d = `M ${fmt(tipL)} ${fmt(cy)} H ${fmt(tipR)} M ${fmt(tipR - head)} ${fmt(cy - barb)} L ${fmt(tipR)} ${fmt(cy)} L ${fmt(tipR - head)} ${fmt(cy + barb)} M ${fmt(tipL + head)} ${fmt(cy - barb)} L ${fmt(tipL)} ${fmt(cy)} L ${fmt(tipL + head)} ${fmt(cy + barb)}`;
       }
       paths.push({ d, dash: prim.dash ? GLYPH_DASH : null, inferred: !!prim.inferred, k: prim.k });
+    } else if (prim.k === "lift_arrow") {
+      // HST — el vástago lleva un quiebro vertical: el gesto de elevar.
+      const half = iw * ARROW_LEN;
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+      const head = half * ARROW_HEAD;
+      const barb = half * ARROW_BARB;
+      const stepY = ih * 0.09;
+      const stepX = half * 0.3;
+      const shaft = (tail: number, tip: number) =>
+        `M ${fmt(tail)} ${fmt(cy)} H ${fmt(cx - stepX)} V ${fmt(cy - stepY)}` +
+        ` H ${fmt(cx + stepX)} V ${fmt(cy)} H ${fmt(tip)}`;
+      const headPath = (tip: number, towards: number) => {
+        const barbX = towards < tip ? tip + head : tip - head;
+        return ` M ${fmt(barbX)} ${fmt(cy - barb)} L ${fmt(tip)} ${fmt(cy)} L ${fmt(barbX)} ${fmt(cy + barb)}`;
+      };
+      let d: string;
+      if (prim.dir === "LEFT") {
+        d = shaft(cx + half, cx - half) + headPath(cx - half, cx + half);
+      } else if (prim.dir === "RIGHT") {
+        d = shaft(cx - half, cx + half) + headPath(cx + half, cx - half);
+      } else {
+        d =
+          shaft(cx - half, cx + half) +
+          headPath(cx + half, cx - half) +
+          headPath(cx - half, cx + half);
+      }
+      paths.push({ d, dash: prim.dash ? GLYPH_DASH : null, inferred: !!prim.inferred, k: prim.k });
+    } else if (prim.k === "varrow") {
+      const half = ih * ARROW_LEN;
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+      const head = half * ARROW_HEAD;
+      const barb = half * ARROW_BARB;
+      let d: string;
+      if (prim.vdir === "UP") {
+        d =
+          `M ${fmt(cx)} ${fmt(cy + half)} V ${fmt(cy - half)}` +
+          ` M ${fmt(cx - barb)} ${fmt(cy - half + head)} L ${fmt(cx)} ${fmt(cy - half)} L ${fmt(cx + barb)} ${fmt(cy - half + head)}`;
+      } else if (prim.vdir === "DOWN") {
+        d =
+          `M ${fmt(cx)} ${fmt(cy - half)} V ${fmt(cy + half)}` +
+          ` M ${fmt(cx - barb)} ${fmt(cy + half - head)} L ${fmt(cx)} ${fmt(cy + half)} L ${fmt(cx + barb)} ${fmt(cy + half - head)}`;
+      } else {
+        d =
+          `M ${fmt(cx)} ${fmt(cy + half)} V ${fmt(cy - half)}` +
+          ` M ${fmt(cx - barb)} ${fmt(cy - half + head)} L ${fmt(cx)} ${fmt(cy - half)} L ${fmt(cx + barb)} ${fmt(cy - half + head)}` +
+          ` M ${fmt(cx - barb)} ${fmt(cy + half - head)} L ${fmt(cx)} ${fmt(cy + half)} L ${fmt(cx + barb)} ${fmt(cy + half - head)}`;
+      }
+      paths.push({ d, dash: prim.dash ? GLYPH_DASH : null, inferred: !!prim.inferred, k: prim.k });
+    } else if (prim.k === "axis" && prim.axis_dir) {
+      let d: string;
+      if (prim.axis_dir === "v") {
+        const ax = Math.min(Math.max(x + (prim.at_mm ?? w / 2), x), x + w);
+        d = `M ${fmt(ax)} ${fmt(y)} V ${fmt(y + h)}`;
+      } else {
+        const ay = Math.min(Math.max(y + (prim.at_mm ?? h / 2), y), y + h);
+        d = `M ${fmt(x)} ${fmt(ay)} H ${fmt(x + w)}`;
+      }
+      paths.push({ d, dash: GLYPH_DASH, inferred: false, k: prim.k });
     } else if (prim.k === "handle" && prim.side) {
       const arm = HANDLE_ARM_MM;
       const datum = prim.at_mm ?? 0;

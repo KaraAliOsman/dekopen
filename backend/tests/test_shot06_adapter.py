@@ -97,5 +97,7 @@ def test_system_params_contract_accounts_for_every_field() -> None:
         # D06: catalog-provided accessory articles the position pass prices
         # and cuts against (extras.py inside evaluate_product).
         "extra_articles",
+        # D08: clearances the advanced typologies consume from the catalog.
+        "fold_guide_clearance_mm", "fold_leaf_clearance_mm", "pivot_clearance_mm",
     }
-    assert len(demo_60_params().model_dump()) == 39
+    assert len(demo_60_params().model_dump()) == 42

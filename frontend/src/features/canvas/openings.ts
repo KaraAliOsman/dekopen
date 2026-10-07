@@ -53,3 +53,15 @@ export function openingOptionAdmitted(
   }
   return false;
 }
+
+/** Direct membership check against an emitted spec key — advanced
+ * typologies (D08) have no grid id, so their recipes compare the exact
+ * composition key the catalog row emitted (`DOOR:PRIMARY:SLIDE`,
+ * `L1:FOLD:LEFT:INWARD:ACTIVE|…`). */
+export function openingSpecKeyAdmitted(
+  specKey: string,
+  openingOptions: readonly OpeningOption[] | undefined,
+): boolean {
+  if (!openingOptions) return true;
+  return openingOptions.some((option) => String(option.key) === specKey);
+}

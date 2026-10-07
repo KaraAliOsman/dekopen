@@ -131,19 +131,42 @@ def test_g4_compound_through_adapter_matches_engine_exactly(
     assert glasses["bay_ob"]["width_mm"] == "696.00"
 
 
-def test_deferred_opening_returns_422(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_undeclared_opening_names_admitting_systems(monkeypatch: pytest.MonkeyPatch) -> None:
     client = APIClient()
     configure_api(client, monkeypatch)
     payload = g1_request()
-    # A movement declared on the spec axis whose fabrication D08 owns
-    # still surfaces the deferred-opening contract.
+    # D08 fabricates PIVOT_V, but DEMO_60's catalog does not declare it —
+    # the refusal is a typology rejection naming the systems that do.
+    monkeypatch.setattr(
+        SystemParamsRepository,
+        "list_visible",
+        lambda self, active_org_id: (
+            VisibleProfileSystem(
+                id=SYSTEM_ID,
+                code="DEMO_60",
+                name="Sistema Demo 60mm PVC",
+                is_demo=True,
+                system_family=SystemFamily.CASEMENT,
+            ),
+            VisibleProfileSystem(
+                id=SYSTEM_ID,
+                code="DEMO_PIVOTANTE_120",
+                name="Sistema Demo Pivotante 120mm",
+                is_demo=True,
+                system_family=SystemFamily.PIVOT,
+            ),
+        ),
+    )
     del payload["parametric_tree"]["opening_type"]
-    payload["parametric_tree"]["opening"] = {"movement": "PIVOT_V"}
+    payload["parametric_tree"]["opening"] = {"movement": "PIVOT_V", "hinge_side": "NONE"}
 
     response = client.post("/api/v1/engine/calculate/", payload, format="json")
 
-    assert response.status_code == 422
-    assert response.json()["error"]["code"] == "unsupported_engine_contract"
+    assert response.status_code == 400
+    body = response.json()["error"]
+    assert body["code"] == "typology_incompatible"
+    assert "DEMO_PIVOTANTE_120" in body["detail"]
+    assert "DEMO_60" not in body["detail"].split("sistemas que sí la admiten:")[-1]
 
 
 def test_inaccessible_system_returns_404(monkeypatch: pytest.MonkeyPatch) -> None:

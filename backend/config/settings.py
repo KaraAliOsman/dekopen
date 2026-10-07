@@ -177,6 +177,9 @@ SPECTACULAR_SETTINGS = {
         "KitOpeningTypeEnum": [
             "AWNING", "BOTTOM_HUNG", "DOOR", "FALLEBA", "SLIDING", "TILT",
             "TILT_TURN", "TURN",
+            # D08 — advanced-typology kit families.
+            "LIFT_SLIDE", "PARALLEL_SLIDE", "FOLD", "PIVOT",
+            "VERTICAL_SLIDE", "DOOR_SLIDING",
         ],
         "ImportOpeningTypeEnum": [
             "AWNING", "DOOR_ENTRY", "FIXED", "SLIDING_2L",

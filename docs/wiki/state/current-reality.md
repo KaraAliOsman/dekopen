@@ -108,12 +108,26 @@ Merged into `integracion/v1` as squash `d7dc6a9c83d19958ca7730930ec27381c30c967c
 - Congelado: los `bom.fittings` de extras contados pasan por el gate `fitting_purchase_mapping_missing_or_ambiguous` igual que herrajes (semilla global en `seed.sql`); el neto sellado incluye sublineas + servicios y los precios historicos quedan congelados en el snapshot.
 - Verificado: `make lint|typecheck|test|build` y `make test-db` verdes (`PY=.venv/bin/python`); golden 1500+30+30→1560 mm e instalacion por ml de perimetro; suma sublineas == total de posicion; plantillas aplicadas en vano nuevo; 30 capturas en `docs/redesign/captures/d06-accesorios-extras/` (antes 4, despues 24 + 2 DOC-01) + ux-audit sin hallazgos nuevos (enum MOSQUITO_SCREEN corregido en BOM con `catalog.extraKind`).
 
+## D08 state
+
+Delivered on branch `devin/D08-tipologias-avanzadas` (verified at `c564c055987d7a5edc1967a1642fce3e3b19d3d8`, PR head rebased on `b6b18f0a`):
+
+- Six advanced typologies run the full engine vertical slice — model, `assert_opening_allowed` validation (`families_admitting_spec`), cuts, BOM, hardware kits, DIN symbology and es-CL human names: puerta corredera elevable/HST (`LIFT_SLIDE`), osciloparalela/PSK (`PARALLEL_SLIDE`), plegable (`FOLD` n+m with ACTIVE pass-leaf), pivotante (`PIVOT_V`/`PIVOT_H` + `axis_offset_mm`), guillotina (`VERTICAL_SLIDE`, simple/doble) and puerta corredera (`DOOR` + `SLIDE`).
+- New `SystemFamily` values LIFT_SLIDE/PARALLEL_SLIDE/FOLDING/PIVOT/VERTICAL_SLIDE + `FAMILY_MOVEMENTS`/`FAMILY_UNIT_KINDS` repertoire per family; `SystemParams` gained `fold_guide_clearance_mm`, `fold_leaf_clearance_mm`, `pivot_clearance_mm`.
+- Catalog: migration `20270218000000_d08_tipologias_avanzadas.sql` seeds six synthetic DEMO systems (`DEMO_ELEVACION_90`, `DEMO_PSK_90`, `DEMO_PLEGABLE_70`, `DEMO_PIVOTANTE_120`, `DEMO_GUILLOTINA_60`, `DEMO_PUERTA_CORREDERA_70`) with opening capabilities, kits (`LIFT_SLIDE`/`PARALLEL_SLIDE`/`FOLD`/`PIVOT`/`VERTICAL_SLIDE`/`DOOR_SLIDING` enum values added to `KitOpeningTypeEnum` + regenerated openapi/orval client), cut and reinforcement rules — marked SEED_SYNTHETIC, never real manufacturer data.
+- Backend: `IncompatibleTypologyError` now propagates through `adapter.calculate_from_api` + `derivative_views` as 400 `typology_incompatible` with `compatible_systems` resolved via `list_visible` + `families_admitting_spec` — the contract is live, not dead code.
+- Frontend: the typology library gained an "Avanzadas" group; `starterCompatible` checks every bay's emitted spec key via `openingSpecKeyAdmitted` (spec bays) or `openingOptionAdmitted` (enum bays); blocked cards show the cause and a lazy per-system query names which catalog systems admit the recipe (§8 "La admiten:" list) — a typology is never invented, only offered where the catalog declares it.
+- Plan symbols: `opening_symbols.py` + TS mirror gained folded-package, lift-slide rail, pivot-axis and vertical-slide primitives; the F5 extended plan shows real travel per the P05 glyph pipeline; fixtures under `engine/tests/fixtures/symbols/`.
+- Decisions registered in `docs/decisions/valores-por-defecto.md` (D08 section); captures under `docs/redesign/captures/d08-tipologias-avanzadas/`.
+
+Verification: `make lint|typecheck|test|build` and `make test-db` green (`PY=.venv/bin/python`) — 1185 pgTAP incl. `185_d08_tipologias.test.sql`, 283 backend integration, 27 e2e, engine 742, backend unit 1315, frontend 723; golden per typology + capability rejection naming admitting systems.
+
 ## D03 state
 
 Merged into `integracion/v1` as squash `db136a7207487e4e843b17f36f03a4c78a54b79b` (dekopen PR #9):
 
 - `Opening{movement, hinge_side, direction, leaf_role, fixed_in_sash}` + `BayLeaf{slot, opening}` + `OpeningSpec{unit_kind, leaves}` is the real opening model (`engine/.../models.py`, `openings.py`); the legacy `opening_type` enum stays accepted for one version and maps totally to/from specs (`spec_for_legacy`/`legacy_openings_for_spec`) — migrated goldens are byte-identical.
-- Movements declared: FIXED, TURN, TILT, TILT_TURN, TOP_HUNG, BOTTOM_HUNG, SLIDE, LIFT_SLIDE, PARALLEL_SLIDE, FOLD, PIVOT_V, PIVOT_H, VERTICAL_SLIDE — the last six are declared-only (D08 implements them); sliding still routes through the legacy `sliding_layout` path.
+- Movements declared: FIXED, TURN, TILT, TILT_TURN, TOP_HUNG, BOTTOM_HUNG, SLIDE, LIFT_SLIDE, PARALLEL_SLIDE, FOLD, PIVOT_V, PIVOT_H, VERTICAL_SLIDE — all implemented (D08 gave the last six model, validation, cuts, BOM, hardware, symbols and human names); sliding still routes through the legacy `sliding_layout` path.
 - `unit_kind` (WINDOW/DOOR) is declared on the unit's top node (a split), not ROOT; a DOOR unit enables `DOOR_SASH` leaves inside splits → door+sidelight and double door without a meeting stile mullion; multi-leaf hinged bays are exactly 1 ACTIVE + PASSIVE (passive carries INVERSOR + falleba hardware).
 - `system_opening_capabilities` (migration `20261230000000`) admits movement×directions×roles×unit_kinds×max_leaves per system, falling back to family defaults when the catalog declares no rows; rejection names the admitting families (engine) and systems (backend), and editor/API/AI only offer admitted combinations.
 - Handle derivation is policy-driven per leaf: lock side opposite the hinges (french = active leaf only), height from the system's/kit's handle policy (`handle_height_mm`), editable.

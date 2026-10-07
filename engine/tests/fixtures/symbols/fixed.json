@@ -16,7 +16,9 @@
         "hinge_side": "NONE",
         "direction": null,
         "leaf_role": "SINGLE",
-        "handle_mm": null
+        "handle_mm": null,
+        "slot": null,
+        "axis_offset_mm": null
       }
     ]
   },
@@ -32,6 +34,8 @@
               "apex_at": "0.4",
               "dash": false,
               "dir": null,
+              "vdir": null,
+              "axis_dir": null,
               "inferred": false,
               "side": null,
               "at_mm": null
@@ -52,6 +56,8 @@
               "apex_at": "0.4",
               "dash": false,
               "dir": null,
+              "vdir": null,
+              "axis_dir": null,
               "inferred": false,
               "side": null,
               "at_mm": null

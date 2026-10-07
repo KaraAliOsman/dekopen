@@ -207,9 +207,22 @@ class Opening(EngineModel):
         elif movement in (OpeningMovement.PIVOT_V, OpeningMovement.PIVOT_H):
             if self.hinge_side is not HingeSide.NONE:
                 raise ValueError(f"{movement.value} rotates on an axis, not a hinge edge")
+            # The displaced axis is the kinematics (BayLeaf.axis_offset_mm);
+            # a nominal swing side would be ambiguous — pivot leaves rotate
+            # through both faces and the kit's declared stopper rules them.
+            if self.direction is not None:
+                raise ValueError(f"{movement.value} carries no direction — the axis rules")
         elif movement is OpeningMovement.FOLD:
-            if self.hinge_side not in (HingeSide.LEFT, HingeSide.RIGHT, HingeSide.NONE):
-                raise ValueError("FOLD hinges on a side edge or none")
+            # Every folding leaf belongs to a pack: it hinges on the edge
+            # its pack folds toward (all leaves of a pack share one side),
+            # declares the face the pack folds to (INWARD/OUTWARD) and
+            # plays a pack role — the hoja de paso ACTIVE, the rest PASSIVE.
+            if self.hinge_side not in (HingeSide.LEFT, HingeSide.RIGHT):
+                raise ValueError("FOLD requires hinge_side LEFT or RIGHT (the pack side)")
+            if self.direction is None:
+                raise ValueError("FOLD requires a direction (the face the pack folds to)")
+            if self.leaf_role is LeafRole.SINGLE:
+                raise ValueError("FOLD leaves are pack members: ACTIVE or PASSIVE")
         return self
 
     def key(self) -> str:
@@ -235,16 +248,38 @@ class BayLeaf(EngineModel):
     """One operable leaf of a bay (D03).
 
     Slot order is left→right in the interior-view elevation: L1..LN for a
-    multi-leaf bay, PRIMARY for a single-leaf one."""
+    multi-leaf bay, PRIMARY for a single-leaf one; a vertical slider names
+    its stacked sashes TOP / BOTTOM."""
 
     slot: str
     opening: Opening
+    # Displaced pivot axis (D08): mm from the leaf's left finished edge
+    # (PIVOT_V) or from its top finished edge (PIVOT_H). Declared only on
+    # pivot leaves — fabrication refuses a pivot without it, never
+    # assumes a centered axis.
+    axis_offset_mm: Decimal | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def _axis_offset_belongs_to_a_pivot(self) -> "BayLeaf":
+        if self.axis_offset_mm is not None and self.opening.movement not in (
+            OpeningMovement.PIVOT_V,
+            OpeningMovement.PIVOT_H,
+        ):
+            raise ValueError("axis_offset_mm only applies to PIVOT_V/PIVOT_H leaves")
+        return self
 
 
 # Hinged movements a multi-leaf bay can compose — the meeting stile of a
 # side-hinged pair is the inversor/encuentro a sliding layout cannot give.
 _HINGED_MULTI_LEAF_MOVEMENTS = frozenset(
     {OpeningMovement.TURN, OpeningMovement.TILT_TURN}
+)
+
+# Movements composing a vertical sash window (guillotina): each sash
+# rides its own vertical channel — TOP / BOTTOM slots — and either sash
+# may stay fixed (single-hung) or travel (double-hung).
+_VERTICAL_SLIDE_MULTI_LEAF = frozenset(
+    {OpeningMovement.VERTICAL_SLIDE, OpeningMovement.FIXED}
 )
 
 
@@ -265,12 +300,17 @@ class OpeningSpec(EngineModel):
             if leaf.opening.leaf_role is not LeafRole.SINGLE:
                 raise ValueError("A single-leaf bay takes leaf_role SINGLE")
             return self
-        # Multi-leaf composition (D03 scope: the 2-leaf hinged pair —
-        # french window / double door; wider hinged runs need posts and
-        # belong to splits).
+        # Multi-leaf composition: the 2-leaf hinged pair (french window /
+        # double door), the folding pack (D08) and the stacked guillotina.
+        movements = {leaf.opening.movement for leaf in self.leaves}
+        if movements == {OpeningMovement.FOLD}:
+            self._fold_composition_is_buildable()
+            return self
+        if movements <= _VERTICAL_SLIDE_MULTI_LEAF:
+            self._vertical_slide_composition_is_buildable()
+            return self
         if len(self.leaves) > 2:
             raise ValueError("Hinged bays compose at most two leaves")
-        movements = {leaf.opening.movement for leaf in self.leaves}
         if len(movements) != 1:
             raise ValueError("Multi-leaf bays share one movement")
         movement = next(iter(movements))
@@ -295,6 +335,80 @@ class OpeningSpec(EngineModel):
             raise ValueError("The right leaf of a pair hinges RIGHT")
         return self
 
+    def _fold_composition_is_buildable(self) -> None:
+        """Folding-door composition rules (D08).
+
+        A folding unit splits into at most two packs: a LEFT run that
+        folds against the left jamb and a RIGHT run that folds against
+        the right jamb — every leaf hinges on its pack side. The packs
+        must be anchored: the left run starts at L1, the right run ends
+        at the last leaf, and no LEFT-hinged leaf may follow a
+        RIGHT-hinged one. Scheme names read like the catalog's: 3+0
+        (three left), 2+1 (two left + single leaf right), 1+2, 2+2.
+
+        The hoja de paso is the pack's jamb leaf playing ACTIVE — the
+        leaf that opens alone like a door. Only pack anchors can take
+        the role: the left run's first leaf or the right run's last.
+        """
+        leaves = self.leaves
+        if len(leaves) < 2:
+            raise ValueError("A folding unit needs at least two leaves to fold")
+        directions = {leaf.opening.direction for leaf in leaves}
+        if len(directions) != 1:
+            raise ValueError("A folding unit folds to one face — leaves share direction")
+        sides = [leaf.opening.hinge_side for leaf in leaves]
+        left_run = 0
+        for side in sides:
+            if side is HingeSide.LEFT:
+                left_run += 1
+            else:
+                break
+        right_run = 0
+        for side in reversed(sides):
+            if side is HingeSide.RIGHT:
+                right_run += 1
+            else:
+                break
+        if left_run + right_run != len(leaves):
+            raise ValueError(
+                "FOLD packs anchor to the jambs: LEFT-hinged leaves lead, "
+                "RIGHT-hinged leaves close the run"
+            )
+        anchors: set[int] = set()
+        if left_run > 0:
+            anchors.add(0)
+        if right_run > 0:
+            anchors.add(len(leaves) - 1)
+        for index, leaf in enumerate(leaves):
+            if leaf.opening.leaf_role is LeafRole.ACTIVE and index not in anchors:
+                raise ValueError(
+                    "La hoja de paso solo puede vivir en el paquete que toca "
+                    "el marco (primera hoja del lado izquierdo o última del derecho)"
+                )
+
+    def _vertical_slide_composition_is_buildable(self) -> None:
+        """Guillotina composition rules (D08): one or two stacked sashes.
+
+        A single sash covers the reveal and travels up; two sashes split
+        the reveal — TOP / BOTTOM slots — and either travels (double-hung)
+        or the top stays a fixed pane (single-hung: FIXED + VERTICAL_SLIDE).
+        """
+        leaves = self.leaves
+        if len(leaves) > 2:
+            raise ValueError("A guillotina composes at most two sashes")
+        if not any(
+            leaf.opening.movement is OpeningMovement.VERTICAL_SLIDE
+            for leaf in leaves
+        ):
+            raise ValueError("A guillotina needs at least one VERTICAL_SLIDE sash")
+        if len(leaves) == 2:
+            if [leaf.slot for leaf in leaves] != ["TOP", "BOTTOM"]:
+                raise ValueError("A two-sash guillotina names its slots TOP and BOTTOM")
+        for leaf in leaves:
+            if leaf.opening.leaf_role is not LeafRole.SINGLE:
+                raise ValueError("Guillotina sashes take no leaf roles")
+
+
 
 class OpeningCapability(EngineModel):
     """One composition class a system declares it can fabricate (D03).
@@ -308,7 +422,8 @@ class OpeningCapability(EngineModel):
     directions: tuple[OpeningDirection, ...] = ()
     leaf_roles: tuple[LeafRole, ...] = (LeafRole.SINGLE,)
     unit_kinds: tuple[UnitKind, ...] = (UnitKind.WINDOW,)
-    max_leaves: int = Field(default=1, ge=1, le=2)
+    # 8 is the physical ceiling a folding pack composes in one unit.
+    max_leaves: int = Field(default=1, ge=1, le=8)
     fixed_in_sash: bool = False
 
 
@@ -341,6 +456,10 @@ class SystemFamily(str, Enum):
     CASEMENT = "CASEMENT"  # ventana/puerta practicable y oscilobatiente
     SLIDING = "SLIDING"  # corredera
     LIFT_SLIDE = "LIFT_SLIDE"  # corredera elevable
+    PARALLEL_SLIDE = "PARALLEL_SLIDE"  # osciloparalela
+    FOLDING = "FOLDING"  # plegable
+    PIVOT = "PIVOT"  # pivotante
+    VERTICAL_SLIDE = "VERTICAL_SLIDE"  # guillotina
     DOOR = "DOOR"  # puerta de entrada
     FACADE_FIXED = "FACADE_FIXED"  # fijo fachada
 
@@ -379,6 +498,13 @@ FAMILY_OPENINGS: dict[SystemFamily, frozenset[BayOpeningType]] = {
         {BayOpeningType.FIXED, BayOpeningType.DOOR_ENTRY, BayOpeningType.DOOR_DOUBLE}
     ),
     SystemFamily.FACADE_FIXED: frozenset({BayOpeningType.FIXED}),
+    # D08 families — the legacy enum cannot express their openings; every
+    # family keeps FIXED in the frame, operable leaves arrive through
+    # declared capability rows (or the family's physical repertoire).
+    SystemFamily.PARALLEL_SLIDE: frozenset({BayOpeningType.FIXED}),
+    SystemFamily.FOLDING: frozenset({BayOpeningType.FIXED}),
+    SystemFamily.PIVOT: frozenset({BayOpeningType.FIXED}),
+    SystemFamily.VERTICAL_SLIDE: frozenset({BayOpeningType.FIXED}),
 }
 
 
@@ -1398,6 +1524,15 @@ class SystemParams(EngineModel):
     sliding_glazing_deduction_width_mm: Decimal | None = None
     sliding_glazing_deduction_height_mm: Decimal | None = None
     door_leaf_side_clearance_mm: Decimal | None = None
+    # D08 fabrication data — same contract: declared or the path refuses.
+    # fold_guide_clearance_mm is the combined top+bottom reserve the
+    # folding guides consume inside the reveal; fold_leaf_clearance_mm is
+    # the per-leaf width deduction the pack's hinges and guides need;
+    # pivot_clearance_mm is the perimeter play a pivot leaf keeps inside
+    # its reveal.
+    fold_guide_clearance_mm: Decimal | None = None
+    fold_leaf_clearance_mm: Decimal | None = None
+    pivot_clearance_mm: Decimal | None = None
     available_panel_rules: dict[str, PanelRule] = Field(default_factory=dict)
     # Declared catalog rules (D01): cut conventions per role, reinforcement
     # requirements per role+finish, and leaf dimensional limits per

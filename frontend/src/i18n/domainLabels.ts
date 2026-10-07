@@ -73,11 +73,18 @@ export const DOMAIN_LABELS: Record<string, L> = {
     AWNING: l("Proyectante", "info", "open-awning"),
     BOTTOM_HUNG: l("Abatimiento inferior", "info", "open-tilt-turn"),
     DOOR: l("Puerta", "info", "open-door"),
+    // D08 — herrajes de las tipologías avanzadas.
+    DOOR_SLIDING: l("Puerta corredera", "info", "open-sliding"),
     FALLEBA: l("Falleba hoja pasiva", "info"),
+    FOLD: l("Plegable", "info"),
+    LIFT_SLIDE: l("Corredera elevable", "info", "open-sliding"),
+    PARALLEL_SLIDE: l("Osciloparalela", "info", "open-sliding"),
+    PIVOT: l("Pivotante", "info"),
     SLIDING: l("Corredera", "info", "open-sliding"),
     TILT: l("Banderola", "info", "open-tilt-turn"),
     TILT_TURN: l("Oscilobatiente", "info", "open-tilt-turn"),
     TURN: l("Abatible", "info", "open-turn"),
+    VERTICAL_SLIDE: l("Guillotina", "info"),
   },
   SlidingPanelFactsKindEnum: {
     MOVING: l("Hoja móvil", "info"),

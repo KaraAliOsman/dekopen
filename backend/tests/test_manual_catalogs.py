@@ -72,6 +72,13 @@ def test_kit_opening_choices_match_current_operable_engine():
         "TILT",
         "BOTTOM_HUNG",
         "FALLEBA",
+        # D08 — familias de herraje de las tipologías avanzadas.
+        "LIFT_SLIDE",
+        "PARALLEL_SLIDE",
+        "FOLD",
+        "PIVOT",
+        "VERTICAL_SLIDE",
+        "DOOR_SLIDING",
     }
 
 

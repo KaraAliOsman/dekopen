@@ -1,0 +1,134 @@
+{
+  "id": "guillotina-doble",
+  "name": "Guillotina doble — flechas verticales",
+  "box": {
+    "x": 0,
+    "y": 0,
+    "w": 900,
+    "h": 1600
+  },
+  "input": {
+    "kind": "leaves",
+    "unit": "WINDOW",
+    "leaves": [
+      {
+        "movement": "VERTICAL_SLIDE",
+        "hinge_side": "NONE",
+        "direction": null,
+        "leaf_role": "SINGLE",
+        "handle_mm": null,
+        "slot": "TOP",
+        "axis_offset_mm": null
+      },
+      {
+        "movement": "VERTICAL_SLIDE",
+        "hinge_side": "NONE",
+        "direction": null,
+        "leaf_role": "SINGLE",
+        "handle_mm": null,
+        "slot": "BOTTOM",
+        "axis_offset_mm": null
+      }
+    ]
+  },
+  "views": {
+    "interior": {
+      "stiles": 1,
+      "leaves": [
+        {
+          "prims": [
+            {
+              "k": "varrow",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": "DOWN",
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 225 508.16 V 1091.84 M 131.61 960.51 L 225 1091.84 L 318.39 960.51",
+              "dash": null
+            }
+          ]
+        },
+        {
+          "prims": [
+            {
+              "k": "varrow",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": "UP",
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 675 1091.84 V 508.16 M 581.61 639.49 L 675 508.16 L 768.39 639.49",
+              "dash": null
+            }
+          ]
+        }
+      ]
+    },
+    "exterior": {
+      "stiles": 1,
+      "leaves": [
+        {
+          "prims": [
+            {
+              "k": "varrow",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": "DOWN",
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 225 508.16 V 1091.84 M 131.61 960.51 L 225 1091.84 L 318.39 960.51",
+              "dash": null
+            }
+          ]
+        },
+        {
+          "prims": [
+            {
+              "k": "varrow",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": "UP",
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": [
+            {
+              "d": "M 675 1091.84 V 508.16 M 581.61 639.49 L 675 508.16 L 768.39 639.49",
+              "dash": null
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

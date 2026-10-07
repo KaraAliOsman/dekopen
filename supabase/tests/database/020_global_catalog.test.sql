@@ -94,10 +94,10 @@ SELECT set_config(
     TRUE
 );
 
-SELECT is((SELECT count(*) FROM public.profile_systems), 6::BIGINT, 'tenant A sees the six reference families');
-SELECT is((SELECT count(*) FROM public.profile_articles), 69::BIGINT, 'tenant A sees profiles');
-SELECT is((SELECT count(*) FROM public.hardware_kits), 31::BIGINT, 'tenant A sees hardware');
-SELECT is((SELECT count(*) FROM public.glazing_bead_matrix), 20::BIGINT, 'tenant A sees beads');
+SELECT is((SELECT count(*) FROM public.profile_systems), 12::BIGINT, 'tenant A sees the twelve reference families');
+SELECT is((SELECT count(*) FROM public.profile_articles), 117::BIGINT, 'tenant A sees profiles');
+SELECT is((SELECT count(*) FROM public.hardware_kits), 47::BIGINT, 'tenant A sees hardware');
+SELECT is((SELECT count(*) FROM public.glazing_bead_matrix), 32::BIGINT, 'tenant A sees beads');
 
 RESET ROLE;
 SET LOCAL ROLE authenticated;
@@ -112,10 +112,10 @@ SELECT set_config(
     TRUE
 );
 
-SELECT is((SELECT count(*) FROM public.profile_systems), 6::BIGINT, 'tenant B sees the six reference families');
-SELECT is((SELECT count(*) FROM public.profile_articles), 69::BIGINT, 'tenant B sees profiles');
-SELECT is((SELECT count(*) FROM public.hardware_kits), 31::BIGINT, 'tenant B sees hardware');
-SELECT is((SELECT count(*) FROM public.glazing_bead_matrix), 20::BIGINT, 'tenant B sees beads');
+SELECT is((SELECT count(*) FROM public.profile_systems), 12::BIGINT, 'tenant B sees the twelve reference families');
+SELECT is((SELECT count(*) FROM public.profile_articles), 117::BIGINT, 'tenant B sees profiles');
+SELECT is((SELECT count(*) FROM public.hardware_kits), 47::BIGINT, 'tenant B sees hardware');
+SELECT is((SELECT count(*) FROM public.glazing_bead_matrix), 32::BIGINT, 'tenant B sees beads');
 
 RESET ROLE;
 SELECT ok(

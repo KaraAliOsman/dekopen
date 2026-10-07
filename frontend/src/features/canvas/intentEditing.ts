@@ -69,6 +69,23 @@ export const SLIDING_PRESETS: Record<string, SlidingLayout> = {
   },
 };
 
+/** X/O de una hoja corredera sobre paño fijo — la topología mínima que el
+ * motor exige declarada para la familia slide (mandato §12). La hoja móvil
+ * viaja en el riel interior sobre el paño fijo, la composición estándar
+ * para HST, PSK y puerta corredera de una hoja. */
+export const SLIDE_XO_LAYOUT: SlidingLayout = {
+  tracks: 2,
+  panels: [
+    { slot: "S1", kind: "MOVING", track: 1, travel: "RIGHT" },
+    { slot: "S2", kind: "FIXED", track: null, travel: null },
+  ],
+};
+
+/** Movimientos de la familia slide que se fabrican sobre una topología de
+ * rieles (espejo de `SLIDE_FAMILY_MOVEMENTS` del motor): sin `sliding_layout`
+ * declarado el motor rechaza el vano con `sliding_layout_invalid`. */
+const SLIDE_SPEC_MOVEMENTS = new Set(["SLIDE", "LIFT_SLIDE", "PARALLEL_SLIDE"]);
+
 /** Dirección resuelta de un panel corredero: su `travel` declarado, o la
  * convención documentada — la mitad izquierda del vano viaja a la
  * derecha, la mitad derecha a la izquierda (la hoja corre sobre su slot
@@ -179,7 +196,13 @@ export type OpeningSpecPayload = {
   fixed_in_sash?: boolean | null;
 };
 
-export type LeafSpecPayload = { slot: string; opening: OpeningSpecPayload };
+export type LeafSpecPayload = {
+  slot: string;
+  opening: OpeningSpecPayload;
+  /** Eje pivotante desplazado (D08): mm desde el canto izquierdo
+   * (PIVOT_V) o superior (PIVOT_H) de la hoja acabada. */
+  axis_offset_mm?: number | string | null;
+};
 
 /** The spec an opening-grid option writes onto the node. */
 export interface OptionSpecPatch {
@@ -431,20 +454,28 @@ export function openingKey(opening: OpeningSpecPayload): string {
 
 /** Per-leaf trace of a bay — spec leaves emit their keys, a legacy enum
  * bay emits the enum (the engine resolves it into a spec). */
-export function bayLeafTraces(
-  node: IntentNode,
-): { slot: string; key: string; opening: OpeningSpecPayload | null }[] {
+export function bayLeafTraces(node: IntentNode): {
+  slot: string;
+  key: string;
+  opening: OpeningSpecPayload | null;
+  axisOffsetMm: number | null;
+}[] {
   if (node.leaves?.length) {
     return node.leaves.map((leaf) => ({
       slot: leaf.slot,
       key: openingKey(leaf.opening),
       opening: leaf.opening,
+      axisOffsetMm: leaf.axis_offset_mm != null ? Number(leaf.axis_offset_mm) : null,
     }));
   }
   if (node.opening) {
-    return [{ slot: "PRIMARY", key: openingKey(node.opening), opening: node.opening }];
+    return [
+      { slot: "PRIMARY", key: openingKey(node.opening), opening: node.opening, axisOffsetMm: null },
+    ];
   }
-  return [{ slot: "PRIMARY", key: node.opening_type ?? "FIXED", opening: null }];
+  return [
+    { slot: "PRIMARY", key: node.opening_type ?? "FIXED", opening: null, axisOffsetMm: null },
+  ];
 }
 
 /** The trace of the leaf that leads the bay — the ACTIVE one in a pair,
@@ -488,8 +519,24 @@ export function bayKitGroup(tree: IntentNode, node: IntentNode): string {
     return lead.key;
   }
   if (opening.movement === "FIXED") return "FIXED";
+  // Una hoja pasiva de paquete plegable monta el juego de plegado
+  // (carretillas, guías, bisagras intermedias), no la falleba.
+  if (opening.movement === "FOLD" && opening.leaf_role === "PASSIVE") return "FOLD";
   if (opening.leaf_role === "PASSIVE") return "FALLEBA";
-  if (bayUnitKind(tree, node) === "DOOR") return "DOOR";
+  if (bayUnitKind(tree, node) === "DOOR") {
+    // Hoja corredera en unidad de puerta = puerta corredera (rodillos +
+    // cerradura de patio), no el multipunto de puerta practicable.
+    if (
+      opening.movement === "SLIDE" ||
+      opening.movement === "LIFT_SLIDE" ||
+      opening.movement === "PARALLEL_SLIDE" ||
+      opening.movement === "VERTICAL_SLIDE"
+    ) {
+      return "DOOR_SLIDING";
+    }
+    if (opening.movement === "PIVOT_V" || opening.movement === "PIVOT_H") return "PIVOT";
+    return "DOOR";
+  }
   return (
     (
       {
@@ -499,9 +546,27 @@ export function bayKitGroup(tree: IntentNode, node: IntentNode): string {
         TOP_HUNG: "AWNING",
         BOTTOM_HUNG: "BOTTOM_HUNG",
         SLIDE: "SLIDING",
+        LIFT_SLIDE: "LIFT_SLIDE",
+        PARALLEL_SLIDE: "PARALLEL_SLIDE",
+        FOLD: "TURN",
+        PIVOT_V: "PIVOT",
+        PIVOT_H: "PIVOT",
+        VERTICAL_SLIDE: "VERTICAL_SLIDE",
       } as Record<string, string>
     )[opening.movement] ?? "TURN"
   );
+}
+
+/** The sliding-family movement a spec bay declares — LIFT_SLIDE (HST),
+ * PARALLEL_SLIDE (PSK) or plain SLIDE; mirrors the renderer's
+ * `_bay_slide_movement`. Falls back to SLIDE on a legacy layout bay. */
+export function baySlideMovement(node: IntentNode): string {
+  const family = new Set(["LIFT_SLIDE", "PARALLEL_SLIDE", "SLIDE"]);
+  for (const leaf of bayLeafTraces(node)) {
+    const movement = leaf.opening?.movement;
+    if (movement && family.has(movement)) return movement;
+  }
+  return "SLIDE";
 }
 
 /** Which grid option id a bay currently displays as — spec keys compare
@@ -554,13 +619,21 @@ export function changeOpening(tree: IntentNode, bayId: string, opening: OpeningC
     // door leaf inside a split composes door + fixed side naturally.
     delete replacement.opening_type;
     delete replacement.door_handedness;
-    delete replacement.sliding_layout;
+    const specMovement = spec.opening?.movement ?? spec.leaves?.[0]?.opening?.movement;
+    if (specMovement && SLIDE_SPEC_MOVEMENTS.has(specMovement)) {
+      // Familia slide (mandato §12): la topología de rieles se declara —
+      // preserva la del vano o toma el X/O de una hoja sobre paño fijo.
+      replacement.sliding_layout = structuredClone(bay.sliding_layout ?? SLIDE_XO_LAYOUT);
+    } else {
+      delete replacement.sliding_layout;
+    }
     if (spec.unit_kind !== "DOOR") delete replacement.panel_article_sku;
     if (spec.opening) replacement.opening = { ...spec.opening };
     if (spec.leaves) {
       replacement.leaves = spec.leaves.map((leaf) => ({
         slot: leaf.slot,
         opening: { ...leaf.opening },
+        axis_offset_mm: leaf.axis_offset_mm ?? null,
       }));
     }
     let next = replaceNode(tree, bayId, replacement);
@@ -610,7 +683,13 @@ function mirrorOpeningSpec(opening: OpeningSpecPayload): OpeningSpecPayload {
 function mirrorLeaves(leaves: LeafSpecPayload[]): LeafSpecPayload[] {
   const slotOf = (slot: string): string => (slot === "L1" ? "L2" : slot === "L2" ? "L1" : slot);
   return leaves
-    .map((leaf) => ({ slot: slotOf(leaf.slot), opening: mirrorOpeningSpec(leaf.opening) }))
+    .map((leaf) => ({
+      slot: slotOf(leaf.slot),
+      opening: mirrorOpeningSpec(leaf.opening),
+      // El eje pivotante es relativo a la propia hoja — el espejo no lo
+      // desplaza (la bahía no declara su ancho acabado aquí).
+      axis_offset_mm: leaf.axis_offset_mm ?? null,
+    }))
     .sort((a, b) => a.slot.localeCompare(b.slot));
 }
 
@@ -626,7 +705,7 @@ export function flipBay(node: IntentNode): IntentNode | null {
   if (typeof openingType === "string" && MIRRORED_OPENING[openingType]) {
     flipped.opening_type = MIRRORED_OPENING[openingType];
     changed = true;
-  } else if (isSlidingOpening(openingType)) {
+  } else if (isSlidingOpening(openingType) || flipped.sliding_layout) {
     const layout = flipped.sliding_layout;
     const panels = layout?.panels ?? SLIDING_PRESETS[openingType ?? ""]?.panels;
     const count = panels?.length ?? 0;
@@ -708,8 +787,14 @@ export function splitBay(
   // own unit, so the stale layout drops and a layout-driven bay defaults
   // back to the two-leaf preset on each side.
   if (first.sliding_layout) {
+    const slideSpec = first.opening?.movement ?? first.leaves?.[0]?.opening?.movement;
     delete first.sliding_layout;
     if (first.opening_type === "SLIDING") first.opening_type = "SLIDING_2L";
+    else if (slideSpec && SLIDE_SPEC_MOVEMENTS.has(slideSpec)) {
+      // Vano spec de la familia slide: cada mitad conserva la tipología con
+      // la topología mínima X/O (una hoja corredera sobre paño fijo).
+      first.sliding_layout = structuredClone(SLIDE_XO_LAYOUT);
+    }
   }
   // A split bay can no longer be the unit root — a declared unit kind
   // (door unit) moves up onto the division node.
@@ -718,7 +803,7 @@ export function splitBay(
   // A vertical split of a handed leaf yields a mullioned pair: the second
   // leaf mirrors so both handles meet at the poste. Horizontal splits
   // (transoms) keep the same opening type on both bays.
-  const second = { ...first, id: ids.secondBay };
+  const second = structuredClone({ ...first, id: ids.secondBay });
   if (division.type === "SPLIT_V") {
     if (second.opening_type) {
       second.opening_type = MIRRORED_OPENING[second.opening_type] ?? second.opening_type;
@@ -864,7 +949,11 @@ export function singleBayTemplate(
       opening_type: null,
       opening: spec.opening ? { ...spec.opening } : null,
       leaves:
-        spec.leaves?.map((leaf) => ({ slot: leaf.slot, opening: { ...leaf.opening } })) ?? null,
+        spec.leaves?.map((leaf) => ({
+          slot: leaf.slot,
+          opening: { ...leaf.opening },
+          axis_offset_mm: leaf.axis_offset_mm ?? null,
+        })) ?? null,
       unit_kind: spec.unit_kind ?? "WINDOW",
     };
   }

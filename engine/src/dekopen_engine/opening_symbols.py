@@ -81,6 +81,14 @@ class GlyphPrimitive(EngineModel):
       (None when no travel exists anywhere to resolve) and ``inferred``
       marks the presentation convention — surfaces badge it
       "dirección inferida".
+    - ``lift_arrow``: HST leaf — the same displacement arrow with a
+      vertical kink in the shaft that reads as the lift gesture.
+    - ``varrow``: guillotina — vertical arrow; ``vdir`` is the resolved
+      direction (None → double-headed) and ``inferred`` marks the
+      presentation convention like ``arrow``.
+    - ``axis``: pivot leaf — dashed centre line at the declared pivot
+      axis; ``axis_dir`` is "v" (offset from the left edge) or "h"
+      (offset from the top edge) and ``at_mm`` the offset.
     - ``handle``: handle mark; ``side`` is the edge it sits on (left/
       right free stile, or the bottom/top rail of a hopper/tilt leaf)
       and ``at_mm`` the datum from the leaf bottom.
@@ -89,11 +97,13 @@ class GlyphPrimitive(EngineModel):
       symbol is a decision, not an omission.
     """
 
-    k: Literal["tri", "arrow", "handle", "sill", "none"]
+    k: Literal["tri", "arrow", "lift_arrow", "varrow", "axis", "handle", "sill", "none"]
     hinge: HingeSide | None = None
     apex_at: Decimal = APEX_AT
     dash: bool = False
     dir: SlidingTravel | None = None
+    vdir: Literal["UP", "DOWN"] | None = None
+    axis_dir: Literal["v", "h"] | None = None
     inferred: bool = False
     side: Literal["left", "right", "top", "bottom"] | None = None
     at_mm: Decimal | None = None
@@ -139,10 +149,15 @@ def leaf_primitives(
     *,
     unit: UnitKind = UnitKind.WINDOW,
     handle_mm: Decimal | None = None,
+    axis_mm: Decimal | None = None,
+    slot: str | None = None,
 ) -> list[GlyphPrimitive]:
     """Primitives for one leaf spec — per leaf, in slot order. The caller
     owns the leaf's glyph box; positions stay symbolic (``hinge`` /
-    ``apex_at`` / ``dir`` / ``side``), never pixel coordinates."""
+    ``apex_at`` / ``dir`` / ``vdir`` / ``side``), never pixel
+    coordinates. ``axis_mm`` is the declared pivot offset of a pivot
+    leaf; ``slot`` (TOP/BOTTOM) resolves the guillotina arrow direction
+    — without it the primitive declares "slides vertically" only."""
     movement = opening.movement
     if movement is OpeningMovement.FIXED:
         return [GlyphPrimitive(k="none")]
@@ -153,18 +168,52 @@ def leaf_primitives(
         OpeningMovement.TURN,
         OpeningMovement.TILT_TURN,
         OpeningMovement.FOLD,
-        OpeningMovement.PIVOT_V,
     ) and hinge in (HingeSide.LEFT, HingeSide.RIGHT):
         prims.append(GlyphPrimitive(k="tri", hinge=hinge, dash=dash))
     if (
         movement is OpeningMovement.TILT_TURN
         or movement is OpeningMovement.TILT
         or movement is OpeningMovement.BOTTOM_HUNG
+        # La hoja osciloparalela dibuja su basculante: el triángulo de
+        # bisagra inferior más la flecha de desplazamiento.
+        or movement is OpeningMovement.PARALLEL_SLIDE
     ):
         prims.append(GlyphPrimitive(k="tri", hinge=HingeSide.BOTTOM, dash=dash))
     elif movement is OpeningMovement.TOP_HUNG:
         prims.append(GlyphPrimitive(k="tri", hinge=HingeSide.TOP, dash=dash))
-    if movement.endswith("SLIDE"):
+    if movement in (OpeningMovement.PIVOT_V, OpeningMovement.PIVOT_H):
+        # Hoja pivotante: el eje marcado es el símbolo — línea de eje a
+        # la distancia declarada, nunca un triángulo de bisagra.
+        prims.append(
+            GlyphPrimitive(
+                k="axis",
+                axis_dir="v" if movement is OpeningMovement.PIVOT_V else "h",
+                at_mm=axis_mm,
+                dash=dash,
+            )
+        )
+    if movement is OpeningMovement.LIFT_SLIDE:
+        # Corredera elevable — flecha de desplazamiento con quiebro de
+        # elevación; la dirección la resuelve el layout, igual que la
+        # corredera (sin dirección → doble punta con quiebro).
+        prims.append(
+            GlyphPrimitive(k="lift_arrow", dir=None, dash=dash, inferred=True)
+        )
+    elif movement is OpeningMovement.VERTICAL_SLIDE:
+        # Guillotina — flecha vertical; la hoja de abajo sube (UP) y la
+        # de arriba baja (DOWN) cuando el slot lo declara.
+        vdir = (
+            "UP" if slot == "BOTTOM" else "DOWN" if slot == "TOP" else None
+        )
+        prims.append(
+            GlyphPrimitive(
+                k="varrow",
+                vdir=vdir,  # type: ignore[arg-type]
+                dash=dash,
+                inferred=vdir is None,
+            )
+        )
+    elif movement.endswith("SLIDE"):
         # A spec-level sliding leaf carries no travel — the layout does.
         # The renderer supplies the direction from `sliding_primitives`;
         # here the arrow only declares "this leaf slides" (unspecified
@@ -187,12 +236,18 @@ def leaf_primitives(
 
 
 def sliding_primitives(
-    layout: SlidingLayout, view: ElevationView = "interior"
+    layout: SlidingLayout,
+    view: ElevationView = "interior",
+    *,
+    movement: OpeningMovement = OpeningMovement.SLIDE,
 ) -> list[list[GlyphPrimitive]]:
     """Per-panel primitives of a sliding layout, in slot order. The arrow
     direction is the declared travel; when the layout pre-dates ``travel``
     the documented convention resolves it and the primitive is flagged
-    ``inferred`` so the surfaces can badge "dirección inferida"."""
+    ``inferred`` so the surfaces can badge "dirección inferida".
+    ``movement`` selects the family glyph: LIFT_SLIDE panels draw the
+    kinked lift arrow, PARALLEL_SLIDE panels the tilt triangle plus the
+    arrow."""
     from dekopen_engine.geometry import panel_travel, travel_inferred
 
     count = len(layout.panels)
@@ -202,15 +257,21 @@ def sliding_primitives(
             out.append([GlyphPrimitive(k="none")])
             continue
         direction = panel_travel(panel, index, count)
-        out.append(
-            [
-                GlyphPrimitive(
-                    k="arrow",
-                    dir=direction,
-                    inferred=travel_inferred(panel),
-                )
-            ]
+        arrow_kind = (
+            "lift_arrow" if movement is OpeningMovement.LIFT_SLIDE else "arrow"
         )
+        prims = [
+            GlyphPrimitive(
+                k=arrow_kind,  # type: ignore[arg-type]
+                dir=direction,
+                inferred=travel_inferred(panel),
+            )
+        ]
+        if movement is OpeningMovement.PARALLEL_SLIDE:
+            prims.insert(
+                0, GlyphPrimitive(k="tri", hinge=HingeSide.BOTTOM)
+            )
+        out.append(prims)
     return out
 
 
@@ -312,6 +373,85 @@ def glyph_paths(
                     f" L {_fmt(tip_l + head)} {_fmt(cy + barb)}"
                 )
             paths.append((d, _DASH if prim.dash else None))
+        elif prim.k == "lift_arrow":
+            # Corredera elevable — el desplazamiento lleva un quiebro
+            # vertical en el vástago: el gesto de elevar la hoja.
+            half = iw * _ARROW_LEN
+            cx, cy = x + w / 2, y + h / 2
+            head, barb = half * _ARROW_HEAD, half * _ARROW_BARB
+            step_y = ih * Decimal("0.09")
+            step_x = half * Decimal("0.30")
+
+            def _lift_head(tip: Decimal, towards: Decimal) -> str:
+                barb_x = tip + head if towards < tip else tip - head
+                return (
+                    f" M {_fmt(barb_x)} {_fmt(cy - barb)} L {_fmt(tip)} {_fmt(cy)}"
+                    f" L {_fmt(barb_x)} {_fmt(cy + barb)}"
+                )
+
+            def _lift_shaft(tail: Decimal, tip: Decimal) -> str:
+                return (
+                    f"M {_fmt(tail)} {_fmt(cy)}"
+                    f" H {_fmt(cx - step_x)} V {_fmt(cy - step_y)}"
+                    f" H {_fmt(cx + step_x)} V {_fmt(cy)} H {_fmt(tip)}"
+                )
+
+            if prim.dir is SlidingTravel.LEFT:
+                tip, tail = cx - half, cx + half
+                d = _lift_shaft(tail, tip) + _lift_head(tip, tail)
+            elif prim.dir is SlidingTravel.RIGHT:
+                tip, tail = cx + half, cx - half
+                d = _lift_shaft(tail, tip) + _lift_head(tip, tail)
+            else:
+                tip_r, tip_l = cx + half, cx - half
+                d = (
+                    _lift_shaft(tip_l, tip_r)
+                    + _lift_head(tip_r, tip_l)
+                    + _lift_head(tip_l, tip_r)
+                )
+            paths.append((d, _DASH if prim.dash else None))
+        elif prim.k == "varrow":
+            # Guillotina — flecha vertical centrada; doble punta cuando la
+            # dirección no está resuelta.
+            half = ih * _ARROW_LEN
+            cx, cy = x + w / 2, y + h / 2
+            head, barb = half * _ARROW_HEAD, half * _ARROW_BARB
+            if prim.vdir == "UP":
+                tip, tail = cy - half, cy + half
+                d = (
+                    f"M {_fmt(cx)} {_fmt(tail)} V {_fmt(tip)}"
+                    f" M {_fmt(cx - barb)} {_fmt(tip + head)} L {_fmt(cx)} {_fmt(tip)}"
+                    f" L {_fmt(cx + barb)} {_fmt(tip + head)}"
+                )
+            elif prim.vdir == "DOWN":
+                tip, tail = cy + half, cy - half
+                d = (
+                    f"M {_fmt(cx)} {_fmt(tail)} V {_fmt(tip)}"
+                    f" M {_fmt(cx - barb)} {_fmt(tip - head)} L {_fmt(cx)} {_fmt(tip)}"
+                    f" L {_fmt(cx + barb)} {_fmt(tip - head)}"
+                )
+            else:
+                tip_t, tip_b = cy - half, cy + half
+                d = (
+                    f"M {_fmt(cx)} {_fmt(tip_b)} V {_fmt(tip_t)}"
+                    f" M {_fmt(cx - barb)} {_fmt(tip_t + head)} L {_fmt(cx)} {_fmt(tip_t)}"
+                    f" L {_fmt(cx + barb)} {_fmt(tip_t + head)}"
+                    f" M {_fmt(cx - barb)} {_fmt(tip_b - head)} L {_fmt(cx)} {_fmt(tip_b)}"
+                    f" L {_fmt(cx + barb)} {_fmt(tip_b - head)}"
+                )
+            paths.append((d, _DASH if prim.dash else None))
+        elif prim.k == "axis" and prim.axis_dir is not None:
+            # Hoja pivotante — el eje declarado, siempre a trazos.
+            offset = prim.at_mm
+            if prim.axis_dir == "v":
+                ax = x + (offset if offset is not None else w / 2)
+                ax = min(max(ax, x), x + w)
+                d = f"M {_fmt(ax)} {_fmt(y)} V {_fmt(y + h)}"
+            else:
+                ay = y + (offset if offset is not None else h / 2)
+                ay = min(max(ay, y), y + h)
+                d = f"M {_fmt(x)} {_fmt(ay)} H {_fmt(x + w)}"
+            paths.append((d, _DASH))
         elif prim.k == "handle" and prim.side is not None:
             arm = _HANDLE_ARM_MM
             datum = prim.at_mm or Decimal("0")
