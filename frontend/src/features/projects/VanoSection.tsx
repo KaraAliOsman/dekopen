@@ -9,7 +9,7 @@
 import type { ReactElement } from "react";
 import { useMemo } from "react";
 import type {
-  CodeEnum,
+  MountingRuleCodeEnum,
   MeasurementResolveResponse,
   MeasurementResponse,
   MeasurementResponseStateEnum,
@@ -205,7 +205,7 @@ export function VanoSection({
             <option value="">{t("projects.vanoMountingPick")}</option>
             {rules?.map((rule) => (
               <option key={rule.id} value={rule.id}>
-                {domainLabel("CodeEnum", rule.code as CodeEnum).label}
+                {domainLabel("MountingRuleCodeEnum", rule.code as MountingRuleCodeEnum).label}
               </option>
             ))}
           </select>

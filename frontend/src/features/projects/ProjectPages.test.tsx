@@ -82,6 +82,7 @@ function makePosition(): PositionResponse {
     quantity: 2,
     price_net: "0",
     discount_pct: "0",
+    thermal_orientation: null,
     typology: "FIXED",
     measurement: {
       state: "CLIENT_DECLARED",

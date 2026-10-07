@@ -8,7 +8,10 @@
 import type { CurrencyEnum } from "./currencyEnum";
 import type { PositionResponse } from "./positionResponse";
 import type { ProjectResponseStatusEnum } from "./projectResponseStatusEnum";
+import type { ProjectResponseThermalWallAreas } from "./projectResponseThermalWallAreas";
+import type { ProjectResponseThermalZone } from "./projectResponseThermalZone";
 import type { ProjectVersionResponse } from "./projectVersionResponse";
+import type { ThermalUseEnum } from "./thermalUseEnum";
 
 export interface ProjectResponse {
   /** @maxLength 255 */
@@ -31,6 +34,11 @@ export interface ProjectResponse {
   delivery_address?: string;
   notes_commercial?: string;
   notes_internal?: string;
+  thermal_zone?:
+    (typeof ProjectResponseThermalZone)[keyof typeof ProjectResponseThermalZone] | null;
+  thermal_use?: ThermalUseEnum;
+  /** @nullable */
+  thermal_wall_areas?: ProjectResponseThermalWallAreas;
   id: string;
   code: string;
   status: ProjectResponseStatusEnum;

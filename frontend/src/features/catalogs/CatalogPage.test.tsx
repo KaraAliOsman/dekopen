@@ -281,6 +281,9 @@ beforeEach(() => {
   vi.mocked(client.catalogArticleList).mockResolvedValue(ok({ items: [] }));
   vi.mocked(client.catalogBeadList).mockResolvedValue(ok({ items: [] }));
   vi.mocked(client.catalogKitList).mockResolvedValue(ok({ items: [kit()] }));
+  vi.mocked(client.catalogSpacerList).mockResolvedValue(ok({ items: [] }));
+  vi.mocked(client.catalogFrameufList).mockResolvedValue(ok({ items: [] }));
+  vi.mocked(client.catalogPerformancetestList).mockResolvedValue(ok({ items: [] }));
 });
 
 afterEach(() => {

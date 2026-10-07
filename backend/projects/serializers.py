@@ -1,6 +1,6 @@
 """Typed project metadata and engine-owned position inputs."""
 
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from rest_framework import serializers
 
@@ -25,6 +25,40 @@ class ProjectWriteSerializer(StrictSerializer):
     delivery_address = serializers.CharField(required=False, allow_blank=True)
     notes_commercial = serializers.CharField(required=False, allow_blank=True)
     notes_internal = serializers.CharField(required=False, allow_blank=True)
+    # P18 — declaración térmica OGUC 4.1.10 (PATCH del proyecto).
+    thermal_zone = serializers.ChoiceField(
+        choices=("A", "B", "C", "D", "E", "F", "G", "H", "I"),
+        required=False, allow_null=True,
+    )
+    thermal_use = serializers.ChoiceField(
+        choices=("RESIDENTIAL", "EQUIPMENT"), required=False
+    )
+    thermal_wall_areas = serializers.DictField(
+        required=False, allow_null=True, allow_empty=True
+    )
+
+    def validate_thermal_wall_areas(self, value):
+        """{N|OP|S|OGT: m² expuestos} — claves de orientación de la norma,
+        superficies numéricas positivas."""
+        if value is None:
+            return value
+        allowed = {"N", "OP", "S", "OGT"}
+        for key, area in value.items():
+            if key not in allowed:
+                raise serializers.ValidationError(
+                    f"orientación inválida: {key}"
+                )
+            try:
+                number = Decimal(str(area))
+            except (InvalidOperation, ValueError) as error:
+                raise serializers.ValidationError(
+                    f"superficie no numérica en {key}"
+                ) from error
+            if number <= 0 or number > Decimal("100000"):
+                raise serializers.ValidationError(
+                    f"superficie fuera de rango en {key}"
+                )
+        return value
 
 
 class ResetPricingSerializer(StrictSerializer):
@@ -94,6 +128,10 @@ class PositionWriteSerializer(StrictSerializer):
     quantity = serializers.IntegerField(min_value=1, max_value=2147483647)
     design = PositionDesignSerializer()
     measurement = PositionMeasurementSerializer(required=False, allow_null=True)
+    thermal_orientation = serializers.ChoiceField(
+        choices=("N", "OP", "S", "OGT", "ROOF"),
+        required=False, allow_null=True,
+    )
 
 
 class PositionUpdateSerializer(PositionWriteSerializer):
@@ -188,6 +226,9 @@ class PositionResponseSerializer(serializers.Serializer):
     typology = serializers.CharField()
     price_net = serializers.CharField()
     discount_pct = serializers.CharField()
+    thermal_orientation = serializers.ChoiceField(
+        choices=("N", "OP", "S", "OGT", "ROOF"), allow_null=True
+    )
     design = PositionDesignSerializer()
     bom = EngineCalculateResponseSerializer()
     measurement = MeasurementResponseSerializer()
@@ -808,3 +849,129 @@ class OrgBrandingWriteSerializer(StrictSerializer):
         min_value=1,
         max_value=365,
     )
+
+
+# ─── P18 — desempeño térmico (OGUC 4.1.10) ─────────────────────────────────
+
+ORIENTATIONS = ("N", "OP", "S", "OGT", "ROOF")
+THERMAL_VERDICTS = ("COMPLIES", "FAILS", "INSUFFICIENT_DATA", "NO_REQUIREMENT")
+
+
+class ThermalMissingSerializer(serializers.Serializer):
+    code = serializers.CharField()
+    detail = serializers.CharField(allow_null=True)
+
+
+class PaneThermalSerializer(serializers.Serializer):
+    bay_id = serializers.CharField()
+    leaf_id = serializers.CharField(allow_null=True)
+    article_sku = serializers.CharField(allow_null=True)
+    area_m2 = serializers.CharField()
+    perimeter_m = serializers.CharField()
+    ug_w_m2k = serializers.CharField(allow_null=True)
+    ug_authority = serializers.CharField(allow_null=True)
+    psi_w_m_k = serializers.CharField(allow_null=True)
+    spacer_code = serializers.CharField(allow_null=True)
+    psi_authority = serializers.CharField(allow_null=True)
+
+
+class FrameZoneThermalSerializer(serializers.Serializer):
+    member_group = serializers.CharField()
+    area_m2 = serializers.CharField()
+    uf_w_m2k = serializers.CharField(allow_null=True)
+    authority = serializers.CharField(allow_null=True)
+    source = serializers.CharField(allow_null=True)
+
+
+class UwComputationSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=("OK", "UNKNOWN"))
+    uw_w_m2k = serializers.CharField(allow_null=True)
+    ag_m2 = serializers.CharField()
+    af_m2 = serializers.CharField()
+    lg_m = serializers.CharField()
+    numerator_w_m_k = serializers.CharField(allow_null=True)
+    authority = serializers.CharField(allow_null=True)
+    panes = PaneThermalSerializer(many=True)
+    frame = FrameZoneThermalSerializer(many=True)
+    missing = ThermalMissingSerializer(many=True)
+
+
+class ResolvedClassesSerializer(serializers.Serializer):
+    air_class = serializers.IntegerField(allow_null=True)
+    water_class = serializers.CharField(allow_null=True)
+    wind_class = serializers.CharField(allow_null=True)
+    report_ref = serializers.CharField(allow_null=True)
+    laboratory = serializers.CharField(allow_null=True)
+    tested_on = serializers.CharField(allow_null=True)
+    tested_width_mm = serializers.CharField(allow_null=True)
+    tested_height_mm = serializers.CharField(allow_null=True)
+    authority = serializers.CharField(allow_null=True)
+    scope_exceeded = serializers.BooleanField()
+
+
+class ThermalCauseSerializer(serializers.Serializer):
+    code = serializers.CharField()
+    detail = serializers.CharField(allow_null=True)
+
+
+class PositionThermalSerializer(serializers.Serializer):
+    verdict = serializers.ChoiceField(choices=THERMAL_VERDICTS)
+    uw = UwComputationSerializer()
+    classes = ResolvedClassesSerializer(allow_null=True)
+    causes = ThermalCauseSerializer(many=True)
+    air_class_required = serializers.IntegerField(allow_null=True)
+    roof_u_max = serializers.CharField(allow_null=True)
+    u_max = serializers.CharField(allow_null=True)
+    window_pct_max = serializers.IntegerField(allow_null=True)
+
+
+class ThermalPositionSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    position_index = serializers.IntegerField()
+    location_tag = serializers.CharField(allow_null=True)
+    quantity = serializers.IntegerField()
+    typology = serializers.CharField()
+    thermal_orientation = serializers.ChoiceField(
+        choices=ORIENTATIONS, allow_null=True
+    )
+    width_mm = serializers.CharField()
+    height_mm = serializers.CharField()
+    surface_m2 = serializers.CharField()
+    thermal = PositionThermalSerializer()
+
+
+class OrientationComplianceSerializer(serializers.Serializer):
+    orientation = serializers.ChoiceField(choices=("N", "OP", "S", "OGT"))
+    window_area_m2 = serializers.CharField()
+    wall_area_m2 = serializers.CharField(allow_null=True)
+    actual_pct = serializers.CharField(allow_null=True)
+    allowed_pct = serializers.IntegerField(allow_null=True)
+    verdict = serializers.ChoiceField(choices=THERMAL_VERDICTS)
+    causes = ThermalCauseSerializer(many=True)
+
+
+class ProjectThermalSerializer(serializers.Serializer):
+    project_id = serializers.UUIDField()
+    thermal_zone = serializers.ChoiceField(
+        choices=("A", "B", "C", "D", "E", "F", "G", "H", "I"), allow_null=True
+    )
+    thermal_use = serializers.ChoiceField(choices=("RESIDENTIAL", "EQUIPMENT"))
+    thermal_wall_areas = serializers.DictField(allow_null=True)
+    positions = ThermalPositionSerializer(many=True)
+    orientations = OrientationComplianceSerializer(many=True)
+    verdict = serializers.ChoiceField(choices=THERMAL_VERDICTS)
+
+
+class ThermalAlternativeSerializer(serializers.Serializer):
+    kind = serializers.ChoiceField(choices=("GLASS", "SYSTEM"))
+    label = serializers.CharField()
+    glass_sku = serializers.CharField(required=False, allow_null=True)
+    system_id = serializers.UUIDField(required=False, allow_null=True)
+    uw_w_m2k = serializers.CharField(allow_null=True)
+    price_delta_net = serializers.CharField(allow_null=True)
+
+
+class ThermalAlternativesResponseSerializer(serializers.Serializer):
+    position_id = serializers.UUIDField()
+    current = PositionThermalSerializer()
+    alternatives = ThermalAlternativeSerializer(many=True)

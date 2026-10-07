@@ -7,6 +7,7 @@
  */
 import type { PositionDesignRequest } from "./positionDesignRequest";
 import type { PositionMeasurementRequest } from "./positionMeasurementRequest";
+import type { PositionUpdateRequestThermalOrientation } from "./positionUpdateRequestThermalOrientation";
 
 export interface PositionUpdateRequest {
   /** @maxLength 100 */
@@ -18,5 +19,8 @@ export interface PositionUpdateRequest {
   quantity: number;
   design: PositionDesignRequest;
   measurement?: PositionMeasurementRequest | null;
+  thermal_orientation?:
+    | (typeof PositionUpdateRequestThermalOrientation)[keyof typeof PositionUpdateRequestThermalOrientation]
+    | null;
   expected_updated_at: string;
 }

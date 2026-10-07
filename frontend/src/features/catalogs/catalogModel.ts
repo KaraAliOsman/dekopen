@@ -19,6 +19,12 @@ import type {
   BeadResponse,
   KitResponse,
   EvidenceRow,
+  SpacerWriteRequest,
+  SpacerResponse,
+  FrameUfWriteRequest,
+  FrameUfResponse,
+  PerformanceTestWriteRequest,
+  PerformanceTestResponse,
 } from "../../api/generated/models";
 
 export type SystemWrite = SystemWriteRequest;
@@ -49,6 +55,9 @@ export type Writes = {
   articles: ArticleWrite;
   glazing: BeadWrite;
   "hardware-kits": KitWrite;
+  spacers: SpacerWriteRequest;
+  "frame-uf": FrameUfWriteRequest;
+  "performance-tests": PerformanceTestWriteRequest;
 };
 export type Resource = keyof Writes;
 type Responses = {
@@ -56,6 +65,9 @@ type Responses = {
   articles: ArticleResponse;
   glazing: BeadResponse;
   "hardware-kits": KitResponse;
+  spacers: SpacerResponse;
+  "frame-uf": FrameUfResponse;
+  "performance-tests": PerformanceTestResponse;
 };
 export type Row<R extends Resource> = Responses[R];
 export type CatalogData = { [R in Resource]: Row<R>[] };
@@ -269,6 +281,57 @@ export const schemas: Record<Resource, Group[]> = {
       ],
     },
   ],
+  // P18 — autoridades térmicas OGUC 4.1.10: todo valor declarado con
+  // fuente; el sello técnico (VERIFIED) lo pone solo la vista de revisión.
+  spacers: [
+    {
+      title: "identity",
+      fields: [
+        {
+          name: "code",
+          kind: "select",
+          options: ["ALUMINIUM", "WARM_EDGE"],
+        },
+        text("name", 255),
+        decimal("psi_w_m_k", 4),
+        active,
+      ],
+    },
+  ],
+  "frame-uf": [
+    {
+      title: "identity",
+      fields: [
+        system,
+        {
+          name: "member_group",
+          kind: "select",
+          options: ["ALL", "FRAME", "SASH", "MULLION", "COUPLER", "THRESHOLD"],
+        },
+        decimal("uf_w_m2k", 3),
+        text("source_ref", 255, true),
+        active,
+      ],
+    },
+  ],
+  "performance-tests": [
+    {
+      title: "identity",
+      fields: [
+        system,
+        text("typology_scope", 40, true),
+        integer("air_class"),
+        text("water_class", 10, true),
+        text("wind_class", 10, true),
+        text("report_ref", 255, true),
+        text("laboratory", 255, true),
+        text("tested_on", 10, true),
+        decimal("tested_width_mm", 2, true),
+        decimal("tested_height_mm", 2, true),
+        active,
+      ],
+    },
+  ],
 };
 
 // Decimal strings remain strings throughout form state and transport —
@@ -479,8 +542,13 @@ export function writeFromDraft<R extends Resource>(
 export function catalogApi(orgId: string) {
   const options = { headers: { "X-Organization-ID": orgId } };
   return {
-    async list<R extends Resource>(resource: R, signal?: AbortSignal): Promise<Row<R>[]> {
+    async list<R extends Resource>(
+      resource: R,
+      signal?: AbortSignal,
+      systemId?: string,
+    ): Promise<Row<R>[]> {
       const request = { ...options, signal };
+      const systemFilter = systemId ? { system_id: systemId } : undefined;
       const response =
         resource === "systems"
           ? await client.catalogSystemList(request)
@@ -488,7 +556,13 @@ export function catalogApi(orgId: string) {
             ? await client.catalogArticleList(undefined, request)
             : resource === "glazing"
               ? await client.catalogBeadList(undefined, request)
-              : await client.catalogKitList(undefined, request);
+              : resource === "hardware-kits"
+                ? await client.catalogKitList(undefined, request)
+                : resource === "spacers"
+                  ? await client.catalogSpacerList(request)
+                  : resource === "frame-uf"
+                    ? await client.catalogFrameufList(systemFilter, request)
+                    : await client.catalogPerformancetestList(systemFilter, request);
       if (response.status !== 200) throw new Error("catalog_read_failed");
       return response.data.items as Row<R>[];
     },
@@ -514,9 +588,28 @@ export function catalogApi(orgId: string) {
               ? id
                 ? await client.catalogBeadUpdate(id, body as BeadWrite, options)
                 : await client.catalogBeadCreate(body as BeadWrite, options)
-              : id
-                ? await client.catalogKitUpdate(id, body as KitWrite, options)
-                : await client.catalogKitCreate(body as KitWrite, options);
+              : resource === "hardware-kits"
+                ? id
+                  ? await client.catalogKitUpdate(id, body as KitWrite, options)
+                  : await client.catalogKitCreate(body as KitWrite, options)
+                : resource === "spacers"
+                  ? id
+                    ? await client.catalogSpacerUpdate(id, body as SpacerWriteRequest, options)
+                    : await client.catalogSpacerCreate(body as SpacerWriteRequest, options)
+                  : resource === "frame-uf"
+                    ? id
+                      ? await client.catalogFrameufUpdate(id, body as FrameUfWriteRequest, options)
+                      : await client.catalogFrameufCreate(body as FrameUfWriteRequest, options)
+                    : id
+                      ? await client.catalogPerformancetestUpdate(
+                          id,
+                          body as PerformanceTestWriteRequest,
+                          options,
+                        )
+                      : await client.catalogPerformancetestCreate(
+                          body as PerformanceTestWriteRequest,
+                          options,
+                        );
       if (response.status !== 200 && response.status !== 201)
         throw new Error("catalog_write_failed");
       return response.data as Row<R>;
@@ -589,7 +682,13 @@ export function catalogApi(orgId: string) {
             ? await client.catalogArticleReview(row.id, headers)
             : resource === "glazing"
               ? await client.catalogBeadReview(row.id, headers)
-              : await client.catalogKitReview(row.id, headers);
+              : resource === "hardware-kits"
+                ? await client.catalogKitReview(row.id, headers)
+                : resource === "spacers"
+                  ? await client.catalogSpacerReview(row.id, headers)
+                  : resource === "frame-uf"
+                    ? await client.catalogFrameufReview(row.id, headers)
+                    : await client.catalogPerformancetestReview(row.id, headers);
       if (response.status !== 200) throw new Error("catalog_review_failed");
       return response.data as Row<R>;
     },
@@ -610,7 +709,13 @@ export function catalogApi(orgId: string) {
             ? await client.catalogArticleDelete(id, options)
             : resource === "glazing"
               ? await client.catalogBeadDelete(id, options)
-              : await client.catalogKitDelete(id, options);
+              : resource === "hardware-kits"
+                ? await client.catalogKitDelete(id, options)
+                : resource === "spacers"
+                  ? await client.catalogSpacerDelete(id, options)
+                  : resource === "frame-uf"
+                    ? await client.catalogFrameufDelete(id, options)
+                    : await client.catalogPerformancetestDelete(id, options);
       if (response.status !== 204) throw new Error("catalog_delete_failed");
     },
   };

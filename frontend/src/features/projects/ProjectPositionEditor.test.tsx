@@ -140,6 +140,7 @@ function position(
     typology: "FIXED",
     price_net: "0",
     discount_pct: "0",
+    thermal_orientation: null,
     measurement: {
       state: "CLIENT_DECLARED",
       confirmed_at: null,

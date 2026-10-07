@@ -12,9 +12,10 @@
  * * `EXTERIOR_LEFT` - EXTERIOR_LEFT
  * * `EXTERIOR_RIGHT` - EXTERIOR_RIGHT
  */
-export type OrientationEnum = (typeof OrientationEnum)[keyof typeof OrientationEnum];
+export type ProfileSectionOrientationEnum =
+  (typeof ProfileSectionOrientationEnum)[keyof typeof ProfileSectionOrientationEnum];
 
-export const OrientationEnum = {
+export const ProfileSectionOrientationEnum = {
   EXTERIOR_DOWN: "EXTERIOR_DOWN",
   EXTERIOR_UP: "EXTERIOR_UP",
   EXTERIOR_LEFT: "EXTERIOR_LEFT",

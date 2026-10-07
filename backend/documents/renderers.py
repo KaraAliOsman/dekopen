@@ -266,6 +266,9 @@ svg:not(.miter) { max-width: 100%; height: auto; display: block; } svg text { fo
 .sign-col .sign-cell { margin-bottom: 9mm; }
 .sign-col .sign-cell:last-child { margin-bottom: 0; }
 .accept-recap { font-size: 8.5pt; color: #465158; margin-bottom: 3mm; }
+.doc-annex { break-before: page; }
+.doc-annex h2 { margin-top: 0; }
+.doc-note { font-size: 7pt; color: #727D82; margin-top: 3mm; }
 
 /* ── DOC-01 v2 (P09) — lectura comercial de presupuesto ────────────
    Cajetín en dos filas, tabla de posiciones de columnas fijas, fichas
@@ -2848,8 +2851,71 @@ def _doc01(snapshot: dict[str, object], *, render_context: dict | None = None) -
     )
     if closing_cols.strip():
         body += f'<div class="doc-duo">{closing_cols}</div>'
+    body += _doc01_thermal_annex(snapshot)
     body += "</main>"
     return body
+
+
+def _doc01_thermal_annex(snapshot: dict[str, object]) -> str:
+    """P18 — anexo técnico opcional: Uw y clases de prestación por
+    posición. El snapshot sólo congela entradas verificadas; una posición
+    sin certificado no aparece y el anexo entero se omite cuando ninguna
+    la tiene. El documento nunca imprime un valor sin su ensayo fuente."""
+    annex = snapshot.get("thermal_annex")
+    if not isinstance(annex, list) or not annex:
+        return ""
+    rows: list[list[object]] = []
+    for item in annex:
+        if not isinstance(item, dict):
+            continue
+        # Una fila sin Uw ni clases verificadas no se imprime — el
+        # congelamiento ya filtra, pero un snapshot armado a mano tampoco
+        # puede fabricar una fila vacía.
+        if item.get("uw_w_m2k") is None and item.get("air_class") is None:
+            continue
+        classes = " · ".join(
+            part
+            for part in (
+                f"Aire {item['air_class']}" if item.get("air_class") is not None else None,
+                f"Agua {item['water_class']}" if item.get("water_class") is not None else None,
+                f"Viento {item['wind_class']}" if item.get("wind_class") is not None else None,
+            )
+            if part
+        )
+        evidence = " · ".join(
+            part
+            for part in (
+                _value(item.get("report_ref")),
+                _value(item.get("laboratory")),
+                _cldate(_value(item.get("tested_on")))
+                if item.get("tested_on") is not None
+                else None,
+            )
+            if part and part != "—"
+        )
+        rows.append(
+            [
+                _value(item.get("position_index")),
+                _value(item.get("location_tag")),
+                _value(item.get("uw_w_m2k")),
+                classes or "—",
+                evidence or "—",
+            ]
+        )
+    if not rows:
+        return ""
+    return (
+        '<section class="doc-annex"><h2>Anexo técnico — desempeño térmico</h2>'
+        + _table(
+            ["Pos.", "Ubicación", "Uw (W/m²K)", "Clases de prestación", "Ensayo"],
+            rows,
+            ["", "", "num", "", ""],
+        )
+        + '<p class="doc-note">Valores Uw según el método de áreas de ISO 10077-1; '
+        "clases de permeabilidad medidas según NCh 892, NCh 891 y NCh 890. "
+        "Sólo se imprimen valores con certificado verificado; requisitos "
+        "según OGUC art. 4.1.10 (D.O. 27-05-2024).</p></section>"
+    )
 
 
 def _doc03(snapshot: dict[str, object]) -> str:

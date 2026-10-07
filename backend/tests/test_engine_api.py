@@ -283,7 +283,7 @@ def test_repository_loads_glass_products_rules_and_limits(monkeypatch):
         '"tint":"CLEAR","treatment":"TEMPERED","coating":null,'
         '"coating_face":null,"supplier_sku":null}]}',
         "B", "1.400", "0.630", "80.00", "15.00", "0.50", False,
-        product_id, 3,
+        product_id, 3, "MANUFACTURER", True,
     )
     surcharge_row = (str(product_id), "TEMPERED", "M2", "5500", "Recargo templado", "CLP")
     rule_row = (
@@ -336,6 +336,8 @@ def test_repository_loads_glass_products_rules_and_limits(monkeypatch):
     assert product.ug_w_m2k == Decimal("1.400")
     assert product.min_area_m2 == Decimal("0.50")
     assert product.price_tier == 3
+    assert product.data_provenance == "MANUFACTURER"
+    assert product.verified is True
     assert product.composition is not None
     assert product.surcharges[0].kind == "TEMPERED"
     assert product.surcharges[0].amount == Decimal("5500")
@@ -371,7 +373,8 @@ def test_repository_glass_product_with_broken_composition_stays_unknown(monkeypa
             if "FROM public.glass_products" in sql:
                 self._rows = [
                     ("VID-X", "Exótico", '{"layers":[{"type":"weird"}]}',
-                     None, None, None, None, None, None, True, uuid4(), None),
+                     None, None, None, None, None, None, True, uuid4(), None,
+                     None, False),
                 ]
             else:
                 self._rows = []

@@ -8,6 +8,7 @@
 import type { EngineCalculateResponse } from "./engineCalculateResponse";
 import type { MeasurementResponse } from "./measurementResponse";
 import type { PositionDesign } from "./positionDesign";
+import type { PositionResponseThermalOrientation } from "./positionResponseThermalOrientation";
 
 export interface PositionResponse {
   id: string;
@@ -19,6 +20,9 @@ export interface PositionResponse {
   typology: string;
   price_net: string;
   discount_pct: string;
+  thermal_orientation:
+    | (typeof PositionResponseThermalOrientation)[keyof typeof PositionResponseThermalOrientation]
+    | null;
   design: PositionDesign;
   bom: EngineCalculateResponse;
   measurement: MeasurementResponse;

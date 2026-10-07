@@ -21,12 +21,14 @@ import {
   positionsMove,
   positionsUpdate,
   projectDesignOptions,
+  projectsThermal,
 } from "../../api/generated/dekopen";
 import type {
   DocumentaryPreparationPosition,
   PositionDesignRequest,
   PositionResponse,
   ProjectResponse,
+  ThermalPosition,
 } from "../../api/generated/models";
 import { colorLabel, t, typologyLabel, type TranslationKey } from "../../i18n/es-CL";
 import { fmtQty, formatDims, formatMoney, formatPercent } from "../../format";
@@ -48,6 +50,7 @@ import { GlobalChangesPanel } from "./GlobalChangesPanel";
 import { PositionThumb } from "./PositionThumb";
 import { ProjectImportsPanel } from "./ProjectImportsPanel";
 import { ProjectBom } from "./ProjectPositionEditor";
+import { PositionThermalFiche } from "./ProjectThermalPanel";
 
 /** Derived per-position progression — the estimator reads "where in the
  * job" each vano is: drafted → engine-evaluated → priced → sealed into a
@@ -686,6 +689,26 @@ export function PositionsTab({
     const found = systemsQuery.data?.find((system) => system.id === design.system_id);
     return found?.name ?? "";
   };
+
+  // P18 — el mapa térmico alimenta la ficha de la posición enfocada y la
+  // pestaña térmica comparte la misma query (React Query la deduplica).
+  const thermalQuery = useQuery({
+    queryKey: ["project-thermal", orgId, project.id, project.updated_at],
+    queryFn: async () => {
+      const response = await projectsThermal(project.id, {
+        headers: { "X-Organization-ID": orgId },
+      });
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      return response.data;
+    },
+    retry: false,
+    staleTime: 60_000,
+  });
+  const thermalByPosition = useMemo(() => {
+    const map = new Map<string, ThermalPosition>();
+    for (const row of thermalQuery.data?.positions ?? []) map.set(row.id, row);
+    return map;
+  }, [thermalQuery.data]);
 
   // La vista vive en la URL — compartible y capturable: ?vista=grilla|lista|importar
   const vista = params.get("vista") ?? "grilla";
@@ -1418,11 +1441,15 @@ export function PositionsTab({
                 editable={editable}
                 estado={estado(focused)}
                 groupBy={groupBy}
+                onChanged={onChanged}
                 onDelete={() => void deleteOne(focused)}
+                onError={onError}
                 onMove={(toIndex) => void move(focused, toIndex)}
+                orgId={orgId}
                 position={focused}
                 project={project}
                 reasons={estado(focused).reasons}
+                thermal={thermalByPosition.get(focused.id)}
               />
             ) : (
               <p className="positions-side__hint">{t("projects.positionHint")}</p>
@@ -1572,8 +1599,12 @@ function PositionDetail({
   canOpenEditor,
   busy,
   groupBy,
+  orgId,
+  thermal,
   onDelete,
   onMove,
+  onChanged,
+  onError,
 }: {
   position: PositionResponse;
   project: ProjectResponse;
@@ -1583,8 +1614,12 @@ function PositionDetail({
   canOpenEditor: boolean;
   busy: boolean;
   groupBy: GroupBy;
+  orgId: string;
+  thermal?: ThermalPosition;
   onDelete(): void;
   onMove(toIndex: number): void;
+  onChanged(): Promise<unknown>;
+  onError(message: string): void;
 }): JSX.Element {
   const design = position.design as PositionDesignRequest;
   const net = Number(position.price_net) > 0;
@@ -1649,6 +1684,21 @@ function PositionDetail({
             <EstadoChip estado={estado} />
           </dd>
         </div>
+      </dl>
+      {/* P18 — la ficha muestra Uw, clase de aire y veredicto con su
+       * procedencia; la orientación se edita aquí (N/OP/S/OGT/ROOF). */}
+      <dl
+        aria-label={t("projects.thermal.ficheTitle")}
+        className="positions-side__facts position-thermal-facts"
+      >
+        <PositionThermalFiche
+          editable={editable}
+          onChanged={onChanged}
+          onError={onError}
+          orgId={orgId}
+          position={position}
+          thermal={thermal}
+        />
       </dl>
       {reasons.length > 0 && (
         <ul className="positions-side__issues">

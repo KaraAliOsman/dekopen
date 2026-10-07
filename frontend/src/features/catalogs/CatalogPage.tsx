@@ -31,7 +31,15 @@ import "./catalogs.css";
 type Label = Parameters<typeof t>[0];
 // All suffixes below are supplied in the translation block.
 const ct = (key: string) => t(`catalog.${key}` as Label);
-const resources: Resource[] = ["systems", "articles", "glazing", "hardware-kits"];
+const resources: Resource[] = [
+  "systems",
+  "articles",
+  "glazing",
+  "hardware-kits",
+  "spacers",
+  "frame-uf",
+  "performance-tests",
+];
 
 const DETAIL_KEYS: Record<string, Label> = {
   "catalogs.errors.not_found": "catalog.errNotFound",
@@ -60,10 +68,17 @@ function itemName(resource: Resource, row: Row<Resource>, data: CatalogData): st
     const article = data.articles.find((item) => item.id === row.bead_article_id);
     return `${article?.name ?? ct("beadUnavailable")} · ${fmtMm(row.glass_thickness_mm)} ${ct("mm")}`;
   }
+  if (resource === "frame-uf" && "member_group" in row) {
+    return `${ct(`memberGroup.${row.member_group}`)} · Uf ${fmtMm(row.uf_w_m2k)}`;
+  }
+  if (resource === "performance-tests" && "report_ref" in row) {
+    return row.report_ref ?? ct("testUnnamed");
+  }
   return "name" in row ? row.name : ct("record");
 }
 
 function itemCode(row: Row<Resource>): string {
+  if ("member_group" in row) return row.member_group;
   return "sku" in row ? row.sku : "code" in row ? row.code : "";
 }
 
@@ -154,10 +169,21 @@ function CatalogWorkspace({ orgId, role }: { orgId: string; role: string }): JSX
       api.list("articles", controller.signal),
       api.list("glazing", controller.signal),
       api.list("hardware-kits", controller.signal),
+      api.list("spacers", controller.signal),
+      api.list("frame-uf", controller.signal),
+      api.list("performance-tests", controller.signal),
     ])
-      .then(([systems, articles, glazing, kits]) => {
+      .then(([systems, articles, glazing, kits, spacers, frameUf, tests]) => {
         if (controller.signal.aborted) return;
-        setData({ systems, articles, glazing, "hardware-kits": kits });
+        setData({
+          systems,
+          articles,
+          glazing,
+          "hardware-kits": kits,
+          spacers,
+          "frame-uf": frameUf,
+          "performance-tests": tests,
+        });
         setSelected((previous) =>
           previous && systems.some((system) => system.id === previous)
             ? previous
@@ -244,7 +270,7 @@ function CatalogWorkspace({ orgId, role }: { orgId: string; role: string }): JSX
       ? currentSystem
         ? [currentSystem]
         : []
-      : data[resource].filter((row) => row.system_id === selected);
+      : data[resource].filter((row) => !("system_id" in row) || row.system_id === selected);
   const editingRow = editor?.id
     ? data[editor.resource].find((row) => row.id === editor.id)
     : undefined;

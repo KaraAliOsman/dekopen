@@ -5,8 +5,8 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
-import type { CodeEnum } from "./codeEnum";
 import type { DataProvenanceEnum } from "./dataProvenanceEnum";
+import type { MountingRuleCodeEnum } from "./mountingRuleCodeEnum";
 import type { MountingRuleResponseAuthority } from "./mountingRuleResponseAuthority";
 
 export interface MountingRuleResponse {
@@ -14,7 +14,7 @@ export interface MountingRuleResponse {
   system_id: string;
   /** @nullable */
   org_id: string | null;
-  code: CodeEnum;
+  code: MountingRuleCodeEnum;
   version: number;
   label: string;
   authority: MountingRuleResponseAuthority;

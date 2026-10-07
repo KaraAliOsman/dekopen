@@ -6,15 +6,19 @@ import type { ReactNode } from "react";
 
 import type {
   CostCoverageRow,
+  FrameUfResponse,
   GlassTab,
   HardwareTab,
   HistoryTab,
   KitResponse,
+  PerformanceTestResponse,
   RulesTab,
+  SpacerResponse,
   TypologyLimitRow,
 } from "../../api/generated/models";
 import { t, tOptional } from "../../i18n/es-CL";
 import { domainLabel } from "../../i18n/domainLabels";
+import { fmtMm } from "../../format";
 import { EntityCode, Length } from "../../ui/format";
 import { StatusChip } from "../../ui/StatusChip";
 
@@ -465,6 +469,160 @@ export function HardwarePanel({
               : null
           }
         />
+      </SubSection>
+    </>
+  );
+}
+
+/* ---------- P18 — Desempeño térmico (OGUC 4.1.10) ---------- */
+
+/** Autoridades térmicas del sistema: Ψg de separadores, Uf por grupo de
+ * miembro e informes de ensayo (aire/agua/viento). Cada fila muestra su
+ * procedencia — el motor solo computa sobre datos autoritativos. */
+export function ThermalPanel({
+  spacers,
+  frameUfs,
+  tests,
+  canEdit,
+  onEdit,
+}: {
+  spacers: SpacerResponse[];
+  frameUfs: FrameUfResponse[];
+  tests: PerformanceTestResponse[];
+  canEdit: boolean;
+  onEdit: (resource: "spacers" | "frame-uf" | "performance-tests", id?: string) => void;
+}): JSX.Element {
+  const create = (resource: "spacers" | "frame-uf" | "performance-tests") =>
+    canEdit ? (
+      <button
+        type="button"
+        className="ui-button ui-button--small ws-subsection-create"
+        onClick={() => onEdit(resource)}
+      >
+        {ct("create")}
+      </button>
+    ) : null;
+  const rowAction = (
+    resource: "spacers" | "frame-uf" | "performance-tests",
+    row: { id: string; read_only: boolean },
+  ) => (
+    <button
+      type="button"
+      className="ui-button ui-button--small"
+      onClick={() => onEdit(resource, row.id)}
+    >
+      {ct(canEdit && !row.read_only ? "edit" : "view")}
+    </button>
+  );
+  return (
+    <>
+      <SubSection title={wst("thermalSpacers")} count={spacers.length}>
+        <DataTable
+          head={[
+            ct("field.code"),
+            wst("name"),
+            ct("field.psi_w_m_k"),
+            wst("provenance"),
+            ct("actions"),
+          ]}
+          empty={wst("noThermalSpacers")}
+          rows={
+            spacers.length
+              ? spacers.map((row) => (
+                  <tr key={row.id} id={`ws-row-${row.id}`}>
+                    <th scope="row">
+                      <EntityCode value={row.code} />
+                    </th>
+                    <td>{row.name}</td>
+                    <td>
+                      <code className="ws-mono">{row.psi_w_m_k}</code>
+                    </td>
+                    <td>
+                      <ProvenanceBadge row={row} />
+                    </td>
+                    <td>{rowAction("spacers", row)}</td>
+                  </tr>
+                ))
+              : null
+          }
+        />
+        {create("spacers")}
+      </SubSection>
+      <SubSection title={wst("thermalFrameUf")} count={frameUfs.length}>
+        <DataTable
+          head={[
+            ct("field.member_group"),
+            ct("field.uf_w_m2k"),
+            ct("field.source_ref"),
+            wst("provenance"),
+            ct("actions"),
+          ]}
+          empty={wst("noThermalFrameUf")}
+          rows={
+            frameUfs.length
+              ? frameUfs.map((row) => (
+                  <tr key={row.id} id={`ws-row-${row.id}`}>
+                    <th scope="row">{ct(`memberGroup.${row.member_group}`)}</th>
+                    <td>
+                      <code className="ws-mono">{row.uf_w_m2k}</code>
+                    </td>
+                    <td>{row.source_ref || "—"}</td>
+                    <td>
+                      <ProvenanceBadge row={row} />
+                    </td>
+                    <td>{rowAction("frame-uf", row)}</td>
+                  </tr>
+                ))
+              : null
+          }
+        />
+        {create("frame-uf")}
+      </SubSection>
+      <SubSection title={wst("thermalTests")} count={tests.length}>
+        <DataTable
+          head={[
+            ct("field.report_ref"),
+            ct("field.laboratory"),
+            wst("testClasses"),
+            ct("field.tested_on"),
+            wst("testedScope"),
+            wst("provenance"),
+            ct("actions"),
+          ]}
+          empty={wst("noThermalTests")}
+          rows={
+            tests.length
+              ? tests.map((row) => (
+                  <tr key={row.id} id={`ws-row-${row.id}`}>
+                    <th scope="row">{row.report_ref ?? "—"}</th>
+                    <td>{row.laboratory ?? "—"}</td>
+                    <td>
+                      <code className="ws-mono">
+                        {[
+                          row.air_class != null ? `A${row.air_class}` : null,
+                          row.water_class ?? null,
+                          row.wind_class ?? null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ") || "—"}
+                      </code>
+                    </td>
+                    <td>{row.tested_on ?? "—"}</td>
+                    <td>
+                      {row.tested_width_mm && row.tested_height_mm
+                        ? `${fmtMm(row.tested_width_mm)} × ${fmtMm(row.tested_height_mm)}`
+                        : (row.typology_scope ?? wst("testedScopeAll"))}
+                    </td>
+                    <td>
+                      <ProvenanceBadge row={row} />
+                    </td>
+                    <td>{rowAction("performance-tests", row)}</td>
+                  </tr>
+                ))
+              : null
+          }
+        />
+        {create("performance-tests")}
       </SubSection>
     </>
   );

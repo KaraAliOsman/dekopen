@@ -27,6 +27,7 @@ from projects.views import (
     ProjectPositionsView,
     ProjectSuccessorView,
     ProjectResetPricingView,
+    ProjectThermalView,
     ProjectView,
     ProjectsView,
     QuotationsView,
@@ -35,6 +36,7 @@ from projects.views import (
     PositionMeasurementConfirmView,
     PositionMeasurementResolveView,
     PositionMoveView,
+    PositionThermalAlternativesView,
     PositionView,
     SiiCafsView,
     SiiCertificateView,
@@ -65,6 +67,7 @@ urlpatterns = [
     path("projects/<uuid:project_id>/clone/", ProjectCloneView.as_view()),
     path("projects/<uuid:project_id>/successor/", ProjectSuccessorView.as_view()),
     path("projects/<uuid:project_id>/reset-pricing/", ProjectResetPricingView.as_view()),
+    path("projects/<uuid:project_id>/thermal/", ProjectThermalView.as_view()),
     path("projects/<uuid:project_id>/positions/", ProjectPositionsView.as_view()),
     path("projects/<uuid:project_id>/payments/", ProjectPaymentsView.as_view()),
     path(
@@ -128,6 +131,10 @@ urlpatterns = [
     ),
     path("positions/<uuid:position_id>/", PositionView.as_view()),
     path("positions/<uuid:position_id>/move/", PositionMoveView.as_view()),
+    path(
+        "positions/<uuid:position_id>/thermal-alternatives/",
+        PositionThermalAlternativesView.as_view(),
+    ),
     path(
         "positions/<uuid:position_id>/measurement-confirm/",
         PositionMeasurementConfirmView.as_view(),

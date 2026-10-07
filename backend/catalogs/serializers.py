@@ -475,7 +475,7 @@ class ReadinessTargetSerializer(serializers.Serializer):
     tab = serializers.ChoiceField(
         choices=[
             "sistema", "perfiles", "refuerzos", "vidrios", "herrajes",
-            "reglas", "costos", "historial",
+            "reglas", "costos", "historial", "termico",
         ]
     )
 
@@ -568,6 +568,92 @@ class ServiceArticleResponseSerializer(ProvenanceFieldsMixin, ServiceArticleWrit
     id = serializers.UUIDField()
 
 
+# ─── P18 — autoridades térmicas (OGUC 4.1.10) ──────────────────────────────
+# Cada valor es DECLARADO con fuente: el motor nunca fabrica un Uf/Ψg/clase.
+
+SPACER_CODES = ("ALUMINIUM", "WARM_EDGE")
+FRAME_MEMBER_GROUPS = ("ALL", "FRAME", "SASH", "MULLION", "COUPLER", "THRESHOLD")
+
+
+class SpacerWriteSerializer(StrictSerializer):
+    """Ψg declarado por tipo de separador (el SpacerKind del motor)."""
+
+    code = serializers.ChoiceField(choices=SPACER_CODES)
+    name = serializers.CharField(max_length=255)
+    psi_w_m_k = decimal_field(
+        6, 4, min_value=Decimal("0.0001"), max_value=Decimal("0.9999")
+    )
+    is_active = serializers.BooleanField()
+
+
+class FrameUfWriteSerializer(StrictSerializer):
+    """Uf declarado por el fabricante para el sistema, por grupo de miembro."""
+
+    system_id = serializers.UUIDField()
+    member_group = serializers.ChoiceField(choices=FRAME_MEMBER_GROUPS)
+    uf_w_m2k = decimal_field(
+        6, 3, min_value=Decimal("0.001"), max_value=Decimal("12.000")
+    )
+    # Referencia legible a la ficha técnica/informe del que sale el valor.
+    source_ref = serializers.CharField(
+        max_length=255, allow_blank=True, required=False
+    )
+    is_active = serializers.BooleanField()
+
+
+class PerformanceTestWriteSerializer(StrictSerializer):
+    """Informe de ensayo del sistema: clases + laboratorio + alcance."""
+
+    system_id = serializers.UUIDField()
+    # NULL = aplica a toda la serie; una familia declarada la restringe.
+    typology_scope = serializers.CharField(
+        max_length=40, allow_null=True, required=False
+    )
+    air_class = serializers.IntegerField(
+        min_value=1, max_value=5, allow_null=True, required=False
+    )
+    water_class = serializers.CharField(
+        max_length=10, allow_null=True, required=False
+    )
+    wind_class = serializers.CharField(
+        max_length=10, allow_null=True, required=False
+    )
+    report_ref = serializers.CharField(
+        max_length=255, allow_null=True, required=False
+    )
+    laboratory = serializers.CharField(
+        max_length=255, allow_null=True, required=False
+    )
+    tested_on = serializers.DateField(allow_null=True, required=False)
+    tested_width_mm = decimal_field(
+        10, 2, allow_null=True, required=False, min_value=Decimal("0.01")
+    )
+    tested_height_mm = decimal_field(
+        10, 2, allow_null=True, required=False, min_value=Decimal("0.01")
+    )
+    is_active = serializers.BooleanField()
+
+
+class SpacerResponseSerializer(ProvenanceFieldsMixin, SpacerWriteSerializer):
+    revision = serializers.CharField(read_only=True)
+    read_only = serializers.BooleanField()
+    id = serializers.UUIDField()
+
+
+class FrameUfResponseSerializer(ProvenanceFieldsMixin, FrameUfWriteSerializer):
+    revision = serializers.CharField(read_only=True)
+    read_only = serializers.BooleanField()
+    id = serializers.UUIDField()
+
+
+class PerformanceTestResponseSerializer(
+    ProvenanceFieldsMixin, PerformanceTestWriteSerializer
+):
+    revision = serializers.CharField(read_only=True)
+    read_only = serializers.BooleanField()
+    id = serializers.UUIDField()
+
+
 class SystemListSerializer(serializers.Serializer):
     items = SystemResponseSerializer(many=True)
 
@@ -590,6 +676,18 @@ class ExtraArticleListSerializer(serializers.Serializer):
 
 class ServiceArticleListSerializer(serializers.Serializer):
     items = ServiceArticleResponseSerializer(many=True)
+
+
+class SpacerListSerializer(serializers.Serializer):
+    items = SpacerResponseSerializer(many=True)
+
+
+class FrameUfListSerializer(serializers.Serializer):
+    items = FrameUfResponseSerializer(many=True)
+
+
+class PerformanceTestListSerializer(serializers.Serializer):
+    items = PerformanceTestResponseSerializer(many=True)
 
 
 class CatalogFilterSerializer(StrictSerializer):
