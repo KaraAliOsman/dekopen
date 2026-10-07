@@ -3,7 +3,7 @@ type: state
 status: active
 updated: 2026-10-07
 volatility: high
-verified_ref: c1f3ed0df1336d7d37a86c2bd3544283922d891e
+verified_ref: b7d3df77326328d0fad3779d3da511cda430cac1
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
@@ -41,6 +41,7 @@ sources:
   - P10 portal propuesta PR https://github.com/KaraAliOsman/dekopen/pull/64
   - P18 térmico OGUC PR https://github.com/KaraAliOsman/dekopen/pull/69
   - P19 3D fidelidad PR https://github.com/KaraAliOsman/dekopen/pull/68
+  - P23 despacho obra postventa PR https://github.com/KaraAliOsman/dekopen/pull/71
   - P18 térmico OGUC branch devin/P18-termico-normativa
   - P15 compras/inventario branch devin/P15-compras-inventario
   - P08 emisión/cotización branch devin/P08-cotizacion-emision
@@ -605,6 +606,8 @@ PR sobre `integracion/v1` (branch `devin/P19-3d-fidelidad`): la vista 3D pasa a 
 - Verificado: `make lint|typecheck|test|build` verdes (`PY=.venv/bin/python`; vitest 732, engine 742, backend 1330); ux:capture 12 tomas 0 hallazgos (benchmark + position-edit); capturas en `docs/redesign/captures/p19-3d/` (36 shots, temas/viewports); decisiones en sección P19 de `valores-por-defecto.md`.
 
 ## P23 despacho, instalación en obra y postventa state
+
+Merged into `integracion/v1` as squash `b7d3df77326328d0fad3779d3da511cda430cac1` (dekopen PR #71):
 
 PR sobre `integracion/v1` (branch `devin/P23-despacho-instalacion-postventa`): la cadena termina en obra — despacho planificado, app de terreno con cola offline, incidencias con destino y postventa trazable a la pieza.
 
