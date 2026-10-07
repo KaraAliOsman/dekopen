@@ -45,6 +45,7 @@ sources:
   - P08 emisión/cotización branch devin/P08-cotizacion-emision
   - P17 asistente IA/trabajos/Orb branch devin/P17-asistente-orb
   - P22 clientes/ajustes branch devin/P22-clientes-ajustes
+  - P19 3D fidelidad branch devin/P19-3d-fidelidad
   - integracion/v1 merge 747c528b67d234d697624929ccbcc7098261ed54
   - open PR metadata observed 2026-09-27/28
   - AGENTS.md
@@ -587,3 +588,15 @@ Detalle completo en `docs/wiki/log.md` — entrada «[2026-10-07] P18 | desempe�
 - Uw por ISO 10077-1 en motor puro (`dekopen_engine/thermal.py`) con `UNKNOWN` + faltantes declarados; clases aire/agua/viento con informe de ensayo y alcance (`TEST_SCOPE_EXCEEDED`); zona térmica A–I + orientación por posición; veredicto por proyecto — sin datos certificados no hay afirmación (VERIFIED puede «Cumple», DECLARED incumplido «No cumple», DEMO nunca veredicta).
 - `GET /projects/<id>/thermal/` + `GET /positions/<id>/thermal-alternatives/` (§8: alternativa conforme más barata con Δ de precio real, «Sin dato» si `pricing_rules` no es legible por el rol — defecto RLS hallado y corregido vía e2e); tab Térmico en proyecto + ficha por posición con traza F6; tab Desempeño térmico en catálogo; anexo DOC-01 solo VERIFIED.
 - Migración `20270219000000` (renombrada por colisión con D08): `glazing_spacers`, `system_frame_uf`, `system_performance_tests`, `projects.thermal_zone/thermal_use/thermal_wall_areas`, `project_positions.thermal_orientation` — todas con `data_provenance` + sello técnico bajo guard P16. pgTAP 1211, integración 290, e2e 37/37.
+
+## P19 3D con fidelidad física state
+
+PR sobre `integracion/v1` (branch `devin/P19-3d-fidelidad`): la vista 3D pasa a representar el mismo modelo del producto — pose real por apertura declarada, acabado por cara con honestidad de catálogo, vano y herrajes — sin contradictoriedad con el dibujo técnico.
+
+- **Poses por eje real** (`leafPose.ts` + `Model3DView`): abatible gira sobre el borde de bisagras hacia el interior (`SWING_RAD=32°`), oscilobatiente abate ~10° sobre el pivote inferior (`TILT_RAD=10°`), proyectante abre al exterior sobre el eje superior (`AWNING_RAD=24°`), corredera se traslada en su carril según `travel` de P05 (sólo la hoja primaria), puerta por su mano — en unidad DOOR sólo `TURN` abate sobre el borde (la pivotante/plegable/guillotina de D08 queda cerrada antes que fabricar una pose falsa). Manilla siempre del lado de cierre declarado (`_handle_side` = opuesto a `hinge_side`). Nada sale del volumen del marco salvo en despiece.
+- **Despiece ordenado desde la habitación**: `explodeLifts` separa axial hacia +z en orden de montaje — junquillo (0,94) > vidrio (0,62) > hoja (0,32) — con varillas guía a su posición de origen; magnitud ilustrativa `max(depth·5,5, 400 mm)` con la nota «Posición ilustrativa — no representa un recorrido autorizado». Activar Despiece fuerza vista Interior.
+- **Acabados honestos**: color por cara = catálogo lineal resuelto vía token; textura foil sólo si el catálogo la provee; si no, color plano + diagnóstico `finish_convention` («Acabado aproximado (convención de acabado)»). Vidrio sobrio sin tinte fantasía. Colores del fixture bicolor por `cssColor()`+tokens — interior blanco cálido `--mat-bicolor-interior` / exterior antracita `--mat-anthracite-fill`.
+- **Contexto y cámara**: `Vano` opcional (yeso 160 mm reveal, muro 140 mm, solera 38 mm, `--mat-wall` por tema); preset `Detalle` con dolly al ancla real de la manilla (`hardwareSolids`); Interior/Exterior de P05; easing de pose a razón 11/s ≈ 95 % en ~270 ms (contrato ≤280 ms).
+- **Chrome alcanzable**: `.model3d-toolbar` envuelve a segunda fila en tarjetas angostas (~380 px benchmark) — todos los controles visibles; readout de cara persistente (`EXTERIOR`/`INTERIOR`).
+- **Tests**: 31 casos de pose en `Product3DScene.test.ts` — pivotes de bisagra, lado de manilla, `travel` de corredera, tilt de hopper, orden de despiece.
+- Verificado: `make lint|typecheck|test|build` verdes (`PY=.venv/bin/python`; vitest 732, engine 742, backend 1330); ux:capture 12 tomas 0 hallazgos (benchmark + position-edit); capturas en `docs/redesign/captures/p19-3d/` (36 shots, temas/viewports); decisiones en sección P19 de `valores-por-defecto.md`.

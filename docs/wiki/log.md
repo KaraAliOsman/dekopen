@@ -354,6 +354,7 @@ Append-only chronology. Keep newest entries at the bottom.
 - Contrato revivido: `IncompatibleTypologyError` llega como 400 `typology_incompatible` con `compatible_systems` (lo tragaba el `except ValueError` genérico del adaptador); bug `compatible` en `assert_opening_allowed` corregido (comparaba enum con strings de familia — siempre True).
 - Biblioteca del editor: grupo "Avanzadas"; `starterCompatible` exige la clave de composición exacta por vano (`openingSpecKeyAdmitted`/`openingOptionAdmitted`); tarjetas bloqueadas con causa y consulta perezosa por serie que nombra qué series la admiten (§8 — nunca se inventa).
 - Verificado `make lint|typecheck|test|build|test-db` verde (`PY=.venv/bin/python`): 1185 pgTAP, 283 integración, 27 e2e, 742 motor, 1315 backend, 723 frontend; goldens por tipología + fixtures de símbolos; decisiones en `valores-por-defecto.md` (sección D08); capturas en `docs/redesign/captures/d08-tipologias-avanzadas/`.
+<<<<<<< HEAD
 
 ## [2026-10-07] P18 | desempeño térmico y normativa chilena: Uw, aire y zona térmica (OGUC 4.1.10)
 
@@ -364,3 +365,12 @@ Append-only chronology. Keep newest entries at the bottom.
 - DOC-01: anexo técnico opcional (P09) congela Uw/clases solo cuando son VERIFIED, con `report_ref`+laboratorio y nota metodológica; la evaluación térmica nunca tumba el sellado (`_thermal_annex_safe`).
 - Lecciones: pgTAP corre solo bajo `authenticated` (las funciones viven en `extensions` sin USAGE de `catalog_backend`) — excepciones del rol backend se capturan en `DO $$ … EXCEPTION … set_config` y se afirman tras `RESET ROLE` (patrón P16); las páginas de proyecto cargan `projects.css` solamente (nada de `ws-table`/`catalog-table-scroll`); el PUT de posiciones exige reenviar `thermal_orientation` — clave ausente preserva, `null` borra (decisión registrada).
 - Verificado: `make lint|typecheck|test|build|test-db` verde (`PY=.venv/bin/python`); e2e navegador real ESTIMATOR+WORKSHOP_MANAGER (24 specs del gate, §8 verificado tras fix RLS); ux:capture sin hallazgos nuevos en rutas tocadas; decisiones P18 en `valores-por-defecto.md`; capturas `docs/redesign/captures/p18-termico/` (antes/después 1440/1280/1024 claro+oscuro).
+
+## [2026-10-07] P19 | 3D con fidelidad física: poses, acabados, vano y herrajes
+
+- La vista 3D deja de ser un diagrama genérico: cada hoja anima sobre el eje que su mecanismo declara — abatible al interior sobre bisagras (32°), oscilobatiente abate 10° sobre pivote inferior, proyectante al exterior sobre eje superior (24°), corredera traslada en carril por `travel` de P05, puerta por su mano — y la manilla queda del lado de cierre que declara el motor, nunca del lado de bisagra.
+- Despiece = desarmado real desde la habitación: junquillo primero (0,94 del recorrido axial hacia +z), vidrio (0,62), hoja (0,32), con varillas guía a la posición de montaje; separación ilustrativa `max(depth·5,5, 400)` declarada por la nota «Posición ilustrativa» y vista Interior forzada.
+- Acabados con honestidad de catálogo: color lineal por cara vía token, foil con textura sólo si el catálogo la provee, si no color plano + chip `finish_convention` («Acabado aproximado»); bicolor del benchmark = interior blanco cálido / exterior antracita por `cssColor()`+tokens (el guard `ui-hex-inline` veta hex literales — el token citado sólo por nombre va a `tokens.unused.txt`).
+- Contexto: `Vano` (yeso+solera) opcional, preset `Detalle` anclado al montaje real de la manilla, easing de pose ~270 ms.
+- Aprendizajes: la «congelación» del despiece era magnitud insuficiente, no un stall — la prueba decisiva es recorrer la escena en vivo (los grupos sí se movían); la toolbar que desbordaba en la tarjeta de 380 px era una falla R17 preexistente que el wrap de dos filas resolvió; dos hojas del mismo riel se interpenetran a media pose — sólo la hoja primaria anima (registrado en valores-por-defecto).
+- Verificado: `make lint|typecheck|test|build` verdes (`PY=.venv/bin/python`; vitest 732 incl. 31 tests de pose); ux:capture benchmark + position-edit 0 hallazgos; capturas `docs/redesign/captures/p19-3d/`; decisiones en sección P19 de `valores-por-defecto.md`.
