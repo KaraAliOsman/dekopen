@@ -29,9 +29,11 @@
 --focus-ring-shadow
 --g-900
 --interactive-fill-hover
+--mat-bicolor-interior
 --model3d-coupler
 --model3d-edge
 --model3d-handle
+--model3d-wall
 --motion-base
 --ok-ink
 --ok-legacy

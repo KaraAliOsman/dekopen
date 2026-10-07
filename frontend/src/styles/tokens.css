@@ -371,6 +371,12 @@
   --mat-coupler: #5d6469;
   --mat-gasket: #2e3134;
   --mat-edge: #6b7075;
+  /* Vano de muro en la vista 3D — estuco plano, cálido y apagado; el
+     producto, no el fondo, lleva el contraste. */
+  --mat-wall: #d7d3c8;
+  /* Bicolor sellado (benchmark): cara interior blanca cálida — la cara
+     exterior toma el antracita de catálogo (--mat-anthracite-fill). */
+  --mat-bicolor-interior: #f4f1ea;
   /* Marcas de operación CNC — paleta categórica de diagrama, fija entre
      temas para que el mecanizado se lea igual en pantalla y en papel. */
   --mat-op-mark: #7a5af8;
@@ -554,6 +560,7 @@
   --model3d-coupler: var(--mat-coupler);
   --model3d-gasket: var(--mat-gasket);
   --model3d-edge: var(--mat-edge);
+  --model3d-wall: var(--mat-wall);
   --member-pvc-fill: var(--mat-pvc-fill);
   --member-pvc-edge: var(--mat-pvc-edge);
   --member-pvc-highlight: var(--mat-pvc-highlight);
