@@ -9,7 +9,7 @@ import {
 } from "../../api/generated/dekopen";
 import { ApiError } from "../../api/apiMutator";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
-import { fmtMm } from "../../format";
+import { fmtMm, formatDateTime } from "../../format";
 import { t, tOptional } from "../../i18n/es-CL";
 import { ORDER_STATUS_KEY } from "./board";
 
@@ -1042,12 +1042,7 @@ export function CncWorkspace() {
                   <ul className="cnc-audit">
                     {data.audit.map((event) => (
                       <li key={event.id}>
-                        <span className="cnc-audit-date">
-                          {new Date(event.created_at).toLocaleString("es-CL", {
-                            dateStyle: "short",
-                            timeStyle: "short",
-                          })}
-                        </span>
+                        <span className="cnc-audit-date">{formatDateTime(event.created_at)}</span>
                         {auditText(event)}
                       </li>
                     ))}

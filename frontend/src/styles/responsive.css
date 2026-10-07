@@ -61,6 +61,11 @@
     min-height: 44px;
   }
 
+  /* Las pestañas de sección también son destinos táctiles a este ancho. */
+  .ui-tab {
+    min-height: 44px;
+  }
+
   .rail-scrim {
     display: block;
     visibility: hidden;
