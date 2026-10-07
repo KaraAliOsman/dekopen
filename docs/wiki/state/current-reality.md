@@ -3,7 +3,7 @@ type: state
 status: active
 updated: 2026-10-07
 volatility: high
-verified_ref: 51e2c87cbbb0a0bef37999d724a8d0cdbb3ebfbb
+verified_ref: 61e1fdd791fba6b24640fbdbc7fa179417047f8a
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
@@ -36,6 +36,7 @@ sources:
   - P08 cotización emisión PR https://github.com/KaraAliOsman/dekopen/pull/50
   - ED2 pase editorial PR https://github.com/KaraAliOsman/dekopen/pull/58
   - P21 proyecto hub PR https://github.com/KaraAliOsman/dekopen/pull/60
+  - P18 térmico OGUC branch devin/P18-termico-normativa
   - P15 compras/inventario branch devin/P15-compras-inventario
   - P08 emisión/cotización branch devin/P08-cotizacion-emision
   - P17 asistente IA/trabajos/Orb branch devin/P17-asistente-orb
