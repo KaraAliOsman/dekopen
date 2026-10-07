@@ -3210,3 +3210,115 @@ input.quotation-share__url {
 .clients-row-name .status-badge {
   margin-left: var(--space-8);
 }
+
+/* ── P18 — Desempeño térmico (OGUC 4.1.10) ────────────────────────────
+   Ajustes de zona/uso/áreas, tabla de orientaciones y tabla de
+   posiciones con Uw + traza, clases, veredicto y alternativas §8. */
+
+.project-thermal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.project-thermal__head {
+  align-items: flex-start;
+  display: flex;
+  gap: var(--space-16);
+  justify-content: space-between;
+}
+
+.project-thermal__head h3 {
+  margin: 0;
+}
+
+.project-thermal__note {
+  color: var(--theme-text-secondary);
+  margin: var(--space-4) 0 0;
+  max-width: 60ch;
+}
+
+.thermal-settings {
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-1);
+  padding: var(--space-12);
+}
+
+.thermal-settings__grid {
+  display: grid;
+  gap: var(--space-12);
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+}
+
+.thermal-settings label {
+  color: var(--theme-text-secondary);
+  display: flex;
+  flex-direction: column;
+  font-size: var(--text-xs);
+  gap: var(--space-4);
+}
+
+.thermal-settings label input,
+.thermal-settings label select {
+  width: 100%;
+}
+
+.thermal-settings .form-actions {
+  margin-top: var(--space-12);
+}
+
+.thermal-heading {
+  font-size: var(--text-sm);
+  margin: 0 0 var(--space-8);
+}
+
+.thermal-causes {
+  color: var(--theme-text-secondary);
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: 400;
+  margin-top: var(--space-2);
+}
+
+.thermal-uw {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--space-6);
+}
+
+.thermal-uw strong,
+.thermal-classes,
+.thermal-alternatives td {
+  font-variant-numeric: tabular-nums;
+}
+
+.thermal-alternatives {
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--r-1);
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-top: var(--space-8);
+  width: 100%;
+}
+
+.thermal-alternatives th,
+.thermal-alternatives td {
+  border-bottom: 1px solid var(--theme-border-subtle);
+  padding: var(--space-6) var(--space-8);
+  text-align: left;
+}
+
+.thermal-alternatives tr:last-child td {
+  border-bottom: 0;
+}
+
+/* La mini-ficha se cuelga del <dl> de hechos de la posición: sus divs
+   desaparecen del flujo para que dt/dd entren a la misma grilla. */
+.position-thermal,
+.position-thermal > div {
+  display: contents;
+}
+
+.position-thermal select {
+  min-width: 7rem;
+}

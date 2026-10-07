@@ -3731,6 +3731,401 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/catalogs/frame-uf/:
+    get:
+      operationId: catalog_frameuf_list
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: query
+        name: system_id
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - catalogs
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FrameUfList'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+    post:
+      operationId: catalog_frameuf_create
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - catalogs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FrameUfWriteRequest'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FrameUfResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/catalogs/frame-uf/{row_id}/:
+    get:
+      operationId: catalog_frameuf_retrieve
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: row_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - catalogs
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FrameUfResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+    patch:
+      operationId: catalog_frameuf_update
+      parameters:
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Quoted revision from the most recently read catalog entity.
+        required: true
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: row_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - catalogs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedFrameUfWriteRequest'
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FrameUfResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+    delete:
+      operationId: catalog_frameuf_delete
+      parameters:
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Quoted revision from the most recently read catalog entity.
+        required: true
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: row_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - catalogs
+      security:
+      - SupabaseBearer: []
+      responses:
+        '204':
+          description: Deleted
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/catalogs/frame-uf/{row_id}/review/:
+    post:
+      operationId: catalog_frameuf_review
+      description: Mark the row technically reviewed; LEGACY_UNVERIFIED provenance
+        becomes MANUAL.
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: row_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - catalogs
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FrameUfResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/catalogs/glazing/:
     get:
       operationId: catalog_bead_list
@@ -3820,6 +4215,396 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BeadResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/catalogs/glazing-spacers/:
+    get:
+      operationId: catalog_spacer_list
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - catalogs
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpacerList'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+    post:
+      operationId: catalog_spacer_create
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - catalogs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpacerWriteRequest'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpacerResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/catalogs/glazing-spacers/{row_id}/:
+    get:
+      operationId: catalog_spacer_retrieve
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: row_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - catalogs
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpacerResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+    patch:
+      operationId: catalog_spacer_update
+      parameters:
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Quoted revision from the most recently read catalog entity.
+        required: true
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: row_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - catalogs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSpacerWriteRequest'
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpacerResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+    delete:
+      operationId: catalog_spacer_delete
+      parameters:
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Quoted revision from the most recently read catalog entity.
+        required: true
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: row_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - catalogs
+      security:
+      - SupabaseBearer: []
+      responses:
+        '204':
+          description: Deleted
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/catalogs/glazing-spacers/{row_id}/review/:
+    post:
+      operationId: catalog_spacer_review
+      description: Mark the row technically reviewed; LEGACY_UNVERIFIED provenance
+        becomes MANUAL.
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: row_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - catalogs
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpacerResponse'
           description: ''
         '400':
           content:
@@ -4551,6 +5336,401 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MountingRuleListResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/catalogs/performance-tests/:
+    get:
+      operationId: catalog_performancetest_list
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: query
+        name: system_id
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - catalogs
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerformanceTestList'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+    post:
+      operationId: catalog_performancetest_create
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - catalogs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PerformanceTestWriteRequest'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerformanceTestResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/catalogs/performance-tests/{row_id}/:
+    get:
+      operationId: catalog_performancetest_retrieve
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: row_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - catalogs
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerformanceTestResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+    patch:
+      operationId: catalog_performancetest_update
+      parameters:
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Quoted revision from the most recently read catalog entity.
+        required: true
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: row_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - catalogs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPerformanceTestWriteRequest'
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerformanceTestResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+    delete:
+      operationId: catalog_performancetest_delete
+      parameters:
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Quoted revision from the most recently read catalog entity.
+        required: true
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: row_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - catalogs
+      security:
+      - SupabaseBearer: []
+      responses:
+        '204':
+          description: Deleted
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/catalogs/performance-tests/{row_id}/review/:
+    post:
+      operationId: catalog_performancetest_review
+      description: Mark the row technically reviewed; LEGACY_UNVERIFIED provenance
+        becomes MANUAL.
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: row_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - catalogs
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerformanceTestResponse'
           description: ''
         '400':
           content:
@@ -10546,6 +11726,77 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PositionResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/positions/{position_id}/thermal-alternatives/:
+    get:
+      operationId: position_thermal_alternatives
+      description: P18 §8 — alternativa más barata que sí cumple para la posición.
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: position_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - projects
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThermalAlternativesResponse'
           description: ''
         '400':
           content:
@@ -18360,6 +19611,77 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/projects/{project_id}/thermal/:
+    get:
+      operationId: projects_thermal
+      description: P18 — panel de cumplimiento térmico OGUC 4.1.10 del proyecto.
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: project_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - projects
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectThermal'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/projects/design-options/{system_id}/:
     get:
       operationId: project_design_options
@@ -21247,6 +22569,7 @@ components:
       - fitting_purchase_mappings
       - glass_purchase_mappings
       - glazing_bead_matrix
+      - glazing_spacers
       - handle_requirement_policies
       - hardware_kits
       - infill_articles
@@ -21254,12 +22577,15 @@ components:
       - profile_articles
       - profile_systems
       - reinforcement_cut_policies
+      - system_frame_uf
+      - system_performance_tests
       type: string
       description: |-
         * `catalog_imports` - catalog_imports
         * `fitting_purchase_mappings` - fitting_purchase_mappings
         * `glass_purchase_mappings` - glass_purchase_mappings
         * `glazing_bead_matrix` - glazing_bead_matrix
+        * `glazing_spacers` - glazing_spacers
         * `handle_requirement_policies` - handle_requirement_policies
         * `hardware_kits` - hardware_kits
         * `infill_articles` - infill_articles
@@ -21267,6 +22593,8 @@ components:
         * `profile_articles` - profile_articles
         * `profile_systems` - profile_systems
         * `reinforcement_cut_policies` - reinforcement_cut_policies
+        * `system_frame_uf` - system_frame_uf
+        * `system_performance_tests` - system_performance_tests
     AxisEnum:
       enum:
       - WIDTH
@@ -23013,20 +24341,6 @@ components:
       - machines
       - orders
       - tools
-    CodeEnum:
-      enum:
-      - EN_VANO
-      - PREMARCO
-      - SOBRE_VANO
-      - TRASLAPADO
-      - RENOVACION
-      type: string
-      description: |-
-        * `EN_VANO` - EN_VANO
-        * `PREMARCO` - PREMARCO
-        * `SOBRE_VANO` - SOBRE_VANO
-        * `TRASLAPADO` - TRASLAPADO
-        * `RENOVACION` - RENOVACION
     CollectionMovement:
       type: object
       properties:
@@ -26256,6 +27570,134 @@ components:
       description: |-
         * `PDF` - PDF
         * `XLSX` - XLSX
+    FrameMemberGroupEnum:
+      enum:
+      - ALL
+      - FRAME
+      - SASH
+      - MULLION
+      - COUPLER
+      - THRESHOLD
+      type: string
+      description: |-
+        * `ALL` - ALL
+        * `FRAME` - FRAME
+        * `SASH` - SASH
+        * `MULLION` - MULLION
+        * `COUPLER` - COUPLER
+        * `THRESHOLD` - THRESHOLD
+    FrameUfList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/FrameUfResponse'
+      required:
+      - items
+    FrameUfResponse:
+      type: object
+      description: |-
+        Read-only provenance/review state — written only by import jobs and
+        the technical-review endpoint, never by catalog CRUD.
+      properties:
+        data_provenance:
+          allOf:
+          - $ref: '#/components/schemas/DataProvenanceEnum'
+          readOnly: true
+        technical_reviewed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        technical_reviewed_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        review_pending:
+          type: boolean
+          readOnly: true
+          default: false
+        system_id:
+          type: string
+          format: uuid
+        member_group:
+          $ref: '#/components/schemas/FrameMemberGroupEnum'
+        uf_w_m2k:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,3})?$
+        source_ref:
+          type: string
+          maxLength: 255
+        is_active:
+          type: boolean
+        revision:
+          type: string
+          readOnly: true
+        read_only:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+      required:
+      - data_provenance
+      - id
+      - is_active
+      - member_group
+      - read_only
+      - review_pending
+      - revision
+      - system_id
+      - technical_reviewed_at
+      - technical_reviewed_by
+      - uf_w_m2k
+    FrameUfWriteRequest:
+      type: object
+      description: Uf declarado por el fabricante para el sistema, por grupo de miembro.
+      properties:
+        system_id:
+          type: string
+          format: uuid
+        member_group:
+          $ref: '#/components/schemas/FrameMemberGroupEnum'
+        uf_w_m2k:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,3})?$
+        source_ref:
+          type: string
+          maxLength: 255
+        is_active:
+          type: boolean
+      required:
+      - is_active
+      - member_group
+      - system_id
+      - uf_w_m2k
+    FrameZoneThermal:
+      type: object
+      properties:
+        member_group:
+          type: string
+        area_m2:
+          type: string
+        uf_w_m2k:
+          type: string
+          nullable: true
+        authority:
+          type: string
+          nullable: true
+        source:
+          type: string
+          nullable: true
+      required:
+      - area_m2
+      - authority
+      - member_group
+      - source
+      - uf_w_m2k
     FreezeRequestRequest:
       type: object
       properties:
@@ -29246,6 +30688,20 @@ components:
       required:
       - module_id
       - unit_net
+    MountingRuleCodeEnum:
+      enum:
+      - EN_VANO
+      - PREMARCO
+      - SOBRE_VANO
+      - TRASLAPADO
+      - RENOVACION
+      type: string
+      description: |-
+        * `EN_VANO` - EN_VANO
+        * `PREMARCO` - PREMARCO
+        * `SOBRE_VANO` - SOBRE_VANO
+        * `TRASLAPADO` - TRASLAPADO
+        * `RENOVACION` - RENOVACION
     MountingRuleListResponse:
       type: object
       properties:
@@ -29269,7 +30725,7 @@ components:
           format: uuid
           nullable: true
         code:
-          $ref: '#/components/schemas/CodeEnum'
+          $ref: '#/components/schemas/MountingRuleCodeEnum'
         version:
           type: integer
         label:
@@ -30500,18 +31956,48 @@ components:
       - documents
       - production
       - security
-    OrientationEnum:
+    OrientationCompliance:
+      type: object
+      properties:
+        orientation:
+          $ref: '#/components/schemas/OrientationGroupEnum'
+        window_area_m2:
+          type: string
+        wall_area_m2:
+          type: string
+          nullable: true
+        actual_pct:
+          type: string
+          nullable: true
+        allowed_pct:
+          type: integer
+          nullable: true
+        verdict:
+          $ref: '#/components/schemas/ThermalVerdictEnum'
+        causes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ThermalCause'
+      required:
+      - actual_pct
+      - allowed_pct
+      - causes
+      - orientation
+      - verdict
+      - wall_area_m2
+      - window_area_m2
+    OrientationGroupEnum:
       enum:
-      - EXTERIOR_DOWN
-      - EXTERIOR_UP
-      - EXTERIOR_LEFT
-      - EXTERIOR_RIGHT
+      - N
+      - OP
+      - S
+      - OGT
       type: string
       description: |-
-        * `EXTERIOR_DOWN` - EXTERIOR_DOWN
-        * `EXTERIOR_UP` - EXTERIOR_UP
-        * `EXTERIOR_LEFT` - EXTERIOR_LEFT
-        * `EXTERIOR_RIGHT` - EXTERIOR_RIGHT
+        * `N` - N
+        * `OP` - OP
+        * `S` - S
+        * `OGT` - OGT
     PackingLabel:
       type: object
       properties:
@@ -30580,6 +32066,47 @@ components:
       - order_code
       - order_id
       - packing
+    PaneThermal:
+      type: object
+      properties:
+        bay_id:
+          type: string
+        leaf_id:
+          type: string
+          nullable: true
+        article_sku:
+          type: string
+          nullable: true
+        area_m2:
+          type: string
+        perimeter_m:
+          type: string
+        ug_w_m2k:
+          type: string
+          nullable: true
+        ug_authority:
+          type: string
+          nullable: true
+        psi_w_m_k:
+          type: string
+          nullable: true
+        spacer_code:
+          type: string
+          nullable: true
+        psi_authority:
+          type: string
+          nullable: true
+      required:
+      - area_m2
+      - article_sku
+      - bay_id
+      - leaf_id
+      - perimeter_m
+      - psi_authority
+      - psi_w_m_k
+      - spacer_code
+      - ug_authority
+      - ug_w_m2k
     PanelChoice:
       type: object
       properties:
@@ -30947,6 +32474,24 @@ components:
         is_active:
           type: boolean
           default: true
+    PatchedFrameUfWriteRequest:
+      type: object
+      description: Uf declarado por el fabricante para el sistema, por grupo de miembro.
+      properties:
+        system_id:
+          type: string
+          format: uuid
+        member_group:
+          $ref: '#/components/schemas/FrameMemberGroupEnum'
+        uf_w_m2k:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,3})?$
+        source_ref:
+          type: string
+          maxLength: 255
+        is_active:
+          type: boolean
     PatchedKitWriteRequest:
       type: object
       properties:
@@ -31023,6 +32568,59 @@ components:
           $ref: '#/components/schemas/MembershipRoleEnum'
         is_active:
           type: boolean
+    PatchedPerformanceTestWriteRequest:
+      type: object
+      description: 'Informe de ensayo del sistema: clases + laboratorio + alcance.'
+      properties:
+        system_id:
+          type: string
+          format: uuid
+        typology_scope:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 40
+        air_class:
+          type: integer
+          maximum: 5
+          minimum: 1
+          nullable: true
+        water_class:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 10
+        wind_class:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 10
+        report_ref:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 255
+        laboratory:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 255
+        tested_on:
+          type: string
+          format: date
+          nullable: true
+        tested_width_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
+        tested_height_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
+        is_active:
+          type: boolean
     PatchedProjectUpdateRequest:
       type: object
       properties:
@@ -31065,6 +32663,17 @@ components:
           type: string
         notes_internal:
           type: string
+        thermal_zone:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/ThermalZoneEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        thermal_use:
+          $ref: '#/components/schemas/ThermalUseEnum'
+        thermal_wall_areas:
+          type: object
+          additionalProperties: {}
+          nullable: true
         expected_updated_at:
           type: string
           format: date-time
@@ -31108,6 +32717,22 @@ components:
         is_active:
           type: boolean
           default: true
+    PatchedSpacerWriteRequest:
+      type: object
+      description: Ψg declarado por tipo de separador (el SpacerKind del motor).
+      properties:
+        code:
+          $ref: '#/components/schemas/SpacerCodeEnum'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        psi_w_m_k:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,2}(?:\.\d{0,4})?$
+        is_active:
+          type: boolean
     PatchedSystemWriteRequest:
       type: object
       properties:
@@ -31643,6 +33268,157 @@ components:
       description: |-
         * `terms` - terms
         * `default` - default
+    PerformanceTestList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PerformanceTestResponse'
+      required:
+      - items
+    PerformanceTestResponse:
+      type: object
+      description: |-
+        Read-only provenance/review state — written only by import jobs and
+        the technical-review endpoint, never by catalog CRUD.
+      properties:
+        data_provenance:
+          allOf:
+          - $ref: '#/components/schemas/DataProvenanceEnum'
+          readOnly: true
+        technical_reviewed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        technical_reviewed_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        review_pending:
+          type: boolean
+          readOnly: true
+          default: false
+        system_id:
+          type: string
+          format: uuid
+        typology_scope:
+          type: string
+          nullable: true
+          maxLength: 40
+        air_class:
+          type: integer
+          maximum: 5
+          minimum: 1
+          nullable: true
+        water_class:
+          type: string
+          nullable: true
+          maxLength: 10
+        wind_class:
+          type: string
+          nullable: true
+          maxLength: 10
+        report_ref:
+          type: string
+          nullable: true
+          maxLength: 255
+        laboratory:
+          type: string
+          nullable: true
+          maxLength: 255
+        tested_on:
+          type: string
+          format: date
+          nullable: true
+        tested_width_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
+        tested_height_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
+        is_active:
+          type: boolean
+        revision:
+          type: string
+          readOnly: true
+        read_only:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+      required:
+      - data_provenance
+      - id
+      - is_active
+      - read_only
+      - review_pending
+      - revision
+      - system_id
+      - technical_reviewed_at
+      - technical_reviewed_by
+    PerformanceTestWriteRequest:
+      type: object
+      description: 'Informe de ensayo del sistema: clases + laboratorio + alcance.'
+      properties:
+        system_id:
+          type: string
+          format: uuid
+        typology_scope:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 40
+        air_class:
+          type: integer
+          maximum: 5
+          minimum: 1
+          nullable: true
+        water_class:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 10
+        wind_class:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 10
+        report_ref:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 255
+        laboratory:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 255
+        tested_on:
+          type: string
+          format: date
+          nullable: true
+        tested_width_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
+        tested_height_mm:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
+        is_active:
+          type: boolean
+      required:
+      - is_active
+      - system_id
     PieceOriginEnum:
       enum:
       - PRODUCT
@@ -32344,6 +34120,11 @@ components:
           type: string
         discount_pct:
           type: string
+        thermal_orientation:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/ThermalOrientationEnum'
+          - $ref: '#/components/schemas/NullEnum'
         design:
           $ref: '#/components/schemas/PositionDesign'
         bom:
@@ -32365,8 +34146,45 @@ components:
       - price_net
       - project_id
       - quantity
+      - thermal_orientation
       - typology
       - updated_at
+    PositionThermal:
+      type: object
+      properties:
+        verdict:
+          $ref: '#/components/schemas/ThermalVerdictEnum'
+        uw:
+          $ref: '#/components/schemas/UwComputation'
+        classes:
+          allOf:
+          - $ref: '#/components/schemas/ResolvedClasses'
+          nullable: true
+        causes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ThermalCause'
+        air_class_required:
+          type: integer
+          nullable: true
+        roof_u_max:
+          type: string
+          nullable: true
+        u_max:
+          type: string
+          nullable: true
+        window_pct_max:
+          type: integer
+          nullable: true
+      required:
+      - air_class_required
+      - causes
+      - classes
+      - roof_u_max
+      - u_max
+      - uw
+      - verdict
+      - window_pct_max
     PositionUpdateRequest:
       type: object
       properties:
@@ -32386,6 +34204,11 @@ components:
         is_option:
           type: boolean
           default: false
+        thermal_orientation:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/ThermalOrientationEnum'
+          - $ref: '#/components/schemas/NullEnum'
         expected_updated_at:
           type: string
           format: date-time
@@ -32413,6 +34236,11 @@ components:
         is_option:
           type: boolean
           default: false
+        thermal_orientation:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/ThermalOrientationEnum'
+          - $ref: '#/components/schemas/NullEnum'
       required:
       - design
       - location_tag
@@ -33348,7 +35176,7 @@ components:
           maxLength: 500
         orientation:
           allOf:
-          - $ref: '#/components/schemas/OrientationEnum'
+          - $ref: '#/components/schemas/ProfileSectionOrientationEnum'
           default: EXTERIOR_DOWN
         local_origin:
           allOf:
@@ -33358,6 +35186,18 @@ components:
       - depth_mm
       - polygon
       - source
+    ProfileSectionOrientationEnum:
+      enum:
+      - EXTERIOR_DOWN
+      - EXTERIOR_UP
+      - EXTERIOR_LEFT
+      - EXTERIOR_RIGHT
+      type: string
+      description: |-
+        * `EXTERIOR_DOWN` - EXTERIOR_DOWN
+        * `EXTERIOR_UP` - EXTERIOR_UP
+        * `EXTERIOR_LEFT` - EXTERIOR_LEFT
+        * `EXTERIOR_RIGHT` - EXTERIOR_RIGHT
     ProfileSectionRequest:
       type: object
       description: |-
@@ -33384,7 +35224,7 @@ components:
           maxLength: 500
         orientation:
           allOf:
-          - $ref: '#/components/schemas/OrientationEnum'
+          - $ref: '#/components/schemas/ProfileSectionOrientationEnum'
           default: EXTERIOR_DOWN
         local_origin:
           allOf:
@@ -33789,6 +35629,17 @@ components:
           type: string
         notes_internal:
           type: string
+        thermal_zone:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/ThermalZoneEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        thermal_use:
+          $ref: '#/components/schemas/ThermalUseEnum'
+        thermal_wall_areas:
+          type: object
+          additionalProperties: {}
+          nullable: true
         id:
           type: string
           format: uuid
@@ -33871,6 +35722,41 @@ components:
       required:
       - items
       - lines
+    ProjectThermal:
+      type: object
+      properties:
+        project_id:
+          type: string
+          format: uuid
+        thermal_zone:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/ThermalZoneEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        thermal_use:
+          $ref: '#/components/schemas/ThermalUseEnum'
+        thermal_wall_areas:
+          type: object
+          additionalProperties: {}
+          nullable: true
+        positions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ThermalPosition'
+        orientations:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrientationCompliance'
+        verdict:
+          $ref: '#/components/schemas/ThermalVerdictEnum'
+      required:
+      - orientations
+      - positions
+      - project_id
+      - thermal_use
+      - thermal_wall_areas
+      - thermal_zone
+      - verdict
     ProjectVersionResponse:
       type: object
       properties:
@@ -33962,6 +35848,17 @@ components:
           type: string
         notes_internal:
           type: string
+        thermal_zone:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/ThermalZoneEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        thermal_use:
+          $ref: '#/components/schemas/ThermalUseEnum'
+        thermal_wall_areas:
+          type: object
+          additionalProperties: {}
+          nullable: true
       required:
       - client_name
       - name
@@ -34820,6 +36717,49 @@ components:
       - confirmed
       - expected_operation_id
       - reason
+    ResolvedClasses:
+      type: object
+      properties:
+        air_class:
+          type: integer
+          nullable: true
+        water_class:
+          type: string
+          nullable: true
+        wind_class:
+          type: string
+          nullable: true
+        report_ref:
+          type: string
+          nullable: true
+        laboratory:
+          type: string
+          nullable: true
+        tested_on:
+          type: string
+          nullable: true
+        tested_width_mm:
+          type: string
+          nullable: true
+        tested_height_mm:
+          type: string
+          nullable: true
+        authority:
+          type: string
+          nullable: true
+        scope_exceeded:
+          type: boolean
+      required:
+      - air_class
+      - authority
+      - laboratory
+      - report_ref
+      - scope_exceeded
+      - tested_height_mm
+      - tested_on
+      - tested_width_mm
+      - water_class
+      - wind_class
     ReviewStateEnum:
       enum:
       - REVIEWED
@@ -35796,6 +37736,99 @@ components:
       description: |-
         * `LEFT` - LEFT
         * `RIGHT` - RIGHT
+    SpacerCodeEnum:
+      enum:
+      - ALUMINIUM
+      - WARM_EDGE
+      type: string
+      description: |-
+        * `ALUMINIUM` - ALUMINIUM
+        * `WARM_EDGE` - WARM_EDGE
+    SpacerList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SpacerResponse'
+      required:
+      - items
+    SpacerResponse:
+      type: object
+      description: |-
+        Read-only provenance/review state — written only by import jobs and
+        the technical-review endpoint, never by catalog CRUD.
+      properties:
+        data_provenance:
+          allOf:
+          - $ref: '#/components/schemas/DataProvenanceEnum'
+          readOnly: true
+        technical_reviewed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        technical_reviewed_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        review_pending:
+          type: boolean
+          readOnly: true
+          default: false
+        code:
+          $ref: '#/components/schemas/SpacerCodeEnum'
+        name:
+          type: string
+          maxLength: 255
+        psi_w_m_k:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,2}(?:\.\d{0,4})?$
+        is_active:
+          type: boolean
+        revision:
+          type: string
+          readOnly: true
+        read_only:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+      required:
+      - code
+      - data_provenance
+      - id
+      - is_active
+      - name
+      - psi_w_m_k
+      - read_only
+      - review_pending
+      - revision
+      - technical_reviewed_at
+      - technical_reviewed_by
+    SpacerWriteRequest:
+      type: object
+      description: Ψg declarado por tipo de separador (el SpacerKind del motor).
+      properties:
+        code:
+          $ref: '#/components/schemas/SpacerCodeEnum'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        psi_w_m_k:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,2}(?:\.\d{0,4})?$
+        is_active:
+          type: boolean
+      required:
+      - code
+      - is_active
+      - name
+      - psi_w_m_k
     StepTransition:
       type: object
       properties:
@@ -36438,6 +38471,7 @@ components:
       - reglas
       - costos
       - historial
+      - termico
       type: string
       description: |-
         * `sistema` - sistema
@@ -36448,6 +38482,173 @@ components:
         * `reglas` - reglas
         * `costos` - costos
         * `historial` - historial
+        * `termico` - termico
+    ThermalAlternative:
+      type: object
+      properties:
+        kind:
+          $ref: '#/components/schemas/ThermalAlternativeKindEnum'
+        label:
+          type: string
+        glass_sku:
+          type: string
+          nullable: true
+        system_id:
+          type: string
+          format: uuid
+          nullable: true
+        uw_w_m2k:
+          type: string
+          nullable: true
+        price_delta_net:
+          type: string
+          nullable: true
+      required:
+      - kind
+      - label
+      - price_delta_net
+      - uw_w_m2k
+    ThermalAlternativeKindEnum:
+      enum:
+      - GLASS
+      - SYSTEM
+      type: string
+      description: |-
+        * `GLASS` - GLASS
+        * `SYSTEM` - SYSTEM
+    ThermalAlternativesResponse:
+      type: object
+      properties:
+        position_id:
+          type: string
+          format: uuid
+        current:
+          $ref: '#/components/schemas/PositionThermal'
+        alternatives:
+          type: array
+          items:
+            $ref: '#/components/schemas/ThermalAlternative'
+      required:
+      - alternatives
+      - current
+      - position_id
+    ThermalCause:
+      type: object
+      properties:
+        code:
+          type: string
+        detail:
+          type: string
+          nullable: true
+      required:
+      - code
+      - detail
+    ThermalMissing:
+      type: object
+      properties:
+        code:
+          type: string
+        detail:
+          type: string
+          nullable: true
+      required:
+      - code
+      - detail
+    ThermalOrientationEnum:
+      enum:
+      - N
+      - OP
+      - S
+      - OGT
+      - ROOF
+      type: string
+      description: |-
+        * `N` - N
+        * `OP` - OP
+        * `S` - S
+        * `OGT` - OGT
+        * `ROOF` - ROOF
+    ThermalPosition:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        position_index:
+          type: integer
+        location_tag:
+          type: string
+          nullable: true
+        quantity:
+          type: integer
+        typology:
+          type: string
+        thermal_orientation:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/ThermalOrientationEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        width_mm:
+          type: string
+        height_mm:
+          type: string
+        surface_m2:
+          type: string
+        thermal:
+          $ref: '#/components/schemas/PositionThermal'
+      required:
+      - height_mm
+      - id
+      - location_tag
+      - position_index
+      - quantity
+      - surface_m2
+      - thermal
+      - thermal_orientation
+      - typology
+      - width_mm
+    ThermalUseEnum:
+      enum:
+      - RESIDENTIAL
+      - EQUIPMENT
+      type: string
+      description: |-
+        * `RESIDENTIAL` - RESIDENTIAL
+        * `EQUIPMENT` - EQUIPMENT
+    ThermalVerdictEnum:
+      enum:
+      - COMPLIES
+      - FAILS
+      - INSUFFICIENT_DATA
+      - NO_REQUIREMENT
+      type: string
+      description: |-
+        * `COMPLIES` - COMPLIES
+        * `FAILS` - FAILS
+        * `INSUFFICIENT_DATA` - INSUFFICIENT_DATA
+        * `NO_REQUIREMENT` - NO_REQUIREMENT
+    ThermalZoneEnum:
+      enum:
+      - A
+      - B
+      - C
+      - D
+      - E
+      - F
+      - G
+      - H
+      - I
+      type: string
+      description: |-
+        * `A` - A
+        * `B` - B
+        * `C` - C
+        * `D` - D
+        * `E` - E
+        * `F` - F
+        * `G` - G
+        * `H` - H
+        * `I` - I
     TimeWindowEnum:
       enum:
       - AM
@@ -36691,6 +38892,57 @@ components:
       required:
       - email
       - id
+    UwComputation:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/UwStatusEnum'
+        uw_w_m2k:
+          type: string
+          nullable: true
+        ag_m2:
+          type: string
+        af_m2:
+          type: string
+        lg_m:
+          type: string
+        numerator_w_m_k:
+          type: string
+          nullable: true
+        authority:
+          type: string
+          nullable: true
+        panes:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaneThermal'
+        frame:
+          type: array
+          items:
+            $ref: '#/components/schemas/FrameZoneThermal'
+        missing:
+          type: array
+          items:
+            $ref: '#/components/schemas/ThermalMissing'
+      required:
+      - af_m2
+      - ag_m2
+      - authority
+      - frame
+      - lg_m
+      - missing
+      - numerator_w_m_k
+      - panes
+      - status
+      - uw_w_m2k
+    UwStatusEnum:
+      enum:
+      - OK
+      - UNKNOWN
+      type: string
+      description: |-
+        * `OK` - OK
+        * `UNKNOWN` - UNKNOWN
     VanoRecord:
       type: object
       description: |-

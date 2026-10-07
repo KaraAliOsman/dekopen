@@ -3,6 +3,7 @@
 import json
 from datetime import datetime
 
+from django.db import connection
 from django.http import HttpResponse
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 from rest_framework.response import Response
@@ -108,6 +109,8 @@ from projects.serializers import (
     PositionUpdateSerializer,
     PositionWriteSerializer,
     ProjectListResponseSerializer,
+    ProjectThermalSerializer,
+    ThermalAlternativesResponseSerializer,
     ProjectResponseSerializer,
     QuotationListResponseSerializer,
     ProjectUpdateSerializer,
@@ -1429,3 +1432,126 @@ class OrganizationDocumentPreviewView(APIView):
             return response(
                 {"html": org_settings.document_preview(org, data)}
             )
+
+
+class ProjectThermalView(APIView):
+    """P18 — panel de cumplimiento térmico OGUC 4.1.10 del proyecto."""
+
+    @extend_schema(
+        operation_id="projects_thermal",
+        responses={200: ProjectThermalSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def get(self, request, project_id):
+        from projects import thermal
+
+        with scope(request, READ_ROLES) as (_, _, org):
+            return response(thermal.project_thermal(org, project_id))
+
+
+class PositionThermalAlternativesView(APIView):
+    """P18 §8 — alternativa más barata que sí cumple para la posición."""
+
+    @extend_schema(
+        operation_id="position_thermal_alternatives",
+        responses={200: ThermalAlternativesResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def get(self, request, position_id):
+        from projects import thermal
+
+        with scope(request, READ_ROLES) as (_, _, org):
+            return response(
+                thermal.thermal_alternatives(
+                    org_id=org,
+                    position_id=position_id,
+                    price_lookup=_thermal_price_lookup(org),
+                )
+            )
+
+
+def _thermal_price_lookup(org):
+    """Δ neto entre la posición guardada y un diseño candidato — la misma
+    composición honesta de §08-WC (position_cost + margen declarado);
+    devuelve None cuando la regla no permite un precio unitario honesto."""
+    from datetime import date
+    from decimal import Decimal as D
+
+    from authentication.rls import tx_aborted
+    from dekopen_engine.commercial import PricingError
+    from django.db import transaction
+    from django.db.utils import DatabaseError
+    from pricing.repository import PricingRepository, json_text, one
+    from pricing.service import _design_net_price, position_cost
+
+    try:
+        with transaction.atomic():  # savepoint: la negación RLS no aborta el resto
+            rules = one(
+                "SELECT * FROM public.pricing_rules WHERE org_id=%s",
+                [org],
+                "pricing_rules_not_found",
+            )
+    except (PricingError, DatabaseError):
+        # pricing_rules no es legible por todos los roles con lectura de
+        # proyectos (p. ej. ESTIMATOR bajo RLS). El §8 conserva las
+        # alternativas y declara Δ «Sin dato» en vez de tumbar la vista.
+        return lambda position, system_id, tree: None
+    organization = one(
+        "SELECT currency FROM public.tenancy_organizations WHERE id=%s",
+        [org],
+        "organization_not_found",
+    )
+    repo = PricingRepository(org, date.today(), organization["currency"], None)
+    calculation_rules = {
+        **rules,
+        "labor_rate_per_m2": repo.convert(rules["labor_rate_per_m2"], organization["currency"]),
+        "installation_rate_per_m2": repo.convert(
+            rules["installation_rate_per_m2"], organization["currency"]
+        ),
+    }
+
+    def lookup(position, system_id, tree):
+        pseudo = {
+            "system_id": system_id,
+            "parametric_tree": json_text(tree),
+            "width_mm": D(str(position["width_mm"])),
+            "height_mm": D(str(position["height_mm"])),
+            "color_interior": position["color_interior"],
+            "color_exterior": position["color_exterior"],
+        }
+        try:
+            before, before_area, _, before_formation = position_cost(
+                repo, position, calculation_rules
+            )
+            after, after_area, _, after_formation = position_cost(repo, pseudo, calculation_rules)
+            before_net = _design_net_price(
+                before,
+                before_area,
+                before_formation,
+                rules,
+                width=position["width_mm"],
+                height=position["height_mm"],
+                foil=position["color_interior"] != "WHITE" or position["color_exterior"] != "WHITE",
+            )
+            after_net = _design_net_price(
+                after,
+                after_area,
+                after_formation,
+                rules,
+                width=pseudo["width_mm"],
+                height=pseudo["height_mm"],
+                foil=pseudo["color_interior"] != "WHITE" or pseudo["color_exterior"] != "WHITE",
+            )
+            if before_net is None or after_net is None:
+                return None
+            return after_net - before_net
+        except Exception:  # noqa: BLE001 — sin precio honesto, «Sin dato»
+            return None
+        finally:
+            # position_cost deja el rol ambiente en pricing_backend; el
+            # contexto del endpoint corre como authenticated.
+            if not tx_aborted():
+                with connection.cursor() as cursor:
+                    cursor.execute("SET LOCAL ROLE authenticated")
+
+    return lookup

@@ -511,6 +511,19 @@ def test_shot06_all_28_catalog_fields_reach_typed_engine(real_rows: RLSFixtures)
         article["section"] = None
     for article in expected_fields["effective_profile_articles"].values():
         article["section"] = None
+    # P18: the seed rows carry provenance + review stamps; the engine
+    # fixture leaves them undeclared. Assert the typed fields deserialize,
+    # then normalize like the sections above.
+    assert any(
+        product["data_provenance"] is not None
+        for product in actual_fields["glass_products"].values()
+    )
+    for product in actual_fields["glass_products"].values():
+        product["data_provenance"] = None
+        product["verified"] = False
+    for product in expected_fields["glass_products"].values():
+        product["data_provenance"] = None
+        product["verified"] = False
     # The live seed owns kit identities independently of the engine's golden
     # fixture; the typed field is still present and populated in both paths.
     assert actual_fields.pop("available_hardware_kits")

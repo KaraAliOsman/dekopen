@@ -73,6 +73,7 @@ from engine_api.repository import SystemParamsRepository
 from pricing.repository import commercial_backend
 from production.service import process_facts_snapshot
 from projects.measurement import resolve_position_measurement
+from projects.thermal import thermal_annex
 from rut import rut_mod11_valid
 
 from documents.repository import (
@@ -1319,6 +1320,16 @@ def _emission_missing(
     return missing
 
 
+def _thermal_annex_safe(org_id: UUID, project_id: UUID) -> list | None:
+    """Anexo térmico del DOC-01: sólo valores verificados; ante cualquier
+    fallo de la evaluación térmica el sellado sigue y el anexo se omite."""
+    try:
+        annex = thermal_annex(org_id, project_id)
+    except Exception:  # noqa: BLE001 — el anexo es opcional por contrato
+        return None
+    return annex or None
+
+
 def _revision_snapshot(
     *,
     org_id: UUID,
@@ -1923,6 +1934,10 @@ def _revision_snapshot(
         },
         "production_allowed": production_allowed,
         "documentary_complete": documentary_complete,
+        # P18: anexo técnico opcional — Uw y clases por posición, sólo con
+        # datos verificados. Si la evaluación térmica falla entera el
+        # documento no puede caer con ella: el anexo se omite.
+        "thermal_annex": _thermal_annex_safe(org_id, project_id),
         "realized_waste": {"status": "NOT_RECORDED", "value": None},
         "bom_hash": bom_hash,
     }

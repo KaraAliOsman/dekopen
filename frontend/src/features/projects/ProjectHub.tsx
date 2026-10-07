@@ -49,6 +49,7 @@ import { PositionsTab } from "./ProjectPositionsTab";
 import { ProjectPaymentsPanel } from "./ProjectPaymentsPanel";
 import { ProjectQuotationPanel } from "./ProjectQuotationPanel";
 import { ProjectServicesPanel } from "./ProjectServicesPanel";
+import { ProjectThermalPanel } from "./ProjectThermalPanel";
 import { fields } from "./projectShared";
 
 /* ------------------------------------------------------------------ */
@@ -1162,6 +1163,7 @@ function RevisionComparePanel({ project }: { project: ProjectResponse }): JSX.El
 
 type HubTab =
   | "posiciones"
+  | "termico"
   | "servicios"
   | "cotizacion"
   | "precio"
@@ -1172,6 +1174,7 @@ type HubTab =
 
 const HUB_TABS: readonly HubTab[] = [
   "posiciones",
+  "termico",
   "servicios",
   "cotizacion",
   "precio",
@@ -1183,6 +1186,7 @@ const HUB_TABS: readonly HubTab[] = [
 
 const TAB_LABEL_KEYS: Record<HubTab, TranslationKey> = {
   posiciones: "projects.tab.posiciones",
+  termico: "projects.tab.termico",
   servicios: "projects.tab.servicios",
   cotizacion: "projects.tab.cotizacion",
   precio: "projects.tab.precio",
@@ -1340,6 +1344,18 @@ export function ProjectHub({
           prepByPosition={prepByPosition}
           project={project}
         />,
+      )}
+      {panel(
+        "termico",
+        <section aria-label={t("projects.tab.termico")} className="project-tab">
+          <ProjectThermalPanel
+            editable={editable && canWrite}
+            onChanged={onChanged}
+            onError={onError}
+            orgId={orgId}
+            project={project}
+          />
+        </section>,
       )}
       {panel(
         "servicios",

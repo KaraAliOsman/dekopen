@@ -15,6 +15,7 @@
  * * `reglas` - reglas
  * * `costos` - costos
  * * `historial` - historial
+ * * `termico` - termico
  */
 export type TabEnum = (typeof TabEnum)[keyof typeof TabEnum];
 
@@ -27,4 +28,5 @@ export const TabEnum = {
   reglas: "reglas",
   costos: "costos",
   historial: "historial",
+  termico: "termico",
 } as const;

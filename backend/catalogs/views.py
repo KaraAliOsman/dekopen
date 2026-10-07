@@ -44,10 +44,16 @@ from catalogs.serializers import (
     CatalogFilterSerializer,
     ExtraArticleListSerializer,
     ExtraArticleResponseSerializer,
+    FrameUfListSerializer,
+    FrameUfResponseSerializer,
     KitListSerializer,
     KitResponseSerializer,
+    PerformanceTestListSerializer,
+    PerformanceTestResponseSerializer,
     ServiceArticleListSerializer,
     ServiceArticleResponseSerializer,
+    SpacerListSerializer,
+    SpacerResponseSerializer,
     SystemListSerializer,
     SystemResponseSerializer,
     ProcessProfileOptionListSerializer,
@@ -280,7 +286,7 @@ def _endpoint_classes(name, resource, response_serializer, list_serializer):
     detail = type(f"{name}DetailView", (CatalogDetailView,), attributes)
     filters = (
         []
-        if resource is service.SYSTEMS
+        if resource in (service.SYSTEMS, service.SPACERS)
         else [
             OpenApiParameter("system_id", OpenApiTypes.UUID, OpenApiParameter.QUERY),
         ]
@@ -395,6 +401,31 @@ ServiceArticleCollectionView, ServiceArticleDetailView = _endpoint_classes(
 )
 ServiceArticleReviewView = _review_view(
     "ServiceArticle", service.SERVICE_ARTICLES, ServiceArticleResponseSerializer
+)
+# P18 autoridades térmicas: Ψg por separador, Uf por grupo de miembro e
+# informes de ensayo del sistema — mismo CRUD + sello de revisión de P16.
+SpacerCollectionView, SpacerDetailView = _endpoint_classes(
+    "Spacer",
+    service.SPACERS,
+    SpacerResponseSerializer,
+    SpacerListSerializer,
+)
+SpacerReviewView = _review_view("Spacer", service.SPACERS, SpacerResponseSerializer)
+FrameUfCollectionView, FrameUfDetailView = _endpoint_classes(
+    "FrameUf",
+    service.FRAME_UF,
+    FrameUfResponseSerializer,
+    FrameUfListSerializer,
+)
+FrameUfReviewView = _review_view("FrameUf", service.FRAME_UF, FrameUfResponseSerializer)
+PerformanceTestCollectionView, PerformanceTestDetailView = _endpoint_classes(
+    "PerformanceTest",
+    service.PERFORMANCE_TESTS,
+    PerformanceTestResponseSerializer,
+    PerformanceTestListSerializer,
+)
+PerformanceTestReviewView = _review_view(
+    "PerformanceTest", service.PERFORMANCE_TESTS, PerformanceTestResponseSerializer
 )
 
 

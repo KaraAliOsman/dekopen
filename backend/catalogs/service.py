@@ -16,8 +16,11 @@ from catalogs.serializers import (
     ArticleWriteSerializer,
     BeadWriteSerializer,
     ExtraArticleWriteSerializer,
+    FrameUfWriteSerializer,
     KitWriteSerializer,
+    PerformanceTestWriteSerializer,
     ServiceArticleWriteSerializer,
+    SpacerWriteSerializer,
     SystemWriteSerializer,
 )
 
@@ -71,6 +74,17 @@ EXTRA_ARTICLES = Resource(
 # the org/global split only (NULL org = the shared seed catalogue).
 SERVICE_ARTICLES = Resource(
     "service_articles", ServiceArticleWriteSerializer, _PROVENANCE_COLUMNS
+)
+# P18 thermal authorities — every value declared with its source: the Ψg
+# per spacer kind (unscoped like service_articles — shared registry), the
+# Uf per system member group, and the system's performance test reports.
+SPACERS = Resource("glazing_spacers", SpacerWriteSerializer, _PROVENANCE_COLUMNS)
+FRAME_UF = Resource(
+    "system_frame_uf", FrameUfWriteSerializer, _PROVENANCE_COLUMNS
+)
+PERFORMANCE_TESTS = Resource(
+    "system_performance_tests", PerformanceTestWriteSerializer,
+    _PROVENANCE_COLUMNS,
 )
 
 
@@ -174,14 +188,14 @@ def visibility_sql(*, child: bool, alias: str | None = None, unscoped: bool = Fa
 def _visibility(resource):
     return visibility_sql(
         child=resource is not SYSTEMS,
-        unscoped=resource is SERVICE_ARTICLES,
+        unscoped=resource in (SERVICE_ARTICLES, SPACERS),
     )
 
 
 def list_rows(resource, org_id, system_id=None):
     where = _visibility(resource)
     params = [org_id]
-    if system_id is not None and resource is not SERVICE_ARTICLES:
+    if system_id is not None and resource not in (SERVICE_ARTICLES, SPACERS):
         where += " AND system_id = %s"
         params.append(system_id)
     values = _fetch(resource, where, params)
@@ -217,7 +231,7 @@ def _require_owned(row, org_id):
 
 
 def _bind_parent(resource, org_id, values):
-    if resource is SYSTEMS or resource is SERVICE_ARTICLES:
+    if resource in (SYSTEMS, SERVICE_ARTICLES, SPACERS):
         return
 
     system_id = values["system_id"]

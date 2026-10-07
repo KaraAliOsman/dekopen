@@ -227,3 +227,37 @@ def test_discount_and_extras_reconcile() -> None:
         assert "US$ 16.724,26" in text  # total
     finally:
         doc.close()
+
+
+def test_thermal_annex_renders_only_when_present() -> None:
+    """P18 — el anexo técnico del DOC-01 se imprime sólo con datos
+    verificados congelados en el snapshot; sin ellos no hay sección."""
+    snapshot = dict(build_snapshot("single"))
+    snapshot["thermal_annex"] = [
+        {
+            "position_index": 1,
+            "location_tag": "Living",
+            "quantity": 2,
+            "uw_w_m2k": "1.90",
+            "air_class": 3,
+            "water_class": "E750",
+            "wind_class": "C3",
+            "report_ref": "INF-2026-045",
+            "laboratory": "IDIEM",
+            "tested_on": "2026-03-12",
+        },
+        # Posición sin ningún valor verificado: no aparece en el anexo.
+        {"position_index": 2, "location_tag": "Cocina", "quantity": 1},
+    ]
+    html = _doc01(snapshot)
+    assert "Anexo técnico" in html
+    assert "1.90" in html
+    assert "Aire 3" in html
+    assert "INF-2026-045" in html
+    assert "IDIEM" in html
+    assert "Cocina" not in html.split("Anexo técnico")[-1]
+
+    html = _doc01(build_snapshot("single"))
+    assert "Anexo técnico" not in html
+    snapshot["thermal_annex"] = []
+    assert "Anexo técnico" not in _doc01(snapshot)

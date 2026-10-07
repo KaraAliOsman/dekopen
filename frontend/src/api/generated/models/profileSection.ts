@@ -6,7 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { LocalOriginEnum } from "./localOriginEnum";
-import type { OrientationEnum } from "./orientationEnum";
+import type { ProfileSectionOrientationEnum } from "./profileSectionOrientationEnum";
 import type { SectionAxis } from "./sectionAxis";
 import type { SectionPoint } from "./sectionPoint";
 import type { SectionSourceEnum } from "./sectionSourceEnum";
@@ -26,6 +26,6 @@ export interface ProfileSection {
    * @nullable
    */
   drawing_ref?: string | null;
-  orientation?: OrientationEnum;
+  orientation?: ProfileSectionOrientationEnum;
   local_origin?: LocalOriginEnum;
 }

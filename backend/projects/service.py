@@ -54,6 +54,10 @@ PROJECT_COLUMNS = (
     "total_price_tax",
     "total_price_gross",
     "client_id",
+    # P18 — declaraciones térmicas del proyecto (OGUC 4.1.10).
+    "thermal_zone",
+    "thermal_use",
+    "thermal_wall_areas",
     "updated_at",
 )
 POSITION_COLUMNS = (
@@ -82,6 +86,8 @@ POSITION_COLUMNS = (
     "measurement_confirmed_at",
     "measurement_confirmed_by",
     "is_option",
+    # P18 — orientación del paramento donde se instala (N/OP/S/OGT/ROOF).
+    "thermal_orientation",
     "updated_at",
 )
 
@@ -213,6 +219,9 @@ def position_public(row):
             )
         },
         "measurement": resolve_position_measurement(row.get("org_id"), row),
+        # Posiciones almacenadas antes de la columna térmica se decodifican
+        # sin orientación — el panel las reporta con causa, nunca inventadas.
+        "thermal_orientation": row.get("thermal_orientation"),
         # The pricing authority writes these on apply — the workspace shows
         # each vano's live net alongside its total, no re-derivation. The
         # cost side stays inside pricing operations (member-denied column).
@@ -272,6 +281,7 @@ def project_public(org_id, row, *, detail=False, authority=_UNSET,
         "currency": (authority or {}).get("currency") or "CLP",
     }
     value.pop("pricing_reset_at", None)  # internal gate timestamp, not API state
+    value["thermal_wall_areas"] = decoded(value["thermal_wall_areas"])
     for key in METADATA:
         value[key] = value[key] or ""
     for key in ("total_price_net", "total_price_tax", "total_price_gross"):
@@ -390,6 +400,18 @@ def update_project(org_id, project_id, data):
     current = editable(org_id, project_id)
     unchanged(current, data["expected_updated_at"])
     values = {key: data[key] for key in METADATA if key in data}
+    for key in ("thermal_zone", "thermal_use"):
+        if key in data:
+            values[key] = data[key]
+    if "thermal_wall_areas" in data:
+        # JSONB — el placeholder genérico no castea; Jsonb() adapta el dict.
+        from psycopg.types.json import Jsonb
+
+        values["thermal_wall_areas"] = (
+            Jsonb(data["thermal_wall_areas"])
+            if data["thermal_wall_areas"] is not None
+            else None
+        )
     if "client_id" in data:
         if data["client_id"]:
             linkable_client(org_id, data["client_id"])
@@ -596,6 +618,13 @@ def save_position(org_id, project_id, data, *, position_id=None):
         measurement["measurement_state"],
         measurement["measurement_confirmed_at"],
         measurement["measurement_confirmed_by"],
+        # Un PUT sin la clave conserva la orientación — clientes antiguos
+        # (qty en línea, mover) no deben borrarla al guardar otra cosa.
+        (
+            data["thermal_orientation"]
+            if "thermal_orientation" in data
+            else (current["thermal_orientation"] if current else None)
+        ),
     ]
     if current:
         rows(
@@ -606,7 +635,7 @@ def save_position(org_id, project_id, data, *, position_id=None):
             "glass_composition=%s::jsonb,glass_review_pending=%s,"
             "rough_opening_input=%s::jsonb,mounting_rule_id=%s,fabrication_lock=%s::jsonb,"
             "measurement_state=%s,measurement_confirmed_at=%s,measurement_confirmed_by=%s,"
-            "updated_at=clock_timestamp() "
+            "thermal_orientation=%s,updated_at=clock_timestamp() "
             "WHERE id=%s AND org_id=%s RETURNING id",
             [*values, position_id, org_id],
         )
@@ -623,11 +652,12 @@ def save_position(org_id, project_id, data, *, position_id=None):
             "glass_composition,glass_review_pending,"
             "rough_opening_input,mounting_rule_id,fabrication_lock,"
             "measurement_state,measurement_confirmed_at,measurement_confirmed_by,"
+            "thermal_orientation,"
             "id,project_id,org_id,position_index) "
             "VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s::jsonb,%s,"
             "%s::jsonb,%s,%s::jsonb,"
             "%s,%s,%s,"
-            "%s,%s,%s,%s) RETURNING id",
+            "%s,%s,%s,%s,%s) RETURNING id",
             [*values, position_id, project_id, org_id, index],
         )
     rows(

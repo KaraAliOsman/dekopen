@@ -4,10 +4,13 @@ import type {
   ArticleResponse,
   EvidenceRow,
   BeadResponse,
+  FrameUfResponse,
   KitResponse,
+  PerformanceTestResponse,
   PurchaseMappingRow,
   ReadinessTarget,
   ReinforcementRow,
+  SpacerResponse,
   SystemWorkspace,
   TabEnum,
   WorkCenter,
@@ -32,6 +35,7 @@ import {
   HistoryPanel,
   ProvenanceBadge,
   RulesPanel,
+  ThermalPanel,
   catalogFieldLabel,
   catalogFieldValue,
   provenanceLabel,
@@ -63,6 +67,7 @@ const WS_TABS: TabEnum[] = [
   "perfiles",
   "refuerzos",
   "vidrios",
+  "termico",
   "herrajes",
   "reglas",
   "costos",
@@ -319,6 +324,11 @@ export function SystemWorkspaceView({
   const centerName = (code: string): string =>
     centers?.find((center) => center.code === code)?.name ?? code;
   const [evidenceRows, setEvidenceRows] = useState<EvidenceRow[] | null>(null);
+  const [thermal, setThermal] = useState<{
+    spacers: SpacerResponse[];
+    frameUfs: FrameUfResponse[];
+    tests: PerformanceTestResponse[];
+  } | null>(null);
   const [error, setError] = useState(false);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
 
@@ -353,6 +363,17 @@ export function SystemWorkspaceView({
       })
       .catch(() => {
         if (alive) setEvidenceRows([]);
+      });
+    void Promise.all([
+      api.list("spacers", controller.signal),
+      api.list("frame-uf", controller.signal, systemId),
+      api.list("performance-tests", controller.signal, systemId),
+    ])
+      .then(([spacers, frameUfs, tests]) => {
+        if (alive) setThermal({ spacers, frameUfs, tests });
+      })
+      .catch(() => {
+        if (alive) setThermal({ spacers: [], frameUfs: [], tests: [] });
       });
     return () => {
       alive = false;
@@ -785,6 +806,26 @@ export function SystemWorkspaceView({
           </section>
           <GlassPanel glass={workspace.glass} />
         </>
+      )}
+
+      {activeTab === "termico" && (
+        <section className="ws-section" id="ws-tab-termico">
+          <header className="ws-section-head">
+            <h3>{wst("thermalTitle")}</h3>
+            <small className="ws-section-note">{wst("thermalNote")}</small>
+          </header>
+          {!thermal ? (
+            <p className="ui-empty-inline">{ct("loading")}</p>
+          ) : (
+            <ThermalPanel
+              spacers={thermal.spacers}
+              frameUfs={thermal.frameUfs}
+              tests={thermal.tests}
+              canEdit={canEdit}
+              onEdit={onEdit}
+            />
+          )}
+        </section>
       )}
 
       {activeTab === "herrajes" && (
