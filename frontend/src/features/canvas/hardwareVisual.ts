@@ -21,7 +21,13 @@ import type { MemberGeometry } from "./members";
 export type Region = { x: number; y: number; w: number; h: number };
 
 export type SceneDiagnosticCode =
-  "kit_unknown" | "handle_out_of_range" | "handle_datum_unsupported" | "hardware_convention";
+  | "kit_unknown"
+  | "handle_out_of_range"
+  | "handle_datum_unsupported"
+  | "hardware_convention"
+  /** A foil-class member renders flat — the catalog declared no texture
+   * for the face, so the swatch is an approximation, never a foil photo. */
+  | "finish_convention";
 
 export interface SceneDiagnostic {
   code: SceneDiagnosticCode;
@@ -58,7 +64,7 @@ export interface HandleSpec {
   /** The declared value when one exists; null when the convention drew. */
   declaredMm: number | null;
   /** Which leaf member the handle mounts on. */
-  mountSide: "left" | "right" | "bottom";
+  mountSide: "left" | "right" | "bottom" | "top";
   /** Kit-bound when the kit's contents declare the handle line. */
   kitBound: boolean;
   diagnostics: SceneDiagnostic[];
@@ -73,7 +79,7 @@ export interface HingeSpec {
 }
 
 export interface HardwareVisualSpec {
-  family: "CASEMENT" | "TILT_TURN" | "DOOR" | "SLIDING" | "AWNING" | "FRAMELESS";
+  family: "CASEMENT" | "TILT_TURN" | "DOOR" | "SLIDING" | "AWNING" | "BOTTOM_HUNG" | "FRAMELESS";
   kitSku: string | null;
   kitName: string | null;
   hinges: HingeSpec | null;
@@ -119,6 +125,48 @@ export function hingeSide(bay: IntentNode): "LEFT" | "RIGHT" | null {
   if (opening === "TURN_RIGHT" || opening === "TILT_TURN_RIGHT") return "RIGHT";
   if (opening === "DOOR_ENTRY") return bay.door_handedness === "RIGHT" ? "RIGHT" : "LEFT";
   return null;
+}
+
+/** Per-leaf opening contract normalized from the spec form (D03
+ * `opening`/`leaves`) — or the legacy enum mapped into the same shape —
+ * so a pair's ACTIVE/PASSIVE leaves pose and carry hardware exactly as
+ * declared instead of collapsing to the bay's enum. */
+export interface LeafSpecInput {
+  movement: string;
+  hinge: "LEFT" | "RIGHT" | "TOP" | "BOTTOM" | null;
+  direction: "INWARD" | "OUTWARD";
+  role: "SINGLE" | "ACTIVE" | "PASSIVE" | null;
+  door: boolean;
+}
+
+/** The opening vocabulary the handle policies are written in — spec
+ * leaves map onto it so the declared host member/band still governs
+ * (unknown movements get no slot and fall back to convention). */
+function specOpeningKey(spec: LeafSpecInput): string {
+  if (spec.door) return "DOOR_ENTRY";
+  switch (spec.movement) {
+    case "TILT_TURN":
+      return spec.hinge === "RIGHT" ? "TILT_TURN_RIGHT" : "TILT_TURN_LEFT";
+    case "TURN":
+      return spec.hinge === "RIGHT" ? "TURN_RIGHT" : "TURN_LEFT";
+    case "TOP_HUNG":
+      return "AWNING";
+    case "BOTTOM_HUNG":
+    case "TILT":
+      return "BOTTOM_HUNG";
+    case "SLIDE":
+    case "LIFT_SLIDE":
+    case "PARALLEL_SLIDE":
+      return "SLIDING";
+    default:
+      return spec.movement;
+  }
+}
+
+/** The hinge side a spec leaf pivots on — TOP/BOTTOM hinges stay null
+ * here because the handle mounts on the free edge, not a stile. */
+export function specHingeSide(spec: LeafSpecInput): "LEFT" | "RIGHT" | null {
+  return spec.hinge === "LEFT" || spec.hinge === "RIGHT" ? spec.hinge : null;
 }
 
 /** The handle's vertical position in module space: the declared
@@ -201,6 +249,7 @@ export function resolveHardwareVisual(
   leaf: Region,
   members: MemberGeometry,
   owner: string,
+  spec?: LeafSpecInput,
 ): HardwareVisualSpec {
   const diagnostics: SceneDiagnostic[] = [];
   const kitSku = bay.hardware_set_sku ?? null;
@@ -209,29 +258,43 @@ export function resolveHardwareVisual(
     diagnostics.push({ code: "kit_unknown", owner, values: { sku: kitSku } });
   }
   const kitName = kit?.name ?? null;
-  const opening = bay.opening_type ?? "FIXED";
-  const door = opening === "DOOR_ENTRY";
-  const awning = opening === "AWNING";
-  const tiltTurn = opening.startsWith("TILT_TURN");
-  const sliding = opening.startsWith("SLIDING");
+  const opening = spec ? specOpeningKey(spec) : (bay.opening_type ?? "FIXED");
+  const door = spec ? spec.door : opening === "DOOR_ENTRY";
+  const awning = spec ? spec.movement === "TOP_HUNG" : opening === "AWNING";
+  const tiltTurn = spec ? spec.movement === "TILT_TURN" : opening.startsWith("TILT_TURN");
+  const bottomHung = spec ? spec.movement === "BOTTOM_HUNG" || spec.movement === "TILT" : false;
+  const sliding = spec ? spec.movement === "SLIDE" : opening.startsWith("SLIDING");
   const family = door
     ? "DOOR"
     : awning
       ? "AWNING"
       : tiltTurn
         ? "TILT_TURN"
-        : sliding
-          ? "SLIDING"
-          : "CASEMENT";
+        : bottomHung
+          ? "BOTTOM_HUNG"
+          : sliding
+            ? "SLIDING"
+            : "CASEMENT";
 
   const policy = members.handlePolicy;
-  const handedness = hingeSide(bay);
+  const handedness = spec ? specHingeSide(spec) : hingeSide(bay);
   const slot = policySlotFor(policy, opening, handedness === "LEFT" ? "LEFT" : handedness);
 
   // Hinges: a kit-declared HINGE quantity is the authority; otherwise the
   // height heuristic draws a schematic count explicitly marked convention.
   let hinges: HingeSpec | null = null;
-  if (family !== "SLIDING" && opening !== "FIXED" && handedness !== null) {
+  if (family === "BOTTOM_HUNG") {
+    // Bottom-hung pivots: two corner shoes carry the leaf — declared HINGE
+    // qty is the authority when the kit names it.
+    const declared = kit ? kitQty(kit, "HINGE") : 0;
+    hinges =
+      declared > 0
+        ? { count: Math.max(Math.round(declared), 2), authority: "kit" }
+        : { count: 2, authority: "convention" };
+    if (hinges.authority === "convention") {
+      diagnostics.push({ code: "hardware_convention", owner, values: { what: "hinges" } });
+    }
+  } else if (family !== "SLIDING" && opening !== "FIXED" && handedness !== null) {
     if (awning) {
       const declared = kit ? kitQty(kit, "HINGE") : 0;
       hinges =
@@ -256,7 +319,12 @@ export function resolveHardwareVisual(
   const declaredLock = kit ? kitQty(kit, "LOCK") > 0 : false;
   const declaredHandle = kit ? kitQty(kit, "HANDLE") > 0 : null;
   let handle: HandleSpec | null = null;
-  if (family === "CASEMENT" || family === "TILT_TURN" || family === "DOOR") {
+  if (spec?.role === "PASSIVE") {
+    // The passive leaf locks through the espagnolette bolt into the
+    // meeting stile — it never carries the bay's handle (the falleba cue
+    // is drawn by the scene builder instead).
+    handle = null;
+  } else if (family === "CASEMENT" || family === "TILT_TURN" || family === "DOOR") {
     const hinge = handedness ?? "LEFT";
     // The policy's host member wins over the hinge-opposite convention —
     // a door kit can mount on a declared stile; BOTTOM hosts mean a
@@ -307,6 +375,29 @@ export function resolveHardwareVisual(
       heightMm: height.declaredMm !== null ? height.heightMm : leaf.y + 30,
       declaredMm: height.declaredMm,
       mountSide: "bottom",
+      kitBound: declaredHandle === true,
+      diagnostics: height.diagnostics,
+    };
+    if (declaredHandle === false) {
+      diagnostics.push({
+        code: "kit_unknown",
+        owner,
+        values: { sku: `${kitSku} (sin línea HANDLE)` },
+      });
+    }
+  } else if (family === "BOTTOM_HUNG") {
+    const height = resolveHandleHeight(bay, leaf, slot, owner);
+    diagnostics.push(...height.diagnostics);
+    handle = {
+      kind: "centre_lever",
+      interior: true,
+      exterior: false,
+      cylinder: false,
+      // A bottom-hung leaf opens on its top edge — the handle mounts
+      // centred on the TOP rail (mirror of the awning convention).
+      heightMm: height.declaredMm !== null ? height.heightMm : leaf.y + leaf.h - 30,
+      declaredMm: height.declaredMm,
+      mountSide: "top",
       kitBound: declaredHandle === true,
       diagnostics: height.diagnostics,
     };

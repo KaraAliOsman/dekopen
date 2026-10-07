@@ -1,13 +1,14 @@
 import type { PlanGeometry, PlanModule } from "../../api/generated/models";
 import type { ContourJson, ProductJson, ProductModuleJson } from "./productEditing";
 import { modulePrimaryBay, resolveStacks } from "./productEditing";
-import type { IntentNode } from "./intentEditing";
-import { resolvedSlidingLayout } from "./intentEditing";
+import type { IntentNode, OpeningSpecPayload } from "./intentEditing";
+import { bayIsDoor, panelTravel, resolvedSlidingLayout } from "./intentEditing";
 import { insetContourPoints } from "./contourGeometry";
 import { frontLayout } from "./ProductFrontSvg";
 import type { MemberGeometry, MemberSpec } from "./members";
-import type { HandleKind, SceneDiagnostic } from "./hardwareVisual";
+import type { HandleKind, LeafSpecInput, SceneDiagnostic } from "./hardwareVisual";
 import { hingeSide, resolveHardwareVisual } from "./hardwareVisual";
+import { leafPart, solidZCenter } from "./leafPose";
 
 /** Pure 3D scene builder — the §16 view derives every solid from the SAME
  * product model the 2D elevation renders (front layout, bay tree, catalog
@@ -33,7 +34,8 @@ export type SolidKind =
   | "hinge"
   | "track"
   | "threshold"
-  | "spacer";
+  | "spacer"
+  | "wall";
 
 /** D05 per-face finish stamped from the picked catalog colors — hex swatch
  * + optional grain texture name; `*Interior` carries the room face so the
@@ -145,6 +147,20 @@ export interface LeafMotion {
   /** TILT_TURN only: the bottom-edge y the leaf tips about in the TILT
    * pose — `pivot` stays the side hinge for the TURN pose. */
   tiltPivot?: number;
+  /** Tilt angle for `kind === "tilt"` — a proyectante opens wider than
+   * the oscilobatiente vent; omitted = the ~10° tilt convention. */
+  rad?: number;
+  /** Leaf centre in module space — the despiece guide-line anchor and
+   * the Detalle camera preset's fallback target. */
+  cx: number;
+  cy: number;
+  /** Closed z-centres of the leaf's exploded parts (sash assembly /
+   * bead+gasket kit / pane) — the guide lines connect each separated
+   * piece back to its seat. */
+  partZ: { sash: number; glazing: number; bead: number };
+  /** Detalle camera anchor — the leaf's handle mount point when it
+   * carries one. */
+  detail?: Vec3;
 }
 
 export interface ModuleScene {
@@ -187,6 +203,10 @@ const GASKET_MM = 3;
 const BEAD_DEPTH_MM = 10;
 const HANDLE_HEIGHT_MM = 1050;
 const TRACK_MM = 10;
+/** The proyectante's open pose reads wider than the oscilobatiente vent —
+ * same axis (top), different amplitude. Kept in module scope so the scene
+ * builder does not import the view's pose constants. */
+const AWNING_POSE_RAD = (24 * Math.PI) / 180;
 
 type Region = { x: number; y: number; w: number; h: number };
 type NodeRegion = { node: IntentNode; region: Region };
@@ -895,8 +915,9 @@ function hardwareSolids(
   sashD: number,
   members: MemberGeometry,
   diagnostics: SceneDiagnostic[],
-): void {
-  const spec = resolveHardwareVisual(bay, leafRegion, members, owner);
+  leafSpec?: LeafSpecInput,
+): Vec3 | null {
+  const spec = resolveHardwareVisual(bay, leafRegion, members, owner, leafSpec);
   diagnostics.push(...spec.diagnostics);
   // Rebate hardware lives in the cavity between the sash's outer face and
   // the aperture edge — buried in neither member, hidden head-on, visible
@@ -904,7 +925,56 @@ function hardwareSolids(
   const rebateZ = zInterior - sashD - 6;
   const zExterior = zInterior - sashD;
   const door = spec.family === "DOOR";
-  const hinge = hingeSide(bay);
+  const hinge = leafSpec
+    ? leafSpec.hinge === "LEFT" || leafSpec.hinge === "RIGHT"
+      ? leafSpec.hinge
+      : null
+    : hingeSide(bay);
+
+  if (spec.family === "BOTTOM_HUNG") {
+    // A bottom-hung leaf rides pivot shoes at its bottom corners and
+    // scissor stays on the jambs; the handle sits centred on the TOP
+    // rail — the leaf's free edge.
+    const pivotCount = spec.hinges?.count ?? 2;
+    for (let index = 0; index < pivotCount; index += 1) {
+      const px =
+        pivotCount === 1
+          ? leafRegion.x + leafRegion.w / 2
+          : leafRegion.x + leafRegion.w * (index === 0 ? 0.08 : 0.92);
+      solids.push({
+        ...box(owner, "hinge", "STEEL", px - 6, leafRegion.y + 4, rebateZ, 12, 42, 10),
+        approximate: spec.hinges?.authority !== "kit",
+      });
+    }
+    for (const side of [0.08, 0.92]) {
+      solids.push({
+        ...box(
+          owner,
+          "hinge",
+          "STEEL",
+          leafRegion.x + leafRegion.w * side - 4,
+          leafRegion.y + leafRegion.h * 0.5 - 75,
+          rebateZ + 2,
+          8,
+          150,
+          7,
+        ),
+        approximate: true,
+      });
+    }
+    if (spec.handle) {
+      centreLever(
+        solids,
+        owner,
+        leafRegion.x + leafRegion.w / 2,
+        spec.handle.heightMm,
+        zInterior,
+        !spec.handle.kitBound,
+      );
+      return [leafRegion.x + leafRegion.w / 2, spec.handle.heightMm, zInterior + 30];
+    }
+    return null;
+  }
 
   if (spec.family === "AWNING") {
     // Top-hung: hinge barrels along the head plus stays at the jambs and a
@@ -955,11 +1025,12 @@ function hardwareSolids(
         zInterior,
         !spec.handle.kitBound,
       );
+      return [leafRegion.x + leafRegion.w / 2, spec.handle.heightMm, zInterior + 30];
     }
-    return;
+    return null;
   }
 
-  if (!hinge || spec.family === "SLIDING") return;
+  if (!hinge || spec.family === "SLIDING") return null;
   const tiltTurn = spec.family === "TILT_TURN";
   const hingeX =
     hinge === "LEFT" ? leafRegion.x + 2 : leafRegion.x + leafRegion.w - (door ? 13 : 11);
@@ -1001,7 +1072,7 @@ function hardwareSolids(
     });
   }
 
-  if (!spec.handle) return;
+  if (!spec.handle) return null;
   const handleY = spec.handle.heightMm;
   // The handle mounts on the declared stile — opposite the hinges by the
   // policy's host-member declaration or the DIN convention.
@@ -1030,6 +1101,7 @@ function hardwareSolids(
       leverOnFace(solids, owner, stileX, handleY, zExterior, -1, approximate);
     }
   }
+  return [stileX, handleY, zInterior + 30];
 }
 
 /** Split walk that emits both divider bars and leaf bays — the same layout
@@ -1143,6 +1215,331 @@ function tagLeaf(solids: Solid3D[], from: number, leafId: string): void {
   }
 }
 
+/** The leaf's opening contract, normalized from the spec form (D03
+ * `opening`/`leaves`) or the legacy enum into the same shape — a spec
+ * pair's ACTIVE/PASSIVE leaves pose independently and a spec single leaf
+ * poses exactly like the enum it mirrors, never as fixed glazing. */
+type ResolvedLeaf = LeafSpecInput & {
+  slot: string;
+  /** Draw a sash ring — operable leaf or a FIXED leaf declared in-sash. */
+  sash: boolean;
+};
+
+const LEGACY_LEAF: Record<
+  string,
+  Pick<ResolvedLeaf, "movement" | "hinge" | "direction" | "role" | "sash">
+> = {
+  TURN_LEFT: { movement: "TURN", hinge: "LEFT", direction: "INWARD", role: "SINGLE", sash: true },
+  TURN_RIGHT: {
+    movement: "TURN",
+    hinge: "RIGHT",
+    direction: "INWARD",
+    role: "SINGLE",
+    sash: true,
+  },
+  TILT_TURN_LEFT: {
+    movement: "TILT_TURN",
+    hinge: "LEFT",
+    direction: "INWARD",
+    role: "SINGLE",
+    sash: true,
+  },
+  TILT_TURN_RIGHT: {
+    movement: "TILT_TURN",
+    hinge: "RIGHT",
+    direction: "INWARD",
+    role: "SINGLE",
+    sash: true,
+  },
+  AWNING: {
+    movement: "TOP_HUNG",
+    hinge: "TOP",
+    direction: "OUTWARD",
+    role: "SINGLE",
+    sash: true,
+  },
+  DOOR_ENTRY: {
+    movement: "TURN",
+    hinge: "LEFT",
+    direction: "INWARD",
+    role: "SINGLE",
+    sash: true,
+  },
+  FIXED: { movement: "FIXED", hinge: null, direction: "INWARD", role: "SINGLE", sash: false },
+};
+
+function specLeaf(slot: string, spec: OpeningSpecPayload, door: boolean): ResolvedLeaf {
+  const hinge =
+    spec.hinge_side === "LEFT" ||
+    spec.hinge_side === "RIGHT" ||
+    spec.hinge_side === "TOP" ||
+    spec.hinge_side === "BOTTOM"
+      ? spec.hinge_side
+      : null;
+  return {
+    slot,
+    movement: spec.movement,
+    hinge,
+    // The declared direction wins; TOP_HUNG defaults outward (a
+    // proyectante opens to the street), everything else inward.
+    direction: spec.direction ?? (spec.movement === "TOP_HUNG" ? "OUTWARD" : "INWARD"),
+    role: spec.leaf_role ?? "SINGLE",
+    sash: spec.movement !== "FIXED" || spec.fixed_in_sash === true,
+    door,
+  };
+}
+
+function resolvedLeaves(bay: IntentNode, door: boolean): ResolvedLeaf[] {
+  if (bay.leaves?.length) {
+    return bay.leaves.map((leaf) => specLeaf(leaf.slot, leaf.opening, door));
+  }
+  if (bay.opening) {
+    return [specLeaf("PRIMARY", bay.opening, door)];
+  }
+  const opening = bay.opening_type ?? "FIXED";
+  const base = LEGACY_LEAF[opening];
+  if (!base) {
+    return [
+      {
+        slot: "PRIMARY",
+        movement: "FIXED",
+        hinge: null,
+        direction: "INWARD",
+        role: "SINGLE",
+        sash: false,
+        door,
+      },
+    ];
+  }
+  // A door's hand is declared on the node, not in the opening name.
+  const hinge =
+    opening === "DOOR_ENTRY" ? (bay.door_handedness === "RIGHT" ? "RIGHT" : "LEFT") : base.hinge;
+  return [{ ...base, slot: "PRIMARY", hinge, door }];
+}
+
+/** Closed z-centres of the leaf's despiece parts — the guide-line anchors. */
+function leafPartZ(
+  solids: Solid3D[],
+  leafId: string,
+  fallbackZ: number,
+): { sash: number; glazing: number; bead: number } {
+  const acc: Record<"sash" | "glazing" | "bead", { sum: number; n: number }> = {
+    sash: { sum: 0, n: 0 },
+    glazing: { sum: 0, n: 0 },
+    bead: { sum: 0, n: 0 },
+  };
+  for (const solid of solids) {
+    if (solid.leafId !== leafId) continue;
+    const part = leafPart(solid.surface);
+    acc[part].sum += solidZCenter(solid);
+    acc[part].n += 1;
+  }
+  return {
+    sash: acc.sash.n ? acc.sash.sum / acc.sash.n : fallbackZ,
+    glazing: acc.glazing.n ? acc.glazing.sum / acc.glazing.n : fallbackZ,
+    bead: acc.bead.n ? acc.bead.sum / acc.bead.n : fallbackZ,
+  };
+}
+
+/** The presentation motion a resolved leaf performs — the pose follows
+ * the real mechanism: TURN/TILT_TURN swing on the declared hinge edge
+ * (the declared direction flips it inward/outward), TILT/BOTTOM_HUNG tip
+ * on the bottom axis ~10°, TOP_HUNG swings its bottom out on the top
+ * axis. Movements the renderer has no honest pose for emit nothing —
+ * the leaf stays closed rather than fabricating a motion. */
+function leafMotionFor(leafId: string, leafRegion: Region, spec: ResolvedLeaf): LeafMotion | null {
+  const out = spec.direction === "OUTWARD";
+  const anchor = { cx: leafRegion.x + leafRegion.w / 2, cy: leafRegion.y + leafRegion.h / 2 };
+  if (
+    spec.movement === "TILT" ||
+    spec.movement === "BOTTOM_HUNG" ||
+    (spec.movement === "TURN" && spec.hinge === "BOTTOM")
+  ) {
+    return {
+      leafId,
+      kind: "tilt",
+      pivot: leafRegion.y,
+      dir: out ? -1 : 1,
+      travel: 0,
+      ...anchor,
+      partZ: { sash: 0, glazing: 0, bead: 0 },
+    };
+  }
+  if (spec.movement === "TOP_HUNG" || (spec.movement === "TURN" && spec.hinge === "TOP")) {
+    return {
+      leafId,
+      kind: "tilt",
+      pivot: leafRegion.y + leafRegion.h,
+      dir: out ? 1 : -1,
+      travel: 0,
+      rad: AWNING_POSE_RAD,
+      ...anchor,
+      partZ: { sash: 0, glazing: 0, bead: 0 },
+    };
+  }
+  if (spec.movement === "TILT_TURN") {
+    const right = spec.hinge === "RIGHT";
+    return {
+      leafId,
+      kind: "tilt_turn",
+      pivot: right ? leafRegion.x + leafRegion.w : leafRegion.x,
+      dir: (right ? 1 : -1) * (out ? -1 : 1),
+      travel: 0,
+      tiltPivot: leafRegion.y,
+      ...anchor,
+      partZ: { sash: 0, glazing: 0, bead: 0 },
+    };
+  }
+  if (spec.movement === "TURN" || spec.door) {
+    const right = spec.hinge === "RIGHT";
+    return {
+      leafId,
+      kind: "swing",
+      pivot: right ? leafRegion.x + leafRegion.w : leafRegion.x,
+      dir: (right ? 1 : -1) * (out ? -1 : 1),
+      travel: 0,
+      ...anchor,
+      partZ: { sash: 0, glazing: 0, bead: 0 },
+    };
+  }
+  return null;
+}
+
+/** One sash'd leaf of a bay: ring + pane + glazing seat + bound hardware
+ * + its presentation motion. Pair leaves each occupy their own slot
+ * column; the passive leaf carries the inversor stile and the falleba
+ * cues instead of the handle. Returns nothing it cannot honestly pose. */
+function operableLeaf(
+  solids: Solid3D[],
+  leaves: LeafMotion[],
+  module: ProductModuleJson,
+  bay: IntentNode,
+  slotRegion: Region,
+  spec: ResolvedLeaf,
+  leafIndex: number,
+  pairPeer: ResolvedLeaf | null,
+  members: MemberGeometry,
+  depth: number,
+  diagnostics: SceneDiagnostic[],
+): void {
+  const owner = `${module.id}/${bay.id}`;
+  const leafId = `${bay.id}:${leafIndex}`;
+  const leafFrom = solids.length;
+  const declaredT = Number(bay.glass_thickness_mm);
+  const glassT = Math.max(
+    Number.isFinite(declaredT) && declaredT > 0 ? declaredT : GLASS_DEFAULT_MM,
+    4,
+  );
+  const sashW = Math.min(members.sash.faceWidthMm, slotRegion.w / 3, slotRegion.h / 3);
+  const sashD = depth * 0.45;
+  // The sash overhangs its slot column onto the frame face by the rebate
+  // overlap, and its interior face stands a step proud of the frame's —
+  // no coplanar z-fight, and the closed leaf reads as a leaf seated in a
+  // frame, not geometry inscribed inside a hole.
+  const overlap = Math.min(10, sashW * 0.25);
+  const leafRegion: Region = {
+    x: slotRegion.x - overlap,
+    y: slotRegion.y - overlap,
+    w: slotRegion.w + overlap * 2,
+    h: slotRegion.h + overlap * 2,
+  };
+  const sashFace = depth + 2;
+  memberBarRing(solids, owner, "sash", members.sash, leafRegion, sashW, sashD, sashFace - sashD);
+  // Glazing seats inside the sash from its interior face — recessed a
+  // few millimetres, never proud of the sash and never coplanar with it.
+  const glassRecess = Math.max(2, Math.min(6, sashD - glassT));
+  const leafGlassZ = Math.max(sashFace - sashD + 1, sashFace - glassRecess - glassT);
+  if (bay.panel_article_sku) {
+    solids.push(
+      box(
+        owner,
+        "panel",
+        members.frame.material,
+        leafRegion.x + sashW,
+        leafRegion.y + sashW,
+        leafGlassZ,
+        Math.max(leafRegion.w - 2 * sashW, 1),
+        Math.max(leafRegion.h - 2 * sashW, 1),
+        glassT,
+      ),
+    );
+  } else {
+    glassInfill(
+      solids,
+      owner,
+      leafRegion.x + sashW,
+      leafRegion.y + sashW,
+      leafGlassZ,
+      Math.max(leafRegion.w - 2 * sashW, 1),
+      Math.max(leafRegion.h - 2 * sashW, 1),
+      glassT,
+      bay.glass_spec,
+      bay.glass_composition,
+    );
+  }
+  gasketAndBead(
+    solids,
+    owner,
+    leafRegion,
+    sashW,
+    sashFace,
+    leafGlassZ + glassT,
+    members.beadSpecFor(bay.glass_thickness_mm ?? null),
+  );
+
+  let anchor: Vec3 | null = null;
+  if (spec.movement !== "FIXED") {
+    anchor = hardwareSolids(
+      solids,
+      owner,
+      bay,
+      leafRegion,
+      sashW,
+      sashFace,
+      sashD,
+      members,
+      diagnostics,
+      spec,
+    );
+  }
+  if (spec.role === "PASSIVE" && pairPeer) {
+    // Falleba: the passive leaf locks top and bottom through the meeting
+    // stile — two flush bolt cues on its interior face where the cremona
+    // pins would throw.
+    const meetingX =
+      spec.hinge === "LEFT" ? leafRegion.x + leafRegion.w - sashW / 2 : leafRegion.x + sashW / 2;
+    for (const boltY of [leafRegion.y + sashW, leafRegion.y + leafRegion.h - sashW - 80]) {
+      solids.push({
+        ...box(owner, "handle", "STEEL", meetingX - 7, boltY, sashFace + 1, 14, 80, 9),
+        approximate: true,
+      });
+    }
+    // The inversor is the passive leaf's astragal — a profile on its
+    // meeting edge covering the pair's joint, moving with this leaf.
+    const boundary = meetingX;
+    solids.push(
+      box(
+        owner,
+        "sash",
+        members.sash.material,
+        boundary - Math.min(sashW * 0.45, 26),
+        leafRegion.y + sashW * 0.5,
+        sashFace + 2,
+        Math.min(sashW * 0.9, 52),
+        leafRegion.h - sashW,
+        10,
+      ),
+    );
+  }
+  tagLeaf(solids, leafFrom, leafId);
+  const motion = leafMotionFor(leafId, leafRegion, spec);
+  if (motion) {
+    motion.partZ = leafPartZ(solids, leafId, depth * 0.75);
+    motion.detail = anchor ?? undefined;
+    leaves.push(motion);
+  }
+}
+
 /** Leaf bay solids: sliding panes ride their declared tracks at stepped
  * depths, operable leaves get a sash ring + pane, fixed leaves a pane,
  * panels an opaque slab. Operable leaves also register a presentation-only
@@ -1160,7 +1557,9 @@ function leafSolids(
   const owner = `${module.id}/${bay.id}`;
   const bead = members.beadFor(bay.glass_thickness_mm ?? null);
   const sliding = resolvedSlidingLayout(bay);
-  const operable = sliding !== null || (bay.opening_type != null && bay.opening_type !== "FIXED");
+  const door = bayIsDoor(module.tree, bay);
+  const leafSpecs = resolvedLeaves(bay, door);
+  const operable = sliding !== null || leafSpecs.some((leaf) => leaf.sash);
   const declaredT = Number(bay.glass_thickness_mm);
   const glassT = Math.max(
     Number.isFinite(declaredT) && declaredT > 0 ? declaredT : GLASS_DEFAULT_MM,
@@ -1177,13 +1576,28 @@ function leafSolids(
     const leafW = pitch + interlock;
     const trackStep = Math.min(24, Math.max(depth * 0.18, 10));
     const sashD = Math.min(24, depth * 0.4);
+    // P19 — riel 0 is the EXTERIOR rail (the model's declared order); each
+    // next track steps toward the room face. A leaf is delante/detrás of
+    // its neighbour purely by its declared track.
+    const trackZ = (track: number): number => Math.min(glassZ + track * trackStep, depth - glassT);
+    // The leaf a user actually opens: the declared `primary_index` when
+    // the layout carries it, else the room-side rail's moving leaf — on a
+    // two-leaf slider moving both would just swap the leaves and reveal
+    // nothing.
+    const movingIndexes = sliding.panels
+      .map((panel, index) => ({ panel, index }))
+      .filter((entry) => entry.panel.kind === "MOVING");
+    const innermost = movingIndexes.reduce(
+      (best, entry) => ((entry.panel.track ?? 0) > (best?.panel.track ?? -1) ? entry : best),
+      movingIndexes[0],
+    );
+    const primaryIndex = sliding.primary_index ?? innermost?.index ?? 0;
     sliding.panels.forEach((panel, index) => {
-      // FIXED panels declare track:null — they sit on the outer glazing
-      // plane (front-most slot), not on a moving rail.
+      // FIXED panels declare track:null — they glaze the outermost plane,
+      // outside every rail, not on a moving track.
       const track =
-        panel.track ??
-        (panel.kind === "FIXED" ? sliding.tracks - 1 : index % Math.max(sliding.tracks, 1));
-      const z0 = Math.min(glassZ + (sliding.tracks - 1 - track) * trackStep, depth - glassT);
+        panel.track ?? (panel.kind === "FIXED" ? -1 : index % Math.max(sliding.tracks, 1));
+      const z0 = track < 0 ? Math.max(glassZ - trackStep, 2) : trackZ(track);
       const slotX = region.x + pitch * index;
       if (panel.kind === "FIXED") {
         // Fixed slots glaze directly — no sash, same as the front view.
@@ -1263,34 +1677,42 @@ function leafSolids(
         region.y + region.h - 90,
       );
       if (visual.handle) {
-        // Only the room-side leaf's pull may stand proud of its face — a
+        // Only the primary leaf's pull may stand proud of its face — a
         // surface bar on an inner track would punch through the leaf that
         // crosses in front of it; those always draw the flush cup.
-        const kind: HandleKind = index === 0 ? visual.handle.kind : "recessed_pull";
+        const kind: HandleKind = index === primaryIndex ? visual.handle.kind : "recessed_pull";
         slidingPull(solids, owner, kind, stileX, pullCy, z0, sashW, !visual.handle.kitBound);
       }
       tagLeaf(solids, leafFrom, leafId);
-      // Presentation only: a leaf slides toward its neighbouring slot(s),
-      // capped to stay inside the bay — the product declares no travel.
-      // On a two-leaf slider both leaves moving at once just swap slots
-      // and reveal nothing; physically one leaf (the inner-rail sash)
-      // slides over the other to open half the bay.
-      const allMoving2 =
-        sliding.panels.length === 2 && sliding.panels.every((p) => p.kind === "MOVING");
-      if (!(allMoving2 && index === 1)) {
-        const dir = index * 2 < sliding.panels.length ? 1 : -1;
+      // Presentation only: the PRIMARY leaf slides toward its neighbouring
+      // slot in its declared `travel` direction (P05 — the documented
+      // convention only when nothing is declared), capped so it can never
+      // leave the frame. Only one leaf animates: translating two leaves
+      // on the same rail means they interpenetrate mid-animation, and
+      // opening anything but the room-side leaf reads wrong from inside.
+      if (index === primaryIndex) {
+        const declared = panelTravel(panel, index, sliding.panels.length);
+        const dir = declared === "LEFT" ? -1 : 1;
         const room = dir > 0 ? region.x + region.w - leafX - leafW : leafX - region.x;
-        leaves.push({
-          leafId,
-          kind: "slide",
-          pivot: 0,
-          dir,
-          travel: Math.max(0, Math.min(pitch, room)),
-        });
+        const travel = Math.max(0, Math.min(pitch, room));
+        if (travel > 1) {
+          leaves.push({
+            leafId,
+            kind: "slide",
+            pivot: 0,
+            dir,
+            travel,
+            cx: leafX + leafW / 2,
+            cy: region.y + region.h / 2,
+            partZ: leafPartZ(solids, leafId, z0 - sashD / 2),
+            detail: visual.handle ? [stileX, pullCy, z0 + glassT + 8] : undefined,
+          });
+        }
       }
     });
     // Sliding leaves ride rails — the track channels at the sill plane are
-    // a physical detail, one per declared track.
+    // a physical detail, one per declared track, in the same track order
+    // (riel 0 = el más exterior).
     for (let track = 0; track < sliding.tracks; track += 1) {
       solids.push(
         box(
@@ -1299,7 +1721,7 @@ function leafSolids(
           "ALUMINIUM",
           region.x,
           region.y,
-          Math.min(glassZ + (sliding.tracks - 1 - track) * trackStep, depth - glassT),
+          trackZ(track),
           region.w,
           TRACK_MM,
           TRACK_MM,
@@ -1327,102 +1749,64 @@ function leafSolids(
   }
 
   if (operable) {
-    const leafId = owner;
-    const leafFrom = solids.length;
-    const sashW = Math.min(members.sash.faceWidthMm, region.w / 3, region.h / 3);
-    const sashD = depth * 0.45;
-    // The sash overhangs the aperture onto the frame face by the rebate
-    // overlap, and its interior face stands a step proud of the frame's —
-    // no coplanar z-fight, and the closed leaf reads as a leaf seated in a
-    // frame, not geometry inscribed inside a hole.
-    const overlap = Math.min(10, sashW * 0.25);
-    const leafRegion: Region = {
-      x: region.x - overlap,
-      y: region.y - overlap,
-      w: region.w + overlap * 2,
-      h: region.h + overlap * 2,
-    };
-    const sashFace = depth + 2;
-    memberBarRing(solids, owner, "sash", members.sash, leafRegion, sashW, sashD, sashFace - sashD);
-    // Glazing seats inside the sash from its interior face — recessed a
-    // few millimetres, never proud of the sash and never coplanar with it.
-    const glassRecess = Math.max(2, Math.min(6, sashD - glassT));
-    const leafGlassZ = Math.max(sashFace - sashD + 1, sashFace - glassRecess - glassT);
-    if (bay.panel_article_sku) {
-      solids.push(
-        box(
-          owner,
-          "panel",
-          members.frame.material,
-          leafRegion.x + sashW,
-          leafRegion.y + sashW,
-          leafGlassZ,
-          Math.max(leafRegion.w - 2 * sashW, 1),
-          Math.max(leafRegion.h - 2 * sashW, 1),
-          glassT,
-        ),
-      );
-    } else {
-      glassInfill(
-        solids,
-        owner,
-        leafRegion.x + sashW,
-        leafRegion.y + sashW,
-        leafGlassZ,
-        Math.max(leafRegion.w - 2 * sashW, 1),
-        Math.max(leafRegion.h - 2 * sashW, 1),
-        glassT,
-        bay.glass_spec,
-        bay.glass_composition,
-      );
-    }
-    gasketAndBead(
-      solids,
-      owner,
-      leafRegion,
-      sashW,
-      sashFace,
-      leafGlassZ + glassT,
-      members.beadSpecFor(bay.glass_thickness_mm ?? null),
+    // Each resolved leaf owns an equal column of the aperture — the same
+    // equal-split convention the 2D elevation draws for spec pairs. A
+    // single leaf takes the whole region.
+    const pitch = region.w / leafSpecs.length;
+    const activeIndex = Math.max(
+      leafSpecs.findIndex((leaf) => leaf.role !== "PASSIVE"),
+      0,
     );
-    hardwareSolids(solids, owner, bay, leafRegion, sashW, sashFace, sashD, members, diagnostics);
-    tagLeaf(solids, leafFrom, leafId);
-    // Hinge conventions mirror hardwareSolids: TURN_LEFT/DOOR hinge on the
-    // leaf's left edge, TURN_RIGHT on the right; TILT_TURN tips the top in
-    // on a bottom pivot, AWNING swings its bottom out on a top pivot.
-    const opening = bay.opening_type;
-    if (opening === "AWNING") {
-      leaves.push({
-        leafId,
-        kind: "tilt",
-        pivot: leafRegion.y + leafRegion.h,
-        dir: 1,
-        travel: 0,
-      });
-    } else if (opening === "TILT_TURN_LEFT" || opening === "TILT_TURN_RIGHT") {
-      // Both motions exist on the same leaf: TURN swings on the side
-      // hinge, TILT tips the top in on the bottom pivot. The view poses
-      // the leaf — CLOSED/TURN/TILT are presentation states only.
-      const hinge = hingeSide(bay);
-      leaves.push({
-        leafId,
-        kind: "tilt_turn",
-        pivot: hinge === "RIGHT" ? leafRegion.x + leafRegion.w : leafRegion.x,
-        dir: hinge === "RIGHT" ? 1 : -1,
-        travel: 0,
-        tiltPivot: leafRegion.y,
-      });
-    } else {
-      const hinge = hingeSide(bay);
-      const hingeLeft = hinge !== "RIGHT";
-      leaves.push({
-        leafId,
-        kind: "swing",
-        pivot: hingeLeft ? leafRegion.x : leafRegion.x + leafRegion.w,
-        dir: hingeLeft ? -1 : 1,
-        travel: 0,
-      });
-    }
+    leafSpecs.forEach((spec, index) => {
+      const slot: Region = {
+        x: region.x + pitch * index,
+        y: region.y,
+        w: pitch,
+        h: region.h,
+      };
+      if (!spec.sash) {
+        // A FIXED leaf inside a spec pair glazes its column directly —
+        // same reading as a fixed bay, no sash ring.
+        glassInfill(
+          solids,
+          owner,
+          slot.x + bead,
+          slot.y + bead,
+          glassZ,
+          Math.max(slot.w - 2 * bead, 1),
+          Math.max(slot.h - 2 * bead, 1),
+          glassT,
+          bay.glass_spec,
+          bay.glass_composition,
+        );
+        gasketAndBead(
+          solids,
+          owner,
+          slot,
+          bead,
+          depth,
+          glassZ + glassT,
+          members.beadSpecFor(bay.glass_thickness_mm ?? null),
+        );
+        return;
+      }
+      // The peer the inversor faces: the ACTIVE leaf of a pair — a
+      // passive leaf's astragal covers the joint toward it.
+      const peer = spec.role === "PASSIVE" ? (leafSpecs[activeIndex] ?? null) : null;
+      operableLeaf(
+        solids,
+        leaves,
+        module,
+        bay,
+        slot,
+        spec,
+        index,
+        peer,
+        members,
+        depth,
+        diagnostics,
+      );
+    });
     return;
   }
 
@@ -1821,7 +2205,10 @@ export function buildScene3D(
       const sillLeaves = out.leaves
         .filter((leaf) => leaf.region.y <= frameT + 0.5)
         .sort((a, b) => a.region.x - b.region.x);
-      if (sillLeaves.some((leaf) => leaf.node.opening_type === "DOOR_ENTRY")) {
+      // Spec doors (`unit_kind: "DOOR"` or a DOOR opening) get the same
+      // 3-sided frame + threshold as the legacy DOOR_ENTRY — the door is
+      // a door regardless of which form declared it.
+      if (sillLeaves.some((leaf) => bayIsDoor(module.tree, leaf.node))) {
         const thresholdW = Math.min(members.threshold?.faceWidthMm ?? frameT, h / 4);
         const thresholdSpec = members.threshold ?? members.frame;
         memberBar(
@@ -1882,7 +2269,7 @@ export function buildScene3D(
               depth,
             );
           }
-          if (leaf.node.opening_type === "DOOR_ENTRY") {
+          if (bayIsDoor(module.tree, leaf.node)) {
             memberBar(
               solids,
               module.id,
@@ -2187,9 +2574,22 @@ export function buildScene3D(
 
   // D05: stamp the picked finish on member-family surfaces — the exterior
   // swatch rides the street face, the interior swatch the room face; the
-  // same stamped pair drives the inside view's bicolor flip.
+  // same stamped pair drives the inside view's bicolor flip. A foil-class
+  // material with no catalog texture renders its flat swatch flagged as an
+  // approximation — never a simulated grain.
   const finish = members.frame.finish;
   if (finish) {
+    const catalogTexture =
+      (finish.exterior.texture ?? null) !== null || (finish.interior.texture ?? null) !== null;
+    if (members.frame.material.includes("FOIL") && !catalogTexture) {
+      diagnostics.push({
+        code: "finish_convention",
+        owner: "assembly",
+        values: { material: members.frame.material },
+      });
+    }
+    const sanitizeHex = (value: string | null | undefined): string | null =>
+      value && /^#[0-9a-f]{6}$/i.test(value) ? value : null;
     const tintable: ReadonlySet<SolidKind> = new Set([
       "frame",
       "sash",
@@ -2200,8 +2600,8 @@ export function buildScene3D(
     ]);
     const stamp = (solid: Solid3D): void => {
       if (!tintable.has(solid.surface)) return;
-      solid.tint = finish.exterior.color ?? null;
-      solid.tintInterior = finish.interior.color ?? null;
+      solid.tint = sanitizeHex(finish.exterior.color);
+      solid.tintInterior = sanitizeHex(finish.interior.color);
       solid.texture = finish.exterior.texture ?? null;
       solid.textureInterior = finish.interior.texture ?? null;
     };
@@ -2237,4 +2637,81 @@ export function buildScene3D(
     bounds: { min, max },
     diagnostics,
   };
+}
+
+/* ---------- Vano de muro (P19) ---------- */
+
+const WALL_THICKNESS_MM = 140;
+const WALL_REVEAL_MM = 160;
+const WALL_GAP_MM = 8;
+const SILL_BOARD_MM = 38;
+
+/** The vano the "Vano" context toggle draws around the assembly: a plain
+ * plastered reveal (three jambs + head, no insulation detail) plus the
+ * interior sill board proud of the room face — enough context for a door
+ * or window to read seated in its opening instead of floating in the
+ * studio void. Solids come back in scene-world coordinates (the same
+ * space `buildScene3D.bounds` describes) and render on the "wall" surface.
+ * The wall is presentation context only — it never joins the model: no
+ * owner selection, not part of explode groups. */
+export function wallContext(bounds: { min: Vec3; max: Vec3 }): Solid3D[] {
+  const x0 = bounds.min[0];
+  const y0 = bounds.min[1];
+  const x1 = bounds.max[0];
+  const y1 = bounds.max[1];
+  const w = x1 - x0;
+  // The wall wraps the frame depth: it starts just behind the product's
+  // outermost z and runs the declared wall thickness toward the room.
+  const zStart = bounds.min[2] - 20;
+  const headH = y1 + WALL_GAP_MM;
+  return [
+    // Head reveal — spans across the side jambs.
+    box(
+      "__wall__",
+      "wall",
+      "WALL",
+      x0 - WALL_REVEAL_MM - WALL_GAP_MM,
+      headH,
+      zStart,
+      w + 2 * (WALL_REVEAL_MM + WALL_GAP_MM),
+      WALL_REVEAL_MM,
+      WALL_THICKNESS_MM,
+    ),
+    // Jamb reveals.
+    box(
+      "__wall__",
+      "wall",
+      "WALL",
+      x0 - WALL_REVEAL_MM - WALL_GAP_MM,
+      y0 - WALL_GAP_MM,
+      zStart,
+      WALL_REVEAL_MM,
+      headH - y0 + WALL_GAP_MM,
+      WALL_THICKNESS_MM,
+    ),
+    box(
+      "__wall__",
+      "wall",
+      "WALL",
+      x1 + WALL_GAP_MM,
+      y0 - WALL_GAP_MM,
+      zStart,
+      WALL_REVEAL_MM,
+      headH - y0 + WALL_GAP_MM,
+      WALL_THICKNESS_MM,
+    ),
+    // Interior sill board — noses proud of the room face, the way a real
+    // tapajuntas interior reads.
+    box(
+      "__wall__",
+      "wall",
+      "WALL",
+      x0 - WALL_REVEAL_MM / 2,
+      y0 - SILL_BOARD_MM - WALL_GAP_MM,
+      zStart - 30,
+      w + WALL_REVEAL_MM,
+      SILL_BOARD_MM,
+      WALL_THICKNESS_MM + 90,
+    ),
+  ];
 }

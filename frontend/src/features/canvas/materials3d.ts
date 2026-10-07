@@ -285,6 +285,19 @@ function baseMaterial(solid: Solid3D, commercial: boolean): SolidMaterial {
         glass: false,
         detail: false,
       };
+    case "wall":
+      // The Vano context — plain plaster: matte, neutral, never tinted
+      // (the wall is not part of the product model).
+      return {
+        colorToken: "--model3d-wall",
+        colorFallback: "rgb(215,211,200)",
+        roughness: 0.9,
+        metalness: 0,
+        transparent: false,
+        opacity: 1,
+        glass: false,
+        detail: false,
+      };
     default: {
       const response = MEMBER_RESPONSE[solid.material] ?? MEMBER_RESPONSE_DEFAULT;
       return {
@@ -296,8 +309,10 @@ function baseMaterial(solid: Solid3D, commercial: boolean): SolidMaterial {
         opacity: 1,
         glass: false,
         detail: false,
-        // Foil is a wood-toned skin over PVC — grain runs along the member.
-        grain: solid.material === "PVC_FOIL" ? grainAxis(solid) : undefined,
+        // Foil reads as grain only when the catalog declares the texture —
+        // a bare foil swatch stays flat and the scene reports it
+        // aproximado (finish_convention), never a simulated laminate.
+        grain: undefined,
       };
     }
   }

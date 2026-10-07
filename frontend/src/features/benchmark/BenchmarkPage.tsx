@@ -4,7 +4,12 @@ import type { HandlePolicy, KitChoice } from "../../api/generated/models";
 import { t, type TranslationKey } from "../../i18n/es-CL";
 import { STARTER_DEFINITIONS, starterNominalSize, type StarterKey } from "../canvas/designLibrary";
 import type { IntentNode } from "../canvas/intentEditing";
-import { FALLBACK_MEMBERS, type MemberGeometry, type MemberSpec } from "../canvas/members";
+import {
+  FALLBACK_MEMBERS,
+  tintMembers,
+  type MemberGeometry,
+  type MemberSpec,
+} from "../canvas/members";
 import Model3DView from "../canvas/Model3DView";
 import { ProductFrontSvg } from "../canvas/ProductFrontSvg";
 import type { ProductJson } from "../canvas/productEditing";
@@ -70,10 +75,17 @@ function LazyThree({
   );
 }
 
-type BenchMaterialKey = "pvc" | "pvcFoil" | "aluAnthracite";
+type BenchMaterialKey = "pvc" | "pvcFoil" | "aluAnthracite" | "bicolor";
 
 function spec(material: string, faceWidthMm: number): MemberSpec {
   return { sku: null, material, faceWidthMm };
+}
+
+/** Catalog-face colors live in tokens.css — resolved here so the fixture
+ * never hardcodes a hex (ui-hex-inline guard). */
+function cssColor(name: string, fallback: string): string {
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value === "" ? fallback : value;
 }
 
 function benchMembers(profile: "pvc" | "alu", material: string): MemberGeometry {
@@ -110,6 +122,19 @@ const MATERIALS: Record<BenchMaterialKey, { labelKey: TranslationKey; members: M
   aluAnthracite: {
     labelKey: "benchmark.material.anthracite",
     members: benchMembers("alu", "ALUMINIUM_ANTHRACITE"),
+  },
+  // P19: a sealed bicolor finish — anthracite foil with its declared grain
+  // on the street face, smooth white on the room face. The Vista
+  // interior/exterior toggle shows the two real faces.
+  bicolor: {
+    labelKey: "benchmark.material.bicolor",
+    members: tintMembers(benchMembers("pvc", "PVC_FOIL"), {
+      exterior: {
+        color: cssColor("--mat-anthracite-fill", "rgb(63,69,75)"),
+        texture: "WOOD_GRAIN",
+      },
+      interior: { color: cssColor("--mat-bicolor-interior", "rgb(244,241,234)"), texture: null },
+    }),
   },
 };
 
@@ -154,6 +179,27 @@ function cornerProduct(): ProductJson {
   };
 }
 
+/** P19 spec-form fixture — a bay declared with the D03 `opening`/`leaves`
+ * payload instead of the legacy enum, so the benchmark proves the 3D
+ * view reads the same model the intent grid writes (mismos datos,
+ * misma vista). */
+function specBayProduct(bay: IntentNode, widthMm: string, heightMm: string): ProductJson {
+  return {
+    version: "product-v2",
+    assembly: {
+      modules: [
+        {
+          id: "m1",
+          width_mm: widthMm,
+          height_mm: heightMm,
+          tree: bay,
+        },
+      ],
+      couplings: [],
+    },
+  };
+}
+
 type Fixture = {
   key: string;
   labelKey: TranslationKey;
@@ -180,6 +226,86 @@ const FIXTURES: Fixture[] = [
     build: () => starterProduct("awning"),
   },
   { key: "door", labelKey: "benchmark.fixture.door", build: () => starterProduct("doorSide") },
+  {
+    key: "specPair",
+    labelKey: "benchmark.fixture.specPair",
+    build: () =>
+      specBayProduct(
+        {
+          id: "b1",
+          type: "BAY",
+          leaves: [
+            {
+              slot: "L1",
+              opening: {
+                movement: "TURN",
+                hinge_side: "LEFT",
+                direction: "INWARD",
+                leaf_role: "ACTIVE",
+              },
+            },
+            {
+              slot: "L2",
+              opening: {
+                movement: "TURN",
+                hinge_side: "RIGHT",
+                direction: "INWARD",
+                leaf_role: "PASSIVE",
+              },
+            },
+          ],
+          glass_thickness_mm: "4.00",
+        },
+        "1500.00",
+        "1400.00",
+      ),
+  },
+  {
+    key: "specTilt",
+    labelKey: "benchmark.fixture.specTilt",
+    build: () =>
+      specBayProduct(
+        {
+          id: "b1",
+          type: "BAY",
+          opening: { movement: "BOTTOM_HUNG", hinge_side: "BOTTOM", direction: "INWARD" },
+          glass_thickness_mm: "4.00",
+        },
+        "1100.00",
+        "900.00",
+      ),
+  },
+  {
+    key: "specDoor",
+    labelKey: "benchmark.fixture.specDoor",
+    build: () =>
+      specBayProduct(
+        {
+          id: "b1",
+          type: "BAY",
+          unit_kind: "DOOR",
+          opening: { movement: "TURN", hinge_side: "RIGHT", direction: "INWARD" },
+          glass_thickness_mm: "4.00",
+        },
+        "1000.00",
+        "2200.00",
+      ),
+  },
+  {
+    key: "specOut",
+    labelKey: "benchmark.fixture.specOut",
+    build: () =>
+      specBayProduct(
+        {
+          id: "b1",
+          type: "BAY",
+          opening: { movement: "TURN", hinge_side: "LEFT", direction: "OUTWARD" },
+          glass_thickness_mm: "4.00",
+        },
+        "900.00",
+        "1400.00",
+      ),
+  },
   { key: "corner", labelKey: "benchmark.fixture.corner", build: cornerProduct },
   { key: "bow", labelKey: "benchmark.fixture.bow", build: () => starterProduct("bow3") },
   {
@@ -419,6 +545,15 @@ const KIT_BY_OPENING: Record<string, string> = {
   DOOR_ENTRY: "KIT-DOOR-MULTIPOINT",
 };
 
+/** The kit a spec-form bay binds by leading movement — the same family
+ * mapping the enum path uses. */
+const KIT_BY_SPEC_MOVEMENT: Record<string, string> = {
+  TURN: "KIT-TURN",
+  TILT_TURN: "KIT-TILT-TURN",
+  TOP_HUNG: "KIT-AWNING-16",
+  SLIDE: "KIT-SLIDING",
+};
+
 function bindKits(product: ProductJson): ProductJson {
   const stamp = (node: IntentNode): void => {
     const opening = node.opening_type ?? "";
@@ -426,6 +561,13 @@ function bindKits(product: ProductJson): ProductJson {
       node.hardware_set_sku = "KIT-SLIDING-TIRADOR";
     else if (opening.startsWith("SLIDING")) node.hardware_set_sku = "KIT-SLIDING";
     else if (KIT_BY_OPENING[opening]) node.hardware_set_sku = KIT_BY_OPENING[opening];
+    else if (node.unit_kind === "DOOR") node.hardware_set_sku = "KIT-DOOR-MULTIPOINT";
+    else {
+      // Spec form: bind by the leading leaf's movement.
+      const movement = node.opening?.movement ?? node.leaves?.[0]?.opening.movement;
+      if (movement && KIT_BY_SPEC_MOVEMENT[movement])
+        node.hardware_set_sku = KIT_BY_SPEC_MOVEMENT[movement];
+    }
     for (const child of node.children ?? []) stamp(child);
   };
   for (const module of product.assembly?.modules ?? []) {
@@ -434,7 +576,7 @@ function bindKits(product: ProductJson): ProductJson {
   return product;
 }
 
-const MATERIAL_ORDER: BenchMaterialKey[] = ["pvc", "pvcFoil", "aluAnthracite"];
+const MATERIAL_ORDER: BenchMaterialKey[] = ["pvc", "pvcFoil", "aluAnthracite", "bicolor"];
 
 export function BenchmarkPage(): JSX.Element {
   const [materialKey, setMaterialKey] = useState<BenchMaterialKey>("pvc");

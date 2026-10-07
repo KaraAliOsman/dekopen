@@ -310,6 +310,10 @@
   align-items: center;
   border-bottom: 1px solid var(--theme-border-subtle);
   display: flex;
+  /* Narrow hosts (benchmark card, slim inspector) wrap to a second
+   * row instead of clipping pose/context controls — every button must
+   * stay reachable (rubric: nothing dead, nothing cut). */
+  flex-wrap: wrap;
   gap: var(--space-4);
   padding: var(--space-4) var(--space-8);
 }
@@ -341,6 +345,9 @@
   letter-spacing: 0.04em;
   margin-left: auto;
   text-transform: uppercase;
+  /* Keeps the readout glued to the last control row even when the
+   * toolbar wraps — otherwise it can orphan onto a row of its own. */
+  white-space: nowrap;
 }
 
 .model3d-inset .model3d-view .model3d-canvas {

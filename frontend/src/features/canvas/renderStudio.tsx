@@ -4,6 +4,7 @@ import * as THREE from "three";
 import type { PlanGeometry } from "../../api/generated/models";
 import type { ProductJson } from "./productEditing";
 import { buildScene3D, type Scene3D, type Solid3D } from "./Product3DScene";
+import { leafPose } from "./leafPose";
 import { solidToGeometry } from "./scene3dGeometry";
 import { foilGrainTexture, runLength, solidMaterial } from "./materials3d";
 import type { MemberGeometry } from "./members";
@@ -21,6 +22,10 @@ export type StudioOptions = {
   height?: number;
   /** Interior/exterior face — matches the orbit view's inside toggle. */
   inside?: boolean;
+  /** P19 — the exported render can pose the leaves exactly like the orbit
+   * view: the same `leafPose` math drives both, so a render never shows a
+   * pose the scene couldn't produce (portal/DOC-01 same camera+material). */
+  pose?: "closed" | "open" | "tilt";
 };
 
 const RENDER_W = 640;
@@ -81,7 +86,11 @@ function solidMesh(solid: Solid3D, inside: boolean): THREE.Mesh | null {
   return geo ? new THREE.Mesh(geo, mat) : null;
 }
 
-function buildThreeScene(scene: Scene3D, inside: boolean): THREE.Group {
+function buildThreeScene(
+  scene: Scene3D,
+  inside: boolean,
+  pose: "closed" | "open" | "tilt",
+): THREE.Group {
   const root = new THREE.Group();
   const inner = new THREE.Group();
   inner.position.set(-scene.center[0], -scene.center[1], -scene.center[2]);
@@ -89,7 +98,36 @@ function buildThreeScene(scene: Scene3D, inside: boolean): THREE.Group {
     const group = new THREE.Group();
     group.position.set(...module.position);
     group.rotation.y = module.rotationY;
+    // Leaf solids render inside the same chained-pivot hierarchy the
+    // orbit view animates — the exported PNG shows the pose the scene
+    // actually performs.
+    const leafSolids = new Map<string, Solid3D[]>();
     for (const solid of module.solids) {
+      if (!solid.leafId) continue;
+      const list = leafSolids.get(solid.leafId) ?? [];
+      list.push(solid);
+      leafSolids.set(solid.leafId, list);
+    }
+    for (const motion of module.leaves) {
+      const leaf = leafPose(motion, pose === "closed" ? 0 : 1, pose === "tilt");
+      const tiltGroup = new THREE.Group();
+      tiltGroup.position.set(...leaf.tiltPos);
+      tiltGroup.rotation.x = leaf.tiltRotX;
+      const swingGroup = new THREE.Group();
+      swingGroup.position.set(...leaf.swingPos);
+      swingGroup.rotation.y = leaf.swingRotY;
+      const innerGroup = new THREE.Group();
+      innerGroup.position.set(...leaf.innerPos);
+      for (const solid of leafSolids.get(motion.leafId) ?? []) {
+        const mesh = solidMesh(solid, inside);
+        if (mesh) innerGroup.add(mesh);
+      }
+      swingGroup.add(innerGroup);
+      tiltGroup.add(swingGroup);
+      group.add(tiltGroup);
+    }
+    for (const solid of module.solids) {
+      if (solid.leafId) continue;
       const mesh = solidMesh(solid, inside);
       if (mesh) group.add(mesh);
     }
@@ -187,7 +225,7 @@ export function renderStudioImage(
   rim.position.set(0, -radius * 0.5, radius * 0.8);
   scene.add(rim);
 
-  const root = buildThreeScene(scene3d, options.inside === true);
+  const root = buildThreeScene(scene3d, options.inside === true, options.pose ?? "closed");
   // World +z is the room face; the street view rotates the model 180°.
   if (!options.inside) root.rotation.y = Math.PI;
   scene.add(root);
@@ -246,7 +284,7 @@ export function StudioImage({
   const memoOptions = useMemo(
     () => options ?? {},
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [options?.inside, options?.width, options?.height],
+    [options?.inside, options?.width, options?.height, options?.pose],
   );
   const theme = useDocumentTheme();
   useEffect(() => {
