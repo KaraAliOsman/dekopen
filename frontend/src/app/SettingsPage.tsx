@@ -1966,7 +1966,7 @@ function DisabledSection({ reason }: { reason: string }): JSX.Element {
   return (
     <div className="settings-card settings-card--disabled">
       <p className="settings-hint">
-        {t("settings.availableWhen")}{" "}{reason}
+        {t("settings.availableWhen")} {reason}
       </p>
     </div>
   );
