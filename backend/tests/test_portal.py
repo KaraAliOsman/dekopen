@@ -1013,6 +1013,24 @@ def test_decide_writes_complete_evidence_event(monkeypatch) -> None:
     assert params[11] == "abc123hash"
 
 
+def test_acceptance_text_formats_each_currency() -> None:
+    """El literal de aceptación usa el formato de moneda de DOC-01 — la
+    evidencia lee idéntica a la propuesta impresa, no un monto crudo."""
+    sealed = {"code": "P-9"}
+    clp = service._acceptance_text(
+        sealed=sealed, revision_code="REV-A", gross="1435471", currency="CLP"
+    )
+    usd = service._acceptance_text(
+        sealed=sealed, revision_code="REV-A", gross="232584.00", currency="USD"
+    )
+    uf = service._acceptance_text(
+        sealed=sealed, revision_code="REV-A", gross="38.4521", currency="UF"
+    )
+    assert "por $1.435.471 IVA incluido" in clp
+    assert "por US$ 232.584,00 IVA incluido" in usd
+    assert "por UF 38,4521 IVA incluido" in uf
+
+
 def test_decide_marks_only_sealed_option_positions(monkeypatch) -> None:
     """marked_position_ids solo acepta ids sellados con is_option — un id
     de posición incluida o inventado rechaza la decisión completa."""

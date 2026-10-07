@@ -18,7 +18,7 @@ from psycopg import sql
 from authentication.rls import tx_aborted
 from documents.artifacts import SupabaseDocumentStorage, generate_artifact
 from documents.brand import effective_brand_color
-from documents.renderers import finish_label, frozen_glass_specs
+from documents.renderers import _money, finish_label, frozen_glass_specs
 from documents.repository import (
     DocumentaryError,
     decoded,
@@ -1078,17 +1078,14 @@ def _acceptance_text(
     *, sealed: dict[str, object], revision_code: object, gross: object, currency: object
 ) -> str:
     """El literal que el cliente marcó — se construye en servidor desde las
-    cifras selladas, nunca desde texto que venga en el request. CLP se
-    formatea es-CL ($1.435.471); otra moneda viaja como monto + código."""
+    cifras selladas, nunca desde texto que venga en el request. El monto usa
+    el mismo formato de moneda que DOC-01 ($1.435.471 · US$ 1.234,56 ·
+    UF 38,4521) para que la evidencia lea idéntica al documento."""
     try:
         amount = Decimal(str(gross))
     except Exception:
         amount = Decimal("0")
-    money = (
-        "$" + f"{int(amount):,}".replace(",", ".")
-        if str(currency or "CLP") == "CLP"
-        else f"{amount} {currency}"
-    )
+    money = _money(amount, currency or "CLP")
     return (
         f"Acepto la propuesta COT-{sealed.get('code')}-{revision_code} "
         f"por {money} IVA incluido y sus condiciones."

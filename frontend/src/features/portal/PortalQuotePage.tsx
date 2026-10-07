@@ -22,6 +22,7 @@ import { formatRevision, isValidRut } from "../../format";
 import { PositionThumb, THUMB_MEMBERS } from "../projects/PositionThumb";
 import {
   addDecimal,
+  compareDecimal,
   divideByInt,
   divideDecimal,
   formatDecimal,
@@ -294,6 +295,7 @@ function PositionGroupCard({
   group,
   currency,
   taxRate,
+  grossOverride,
   option,
   onZoom,
 }: {
@@ -302,6 +304,9 @@ function PositionGroupCard({
   // IVA-included line totals reconcile with the headline Total — a customer
   // thinks in gross, so the card leads with it when the rate is derivable.
   taxRate: DecimalValue | null;
+  // Rounded-to-the-sealed-total display value; when the page reconciles the
+  // line it passes the adjusted integer string so Σ líneas = total header.
+  grossOverride?: string;
   option?: boolean;
   onZoom: (payload: { title: string; body: React.ReactNode }) => void;
 }): JSX.Element {
@@ -316,6 +321,7 @@ function PositionGroupCard({
     totalNet !== null && taxRate !== null
       ? multiplyDecimal(totalNet, addDecimal({ numerator: 1n, denominator: 1n }, taxRate))
       : null;
+  const grossDisplay = grossOverride ?? (grossLine !== null ? roundDecimalToInt(grossLine) : null);
   const locations =
     group.locations.length > 0
       ? compactList(group.locations)
@@ -415,8 +421,8 @@ function PositionGroupCard({
           </span>
           <strong>
             {hasPrice
-              ? grossLine !== null
-                ? money(roundDecimalToInt(grossLine), currency)
+              ? grossDisplay !== null
+                ? money(grossDisplay, currency)
                 : totalNet !== null
                   ? money(formatDecimal(totalNet), currency)
                   : "—"
@@ -764,6 +770,42 @@ export function PortalQuotePage(): JSX.Element {
   const options = (quote.positions ?? []).filter((position) => position.is_option);
   const groups = groupPositions(included);
   const optionGroups = groupPositions(options);
+  // Σ líneas = total del encabezado: cada bruto de línea se redondea en su
+  // tarjeta y el total se redondea una sola vez al sellar — la deriva típica
+  // (±$1) se absorbe en la línea mayor, como el ajuste de redondeo del SII.
+  // Solo se ajusta deriva pura (≤ $1 por línea); una inconsistencia real
+  // entre líneas y total nunca se maquilla.
+  const grossByKey = (() => {
+    const map = new Map<string, string>();
+    if (taxRate === null || !quote.total_price_gross) return map;
+    const sealedGross = parseDecimal(quote.total_price_gross);
+    if (sealedGross === null) return map;
+    const sealedInt = BigInt(roundDecimalToInt(sealedGross));
+    const one: DecimalValue = { numerator: 1n, denominator: 1n };
+    let allPriced = groups.length > 0;
+    let sum = 0n;
+    let largest: { key: string; exact: DecimalValue; display: bigint } | null = null;
+    for (const group of groups) {
+      if (group.position.price_net == null || group.totalNet === null) {
+        allPriced = false;
+        continue;
+      }
+      const exact = multiplyDecimal(group.totalNet, addDecimal(one, taxRate));
+      const display = BigInt(roundDecimalToInt(exact));
+      map.set(group.key, String(display));
+      sum += display;
+      if (largest === null || compareDecimal(exact, largest.exact) > 0) {
+        largest = { key: group.key, exact, display };
+      }
+    }
+    if (!allPriced || largest === null) return map;
+    const diff = sealedInt - sum;
+    const drift = diff < 0n ? -diff : diff;
+    if (drift <= BigInt(groups.length)) {
+      map.set(largest.key, String(largest.display + diff));
+    }
+    return map;
+  })();
   // La vigencia se lee en días — "quedan N días" es lo que la persona entiende.
   const daysLeft = (() => {
     if (!quote.valid_until) return null;
@@ -898,6 +940,7 @@ export function PortalQuotePage(): JSX.Element {
                   group={group}
                   currency={quote.currency}
                   taxRate={taxRate}
+                  grossOverride={grossByKey.get(group.key)}
                   onZoom={setZoom}
                 />
               ))}

@@ -153,6 +153,18 @@ test("cotización vigente: marca del fabricante, posiciones y suma de líneas = 
     await options.first().locator(".portal-position__price strong").innerText(),
   );
   expect(optionPrice, "la alternativa está precificada").toBeGreaterThan(0);
+
+  // Proyecto chico (3 líneas): la deriva clásica de redondeo por línea se
+  // ajusta en la línea mayor — la suma mostrada sigue igualando el total.
+  await openPortal(page, state.portal["vigente"]!);
+  const smallGross = digits(await page.locator(".portal-totals__gross dd").innerText());
+  let smallSum = 0;
+  for (const line of await page
+    .locator(".portal-positions .portal-position:not([data-option]) .portal-position__price strong")
+    .all()) {
+    smallSum += digits(await line.innerText());
+  }
+  expect(smallSum, "vigente: suma de líneas = total del encabezado").toBe(smallGross);
 });
 
 test("cotización vigente: decisión exige nombre + RUT válido + aceptación literal", async ({
