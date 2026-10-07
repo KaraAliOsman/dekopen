@@ -108,6 +108,9 @@ const DOM_PROBE_JS = `() => {
     if (r.width === 0 || r.height === 0) continue;
     const style = getComputedStyle(el);
     if (style.display === "none" || style.visibility === "hidden") continue;
+    // Contenido de un <svg aria-hidden> es decorativo (láminas de estados
+    // vacíos, iconos): su «texto» nunca es legible por diseño — no audit.
+    if (el.closest('svg[aria-hidden="true"]') !== null) continue;
     const tag = el.tagName.toLowerCase();
     const interactive =
       ["button", "a", "input", "select", "textarea", "summary"].includes(tag) ||

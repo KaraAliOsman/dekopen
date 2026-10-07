@@ -72,6 +72,15 @@ export function PhotoField({
 
   return (
     <div className="field-photo">
+      <button
+        aria-disabled={disabled || busy}
+        className="field-photo__trigger"
+        disabled={disabled || busy}
+        onClick={() => inputRef.current?.click()}
+        type="button"
+      >
+        {label}
+      </button>
       <input
         ref={inputRef}
         accept="image/*"
@@ -85,11 +94,11 @@ export function PhotoField({
         }}
         type="file"
       />
-      <span className="field-photo__count">
-        {photos.length > 0
-          ? t("field.photoCount").replace("{count}", String(photos.length))
-          : label}
-      </span>
+      {photos.length > 0 ? (
+        <span className="field-photo__count">
+          {t("field.photoCount").replace("{count}", String(photos.length))}
+        </span>
+      ) : null}
       {busy ? <span className="field-photo__busy">{t("field.photoUploading")}</span> : null}
       {failed ? <span className="field-photo__error">{t("field.photoFailed")}</span> : null}
     </div>

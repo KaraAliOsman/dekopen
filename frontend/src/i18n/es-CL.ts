@@ -5164,6 +5164,7 @@ export const messages = {
   "field.checklistProgress": "{done}/{total} posiciones listas",
   "field.incidentsOpen": "{count} incidencia(s) abierta(s)",
   "field.received": "Recepción firmada",
+  "field.howToGet": "Cómo llegar",
   "field.serviceVisits": "Visitas de postventa de hoy",
   "field.mineOnly": "Solo tus paradas",
   "field.backAgenda": "Agenda",

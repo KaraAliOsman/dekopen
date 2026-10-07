@@ -116,7 +116,7 @@ def save_check(
                 (org_id, order_id, unit_index, items, notes, photos,
                  operation_key, checked_by, checked_at)
             VALUES (%s,%s,%s,%s::jsonb,%s,%s::jsonb,%s,%s,NOW())
-            ON CONFLICT (org_id, order_id, unit_index) NULLS NOT DISTINCT
+            ON CONFLICT (org_id, order_id, unit_index)
             DO UPDATE SET
                 items=EXCLUDED.items, notes=EXCLUDED.notes,
                 photos=EXCLUDED.photos, checked_by=EXCLUDED.checked_by,

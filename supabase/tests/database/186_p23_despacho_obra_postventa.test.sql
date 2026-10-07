@@ -1,7 +1,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
 SET LOCAL search_path = public, private, auth, extensions, pg_temp;
-SELECT plan(27);
+SELECT plan(28);
 
 -- P23 — despacho planificado por cuadrilla, medición y checklist en obra,
 -- incidencias con destino (remake/compra/servicio), postventa con plazo
@@ -195,6 +195,14 @@ SELECT is(
      WHERE id='99cc0000-0000-4000-8000-000000000001')::int,
     24,
     'el plazo de garantía por defecto es 24 meses'
+);
+
+-- ── La posición es legible por el instalador en terreno ──────────────
+SELECT ok(
+    EXISTS (SELECT 1 FROM pg_policies
+            WHERE schemaname = 'public' AND tablename = 'project_positions'
+              AND policyname = 'position_field_installer_read'),
+    'el instalador tiene lectura de posición vía position_field_installer_read'
 );
 
 SELECT * FROM finish();

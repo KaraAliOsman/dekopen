@@ -146,7 +146,7 @@ def report_incident(
             FROM public.orders o
             JOIN public.projects p ON p.id = o.project_id AND p.org_id = o.org_id
             WHERE o.id = %s AND o.org_id = %s AND o.order_type = 'WORKSHOP_OT'
-            FOR UPDATE
+            FOR UPDATE OF o
             """,
             [str(order_id), str(org_id)],
         )

@@ -210,9 +210,23 @@ export function FieldOrderPage(): JSX.Element {
         <h2>
           {data.position?.location_tag ?? data.order.order_code} · {data.project.client_name}
         </h2>
-        <p className="field-visit">
-          {delivery?.address ?? data.project.delivery_address ?? data.order.address ?? "—"}
-        </p>
+        <div className="field-addr-row">
+          <p className="field-visit">
+            {delivery?.address ?? data.project.delivery_address ?? data.order.address ?? "—"}
+          </p>
+          {delivery?.address || data.project.delivery_address || data.order.address ? (
+            <a
+              className="field-stop__maps"
+              href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+                delivery?.address ?? data.project.delivery_address ?? data.order.address ?? "",
+              )}`}
+              rel="noreferrer"
+              target="_blank"
+            >
+              {t("field.howToGet")}
+            </a>
+          ) : null}
+        </div>
         <div className="field-chip-row">
           <StatusChip
             label={t(ORDER_STATUS_KEY[data.order.status] ?? "production.orderReleased")}

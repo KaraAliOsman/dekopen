@@ -6,7 +6,7 @@ import { ApiError } from "../../api/apiMutator";
 import { fieldAgenda } from "../../api/generated/dekopen";
 import type { FieldAgenda } from "../../api/generated/models";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
-import { formatDate } from "../../format";
+
 import { t, tDynamic } from "../../i18n/es-CL";
 import { DeniedState, EmptyState, ErrorState, LoadingState, StatusChip } from "../../ui";
 
@@ -119,60 +119,87 @@ export function FieldAgendaPage(): JSX.Element {
       ) : (
         <>
           {stops.map((stop) => (
-            <Link
-              className={`field-stop${stop.confirmed ? " field-stop--done" : ""}`}
-              key={stop.delivery_id}
-              to={`/field/orders/${stop.order_id}?delivery=${stop.delivery_id}`}
-            >
-              <span className="field-stop__top">
-                <span className="field-stop__order">{stop.order_code}</span>
-                <StatusChip
-                  label={tDynamic("deliveries.window", stop.time_window)}
-                  tone="info"
-                  value={stop.time_window}
-                />
-              </span>
-              <span className="field-stop__project">
-                {stop.project_code} · {stop.client_name}
-                {stop.location_tag ? ` · ${stop.location_tag}` : ""}
-              </span>
-              <span className="field-stop__address">{stop.address}</span>
-              <span className="field-stop__meta">
-                <span className="field-stop__progress">
-                  {t("field.checklistProgress")
-                    .replace("{done}", String(stop.checklists_done))
-                    .replace("{total}", String(stop.checks_total))}
-                </span>
-                {stop.open_incidents > 0 ? (
+            <div className="field-stop-wrap" key={stop.delivery_id}>
+              <Link
+                className={`field-stop${stop.confirmed ? " field-stop--done" : ""}`}
+                to={`/field/orders/${stop.order_id}?delivery=${stop.delivery_id}`}
+              >
+                <span className="field-stop__top">
+                  <span className="field-stop__order">{stop.order_code}</span>
                   <StatusChip
-                    label={t("field.incidentsOpen").replace("{count}", String(stop.open_incidents))}
-                    tone="danger"
-                    value="incidents"
+                    label={tDynamic("deliveries.window", stop.time_window)}
+                    tone="info"
+                    value={stop.time_window}
                   />
+                </span>
+                <span className="field-stop__project">
+                  {stop.project_code} · {stop.client_name}
+                  {stop.location_tag ? ` · ${stop.location_tag}` : ""}
+                </span>
+                <span className="field-stop__meta">
+                  <span className="field-stop__progress">
+                    {t("field.checklistProgress")
+                      .replace("{done}", String(stop.checklists_done))
+                      .replace("{total}", String(stop.checks_total))}
+                  </span>
+                  {stop.open_incidents > 0 ? (
+                    <StatusChip
+                      label={t("field.incidentsOpen").replace(
+                        "{count}",
+                        String(stop.open_incidents),
+                      )}
+                      tone="danger"
+                      value="incidents"
+                    />
+                  ) : null}
+                  {stop.confirmed ? (
+                    <StatusChip label={t("field.received")} tone="ok" value="done" />
+                  ) : null}
+                </span>
+              </Link>
+              <div className="field-stop__foot">
+                <span className="field-stop__address">{stop.address ?? "—"}</span>
+                {stop.address ? (
+                  <a
+                    className="field-stop__maps"
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(stop.address)}`}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    {t("field.howToGet")}
+                  </a>
                 ) : null}
-                {stop.confirmed ? (
-                  <StatusChip label={t("field.received")} tone="ok" value="done" />
-                ) : null}
-              </span>
-            </Link>
+              </div>
+            </div>
           ))}
           {visits.length > 0 ? (
             <section className="field-card field-section-gap">
               <h2>{t("field.serviceVisits")}</h2>
               {visits.map((visit) => (
-                <p className="field-visit" key={visit.ticket_id}>
-                  <code>{visit.code}</code> · {visit.project_code} · {visit.client_name ?? "—"} ·{" "}
-                  {visit.address ?? "—"}
-                </p>
+                <div className="field-visit-row" key={visit.ticket_id}>
+                  <p className="field-visit">
+                    <code>{visit.code}</code> · {visit.project_code} · {visit.client_name ?? "—"} ·{" "}
+                    {visit.address ?? "—"}
+                  </p>
+                  {visit.address ? (
+                    <a
+                      className="field-stop__maps"
+                      href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(visit.address)}`}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      {t("field.howToGet")}
+                    </a>
+                  ) : null}
+                </div>
               ))}
             </section>
           ) : null}
         </>
       )}
-      {agenda ? (
+      {agenda?.mine_only ? (
         <p className="field-visit" aria-live="polite">
-          {formatDate(agenda.date)}
-          {agenda.mine_only ? ` · ${t("field.mineOnly")}` : ""}
+          {t("field.mineOnly")}
         </p>
       ) : null}
     </div>

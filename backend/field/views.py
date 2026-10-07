@@ -272,7 +272,11 @@ class FieldChecklistView(APIView):
                     org_id=org_id,
                     order_id=order_id,
                     actor_id=token.user_id,
-                    data=data,
+                    unit_index=data.get("unit_index"),
+                    items=data.get("items") or {},
+                    notes=data.get("notes"),
+                    photos=data.get("photos"),
+                    operation_key=data.get("operation_key"),
                 )
         return Response(output, status=200 if output.get("replayed") else 201)
 

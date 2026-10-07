@@ -489,7 +489,18 @@ ALTER TABLE public.project_documentary_inputs
         CONSTRAINT warranty_months_range
         CHECK (warranty_months IS NULL OR warranty_months BETWEEN 0 AND 240);
 
--- ── 9) Eventos de obra en la línea de tiempo de la OT ─────────────────
+-- ── 9) Lectura de la posición para el instalador ─────────────────────
+--
+-- El rol INSTALLER no es escritor documental: la ficha de obra lee la
+-- posición (vano declarado, estado de medición, regla de montaje) bajo
+-- documentary_backend, y la medición misma entra por el definer
+-- apply_site_measurement — la política es de solo lectura.
+
+CREATE POLICY position_field_installer_read ON public.project_positions
+    FOR SELECT TO documentary_backend
+    USING (private.documentary_role(org_id, ARRAY['INSTALLER']));
+
+-- ── 10) Eventos de obra en la línea de tiempo de la OT ────────────────
 
 ALTER TABLE public.production_step_events
     DROP CONSTRAINT production_step_events_event_check;

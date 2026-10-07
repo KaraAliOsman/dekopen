@@ -129,7 +129,7 @@ function IncidentBoard({ orgId, canResolve }: { orgId: string; canResolve: boole
       {incidents.length === 0 ? (
         <EmptyState title={t("field.incidentsEmpty")} illustration="document" />
       ) : (
-        <div className="dispatch-table__wrap">
+        <div className="field-table-wrap">
           <table className="field-table">
             <thead>
               <tr>
@@ -395,80 +395,82 @@ function PurchaseBoard({ orgId, canWrite }: { orgId: string; canWrite: boolean }
   }
 
   return (
-    <table className="field-table">
-      <thead>
-        <tr>
-          <th scope="col">{t("field.colCode")}</th>
-          <th scope="col">{t("field.colIncident")}</th>
-          <th scope="col">{t("field.colItem")}</th>
-          <th scope="col">{t("field.colQuantity")}</th>
-          <th scope="col">{t("field.colSupplier")}</th>
-          <th scope="col">{t("field.colNeededAt")}</th>
-          <th scope="col">{t("field.colStatus")}</th>
-          {canWrite ? <th scope="col">{t("field.colAction")}</th> : null}
-        </tr>
-      </thead>
-      <tbody>
-        {requests.map((request) => {
-          const status = request.status;
-          return (
-            <tr key={request.id}>
-              <td>
-                <code>{request.code}</code>
-              </td>
-              <td>
-                <code>{request.incident_code}</code>
-              </td>
-              <td>{request.item}</td>
-              <td>
-                {request.quantity ?? "—"} {request.unit ?? ""}
-              </td>
-              <td>{request.supplier_hint ?? "—"}</td>
-              <td>{request.needed_at ? formatDate(request.needed_at) : "—"}</td>
-              <td>
-                <StatusChip
-                  label={tDynamic("field.purchaseStatus", status)}
-                  tone={status === "RECEIVED" ? "ok" : "info"}
-                  value={status}
-                />
-              </td>
-              {canWrite ? (
+    <div className="field-table-wrap">
+      <table className="field-table">
+        <thead>
+          <tr>
+            <th scope="col">{t("field.colCode")}</th>
+            <th scope="col">{t("field.colIncident")}</th>
+            <th scope="col">{t("field.colItem")}</th>
+            <th scope="col">{t("field.colQuantity")}</th>
+            <th scope="col">{t("field.colSupplier")}</th>
+            <th scope="col">{t("field.colNeededAt")}</th>
+            <th scope="col">{t("field.colStatus")}</th>
+            {canWrite ? <th scope="col">{t("field.colAction")}</th> : null}
+          </tr>
+        </thead>
+        <tbody>
+          {requests.map((request) => {
+            const status = request.status;
+            return (
+              <tr key={request.id}>
                 <td>
-                  <div className="field-chip-row">
-                    {status === "PENDING" ? (
-                      <button
-                        className="field-button field-button--ghost"
-                        onClick={() => mark(request.id, "ORDERED")}
-                        type="button"
-                      >
-                        {t("field.markOrdered")}
-                      </button>
-                    ) : null}
-                    {status === "PENDING" || status === "ORDERED" ? (
-                      <button
-                        className="field-button field-button--ghost"
-                        onClick={() => mark(request.id, "RECEIVED")}
-                        type="button"
-                      >
-                        {t("field.markReceived")}
-                      </button>
-                    ) : null}
-                    {status === "PENDING" || status === "ORDERED" ? (
-                      <button
-                        className="field-button field-button--ghost"
-                        onClick={() => mark(request.id, "CANCELLED")}
-                        type="button"
-                      >
-                        {t("field.markCancelled")}
-                      </button>
-                    ) : null}
-                  </div>
+                  <code>{request.code}</code>
                 </td>
-              ) : null}
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+                <td>
+                  <code>{request.incident_code}</code>
+                </td>
+                <td>{request.item}</td>
+                <td>
+                  {request.quantity ?? "—"} {request.unit ?? ""}
+                </td>
+                <td>{request.supplier_hint ?? "—"}</td>
+                <td>{request.needed_at ? formatDate(request.needed_at) : "—"}</td>
+                <td>
+                  <StatusChip
+                    label={tDynamic("field.purchaseStatus", status)}
+                    tone={status === "RECEIVED" ? "ok" : "info"}
+                    value={status}
+                  />
+                </td>
+                {canWrite ? (
+                  <td>
+                    <div className="field-chip-row">
+                      {status === "PENDING" ? (
+                        <button
+                          className="field-button field-button--ghost"
+                          onClick={() => mark(request.id, "ORDERED")}
+                          type="button"
+                        >
+                          {t("field.markOrdered")}
+                        </button>
+                      ) : null}
+                      {status === "PENDING" || status === "ORDERED" ? (
+                        <button
+                          className="field-button field-button--ghost"
+                          onClick={() => mark(request.id, "RECEIVED")}
+                          type="button"
+                        >
+                          {t("field.markReceived")}
+                        </button>
+                      ) : null}
+                      {status === "PENDING" || status === "ORDERED" ? (
+                        <button
+                          className="field-button field-button--ghost"
+                          onClick={() => mark(request.id, "CANCELLED")}
+                          type="button"
+                        >
+                          {t("field.markCancelled")}
+                        </button>
+                      ) : null}
+                    </div>
+                  </td>
+                ) : null}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }

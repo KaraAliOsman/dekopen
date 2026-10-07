@@ -107,119 +107,121 @@ export function FieldServicePage(): JSX.Element {
       ) : tickets.length === 0 ? (
         <EmptyState title={t("field.serviceEmpty")} illustration="document" />
       ) : (
-        <table className="field-table">
-          <thead>
-            <tr>
-              <th scope="col">{t("field.colCode")}</th>
-              <th scope="col">{t("field.colKind")}</th>
-              <th scope="col">{t("field.colProject")}</th>
-              <th scope="col">{t("field.colClient")}</th>
-              <th scope="col">{t("field.colOrder")}</th>
-              <th scope="col">{t("field.colDescription")}</th>
-              <th scope="col">{t("field.colWarranty")}</th>
-              <th scope="col">{t("field.colVisit")}</th>
-              <th scope="col">{t("field.colStatus")}</th>
-              {canWrite ? <th scope="col">{t("field.colAction")}</th> : null}
-            </tr>
-          </thead>
-          <tbody>
-            {tickets.map((ticket) => {
-              const status = ticket.status;
-              return (
-                <tr key={ticket.id}>
-                  <td>
-                    <code>{ticket.code}</code>
-                  </td>
-                  <td>
-                    <StatusChip
-                      label={tDynamic("field.ticketKind", ticket.kind)}
-                      tone={ticket.kind === "WARRANTY" ? "info" : "neutral"}
-                      value={ticket.kind}
-                    />
-                  </td>
-                  <td>
-                    <code>{ticket.project_code}</code>
-                    <br />
-                    <span className="dispatch-stop__address">{ticket.site_address ?? ""}</span>
-                  </td>
-                  <td>{ticket.client_name ?? "—"}</td>
-                  <td>
-                    {ticket.order_id ? (
-                      <Link className="deliveries-order" to={`/field/orders/${ticket.order_id}`}>
-                        {ticket.order_code}
-                      </Link>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td>{ticket.description}</td>
-                  <td>
-                    {ticket.warranty_until ? (
-                      <>
-                        {formatDate(ticket.warranty_until)}
-                        <StatusChip
-                          label={
-                            ticket.in_warranty ? t("field.inWarranty") : t("field.outWarranty")
-                          }
-                          tone={ticket.in_warranty ? "ok" : "neutral"}
-                          value="warranty"
-                        />
-                      </>
-                    ) : ticket.kind === "WARRANTY" ? (
-                      t("field.noData")
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td>
-                    {ticket.scheduled_visit_at ? formatDate(ticket.scheduled_visit_at) : "—"}
-                    {ticket.crew_name ? ` · ${ticket.crew_name}` : ""}
-                  </td>
-                  <td>
-                    <StatusChip
-                      label={tDynamic("field.ticketStatus", status)}
-                      tone={status === "CLOSED" ? "ok" : "info"}
-                      value={status}
-                    />
-                  </td>
-                  {canWrite ? (
+        <div className="field-table-wrap">
+          <table className="field-table">
+            <thead>
+              <tr>
+                <th scope="col">{t("field.colCode")}</th>
+                <th scope="col">{t("field.colKind")}</th>
+                <th scope="col">{t("field.colProject")}</th>
+                <th scope="col">{t("field.colClient")}</th>
+                <th scope="col">{t("field.colOrder")}</th>
+                <th scope="col">{t("field.colDescription")}</th>
+                <th scope="col">{t("field.colWarranty")}</th>
+                <th scope="col">{t("field.colVisit")}</th>
+                <th scope="col">{t("field.colStatus")}</th>
+                {canWrite ? <th scope="col">{t("field.colAction")}</th> : null}
+              </tr>
+            </thead>
+            <tbody>
+              {tickets.map((ticket) => {
+                const status = ticket.status;
+                return (
+                  <tr key={ticket.id}>
                     <td>
-                      <div className="field-chip-row">
-                        {(NEXT_ACTIONS[status] ?? []).map((action) => (
-                          <button
-                            className="field-button field-button--ghost"
-                            key={action.next}
-                            onClick={() => {
-                              if (action.next === "CLOSED") {
-                                setClosing(ticket);
-                              } else if (action.next === "SCHEDULED") {
-                                setScheduling(ticket);
-                              } else {
-                                transition(ticket, action.next);
-                              }
-                            }}
-                            type="button"
-                          >
-                            {t(action.label as TranslationKey)}
-                          </button>
-                        ))}
-                        {status !== "CLOSED" && status !== "CANCELLED" ? (
-                          <button
-                            className="field-button field-button--ghost"
-                            onClick={() => transition(ticket, "CANCELLED")}
-                            type="button"
-                          >
-                            {t("field.ticketCancel")}
-                          </button>
-                        ) : null}
-                      </div>
+                      <code>{ticket.code}</code>
                     </td>
-                  ) : null}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    <td>
+                      <StatusChip
+                        label={tDynamic("field.ticketKind", ticket.kind)}
+                        tone={ticket.kind === "WARRANTY" ? "info" : "neutral"}
+                        value={ticket.kind}
+                      />
+                    </td>
+                    <td>
+                      <code>{ticket.project_code}</code>
+                      <br />
+                      <span className="dispatch-stop__address">{ticket.site_address ?? ""}</span>
+                    </td>
+                    <td>{ticket.client_name ?? "—"}</td>
+                    <td>
+                      {ticket.order_id ? (
+                        <Link className="deliveries-order" to={`/field/orders/${ticket.order_id}`}>
+                          {ticket.order_code}
+                        </Link>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td>{ticket.description}</td>
+                    <td>
+                      {ticket.warranty_until ? (
+                        <>
+                          {formatDate(ticket.warranty_until)}
+                          <StatusChip
+                            label={
+                              ticket.in_warranty ? t("field.inWarranty") : t("field.outWarranty")
+                            }
+                            tone={ticket.in_warranty ? "ok" : "neutral"}
+                            value="warranty"
+                          />
+                        </>
+                      ) : ticket.kind === "WARRANTY" ? (
+                        t("field.noData")
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td>
+                      {ticket.scheduled_visit_at ? formatDate(ticket.scheduled_visit_at) : "—"}
+                      {ticket.crew_name ? ` · ${ticket.crew_name}` : ""}
+                    </td>
+                    <td>
+                      <StatusChip
+                        label={tDynamic("field.ticketStatus", status)}
+                        tone={status === "CLOSED" ? "ok" : "info"}
+                        value={status}
+                      />
+                    </td>
+                    {canWrite ? (
+                      <td>
+                        <div className="field-chip-row">
+                          {(NEXT_ACTIONS[status] ?? []).map((action) => (
+                            <button
+                              className="field-button field-button--ghost"
+                              key={action.next}
+                              onClick={() => {
+                                if (action.next === "CLOSED") {
+                                  setClosing(ticket);
+                                } else if (action.next === "SCHEDULED") {
+                                  setScheduling(ticket);
+                                } else {
+                                  transition(ticket, action.next);
+                                }
+                              }}
+                              type="button"
+                            >
+                              {t(action.label as TranslationKey)}
+                            </button>
+                          ))}
+                          {status !== "CLOSED" && status !== "CANCELLED" ? (
+                            <button
+                              className="field-button field-button--ghost"
+                              onClick={() => transition(ticket, "CANCELLED")}
+                              type="button"
+                            >
+                              {t("field.ticketCancel")}
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
+                    ) : null}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {closing ? (

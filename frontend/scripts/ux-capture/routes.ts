@@ -187,6 +187,15 @@ export const ROUTES: CaptureRoute[] = [
     touchAudit: true,
   },
   { name: "jobs-manager", path: "/jobs", role: "manager" },
+  {
+    name: "field-dispatch",
+    path: "/field/dispatch",
+    role: "manager",
+    extraMobile: true,
+    touchAudit: true,
+  },
+  { name: "field-incidents", path: "/field/incidents", role: "manager", extraMobile: true },
+  { name: "field-service", path: "/field/service", role: "manager", extraMobile: true },
 
   // ---- operator ----------------------------------------------------------
   {
@@ -218,6 +227,20 @@ export const ROUTES: CaptureRoute[] = [
   {
     name: "production-installer",
     path: "/production",
+    role: "installer",
+    extraMobile: true,
+    touchAudit: true,
+  },
+  {
+    name: "field-agenda",
+    path: "/field/agenda",
+    role: "installer",
+    extraMobile: true,
+    touchAudit: true,
+  },
+  {
+    name: "field-order",
+    path: "/field/orders/{{orders.despachada}}",
     role: "installer",
     extraMobile: true,
     touchAudit: true,

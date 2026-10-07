@@ -2,9 +2,12 @@
  * señal — objetivos ≥56px, tipografía de lectura, nada de hover-only. */
 
 .field-root {
+  background: var(--theme-bg-canvas);
+  border-radius: var(--radius-md);
   color: var(--theme-text-primary);
   margin: 0 auto;
   max-width: 30rem;
+  min-height: calc(100vh - 12rem);
   padding: var(--space-12);
 }
 
@@ -58,14 +61,59 @@
   color: var(--danger-ink, #e4a0a0);
 }
 
-.field-stop {
+.field-stop-wrap {
   background: var(--theme-surface-raised);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-md);
-  display: block;
   margin-bottom: var(--space-12);
+  overflow: hidden;
+}
+
+.field-stop-wrap:has(.field-stop--done) {
+  opacity: 0.62;
+}
+
+.field-stop {
+  display: block;
   padding: var(--space-12);
   text-decoration: none;
+}
+
+.field-stop__foot {
+  align-items: center;
+  border-top: 1px solid var(--theme-border-subtle);
+  display: flex;
+  gap: var(--space-8);
+  justify-content: space-between;
+  padding: var(--space-8) var(--space-12);
+}
+
+.field-stop__maps {
+  color: var(--interactive);
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.field-stop__maps:hover {
+  text-decoration: underline;
+}
+
+.field-addr-row,
+.field-visit-row {
+  align-items: center;
+  display: flex;
+  gap: var(--space-8);
+  justify-content: space-between;
+}
+
+.field-addr-row .field-visit,
+.field-visit-row .field-visit {
+  margin: 0;
 }
 
 .field-stop__top {
@@ -87,9 +135,7 @@
 
 .field-stop__address {
   color: var(--theme-text-primary);
-  display: block;
-  font-size: 1.05rem;
-  margin-top: var(--space-4);
+  font-size: 0.95rem;
 }
 
 .field-stop__meta {
@@ -107,7 +153,7 @@
 }
 
 .field-stop--done {
-  opacity: 0.62;
+  /* dim aplica al wrap completo (:has arriba) */
 }
 
 .field-card {
@@ -248,9 +294,26 @@
 }
 
 .field-photo__input {
-  color: var(--theme-text-secondary);
-  font-size: 0.9rem;
-  max-width: 100%;
+  display: none;
+}
+
+.field-photo__trigger {
+  align-items: center;
+  background: var(--theme-surface);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--theme-text-primary);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 1rem;
+  font-weight: 600;
+  min-height: 3.25rem;
+  padding: var(--space-8) var(--space-16);
+}
+
+.field-photo__trigger[aria-disabled="true"] {
+  cursor: default;
+  opacity: 0.5;
 }
 
 .field-photo__count,
@@ -384,9 +447,19 @@
   vertical-align: middle;
 }
 
+.field-table-wrap {
+  overflow-x: auto;
+}
+
 .field-table {
   border-collapse: collapse;
   width: 100%;
+}
+
+@media (max-width: 40rem) {
+  .field-table-wrap .field-table {
+    min-width: 38rem;
+  }
 }
 
 .field-table th {
@@ -407,6 +480,37 @@
 
 .field-table code {
   font-family: var(--font-mono);
+}
+
+/* SignaturePad es de production pero su hoja vive en production.css — aquí
+   va su contrato en el scope de terreno: papel con tinta y borde visible
+   (el PNG firmado sella el acta PDF, así que papel siempre claro). */
+.field-root .signature-pad {
+  margin-top: var(--space-4);
+  position: relative;
+}
+
+.field-root .signature-pad-canvas {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--signature-ink);
+  cursor: crosshair;
+  display: block;
+  height: 160px;
+  max-width: 480px;
+  touch-action: none;
+  width: 100%;
+}
+
+.field-root .signature-pad-hint {
+  color: var(--ink-faint);
+  display: grid;
+  font-size: var(--text-s);
+  inset: 0;
+  place-items: center;
+  pointer-events: none;
+  position: absolute;
 }
 
 .field-chip-row {
