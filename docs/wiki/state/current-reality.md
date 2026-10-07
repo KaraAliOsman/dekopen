@@ -33,6 +33,7 @@ sources:
   - P14 CNC mecanizado PR https://github.com/KaraAliOsman/dekopen/pull/52
   - P11 cobranza facturación PR https://github.com/KaraAliOsman/dekopen/pull/51
   - P16 catálogo PR https://github.com/KaraAliOsman/dekopen/pull/55
+  - P08 cotización emisión PR https://github.com/KaraAliOsman/dekopen/pull/50
   - P15 compras/inventario branch devin/P15-compras-inventario
   - P08 emisión/cotización branch devin/P08-cotizacion-emision
   - P17 asistente IA/trabajos/Orb branch devin/P17-asistente-orb
@@ -474,6 +475,8 @@ PR sobre `integracion/v1` (branch `devin/P16-catalogo`):
 - Proveedor IA en desarrollo: MOCK documentado (MIMO en 429). Integraciones sin cambios. Verificado: `make lint|typecheck|test|build|test-db` verdes (`PY=.venv/bin/python`); capturas en `docs/redesign/captures/p16-catalogo/`; decisiones en sección P16 de `valores-por-defecto.md`.
 
 ## P08 emisión canónica, checklist y enlace state
+
+Merged into `integracion/v1` as squash `efdc1533927ac85084f3e6f356b2970ef861356e` (dekopen PR #50):
 
 Abierto en la rama `devin/P08-cotizacion-emision` (PR pendiente sobre `integracion/v1`, merge SHA `__P08_MERGE_SHA__`); verificación en HEAD de esa rama:
 
