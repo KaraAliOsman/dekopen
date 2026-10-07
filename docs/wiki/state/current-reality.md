@@ -3,7 +3,7 @@ type: state
 status: active
 updated: 2026-10-06
 volatility: high
-verified_ref: e34383880de4048011d60f5f5a15a07d2d9961b3
+verified_ref: feb2be5e04da203d2994a63daf0f1f8fdcd2e469
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
@@ -31,6 +31,7 @@ sources:
   - P06 bow acoplados PR https://github.com/KaraAliOsman/dekopen/pull/46
   - P15 compras inventario PR https://github.com/KaraAliOsman/dekopen/pull/47
   - P14 CNC mecanizado PR https://github.com/KaraAliOsman/dekopen/pull/52
+  - P11 cobranza facturación PR https://github.com/KaraAliOsman/dekopen/pull/51
   - P15 compras/inventario branch devin/P15-compras-inventario
   - P17 asistente IA/trabajos/Orb branch devin/P17-asistente-orb
   - integracion/v1 merge 747c528b67d234d697624929ccbcc7098261ed54
@@ -438,6 +439,8 @@ Open PR (branch `devin/p14-cnc-mecanizado`, on `integracion/v1`):
 
 
 ## P11 cobranza, pagos y facturación state
+
+Merged into `integracion/v1` as squash `feb2be5e04da203d2994a63daf0f1f8fdcd2e469` (dekopen PR #51):
 
 Open PR (branch `devin/P11-cobranza-facturacion`, on `integracion/v1` post-P13):
 
