@@ -3,7 +3,7 @@ type: state
 status: active
 updated: 2026-10-07
 volatility: high
-verified_ref: 773342c6278c2f06ef47a9d74bc9fb662736d4bc
+verified_ref: 4a9d3c27019fd31f63074db05ffaf262eb51bee3
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
@@ -38,6 +38,7 @@ sources:
   - P21 proyecto hub PR https://github.com/KaraAliOsman/dekopen/pull/60
   - P22 clientes ajustes PR https://github.com/KaraAliOsman/dekopen/pull/61
   - D08 tipologías avanzadas PR https://github.com/KaraAliOsman/dekopen/pull/65
+  - P10 portal propuesta PR https://github.com/KaraAliOsman/dekopen/pull/64
   - P15 compras/inventario branch devin/P15-compras-inventario
   - P08 emisión/cotización branch devin/P08-cotizacion-emision
   - P17 asistente IA/trabajos/Orb branch devin/P17-asistente-orb
@@ -541,6 +542,8 @@ Merged into `integracion/v1` as squash `51e2c87cbbb0a0bef37999d724a8d0cdbb3ebfbb
 - Verificado: `make lint|typecheck|test|build|test-db` (`PY=.venv/bin/python`); e2e auth+projects verde contra stack real; ux:capture 48 tomas 0 hallazgos; capturas `docs/redesign/captures/p21-proyecto-hub/`; decisiones en sección P21 de `valores-por-defecto.md`.
 
 ## P10 portal de propuesta v2 state
+
+Merged into `integracion/v1` as squash `4a9d3c27019fd31f63074db05ffaf262eb51bee3` (dekopen PR #64):
 
 Merged into `integracion/v1` as squash `__P10_MERGE_SHA__` (dekopen PR #`__P10_PR_NUM__`):
 
