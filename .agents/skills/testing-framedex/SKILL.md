@@ -833,3 +833,18 @@ Devin Secrets needed: none (all keys come from `supabase status` / .fixture-stat
   unchanged; below ~1100 CSS px the left nav collapses to a hamburger
   and the inspector hides behind an "Inspector" rail button; the library
   flyout is "Biblioteca de diseños" (same `B`).
+
+## P19 3D-fidelity testing notes
+- **Overlay coverage check** — a control present in DOM can still be unreachable:
+  prove clickability with `document.elementFromPoint(cx, cy) === btn` at the
+  button's center (benchmark `.benchmark-three-freeze` overlay previously
+  covered wrapped-toolbar buttons; now bottom-right of the canvas).
+- **Dark theme without OS change**: emulate `prefers-color-scheme` via CDP
+  (`Emulation.setEmulatedMedia`) or set `localStorage['dekopen.theme']` BEFORE
+  the page mounts — the React theme provider reads it once.
+- **Editor regressions need an EDITABLE project**: the fixture vitrina project
+  is a sealed revision ("Revisión cerrada para edición"). Use the draft
+  `P-000001 Casa El Roble` (fixture) → Posiciones → "Abrir diseño";
+  `Dormitorio principal` is a Fijo + Oscilobatiente Conjunto.
+- **Toolbar truth at ~380 px**: the `.model3d-toolbar` wraps to a second row —
+  verify every button by elementFromPoint, not just DOM presence.
