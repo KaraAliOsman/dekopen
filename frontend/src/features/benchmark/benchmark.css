@@ -174,13 +174,16 @@
   background: var(--theme-surface-panel);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--r-2);
+  /* Bottom-right of the canvas — a top-right overlay lands on the wrapped
+   * toolbar's second row and physically covers Abrir/Vano (verified:
+   * elementFromPoint hit the freeze button). */
+  bottom: var(--space-8);
   color: var(--theme-text-secondary);
   cursor: pointer;
   font-size: var(--type-dense);
   padding: var(--space-2) var(--space-8);
   position: absolute;
   right: var(--space-8);
-  top: var(--space-8);
   z-index: var(--z-raise);
 }
 
