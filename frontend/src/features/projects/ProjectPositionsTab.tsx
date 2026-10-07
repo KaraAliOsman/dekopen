@@ -35,9 +35,14 @@ import { designFromProduct } from "../assistant/designPayload";
 import { starterNominalSize, type StarterDefinition } from "../canvas/designLibrary";
 import { applyDesignOps } from "../canvas/designOps";
 import { resolveMembers } from "../canvas/members";
-import { isProductModel, wrapTreeAsProduct, type ProductJson } from "../canvas/productEditing";
+import {
+  isProductModel,
+  updateModuleBay,
+  wrapTreeAsProduct,
+  type ProductJson,
+} from "../canvas/productEditing";
 import { TypologyFlyout } from "../canvas/TypologyFlyout";
-import type { IntentNode } from "../canvas/intentEditing";
+import { intentBays, type IntentNode } from "../canvas/intentEditing";
 import type { DesignOp } from "../commands/types";
 import { GlobalChangesPanel } from "./GlobalChangesPanel";
 import { PositionThumb } from "./PositionThumb";
@@ -505,8 +510,21 @@ function QuickAddDialog({
         for (const module of modules)
           ops.push({ op: "set_glass_thickness", module: module.id, mm: thickness } as DesignOp);
       const after = ops.length ? applyDesignOps(product, ops) : product;
+      // Las ops escriben el SKU/espesor pero nunca `glass_spec`, y el motor
+      // rechaza todo BAY sin spec («requires glass_thickness_mm and
+      // glass_spec»). El spec correcto es el del catálogo para el SKU elegido
+      // (design_alternatives usa la receta o str(thickness) como fallback).
+      const spec =
+        options?.glass_specs?.find((item) => item.sku === glass)?.spec ??
+        options?.glass_specs?.[0]?.spec ??
+        (thickness !== undefined ? String(thickness) : null);
+      let stamped = after;
+      if (spec)
+        for (const module of after.assembly.modules)
+          for (const bay of intentBays(module.tree))
+            stamped = updateModuleBay(stamped, module.id, bay.id, { glass_spec: spec });
       const color = options?.color_options?.[0]?.code ?? options?.colors?.[0] ?? "WHITE";
-      const design = designFromProduct(after, systemId, color);
+      const design = designFromProduct(stamped, systemId, color);
       const response = await positionsCreate(
         project.id,
         { location_tag: location.trim(), quantity: qty, design },
@@ -1518,8 +1536,11 @@ export function PositionsTab({
             disabled={busy}
             initialScope={selected}
             onApplied={async () => {
+              // El diálogo NO se cierra al aplicar: la fase «done» del panel
+              // muestra el resultado y el botón «Deshacer cambio»; cerrarlo
+              // aquí desmontaba esa fase antes de pintar (R20/§8: el deshacer
+              // debe ser alcanzable). El usuario cierra con X/Escape.
               setSelected(new Set());
-              setBatchDialog(null);
               await onChanged();
             }}
             orgId={orgId}
