@@ -1,14 +1,23 @@
 import { useCallback, useEffect, useState } from "react";
 
 import {
+  productionCncProgramCompare,
   productionOrderCncProgramGenerate,
   productionOrderCncReadiness,
 } from "../../api/generated/dekopen";
-import { apiFetchBlob } from "../../api/apiMutator";
+import { ApiError, apiFetchBlob } from "../../api/apiMutator";
 import { actionErrorDetail } from "../errors";
-import { fmtMm } from "../../format";
+import { fmtMm, shortTechnicalId } from "../../format";
 import { t, tOptional } from "../../i18n/es-CL";
-import { opLabel } from "./labels";
+import {
+  cutRoleLabel,
+  leafSlotLabel,
+  opBasisLabel,
+  opFaceLabel,
+  opKindLabel,
+  opLabel,
+  opReferenceLabel,
+} from "./labels";
 
 type CncOp = {
   operation_id: string;
@@ -47,6 +56,12 @@ type CncMember = {
   member_label: string;
   workshop_sku?: string | null;
   role?: string | null;
+  material?: string | null;
+  axis?: string | null;
+  angle_left_deg?: string | null;
+  angle_right_deg?: string | null;
+  leaf_slot?: string | null;
+  repetition_index?: number | null;
   bay_id?: string | null;
   leaf_id?: string | null;
   position_index?: number | null;
@@ -67,101 +82,210 @@ type CncProgram = {
   fingerprint: string;
   status: string;
   machine_code: string | null;
+  plan_seed?: string | null;
+  plan_fingerprint?: string | null;
+  stale_inputs?: boolean;
+  superseded_by?: { id: string; program_no: string } | null;
   created_at: string;
+};
+
+type CncGapCheck = {
+  machine_id: string;
+  machine_code: string;
+  can_run: boolean;
+  cause: string;
+};
+
+type CncGap = {
+  gap_id: string;
+  kind: string;
+  op_kind: string | null;
+  cause: string;
+  source: string;
+  declared_value?: string;
+  bay_id?: string | null;
+  leaf_id?: string | null;
+  member_id?: string | null;
+  kit_sku?: string | null;
+  machines?: CncGapCheck[];
 };
 
 type CncIssue = {
   code: string;
-  detail?: string;
+  detail?: string | Record<string, string>;
 } & Record<string, unknown>;
 
 type CncReadinessData = {
   order_id: string;
   order_code: string;
+  plan?: { fingerprint?: string; plan_seed?: string; position_id?: string };
   members: CncMember[];
+  declared_gaps?: CncGap[];
   issues?: CncIssue[];
   required_tool_ids?: string[];
-  machines: { id: string; code: string; name: string }[];
+  machines: {
+    id: string;
+    code: string;
+    name: string;
+    emitter_implemented?: boolean;
+  }[];
   programs: CncProgram[];
 };
 
-const OP_LABELS: Record<string, string> = {
-  SAW_CUT: "production.cncKindSaw",
-  DRILL: "production.cncKindDrill",
-  SLOT: "production.cncKindSlot",
-  DRAINAGE: "production.cncKindDrainage",
-  VENTILATION: "production.cncKindVentilation",
-  HANDLE_PREP: "production.cncKindHandle",
-  LOCK_PREP: "production.cncKindLock",
-  HINGE_PREP: "production.cncKindHinge",
-  CORNER_CONNECTOR: "production.cncKindCorner",
-  T_CONNECTOR: "production.cncKindTee",
-  MILLING: "production.cncKindMilling",
-  END_MACHINING: "production.cncKindEnd",
-  ROUTING: "production.cncKindRouting",
-  GASKET_MARK: "production.cncKindGasket",
-  CUSTOM: "production.cncKindCustom",
+type ProgramDiff = {
+  base: { program_no: string };
+  other: { program_no: string };
+  added: { operation_id: string; kind?: string }[];
+  removed: { operation_id: string; kind?: string }[];
+  changed: { operation_id: string; fields: Record<string, { from: unknown; to: unknown }> }[];
+  counts: { added: number; removed: number; changed: number; unchanged: number };
 };
 
-const FACE_LABELS: Record<string, string> = {
-  OUTSIDE_FACE: "production.cncFaceOutside",
-  INSIDE_FACE: "production.cncFaceInside",
-  TOP_EDGE: "production.cncFaceTop",
-  BOTTOM_EDGE: "production.cncFaceBottom",
-  START_EDGE: "production.cncFaceStart",
-  END_EDGE: "production.cncFaceEnd",
+/** gap.kind/op_kind can carry declaration kinds outside the op enum
+ * (OTHER) — never print the raw token. */
+function gapKindLabel(gap: CncGap): string {
+  const kind = gap.op_kind ?? gap.kind;
+  if (!kind || kind === "OTHER") return t("production.cncGapOther");
+  const label = opKindLabel(kind);
+  return label === kind ? t("production.cncGapOther") : label;
+}
+
+const MATERIAL_LABELS: Record<string, string> = {
+  PVC: "PVC",
+  ALUMINIUM: "aluminio",
 };
 
-function opKindLabel(kind: string): string {
-  return tOptional(OP_LABELS[kind] ?? "") ?? kind;
+const AXIS_LABELS: Record<string, string> = {
+  HORIZONTAL: "horizontal",
+  VERTICAL: "vertical",
+};
+const GAP_CAUSES: Record<string, string> = {
+  no_rule: "production.cncGapCauseNoRule",
+  no_coordinates: "production.cncGapCauseNoCoords",
+  no_tool: "production.cncGapCauseNoTool",
+  unsupported_kind: "production.cncGapCauseUnsupported",
+  emitter_not_implemented: "production.cncGapCauseEmitter",
+  unassessable: "production.cncGapCauseUnassessable",
+};
+
+function gapCauseLabel(cause: string): string {
+  return tOptional(GAP_CAUSES[cause] ?? "") ?? t("production.cncGapCauseGeneric");
 }
 
-function faceLabel(face: string | null): string {
-  if (!face) return "—";
-  return tOptional(FACE_LABELS[face] ?? "") ?? face;
+const GAP_SOURCES: Record<string, string> = {
+  "workshop_annotations.bottom_drain_holes_mm": "production.cncGapSourceDrains",
+  "workshop_annotations.closing_points_perimeter_mm": "production.cncGapSourceClosing",
+  "workshop_annotations.has_coupler": "production.cncGapSourceCoupler",
+  handle_intents: "production.cncGapSourceHandles",
+  hardware_machining: "production.cncGapSourceHardware",
+};
+
+function gapSourceLabel(source: string): string {
+  return tOptional(GAP_SOURCES[source] ?? "") ?? t("production.cncGapSourceGeneric");
 }
 
-function roleLabel(role: string): string {
-  return tOptional(`production.role.${role}`) ?? role;
+const DETAIL_KEYS: Record<string, string> = {
+  host_label: "pieza",
+  member: "pieza",
+  member_label: "pieza",
+  tool_id: "herramienta",
+  required_kind: "operación",
+  required_tool: "herramienta",
+  depth_mm: "profundidad",
+  max_depth_mm: "prof. máx",
+  member_length_mm: "largo pieza",
+  max_member_length_mm: "largo máx",
+  machine_limit_mm: "límite máquina",
+  safe_margin_mm: "margen seguro",
+  clamp_zone: "mordaza",
+  clamp_label: "mordaza",
+  margin_mm: "margen",
+  coordinate_system: "coordenadas",
+  face: "cara",
+  kind: "operación",
+  op_kind: "operación",
+  u_mm: "u",
+  postprocessor_id: "emisor",
+  reference: "referencia",
+  basis: "regla",
+};
+
+/* Campos que no se muestran: la máquina ya encabeza su veredicto, `host` es
+ * la etiqueta de la pieza (redundante junto al encabezado) y `reason` llega
+ * del backend en inglés — la etiqueta del código ya lo dice en español. */
+const DETAIL_SKIP = new Set(["host", "machine", "machine_id", "reason", "host_label"]);
+
+/** Un valor de detalle siempre en español: enums por su labeler, distancias
+ * por fmtMm, identificadores de taller (herramienta, mordaza, emisor) como
+ * vienen declarados. */
+function detailValueText(key: string, value: string): string {
+  if (["kind", "required_kind", "op_kind"].includes(key)) return opKindLabel(value);
+  if (key === "face") return opFaceLabel(value);
+  if (key === "coordinate_system") return tOptional(`production.cncCoord_${value}`) ?? value;
+  if (key === "reference") return opReferenceLabel(value);
+  if (key === "basis") return opBasisLabel(value);
+  if (key === "tool_id" || key === "required_tool")
+    return tOptional(`production.cncToolId_${value}`) ?? value;
+  if (key.endsWith("_mm")) return fmtMm(value);
+  return value;
 }
 
+function detailText(detail: Record<string, string>): string {
+  return Object.entries(detail)
+    .filter(([k, v]) => !DETAIL_SKIP.has(k) && v !== "")
+    .map(([k, v]) => `${DETAIL_KEYS[k] ?? k} ${detailValueText(k, v)}`)
+    .join(" · ");
+}
+
+/** Verdict detail values rendered in words, not `k=v` — a reader knows what
+ * "broca DR-8 no cubre 12 mm" means, not what the code field is called. */
 function blockerText(blocker: CncVerdict): string {
   const key = `production.cncBlock_${blocker.code}`;
-  const label = tOptional(key) ?? blocker.code;
-  const values = Object.entries(blocker.detail)
-    .filter(([k]) => k !== "host")
-    .map(([k, v]) => `${k}=${v}`)
-    .join(" · ");
-  return values ? `${label}: ${values}` : label;
+  const label = tOptional(key) ?? t("production.cncBlockGeneric");
+  const values = detailText(blocker.detail);
+  return values ? `${label} — ${values}` : label;
 }
 
 function issueText(issue: CncIssue): string {
   const key = `production.cncIssue_${issue.code}`;
-  const label = tOptional(key) ?? issue.code;
+  const label = tOptional(key) ?? t("production.cncIssueGeneric");
   const context = Object.entries(issue)
     .filter(([k]) => !["code", "detail"].includes(k))
-    .map(([k, v]) => `${k}=${v}`)
+    .map(([k, v]) => `${DETAIL_KEYS[k] ?? k} ${detailValueText(k, String(v))}`)
     .join(" · ");
-  const detail = typeof issue.detail === "string" ? issue.detail : "";
-  return [label, context, detail].filter(Boolean).join(" — ");
+  /* issue.detail llega del motor en inglés — la etiqueta del código ya da la
+   * causa en español; el contexto (pieza, operación, máquina) va traducido. */
+  return [label, context].filter(Boolean).join(" — ");
 }
 
 export function CncPanel({ orderId, canWrite }: { orderId: string; canWrite: boolean }) {
   const [data, setData] = useState<CncReadinessData | null>(null);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [forbidden, setForbidden] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [selectedOp, setSelectedOp] = useState<string | null>(null);
+  const [diff, setDiff] = useState<Record<string, ProgramDiff | "loading">>({});
 
   const load = useCallback(async () => {
+    setLoading(true);
     try {
       const response = await productionOrderCncReadiness(orderId);
       setData(response.data as CncReadinessData);
       setError(null);
-    } catch {
-      setError(t("production.cncLoadError"));
+      setForbidden(false);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 403) {
+        setForbidden(true);
+        setError(null);
+      } else {
+        setError(t("production.cncLoadError"));
+      }
       setData(null);
+    } finally {
+      setLoading(false);
     }
   }, [orderId]);
 
@@ -203,6 +327,24 @@ export function CncPanel({ orderId, canWrite }: { orderId: string; canWrite: boo
     }
   }
 
+  async function comparePrograms(program: CncProgram, otherId: string) {
+    setDiff((current) => ({ ...current, [program.id]: "loading" }));
+    try {
+      const response = await productionCncProgramCompare(program.id, otherId);
+      setDiff((current) => ({
+        ...current,
+        [program.id]: response.data as unknown as ProgramDiff,
+      }));
+    } catch {
+      setDiff((current) => {
+        const next = { ...current };
+        delete next[program.id];
+        return next;
+      });
+      setError(t("production.cncProgramError"));
+    }
+  }
+
   return (
     <div className="cnc-panel">
       <button
@@ -221,12 +363,26 @@ export function CncPanel({ orderId, canWrite }: { orderId: string; canWrite: boo
               {error}
             </p>
           ) : null}
-          {!data ? (
+          {loading && !data ? (
             <p className="cnc-empty">{t("production.cncLoading")}</p>
-          ) : data.members.length === 0 ? (
-            <p className="cnc-empty">{t("production.cncNoOps")}</p>
+          ) : forbidden ? (
+            <p className="cnc-empty" role="alert">
+              {t("production.cncNoPermission")}
+            </p>
+          ) : !data ? (
+            error ? null : (
+              <p className="cnc-empty">{t("production.cncLoading")}</p>
+            )
           ) : (
             <>
+              {data.plan?.fingerprint || data.plan?.plan_seed ? (
+                <p className="cnc-plan-line">
+                  {t("production.cncPlan")}: {shortTechnicalId(data.plan.fingerprint ?? "")}
+                  {data.plan.plan_seed
+                    ? ` · ${t("production.cncPlanSeed")} ${data.plan.plan_seed}`
+                    : ""}
+                </p>
+              ) : null}
               {data.issues?.length ? (
                 <ul className="cnc-issues" role="alert">
                   {data.issues.map((issue, index) => (
@@ -239,85 +395,74 @@ export function CncPanel({ orderId, canWrite }: { orderId: string; canWrite: boo
                   {t("production.cncNoMachines")}
                 </p>
               ) : null}
+              {data.machines.some((m) => m.emitter_implemented === false) ? (
+                <ul className="cnc-issues" role="alert">
+                  {data.machines
+                    .filter((m) => m.emitter_implemented === false)
+                    .map((m) => (
+                      <li key={m.id}>
+                        {m.code} — {t("production.cncGapCauseEmitter")}
+                      </li>
+                    ))}
+                </ul>
+              ) : null}
               {data.required_tool_ids?.length ? (
                 <p className="cnc-required-tools">
                   {t("production.cncRequiredTools")}: {data.required_tool_ids.join(", ")}
                 </p>
               ) : null}
-              <table className="cnc-table">
-                <thead>
-                  <tr>
-                    <th>{t("production.cncMember")}</th>
-                    <th>{t("production.cncOps")}</th>
-                    {data.machines.map((machine) => (
-                      <th key={machine.id}>{machine.code}</th>
-                    ))}
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.members.map((member) => (
-                    <CncMemberRow
-                      key={member.member_id}
-                      member={member}
-                      machines={data.machines}
-                      canWrite={canWrite}
-                      busy={busy}
-                      expanded={expanded === member.member_id}
-                      onToggle={() =>
-                        setExpanded((value) =>
-                          value === member.member_id ? null : member.member_id,
-                        )
-                      }
-                      selectedOp={selectedOp}
-                      onSelectOp={(id) => setSelectedOp(id)}
-                      onGenerate={(machineId) => void generate(machineId, member.member_id)}
-                    />
-                  ))}
-                </tbody>
-              </table>
+              {data.members.length === 0 ? (
+                <p className="cnc-empty">{t("production.cncNoOps")}</p>
+              ) : (
+                <div className="cnc-matrix-scroll">
+                  <table className="cnc-table">
+                    <thead>
+                      <tr>
+                        <th>{t("production.cncMember")}</th>
+                        <th>{t("production.cncOps")}</th>
+                        {data.machines.map((machine) => (
+                          <th key={machine.id}>{machine.code}</th>
+                        ))}
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.members.map((member) => (
+                        <CncMemberRow
+                          key={member.member_id}
+                          member={member}
+                          machines={data.machines}
+                          canWrite={canWrite}
+                          busy={busy}
+                          expanded={expanded === member.member_id}
+                          onToggle={() =>
+                            setExpanded((value) =>
+                              value === member.member_id ? null : member.member_id,
+                            )
+                          }
+                          selectedOp={selectedOp}
+                          onSelectOp={(id) => setSelectedOp(id)}
+                          onGenerate={(machineId) => void generate(machineId, member.member_id)}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {data.declared_gaps?.length ? <DeclaredGaps gaps={data.declared_gaps} /> : null}
               {data.programs.length ? (
                 <div className="cnc-programs">
                   <h4>{t("production.cncPrograms")}</h4>
                   <ul>
                     {data.programs.map((program) => (
-                      <li
+                      <CncProgramRow
                         key={program.id}
-                        className={
-                          program.status === "SUPERSEDED"
-                            ? "cnc-program cnc-program-stale"
-                            : "cnc-program"
-                        }
-                      >
-                        <span className="cnc-program-no">{program.program_no}</span>
-                        <span className="cnc-program-meta">
-                          {program.member_label} · {program.machine_code} ·{" "}
-                          {program.operation_count} {t("production.cncOpsUnit")}
-                        </span>
-                        <span
-                          className={`cnc-verdict cnc-verdict-${program.verdict.toLowerCase()}`}
-                        >
-                          {tOptional(`production.cncVerdict${program.verdict}`) ?? program.verdict}
-                        </span>
-                        {program.status === "SUPERSEDED" ? (
-                          <span className="cnc-stale">{t("production.cncSuperseded")}</span>
-                        ) : (
-                          <span className="cnc-program-actions">
-                            {["operations.json", "operations.csv", "manifest.json"].map(
-                              (filename) => (
-                                <button
-                                  key={filename}
-                                  type="button"
-                                  className="cnc-program-file"
-                                  onClick={() => void downloadProgram(program, filename)}
-                                >
-                                  {filename}
-                                </button>
-                              ),
-                            )}
-                          </span>
-                        )}
-                      </li>
+                        program={program}
+                        programs={data.programs}
+                        diff={diff}
+                        onDownload={(filename) => void downloadProgram(program, filename)}
+                        onCompare={(otherId) => void comparePrograms(program, otherId)}
+                      />
                     ))}
                   </ul>
                 </div>
@@ -362,7 +507,7 @@ function CncMemberRow({
           </button>
           {member.workshop_sku || member.role ? (
             <div className="cnc-member-meta">
-              {[member.workshop_sku, member.role ? roleLabel(member.role) : null]
+              {[member.workshop_sku, member.role ? cutRoleLabel(member.role) : null]
                 .filter(Boolean)
                 .join(" · ")}
             </div>
@@ -379,18 +524,17 @@ function CncMemberRow({
           }
           return (
             <td key={machine.id}>
-              <span
-                className={`cnc-verdict cnc-verdict-${verdict.verdict.toLowerCase()}`}
-                title={
-                  verdict.blockers.length
-                    ? verdict.blockers.map(blockerText).join("\n")
-                    : verdict.warnings.length
-                      ? verdict.warnings.map(blockerText).join("\n")
-                      : undefined
-                }
+              <button
+                type="button"
+                className={`cnc-verdict cnc-verdict-${verdict.verdict.toLowerCase()} cnc-verdict-btn`}
+                onClick={onToggle}
               >
                 {tOptional(`production.cncVerdict${verdict.verdict}`) ?? verdict.verdict}
-              </span>
+                {verdict.blockers.length ? ` (${verdict.blockers.length})` : ""}
+                {!verdict.blockers.length && verdict.warnings.length
+                  ? ` (${verdict.warnings.length})`
+                  : ""}
+              </button>
             </td>
           );
         })}
@@ -417,41 +561,13 @@ function CncMemberRow({
       {expanded ? (
         <tr className="cnc-member-ops">
           <td colSpan={2 + machines.length + 1}>
-            <MemberOpsDiagram member={member} selectedOp={selectedOp} onSelectOp={onSelectOp} />
-            <table className="cnc-ops">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>{t("production.cncOpKind")}</th>
-                  <th>u (mm)</th>
-                  <th>{t("production.cncFace")}</th>
-                  <th>{t("production.cncReference")}</th>
-                  <th>{t("production.cncDepth")}</th>
-                  <th>{t("production.cncTool")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {member.operations.map((op, index) => (
-                  <tr
-                    key={op.operation_id}
-                    className={
-                      selectedOp === op.operation_id ? "cnc-op-row is-selected" : "cnc-op-row"
-                    }
-                    onClick={() =>
-                      onSelectOp(selectedOp === op.operation_id ? null : op.operation_id)
-                    }
-                  >
-                    <td>{index + 1}</td>
-                    <td>{opLabel(op)}</td>
-                    <td>{op.u_mm ?? "—"}</td>
-                    <td>{faceLabel(op.face)}</td>
-                    <td>{op.reference ?? "—"}</td>
-                    <td>{op.depth_mm ?? "—"}</td>
-                    <td>{op.tool_id ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <MemberCard
+              member={member}
+              machines={machines}
+              byMachine={byMachine}
+              selectedOp={selectedOp}
+              onSelectOp={onSelectOp}
+            />
           </td>
         </tr>
       ) : null}
@@ -459,12 +575,305 @@ function CncMemberRow({
   );
 }
 
-/**
- * Machine-neutral member bar: every machining op placed on the member's own
- * axis (u from the member START datum; member_end ops anchored at the end).
- * Clicking a mark highlights the matching row — this is the human check the
- * operator does before a program is generated.
- */
+/** Tarjeta de miembro: identidad física (SKU, rol, largo), vista por caras
+ * con las operaciones dibujadas desde el datum declarado, la tabla de
+ * operaciones con coordenadas y fuente de regla, y el veredicto por máquina
+ * con las razones en palabras — nunca dentro de un tooltip. */
+function MemberCard({
+  member,
+  machines,
+  byMachine,
+  selectedOp,
+  onSelectOp,
+}: {
+  member: CncMember;
+  machines: { id: string; code: string }[];
+  byMachine: Map<string, CncMachineVerdict>;
+  selectedOp: string | null;
+  onSelectOp: (id: string | null) => void;
+}) {
+  return (
+    <div className="cnc-member-card">
+      <div className="cnc-member-card-head">
+        <strong>{member.member_label}</strong>
+        <span>
+          {[
+            member.workshop_sku,
+            member.role ? cutRoleLabel(member.role) : null,
+            member.material ? (MATERIAL_LABELS[member.material] ?? member.material) : null,
+            member.axis ? (AXIS_LABELS[member.axis] ?? member.axis) : null,
+            member.leaf_slot ? leafSlotLabel(member.leaf_slot) : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+          {member.length_mm ? ` · ${fmtMm(member.length_mm)}` : ""}
+          {member.angle_left_deg ? ` · ${member.angle_left_deg}°` : ""}
+          {member.angle_right_deg ? `/${member.angle_right_deg}°` : ""}
+        </span>
+      </div>
+      <MemberOpsDiagram member={member} selectedOp={selectedOp} onSelectOp={onSelectOp} />
+      <table className="cnc-ops">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>{t("production.cncOpKind")}</th>
+            <th>{t("production.cncFace")}</th>
+            <th>u (mm)</th>
+            <th>X (mm)</th>
+            <th>Y (mm)</th>
+            <th>{t("production.cncReference")}</th>
+            <th>{t("production.cncDepth")}</th>
+            <th>{t("production.cncTool")}</th>
+            <th>{t("production.cncBasis")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {member.operations.map((op, index) => (
+            <tr
+              key={op.operation_id}
+              className={selectedOp === op.operation_id ? "cnc-op-row is-selected" : "cnc-op-row"}
+              onClick={() => onSelectOp(selectedOp === op.operation_id ? null : op.operation_id)}
+            >
+              <td data-th="#">{index + 1}</td>
+              <td data-th={t("production.cncOpKind")}>{opLabel(op)}</td>
+              <td data-th={t("production.cncFace")}>{opFaceLabel(op.face)}</td>
+              <td data-th="u (mm)">{fmtMm(op.u_mm)}</td>
+              <td data-th="X (mm)">{fmtMm(op.x_mm)}</td>
+              <td data-th="Y (mm)">{fmtMm(op.y_mm)}</td>
+              <td data-th={t("production.cncReference")}>{opReferenceLabel(op.reference)}</td>
+              <td data-th={t("production.cncDepth")}>{fmtMm(op.depth_mm)}</td>
+              <td data-th={t("production.cncTool")}>{op.tool_id ?? "—"}</td>
+              <td data-th={t("production.cncBasis")}>{opBasisLabel(op.basis)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="cnc-verdicts">
+        <h5>{t("production.cncVerdicts")}</h5>
+        <ul>
+          {machines.map((machine) => {
+            const verdict = byMachine.get(machine.id);
+            if (!verdict) return null;
+            const reasons = [...verdict.blockers, ...verdict.warnings];
+            return (
+              <li key={machine.id} className="cnc-verdict-line">
+                <span className={`cnc-verdict cnc-verdict-${verdict.verdict.toLowerCase()}`}>
+                  {tOptional(`production.cncVerdict${verdict.verdict}`) ?? verdict.verdict}
+                </span>
+                <span className="cnc-verdict-machine">{machine.code}</span>
+                {reasons.length ? (
+                  <ul className="cnc-reasons">
+                    {reasons.map((reason, index) => (
+                      <li key={index}>{blockerText(reason)}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <span className="cnc-verdict-ok">{t("production.cncVerdictOk")}</span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+/** Declared-but-not-emitted operations for the order: what the sealed data
+ * asked for that no emitter produced, the source it was declared in, the
+ * cause, and per machine whether it could run it if it existed. */
+function DeclaredGaps({ gaps }: { gaps: CncGap[] }) {
+  return (
+    <div className="cnc-gaps">
+      <h4>{t("production.cncDeclaredGaps")}</h4>
+      <table className="cnc-table">
+        <thead>
+          <tr>
+            <th>{t("production.cncOpKind")}</th>
+            <th>{t("production.cncGapSource")}</th>
+            <th>{t("production.cncGapCause")}</th>
+            <th>{t("production.cncGapMachines")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {gaps.map((gap) => (
+            <tr key={gap.gap_id}>
+              <td>
+                {gapKindLabel(gap)}
+                {gap.kit_sku ? ` · ${gap.kit_sku}` : ""}
+                {gap.declared_value ? ` · ${gap.declared_value}` : ""}
+                {gap.leaf_id || gap.bay_id
+                  ? ` · ${[gap.bay_id, gap.leaf_id].filter(Boolean).join("/")}`
+                  : ""}
+              </td>
+              <td>{gapSourceLabel(gap.source)}</td>
+              <td>{gapCauseLabel(gap.cause)}</td>
+              <td>
+                <ul className="cnc-gap-machines">
+                  {(gap.machines ?? []).map((check) => (
+                    <li key={check.machine_id}>
+                      {check.machine_code}:{" "}
+                      {check.can_run ? t("production.cncGapCanRun") : gapCauseLabel(check.cause)}
+                    </li>
+                  ))}
+                </ul>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function CncProgramRow({
+  program,
+  programs,
+  diff,
+  onDownload,
+  onCompare,
+}: {
+  program: CncProgram;
+  programs: CncProgram[];
+  diff: Record<string, ProgramDiff | "loading">;
+  onDownload: (filename: string) => void;
+  onCompare: (otherId: string) => void;
+}) {
+  const superseded = program.status === "SUPERSEDED";
+  // Versions of the same member on the same machine — the only comparison
+  // that makes physical sense.
+  const siblings = programs.filter(
+    (other) =>
+      other.id !== program.id &&
+      other.member_id === program.member_id &&
+      other.machine_code === program.machine_code,
+  );
+  const result = diff[program.id];
+  return (
+    <li className={superseded ? "cnc-program cnc-program-stale" : "cnc-program"}>
+      <span className="cnc-program-no">{program.program_no}</span>
+      <span className="cnc-program-meta">
+        {program.member_label} · {program.machine_code} · {program.operation_count}{" "}
+        {t("production.cncOpsUnit")}
+      </span>
+      <span className={`cnc-verdict cnc-verdict-${program.verdict.toLowerCase()}`}>
+        {tOptional(`production.cncVerdict${program.verdict}`) ?? program.verdict}
+      </span>
+      {program.plan_seed ? (
+        <span className="cnc-program-seed">
+          {t("production.cncPlanSeed")} {program.plan_seed}
+        </span>
+      ) : null}
+      {superseded ? (
+        <span className="cnc-stale">
+          {program.superseded_by
+            ? `${t("production.cncSupersededBy")} ${program.superseded_by.program_no}`
+            : program.stale_inputs
+              ? t("production.cncStale")
+              : t("production.cncSuperseded")}
+        </span>
+      ) : (
+        <span className="cnc-program-actions">
+          {["operations.json", "operations.csv", "manifest.json"].map((filename) => (
+            <button
+              key={filename}
+              type="button"
+              className="cnc-program-file"
+              onClick={() => onDownload(filename)}
+            >
+              {filename}
+            </button>
+          ))}
+          {siblings.length ? (
+            <button
+              type="button"
+              className="cnc-program-file"
+              disabled={result === "loading"}
+              onClick={() => {
+                const other = siblings[siblings.length - 1];
+                if (other) onCompare(other.id);
+              }}
+            >
+              {t("production.cncCompare")}
+            </button>
+          ) : null}
+        </span>
+      )}
+      {result && result !== "loading" ? <ProgramDiffView diff={result} /> : null}
+    </li>
+  );
+}
+
+/** Diff between two program versions — what physically changed in the file
+ * before the new one goes to the cell. */
+function ProgramDiffView({ diff }: { diff: ProgramDiff }) {
+  return (
+    <div className="cnc-diff">
+      <p className="cnc-diff-counts">
+        {t("production.cncDiffAdded")}: {diff.counts.added} · {t("production.cncDiffRemoved")}:{" "}
+        {diff.counts.removed} · {t("production.cncDiffChanged")}: {diff.counts.changed} ·{" "}
+        {t("production.cncDiffUnchanged")}: {diff.counts.unchanged}
+      </p>
+      {diff.changed.length ? (
+        <table className="cnc-table">
+          <thead>
+            <tr>
+              <th>{t("production.cncDiffOp")}</th>
+              <th>{t("production.cncDiffField")}</th>
+              <th>{t("production.cncDiffFrom")}</th>
+              <th>{t("production.cncDiffTo")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {diff.changed.flatMap((change) =>
+              Object.entries(change.fields).map(([field, values]) => (
+                <tr key={`${change.operation_id}-${field}`}>
+                  <td>{shortTechnicalId(change.operation_id)}</td>
+                  <td>{DETAIL_KEYS[field] ?? field}</td>
+                  <td>
+                    {values.from === null || values.from === undefined
+                      ? "—"
+                      : detailValueText(field, String(values.from))}
+                  </td>
+                  <td>
+                    {values.to === null || values.to === undefined
+                      ? "—"
+                      : detailValueText(field, String(values.to))}
+                  </td>
+                </tr>
+              )),
+            )}
+          </tbody>
+        </table>
+      ) : null}
+      {diff.added.length || diff.removed.length ? (
+        <p className="cnc-diff-ops">
+          {[
+            diff.added.length
+              ? `${t("production.cncDiffAdded")}: ${diff.added
+                  .map((op) => opKindLabel(String(op.kind ?? "")))
+                  .join(", ")}`
+              : "",
+            diff.removed.length
+              ? `${t("production.cncDiffRemoved")}: ${diff.removed
+                  .map((op) => opKindLabel(String(op.kind ?? "")))
+                  .join(", ")}`
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** Face view of a member: four lanes (canto superior, exterior, interior,
+ * canto inferior) with every op drawn at its declared u from the member
+ * datum; edge work anchors at the member ends. Ops without a declared face
+ * land on a "cara no declarada" lane — never guessed. */
+const FACE_LANES = ["TOP_EDGE", "OUTSIDE_FACE", "INSIDE_FACE", "BOTTOM_EDGE"];
+
 function MemberOpsDiagram({
   member,
   selectedOp,
@@ -475,50 +884,74 @@ function MemberOpsDiagram({
   onSelectOp: (id: string | null) => void;
 }) {
   const lengthMm = Math.max(parseFloat(member.length_mm || "0") || 0, 1);
-  const W = 640;
-  const H = 86;
+  const W = 680;
   const pad = 26;
-  const barY = 42;
-  const barH = 14;
+  const laneH = 22;
+  const top = 22;
   const ux = (uMm: number) => pad + (uMm / lengthMm) * (W - pad * 2);
 
-  function opX(op: CncOp): number | null {
+  function opU(op: CncOp): number | null {
     if (op.u_mm != null) {
       const u = parseFloat(op.u_mm);
       return op.reference === "member_end" ? ux(lengthMm - u) : ux(u);
     }
-    if (op.reference === "bar_left_edge") return pad + 3;
-    if (op.face === "START_EDGE") return pad;
+    if (op.face === "START_EDGE" || op.reference === "bar_left_edge") return pad;
     if (op.face === "END_EDGE") return W - pad;
     return null;
   }
 
-  const unplaced = member.operations.filter((op) => opX(op) === null);
+  function opLane(op: CncOp): number {
+    // Edge-cap ops draw on the (single) end lane, faceless ops on the last.
+    if (op.face === "START_EDGE" || op.face === "END_EDGE") {
+      return FACE_LANES.length;
+    }
+    const index = FACE_LANES.indexOf(op.face ?? "");
+    return index === -1 ? FACE_LANES.length + 1 : index;
+  }
+
+  const lanes = [
+    ...FACE_LANES.map((face) => ({ key: face, label: opFaceLabel(face) })),
+    { key: "EDGES", label: t("production.cncLaneEdges") },
+    { key: "NO_FACE", label: t("production.cncLaneNoFace") },
+  ];
+  const H = top + lanes.length * laneH + 16;
+  const unplaced = member.operations.filter((op) => opU(op) === null);
 
   return (
     <div className="cnc-diagram">
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={member.member_label}>
-        <text x={pad} y={14} className="cnc-diagram-datum">
+        <text x={pad} y={12} className="cnc-diagram-datum">
           {t("production.cncDiagramStart")}
         </text>
-        <text x={W - pad} y={14} textAnchor="end" className="cnc-diagram-datum">
+        <text x={W - pad} y={12} textAnchor="end" className="cnc-diagram-datum">
           {t("production.cncDiagramEnd")} · {fmtMm(member.length_mm)}
         </text>
-        <line x1={pad} y1={22} x2={pad} y2={barY - 4} className="cnc-diagram-datum-line" />
-        <line x1={W - pad} y1={22} x2={W - pad} y2={barY - 4} className="cnc-diagram-datum-line" />
-        <rect
-          x={pad}
-          y={barY}
-          width={W - pad * 2}
-          height={barH}
-          rx={2}
-          className="cnc-diagram-bar"
-        />
+        <line x1={pad} y1={16} x2={pad} y2={H - 10} className="cnc-diagram-datum-line" />
+        <line x1={W - pad} y1={16} x2={W - pad} y2={H - 10} className="cnc-diagram-datum-line" />
+        {lanes.map((lane, index) => {
+          const y = top + index * laneH;
+          return (
+            <g key={lane.key}>
+              <rect
+                x={pad}
+                y={y}
+                width={W - pad * 2}
+                height={laneH - 4}
+                rx={2}
+                className="cnc-diagram-bar"
+              />
+              <text x={4} y={y + laneH / 2 + 3} className="cnc-diagram-datum">
+                {lane.label}
+              </text>
+            </g>
+          );
+        })}
         {member.operations.map((op, index) => {
-          const x = opX(op);
+          const x = opU(op);
           if (x === null) return null;
+          const lane = opLane(op);
+          const cy = top + lane * laneH + laneH / 2 - 2;
           const selected = op.operation_id === selectedOp;
-          const cy = barY + barH / 2;
           return (
             <g
               key={op.operation_id}
@@ -528,10 +961,10 @@ function MemberOpsDiagram({
               aria-label={`${index + 1} ${opLabel(op)}`}
             >
               <title>
-                {`${index + 1} · ${opLabel(op)} · u=${op.u_mm ?? "—"} · ${faceLabel(op.face)}`}
+                {`${index + 1} · ${opLabel(op)} · u=${op.u_mm ?? "—"} · ${opFaceLabel(op.face)}`}
               </title>
               <OpMark kind={op.kind} x={x} cy={cy} />
-              <text x={x} y={barY - 6} textAnchor="middle" className="cnc-diagram-seq">
+              <text x={x} y={cy - 8} textAnchor="middle" className="cnc-diagram-seq">
                 {index + 1}
               </text>
             </g>

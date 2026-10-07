@@ -73,6 +73,7 @@ import type {
   CncMachineList,
   CncMachineRequestRequest,
   CncProgram,
+  CncProgramCompare,
   CncProgramList,
   CncReadiness,
   CncTool,
@@ -11211,6 +11212,82 @@ export const productionCncMachineUpdate = async (
       method: "PATCH",
       headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
       body: JSON.stringify(patchedCncMachinePatchRequest),
+    },
+  );
+};
+
+export type productionCncProgramCompareResponse200 = {
+  data: CncProgramCompare;
+  status: 200;
+};
+
+export type productionCncProgramCompareResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type productionCncProgramCompareResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type productionCncProgramCompareResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type productionCncProgramCompareResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type productionCncProgramCompareResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type productionCncProgramCompareResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type productionCncProgramCompareResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type productionCncProgramCompareResponseSuccess = productionCncProgramCompareResponse200 & {
+  headers: Headers;
+};
+export type productionCncProgramCompareResponseError = (
+  | productionCncProgramCompareResponse400
+  | productionCncProgramCompareResponse401
+  | productionCncProgramCompareResponse403
+  | productionCncProgramCompareResponse404
+  | productionCncProgramCompareResponse409
+  | productionCncProgramCompareResponse422
+  | productionCncProgramCompareResponse503
+) & {
+  headers: Headers;
+};
+
+export type productionCncProgramCompareResponse =
+  productionCncProgramCompareResponseSuccess | productionCncProgramCompareResponseError;
+
+export const getProductionCncProgramCompareUrl = (programId: string, otherId: string) => {
+  return `/api/v1/production/cnc/programs/${programId}/compare/${otherId}/`;
+};
+
+export const productionCncProgramCompare = async (
+  programId: string,
+  otherId: string,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<productionCncProgramCompareResponse> => {
+  return apiMutator<productionCncProgramCompareResponse>(
+    getProductionCncProgramCompareUrl(programId, otherId),
+    {
+      ...options,
+      method: "GET",
     },
   );
 };

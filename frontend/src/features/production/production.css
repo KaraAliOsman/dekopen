@@ -1372,11 +1372,35 @@ div:has(> table.production-plan) {
 }
 .cnc-table th,
 .cnc-table td {
-  word-break: break-word;
+  /* Guion natural en vez de corte de palabra («profundi-dad», nunca
+   * «profundida d»); los botones de acción nunca se parten. */
+  overflow-wrap: normal;
+  hyphens: auto;
+}
+.cnc-table td .cnc-add,
+.cnc-actions {
+  white-space: nowrap;
+}
+.cnc-actions {
+  text-align: right;
+}
+.cnc-actions .cnc-add + .cnc-add {
+  margin-left: 0.35rem;
 }
 .cnc-workspace-grid > div {
   min-width: 0;
   overflow-x: auto;
+}
+/* La matriz miembro×máquina puede crecer con el parque de máquinas: a ancho
+ * estrecho el scroll va dentro del contenedor, nunca en la página. */
+.cnc-matrix-scroll {
+  overflow-x: auto;
+}
+.cnc-matrix-scroll .cnc-table {
+  min-width: 34rem;
+}
+.cnc-gaps .cnc-table {
+  min-width: 30rem;
 }
 .cnc-member-meta {
   font-size: 0.75rem;
@@ -1414,9 +1438,18 @@ div:has(> table.production-plan) {
 .cnc-verdict {
   display: inline-block;
   padding: 0.1rem 0.45rem;
-  border-radius: var(--r-pill);
+  /* Chips de veredicto son texto, no puntos de estado: radio mínimo.
+   * nowrap: «Atención»/«Bloqueado» nunca se parten a ancho estrecho. */
+  border-radius: var(--r-1);
   font-size: 0.75rem;
   font-weight: 600;
+  white-space: nowrap;
+  hyphens: none;
+}
+.cnc-verdict-btn {
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
 }
 .cnc-verdict-pass {
   background: color-mix(in srgb, var(--ok) 15%, transparent);
@@ -1463,6 +1496,38 @@ div:has(> table.production-plan) {
   padding: 0.2rem 0.4rem;
   border-bottom: 1px dashed var(--theme-border, #d8d4cd);
   text-align: left;
+}
+/* A 390 px una tabla de diez columnas no se lee: cada operación se apila
+ * como ficha con su etiqueta antes del valor. */
+@media (max-width: 700px) {
+  .cnc-ops thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .cnc-ops tr {
+    display: block;
+    border-bottom: 1px solid var(--theme-border, #d8d4cd);
+    padding: 0.35rem 0;
+  }
+  .cnc-ops td {
+    display: block;
+    border-bottom: none;
+    padding: 0.1rem 0.4rem;
+  }
+  .cnc-ops td::before {
+    content: attr(data-th) " · ";
+    color: var(--theme-text-muted, #6b675f);
+    font-size: 0.75rem;
+  }
+  .cnc-ops td[data-th="#"]::before {
+    content: none;
+  }
+  .cnc-ops td[data-th="#"] {
+    font-weight: 600;
+  }
 }
 .cnc-programs {
   margin-top: 0.75rem;
@@ -1678,6 +1743,131 @@ div:has(> table.production-plan) {
 }
 .cnc-op-row.is-selected td {
   background: var(--op-selected-row);
+}
+
+/* Member card — physical identity + verdicts with legible reasons. */
+.cnc-member-card {
+  padding: 0.4rem 0.2rem 0.6rem;
+}
+.cnc-member-card-head {
+  display: flex;
+  gap: 0.75rem;
+  align-items: baseline;
+  font-size: 0.85rem;
+  margin-bottom: 0.25rem;
+}
+.cnc-member-card-head > span {
+  color: var(--theme-text-secondary);
+}
+.cnc-verdicts h5 {
+  margin: 0.7rem 0 0.25rem;
+  font-size: 0.8rem;
+  color: var(--theme-text-secondary);
+}
+.cnc-verdicts > ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+.cnc-verdict-line {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  font-size: 0.82rem;
+}
+.cnc-verdict-machine {
+  font-family: var(--font-mono, monospace);
+  font-weight: 600;
+}
+.cnc-verdict-ok {
+  color: var(--theme-text-secondary);
+}
+.cnc-reasons {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.15rem;
+}
+.cnc-reasons li {
+  color: var(--theme-text);
+}
+
+/* Declared-not-emitted section. */
+.cnc-gaps {
+  margin-top: 0.9rem;
+  overflow-x: auto;
+}
+.cnc-gaps h4 {
+  margin: 0 0 0.35rem;
+  font-size: 0.85rem;
+  color: var(--theme-text-secondary);
+}
+.cnc-gap-machines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.78rem;
+  color: var(--theme-text-secondary);
+}
+
+/* Plan identity + program provenance. */
+.cnc-plan-line {
+  margin: 0 0 0.5rem;
+  font-size: 0.78rem;
+  color: var(--theme-text-secondary);
+  font-family: var(--font-mono, monospace);
+}
+.cnc-program-seed {
+  font-size: 0.75rem;
+  color: var(--theme-text-secondary);
+  font-family: var(--font-mono, monospace);
+}
+.cnc-diff {
+  flex-basis: 100%;
+  padding: 0.4rem 0.5rem;
+  background: var(--theme-bg, #faf9f7);
+  font-size: 0.8rem;
+  overflow-x: auto;
+}
+.cnc-diff-counts {
+  margin: 0 0 0.3rem;
+  font-weight: 600;
+}
+.cnc-diff-ops {
+  margin: 0.3rem 0 0;
+  color: var(--theme-text-secondary);
+}
+
+/* Workspace additions: emitter flag, inactive rows, audit trail. */
+.cnc-emitter-missing {
+  color: var(--danger-ink);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.cnc-row-inactive {
+  opacity: 0.55;
+}
+.cnc-audit {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+}
+.cnc-audit li {
+  border-bottom: 1px dashed var(--theme-border, #d8d4cd);
+  padding-bottom: 0.25rem;
+}
+.cnc-audit-date {
+  display: inline-block;
+  min-width: 8.5rem;
+  color: var(--theme-text-secondary);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.75rem;
 }
 .operator-member-strips {
   display: flex;

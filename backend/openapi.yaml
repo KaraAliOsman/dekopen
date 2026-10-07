@@ -9981,6 +9981,83 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/production/cnc/programs/{program_id}/compare/{other_id}/:
+    get:
+      operationId: production_cnc_program_compare
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: other_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: program_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - production
+      - cnc
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CncProgramCompare'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/production/cnc/programs/{program_id}/file/{filename}:
     get:
       operationId: production_cnc_program_file
@@ -20309,6 +20386,22 @@ components:
           type: string
         active:
           type: boolean
+        machine_type:
+          type: string
+        axes_count:
+          type: integer
+          nullable: true
+        travel_x_mm:
+          type: string
+          nullable: true
+        travel_y_mm:
+          type: string
+          nullable: true
+        travel_z_mm:
+          type: string
+          nullable: true
+        emitter_implemented:
+          type: boolean
       required:
       - active
       - clamp_zones
@@ -20409,6 +20502,22 @@ components:
           maxLength: 40
         active:
           type: boolean
+        machine_type:
+          type: string
+          minLength: 1
+          maxLength: 30
+        axes_count:
+          type: string
+          nullable: true
+        travel_x_mm:
+          type: string
+          nullable: true
+        travel_y_mm:
+          type: string
+          nullable: true
+        travel_z_mm:
+          type: string
+          nullable: true
       required:
       - code
       - name
@@ -20443,6 +20552,34 @@ components:
       - operation_count
       - program_no
       - verdict
+    CncProgramCompare:
+      type: object
+      properties:
+        base:
+          type: object
+          additionalProperties: {}
+        other:
+          type: object
+          additionalProperties: {}
+        added:
+          type: array
+          items: {}
+        removed:
+          type: array
+          items: {}
+        changed:
+          type: array
+          items: {}
+        counts:
+          type: object
+          additionalProperties: {}
+      required:
+      - added
+      - base
+      - changed
+      - counts
+      - other
+      - removed
     CncProgramList:
       type: object
       properties:
@@ -20458,7 +20595,13 @@ components:
           type: string
         order_code:
           type: string
+        plan:
+          type: object
+          additionalProperties: {}
         members:
+          type: array
+          items: {}
+        declared_gaps:
           type: array
           items: {}
         issues:
@@ -20569,6 +20712,9 @@ components:
           items:
             $ref: '#/components/schemas/CncTool'
         orders:
+          type: array
+          items: {}
+        audit:
           type: array
           items: {}
       required:
@@ -26794,6 +26940,22 @@ components:
           maxLength: 40
         active:
           type: boolean
+        machine_type:
+          type: string
+          minLength: 1
+          maxLength: 30
+        axes_count:
+          type: string
+          nullable: true
+        travel_x_mm:
+          type: string
+          nullable: true
+        travel_y_mm:
+          type: string
+          nullable: true
+        travel_z_mm:
+          type: string
+          nullable: true
     PatchedCncToolPatchRequest:
       type: object
       properties:

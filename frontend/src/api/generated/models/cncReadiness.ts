@@ -6,11 +6,14 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { CncMachine } from "./cncMachine";
+import type { CncReadinessPlan } from "./cncReadinessPlan";
 
 export interface CncReadiness {
   order_id: string;
   order_code: string;
+  plan?: CncReadinessPlan;
   members: unknown[];
+  declared_gaps?: unknown[];
   issues?: unknown[];
   machines: CncMachine[];
   programs: unknown[];
