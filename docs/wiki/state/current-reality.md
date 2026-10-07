@@ -3,7 +3,7 @@ type: state
 status: active
 updated: 2026-10-07
 volatility: high
-verified_ref: 321282cc66a9707e934b39fc6926405918673fe2
+verified_ref: 51e2c87cbbb0a0bef37999d724a8d0cdbb3ebfbb
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
@@ -34,6 +34,8 @@ sources:
   - P11 cobranza facturación PR https://github.com/KaraAliOsman/dekopen/pull/51
   - P16 catálogo PR https://github.com/KaraAliOsman/dekopen/pull/55
   - P08 cotización emisión PR https://github.com/KaraAliOsman/dekopen/pull/50
+  - ED2 pase editorial PR https://github.com/KaraAliOsman/dekopen/pull/58
+  - P21 proyecto hub PR https://github.com/KaraAliOsman/dekopen/pull/60
   - P15 compras/inventario branch devin/P15-compras-inventario
   - P08 emisión/cotización branch devin/P08-cotizacion-emision
   - P17 asistente IA/trabajos/Orb branch devin/P17-asistente-orb
@@ -506,6 +508,8 @@ PR sobre `integracion/v1` (branch `devin/ED2-pase-editorial-ola2`); encargo sin 
 - **Ronda de verificación UI** (grabación sobre fixture): corregidos `changesRequested` crudo (clave `quotations.state.changesRequested` + tono person), `REV-A` → `formatRevision` en cotizaciones/pipeline/tablero/precio/traza, y orden de cascada del bloque táctil OT (al final de `production.css`; el input «Buscar pieza» quedaba en 32 px). Re-capturas afectadas con 0 findings.
 
 ## P21 hub del proyecto: centro de trabajo del estimador
+
+Merged into `integracion/v1` as squash `51e2c87cbbb0a0bef37999d724a8d0cdbb3ebfbb` (dekopen PR #60):
 
 - `/projects/<id>` es ahora un hub de 8 pestañas (`ProjectHub.tsx`): Posiciones (predeterminada) · Servicios · Cotización · Precio · Cobranza · Producción · Documentos · Actividad. Los paneles de la ola 2 (`ProjectQuotationPanel` P08, cobranza P11, precio P07, servicios D06, documentos, actividad) se montan como pestañas sin reescribirse; la pila de acordeones anterior se eliminó completa. `?tab=<id>` es canónico; `?section=quote|services|payments|imports|compare` sigue resolviendo vía `SECTION_TO_TAB` para enlaces antiguos de «Hoy»/campana.
 - Encabezado: código+ nombre, cliente enlazado, obra/dirección, stepper del ciclo comercial, total con IVA + vigencia, y UNA acción siguiente por estado (`projectNextAction`: borrador → añadir/cotizar/emitir; cotizado → compartir o «esperando respuesta» si el enlace sigue vivo; aprobado → abono/saldo/liberar según rol; en producción → ir a producción). Roles sin permiso ven encabezado honesto sin CTA muerto.
