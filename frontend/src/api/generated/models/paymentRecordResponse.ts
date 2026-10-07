@@ -7,9 +7,9 @@
  */
 import type { CollectionMovement } from "./collectionMovement";
 import type { CollectionQuota } from "./collectionQuota";
-import type { CurrencyEnum } from "./currencyEnum";
 import type { PaymentReceipt } from "./paymentReceipt";
 import type { PaymentStatusEnum } from "./paymentStatusEnum";
+import type { PricingCurrencyEnum } from "./pricingCurrencyEnum";
 import type { ProjectInvoice } from "./projectInvoice";
 import type { ProjectPayment } from "./projectPayment";
 import type { ReminderDraft } from "./reminderDraft";
@@ -27,7 +27,7 @@ export interface PaymentRecordResponse {
   quote_total_gross: string | null;
   /** @nullable */
   balance: string | null;
-  currency: CurrencyEnum;
+  currency: PricingCurrencyEnum;
   status: PaymentStatusEnum;
   /** @nullable */
   sealed_revision: string | null;

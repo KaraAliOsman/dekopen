@@ -9,10 +9,12 @@
 /**
  * * `CLP` - CLP
  * * `USD` - USD
+ * * `UF` - UF
  */
-export type CurrencyEnum = (typeof CurrencyEnum)[keyof typeof CurrencyEnum];
+export type OrgCurrencyEnum = (typeof OrgCurrencyEnum)[keyof typeof OrgCurrencyEnum];
 
-export const CurrencyEnum = {
+export const OrgCurrencyEnum = {
   CLP: "CLP",
   USD: "USD",
+  UF: "UF",
 } as const;

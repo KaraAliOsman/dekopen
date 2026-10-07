@@ -11,9 +11,10 @@
  * * `LEGAL` - Oficio
  * * `A4` - A4
  */
-export type DocPaperSizeEnum = (typeof DocPaperSizeEnum)[keyof typeof DocPaperSizeEnum];
+export type OrgBrandingWriteDocPaperSizeEnum =
+  (typeof OrgBrandingWriteDocPaperSizeEnum)[keyof typeof OrgBrandingWriteDocPaperSizeEnum];
 
-export const DocPaperSizeEnum = {
+export const OrgBrandingWriteDocPaperSizeEnum = {
   LETTER: "LETTER",
   LEGAL: "LEGAL",
   A4: "A4",

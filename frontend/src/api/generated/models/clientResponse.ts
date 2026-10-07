@@ -17,7 +17,12 @@ export interface ClientResponse {
   giro: string | null;
   /** @nullable */
   comuna: string | null;
-  notes: string;
+  kind: string;
   is_active: boolean;
+  /** @nullable */
+  merged_into: string | null;
+  /** @nullable */
+  merged_at: string | null;
+  created_at: string;
   updated_at: string;
 }

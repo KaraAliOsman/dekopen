@@ -5,6 +5,8 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
-import { WorkshopLabelFormatEnum } from "./workshopLabelFormatEnum";
+import { OrgBrandingWriteWorkshopLabelFormatEnum } from "./orgBrandingWriteWorkshopLabelFormatEnum";
 
-export const OrgBrandingWriteRequestWorkshopLabelFormat = { ...WorkshopLabelFormatEnum } as const;
+export const OrgBrandingWriteRequestWorkshopLabelFormat = {
+  ...OrgBrandingWriteWorkshopLabelFormatEnum,
+} as const;

@@ -1,6 +1,8 @@
 """Client registry: org-scoped CRUD, snapshot semantics on projects."""
 
+from contextlib import nullcontext
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -14,19 +16,27 @@ def _row(**over):
     row = {
         "id": uuid4(),
         "name": "Constructora Andina",
-        "rut": "76.543.210-1",
+        "rut": "11.111.111-1",
         "email": "obras@andina.cl",
         "phone": "+56 2 2345 6789",
         "address": "Av. Providencia 1234, Santiago",
         "giro": "Construcción",
         "comuna": "Providencia",
-        "notes": None,
+        "kind": "COMPANY",
+        "merged_into": None,
+        "merged_at": None,
         "is_active": True,
         "created_at": datetime(2026, 9, 20, tzinfo=timezone.utc),
         "updated_at": datetime(2026, 9, 20, tzinfo=timezone.utc),
     }
     row.update(over)
     return row
+
+
+def _no_db(monkeypatch, module):
+    """create_client/update_client wrap writes in transaction.atomic();
+    the unit suite has no database — stub the transaction away."""
+    monkeypatch.setattr(module, "transaction", SimpleNamespace(atomic=lambda: nullcontext()))
 
 
 def _runner(captured, **routes):
@@ -54,17 +64,19 @@ def test_create_client_inserts_and_returns_public(monkeypatch):
         return [row]
 
     monkeypatch.setattr(clients, "rows", fake_rows)
+    monkeypatch.setattr(clients, "write", _runner([]))
+    _no_db(monkeypatch, clients)
     result = clients.create_client(
         org,
         actor,
-        {"name": "Constructora Andina", "rut": "76.543.210-1", "email": "obras@andina.cl"},
+        {"name": "Constructora Andina", "rut": "11.111.111-1", "email": "obras@andina.cl"},
     )
     insert = calls[0]
     assert insert[1][0] == result["id"] or insert[1][1] == org
     assert insert[1][1] == org and insert[1][2] == actor
     # Blank optional fields are normalized to NULL (never '') so the
     # (org_id, rut) unique key treats them as absent.
-    assert insert[1][4] == "76.543.210-1"
+    assert insert[1][4] == "11.111.111-1"
     assert insert[1][6] is None  # phone
     assert result["name"] == "Constructora Andina"
 
@@ -74,6 +86,8 @@ def test_create_client_rut_conflict_raises_409(monkeypatch):
         raise IntegrityError("duplicate key")
 
     monkeypatch.setattr(clients, "rows", dup)
+    monkeypatch.setattr(clients, "write", _runner([]))
+    _no_db(monkeypatch, clients)
     with pytest.raises(APIException) as raised:
         clients.create_client(uuid4(), uuid4(), {"name": "X", "rut": "1-9"})
     assert raised.value.status_code == 409
@@ -97,6 +111,8 @@ def test_update_client_is_sparse(monkeypatch):
         return [row]
 
     monkeypatch.setattr(clients, "rows", fake_rows)
+    monkeypatch.setattr(clients, "write", _runner([]))
+    _no_db(monkeypatch, clients)
     clients.update_client(
         row["id"], uuid4(), {"expected_updated_at": row["updated_at"], "phone": "+56 9 111"}
     )
@@ -122,6 +138,7 @@ def test_deactivate_keeps_the_record(monkeypatch):
     calls = []
     row = _row()
     monkeypatch.setattr(clients, "rows", _runner(calls, **{"SELECT": [row]}))
+    monkeypatch.setattr(clients, "write", _runner(calls))
     clients.deactivate_client(uuid4(), row["id"])
     assert any("is_active=FALSE" in sql and "DELETE" not in sql for sql, _ in calls)
 
@@ -132,6 +149,8 @@ def test_list_orders_active_first(monkeypatch):
     monkeypatch.setattr(
         clients, "rows", _runner([], **{"FROM public.clients": [active, inactive]})
     )
+    # Aggregates come from the documentary connection — mocked out here.
+    monkeypatch.setattr(clients, "_deal_aggregates", lambda org, client_ids=None: {})
     items = clients.list_clients(uuid4())
     assert [item["name"] for item in items] == ["Activo", "Inactivo"]
     assert items[0]["is_active"] is True

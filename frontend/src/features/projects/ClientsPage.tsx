@@ -5,36 +5,40 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ApiError } from "../../api/apiMutator";
 import { UnsavedChangesGuard } from "../../app/UnsavedChangesGuard";
 import {
+  clientsAddNote,
   clientsCreate,
   clientsDeactivate,
+  clientsDuplicates,
   clientsList,
+  clientsMerge,
+  clientsRetrieve,
   clientsUpdate,
-  projectsList,
 } from "../../api/generated/dekopen";
-import type { ClientResponse, ProjectResponse } from "../../api/generated/models";
-import type { PatchedClientUpdateRequest } from "../../api/generated/models/patchedClientUpdateRequest";
+import type {
+  ClientAddressRequest,
+  ClientsListFiltro,
+  ClientContactRequest,
+  ClientDetailResponse,
+  ClientListItem,
+  ClientResponse,
+  PatchedClientUpdateRequest,
+} from "../../api/generated/models";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
 import { t } from "../../i18n/es-CL";
 import { Button, DeniedState, Field, PageHeader, useConfirm } from "../../ui";
 import { StatusBadge } from "../../ui/StatusBadge";
 import { StatusChip } from "../../ui/StatusChip";
 import "./projects.css";
-import { isValidEmail, isValidRut } from "../../format";
-import { formatDate } from "../../format";
+import { formatDate, formatDateTime, formatMoney, isValidEmail, isValidRut } from "../../format";
 
-const clientFields = [
-  ["name", "clients.name", "text", 255],
-  ["rut", "clients.rut", "text", 50],
-  ["email", "clients.email", "email", undefined],
-  ["phone", "clients.phone", "tel", 50],
-  ["address", "clients.address", "textarea", undefined],
-  ["giro", "clients.giro", "text", 80],
-  ["comuna", "clients.comuna", "text", 20],
-  ["notes", "clients.notes", "textarea", undefined],
-] as const;
+type ContactDraft = ClientContactRequest;
+type AddressDraft = ClientAddressRequest;
 
 type Draft = {
-  value: PatchedClientUpdateRequest;
+  value: PatchedClientUpdateRequest & {
+    contacts?: ContactDraft[];
+    addresses?: AddressDraft[];
+  };
   expectedUpdatedAt?: string;
 };
 
@@ -48,12 +52,15 @@ function empty(): Draft {
       address: "",
       giro: "",
       comuna: "",
-      notes: "",
+      kind: "COMPANY",
+      contacts: [],
+      addresses: [],
     },
   };
 }
 
-function filled(client: ClientResponse): Draft {
+function filled(detail: ClientDetailResponse): Draft {
+  const client = detail.client;
   return {
     value: {
       name: client.name,
@@ -63,21 +70,42 @@ function filled(client: ClientResponse): Draft {
       address: client.address,
       giro: client.giro ?? "",
       comuna: client.comuna ?? "",
-      notes: client.notes,
+      kind: client.kind as "PERSON" | "COMPANY",
+      contacts: detail.contacts.map((item) => ({
+        name: item.name,
+        role_label: item.role_label ?? "",
+        email: item.email ?? "",
+        phone: item.phone ?? "",
+        is_primary: item.is_primary,
+      })),
+      addresses: detail.addresses.map((item) => ({
+        label: item.label,
+        address: item.address,
+        comuna: item.comuna ?? "",
+        is_default: item.is_default,
+      })),
     },
     expectedUpdatedAt: client.updated_at,
   };
 }
 
-function lastActivity(client: ClientResponse, projects: ProjectResponse[]): string {
-  return projects.reduce(
-    (latest, project) => (project.updated_at > latest ? project.updated_at : latest),
-    client.updated_at,
-  );
-}
+const PAYMENT_KIND_ES: Record<string, string> = {
+  ANTICIPO: "Anticipo",
+  PARCIAL: "Abono",
+  SALDO: "Saldo",
+};
 
-/** Client registry: master list on the left, the client's whole commercial
- * story on the right — contact data, their projects, last activity. */
+const PAYMENT_METHOD_ES: Record<string, string> = {
+  TRANSFER: "Transferencia",
+  CASH: "Efectivo",
+  CARD: "Tarjeta",
+  CHECK: "Cheque",
+  OTHER: "Otro",
+};
+
+/** Client registry: master list with search/filters on the left, the full
+ * ficha on the right — identidad, contactos, obras, proyectos, cotizaciones,
+ * pagos y saldo, documentos, notas con autor, y fusión auditada. */
 export function ClientsPage(): JSX.Element {
   const auth = useAuthSession();
   const org = auth.me?.active_organization;
@@ -100,14 +128,16 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
   const { id: routeClientId } = useParams();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
-  // /clients/:id deep-links straight to a client's detail — selection mirrors
-  // the route so the address bar and the shell rail stay truthful (review m10).
   const [selected, setSelected] = useState<string | null>(routeClientId ?? null);
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("");
+  const [merging, setMerging] = useState<{ id: string; name: string; rut: string } | null>(null);
+  const [survivorId, setSurvivorId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [noteDraft, setNoteDraft] = useState("");
   const lifetime = useRef<AbortController | null>(null);
 
   const selectClient = (clientId: string | null) => {
@@ -115,8 +145,6 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
     navigate(clientId ? `/clients/${clientId}` : "/clients");
   };
 
-  // Browser back/forward or a pasted link changes the route first — selection
-  // follows it, so the detail pane never disagrees with the address bar.
   useEffect(() => {
     setSelected(routeClientId ?? null);
   }, [routeClientId]);
@@ -127,10 +155,47 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
     return () => controller.abort();
   }, []);
 
-  const query = useQuery<ClientResponse[]>({
-    queryKey: ["clients", orgId],
+  const query = useQuery<ClientListItem[]>({
+    queryKey: ["clients", orgId, search, filter],
     queryFn: async ({ signal }) => {
-      const response = await clientsList({
+      const response = await clientsList(
+        {
+          q: search || undefined,
+          filtro: (filter || undefined) as ClientsListFiltro | undefined,
+        },
+        {
+          signal,
+          headers: { "X-Organization-ID": orgId },
+        },
+      );
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      return response.data.items;
+    },
+    retry: false,
+    gcTime: 0,
+    refetchOnWindowFocus: false,
+  });
+
+  const detailQuery = useQuery<ClientDetailResponse>({
+    queryKey: ["clients", orgId, "detail", selected],
+    queryFn: async ({ signal }) => {
+      const response = await clientsRetrieve(selected!, {
+        signal,
+        headers: { "X-Organization-ID": orgId },
+      });
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      return response.data;
+    },
+    enabled: selected !== null && !creating,
+    retry: false,
+    gcTime: 0,
+    refetchOnWindowFocus: false,
+  });
+
+  const duplicatesQuery = useQuery({
+    queryKey: ["clients", orgId, "duplicates"],
+    queryFn: async ({ signal }) => {
+      const response = await clientsDuplicates({
         signal,
         headers: { "X-Organization-ID": orgId },
       });
@@ -142,34 +207,10 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
     refetchOnWindowFocus: false,
   });
 
-  const projectsQuery = useQuery<ProjectResponse[]>({
-    queryKey: ["clients", orgId, "projects"],
-    queryFn: async ({ signal }) => {
-      const response = await projectsList({
-        signal,
-        headers: { "X-Organization-ID": orgId },
-      });
-      if (response.status !== 200) throw new ApiError(response.status, response.data);
-      return response.data.items;
-    },
-    staleTime: 60_000,
-  });
-
-  // A workspace leads with the work — land on the first client's ficha
-  // instead of an empty hint pane (same pattern as /production).
   useEffect(() => {
     if (routeClientId || creating || !query.data || query.data.length === 0) return;
     navigate(`/clients/${query.data[0]!.id}`, { replace: true });
   }, [routeClientId, creating, query.data, navigate]);
-
-  const allProjects = projectsQuery.data ?? [];
-  const projectsByClient = new Map<string, ProjectResponse[]>();
-  for (const project of allProjects) {
-    if (!project.client_id) continue;
-    const list = projectsByClient.get(project.client_id) ?? [];
-    list.push(project);
-    projectsByClient.set(project.client_id, list);
-  }
 
   async function save(): Promise<void> {
     const controller = lifetime.current;
@@ -185,7 +226,10 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
     setBusy(true);
     setError("");
     setNotice("");
-    const options = { signal: controller.signal, headers: { "X-Organization-ID": orgId } };
+    const options = {
+      signal: controller.signal,
+      headers: { "X-Organization-ID": orgId },
+    };
     try {
       if (editing) {
         const response = await clientsUpdate(
@@ -205,7 +249,9 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
             address: draft.value.address ?? "",
             giro: draft.value.giro ?? "",
             comuna: draft.value.comuna ?? "",
-            notes: draft.value.notes ?? "",
+            kind: draft.value.kind ?? "COMPANY",
+            contacts: draft.value.contacts ?? [],
+            addresses: draft.value.addresses ?? [],
           },
           options,
         );
@@ -217,6 +263,7 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
       setEditing(null);
       setCreating(false);
       void query.refetch();
+      void detailQuery.refetch();
     } catch (caught) {
       if (controller.signal.aborted) return;
       const status = caught instanceof ApiError ? caught.status : null;
@@ -250,7 +297,68 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
       if (controller.signal.aborted) return;
       setNotice(t("clients.deactivated"));
       void query.refetch();
-    } catch (caught) {
+      void detailQuery.refetch();
+    } catch {
+      if (!controller.signal.aborted) setError(t("projects.uncertain"));
+    } finally {
+      if (!controller.signal.aborted) setBusy(false);
+    }
+  }
+
+  async function addNote(): Promise<void> {
+    const controller = lifetime.current;
+    if (!controller || controller.signal.aborted || !selected) return;
+    if (!noteDraft.trim()) return;
+    setBusy(true);
+    setError("");
+    try {
+      const response = await clientsAddNote(
+        selected,
+        { body: noteDraft },
+        {
+          signal: controller.signal,
+          headers: { "X-Organization-ID": orgId },
+        },
+      );
+      if (response.status !== 201) throw new ApiError(response.status, response.data);
+      if (controller.signal.aborted) return;
+      setNoteDraft("");
+      setNotice(t("clients.noteSaved"));
+      void detailQuery.refetch();
+    } catch {
+      if (!controller.signal.aborted) setError(t("projects.uncertain"));
+    } finally {
+      if (!controller.signal.aborted) setBusy(false);
+    }
+  }
+
+  async function mergeNow(): Promise<void> {
+    const controller = lifetime.current;
+    if (!controller || controller.signal.aborted || !merging || !survivorId) return;
+    if (
+      !(await confirm({
+        title: t("clients.mergeConfirm"),
+        danger: true,
+      }))
+    )
+      return;
+    setBusy(true);
+    setError("");
+    try {
+      const response = await clientsMerge(
+        merging.id,
+        { survivor_id: survivorId },
+        { signal: controller.signal, headers: { "X-Organization-ID": orgId } },
+      );
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      if (controller.signal.aborted) return;
+      setNotice(t("clients.merged"));
+      setMerging(null);
+      setSurvivorId("");
+      selectClient(survivorId);
+      void query.refetch();
+      void duplicatesQuery.refetch();
+    } catch {
       if (!controller.signal.aborted) setError(t("projects.uncertain"));
     } finally {
       if (!controller.signal.aborted) setBusy(false);
@@ -267,16 +375,8 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
     );
   }
 
-  const needle = search.toLocaleLowerCase("es-CL");
-  const visible = query.data.filter((item) =>
-    `${item.name} ${item.rut} ${item.email}`.toLocaleLowerCase("es-CL").includes(needle),
-  );
-  const selectedClient = query.data.find((item) => item.id === selected) ?? null;
-  const selectedProjects = selectedClient
-    ? (projectsByClient.get(selectedClient.id) ?? []).sort((a, b) =>
-        b.updated_at.localeCompare(a.updated_at),
-      )
-    : [];
+  const detail = detailQuery.data ?? null;
+  const duplicateGroups = duplicatesQuery.data ?? [];
 
   return (
     <section className="projects-page" aria-busy={busy || query.isFetching}>
@@ -303,71 +403,73 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
 
-      {draft ? (
+      {duplicateGroups.length > 0 && (
+        <div className="clients-duplicates" role="status">
+          <strong>{t("clients.duplicatesTitle")}</strong>
+          {duplicateGroups.map((group) => (
+            <p key={group.rut}>
+              {t("clients.duplicatesRow").replace("{rut}", group.rut)}
+              {canWrite && (
+                <button
+                  type="button"
+                  className="clients-empty__cta"
+                  disabled={busy}
+                  onClick={() => {
+                    setMerging(group.clients[0]!);
+                    setSurvivorId(group.clients[1]?.id ?? "");
+                  }}
+                >
+                  {t("clients.mergeCta")}
+                </button>
+              )}
+            </p>
+          ))}
+        </div>
+      )}
+
+      {merging && (
         <form
           className="project-metadata-form"
-          noValidate
           onSubmit={(event) => {
             event.preventDefault();
-            if (!busy) void save();
+            if (!busy) void mergeNow();
           }}
         >
           <fieldset disabled={busy}>
-            <legend>{t(editing ? "clients.edit" : "clients.new")}</legend>
-            {clientFields.map(([name, label, type, maxLength]) => {
-              const props = {
-                name,
-                value: (draft.value[name] as string | undefined) ?? "",
-                required: name === "name",
-                "aria-label": t(label),
-                maxLength,
-                onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-                  setDraft({
-                    ...draft,
-                    value: { ...draft.value, [name]: event.target.value },
-                  }),
-              };
-              return (
-                <label key={name}>
-                  <span>
-                    {t(label)}
-                    {name === "name" ? (
-                      <span className="form-required" aria-hidden="true">
-                        {" "}
-                        *
-                      </span>
-                    ) : null}
-                  </span>
-                  {type === "textarea" ? <textarea {...props} /> : <input {...props} type={type} />}
-                  {name === "rut" && props.value !== "" && !isValidRut(props.value) ? (
-                    <span className="field-hint" role="alert">
-                      {t("clients.rutInvalid")}
-                    </span>
-                  ) : null}
-                  {name === "email" && props.value !== "" && !isValidEmail(props.value) ? (
-                    <span className="field-hint" role="alert">
-                      {t("clients.emailInvalid")}
-                    </span>
-                  ) : null}
-                </label>
-              );
-            })}
+            <legend>{t("clients.mergeTitle")}</legend>
+            <p>
+              {t("clients.mergeHint")
+                .replace("{merged}", merging.name)
+                .replace("{rut}", merging.rut || "—")}
+            </p>
+            <Field label={t("clients.mergeSurvivor")}>
+              <select
+                className="ui-field__input"
+                value={survivorId}
+                onChange={(event) => setSurvivorId(event.target.value)}
+                required
+              >
+                <option value="" disabled>
+                  {t("clients.mergePick")}
+                </option>
+                {query.data
+                  .filter((item) => item.id !== merging.id && item.is_active)
+                  .map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name} · {item.rut || "—"}
+                    </option>
+                  ))}
+              </select>
+            </Field>
             <div className="form-actions">
-              <button type="submit">{t("projects.save")}</button>
+              <button type="submit" disabled={!survivorId}>
+                {t("clients.mergeDo")}
+              </button>
               <button
                 type="button"
-                disabled={busy}
                 onClick={() => {
-                  void confirm({ title: t("projects.discard") }).then((ok) => {
-                    if (ok) {
-                      setDraft(null);
-                      setEditing(null);
-                      setCreating(false);
-                      // The form's validation banner belongs to the form —
-                      // it must not linger on the list after cancel.
-                      setError("");
-                    }
-                  });
+                  setMerging(null);
+                  setSurvivorId("");
                 }}
               >
                 {t("projects.cancel")}
@@ -375,6 +477,28 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
             </div>
           </fieldset>
         </form>
+      )}
+
+      {draft ? (
+        <ClientForm
+          draft={draft}
+          setDraft={setDraft}
+          editing={editing}
+          busy={busy}
+          onCancel={() => {
+            void confirm({ title: t("projects.discard") }).then((ok) => {
+              if (ok) {
+                setDraft(null);
+                setEditing(null);
+                setCreating(false);
+                setError("");
+              }
+            });
+          }}
+          onSave={() => {
+            if (!busy) void save();
+          }}
+        />
       ) : (
         <div className="clients-desk">
           <div className="clients-list">
@@ -385,9 +509,19 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
                 value={search}
               />
             </Field>
+            <Field label={t("clients.filter")}>
+              <select
+                className="ui-field__input"
+                value={filter}
+                onChange={(event) => setFilter(event.target.value)}
+              >
+                <option value="">{t("clients.filterAll")}</option>
+                <option value="activos">{t("clients.filterActive")}</option>
+                <option value="saldo">{t("clients.filterBalance")}</option>
+              </select>
+            </Field>
             <ul>
-              {visible.map((item) => {
-                const clientProjects = projectsByClient.get(item.id) ?? [];
+              {query.data.map((item) => {
                 const active = selected === item.id;
                 return (
                   <li key={item.id}>
@@ -397,18 +531,25 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
                       aria-current={active ? "true" : undefined}
                       onClick={() => selectClient(item.id)}
                     >
-                      <span className="clients-row-name">{item.name}</span>
+                      <span className="clients-row-name">
+                        {item.name}
+                        {item.kind === "COMPANY" ? (
+                          <StatusBadge label={t("clients.kindCompany")} tone="neutral" />
+                        ) : (
+                          <StatusBadge label={t("clients.kindPerson")} tone="neutral" />
+                        )}
+                      </span>
                       <span className="clients-row-meta">{item.rut || item.email || "—"}</span>
                       <span className="clients-row-meta">
-                        {t(
-                          clientProjects.length === 1
-                            ? "clients.projectsCountOne"
-                            : "clients.projectsCount",
-                        ).replace("{count}", String(clientProjects.length))}
-                        {" · "}
-                        <time dateTime={lastActivity(item, clientProjects)}>
-                          {formatDate(lastActivity(item, clientProjects))}
-                        </time>
+                        {t("clients.projectsCount")
+                          .replace("{count}", String(item.projects_count))
+                          .replace("{active}", String(item.active_projects))}
+                        {item.balance !== "0" && item.balance !== "0.00" && (
+                          <>
+                            {" · "}
+                            {t("clients.balanceHint")} {formatMoney(item.balance, "CLP")}
+                          </>
+                        )}
                       </span>
                       {!item.is_active && (
                         <StatusBadge label={t("clients.inactive")} tone="neutral" />
@@ -417,7 +558,7 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
                   </li>
                 );
               })}
-              {visible.length === 0 && (
+              {query.data.length === 0 && (
                 <li className="clients-empty">
                   {t("clients.empty")}
                   {canWrite && (
@@ -440,105 +581,645 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
           </div>
 
           <div className="clients-detail">
-            {selectedClient === null ? (
-              <p className="clients-empty">{t("clients.selectHint")}</p>
+            {selected === null || detail === null ? (
+              <p className="clients-empty">
+                {detailQuery.isFetching ? t("projects.loading") : t("clients.selectHint")}
+              </p>
             ) : (
-              <>
-                <header className="clients-detail-head">
-                  <div>
-                    <h2>{selectedClient.name}</h2>
-                    <p className="clients-detail-meta">
-                      {selectedClient.rut || "—"}
-                      {selectedClient.giro ? ` · ${selectedClient.giro}` : ""}
-                      {selectedClient.comuna ? ` · ${selectedClient.comuna}` : ""}
-                    </p>
-                  </div>
-                  {canWrite && (
-                    <div className="clients-detail-actions">
-                      <button
-                        type="button"
-                        className="ui-button"
-                        disabled={busy}
-                        onClick={() => {
-                          setEditing(selectedClient.id);
-                          setDraft(filled(selectedClient));
-                        }}
-                      >
-                        {t("projects.edit")}
-                      </button>
-                      {selectedClient.is_active && (
-                        <button
-                          type="button"
-                          className="ui-button ui-button--danger"
-                          disabled={busy}
-                          onClick={() => void deactivate(selectedClient)}
-                        >
-                          {t("clients.deactivate")}
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </header>
-
-                <dl className="clients-facts">
-                  {selectedClient.email && (
-                    <div>
-                      <dt>{t("clients.email")}</dt>
-                      <dd>{selectedClient.email}</dd>
-                    </div>
-                  )}
-                  {selectedClient.phone && (
-                    <div>
-                      <dt>{t("clients.phone")}</dt>
-                      <dd>{selectedClient.phone}</dd>
-                    </div>
-                  )}
-                  {selectedClient.address && (
-                    <div>
-                      <dt>{t("clients.address")}</dt>
-                      <dd>{selectedClient.address}</dd>
-                    </div>
-                  )}
-                  {selectedClient.notes && (
-                    <div>
-                      <dt>{t("clients.notes")}</dt>
-                      <dd>{selectedClient.notes}</dd>
-                    </div>
-                  )}
-                </dl>
-
-                <section aria-label={t("clients.projectsTitle")}>
-                  <h3 className="eyebrow">{t("clients.projectsTitle")}</h3>
-                  {selectedProjects.length === 0 ? (
-                    <p className="clients-empty">{t("clients.noProjects")}</p>
-                  ) : (
-                    <ul className="clients-projects">
-                      {selectedProjects.map((project) => {
-                        const projectStatus = project.status;
-                        return (
-                          <li key={project.id}>
-                            <Link to={`/projects/${project.id}`} className="clients-project-row">
-                              <span className="dashboard-row-code">{project.code}</span>
-                              <span className="dashboard-row-name">{project.name}</span>
-                              <StatusChip
-                                enumName="ProjectResponseStatusEnum"
-                                value={projectStatus}
-                              />
-                              <time dateTime={project.updated_at}>
-                                {formatDate(project.updated_at)}
-                              </time>
-                            </Link>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </section>
-              </>
+              <ClientFicha
+                detail={detail}
+                canWrite={canWrite}
+                busy={busy}
+                noteDraft={noteDraft}
+                setNoteDraft={setNoteDraft}
+                onEdit={() => {
+                  setEditing(detail.client.id);
+                  setDraft(filled(detail));
+                }}
+                onDeactivate={() => void deactivate(detail.client)}
+                onMerge={() => {
+                  setMerging(detail.client);
+                  setSurvivorId("");
+                }}
+                onAddNote={() => void addNote()}
+              />
             )}
           </div>
         </div>
       )}
     </section>
+  );
+}
+
+function ClientFicha({
+  detail,
+  canWrite,
+  busy,
+  noteDraft,
+  setNoteDraft,
+  onEdit,
+  onDeactivate,
+  onMerge,
+  onAddNote,
+}: {
+  detail: ClientDetailResponse;
+  canWrite: boolean;
+  busy: boolean;
+  noteDraft: string;
+  setNoteDraft: (value: string) => void;
+  onEdit: () => void;
+  onDeactivate: () => void;
+  onMerge: () => void;
+  onAddNote: () => void;
+}): JSX.Element {
+  const client = detail.client;
+  return (
+    <>
+      <header className="clients-detail-head">
+        <div>
+          <h2>
+            {client.name}
+            <StatusBadge
+              label={t(client.kind === "COMPANY" ? "clients.kindCompany" : "clients.kindPerson")}
+              tone="neutral"
+            />
+          </h2>
+          <p className="clients-detail-meta">
+            {client.rut || "—"}
+            {client.giro ? ` · ${client.giro}` : ""}
+            {client.comuna ? ` · ${client.comuna}` : ""}
+            {!client.is_active ? ` · ${t("clients.inactive")}` : ""}
+          </p>
+          <p className="clients-detail-meta">
+            {t("clients.totals")
+              .replace("{billed}", formatMoney(detail.totals.billed, detail.totals.currency))
+              .replace("{collected}", formatMoney(detail.totals.collected, detail.totals.currency))
+              .replace("{balance}", formatMoney(detail.totals.balance, detail.totals.currency))}
+          </p>
+        </div>
+        {canWrite && (
+          <div className="clients-detail-actions">
+            <button type="button" className="ui-button" disabled={busy} onClick={onEdit}>
+              {t("projects.edit")}
+            </button>
+            <button type="button" className="ui-button" disabled={busy} onClick={onMerge}>
+              {t("clients.mergeCta")}
+            </button>
+            {client.is_active && (
+              <button
+                type="button"
+                className="ui-button ui-button--danger"
+                disabled={busy}
+                onClick={onDeactivate}
+              >
+                {t("clients.deactivate")}
+              </button>
+            )}
+          </div>
+        )}
+      </header>
+
+      <dl className="clients-facts">
+        {client.email && (
+          <div>
+            <dt>{t("clients.email")}</dt>
+            <dd>{client.email}</dd>
+          </div>
+        )}
+        {client.phone && (
+          <div>
+            <dt>{t("clients.phone")}</dt>
+            <dd>{client.phone}</dd>
+          </div>
+        )}
+        {client.address && (
+          <div>
+            <dt>{t("clients.address")}</dt>
+            <dd>{client.address}</dd>
+          </div>
+        )}
+      </dl>
+
+      <section aria-label={t("clients.contactsTitle")}>
+        <h3 className="eyebrow">{t("clients.contactsTitle")}</h3>
+        {detail.contacts.length === 0 ? (
+          <p className="clients-empty">{t("clients.noContacts")}</p>
+        ) : (
+          <ul className="clients-projects">
+            {detail.contacts.map((item) => (
+              <li key={item.id}>
+                <span className="clients-project-row">
+                  <span className="dashboard-row-name">
+                    {item.name}
+                    {item.is_primary ? ` · ${t("clients.contactPrimary")}` : ""}
+                  </span>
+                  <span className="clients-row-meta">
+                    {[item.role_label, item.email, item.phone].filter(Boolean).join(" · ") || "—"}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section aria-label={t("clients.addressesTitle")}>
+        <h3 className="eyebrow">{t("clients.addressesTitle")}</h3>
+        {detail.addresses.length === 0 ? (
+          <p className="clients-empty">{t("clients.noAddresses")}</p>
+        ) : (
+          <ul className="clients-projects">
+            {detail.addresses.map((item) => (
+              <li key={item.id}>
+                <span className="clients-project-row">
+                  <span className="dashboard-row-name">
+                    {item.label}
+                    {item.is_default ? ` · ${t("clients.addressDefault")}` : ""}
+                  </span>
+                  <span className="clients-row-meta">
+                    {item.address}
+                    {item.comuna ? ` · ${item.comuna}` : ""}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section aria-label={t("clients.projectsTitle")}>
+        <h3 className="eyebrow">{t("clients.projectsTitle")}</h3>
+        {detail.projects.length === 0 ? (
+          <p className="clients-empty">{t("clients.noProjects")}</p>
+        ) : (
+          <ul className="clients-projects">
+            {detail.projects.map((project) => {
+              const projectStatus = project.status;
+              return (
+                <li key={project.id}>
+                  <Link to={`/projects/${project.id}`} className="clients-project-row">
+                    <span className="dashboard-row-code">{project.code}</span>
+                    <span className="dashboard-row-name">{project.name}</span>
+                    <StatusChip enumName="ProjectResponseStatusEnum" value={projectStatus} />
+                    <span className="clients-row-meta">
+                      {formatMoney(project.billed, "CLP")}
+                      {" · "}
+                      {t("clients.balanceHint")} {formatMoney(project.balance, "CLP")}
+                    </span>
+                    <time dateTime={project.created_at}>{formatDate(project.created_at)}</time>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      <section aria-label={t("clients.quotationsTitle")}>
+        <h3 className="eyebrow">{t("clients.quotationsTitle")}</h3>
+        {detail.quotations.length === 0 ? (
+          <p className="clients-empty">{t("clients.noQuotations")}</p>
+        ) : (
+          <ul className="clients-projects">
+            {detail.quotations.map((item) => (
+              <li key={`${item.project_id}-${item.revision_code}`}>
+                <Link to={`/projects/${item.project_id}`} className="clients-project-row">
+                  <span className="dashboard-row-code">{item.revision_code}</span>
+                  <span className="clients-row-meta">
+                    {item.total_price_gross
+                      ? formatMoney(item.total_price_gross, item.currency)
+                      : "—"}
+                  </span>
+                  <time dateTime={item.emitted_at}>{formatDate(item.emitted_at)}</time>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section aria-label={t("clients.paymentsTitle")}>
+        <h3 className="eyebrow">{t("clients.paymentsTitle")}</h3>
+        {detail.payments.length === 0 ? (
+          <p className="clients-empty">{t("clients.noPayments")}</p>
+        ) : (
+          <ul className="clients-projects">
+            {detail.payments.map((item) => (
+              <li key={item.id}>
+                <Link to={`/projects/${item.project_id}`} className="clients-project-row">
+                  <span className="dashboard-row-code">
+                    {item.receipt_code || item.project_code}
+                  </span>
+                  <span className="dashboard-row-name">
+                    {formatMoney(item.amount, "CLP")}
+                    {item.voided ? ` · ${t("clients.paymentVoided")}` : ""}
+                  </span>
+                  <span className="clients-row-meta">
+                    {PAYMENT_KIND_ES[item.kind] ?? item.kind}
+                    {" · "}
+                    {PAYMENT_METHOD_ES[item.method] ?? item.method}
+                  </span>
+                  <time dateTime={item.recorded_at}>{formatDate(item.recorded_at)}</time>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section aria-label={t("clients.documentsTitle")}>
+        <h3 className="eyebrow">{t("clients.documentsTitle")}</h3>
+        {detail.documents.length === 0 ? (
+          <p className="clients-empty">{t("clients.noDocuments")}</p>
+        ) : (
+          <ul className="clients-projects">
+            {detail.documents.map((item) => (
+              <li key={item.id}>
+                <Link to={`/projects/${item.project_id}`} className="clients-project-row">
+                  <span className="dashboard-row-code">{item.document_type}</span>
+                  <span className="dashboard-row-name">{item.project_code}</span>
+                  <span className="clients-row-meta">{item.format}</span>
+                  <time dateTime={item.created_at}>{formatDateTime(item.created_at)}</time>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section aria-label={t("clients.notesTitle")}>
+        <h3 className="eyebrow">{t("clients.notesTitle")}</h3>
+        {detail.notes.length === 0 ? (
+          <p className="clients-empty">{t("clients.noNotes")}</p>
+        ) : (
+          <ul className="clients-projects">
+            {detail.notes.map((item) => (
+              <li key={item.id}>
+                <span className="clients-project-row">
+                  <span className="dashboard-row-name">{item.body}</span>
+                  <span className="clients-row-meta">{item.author_label}</span>
+                  <time dateTime={item.created_at}>{formatDateTime(item.created_at)}</time>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {canWrite && (
+          <form
+            className="clients-note-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              onAddNote();
+            }}
+          >
+            <input
+              className="ui-field__input"
+              aria-label={t("clients.notePlaceholder")}
+              placeholder={t("clients.notePlaceholder")}
+              value={noteDraft}
+              onChange={(event) => setNoteDraft(event.target.value)}
+            />
+            <button type="submit" className="ui-button" disabled={busy || !noteDraft.trim()}>
+              {t("clients.noteAdd")}
+            </button>
+          </form>
+        )}
+      </section>
+
+      {detail.merges.length > 0 && (
+        <section aria-label={t("clients.mergesTitle")}>
+          <h3 className="eyebrow">{t("clients.mergesTitle")}</h3>
+          <ul className="clients-projects">
+            {detail.merges.map((item) => (
+              <li key={item.id}>
+                <span className="clients-project-row">
+                  <span className="clients-row-meta">
+                    {item.actor_label}
+                    {" · "}
+                    {t("clients.mergeDetail")
+                      .replace("{projects}", String(item.detail.projects ?? 0))
+                      .replace("{contacts}", String(item.detail.client_contacts ?? 0))
+                      .replace("{addresses}", String(item.detail.client_addresses ?? 0))
+                      .replace("{notes}", String(item.detail.client_notes ?? 0))}
+                  </span>
+                  <time dateTime={item.created_at}>{formatDateTime(item.created_at)}</time>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </>
+  );
+}
+
+function ClientForm({
+  draft,
+  setDraft,
+  editing,
+  busy,
+  onCancel,
+  onSave,
+}: {
+  draft: Draft;
+  setDraft: (value: Draft) => void;
+  editing: string | null;
+  busy: boolean;
+  onCancel: () => void;
+  onSave: () => void;
+}): JSX.Element {
+  const contacts = draft.value.contacts ?? [];
+  const addresses = draft.value.addresses ?? [];
+  const setField = (name: string, value: string) =>
+    setDraft({ ...draft, value: { ...draft.value, [name]: value } });
+
+  return (
+    <form
+      className="project-metadata-form"
+      noValidate
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSave();
+      }}
+    >
+      <fieldset disabled={busy}>
+        <legend>{t(editing ? "clients.edit" : "clients.new")}</legend>
+        <label>
+          <span>{t("clients.kind")}</span>
+          <select
+            className="ui-field__input"
+            value={draft.value.kind ?? "COMPANY"}
+            onChange={(event) => setField("kind", event.target.value)}
+          >
+            <option value="COMPANY">{t("clients.kindCompany")}</option>
+            <option value="PERSON">{t("clients.kindPerson")}</option>
+          </select>
+        </label>
+        <label>
+          <span>
+            {t("clients.name")}
+            <span className="form-required" aria-hidden="true">
+              {" "}
+              *
+            </span>
+          </span>
+          <input
+            name="name"
+            required
+            value={draft.value.name ?? ""}
+            onChange={(event) => setField("name", event.target.value)}
+          />
+        </label>
+        <label>
+          <span>{t("clients.rut")}</span>
+          <input
+            name="rut"
+            value={draft.value.rut ?? ""}
+            maxLength={50}
+            onChange={(event) => setField("rut", event.target.value)}
+          />
+          {(draft.value.rut ?? "") !== "" && !isValidRut(draft.value.rut ?? "") ? (
+            <span className="field-hint" role="alert">
+              {t("clients.rutInvalid")}
+            </span>
+          ) : null}
+        </label>
+        <label>
+          <span>{t("clients.email")}</span>
+          <input
+            name="email"
+            type="email"
+            value={draft.value.email ?? ""}
+            onChange={(event) => setField("email", event.target.value)}
+          />
+          {(draft.value.email ?? "") !== "" && !isValidEmail(draft.value.email ?? "") ? (
+            <span className="field-hint" role="alert">
+              {t("clients.emailInvalid")}
+            </span>
+          ) : null}
+        </label>
+        <label>
+          <span>{t("clients.phone")}</span>
+          <input
+            name="phone"
+            type="tel"
+            value={draft.value.phone ?? ""}
+            maxLength={50}
+            onChange={(event) => setField("phone", event.target.value)}
+          />
+        </label>
+        <label>
+          <span>{t("clients.address")}</span>
+          <textarea
+            name="address"
+            value={draft.value.address ?? ""}
+            onChange={(event) => setField("address", event.target.value)}
+          />
+        </label>
+        <label>
+          <span>{t("clients.giro")}</span>
+          <input
+            name="giro"
+            value={draft.value.giro ?? ""}
+            maxLength={80}
+            onChange={(event) => setField("giro", event.target.value)}
+          />
+        </label>
+        <label>
+          <span>{t("clients.comuna")}</span>
+          <input
+            name="comuna"
+            value={draft.value.comuna ?? ""}
+            maxLength={20}
+            onChange={(event) => setField("comuna", event.target.value)}
+          />
+        </label>
+
+        <h3 className="eyebrow">{t("clients.contactsTitle")}</h3>
+        {contacts.map((contact, index) => (
+          <div className="clients-subrow" key={index}>
+            <input
+              aria-label={t("clients.contactName")}
+              placeholder={t("clients.contactName")}
+              value={contact.name ?? ""}
+              onChange={(event) => {
+                const next = contacts.slice();
+                next[index] = { ...contact, name: event.target.value };
+                setDraft({ ...draft, value: { ...draft.value, contacts: next } });
+              }}
+            />
+            <input
+              aria-label={t("clients.contactRole")}
+              placeholder={t("clients.contactRole")}
+              value={contact.role_label ?? ""}
+              onChange={(event) => {
+                const next = contacts.slice();
+                next[index] = { ...contact, role_label: event.target.value };
+                setDraft({ ...draft, value: { ...draft.value, contacts: next } });
+              }}
+            />
+            <input
+              aria-label={t("clients.email")}
+              placeholder={t("clients.email")}
+              value={contact.email ?? ""}
+              onChange={(event) => {
+                const next = contacts.slice();
+                next[index] = { ...contact, email: event.target.value };
+                setDraft({ ...draft, value: { ...draft.value, contacts: next } });
+              }}
+            />
+            <input
+              aria-label={t("clients.phone")}
+              placeholder={t("clients.phone")}
+              value={contact.phone ?? ""}
+              onChange={(event) => {
+                const next = contacts.slice();
+                next[index] = { ...contact, phone: event.target.value };
+                setDraft({ ...draft, value: { ...draft.value, contacts: next } });
+              }}
+            />
+            <label className="clients-inline-check">
+              <input
+                type="checkbox"
+                checked={contact.is_primary ?? false}
+                onChange={(event) => {
+                  const next = contacts.slice();
+                  next[index] = { ...contact, is_primary: event.target.checked };
+                  setDraft({ ...draft, value: { ...draft.value, contacts: next } });
+                }}
+              />
+              {t("clients.contactPrimary")}
+            </label>
+            <button
+              type="button"
+              className="ui-button"
+              onClick={() => {
+                setDraft({
+                  ...draft,
+                  value: {
+                    ...draft.value,
+                    contacts: contacts.filter((_, at) => at !== index),
+                  },
+                });
+              }}
+            >
+              {t("clients.removeRow")}
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          className="ui-button"
+          onClick={() =>
+            setDraft({
+              ...draft,
+              value: {
+                ...draft.value,
+                contacts: [
+                  ...contacts,
+                  {
+                    name: "",
+                    role_label: "",
+                    email: "",
+                    phone: "",
+                    is_primary: contacts.length === 0,
+                  },
+                ],
+              },
+            })
+          }
+        >
+          {t("clients.addContact")}
+        </button>
+
+        <h3 className="eyebrow">{t("clients.addressesTitle")}</h3>
+        {addresses.map((item, index) => (
+          <div className="clients-subrow" key={index}>
+            <input
+              aria-label={t("clients.addressLabel")}
+              placeholder={t("clients.addressLabel")}
+              value={item.label ?? ""}
+              onChange={(event) => {
+                const next = addresses.slice();
+                next[index] = { ...item, label: event.target.value };
+                setDraft({ ...draft, value: { ...draft.value, addresses: next } });
+              }}
+            />
+            <input
+              aria-label={t("clients.addressStreet")}
+              placeholder={t("clients.addressStreet")}
+              value={item.address ?? ""}
+              onChange={(event) => {
+                const next = addresses.slice();
+                next[index] = { ...item, address: event.target.value };
+                setDraft({ ...draft, value: { ...draft.value, addresses: next } });
+              }}
+            />
+            <input
+              aria-label={t("clients.comuna")}
+              placeholder={t("clients.comuna")}
+              value={item.comuna ?? ""}
+              onChange={(event) => {
+                const next = addresses.slice();
+                next[index] = { ...item, comuna: event.target.value };
+                setDraft({ ...draft, value: { ...draft.value, addresses: next } });
+              }}
+            />
+            <label className="clients-inline-check">
+              <input
+                type="checkbox"
+                checked={item.is_default ?? false}
+                onChange={(event) => {
+                  const next = addresses.slice();
+                  next[index] = { ...item, is_default: event.target.checked };
+                  setDraft({ ...draft, value: { ...draft.value, addresses: next } });
+                }}
+              />
+              {t("clients.addressDefault")}
+            </label>
+            <button
+              type="button"
+              className="ui-button"
+              onClick={() => {
+                setDraft({
+                  ...draft,
+                  value: {
+                    ...draft.value,
+                    addresses: addresses.filter((_, at) => at !== index),
+                  },
+                });
+              }}
+            >
+              {t("clients.removeRow")}
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          className="ui-button"
+          onClick={() =>
+            setDraft({
+              ...draft,
+              value: {
+                ...draft.value,
+                addresses: [
+                  ...addresses,
+                  { label: "Obra", address: "", comuna: "", is_default: addresses.length === 0 },
+                ],
+              },
+            })
+          }
+        >
+          {t("clients.addAddress")}
+        </button>
+
+        <div className="form-actions">
+          <button type="submit">{t("projects.save")}</button>
+          <button type="button" disabled={busy} onClick={onCancel}>
+            {t("projects.cancel")}
+          </button>
+        </div>
+      </fieldset>
+    </form>
   );
 }

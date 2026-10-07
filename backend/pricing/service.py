@@ -466,7 +466,8 @@ def preview(org_id, actor, request):
     margin = request.get('margin_pct')
     if margin is None:
         margin = rules['default_margin_pct']
-    state = discount_state(actor.active_organization.role,discount,request['confirmed'])
+    state = discount_state(actor.active_organization.role,discount,request['confirmed'],
+                           D(str(rules.get('discount_approval_threshold_pct') or '0.10')))
     if mode == PricingMode.COMMERCIAL_LIST_WITH_DISCOUNTS:
         # Segment bands only bound the list-with-discounts catalogue: RETAIL
         # requires 0% and ARCHITECT 8–12%, so applying them to the manual
@@ -1270,7 +1271,10 @@ def apply_operation(org_id, actor_id, role, operation_id, reason, confirmed, rej
     if operation['state'] not in ('PREVIEW','PENDING'):
         raise PricingError('operation_already_final')
     request = decoded(operation['request'])
-    state = discount_state(role,D(str(request['discount_pct'])),confirmed)
+    rules_row = one('SELECT discount_approval_threshold_pct FROM public.pricing_rules '
+                    'WHERE org_id=%s',[org_id],'pricing_rules_not_found')
+    state = discount_state(role,D(str(request['discount_pct'])),confirmed,
+                           D(str(rules_row['discount_approval_threshold_pct'])))
     if state == 'PENDING' or (reject and role != 'OWNER'):
         raise PricingError('owner_approval_required')
     # P07 — la banda también gobierna la aplicación: un PREVIEW fuera de
