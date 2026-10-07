@@ -109,7 +109,7 @@ Merged into `integracion/v1` as squash `d7dc6a9c83d19958ca7730930ec27381c30c967c
 
 ## D08 state
 
-Delivered on branch `devin/D08-tipologias-avanzadas` (verified at `2667b2d0027fc0461f460db5fbf27c3ba0eb5619`):
+Delivered on branch `devin/D08-tipologias-avanzadas` (verified at `c564c055987d7a5edc1967a1642fce3e3b19d3d8`, PR head rebased on `b6b18f0a`):
 
 - Six advanced typologies run the full engine vertical slice — model, `assert_opening_allowed` validation (`families_admitting_spec`), cuts, BOM, hardware kits, DIN symbology and es-CL human names: puerta corredera elevable/HST (`LIFT_SLIDE`), osciloparalela/PSK (`PARALLEL_SLIDE`), plegable (`FOLD` n+m with ACTIVE pass-leaf), pivotante (`PIVOT_V`/`PIVOT_H` + `axis_offset_mm`), guillotina (`VERTICAL_SLIDE`, simple/doble) and puerta corredera (`DOOR` + `SLIDE`).
 - New `SystemFamily` values LIFT_SLIDE/PARALLEL_SLIDE/FOLDING/PIVOT/VERTICAL_SLIDE + `FAMILY_MOVEMENTS`/`FAMILY_UNIT_KINDS` repertoire per family; `SystemParams` gained `fold_guide_clearance_mm`, `fold_leaf_clearance_mm`, `pivot_clearance_mm`.
@@ -119,7 +119,7 @@ Delivered on branch `devin/D08-tipologias-avanzadas` (verified at `2667b2d0027fc
 - Plan symbols: `opening_symbols.py` + TS mirror gained folded-package, lift-slide rail, pivot-axis and vertical-slide primitives; the F5 extended plan shows real travel per the P05 glyph pipeline; fixtures under `engine/tests/fixtures/symbols/`.
 - Decisions registered in `docs/decisions/valores-por-defecto.md` (D08 section); captures under `docs/redesign/captures/d08-tipologias-avanzadas/`.
 
-Verification: `make lint|typecheck|test|build` and `make test-db` green (`PY=.venv/bin/python`) — 1153 pgTAP incl. `185_d08_tipologias.test.sql`, 281 backend integration, 24 e2e, engine 742, backend unit 1301, frontend 719; golden per typology + capability rejection naming admitting systems.
+Verification: `make lint|typecheck|test|build` and `make test-db` green (`PY=.venv/bin/python`) — 1185 pgTAP incl. `185_d08_tipologias.test.sql`, 283 backend integration, 27 e2e, engine 742, backend unit 1315, frontend 723; golden per typology + capability rejection naming admitting systems.
 
 ## D03 state
 
