@@ -6,7 +6,7 @@ import { quotationsList } from "../../api/generated/dekopen";
 import type { QuotationItem } from "../../api/generated/models";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
 import { formatDate, formatMoney } from "../../format";
-import { t, tDynamic } from "../../i18n/es-CL";
+import { enumI18nKey, t, tDynamic } from "../../i18n/es-CL";
 import {
   DeniedState,
   EmptyState,
@@ -122,7 +122,7 @@ export function QuotationsPage(): JSX.Element {
                   <td className="mono">{formatMoney(item.total_price_gross, item.currency)}</td>
                   <td>
                     <StatusChip
-                      label={tDynamic("quotations.state", item.quote_state)}
+                      label={tDynamic("quotations.state", enumI18nKey(item.quote_state))}
                       tone={STATE_TONE[item.quote_state] ?? "neutral"}
                       value={item.quote_state}
                     />

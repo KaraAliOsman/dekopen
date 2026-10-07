@@ -275,7 +275,7 @@
   color: var(--theme-text-secondary);
   cursor: pointer;
   font-size: var(--text-xs);
-  padding: 2px var(--space-8);
+  padding: var(--space-2) var(--space-8);
 }
 .ui-tech__copy:hover {
   border-color: var(--theme-border-strong);

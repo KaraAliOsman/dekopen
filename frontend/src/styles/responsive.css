@@ -67,7 +67,7 @@
   }
 
   .app-shell.rail-open .rail-scrim {
-    background: rgba(15, 15, 14, 0.45);
+    background: var(--scrim-overlay);
     visibility: visible;
   }
 
@@ -185,7 +185,7 @@
 
 @media (max-width: 640px) {
   .app-topbar {
-    gap: 0.5rem;
+    gap: var(--space-8);
   }
 
   /* Phone: the header stack puts actions on their own line — no clipped
@@ -212,7 +212,7 @@
      chip de job se cede al propio orb. El switcher de proyecto se omite:
      el drawer ya ofrece la lista completa. */
   .app-topbar__actions {
-    gap: 4px;
+    gap: var(--space-4);
   }
 
   .topbar-search {
@@ -241,7 +241,7 @@
     color: transparent;
     font-size: 0;
     gap: 0;
-    padding: 0.375rem;
+    padding: var(--space-6);
   }
 
   .app-topbar .ai-test-mode-badge::before {

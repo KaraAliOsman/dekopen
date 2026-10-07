@@ -2010,11 +2010,6 @@ export const messages = {
   "purchasing.noOrders": "Todavía no hay órdenes confirmadas.",
   "purchasing.noRequirements": "Sin requisitos para este tipo.",
   "purchasing.status": "Estado",
-  "purchasing.draft": "BORRADOR",
-  "purchasing.sent": "ENVIADA",
-  "purchasing.partiallyReceived": "PARCIALMENTE RECIBIDA",
-  "purchasing.fulfilled": "COMPLETADA",
-  "purchasing.cancelled": "ANULADA",
   "purchasing.cancelledAt": "Anulada el",
   "purchasing.receiving": "Recepción de material",
   "purchasing.receivingLoading": "Cargando líneas de la orden…",
@@ -2285,10 +2280,11 @@ export const messages = {
   "production.optimizeCompare": "Comparar estrategias",
   "production.optimizeComparing": "Comparando…",
   "production.optimizeStatsBars": "Barras",
-  "production.optimizeStatsRemnant": "retazo(s)",
+  "production.optimizeStatsRemnantOne": "retazo",
+  "production.optimizeStatsRemnantMany": "retazos",
   "production.optimizeStatsCuts": "Cortes",
   "production.optimizeStatsWaste": "Desperdicio",
-  "production.optimizeStatsRemnantReusable": "retazo reutilizable",
+  "production.optimizeStatsRemnantReusable": "Retazo reutilizable",
   "production.optimizeStatsSheets": "Planchas",
   "production.optimizeStatsUnnested": "Piezas sin ubicar",
   "production.optimizeStatsPurchases": "Compras",
@@ -2536,8 +2532,10 @@ export const messages = {
   "production.optimizeStockNew": "Material de stock nuevo que consume el plan",
   "production.optimizeBuy": "Por comprar",
   "production.optimizeUnmapped": "sin equivalencia de stock",
-  "production.optimizePurchaseUnit": "barra(s)",
-  "production.optimizePurchaseSheet": "plancha(s)",
+  "production.optimizePurchaseBar": "barra",
+  "production.optimizePurchaseBars": "barras",
+  "production.optimizePurchaseSheetOne": "plancha",
+  "production.optimizePurchaseSheets": "planchas",
   "production.optimizeRotated": "rotada",
   "production.optimizeRunAt": "Optimizado",
   "production.optimizeStrategy": "Estrategia",
@@ -4691,4 +4689,26 @@ export function tOptional(key: string): string | undefined {
 export function tDynamic(prefix: string, name: string): string {
   const key = `${prefix}.${name}` as TranslationKey;
   return messages[key] ?? name;
+}
+
+/** Un enum wire (`SLIDING_2L`, `no_link`) a su clave i18n (`sliding2l`,
+ * `noLink`): minúsculas + camelCase — la transformación única para buscar
+ * etiquetas de valores que llegan del API. */
+export function enumI18nKey(code: string): string {
+  return code.toLowerCase().replace(/_([a-z0-9])/g, (_, c: string) => c.toUpperCase());
+}
+
+/** Tipología comercial en español — la única puerta a las claves
+ * `typology.*` (proyecto, producción y portal la comparten). Un código no
+ * declarado se muestra tal cual, nunca vacío. */
+export function typologyLabel(code: string | null | undefined): string {
+  if (!code) return "";
+  return tOptional(`typology.${enumI18nKey(code)}`) ?? code;
+}
+
+/** Color de perfil en español — la única puerta a `projects.color.*`; el
+ * código del catálogo se muestra tal cual cuando no tiene nombre. */
+export function colorLabel(code: string | null | undefined): string {
+  if (!code) return "";
+  return tOptional(`projects.color.${code}`) ?? code;
 }

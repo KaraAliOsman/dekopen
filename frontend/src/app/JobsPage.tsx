@@ -13,6 +13,7 @@ import { formatDateTime } from "../format";
 import { EmptyState, PageHeader } from "../ui";
 import { StatusChip } from "../ui/StatusChip";
 import { t, tDynamic, type TranslationKey } from "../i18n/es-CL";
+import { domainLabel } from "../i18n/domainLabels";
 
 const STATE_KEYS: Record<string, TranslationKey> = {
   QUEUED: "jobs.state.QUEUED",
@@ -58,7 +59,15 @@ function resultLabel(result: JobRun["result"]): string {
   const record = result as Record<string, unknown>;
   for (const key of ["revision_code", "order_code", "project_code", "next_step", "status"]) {
     const value = record[key];
-    if (typeof value === "string" && value !== "") return value;
+    if (typeof value === "string" && value !== "") {
+      // El resultado "status" viene del dominio que ejecutó el trabajo
+      // (envíos SENT/SKIPPED/FAILED/QUEUED): sale por domainLabels, no crudo.
+      if (key === "status") {
+        const label = domainLabel("CollectionReminderSendResponseStatusEnum", value).label;
+        return label === value ? value : label;
+      }
+      return value;
+    }
     if (typeof value === "number") return String(value);
   }
   return "—";

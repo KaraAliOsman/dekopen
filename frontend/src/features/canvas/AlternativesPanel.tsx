@@ -211,7 +211,7 @@ export function AlternativesPanel({
           <div className="inspector-actions">
             <button
               type="button"
-              className="primary-button"
+              className="ui-button ui-button--primary"
               disabled={busy || disabled || !systemId || !catalogReady || !brief.trim()}
               onClick={() => void generate()}
             >
@@ -294,7 +294,7 @@ export function AlternativesPanel({
                         )}
                         <button
                           type="button"
-                          className="primary-button alternative-card__use"
+                          className="ui-button ui-button--primary alternative-card__use"
                           disabled={
                             disabled ||
                             busy ||

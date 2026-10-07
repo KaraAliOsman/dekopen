@@ -819,13 +819,20 @@ def _declared_gaps(bundle: dict[str, object]) -> list[dict[str, object]]:
             for field, kind in _ANNOTATION_GAP_SOURCES:
                 if not item.get(field) or kind in emitted:
                     continue
+                declared = item.get(field)
                 gaps.append(
                     {
                         "kind": kind,
                         "op_kind": kind,
                         "cause": "no_rule",
                         "source": f"workshop_annotations.{field}",
-                        "declared_value": str(item.get(field)),
+                        # Positions lists ship raw — the frontend formats each
+                        # offset with fmtMm; a repr of Decimal strings is not
+                        # a value anyone can read.
+                        "declared_offsets_mm": [str(v) for v in declared]
+                        if isinstance(declared, list)
+                        else None,
+                        "declared_value": None if isinstance(declared, list) else str(declared),
                         "bay_id": item.get("bay_id") or position.get("bay_id"),
                         "leaf_id": item.get("leaf_id") or position.get("leaf_id"),
                         "member_id": None,

@@ -24,20 +24,20 @@
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-md);
   display: flex;
-  gap: 0.75rem;
-  padding: 0.625rem 0.75rem;
+  gap: var(--space-12);
+  padding: var(--space-8) var(--space-12);
 }
 
 .onboarding-systems {
   display: grid;
-  gap: 0.5rem;
+  gap: var(--space-8);
 }
 
 .onboarding-system {
   align-items: center;
   display: flex;
-  gap: 0.75rem;
-  padding: 0.625rem 0.75rem;
+  gap: var(--space-12);
+  padding: var(--space-8) var(--space-12);
   text-align: left;
   width: 100%;
 }
@@ -56,15 +56,15 @@
 
 .onboarding-choice {
   display: grid;
-  gap: 0.5rem;
+  gap: var(--space-8);
   grid-template-columns: 1fr 1fr;
 }
 
 .onboarding-choice__card {
   align-items: flex-start;
   display: grid;
-  gap: 0.375rem;
-  padding: 0.75rem;
+  gap: var(--space-6);
+  padding: var(--space-12);
   text-align: left;
 }
 
@@ -86,13 +86,13 @@
 
 .onboarding-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-8);
   justify-content: space-between;
 }
 
 .dashboard-empty__actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-8);
 }
 
 @media (max-width: 640px) {
@@ -111,7 +111,7 @@
 
 .organization-list {
   display: grid;
-  gap: 0.5rem;
+  gap: var(--space-8);
 }
 
 .organization-list button {

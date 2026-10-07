@@ -106,6 +106,8 @@ export const ROUTES: CaptureRoute[] = [
   { name: "pricing-commercial", path: "/pricing/commercial", role: "estimator" },
   { name: "pricing-cost-lists", path: "/pricing/cost-lists", role: "estimator" },
   { name: "clients-list", path: "/clients", role: "estimator" },
+  { name: "quotations", path: "/quotations", role: "estimator" },
+  { name: "deliveries", path: "/deliveries", role: "manager" },
   { name: "catalogs-systems", path: "/catalogs/systems", role: "estimator" },
   { name: "catalogs-alias", path: "/catalogs", role: "estimator" },
   { name: "assistant", path: "/assistant", role: "estimator" },
@@ -128,6 +130,18 @@ export const ROUTES: CaptureRoute[] = [
     touchAudit: true,
   },
   { name: "purchasing", path: "/purchasing", role: "manager" },
+  {
+    name: "production-order",
+    path: "/production?order={{orders.en_produccion}}",
+    role: "manager",
+    extraMobile: true,
+    touchAudit: true,
+  },
+  {
+    name: "production-order-blocked",
+    path: "/production?order={{orders.bloqueada_faltante}}",
+    role: "manager",
+  },
   {
     name: "inventory-alias",
     path: "/inventory",

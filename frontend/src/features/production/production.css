@@ -6,7 +6,7 @@
 .production-page h1,
 .production-page h2,
 .production-page h3 {
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--space-12);
 }
 .production-page header p {
   color: var(--theme-text-secondary);
@@ -25,9 +25,9 @@
   z-index: var(--z-toast);
   max-width: min(34rem, calc(100vw - 2rem));
   margin: 0;
-  padding: 0.65rem 1rem;
+  padding: var(--space-12) var(--space-16);
   border: 1px solid var(--theme-danger);
-  border-radius: var(--radius-md, var(--r-2));
+  border-radius: var(--radius-md);
   background: var(--theme-surface-panel);
   box-shadow: var(--shadow-raise);
   font-weight: 600;
@@ -35,7 +35,7 @@
 .production-layout {
   display: grid;
   grid-template-columns: minmax(16rem, 22rem) 1fr;
-  gap: 1.25rem;
+  gap: var(--space-16);
   align-items: start;
 }
 .production-orders,
@@ -46,7 +46,7 @@
   min-width: 0;
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--r-2);
-  padding: 1rem;
+  padding: var(--space-16);
   background: var(--theme-surface-panel);
 }
 .production-filters {
@@ -56,7 +56,7 @@
   gap: var(--space-4);
   margin-bottom: var(--space-12);
   overflow-x: auto;
-  padding-bottom: 0.25rem;
+  padding-bottom: var(--space-4);
 }
 
 .production-filter {
@@ -111,7 +111,7 @@
 .production-next .production-step-actions button {
   min-height: 52px;
   min-width: 120px;
-  padding: 0.6rem 1.1rem;
+  padding: var(--space-8) var(--space-16);
   font-size: 1rem;
   font-weight: 600;
   border-radius: var(--radius-md);
@@ -122,7 +122,7 @@
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.5rem;
+  gap: var(--space-8);
 }
 .production-order {
   /* Chips wrap onto their own row instead of squashing or overflowing the
@@ -130,10 +130,10 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.35rem;
+  gap: var(--space-6);
   width: 100%;
   text-align: left;
-  padding: 0.6rem 0.75rem;
+  padding: var(--space-8) var(--space-12);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--r-1);
   background: var(--theme-bg-canvas);
@@ -161,7 +161,7 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: var(--space-12);
 }
 .production-detail-head .production-chip,
 .production-order .production-chip {
@@ -171,15 +171,15 @@
 }
 .production-materials {
   display: flex;
-  gap: 1.5rem;
-  margin: 0.75rem 0;
-  padding: 0.75rem;
+  gap: var(--space-24);
+  margin: var(--space-12) 0;
+  padding: var(--space-12);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--r-1);
 }
 .production-materials div {
   display: grid;
-  gap: 0.15rem;
+  gap: var(--space-2);
 }
 .production-materials dt {
   font-size: 0.8rem;
@@ -192,10 +192,10 @@
 }
 .production-steps {
   list-style: none;
-  margin: 1rem 0;
+  margin: var(--space-16) 0;
   padding: 0;
   display: grid;
-  gap: 0.5rem;
+  gap: var(--space-8);
 }
 .production-step {
   align-items: center;
@@ -204,8 +204,8 @@
   border-radius: var(--r-1);
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  padding: 0.55rem 0.75rem;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12);
 }
 .production-step.step-done {
   opacity: 0.75;
@@ -216,7 +216,7 @@
 .production-step-head {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: var(--space-8);
 }
 .production-step-seq {
   font-family: var(--theme-font-mono);
@@ -230,11 +230,11 @@
   color: var(--theme-text-secondary);
   flex-basis: 100%;
   font-size: 0.9rem;
-  margin: 0.2rem 0 0;
+  margin: var(--space-4) 0 0;
 }
 .production-step-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-8);
   margin-left: auto;
 }
 .production-step-actions button,
@@ -242,7 +242,7 @@
   cursor: pointer;
 }
 .production-step-actions button {
-  padding: 0.4rem 0.7rem;
+  padding: var(--space-6) var(--space-12);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--r-2);
   background: var(--theme-surface-panel);
@@ -256,44 +256,45 @@
   align-items: center;
   color: var(--theme-text-secondary);
   display: inline-flex;
-  font-size: var(--text-s, 12px);
+  font-size: var(--text-s);
   font-style: italic;
-  padding: 0.4rem 0.2rem;
+  padding: var(--space-6) var(--space-4);
 }
 .production-remake {
-  padding: 0.35rem 0.7rem;
+  padding: var(--space-6) var(--space-12);
   border: 1px solid var(--theme-mark);
   border-radius: var(--r-2);
   background: transparent;
-  color: var(--theme-mark);
+  /* Texto en la tinta persona — --mark anuncia, --person-ink se lee (AA). */
+  color: var(--person-ink);
   font-weight: 600;
   cursor: pointer;
 }
 .production-cnc {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-8);
   flex-wrap: wrap;
-  margin-top: 0.5rem;
+  margin-top: var(--space-8);
 }
 .production-cnc button {
-  padding: 0.35rem 0.7rem;
+  padding: var(--space-6) var(--space-12);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--r-2);
   background: var(--theme-surface-panel);
   color: var(--theme-text-primary);
-  font-family: var(--theme-font-mono, monospace);
+  font-family: var(--theme-font-mono);
   font-size: 0.8rem;
   cursor: pointer;
 }
 .production-cnc button:hover:not(:disabled) {
-  border-color: var(--theme-accent, #0f817a);
+  border-color: var(--theme-accent);
 }
 .production-cnc button:disabled {
   cursor: wait;
   opacity: 0.6;
 }
 .production-cnc .production-cutpack {
-  border-color: var(--theme-accent, #0f817a);
+  border-color: var(--theme-accent);
   background: var(--theme-accent-soft);
   font-weight: 600;
 }
@@ -312,14 +313,14 @@
 }
 .production-note {
   display: grid;
-  gap: 0.3rem;
-  margin: 0.75rem 0;
+  gap: var(--space-4);
+  margin: var(--space-12) 0;
 }
 .production-note input {
   background: var(--theme-bg-canvas);
   color: var(--theme-text-primary);
   border: 1px solid var(--theme-border-subtle);
-  padding: 0.6rem;
+  padding: var(--space-8);
   border-radius: var(--r-2);
 }
 .production-events ol {
@@ -327,11 +328,11 @@
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.35rem;
+  gap: var(--space-6);
 }
 .production-events li {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--space-12);
   font-size: 0.85rem;
   flex-wrap: wrap;
 }
@@ -355,8 +356,8 @@
 .production-optimize {
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--r-2);
-  padding: 0.9rem;
-  margin-bottom: 1rem;
+  padding: var(--space-16);
+  margin-bottom: var(--space-16);
   background: var(--theme-surface-panel);
   /* Plan tables are wider than a phone — scroll inside the section, never
      stretch the page. */
@@ -366,7 +367,7 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: var(--space-12);
 }
 .production-optimize-head h3 {
   margin: 0;
@@ -379,20 +380,20 @@
 }
 .production-optimize-controls {
   display: flex;
-  gap: 0.5rem;
-  margin: 0.6rem 0;
+  gap: var(--space-8);
+  margin: var(--space-8) 0;
 }
 .production-optimize-controls input {
   background: var(--theme-bg-canvas);
   color: var(--theme-text-primary);
   border: 1px solid var(--theme-border-subtle);
-  padding: 0.5rem 0.6rem;
+  padding: var(--space-8) var(--space-8);
   border-radius: var(--r-2);
   font-family: var(--theme-font-mono);
   width: 10rem;
 }
 .production-optimize-controls button {
-  padding: 0.5rem 0.9rem;
+  padding: var(--space-8) var(--space-16);
   cursor: pointer;
 }
 .production-optimize-controls button:disabled {
@@ -402,14 +403,14 @@
 .production-optimize-empty {
   color: var(--theme-text-secondary);
   font-size: 0.85rem;
-  margin: 0.5rem 0 0;
+  margin: var(--space-8) 0 0;
 }
 .production-invalidated {
   margin: 0 0 var(--space-12);
   padding: var(--space-12) var(--space-16);
   border: 1px solid var(--theme-danger);
   border-radius: var(--radius-md);
-  background: var(--theme-danger-soft, #fbe9e7);
+  background: var(--theme-danger-soft);
   color: var(--danger-ink);
   font-weight: 600;
 }
@@ -421,8 +422,8 @@
   list-style: none;
   margin: 0 0 var(--space-12);
   padding: var(--space-12) var(--space-16);
-  border-left: 3px solid var(--theme-warning, #b7791f);
-  background: var(--theme-warning-soft, #fdf3e0);
+  border-left: 3px solid var(--theme-warning);
+  background: var(--theme-warning-soft);
   color: var(--theme-text);
   font-size: 0.85rem;
 }
@@ -434,7 +435,7 @@
   color: var(--theme-text-secondary);
   font-style: normal;
   font-size: 0.82rem;
-  margin-top: 0.125rem;
+  margin-top: var(--space-2);
 }
 .production-remake-provenance {
   margin: 0 0 var(--space-12);
@@ -448,17 +449,17 @@
   width: 100%;
   border-collapse: collapse;
   font-size: 0.8rem;
-  margin-top: 0.6rem;
+  margin-top: var(--space-8);
 }
 .production-plan th {
   text-align: left;
   color: var(--theme-text-secondary);
   font-weight: 500;
-  padding: 0.3rem 0.5rem;
+  padding: var(--space-4) var(--space-8);
   border-bottom: 1px solid var(--theme-border-subtle);
 }
 .production-plan td {
-  padding: 0.35rem 0.5rem;
+  padding: var(--space-6) var(--space-8);
   border-bottom: 1px solid var(--theme-border-subtle);
   vertical-align: top;
 }
@@ -469,12 +470,12 @@
 .production-optimize-purchases {
   font-size: 0.85rem;
   color: var(--theme-text-secondary);
-  margin: 0.6rem 0 0;
+  margin: var(--space-8) 0 0;
 }
 .production-optimize-unnested {
   font-size: 0.85rem;
   color: var(--warn-ink);
-  margin: 0.6rem 0 0;
+  margin: var(--space-8) 0 0;
 }
 
 .production-dispatch {
@@ -491,13 +492,13 @@
 
 .production-dispatch.is-voided {
   background: transparent;
-  color: var(--theme-text-muted, #7d8794);
-  border-color: var(--theme-border-subtle, #c8ced6);
+  color: var(--theme-text-muted);
+  border-color: var(--theme-border-subtle);
   text-decoration: line-through;
 }
 
 .production-packing {
-  margin-block: var(--space-16, 16px);
+  margin-block: var(--space-16);
   /* Packing tables can exceed a phone's width — scroll inside the section. */
   overflow-x: auto;
 }
@@ -512,16 +513,16 @@
 .production-labels {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-  gap: 12px;
+  gap: var(--space-12);
   list-style: none;
   margin: 0;
   padding: 0;
 }
 .production-label {
   display: grid;
-  gap: 6px;
-  border: 1px solid var(--line-strong, #2e3338);
-  padding: 12px;
+  gap: var(--space-6);
+  border: 1px solid var(--line-strong);
+  padding: var(--space-12);
   text-align: center;
 }
 .production-label-qr svg {
@@ -535,8 +536,8 @@
   font-weight: 600;
 }
 .production-label-parts {
-  font-size: var(--text-s, 12px);
-  color: var(--ink-muted, #6b7280);
+  font-size: var(--text-s);
+  color: var(--ink-muted);
 }
 @media print {
   /* The label sheet lives inside .app-body > .workspace — hiding any ancestor
@@ -581,17 +582,17 @@
   }
 }
 .production-delivery {
-  margin-top: 12px;
+  margin-top: var(--space-12);
 }
 .production-delivery-facts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 8px;
-  margin: 8px 0 0;
+  gap: var(--space-8);
+  margin: var(--space-8) 0 0;
 }
 .production-delivery-facts dt {
   color: var(--ink-muted);
-  font-size: var(--text-s, 12px);
+  font-size: var(--text-s);
 }
 .production-delivery-facts dd {
   margin: 0;
@@ -599,13 +600,13 @@
 .production-delivery-form {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 10px;
-  margin-top: 10px;
+  gap: var(--space-8);
+  margin-top: var(--space-8);
 }
 .production-delivery-form label {
   display: grid;
-  gap: 4px;
-  font-size: var(--text-s, 12px);
+  gap: var(--space-4);
+  font-size: var(--text-s);
   color: var(--ink-muted);
 }
 .production-delivery-wide {
@@ -614,21 +615,21 @@
 .production-delivery-actions {
   grid-column: 1 / -1;
   display: flex;
-  gap: 8px;
+  gap: var(--space-8);
 }
 .production-delivery-trips {
   display: grid;
-  gap: 6px;
+  gap: var(--space-6);
   list-style: none;
-  margin: 10px 0 0;
+  margin: var(--space-8) 0 0;
   padding: 0;
 }
 .production-delivery-trip {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-8);
   border: 1px solid var(--line);
   border-radius: var(--r-2);
   background: var(--paper-2);
@@ -638,39 +639,39 @@
 }
 .production-delivery-trip-units {
   color: var(--ink-muted);
-  font-size: var(--text-s, 12px);
+  font-size: var(--text-s);
 }
 .production-delivery-pending {
-  margin: 8px 0 0;
-  font-size: var(--text-s, 12px);
+  margin: var(--space-8) 0 0;
+  font-size: var(--text-s);
   color: var(--ink-muted);
 }
 .production-delivery-units {
   grid-column: 1 / -1;
-  margin: 10px 0 0;
-  padding: 8px 10px;
+  margin: var(--space-8) 0 0;
+  padding: var(--space-8) var(--space-8);
   border: 1px dashed var(--line);
   border-radius: var(--r-2);
 }
 .production-delivery-units legend {
-  font-size: var(--text-s, 12px);
+  font-size: var(--text-s);
   color: var(--ink-muted);
-  padding: 0 4px;
+  padding: 0 var(--space-4);
 }
 .production-delivery-unit-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-6);
 }
 .production-delivery-units-hint {
-  margin: 6px 0 0;
-  font-size: var(--text-xs, 11px);
+  margin: var(--space-6) 0 0;
+  font-size: var(--text-xs);
   color: var(--ink-muted);
 }
 
 .signature-pad {
   position: relative;
-  margin-top: 4px;
+  margin-top: var(--space-4);
 }
 .signature-pad-canvas {
   display: block;
@@ -678,7 +679,7 @@
   width: 100%;
   max-width: 480px;
   height: 160px;
-  border: 1px solid var(--line, #d8dde2);
+  border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   /* The pad is paper, not a theme surface: the captured PNG seals into the
      printed POD, so it stays white with dark ink in either theme. */
@@ -691,33 +692,33 @@
   inset: 0;
   display: grid;
   place-items: center;
-  font-size: var(--text-s, 12px);
-  color: var(--ink-faint, #98a2ab);
+  font-size: var(--text-s);
+  color: var(--ink-faint);
   pointer-events: none;
 }
 .production-confirm-collect {
   grid-column: 1 / -1;
   display: flex !important;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-8);
 }
 
 .cutplan {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 240px;
-  gap: 12px;
-  margin: 10px 0 14px;
+  gap: var(--space-12);
+  margin: var(--space-8) 0 var(--space-12);
 }
 .cutplan-canvas {
   min-width: 0;
   display: grid;
-  gap: 10px;
+  gap: var(--space-8);
 }
 .cutplan-bar-row,
 .cutplan-sheet-card {
   margin: 0;
   display: grid;
-  gap: 4px;
+  gap: var(--space-4);
 }
 .cutplan-bar-row figcaption,
 .cutplan-sheet-card figcaption {
@@ -733,9 +734,9 @@
 .cutplan-piece-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 10px;
+  gap: var(--space-4) var(--space-8);
   list-style: none;
-  margin: 4px 0 0;
+  margin: var(--space-4) 0 0;
   padding: 0;
   font-size: 0.75rem;
 }
@@ -758,7 +759,7 @@
 .cutplan-sheets {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--space-12);
 }
 .cutplan-sheet {
   display: block;
@@ -843,13 +844,13 @@
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-sm);
   background: var(--theme-surface-panel);
-  padding: 10px 12px;
+  padding: var(--space-8) var(--space-12);
   align-self: start;
 }
 .cutplan-detail dl {
   margin: 0;
   display: grid;
-  gap: 6px;
+  gap: var(--space-6);
   font-size: 0.8rem;
 }
 .cutplan-detail dt {
@@ -874,7 +875,7 @@
   }
 }
 .production-glass {
-  margin-top: 0.75rem;
+  margin-top: var(--space-12);
   overflow-x: auto;
 }
 /* Operator-card tables (pieces/ops/cuts) scroll inside their section on
@@ -889,9 +890,9 @@ div:has(> table.production-plan) {
 }
 
 .production-remnant-tag {
-  color: var(--theme-accent-ink, #1d4e33);
-  background: var(--theme-accent-soft, #e4f0e8);
-  border: 1px solid var(--theme-accent, #2f6f4f);
+  color: var(--theme-accent-ink);
+  background: var(--theme-accent-soft);
+  border: 1px solid var(--theme-accent);
   /* 0.78em medía ~10 px — bajo el piso legible de la Constitución. */
   font-size: var(--type-micro);
   font-weight: 600;
@@ -902,11 +903,11 @@ div:has(> table.production-plan) {
 .production-optimize-remnants,
 .production-optimize-metrics {
   display: flex;
-  gap: 12px;
+  gap: var(--space-12);
   flex-wrap: wrap;
   font-size: 0.85rem;
   color: var(--theme-text-secondary);
-  margin: 0.4rem 0 0;
+  margin: var(--space-6) 0 0;
 }
 
 .production-stock-reserve {
@@ -928,14 +929,14 @@ div:has(> table.production-plan) {
 
 /* §11 work-order traceability */
 .production-trace {
-  margin-top: 1.25rem;
-  border-top: 1px solid var(--line, #d9dce2);
-  padding-top: 1rem;
+  margin-top: var(--space-16);
+  border-top: 1px solid var(--line);
+  padding-top: var(--space-16);
 }
 .production-trace-chain {
-  margin: 0 0 0.75rem;
+  margin: 0 0 var(--space-12);
   font-variant-numeric: tabular-nums;
-  color: var(--text-dim, #5a6270);
+  color: var(--text-dim);
 }
 .production-trace-body,
 .production-trace-stock {
@@ -947,45 +948,45 @@ div:has(> table.production-plan) {
 .production-trace-stock table {
   width: 100%;
   border-collapse: collapse;
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--space-12);
   font-size: 0.8125rem;
 }
 .production-trace-plan th,
 .production-trace-stock th {
   text-align: left;
   font-weight: 600;
-  padding: 0.25rem 0.5rem;
-  border-bottom: 1px solid var(--line, #d9dce2);
+  padding: var(--space-4) var(--space-8);
+  border-bottom: 1px solid var(--line);
 }
 .production-trace-plan td,
 .production-trace-stock td {
-  padding: 0.25rem 0.5rem;
-  border-bottom: 1px solid var(--line-soft, #eceef2);
+  padding: var(--space-4) var(--space-8);
+  border-bottom: 1px solid var(--line-soft);
   font-variant-numeric: tabular-nums;
 }
 .production-trace-remnants,
 .production-trace-matches {
-  margin: 0.5rem 0 0;
-  padding-left: 1.25rem;
+  margin: var(--space-8) 0 0;
+  padding-left: var(--space-16);
   font-size: 0.8125rem;
-  color: var(--text-dim, #5a6270);
+  color: var(--text-dim);
 }
 .production-trace-lookup {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--space-12);
   align-items: end;
-  margin-top: 0.75rem;
+  margin-top: var(--space-12);
 }
 .production-trace-lookup label {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--space-4);
   font-size: 0.8125rem;
   flex: 1;
   min-width: 0;
 }
 .production-trace-lookup input {
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-mono);
   min-width: 0;
   width: 100%;
 }
@@ -999,12 +1000,12 @@ div:has(> table.production-plan) {
 }
 .production-trace-empty {
   font-size: 0.8125rem;
-  color: var(--text-dim, #5a6270);
+  color: var(--text-dim);
 }
 /* Sidebar piece lookup (PM-M6): the control lives outside the order detail,
    so it takes the sidebar width and matches open the order on click. */
 .production-orders .production-trace-lookup {
-  margin: 0.5rem 0.75rem 0;
+  margin: var(--space-8) var(--space-12) 0;
 }
 .production-trace-match {
   background: none;
@@ -1018,7 +1019,7 @@ div:has(> table.production-plan) {
 }
 .production-trace-match:hover,
 .production-trace-match:focus-visible {
-  color: var(--ink, #1c2027);
+  color: var(--ink);
   outline: none;
   text-decoration: underline;
 }
@@ -1030,7 +1031,7 @@ div:has(> table.production-plan) {
   padding: 0;
   font: inherit;
   font-weight: 600;
-  color: var(--ink, #1d2530);
+  color: var(--ink);
   cursor: pointer;
   text-align: left;
 }
@@ -1038,22 +1039,22 @@ div:has(> table.production-plan) {
   text-decoration: underline;
 }
 .production-step.step-operator {
-  outline: 2px solid var(--accent, #3156c5);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: var(--r-2);
 }
 .operator-card {
-  margin-top: 1rem;
-  border: 1px solid var(--line, #d9dce2);
+  margin-top: var(--space-16);
+  border: 1px solid var(--line);
   border-radius: var(--r-2);
-  padding: 1rem;
-  background: var(--surface-raised, #fbfcfe);
+  padding: var(--space-16);
+  background: var(--surface-raised);
 }
 .operator-card-head {
   display: flex;
   align-items: baseline;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
+  gap: var(--space-12);
+  margin-bottom: var(--space-12);
 }
 .operator-card-head h3 {
   margin: 0;
@@ -1062,21 +1063,21 @@ div:has(> table.production-plan) {
 .operator-card-body {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--space-12);
 }
 /* Persistent primary action: the step's live transitions stay pinned to the
    bottom of the viewport while the card's materials/ops scroll beneath. */
 .operator-card-actions {
   position: sticky;
   bottom: 0;
-  margin: 0.75rem -1rem -1rem;
-  padding: 0.6rem 1rem;
-  border-top: 1px solid var(--line, #d9dce2);
+  margin: var(--space-12) -1rem -1rem;
+  padding: var(--space-8) var(--space-16);
+  border-top: 1px solid var(--line);
   border-radius: 0 0 var(--r-2) var(--r-2);
-  background: var(--surface-raised, #fbfcfe);
+  background: var(--surface-raised);
   display: flex;
   justify-content: flex-end;
-  z-index: 2;
+  z-index: var(--z-raise);
 }
 .operator-card-actions .production-step-actions {
   margin-left: 0;
@@ -1084,20 +1085,20 @@ div:has(> table.production-plan) {
 .operator-card-actions .production-step-actions button {
   min-height: 44px;
   min-width: 110px;
-  padding: 0.55rem 1rem;
+  padding: var(--space-8) var(--space-16);
   font-size: 0.95rem;
   font-weight: 600;
 }
 .operator-section h4 {
-  margin: 0 0 0.375rem;
+  margin: 0 0 var(--space-6);
   font-size: 0.8125rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--text-dim, #5a6270);
+  color: var(--text-dim);
 }
 .operator-blockers {
   margin: 0;
-  padding: 0.5rem 0.75rem;
+  padding: var(--space-8) var(--space-12);
   border: 1px solid var(--warn);
   border-left-width: 4px;
   border-radius: var(--r-2);
@@ -1107,34 +1108,34 @@ div:has(> table.production-plan) {
   font-size: 0.8125rem;
 }
 .operator-remnants {
-  margin: 0.5rem 0 0;
-  padding-left: 1.25rem;
+  margin: var(--space-8) 0 0;
+  padding-left: var(--space-16);
   font-size: 0.8125rem;
-  color: var(--text-dim, #5a6270);
+  color: var(--text-dim);
 }
 .operator-row-short td {
   background: var(--warn-soft);
 }
 .operator-ops,
 .operator-pieces {
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--space-8);
   font-size: 0.8125rem;
 }
 .operator-summary {
   margin: 0;
   font-size: 0.8125rem;
-  color: var(--text-dim, #5a6270);
+  color: var(--text-dim);
 }
 
 .production-prep {
-  margin-bottom: 0.75rem;
-  padding: 0.6rem 0.75rem;
+  margin-bottom: var(--space-12);
+  padding: var(--space-8) var(--space-12);
   border: 1px solid var(--theme-border-subtle);
-  border-radius: var(--radius-card, var(--r-2));
-  background: var(--theme-surface-raised, transparent);
+  border-radius: var(--radius-card);
+  background: var(--theme-surface-raised);
 }
 .production-prep h3 {
-  margin: 0 0 0.4rem;
+  margin: 0 0 var(--space-6);
   font-size: 0.8rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -1147,23 +1148,23 @@ div:has(> table.production-plan) {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--space-6);
 }
 .production-prep li {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: var(--space-8);
   font-size: 0.85rem;
 }
 .production-station-queue {
-  margin-bottom: 0.75rem;
-  padding: 0.6rem 0.75rem;
+  margin-bottom: var(--space-12);
+  padding: var(--space-8) var(--space-12);
   border: 1px solid var(--theme-border-subtle);
-  border-radius: var(--radius-card, var(--r-2));
+  border-radius: var(--radius-card);
 }
 .production-station-queue h3 {
-  margin: 0 0 0.4rem;
+  margin: 0 0 var(--space-6);
   font-size: 0.8rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -1176,34 +1177,34 @@ div:has(> table.production-plan) {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-8);
 }
 .production-station-queue li ul {
   list-style: none;
-  margin: 0.25rem 0 0;
+  margin: var(--space-4) 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--space-4);
 }
 .production-station-counts {
   display: block;
-  margin-left: 0.4rem;
+  margin-left: var(--space-6);
   font-size: var(--type-dense);
   font-weight: 500;
   color: var(--theme-text-secondary);
 }
 .production-station-empty {
-  margin: 0 0 0.75rem;
-  padding: 0.6rem 0.75rem;
+  margin: 0 0 var(--space-12);
+  padding: var(--space-8) var(--space-12);
   border: 1px dashed var(--theme-border-subtle);
-  border-radius: var(--radius-card, var(--r-2));
+  border-radius: var(--radius-card);
   font-size: 0.82rem;
   color: var(--theme-text-secondary);
 }
 .production-station-empty button {
-  margin-left: 0.4rem;
-  padding: 0.15rem 0.6rem;
+  margin-left: var(--space-6);
+  padding: var(--space-2) var(--space-8);
   border-radius: var(--radius-md);
   border: 1px solid var(--theme-accent);
   background: transparent;
@@ -1231,31 +1232,31 @@ div:has(> table.production-plan) {
 .operator-qc-form {
   display: grid;
   grid-template-columns: minmax(90px, 0.8fr) 1.6fr 0.8fr 0.8fr auto auto;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
+  gap: var(--space-8);
+  margin-top: var(--space-8);
   align-items: stretch;
 }
 .operator-qc-form select,
 .operator-qc-form input {
   min-height: 44px;
-  padding: 0.45rem 0.6rem;
+  padding: var(--space-8) var(--space-8);
   font-size: 0.9rem;
 }
 .operator-qc-form button {
   min-height: 44px;
-  padding: 0.45rem 1rem;
-  border-radius: var(--radius-sm, var(--r-2));
+  padding: var(--space-8) var(--space-16);
+  border-radius: var(--radius-sm);
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
 }
 .qc-submit-pass {
-  border: 1px solid var(--theme-success, #1a7f4b);
-  background: var(--theme-success, #1a7f4b);
+  border: 1px solid var(--theme-success);
+  background: var(--theme-success);
   color: var(--theme-surface-panel);
 }
 .qc-submit-fail {
-  border: 1px solid var(--theme-danger, #b3261e);
+  border: 1px solid var(--theme-danger);
   background: transparent;
   color: var(--danger-ink);
 }
@@ -1277,8 +1278,8 @@ div:has(> table.production-plan) {
 .production-optimize-stats {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
-  margin: 0.5rem 0;
+  gap: var(--space-6);
+  margin: var(--space-8) 0;
   font-size: 0.8rem;
   color: var(--theme-text-secondary);
 }
@@ -1287,20 +1288,20 @@ div:has(> table.production-plan) {
   font-size: 0.85rem;
 }
 .production-optimize-inputs {
-  margin: 0.4rem 0;
+  margin: var(--space-6) 0;
   font-size: 0.78rem;
   line-height: 1.45;
   color: var(--theme-text-secondary);
   max-width: 70ch;
 }
 .production-compare-table {
-  margin-top: 0.4rem;
+  margin-top: var(--space-6);
 }
 .production-compare-table .production-compare-best {
-  background: color-mix(in srgb, var(--theme-success, #1a7f4b) 10%, transparent);
+  background: color-mix(in srgb, var(--theme-success) 10%, transparent);
 }
 .production-compare-note {
-  margin: 0.3rem 0 0.5rem;
+  margin: var(--space-4) 0 var(--space-8);
   font-size: 0.75rem;
   color: var(--theme-text-secondary);
 }
@@ -1308,10 +1309,10 @@ div:has(> table.production-plan) {
 .production-making {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem 1rem;
+  gap: var(--space-8) var(--space-16);
   align-items: baseline;
   font-size: 0.95rem;
-  margin: 0.25rem 0 0.5rem;
+  margin: var(--space-4) 0 var(--space-8);
   color: var(--theme-text-secondary);
 }
 .production-making strong {
@@ -1329,17 +1330,17 @@ div:has(> table.production-plan) {
 
 /* CNC readiness — per-member machining verdicts and programs. */
 .cnc-panel {
-  margin-top: 0.6rem;
-  border: 1px solid var(--theme-border, #d8d4cd);
+  margin-top: var(--space-8);
+  border: 1px solid var(--theme-border);
   border-radius: var(--r-2);
-  background: var(--theme-surface, #fff);
+  background: var(--theme-surface);
 }
 .cnc-panel-toggle {
   width: 100%;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.5rem 0.75rem;
+  padding: var(--space-8) var(--space-12);
   background: none;
   border: none;
   font: inherit;
@@ -1348,7 +1349,7 @@ div:has(> table.production-plan) {
   color: var(--theme-text);
 }
 .cnc-panel-body {
-  padding: 0.4rem 0.75rem 0.75rem;
+  padding: var(--space-6) var(--space-12) var(--space-12);
   /* The members×machines grid is inherently wide — scroll it inside the
      panel instead of stretching the whole production page. */
   overflow-x: auto;
@@ -1356,12 +1357,12 @@ div:has(> table.production-plan) {
 .cnc-empty {
   color: var(--theme-text-secondary);
   font-size: 0.85rem;
-  margin: 0.25rem 0;
+  margin: var(--space-4) 0;
 }
 .cnc-error {
   color: var(--danger-ink);
   font-size: 0.85rem;
-  margin: 0.25rem 0;
+  margin: var(--space-4) 0;
 }
 .cnc-table {
   width: 100%;
@@ -1385,7 +1386,7 @@ div:has(> table.production-plan) {
   text-align: right;
 }
 .cnc-actions .cnc-add + .cnc-add {
-  margin-left: 0.35rem;
+  margin-left: var(--space-6);
 }
 .cnc-workspace-grid > div {
   min-width: 0;
@@ -1404,23 +1405,23 @@ div:has(> table.production-plan) {
 }
 .cnc-member-meta {
   font-size: 0.75rem;
-  color: var(--theme-text-muted, #6b675f);
+  color: var(--theme-text-muted);
 }
 .cnc-hint {
   font-size: 0.75rem;
-  color: var(--theme-text-muted, #6b675f);
-  margin: 0 0 0.35rem;
+  color: var(--theme-text-muted);
+  margin: 0 0 var(--space-6);
 }
 .cnc-required-tools {
   font-size: 0.8rem;
-  color: var(--theme-text-muted, #6b675f);
-  margin: 0.15rem 0 0.4rem;
+  color: var(--theme-text-muted);
+  margin: var(--space-2) 0 var(--space-6);
 }
 .cnc-table th,
 .cnc-table td {
   text-align: left;
-  padding: 0.3rem 0.4rem;
-  border-bottom: 1px solid var(--theme-border, #d8d4cd);
+  padding: var(--space-4) var(--space-6);
+  border-bottom: 1px solid var(--theme-border);
   vertical-align: top;
 }
 .cnc-member-label {
@@ -1432,12 +1433,12 @@ div:has(> table.production-plan) {
   padding: 0;
   color: var(--theme-accent);
   display: inline-flex;
-  gap: 0.25rem;
+  gap: var(--space-4);
   align-items: center;
 }
 .cnc-verdict {
   display: inline-block;
-  padding: 0.1rem 0.45rem;
+  padding: var(--space-2) var(--space-8);
   /* Chips de veredicto son texto, no puntos de estado: radio mínimo.
    * nowrap: «Atención»/«Bloqueado» nunca se parten a ancho estrecho. */
   border-radius: var(--r-1);
@@ -1468,23 +1469,23 @@ div:has(> table.production-plan) {
   color: var(--theme-text-secondary);
 }
 .cnc-issues {
-  margin: 0 0 0.75rem;
-  padding: 0.55rem 0.9rem;
-  border-left: 3px solid var(--theme-warning, #b26a00);
-  background: color-mix(in srgb, var(--theme-warning, #b26a00) 8%, transparent);
+  margin: 0 0 var(--space-12);
+  padding: var(--space-8) var(--space-16);
+  border-left: 3px solid var(--theme-warning);
+  background: color-mix(in srgb, var(--theme-warning) 8%, transparent);
   font-size: 0.85rem;
   line-height: 1.5;
   list-style: none;
 }
 .cnc-issues li + li {
-  margin-top: 0.3rem;
+  margin-top: var(--space-4);
 }
 .cnc-generate {
-  margin-right: 0.4rem;
+  margin-right: var(--space-6);
   font-size: 0.8rem;
 }
 .cnc-member-ops td {
-  background: var(--theme-bg, #faf9f7);
+  background: var(--theme-bg);
 }
 .cnc-ops {
   width: 100%;
@@ -1493,8 +1494,8 @@ div:has(> table.production-plan) {
 }
 .cnc-ops th,
 .cnc-ops td {
-  padding: 0.2rem 0.4rem;
-  border-bottom: 1px dashed var(--theme-border, #d8d4cd);
+  padding: var(--space-4) var(--space-6);
+  border-bottom: 1px dashed var(--theme-border);
   text-align: left;
 }
 /* A 390 px una tabla de diez columnas no se lee: cada operación se apila
@@ -1509,17 +1510,17 @@ div:has(> table.production-plan) {
   }
   .cnc-ops tr {
     display: block;
-    border-bottom: 1px solid var(--theme-border, #d8d4cd);
-    padding: 0.35rem 0;
+    border-bottom: 1px solid var(--theme-border);
+    padding: var(--space-6) 0;
   }
   .cnc-ops td {
     display: block;
     border-bottom: none;
-    padding: 0.1rem 0.4rem;
+    padding: var(--space-2) var(--space-6);
   }
   .cnc-ops td::before {
     content: attr(data-th) " · ";
-    color: var(--theme-text-muted, #6b675f);
+    color: var(--theme-text-muted);
     font-size: 0.75rem;
   }
   .cnc-ops td[data-th="#"]::before {
@@ -1530,10 +1531,10 @@ div:has(> table.production-plan) {
   }
 }
 .cnc-programs {
-  margin-top: 0.75rem;
+  margin-top: var(--space-12);
 }
 .cnc-programs h4 {
-  margin: 0 0 0.35rem;
+  margin: 0 0 var(--space-6);
   font-size: 0.85rem;
   color: var(--theme-text-secondary);
 }
@@ -1545,17 +1546,17 @@ div:has(> table.production-plan) {
 .cnc-program {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem 0.75rem;
+  gap: var(--space-8) var(--space-12);
   align-items: center;
-  padding: 0.35rem 0;
-  border-bottom: 1px solid var(--theme-border, #d8d4cd);
+  padding: var(--space-6) 0;
+  border-bottom: 1px solid var(--theme-border);
   font-size: 0.85rem;
 }
 .cnc-program-stale {
   opacity: 0.65;
 }
 .cnc-program-no {
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
   font-weight: 600;
 }
 .cnc-program-meta {
@@ -1569,29 +1570,29 @@ div:has(> table.production-plan) {
 .cnc-program-actions {
   margin-left: auto;
   display: flex;
-  gap: 0.4rem;
+  gap: var(--space-6);
 }
 .cnc-program-file {
   font-size: 0.78rem;
-  padding: 0.15rem 0.5rem;
+  padding: var(--space-2) var(--space-8);
 }
 
 /* CNC workspace — machine + tool authority management. */
 .cnc-workspace {
-  margin-top: 0.75rem;
-  border: 1px solid var(--theme-border, #d8d4cd);
+  margin-top: var(--space-12);
+  border: 1px solid var(--theme-border);
   border-radius: var(--r-2);
-  background: var(--theme-surface, #fff);
+  background: var(--theme-surface);
 }
 .cnc-workspace-grid {
   display: grid;
-  gap: 1rem;
+  gap: var(--space-16);
 }
 .cnc-section-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.35rem;
+  margin-bottom: var(--space-6);
 }
 .cnc-section-head h3 {
   margin: 0;
@@ -1599,25 +1600,25 @@ div:has(> table.production-plan) {
 }
 .cnc-add {
   font-size: 0.8rem;
-  padding: 0.2rem 0.6rem;
+  padding: var(--space-4) var(--space-8);
 }
 .cnc-form {
-  margin-top: 0.5rem;
-  padding: 0.6rem;
-  border: 1px dashed var(--theme-border, #d8d4cd);
+  margin-top: var(--space-8);
+  padding: var(--space-8);
+  border: 1px dashed var(--theme-border);
   border-radius: var(--r-2);
   display: grid;
-  gap: 0.5rem;
+  gap: var(--space-8);
 }
 .cnc-form-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 0.5rem;
+  gap: var(--space-8);
 }
 .cnc-form-row label {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: var(--space-2);
   font-size: 0.78rem;
   color: var(--theme-text-secondary);
 }
@@ -1634,22 +1635,22 @@ div:has(> table.production-plan) {
 .cnc-checks {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.3rem 0.9rem;
+  gap: var(--space-4) var(--space-16);
   font-size: 0.8rem;
 }
 .cnc-checks label {
   display: inline-flex;
-  gap: 0.3rem;
+  gap: var(--space-4);
   align-items: center;
 }
 .cnc-form-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-8);
 }
 
 /* Member ops diagram — operator visual check before program generation. */
 .cnc-diagram {
-  margin: 0.35rem 0 0.6rem;
+  margin: var(--space-6) 0 var(--space-8);
 }
 .cnc-diagram svg {
   width: 100%;
@@ -1667,8 +1668,8 @@ div:has(> table.production-plan) {
   stroke-width: 1;
 }
 .cnc-diagram-bar {
-  fill: var(--theme-surface-alt, #f1efe9);
-  stroke: var(--theme-border, #d8d4cd);
+  fill: var(--theme-surface-alt);
+  stroke: var(--theme-border);
   stroke-width: 1.5;
 }
 .cnc-diagram-op {
@@ -1730,10 +1731,10 @@ div:has(> table.production-plan) {
 }
 .cnc-diagram-legend {
   display: flex;
-  gap: 1rem;
+  gap: var(--space-16);
   font-size: 0.78rem;
   color: var(--theme-text-secondary);
-  margin: 0.15rem 0 0;
+  margin: var(--space-2) 0 0;
 }
 .cnc-diagram-missing {
   color: var(--op-hardware);
@@ -1747,20 +1748,20 @@ div:has(> table.production-plan) {
 
 /* Member card — physical identity + verdicts with legible reasons. */
 .cnc-member-card {
-  padding: 0.4rem 0.2rem 0.6rem;
+  padding: var(--space-6) var(--space-4) var(--space-8);
 }
 .cnc-member-card-head {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--space-12);
   align-items: baseline;
   font-size: 0.85rem;
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--space-4);
 }
 .cnc-member-card-head > span {
   color: var(--theme-text-secondary);
 }
 .cnc-verdicts h5 {
-  margin: 0.7rem 0 0.25rem;
+  margin: var(--space-12) 0 var(--space-4);
   font-size: 0.8rem;
   color: var(--theme-text-secondary);
 }
@@ -1769,16 +1770,16 @@ div:has(> table.production-plan) {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.4rem;
+  gap: var(--space-6);
 }
 .cnc-verdict-line {
   display: flex;
-  gap: 0.6rem;
+  gap: var(--space-8);
   align-items: baseline;
   font-size: 0.82rem;
 }
 .cnc-verdict-machine {
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
   font-weight: 600;
 }
 .cnc-verdict-ok {
@@ -1789,7 +1790,7 @@ div:has(> table.production-plan) {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.15rem;
+  gap: var(--space-2);
 }
 .cnc-reasons li {
   color: var(--theme-text);
@@ -1797,11 +1798,11 @@ div:has(> table.production-plan) {
 
 /* Declared-not-emitted section. */
 .cnc-gaps {
-  margin-top: 0.9rem;
+  margin-top: var(--space-16);
   overflow-x: auto;
 }
 .cnc-gaps h4 {
-  margin: 0 0 0.35rem;
+  margin: 0 0 var(--space-6);
   font-size: 0.85rem;
   color: var(--theme-text-secondary);
 }
@@ -1815,29 +1816,29 @@ div:has(> table.production-plan) {
 
 /* Plan identity + program provenance. */
 .cnc-plan-line {
-  margin: 0 0 0.5rem;
+  margin: 0 0 var(--space-8);
   font-size: 0.78rem;
   color: var(--theme-text-secondary);
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
 }
 .cnc-program-seed {
   font-size: 0.75rem;
   color: var(--theme-text-secondary);
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
 }
 .cnc-diff {
   flex-basis: 100%;
-  padding: 0.4rem 0.5rem;
-  background: var(--theme-bg, #faf9f7);
+  padding: var(--space-6) var(--space-8);
+  background: var(--theme-bg);
   font-size: 0.8rem;
   overflow-x: auto;
 }
 .cnc-diff-counts {
-  margin: 0 0 0.3rem;
+  margin: 0 0 var(--space-4);
   font-weight: 600;
 }
 .cnc-diff-ops {
-  margin: 0.3rem 0 0;
+  margin: var(--space-4) 0 0;
   color: var(--theme-text-secondary);
 }
 
@@ -1855,25 +1856,25 @@ div:has(> table.production-plan) {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.25rem;
+  gap: var(--space-4);
   font-size: 0.8rem;
 }
 .cnc-audit li {
-  border-bottom: 1px dashed var(--theme-border, #d8d4cd);
-  padding-bottom: 0.25rem;
+  border-bottom: 1px dashed var(--theme-border);
+  padding-bottom: var(--space-4);
 }
 .cnc-audit-date {
   display: inline-block;
   min-width: 8.5rem;
   color: var(--theme-text-secondary);
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
   font-size: 0.75rem;
 }
 .operator-member-strips {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  margin: 0.35rem 0 0.6rem;
+  gap: var(--space-6);
+  margin: var(--space-6) 0 var(--space-8);
 }
 .operator-member-strip {
   margin: 0;
@@ -1899,8 +1900,8 @@ div:has(> table.production-plan) {
   stroke-width: 1;
 }
 .operator-member-bar {
-  fill: var(--theme-surface-alt, #f1efe9);
-  stroke: var(--theme-border, #d8d4cd);
+  fill: var(--theme-surface-alt);
+  stroke: var(--theme-border);
   stroke-width: 1.5;
 }
 .operator-member-op {
@@ -1930,7 +1931,7 @@ div:has(> table.production-plan) {
 }
 .board-filters input,
 .board-filters select {
-  min-height: var(--density-default, 2.25rem);
+  min-height: var(--density-default);
 }
 .board-filters__q {
   flex: 1 1 14rem;
@@ -2090,7 +2091,7 @@ div:has(> table.production-plan) {
 /* Naranja = requiere persona (constitución: ≤3 % de la superficie). */
 .board-chip.needs-person {
   border-color: var(--theme-warning);
-  color: var(--warn-ink, var(--theme-text-primary));
+  color: var(--warn-ink);
   background: var(--theme-warning-soft);
 }
 .mono {
@@ -2197,7 +2198,7 @@ div:has(> table.production-plan) {
 }
 .ot-pieces__bar input {
   flex: 1 1 16rem;
-  min-height: var(--density-default, 2.25rem);
+  min-height: var(--density-default);
 }
 .ot-pieces__count {
   color: var(--theme-text-secondary);
@@ -2331,7 +2332,7 @@ button.piece-list__row:hover {
 }
 .human-trace__filters select,
 .human-trace__filters label {
-  min-height: var(--density-default, 2.25rem);
+  min-height: var(--density-default);
   display: inline-flex;
   align-items: center;
   gap: var(--space-4);
@@ -2401,7 +2402,7 @@ button.piece-list__row:hover {
   width: 100%;
   min-height: 3rem;
   font-family: var(--font-mono);
-  font-size: var(--type-title-m, 1.125rem);
+  font-size: var(--type-title-m);
   padding: 0 var(--space-12);
 }
 .operator-topbar button {
@@ -2444,7 +2445,7 @@ button.piece-list__row:hover {
   font-size: var(--type-title-l);
 }
 .operator-next__step {
-  font-size: var(--type-title-m, 1.125rem);
+  font-size: var(--type-title-m);
   font-weight: 600;
 }
 .operator-next__cta {
@@ -2487,7 +2488,7 @@ button.piece-list__row:hover {
   flex: 1;
 }
 .operator-queue-row__blocked {
-  color: var(--theme-warning);
+  color: var(--theme-warning-ink);
   font-weight: 600;
 }
 .operator-order-head {
@@ -2502,7 +2503,7 @@ button.piece-list__row:hover {
   gap: var(--space-8);
   font-family: var(--font-mono);
   font-weight: 600;
-  font-size: var(--type-title-m, 1.125rem);
+  font-size: var(--type-title-m);
 }
 .operator-order-head__station {
   font-family: var(--font-sans);
@@ -2546,7 +2547,8 @@ button.piece-list__row:hover {
 }
 .operator-btn--warn {
   border-color: var(--theme-warning);
-  color: var(--theme-warning);
+  /* Tinta legible — --warn es el borde; el texto exige AA. */
+  color: var(--theme-warning-ink);
 }
 .operator-qc-hint,
 .operator-blocked-hint,
@@ -2607,7 +2609,7 @@ button.piece-list__row:hover {
   letter-spacing: 0.02em;
 }
 .operator-focus__label {
-  font-size: var(--type-title-m, 1.125rem);
+  font-size: var(--type-title-m);
   font-weight: 600;
 }
 .operator-focus__meta {
@@ -2615,7 +2617,7 @@ button.piece-list__row:hover {
   gap: var(--space-16);
   flex-wrap: wrap;
   font-family: var(--font-mono);
-  font-size: var(--type-title-m, 1.125rem);
+  font-size: var(--type-title-m);
 }
 .operator-focus__next {
   font-weight: 600;

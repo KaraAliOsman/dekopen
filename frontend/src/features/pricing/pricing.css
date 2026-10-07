@@ -5,7 +5,7 @@
 }
 .pricing-page h1,
 .pricing-page h2 {
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--space-12);
 }
 .pricing-page header p {
   color: var(--theme-text-secondary);
@@ -13,8 +13,8 @@
 .pricing-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  margin: 1rem 0;
+  gap: var(--space-8);
+  margin: var(--space-16) 0;
 }
 .pricing-tabs [aria-pressed="true"] {
   outline: 2px solid var(--theme-accent);
@@ -22,19 +22,19 @@
 .pricing-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(18rem, 1fr);
-  gap: 1.5rem;
+  gap: var(--space-24);
 }
 .pricing-page article,
 .pricing-page form {
   border: 1px solid var(--theme-border-subtle);
-  padding: 1rem;
+  padding: var(--space-16);
   background: var(--theme-surface-panel);
   border-radius: var(--r-2);
-  margin: 0.75rem 0;
+  margin: var(--space-12) 0;
 }
 .pricing-page form {
   display: grid;
-  gap: 0.75rem;
+  gap: var(--space-12);
   align-content: start;
 }
 
@@ -42,7 +42,7 @@
  * a record viewer, not an import workspace. */
 .pricing-page .form-grid {
   display: grid;
-  gap: 0.75rem;
+  gap: var(--space-12);
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -74,14 +74,14 @@
 }
 .pricing-page label {
   display: grid;
-  gap: 0.3rem;
+  gap: var(--space-4);
 }
 .pricing-page input,
 .pricing-page select {
   background: var(--theme-surface-panel);
   color: var(--theme-text-primary);
   border: 1px solid var(--theme-border-subtle);
-  padding: 0.6rem;
+  padding: var(--space-8);
   border-radius: var(--r-2);
   min-width: 0;
 }
@@ -90,7 +90,7 @@
   height: 1.25rem;
 }
 .pricing-page button {
-  padding: 0.55rem 0.8rem;
+  padding: var(--space-8) var(--space-12);
   cursor: pointer;
 }
 .pricing-page button:disabled {
@@ -103,9 +103,9 @@
 .pricing-page dl div {
   display: flex;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-16);
   border-bottom: 1px solid var(--theme-border-subtle);
-  padding: 0.3rem 0;
+  padding: var(--space-4) 0;
 }
 .pricing-page dd {
   margin: 0;
@@ -117,7 +117,7 @@
 }
 .pricing-page td,
 .pricing-page th {
-  padding: 0.5rem;
+  padding: var(--space-8);
   border-bottom: 1px solid var(--theme-border-subtle);
   text-align: left;
 }
@@ -129,7 +129,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
   .pricing-page {
-    padding: 0.75rem;
+    padding: var(--space-12);
   }
 }
 
@@ -145,7 +145,7 @@
 .operation-decision__head {
   align-items: center;
   display: flex;
-  gap: 0.75rem;
+  gap: var(--space-12);
   margin-bottom: var(--space-8);
 }
 
@@ -156,16 +156,16 @@
 
 .operation-totals {
   display: grid;
-  gap: 0.5rem;
+  gap: var(--space-8);
   grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
   margin-bottom: var(--space-8);
 }
 
 .operation-total {
-  background: var(--theme-surface-page, var(--theme-surface-panel));
+  background: var(--theme-surface-page);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--r-1);
-  padding: 0.5rem 0.625rem;
+  padding: var(--space-8) var(--space-8);
 }
 
 .operation-total dt {
@@ -179,11 +179,11 @@
 .operation-total dd {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
-  margin: 0.125rem 0 0;
+  margin: var(--space-2) 0 0;
 }
 
 .operation-total--gross dd {
-  color: var(--theme-accent-ink, var(--theme-accent));
+  color: var(--theme-accent-ink);
   font-size: var(--text-title);
 }
 
@@ -202,16 +202,16 @@
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.04em;
-  padding: 0 0.25rem;
+  padding: 0 var(--space-4);
   text-transform: uppercase;
 }
 
 .pricing-extras__row {
   align-items: center;
   display: grid;
-  gap: 0.5rem;
+  gap: var(--space-8);
   grid-template-columns: minmax(7rem, 10rem) minmax(0, 1fr) minmax(6rem, 9rem) auto;
-  margin-top: 0.375rem;
+  margin-top: var(--space-6);
 }
 
 @media (max-width: 760px) {
@@ -237,7 +237,7 @@
   font-size: var(--type-micro);
   font-weight: 600;
   letter-spacing: 0.04em;
-  padding: 0.375rem 0;
+  padding: var(--space-6) 0;
   text-align: left;
   text-transform: uppercase;
 }
@@ -246,7 +246,7 @@
 .operation-lines td {
   border-bottom: 1px solid var(--theme-border-subtle);
   font-variant-numeric: tabular-nums;
-  padding: 0.375rem 0.5rem;
+  padding: var(--space-6) var(--space-8);
   text-align: right;
 }
 
@@ -262,7 +262,7 @@
 
 .operation-decision__actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-8);
   position: sticky;
   bottom: 0;
   margin: var(--space-12) calc(-1 * var(--space-12)) calc(-1 * var(--space-12));
@@ -280,13 +280,13 @@
 .operation-decision__stale {
   color: var(--warn-ink);
   font-size: 0.75rem;
-  margin: 0.25rem 0 0;
+  margin: var(--space-4) 0 0;
 }
 
 .operation-warning {
   color: var(--warn-ink);
   font-size: 0.7rem;
-  margin-left: 0.5rem;
+  margin-left: var(--space-8);
 }
 
 .operation-lines__list {
@@ -297,7 +297,7 @@
 
 .operation-lines__detail > td {
   border-top: none;
-  padding: 0 0.5rem 0.5rem;
+  padding: 0 var(--space-8) var(--space-8);
 }
 
 .operation-lines__detail details summary {
@@ -307,7 +307,7 @@
 }
 
 .cost-composition {
-  margin-top: 0.5rem;
+  margin-top: var(--space-8);
 }
 
 .cost-composition__table {
@@ -315,7 +315,7 @@
 }
 
 .cost-composition__table td {
-  padding: 0.15rem 0.75rem 0.15rem 0;
+  padding: var(--space-2) var(--space-12) var(--space-2) 0;
 }
 
 .cost-composition__table td:last-child {
@@ -326,13 +326,13 @@
 .cost-composition__math {
   color: var(--theme-text-secondary);
   font-size: var(--type-dense);
-  margin: 0.25rem 0 0;
+  margin: var(--space-4) 0 0;
 }
 
 .operation-authorities {
   font-size: var(--type-dense);
   color: var(--theme-text-secondary);
-  margin-top: 0.25rem;
+  margin-top: var(--space-4);
 }
 
 .operation-authorities summary {
@@ -340,25 +340,25 @@
 }
 
 .operation-authorities ul {
-  margin: 0.25rem 0 0;
-  padding-left: 1.25rem;
+  margin: var(--space-4) 0 0;
+  padding-left: var(--space-16);
 }
 
 .operation-history__filters {
   align-items: flex-end;
   display: flex;
-  gap: 1rem;
-  margin-bottom: 0.75rem;
+  gap: var(--space-16);
+  margin-bottom: var(--space-12);
 }
 
 .operation-history__filters select {
-  margin-left: 0.5rem;
+  margin-left: var(--space-8);
 }
 
 .field-hint {
   color: var(--theme-text-secondary);
   font-size: var(--type-dense);
-  margin: 0.15rem 0 0;
+  margin: var(--space-2) 0 0;
 }
 
 .coverage-summary {
@@ -381,8 +381,8 @@
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--r-2);
   display: grid;
-  gap: 0.25rem;
-  padding: 0.75rem 1rem;
+  gap: var(--space-4);
+  padding: var(--space-12) var(--space-16);
 }
 
 .coverage-card--missing {
@@ -403,15 +403,15 @@
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--r-2);
   display: grid;
-  gap: 0.375rem;
-  padding: 0.75rem 1rem;
+  gap: var(--space-6);
+  padding: var(--space-12) var(--space-16);
 }
 
 .audit-card__header {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--space-8);
 }
 
 .audit-card__project {
@@ -428,7 +428,7 @@
 .audit-card__diffs {
   font-size: 0.75rem;
   margin: 0;
-  padding-left: 1rem;
+  padding-left: var(--space-16);
 }
 
 .audit-card__diffs code {
@@ -444,7 +444,7 @@
   display: flex;
   flex-wrap: wrap;
   font-size: 0.75rem;
-  gap: 0.75rem;
+  gap: var(--space-12);
 }
 
 /* §8 compare band — CURRENT → PROPOSED with the delta in the same glance */
@@ -509,7 +509,7 @@
 .operation-lines__vano {
   align-items: center;
   display: inline-flex;
-  gap: 0.5rem;
+  gap: var(--space-8);
 }
 
 .operation-lines__vano .position-thumb {
@@ -557,7 +557,7 @@
 .margin-band__track {
   position: relative;
   height: 0.625rem;
-  background: var(--theme-surface-inset, var(--theme-border-subtle));
+  background: var(--theme-surface-inset);
   overflow: hidden;
 }
 

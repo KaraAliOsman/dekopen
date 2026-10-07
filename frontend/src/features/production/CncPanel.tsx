@@ -103,6 +103,7 @@ type CncGap = {
   cause: string;
   source: string;
   declared_value?: string;
+  declared_offsets_mm?: string[];
   bay_id?: string | null;
   leaf_id?: string | null;
   member_id?: string | null;
@@ -379,7 +380,7 @@ export function CncPanel({ orderId, canWrite }: { orderId: string; canWrite: boo
                 <p className="cnc-plan-line">
                   {t("production.cncPlan")}: {shortTechnicalId(data.plan.fingerprint ?? "")}
                   {data.plan.plan_seed
-                    ? ` · ${t("production.cncPlanSeed")} ${data.plan.plan_seed}`
+                    ? ` · ${t("production.cncPlanSeed")} ${shortTechnicalId(data.plan.plan_seed)}`
                     : ""}
                 </p>
               ) : null}
@@ -408,7 +409,10 @@ export function CncPanel({ orderId, canWrite }: { orderId: string; canWrite: boo
               ) : null}
               {data.required_tool_ids?.length ? (
                 <p className="cnc-required-tools">
-                  {t("production.cncRequiredTools")}: {data.required_tool_ids.join(", ")}
+                  {t("production.cncRequiredTools")}:{" "}
+                  {data.required_tool_ids
+                    .map((id) => tOptional(`production.cncToolId_${id}`) ?? id)
+                    .join(" · ")}
                 </p>
               ) : null}
               {data.members.length === 0 ? (
@@ -701,7 +705,11 @@ function DeclaredGaps({ gaps }: { gaps: CncGap[] }) {
               <td>
                 {gapKindLabel(gap)}
                 {gap.kit_sku ? ` · ${gap.kit_sku}` : ""}
-                {gap.declared_value ? ` · ${gap.declared_value}` : ""}
+                {gap.declared_offsets_mm?.length
+                  ? ` · ${gap.declared_offsets_mm.map((off) => fmtMm(off)).join(" · ")} mm`
+                  : gap.declared_value
+                    ? ` · ${gap.declared_value}`
+                    : ""}
                 {gap.leaf_id || gap.bay_id
                   ? ` · ${[gap.bay_id, gap.leaf_id].filter(Boolean).join("/")}`
                   : ""}
@@ -761,7 +769,7 @@ function CncProgramRow({
       </span>
       {program.plan_seed ? (
         <span className="cnc-program-seed">
-          {t("production.cncPlanSeed")} {program.plan_seed}
+          {t("production.cncPlanSeed")} {shortTechnicalId(program.plan_seed)}
         </span>
       ) : null}
       {superseded ? (

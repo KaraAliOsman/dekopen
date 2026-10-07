@@ -2,7 +2,7 @@
 .clients-desk {
   align-items: start;
   display: grid;
-  gap: 1rem;
+  gap: var(--space-16);
   grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr);
 }
 
@@ -10,14 +10,14 @@
   background: var(--theme-surface-panel);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--r-2);
-  padding: 0.75rem;
+  padding: var(--space-12);
 }
 
 .clients-list > ul {
   display: grid;
-  gap: 0.25rem;
+  gap: var(--space-4);
   list-style: none;
-  margin: 0.5rem 0 0;
+  margin: var(--space-8) 0 0;
   padding: 0;
 }
 
@@ -29,8 +29,8 @@
   color: var(--theme-text-primary);
   cursor: pointer;
   display: grid;
-  gap: 0.125rem;
-  padding: 0.5rem 0.625rem;
+  gap: var(--space-2);
+  padding: var(--space-8) var(--space-8);
   text-align: left;
   width: 100%;
 }
@@ -40,7 +40,7 @@
 }
 
 .clients-row.is-active {
-  background: var(--theme-surface-raised, var(--theme-surface-panel));
+  background: var(--theme-surface-raised);
   border-color: var(--theme-accent);
 }
 
@@ -57,8 +57,8 @@
   align-items: center;
   color: var(--theme-text-secondary);
   display: flex;
-  gap: 0.6rem;
-  padding: 0.75rem;
+  gap: var(--space-8);
+  padding: var(--space-12);
 }
 
 .clients-empty__cta {
@@ -68,20 +68,20 @@
   color: var(--theme-accent-ink);
   cursor: pointer;
   font-size: 0.75rem;
-  padding: 0.18rem 0.6rem;
+  padding: 0.18rem var(--space-8);
 }
 
 .clients-detail {
   background: var(--theme-surface-panel);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--r-2);
-  padding: 1rem 1.25rem;
+  padding: var(--space-16) var(--space-16);
 }
 
 .clients-detail-head {
   align-items: start;
   display: flex;
-  gap: 1rem;
+  gap: var(--space-16);
   justify-content: space-between;
 }
 
@@ -91,19 +91,19 @@
 
 .clients-detail-meta {
   color: var(--theme-text-secondary);
-  margin: 0.25rem 0 0;
+  margin: var(--space-4) 0 0;
 }
 
 .clients-detail-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-8);
 }
 
 .clients-facts {
   display: grid;
-  gap: 0.5rem;
+  gap: var(--space-8);
   grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
-  margin: 1rem 0;
+  margin: var(--space-16) 0;
 }
 
 .clients-facts dt {
@@ -115,13 +115,13 @@
 }
 
 .clients-facts dd {
-  margin: 0.125rem 0 0;
+  margin: var(--space-2) 0 0;
   white-space: pre-wrap;
 }
 
 .clients-projects {
   list-style: none;
-  margin: 0.5rem 0 0;
+  margin: var(--space-8) 0 0;
   padding: 0;
 }
 
@@ -129,9 +129,9 @@
   align-items: center;
   color: var(--theme-text-primary);
   display: grid;
-  gap: 0.75rem;
+  gap: var(--space-12);
   grid-template-columns: auto minmax(8rem, 1fr) auto auto;
-  padding: 0.5rem 0;
+  padding: var(--space-8) 0;
   text-decoration: none;
 }
 

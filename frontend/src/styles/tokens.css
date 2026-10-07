@@ -84,7 +84,6 @@
   --surface-card: var(--g-100);
   --surface-sheet: var(--paper);
   --surface-hover: #e2e8e7;
-  --surface-active: #d4dedd;
   --surface-selected: var(--teal-50);
   --selected-edge: var(--teal-700);
 
@@ -166,7 +165,6 @@
   --surface-card: #1b2326;
   --surface-sheet: #182024; /* el lienzo; los documentos impresos siempre claros */
   --surface-hover: #1f282b;
-  --surface-active: #242e31;
   --surface-selected: #11312e;
   --selected-edge: var(--teal-400);
 
@@ -281,11 +279,14 @@
 
   /* Capas — §3.4. Prohibidos los literales fuera de esta escala. */
   --z-base: 0;
+  --z-raise: 2;
+  --z-raise-top: 3;
   --z-sticky: 10;
   --z-rail: 20;
   --z-popover: 40;
   --z-drawer: 50;
   --z-dialog: 60;
+  --z-menu: 70;
   --z-toast: 70;
   --z-palette: 80;
 
@@ -449,6 +450,7 @@
   --theme-mark: var(--mark);
   --theme-warning: var(--warn);
   --theme-warning-soft: var(--warn-soft);
+  --theme-warning-ink: var(--warn-ink);
   --theme-success: var(--ok);
   --theme-success-soft: var(--ok-soft);
   --theme-danger: var(--danger);
@@ -466,7 +468,6 @@
   --theme-disabled-ink: var(--disabled-ink);
   --theme-disabled-border: var(--disabled-border);
   --theme-skeleton: var(--skeleton);
-  --theme-skeleton-sheen: var(--surface-active);
   --theme-glass-tint: var(--canvas-glass);
   --theme-glass-pane: var(--mat-glass-pane);
   --op-selected-row: var(--warn-soft);

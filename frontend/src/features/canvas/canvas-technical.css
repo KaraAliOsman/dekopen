@@ -44,9 +44,9 @@
 .prov-strip {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--space-4);
   list-style: none;
-  margin: 0 0 10px;
+  margin: 0 0 var(--space-8);
   padding: 0;
 }
 
@@ -55,7 +55,7 @@
   border-radius: var(--r-pill);
   color: var(--theme-text-secondary);
   font-size: var(--type-micro);
-  padding: 1px 8px 1px 3px;
+  padding: 1px var(--space-8) 1px 3px;
   white-space: nowrap;
 }
 
@@ -64,8 +64,8 @@
   font-size: var(--type-micro);
   font-weight: 600;
   letter-spacing: 0.04em;
-  margin-right: 4px;
-  padding: 1px 6px;
+  margin-right: var(--space-4);
+  padding: 1px var(--space-6);
   text-transform: uppercase;
 }
 
@@ -91,20 +91,20 @@
 
 .division-children {
   list-style: none;
-  margin: 4px 0 0;
+  margin: var(--space-4) 0 0;
   padding: 0;
 }
 
 .division-children li + li {
-  margin-top: 2px;
+  margin-top: var(--space-2);
 }
 
 .recents {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 6px;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
 }
 
 .recents__label {
@@ -122,7 +122,7 @@
   font-size: var(--type-micro);
   max-width: 140px;
   overflow: hidden;
-  padding: 2px 9px;
+  padding: var(--space-2) var(--space-8);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -134,13 +134,13 @@
 
 .recents__chip--favorite {
   border-color: color-mix(in srgb, var(--theme-accent) 40%, transparent);
-  color: var(--theme-accent-strong, var(--theme-accent));
+  color: var(--theme-accent-strong);
 }
 
 .assembly-field__row {
   align-items: center;
   display: flex;
-  gap: 6px;
+  gap: var(--space-6);
 }
 
 .assembly-field__row select {
@@ -157,7 +157,7 @@
   flex: 0 0 auto;
   font-size: var(--type-title-m);
   line-height: 1;
-  padding: 5px 7px;
+  padding: var(--space-4) var(--space-6);
 }
 
 .star-toggle:hover:not(:disabled) {
@@ -185,8 +185,8 @@
   color: var(--theme-accent);
   cursor: pointer;
   font-size: var(--type-micro);
-  margin-top: 2px;
-  padding: 0 4px;
+  margin-top: var(--space-2);
+  padding: 0 var(--space-4);
   text-align: left;
 }
 
@@ -198,7 +198,7 @@
 .section-view {
   display: block;
   height: auto;
-  margin-top: 0.5rem;
+  margin-top: var(--space-8);
   width: 100%;
 }
 
@@ -327,13 +327,13 @@
 .glazing-picker {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
-  margin-top: 0.35rem;
+  gap: var(--space-8);
+  margin-top: var(--space-6);
 }
 
 .glass-cards {
   display: grid;
-  gap: 0.4rem;
+  gap: var(--space-6);
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   list-style: none;
   margin: 0;
@@ -351,8 +351,8 @@
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  padding: 0.45rem 0.55rem;
+  gap: var(--space-4);
+  padding: var(--space-8) var(--space-8);
   text-align: left;
   width: 100%;
   height: 100%;
@@ -397,18 +397,18 @@
   display: flex;
   flex-wrap: wrap;
   font-size: var(--type-micro);
-  gap: 0.35rem;
+  gap: var(--space-6);
 }
 
 .glass-card__tier {
-  color: var(--theme-accent-strong, var(--theme-accent));
+  color: var(--theme-accent-strong);
   font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
 }
 
 .glass-card__flags {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem;
+  gap: var(--space-4);
 }
 
 .glass-card__flag {
@@ -419,11 +419,11 @@
   align-items: center;
   gap: 3px;
   font-size: var(--type-micro);
-  padding: 1px 7px;
+  padding: 1px var(--space-6);
 }
 
 .glass-card__flag.is-warn {
-  color: var(--theme-warning);
+  color: var(--theme-warning-ink);
 }
 
 .glass-card__star {
@@ -435,7 +435,7 @@
 .glass-findings {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: var(--space-4);
   list-style: none;
   margin: 0;
   padding: 0;
@@ -448,8 +448,8 @@
   color: var(--theme-text-primary);
   display: flex;
   font-size: var(--type-dense);
-  gap: 0.4rem;
-  padding: 0.35rem 0.5rem;
+  gap: var(--space-6);
+  padding: var(--space-6) var(--space-8);
 }
 
 .glass-finding--mandatory {
@@ -469,7 +469,7 @@
 .glass-composer {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: var(--space-6);
 }
 
 .glass-section {
@@ -508,7 +508,7 @@
 .glass-composer__layers {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--space-6);
   list-style: none;
   margin: 0;
   padding: 0;
@@ -519,8 +519,8 @@
   border-left: 2px solid var(--theme-border-subtle);
   display: flex;
   flex-wrap: wrap;
-  gap: 0.3rem;
-  padding-left: 0.4rem;
+  gap: var(--space-4);
+  padding-left: var(--space-6);
 }
 
 .glass-layer--chamber {
@@ -537,7 +537,7 @@
 .glass-layer__pane {
   align-items: center;
   display: inline-flex;
-  gap: 0.2rem;
+  gap: var(--space-4);
 }
 
 .glass-layer select {
@@ -553,14 +553,14 @@
   border-top: 1px solid var(--theme-border-subtle);
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  padding-top: 0.4rem;
+  gap: var(--space-6);
+  padding-top: var(--space-6);
 }
 
 .glass-surcharge {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--space-4);
 }
 
 .glass-surcharge__edges,
@@ -568,8 +568,8 @@
 .glass-surcharge__count {
   align-items: center;
   display: inline-flex;
-  gap: 0.3rem;
-  margin-left: 1.4rem;
+  gap: var(--space-4);
+  margin-left: var(--space-24);
 }
 
 .glass-surcharge input[type="number"] {
@@ -623,8 +623,8 @@
 
 .handle-datum.is-invalid line,
 .handle-datum.is-invalid text {
-  stroke: var(--theme-danger, #d33);
-  fill: var(--theme-danger, #d33);
+  stroke: var(--theme-danger);
+  fill: var(--theme-danger);
 }
 
 /* Cinta de planta bajo el alzado técnico de una corredera. */

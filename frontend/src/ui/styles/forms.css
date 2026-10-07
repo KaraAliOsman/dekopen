@@ -95,9 +95,9 @@
   border-radius: var(--r-pill);
   display: block;
   height: 0.75rem;
-  left: 0.125rem;
+  left: var(--space-2);
   position: absolute;
-  top: 0.125rem;
+  top: var(--space-2);
   transition: left var(--t-state);
   width: 0.75rem;
 }
@@ -192,9 +192,9 @@
   display: inline-flex;
 }
 .ui-tooltip__tip {
-  background: var(--g-950, #161c1f);
+  background: var(--g-950);
   border-radius: var(--r-1);
-  color: var(--paper, #fafcfa);
+  color: var(--paper);
   font-size: var(--type-micro);
   left: 50%;
   line-height: var(--type-micro-lh);
@@ -223,7 +223,7 @@
   transform: translateX(-50%) translateY(0);
 }
 .ui-tooltip__key {
-  border: 1px solid rgb(255 255 255 / 30%);
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
   border-radius: var(--r-1);
   font-family: var(--font-mono);
   margin-left: var(--space-6);

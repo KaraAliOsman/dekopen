@@ -219,7 +219,7 @@ function CatalogReviewView({ payload }: { payload: Dict }): JSX.Element {
 
 function GenericView({ payload }: { payload: Dict }): JSX.Element {
   const rows = Object.entries(payload);
-  if (!rows.length) return <p className="art-empty">{t("aiws.art.empty")}</p>;
+  if (!rows.length) return <p className="ui-empty-inline">{t("aiws.art.empty")}</p>;
   return (
     <dl className="art-kv">
       {rows.map(([key, value]) => (

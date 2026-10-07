@@ -6,14 +6,14 @@
   background: var(--theme-surface-panel);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-sm);
-  bottom: 3rem;
+  bottom: var(--space-48);
   color: var(--theme-text-secondary);
   cursor: pointer;
   font-size: 0.78rem;
-  padding: 0.3rem 0.6rem;
+  padding: var(--space-4) var(--space-8);
   position: absolute;
-  left: 0.75rem;
-  z-index: 2;
+  left: var(--space-12);
+  z-index: var(--z-raise);
 }
 
 /* Status bar — compact persistent state */
@@ -21,7 +21,7 @@
   color: var(--danger-ink);
   display: block;
   font-size: var(--type-dense);
-  margin-top: 0.2rem;
+  margin-top: var(--space-4);
 }
 
 .assembly-field.is-invalid input,
@@ -35,13 +35,13 @@
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-md);
   display: flex;
-  gap: 0.9rem;
+  gap: var(--space-16);
   grid-area: status;
-  padding: 0.3rem 0.75rem;
+  padding: var(--space-4) var(--space-12);
   /* Above the canvas' floating islands (z2) — a scrolled viewport-status
    * chip must never underlap/intercept the issues button (render P2-7). */
   position: relative;
-  z-index: 3;
+  z-index: var(--z-raise-top);
 }
 
 .assembly-statusbar__dims {
@@ -89,7 +89,7 @@
   font-weight: 600;
   letter-spacing: 0.06em;
   margin: 0;
-  padding: 0.55rem 0.75rem;
+  padding: var(--space-8) var(--space-12);
   text-transform: uppercase;
 }
 
@@ -102,13 +102,13 @@
 
 .tree-root {
   overflow-y: auto;
-  padding: 0.25rem 0.2rem;
+  padding: var(--space-4) var(--space-4);
 }
 
 .tree-row {
   align-items: center;
   display: flex;
-  gap: 2px;
+  gap: var(--space-2);
   min-height: 1.5rem;
 }
 
@@ -141,9 +141,9 @@
   flex: 1;
   font: inherit;
   font-size: 0.8rem;
-  gap: 0.35rem;
+  gap: var(--space-6);
   min-width: 0;
-  padding: 0.15rem 0.3rem;
+  padding: var(--space-2) var(--space-4);
   text-align: left;
 }
 
@@ -262,12 +262,12 @@
   background: var(--theme-surface-panel);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-md);
-  bottom: 0.75rem;
+  bottom: var(--space-12);
   display: flex;
-  left: 0.75rem;
-  padding: 2px;
+  left: var(--space-12);
+  padding: var(--space-2);
   position: absolute;
-  z-index: 2;
+  z-index: var(--z-raise);
 }
 
 .viewport-button {
@@ -283,7 +283,7 @@
   height: 1.6rem;
   justify-content: center;
   min-width: 1.6rem;
-  padding: 0 0.35rem;
+  padding: 0 var(--space-6);
 }
 
 .viewport-button:hover {
@@ -316,7 +316,7 @@
   color: var(--theme-text-primary);
   cursor: pointer;
   font: inherit;
-  padding: 0.4rem 0.6rem;
+  padding: var(--space-6) var(--space-8);
   text-align: left;
 }
 
@@ -333,16 +333,16 @@
   background: var(--theme-surface-panel);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-md);
-  bottom: 0.75rem;
+  bottom: var(--space-12);
   /* Secondary ink, not muted: on the panel's dark surface muted measured
    * 4.32:1 — under AA for this readout's size. */
   color: var(--theme-text-secondary);
   font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
   font-size: var(--type-dense);
-  padding: 0.3rem 0.55rem;
+  padding: var(--space-4) var(--space-8);
   position: absolute;
-  right: 0.75rem;
-  z-index: 2;
+  right: var(--space-12);
+  z-index: var(--z-raise);
 }
 
 .product-front-svg {
@@ -574,7 +574,7 @@
   color: var(--theme-text-primary);
   font-variant-numeric: tabular-nums;
   font-size: 0.9rem;
-  padding: 0.15rem 0.3rem;
+  padding: var(--space-2) var(--space-4);
   text-align: center;
   width: 100%;
 }
@@ -693,7 +693,7 @@
 .assembly-side {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--space-12);
   grid-area: side;
   min-height: 0;
   min-width: 0;
@@ -705,8 +705,8 @@
   border: 1px solid var(--theme-border-subtle);
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-  padding: 0.6rem 0.75rem;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12);
 }
 
 .assembly-inspector__header {
@@ -738,8 +738,8 @@
   font-weight: 600;
   letter-spacing: 0.06em;
   list-style: none;
-  margin-top: 0.4rem;
-  padding: 0.3rem 0;
+  margin-top: var(--space-6);
+  padding: var(--space-4) 0;
   text-transform: uppercase;
   user-select: none;
 }
@@ -747,7 +747,7 @@
 .inspector-section > summary::before {
   content: "▾";
   display: inline-block;
-  margin-right: 0.35rem;
+  margin-right: var(--space-6);
   transition: transform 0.12s ease;
 }
 
@@ -778,7 +778,7 @@
 
 .opening-grid {
   display: grid;
-  gap: 0.3rem;
+  gap: var(--space-4);
   grid-template-columns: repeat(4, 1fr);
 }
 
@@ -786,7 +786,7 @@
   background: var(--theme-bg-canvas);
   border: 1px solid var(--theme-border-subtle);
   cursor: pointer;
-  padding: 0.15rem;
+  padding: var(--space-2);
 }
 
 .opening-choice.is-active {
@@ -815,7 +815,7 @@
 .inspector-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: var(--space-6);
 }
 
 .ghost-button {
@@ -824,7 +824,7 @@
   color: var(--theme-text-primary);
   cursor: pointer;
   font-size: 0.85rem;
-  padding: 0.3rem 0.55rem;
+  padding: var(--space-4) var(--space-8);
 }
 
 .ghost-button:hover:not(:disabled) {
@@ -846,7 +846,7 @@
 .assembly-issues {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: var(--space-4);
   list-style: none;
   margin: 0;
   padding: 0;
@@ -859,7 +859,7 @@
   color: var(--theme-text-secondary);
   cursor: pointer;
   font-size: 0.8rem;
-  padding: 0.35rem 0.5rem;
+  padding: var(--space-6) var(--space-8);
   text-align: left;
   width: 100%;
 }
@@ -1018,52 +1018,52 @@
   background: var(--theme-surface);
   color: var(--theme-text-primary);
   font: inherit;
-  padding: 6px 8px;
-  margin-bottom: 8px;
+  padding: var(--space-6) var(--space-8);
+  margin-bottom: var(--space-8);
 }
 
 .assistant-panel__preview {
   border-top: 1px solid var(--theme-border-subtle);
-  margin-top: 8px;
-  padding-top: 8px;
+  margin-top: var(--space-8);
+  padding-top: var(--space-8);
 }
 
 .assistant-panel__notes {
   color: var(--theme-text-secondary);
   font-size: var(--type-dense);
-  margin: 0 0 6px;
+  margin: 0 0 var(--space-6);
 }
 
 .assistant-panel__ops,
 .assistant-panel__rejected {
-  margin: 0 0 8px;
-  padding-left: 16px;
+  margin: 0 0 var(--space-8);
+  padding-left: var(--space-16);
   font-size: var(--type-dense);
 }
 
 .assistant-panel__rejected {
-  color: var(--theme-mark);
+  color: var(--person-ink);
 }
 
 .assistant-panel__chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin: 0 0 8px;
+  gap: var(--space-6);
+  margin: 0 0 var(--space-8);
 }
 
 .assistant-panel__chip {
-  border: 1px solid var(--theme-border-strong, var(--theme-border));
+  border: 1px solid var(--theme-border-strong);
   border-radius: var(--radius-pill);
-  background: var(--theme-surface-raised, var(--theme-surface));
+  background: var(--theme-surface-raised);
   color: var(--theme-text-primary);
   font-size: var(--type-dense);
-  padding: 4px 12px;
+  padding: var(--space-4) var(--space-12);
   cursor: pointer;
 }
 
 .assistant-panel__chip:hover:not(:disabled) {
-  background: var(--theme-surface-hover, var(--theme-surface-sunken));
+  background: var(--theme-surface-hover);
 }
 
 .assistant-panel__chip:disabled {
@@ -1074,25 +1074,25 @@
 .assistant-panel__meta {
   color: var(--theme-text-muted);
   font-size: var(--type-micro);
-  margin: 6px 0 0;
+  margin: var(--space-6) 0 0;
 }
 
 .alternatives-panel__result {
   border-top: 1px solid var(--theme-border-subtle);
-  margin-top: 8px;
-  padding-top: 8px;
+  margin-top: var(--space-8);
+  padding-top: var(--space-8);
 }
 
 .alternatives-panel__cards {
   display: grid;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: var(--space-8);
+  margin-bottom: var(--space-8);
 }
 
 .alternative-card {
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--radius-md);
-  padding: 8px;
+  padding: var(--space-8);
   background: var(--theme-surface);
 }
 
@@ -1108,19 +1108,19 @@
   height: auto;
   min-height: 96px;
   border-radius: var(--radius-sm);
-  background: var(--model3d-backdrop, var(--theme-bg-canvas));
+  background: var(--model3d-backdrop);
 }
 
 .alternative-card__label {
   font-weight: 600;
   font-size: var(--type-dense);
-  margin: 6px 0 2px;
+  margin: var(--space-6) 0 var(--space-2);
 }
 
 .alternative-card__rationale {
   color: var(--theme-text-secondary);
   font-size: var(--type-micro);
-  margin: 0 0 4px;
+  margin: 0 0 var(--space-4);
 }
 
 .alternative-card__metrics {
@@ -1131,13 +1131,13 @@
 }
 
 .alternative-card__warnings {
-  color: var(--theme-mark);
+  color: var(--person-ink);
   font-size: var(--type-micro);
-  margin: 4px 0 0;
+  margin: var(--space-4) 0 0;
 }
 
 .alternative-card__use {
-  margin-top: 6px;
+  margin-top: var(--space-6);
 }
 
 .context-menu {
@@ -1148,9 +1148,9 @@
   display: flex;
   flex-direction: column;
   min-width: 200px;
-  padding: 4px;
+  padding: var(--space-4);
   position: fixed;
-  z-index: 70;
+  z-index: var(--z-menu);
 }
 
 .context-menu__item {
@@ -1161,7 +1161,7 @@
   cursor: pointer;
   font: inherit;
   font-size: var(--type-body);
-  padding: 7px 10px;
+  padding: var(--space-6) var(--space-8);
   text-align: left;
 }
 
@@ -1172,16 +1172,16 @@
 
 .context-menu__item--assistant {
   border-top: 1px solid var(--theme-border-subtle);
-  border-radius: 0 0 4px 4px;
+  border-radius: 0 0 var(--r-2) var(--r-2);
   color: var(--theme-accent);
-  margin-top: 4px;
+  margin-top: var(--space-4);
 }
 
 .context-menu__item {
   align-items: center;
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-12);
 }
 
 .context-menu__label {
@@ -1193,18 +1193,18 @@
 .context-menu__hint {
   background: transparent;
   border: 1px solid var(--theme-border-subtle);
-  border-radius: var(--radius-xs, 3px);
+  border-radius: var(--radius-xs);
   color: var(--theme-text-muted);
   font-family: "IBM Plex Mono", "JetBrains Mono", "SF Mono", monospace;
   font-size: var(--type-micro);
-  padding: 1px 5px;
+  padding: 1px var(--space-4);
   white-space: nowrap;
 }
 
 /* D04 herrajes: resolved class + why-this-kit + avanzado component table. */
 .assembly-kit-summary {
   border: 1px solid var(--theme-border-subtle);
-  padding: 0.35rem 0.5rem;
+  padding: var(--space-6) var(--space-8);
 }
 
 .assembly-kit-class {
@@ -1222,7 +1222,7 @@
 }
 
 .assembly-kit-why {
-  margin-top: 0.15rem;
+  margin-top: var(--space-2);
 }
 
 .assembly-kit-why > summary {
@@ -1236,7 +1236,7 @@
 .assembly-kit-why > summary::before {
   content: "▸";
   display: inline-block;
-  margin-right: 0.3rem;
+  margin-right: var(--space-4);
 }
 
 .assembly-kit-why[open] > summary::before {
@@ -1251,7 +1251,7 @@
   border: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--space-4);
   margin: 0;
   padding: 0;
 }
@@ -1267,7 +1267,7 @@
   color: var(--theme-text-secondary);
   display: flex;
   font-size: 0.85rem;
-  gap: 0.35rem;
+  gap: var(--space-6);
 }
 
 .assembly-check input[type="checkbox"] {
@@ -1285,7 +1285,7 @@
 .assembly-kit-advanced > summary::before {
   content: "▸";
   display: inline-block;
-  margin-right: 0.3rem;
+  margin-right: var(--space-4);
 }
 
 .assembly-kit-advanced[open] > summary::before {
@@ -1311,7 +1311,7 @@
 .assembly-kit-table td,
 .assembly-kit-table th {
   border-bottom: 1px solid var(--theme-border-subtle);
-  padding: 0.15rem 0.25rem 0.15rem 0;
+  padding: var(--space-2) var(--space-4) var(--space-2) 0;
 }
 
 .assembly-kit-table td:first-child,

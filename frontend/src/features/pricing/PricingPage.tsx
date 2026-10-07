@@ -2188,8 +2188,13 @@ function CommercialOperations({
         <label>
           {t("pricing.context")}
           <input
+            key={selectedMode}
             name="context_code"
-            defaultValue="DEFAULT"
+            // El modo costo+margen no usa contexto: el campo queda fuera del
+            // submit (disabled) y muestra el nombre legible, no la clave cruda.
+            defaultValue={
+              selectedMode === "COST_PLUS_MARGIN" ? t("pricing.contextDefault") : "DEFAULT"
+            }
             disabled={selectedMode === "COST_PLUS_MARGIN"}
             required={selectedMode !== "COST_PLUS_MARGIN"}
           />

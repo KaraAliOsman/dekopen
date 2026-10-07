@@ -184,7 +184,7 @@ function ReadinessLadder({
   onJump: (target: ReadinessTarget) => void;
 }) {
   const readiness = system.readiness;
-  if (!readiness) return <p className="ws-empty">{ct("readinessUnknown")}</p>;
+  if (!readiness) return <p className="ui-empty-inline">{ct("readinessUnknown")}</p>;
   const levels = readiness.levels ?? [];
   /** Blocker text arrives with the raw system UUID embedded — it means
    * this very record, so name it instead of showing a hex fragment. */
@@ -686,7 +686,7 @@ export function SystemWorkspaceView({
             )}
           </header>
           {!articles.length ? (
-            <p className="ws-empty">{wst("noArticles")}</p>
+            <p className="ui-empty-inline">{wst("noArticles")}</p>
           ) : (
             <div className="ws-article-grid">
               {articles.map((article) => (
@@ -730,7 +730,7 @@ export function SystemWorkspaceView({
               )}
             </header>
             {!beads.length ? (
-              <p className="ws-empty">{wst("noBeadsRows")}</p>
+              <p className="ui-empty-inline">{wst("noBeadsRows")}</p>
             ) : (
               <div className="catalog-table-scroll">
                 <table className="ws-table">
@@ -812,7 +812,7 @@ export function SystemWorkspaceView({
               )}
             </header>
             {!kits.length ? (
-              <p className="ws-empty">{wst("noKits")}</p>
+              <p className="ui-empty-inline">{wst("noKits")}</p>
             ) : (
               <div className="ws-kit-row">
                 {kits.map((kit: KitResponse) => (
@@ -850,7 +850,7 @@ export function SystemWorkspaceView({
             </h3>
           </header>
           {!reinforcements.length ? (
-            <p className="ws-empty">{wst("noReinforcements")}</p>
+            <p className="ui-empty-inline">{wst("noReinforcements")}</p>
           ) : (
             <div className="catalog-table-scroll">
               <table className="ws-table">
@@ -905,7 +905,7 @@ export function SystemWorkspaceView({
               </h3>
             </header>
             {!purchase_mappings.length ? (
-              <p className="ws-empty">{wst("noPurchase")}</p>
+              <p className="ui-empty-inline">{wst("noPurchase")}</p>
             ) : (
               <div className="catalog-table-scroll">
                 <table className="ws-table">
@@ -949,7 +949,7 @@ export function SystemWorkspaceView({
           <h3>{wst("process")}</h3>
         </header>
         {!process_profile ? (
-          <p className="ws-empty">
+          <p className="ui-empty-inline">
             {wst("noProcessBound")}{" "}
             {canEdit && (
               <button
@@ -1035,7 +1035,7 @@ export function SystemWorkspaceView({
           <div className="ws-centers">
             <h4>{wst("centers")}</h4>
             {centers.length === 0 && (
-              <p className="ws-empty">
+              <p className="ui-empty-inline">
                 {wst("noCenters")}
                 {canEdit && (
                   <>
@@ -1162,9 +1162,9 @@ export function SystemWorkspaceView({
             </header>
             <p className="ws-hint">{wst("sourcesHint")}</p>
             {evidenceRows === null ? (
-              <p className="ws-empty">{ct("loading")}</p>
+              <p className="ui-empty-inline">{ct("loading")}</p>
             ) : !evidenceRows.length ? (
-              <p className="ws-empty">{wst("noSources")}</p>
+              <p className="ui-empty-inline">{wst("noSources")}</p>
             ) : (
               <table className="ui-table ws-evidence">
                 <thead>

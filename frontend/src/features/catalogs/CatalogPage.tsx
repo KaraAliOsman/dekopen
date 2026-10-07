@@ -1254,7 +1254,7 @@ function CatalogEditor({
       <footer className="catalog-toolbar">
         <button
           type="submit"
-          className="catalog-primary"
+          className="ui-button ui-button--primary catalog-primary"
           disabled={busy || readOnly || noBeads || uncertainCreate || (row !== undefined && !dirty)}
         >
           {ct(busy ? "working" : "save")}

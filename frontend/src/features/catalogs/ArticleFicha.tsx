@@ -248,7 +248,7 @@ export function ArticleFichaDialog({
                 </table>
               </div>
             )}
-            {ficha.evidence.length === 0 && <p className="ws-empty">{ft("noEvidence")}</p>}
+            {ficha.evidence.length === 0 && <p className="ui-empty-inline">{ft("noEvidence")}</p>}
           </section>
 
           {ficha.purchase_mappings.length > 0 && (

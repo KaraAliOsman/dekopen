@@ -333,8 +333,8 @@
 
 .portal-position__views {
   position: absolute;
-  right: 4px;
-  bottom: 4px;
+  right: var(--space-4);
+  bottom: var(--space-4);
   display: inline-flex;
   background: var(--theme-surface-panel);
   border: 1px solid var(--theme-border-subtle);
@@ -346,7 +346,7 @@
 .portal-view-toggle {
   border: 0;
   background: transparent;
-  padding: 2px 7px;
+  padding: var(--space-2) var(--space-6);
   font-size: var(--type-micro);
   font-weight: 600;
   color: var(--theme-text-muted);
@@ -359,8 +359,8 @@
 }
 
 .portal-position__count {
-  margin-left: 6px;
-  padding: 0 6px;
+  margin-left: var(--space-6);
+  padding: 0 var(--space-6);
   border-radius: var(--r-pill);
   background: var(--theme-accent-soft);
   color: var(--info-ink);
@@ -649,12 +649,12 @@
   color: var(--theme-accent-onfill);
 }
 .portal-step[data-state="declined"] {
-  border-color: var(--theme-warning, #b45309);
+  border-color: var(--theme-warning);
   color: var(--theme-text);
 }
 .portal-step[data-state="declined"]::before {
   content: "↺";
-  background: var(--theme-warning, #b45309);
+  background: var(--theme-warning);
   color: var(--theme-surface-panel);
 }
 
@@ -700,7 +700,7 @@
 /* P08 — el cliente pidió cambios: estado intermedio naranja (requiere
  * persona), el enlace sigue vivo para aprobar/rechazar después. */
 .portal-decided[data-state="changes"] {
-  background: var(--theme-warning-soft, rgba(217, 119, 6, 0.12));
+  background: var(--theme-warning-soft);
   border-color: var(--theme-warning);
   color: var(--theme-text);
 }

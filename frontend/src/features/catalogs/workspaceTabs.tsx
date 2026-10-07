@@ -107,7 +107,7 @@ function DataTable({
   empty: string;
 }): JSX.Element {
   const hasRows = rows !== null && rows !== false;
-  if (!hasRows) return <p className="ws-empty">{empty}</p>;
+  if (!hasRows) return <p className="ui-empty-inline">{empty}</p>;
   return (
     <div className="catalog-table-scroll">
       <table className="ws-table">
@@ -368,7 +368,7 @@ export function HardwarePanel({
     <>
       <SubSection title={wst("kitGroups")} count={kits.length}>
         {!openings.length ? (
-          <p className="ws-empty">{wst("noKits")}</p>
+          <p className="ui-empty-inline">{wst("noKits")}</p>
         ) : (
           openings.map((opening) => {
             const group = kits.filter((kit) => kit.opening_type === opening);
