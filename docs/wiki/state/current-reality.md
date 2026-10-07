@@ -3,7 +3,7 @@ type: state
 status: active
 updated: 2026-10-07
 volatility: high
-verified_ref: 4a9d3c27019fd31f63074db05ffaf262eb51bee3
+verified_ref: bd5b8f126952f599b7c63705feb3d4f2d81e2770
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
@@ -39,6 +39,7 @@ sources:
   - P22 clientes ajustes PR https://github.com/KaraAliOsman/dekopen/pull/61
   - D08 tipologías avanzadas PR https://github.com/KaraAliOsman/dekopen/pull/65
   - P10 portal propuesta PR https://github.com/KaraAliOsman/dekopen/pull/64
+  - P18 térmico OGUC branch devin/P18-termico-normativa
   - P15 compras/inventario branch devin/P15-compras-inventario
   - P08 emisión/cotización branch devin/P08-cotizacion-emision
   - P17 asistente IA/trabajos/Orb branch devin/P17-asistente-orb
