@@ -1,7 +1,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
 SET LOCAL search_path = public, private, auth, extensions, pg_temp;
-SELECT plan(27);
+SELECT plan(32);
 
 -- clients: tipo de cliente y estado de fusión.
 SELECT has_column('public', 'clients', 'kind', 'clients.kind exists');
@@ -87,6 +87,40 @@ SELECT has_column('public', 'tenancy_organizations', 'require_totp',
     'org require_totp exists');
 SELECT has_column('public', 'pricing_rules', 'discount_approval_threshold_pct',
     'discount approval threshold exists');
+
+-- Guardado de Comercial: pricing_backend puede UPDATEar las columnas de
+-- reglas que el formulario envía e INSERTar la fila de una org nueva.
+SELECT is(
+    (SELECT COUNT(*)::int FROM information_schema.role_column_grants
+     WHERE table_schema='public' AND table_name='pricing_rules'
+       AND grantee='pricing_backend' AND privilege_type='UPDATE'
+       AND column_name IN ('tax_rate_pct','default_margin_pct','margin_min_pct',
+         'margin_max_pct','discount_approval_threshold_pct')),
+    5,
+    'pricing_backend puede UPDATEar las cinco columnas de reglas comerciales');
+SELECT is(
+    (SELECT COUNT(*)::int FROM information_schema.role_table_grants
+     WHERE table_schema='public' AND table_name='pricing_rules'
+       AND grantee='pricing_backend' AND privilege_type='INSERT'),
+    1,
+    'pricing_backend puede INSERTar la fila de reglas de una org nueva');
+SELECT is(
+    (SELECT cmd::text FROM pg_policies
+     WHERE schemaname='public' AND tablename='pricing_rules'
+       AND policyname='pricing_rules_settings_write'),
+    'UPDATE',
+    'policy pricing_rules_settings_write covers UPDATE for pricing_backend');
+SELECT is(
+    (SELECT cmd::text FROM pg_policies
+     WHERE schemaname='public' AND tablename='pricing_rules'
+       AND policyname='pricing_rules_settings_insert'),
+    'INSERT',
+    'policy pricing_rules_settings_insert covers INSERT for pricing_backend');
+SELECT ok(
+    (SELECT 'pricing_backend' = ANY(roles) FROM pg_policies
+     WHERE schemaname='public' AND tablename='pricing_rules'
+       AND policyname='pricing_rules_settings_write'),
+    'settings write policy is scoped to pricing_backend');
 
 SELECT * FROM finish();
 ROLLBACK;

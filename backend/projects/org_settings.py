@@ -185,9 +185,15 @@ def save_commercial(org_id, data: dict) -> dict:
                         "margin_band_invalid",
                         "El margen mínimo no puede superar al máximo.",
                     )
+        # Org nueva sin fila de reglas: row_id=None -> admin_write hace INSERT
+        # (la migración concede INSERT a nivel tabla y UPDATE por columna).
         with transaction.atomic(), commercial_backend():
             admin_write(
-                "rules", org_id, rule_payload, "ajustes_comercial", _rules(org_id)["id"]
+                "rules",
+                org_id,
+                rule_payload,
+                "ajustes_comercial",
+                _rules(org_id).get("id"),
             )
     if org_payload:
         with transaction.atomic(), documentary_backend():

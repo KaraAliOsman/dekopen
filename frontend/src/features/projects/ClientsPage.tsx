@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { ApiError } from "../../api/apiMutator";
@@ -174,6 +174,9 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
     retry: false,
     gcTime: 0,
     refetchOnWindowFocus: false,
+    // Mantiene los datos anteriores mientras llega la nueva búsqueda: sin esto
+    // el retorno anticipado por isPending desmonta el input a cada tecla.
+    placeholderData: keepPreviousData,
   });
 
   const detailQuery = useQuery<ClientDetailResponse>({
@@ -264,6 +267,7 @@ function ClientsWorkspace({ orgId, canWrite }: { orgId: string; canWrite: boolea
       setCreating(false);
       void query.refetch();
       void detailQuery.refetch();
+      void duplicatesQuery.refetch();
     } catch (caught) {
       if (controller.signal.aborted) return;
       const status = caught instanceof ApiError ? caught.status : null;

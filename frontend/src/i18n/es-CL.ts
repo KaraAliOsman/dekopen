@@ -1422,6 +1422,7 @@ export const messages = {
     "Bajo este descuento se aplica directo; hasta el doble lo aprueba el dueño.",
   "settings.commercialFractions": "Los porcentajes van en fracción: 0,35 = 35 %.",
   "settings.commercialError": "Revisa los valores — los rangos y la banda no cuadran.",
+  "settings.commercialSaveError": "No se pudo guardar la configuración comercial.",
   "settings.commercialSave": "Guardar comercial",
   "settings.previewTitle": "Vista previa del documento",
   "settings.previewLoading": "Generando vista previa…",

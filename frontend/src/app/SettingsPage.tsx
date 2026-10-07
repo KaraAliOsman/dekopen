@@ -1283,7 +1283,7 @@ function CommercialCard({ orgId }: { orgId: string }): JSX.Element {
     } catch (caught) {
       const status = caught instanceof ApiError ? caught.status : 0;
       setMessage({
-        text: t(status === 400 ? "settings.commercialError" : "settings.brandingSaveError"),
+        text: t(status === 400 ? "settings.commercialError" : "settings.commercialSaveError"),
         error: true,
       });
     } finally {
@@ -1966,7 +1966,7 @@ function DisabledSection({ reason }: { reason: string }): JSX.Element {
   return (
     <div className="settings-card settings-card--disabled">
       <p className="settings-hint">
-        {t("settings.availableWhen")} {reason}
+        {t("settings.availableWhen")}{" "}{reason}
       </p>
     </div>
   );

@@ -170,8 +170,26 @@ ALTER TABLE public.pricing_rules
 
 GRANT SELECT (discount_approval_threshold_pct)
     ON public.pricing_rules TO pricing_backend;
-GRANT UPDATE (discount_approval_threshold_pct)
+-- Ajustes > Comercial escribe las reglas comerciales (IVA, banda de margen,
+-- umbral de descuento) via pricing_backend: grants de columna + políticas de
+-- escritura acotadas a OWNER/ESTIMATOR (los roles que escriben ajustes).
+GRANT UPDATE (tax_rate_pct, default_margin_pct, margin_min_pct,
+    margin_max_pct, discount_approval_threshold_pct)
     ON public.pricing_rules TO pricing_backend;
+-- INSERT a nivel tabla: una org nueva sin fila de reglas crea la suya al
+-- guardar Comercial por primera vez (el UPDATE de arriba sigue por columna).
+GRANT INSERT ON public.pricing_rules TO pricing_backend;
+
+CREATE POLICY pricing_rules_settings_write ON public.pricing_rules
+    FOR UPDATE TO pricing_backend
+    USING (org_id IN (SELECT private.current_user_org_ids())
+           AND private.pricing_role(org_id, ARRAY['OWNER', 'ESTIMATOR']))
+    WITH CHECK (org_id IN (SELECT private.current_user_org_ids())
+           AND private.pricing_role(org_id, ARRAY['OWNER', 'ESTIMATOR']));
+CREATE POLICY pricing_rules_settings_insert ON public.pricing_rules
+    FOR INSERT TO pricing_backend
+    WITH CHECK (org_id IN (SELECT private.current_user_org_ids())
+           AND private.pricing_role(org_id, ARRAY['OWNER', 'ESTIMATOR']));
 
 -- ---------------------------------------------------------------------------
 -- RLS — misma forma que `clients_isolation` (FOR ALL por org).
