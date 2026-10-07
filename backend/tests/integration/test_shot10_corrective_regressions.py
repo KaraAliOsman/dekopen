@@ -831,6 +831,8 @@ def test_readiness_levels_flag_unmapped_machine_ops(documentary_tenant):
 
         # The clone has mullions → END_MACHINING; the frameless profile routes
         # only SAW_CUT and HANDLE_PREP, so binding it must surface the gap.
+        # Blocker text is user-facing: ops are named by their localized
+        # label (R6 — no machine keys in copy).
         with as_user(users["WORKSHOP_MANAGER"]):
             one(
                 "UPDATE public.profile_systems SET process_profile_id=%s WHERE id=%s RETURNING id",
@@ -843,7 +845,8 @@ def test_readiness_levels_flag_unmapped_machine_ops(documentary_tenant):
             b for b in levels["CNC_READY"]["blockers"]
             if b["code"] == "station_map"
         )
-        assert "END_MACHINING" in blocker["affected"]
+        assert "mecanizado de extremo" in blocker["affected"]
+        assert "END_MACHINING" not in blocker["affected"]
     finally:
         with as_user(users["WORKSHOP_MANAGER"]):
             one(
