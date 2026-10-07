@@ -730,3 +730,63 @@ description: Local dev-stack recipe for DEKOPEN E2E testing — Supabase CLI sta
 - Gotcha: el pack se renderiza al descargar, así que cambiar el setting de la
   org y re-descargar la MISMA OT es la prueba A/B más limpia (la segunda
   descarga aterriza como `… (1).pdf` en ~/Downloads).
+
+## P11 cobranza — env vars y patrones nuevos
+- `SII_CAF_KEK=<64-hex>` — REQUIRED for any CAF upload or DTE stamp; missing →
+  503 «SII_CAF_KEK no está configurado». Generate with
+  `python -c "import secrets;print(secrets.token_hex(32))"` and relaunch
+  runserver + runjobs.
+- `FLOW_WS_MOCK=1` exposes `/api/v1/billing/flow-sim/<token>/` (public).
+- `SII_WS_ENVIO_MOCK=1` + `SII_WS_ENVIO_MOCK_VERDICT=OBSERVED` makes «Enviar al
+  SII» land «SII · Aceptado con reparos».
+- `AI_GATEWAY_MOCK_ENABLED=1` + `UPDATE ai_routes SET provider='MOCK' WHERE
+  capability='collection_reminder'` when MiMo is 429 — env alone is not enough.
+
+Direct-SQL writes (link expiry, client_email, invoice payload fixes):
+
+- `projects` UPDATE needs service role + claims GUC or the
+  guard/RLS silently returns 0 rows:
+  `BEGIN; SET LOCAL ROLE pricing_backend;
+   SET LOCAL request.jwt.claims='{"sub":"<uid>","role":"authenticated","aal":"aal2"}';
+   UPDATE ...; COMMIT;`
+- Plain psql as postgres works for reads and non-guarded tables
+  (`project_payment_links.expires_at`, `project_invoices.payload_json`,
+  `ai_routes`).
+
+Fixture data gaps found (P11): all clients lack `client_rut`/`client_giro`/
+`client_comuna`/`client_address` → DTE stamping 422s «RUT de receptor
+válido» / «giro, comuna y dirección». `projects.client_email` is empty →
+«Enviar recordatorio» 422s `reminder_no_client_email` (no clients.email
+fallback). Fix via guarded UPDATEs above or patch the sealed
+`project_invoices.payload_json->project` with `jsonb_set` (UTF-8 chars
+outside ISO-8859-1 — e.g. ’ — are rejected at stamp time).
+
+Devin Secrets needed: none (all keys come from `supabase status` / .fixture-state.json).
+## Delta-reverification additions (2026-10, post `8ca5c467`)
+
+- **Frontend magic-link needs Vite env**: `VITE_SUPABASE_URL` +
+  `VITE_SUPABASE_ANON_KEY` must be exported before `npm run dev` or the
+  OTP step fails with «No fue posible solicitar el enlace de acceso»
+  (supabaseClient reads `import.meta.env.VITE_*`). Take both values from
+  `supabase status`.
+- **Heredoc into `docker exec` needs `-i`**: `docker exec supabase_db_dekopen
+  psql <<EOF` silently runs nothing — stdin is not forwarded without `-i`.
+  Symptom: statements "succeed" but produce no output and apply nothing.
+- **Grant bugs hide behind earlier crashes**: `_seal_repr`'s
+  `UPDATE project_dtes SET repr_*` lacked `GRANT UPDATE` for
+  `documentary_backend`, but the PDF417 ValueError crashed *before* the
+  UPDATE — the missing grant only surfaced once the barcode was fixed
+  (409 `Pricing transaction rejected`, SQLSTATE 42501). When a fix moves
+  a failure boundary forward, re-check grants/RLS on every later statement
+  in the same transaction; test-workaround was column-level
+  `GRANT UPDATE (repr_storage_object_key, repr_file_sha256)`.
+- **`pkill -f` inside a compound command can kill the command itself** if the
+  pattern matches the parent shell's command line (e.g. `pkill -f vite` in a
+  shell that also contains 'vite' in argv) — verify the port is down, then
+  relaunch in a separate call.
+- **Bash `UID` is readonly** — never assign to it; use `OU`/`OWNER_UID`.
+- **pyotp not installed** — compute TOTP inline (hmac-sha1, T=30, `% 10**6`).
+- **Mock `_charges` dies with the runserver process**: previously created
+  flow-sim links 404 «cargo desconocido» after any backend restart — mint a
+  fresh link instead of reusing an old token.
+

@@ -1,0 +1,190 @@
+{
+  "summary": {
+    "generated_at": "2026-10-06T22:09:09.354Z",
+    "routes": 18,
+    "routes_with_findings": [],
+    "total_findings": 0
+  },
+  "results": [
+    {
+      "route": "settings-general",
+      "url": "/settings/general",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/settings-general--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/general"
+    },
+    {
+      "route": "settings-general",
+      "url": "/settings/general",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/settings-general--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/general"
+    },
+    {
+      "route": "settings-general",
+      "url": "/settings/general",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/settings-general--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/general"
+    },
+    {
+      "route": "settings-general",
+      "url": "/settings/general",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/settings-general--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/general"
+    },
+    {
+      "route": "settings-general",
+      "url": "/settings/general",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/settings-general--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/general"
+    },
+    {
+      "route": "settings-general",
+      "url": "/settings/general",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/settings-general--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/general"
+    },
+    {
+      "route": "settings-billing",
+      "url": "/settings/billing",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/settings-billing--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/billing"
+    },
+    {
+      "route": "settings-billing",
+      "url": "/settings/billing",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/settings-billing--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/billing"
+    },
+    {
+      "route": "settings-billing",
+      "url": "/settings/billing",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/settings-billing--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/billing"
+    },
+    {
+      "route": "settings-billing",
+      "url": "/settings/billing",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/settings-billing--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/billing"
+    },
+    {
+      "route": "settings-billing",
+      "url": "/settings/billing",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/settings-billing--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/billing"
+    },
+    {
+      "route": "settings-billing",
+      "url": "/settings/billing",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/settings-billing--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/billing"
+    },
+    {
+      "route": "settings-wallet",
+      "url": "/settings/wallet",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/settings-wallet--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/wallet"
+    },
+    {
+      "route": "settings-wallet",
+      "url": "/settings/wallet",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/settings-wallet--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/wallet"
+    },
+    {
+      "route": "settings-wallet",
+      "url": "/settings/wallet",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/settings-wallet--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/wallet"
+    },
+    {
+      "route": "settings-wallet",
+      "url": "/settings/wallet",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/settings-wallet--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/wallet"
+    },
+    {
+      "route": "settings-wallet",
+      "url": "/settings/wallet",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/settings-wallet--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/wallet"
+    },
+    {
+      "route": "settings-wallet",
+      "url": "/settings/wallet",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/settings-wallet--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/settings/wallet"
+    }
+  ]
+}

@@ -14,6 +14,7 @@ import json
 import logging
 import os
 from decimal import Decimal
+from html import escape
 from uuid import UUID, uuid4
 
 from django.conf import settings
@@ -241,6 +242,46 @@ def _deliver_to_staff(
 
 
 # ——— Casos de uso (los llama el job handler con la tx y claims listos) ———
+
+
+def deliver_client_message(
+    *,
+    org_id: UUID,
+    to_email: str,
+    rendered: templates.RenderedMail,
+    template: str,
+    context: dict,
+) -> dict:
+    """Correo al cliente por clic explícito del usuario (P11 recordatorio):
+    se envuelve en la concha white-label de la org y sale por la bandeja —
+    la fila mail_messages es la evidencia del envío."""
+    brand = _org_mail_brand(org_id=org_id)
+    paragraphs = "".join(
+        f'<p style="margin:0 0 14px;font-family:{templates._FONT};'
+        f'font-size:14px;line-height:1.6;color:{templates._INK}">'
+        f'{escape(line)}</p>'
+        for block in str(rendered.text).split("\n\n")
+        for line in [block.strip()]
+        if line
+    )
+    rendered = templates.RenderedMail(
+        subject=rendered.subject,
+        html=templates._client_shell(
+            accent=str(brand["accent"]),
+            header=escape(str(brand["org_name"])),
+            body=paragraphs,
+            footer_lines=escape(str(brand["org_contact"] or "")),
+        ),
+        text=rendered.text,
+    )
+    return _deliver(
+        org_id=org_id,
+        audience="CLIENT",
+        template=template,
+        to_email=to_email,
+        rendered=rendered,
+        context=context,
+    )
 
 
 def deliver_quote_sent(*, org_id: UUID, project_id: UUID, token: str) -> dict:

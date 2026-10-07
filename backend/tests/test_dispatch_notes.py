@@ -111,6 +111,14 @@ def _patch_env(monkeypatch, storage, *, existing=None, count=0):
     monkeypatch.setattr(dispatch_notes, "rows", fake_rows)
     monkeypatch.setattr(dispatch_notes, "one", fake_one)
     monkeypatch.setattr(dispatch_notes, "SupabaseDocumentStorage", lambda: storage)
+    # P11 — la guía sella el estado tributario de la org al emitirse;
+    # en unidad ese estado es «no certificado» honesto.
+    monkeypatch.setattr(
+        dispatch_notes,
+        "integration_state",
+        lambda *, org_id: {"adapter": "none", "certified": False,
+                           "certificate": False, "caf_available": False},
+    )
     return one_calls
 
 

@@ -12,6 +12,8 @@ from decimal import Decimal
 import hashlib
 import hmac
 import json
+import os
+import uuid
 from urllib.parse import urlencode, urlsplit
 
 import httpx
@@ -172,3 +174,111 @@ class FlowClient:
                 or parsed.query or parsed.fragment or parsed.username):
             raise FlowError("flow_invalid_redirect", uncertain=True)
         return url + "?" + urlencode({"token": token})
+
+
+def mock_enabled() -> bool:
+    """Proveedor simulado — sólo con el opt-in explícito ``FLOW_WS_MOCK=1``,
+    nunca como fallback silencioso de una integración real sin llaves."""
+    return os.environ.get("FLOW_WS_MOCK", "").strip() == "1"
+
+
+class MockFlowClient:
+    """Proveedor Flow simulado de punta a punta, detrás del mismo contrato
+    del cliente real: ``create_payment`` devuelve la orden + token y una URL
+    de pago — que en modo simulado apunta a la página de checkout local
+    (``flow_sim``), donde el pagador decide pagar o rechazar y la decisión
+    entra por el mismo ``payment_status`` que el webhook real.
+
+    El estado vive en memoria del proceso: un cargo desconocido se reporta
+    como aún pendiente — nunca como pagado — para que la conciliación por
+    ``commerceOrder`` no pueda inventar un pago tras un reinicio."""
+
+    _charges: dict[str, dict] = {}
+
+    def __init__(self, *, api_url: str, api_key: str, secret_key: str):
+        self.api_url = api_url or "https://sandbox.flow.cl/api"
+
+    @classmethod
+    def checkout_url(cls, *, token: str, base: str) -> str:
+        return f"{base.rstrip('/')}/api/v1/billing/flow-sim/{token}/"
+
+    @classmethod
+    def decide(cls, token: str, status: int) -> None:
+        """La página simulada marca el veredicto del pagador (2 paga, 3
+        rechaza); ``payment_status`` lo expone luego igual que Flow."""
+        charge = cls._charges.get(token)
+        if charge is not None:
+            charge["status"] = status
+
+    def create_payment(self, *, order: str, subject: str, amount: Decimal, email: str,
+                       confirmation_url: str, return_url: str) -> dict:
+        if not amount.is_finite() or amount <= 0 or amount != amount.to_integral_value():
+            raise ValueError("Flow CLP payments require positive integral Decimal amounts")
+        token = f"sim-{uuid.uuid4().hex[:20]}"
+        flow_order = int(uuid.uuid4().hex[:8], 16) % 9_000_000 + 1_000_000
+        self._charges[token] = {
+            "order": order,
+            "flowOrder": flow_order,
+            "amount": amount,
+            "status": 1,
+        }
+        sim_base = os.environ.get("FLOW_SIM_ORIGIN", "").strip() or "http://127.0.0.1:8000"
+        return {
+            "url": self.checkout_url(token=token, base=sim_base),
+            "token": token,
+            "flowOrder": flow_order,
+        }
+
+    def _resolve(self, token: str) -> dict:
+        charge = self._charges.get(token)
+        if charge is None:
+            raise FlowError("flow_payment_not_found")
+        return {
+            "flowOrder": charge["flowOrder"],
+            "status": charge["status"],
+            "commerceOrder": charge["order"],
+            "amount": str(charge["amount"]),
+            "currency": "CLP",
+        }
+
+    def _resolve_by_order(self, order: str) -> dict:
+        for charge in self._charges.values():
+            if charge["order"] == order:
+                return {
+                    "flowOrder": charge["flowOrder"],
+                    "status": charge["status"],
+                    "commerceOrder": charge["order"],
+                    "amount": str(charge["amount"]),
+                    "currency": "CLP",
+                }
+        raise FlowError("flow_payment_not_found")
+
+    def payment_status(self, token: str) -> dict:
+        return self._resolve(token)
+
+    def payment_by_order(self, order: str) -> dict:
+        return self._resolve_by_order(order)
+
+    def redirect_url(self, response: Mapping) -> str:
+        url = response.get("url")
+        token = response.get("token")
+        if not isinstance(url, str) or not url:
+            raise FlowError("flow_invalid_redirect", uncertain=True)
+        return url if not token else f"{url}?token={token}"
+
+
+def client_for(integration: dict):
+    """Adaptador único: con ``FLOW_WS_MOCK=1`` toda integración habla con el
+    proveedor simulado — el resto del dominio (claim, webhook, ledger) no se
+    entera de qué transporte está detrás."""
+    if mock_enabled():
+        return MockFlowClient(
+            api_url=integration["api_url"],
+            api_key=integration["api_key"],
+            secret_key=integration["secret_key"],
+        )
+    return FlowClient(
+        api_url=integration["api_url"],
+        api_key=integration["api_key"],
+        secret_key=integration["secret_key"],
+    )

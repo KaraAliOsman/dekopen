@@ -1141,6 +1141,107 @@ p.handle-pending {
   background: var(--accent);
   transition: width 0.28s ease;
 }
+/* Calendario de cobranza — stepper de cuotas del acuerdo sellado (P11):
+   cada cuota explica monto, cubierto y vencimiento en mono. */
+.collection-stepper {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  counter-reset: cuota;
+}
+.collection-stepper__step {
+  border: 1px solid var(--theme-border-subtle, #d8dce0);
+  border-radius: var(--radius-sm, 4px);
+  padding: 10px 12px;
+  display: grid;
+  gap: 4px;
+  counter-increment: cuota;
+  position: relative;
+}
+.collection-stepper__step::before {
+  content: counter(cuota);
+  position: absolute;
+  inset-inline-end: 10px;
+  inset-block-start: 10px;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.7rem;
+  color: var(--ink-muted);
+}
+.collection-stepper__step.is-overdue {
+  border-color: var(--danger, #b42318);
+}
+.collection-stepper__step.is-paid {
+  border-color: var(--accent);
+}
+.collection-stepper__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.collection-stepper__label {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.collection-stepper__amount {
+  font-family: var(--font-mono, monospace);
+  font-size: 1.15rem;
+}
+.collection-stepper__meta {
+  color: var(--ink-muted);
+  font-size: 0.75rem;
+}
+/* Línea de tiempo — cada movimiento con su actor y su documento. */
+.collection-movements {
+  margin-top: 16px;
+}
+.collection-timeline {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  border-inline-start: 2px solid var(--theme-border-subtle, #d8dce0);
+}
+.collection-timeline__item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: baseline;
+  padding: 6px 0 6px 12px;
+  position: relative;
+}
+.collection-timeline__item::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: -5px;
+  inset-block-start: 13px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.collection-timeline__what {
+  font-size: 0.85rem;
+}
+.collection-timeline__what .num,
+.collection-timeline__meta {
+  font-family: var(--font-mono, monospace);
+}
+.collection-timeline__meta {
+  color: var(--ink-muted);
+  font-size: 0.75rem;
+}
+.projects-reminder {
+  margin-top: 14px;
+  border-top: 1px solid var(--theme-border-subtle);
+  padding-top: 10px;
+}
+.reminder-form textarea {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.8rem;
+  resize: vertical;
+}
 .imports-empty {
   color: var(--theme-text-secondary);
   font-size: 0.9rem;

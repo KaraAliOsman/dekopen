@@ -1254,7 +1254,18 @@ function ProjectWorkspace({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const positionRowRefs = useRef(new Map<string, HTMLDivElement>());
   const [factsCollapsed, setFactsCollapsed] = useState(false);
-  const [openSection, setOpenSection] = useState<FactsSection | null>(null);
+  // «Hoy» deep-links into a workflow section (?section=payments) — the
+  // collection queue lands on Cobranza open, not on a collapsed rail.
+  const [openSection, setOpenSection] = useState<FactsSection | null>(() => {
+    const section = params.get("section");
+    return section === "quote" ||
+      section === "services" ||
+      section === "payments" ||
+      section === "imports" ||
+      section === "compare"
+      ? section
+      : null;
+  });
   // Services fetches mount on first open — a collapsed section shouldn't
   // cost a round-trip (same contract as ProjectActivitySection).
   const [servicesOpened, setServicesOpened] = useState(false);

@@ -197,6 +197,14 @@ def _patch_env(monkeypatch, storage, *, order=None, delivery=None, existing=None
     monkeypatch.setattr(confirmations, "SupabaseDocumentStorage", lambda: storage)
     monkeypatch.setattr(confirmations.transaction, "atomic", _noop)
     monkeypatch.setattr(confirmations, "documentary_backend", _noop)
+    # P11 — el POD sella el estado tributario de la org al emitirse;
+    # en unidad ese estado es «no certificado» honesto.
+    monkeypatch.setattr(
+        confirmations,
+        "integration_state",
+        lambda *, org_id: {"adapter": "none", "certified": False,
+                           "certificate": False, "caf_available": False},
+    )
     return order, delivery
 
 

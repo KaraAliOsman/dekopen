@@ -32,6 +32,7 @@ from projects import (
     payments,
     quotations,
     receipts,
+    reminders,
     service,
     sii,
     sii_envio,
@@ -41,6 +42,10 @@ from projects.serializers import (
     ClientResponseSerializer,
     ClientUpdateSerializer,
     ClientWriteSerializer,
+    CollectionReminderDraftResponseSerializer,
+    CollectionReminderPrepareSerializer,
+    CollectionReminderSendResponseSerializer,
+    CollectionReminderSendSerializer,
     OrgBrandingSerializer,
     OrgBrandingWriteSerializer,
     PaymentIntegrationSerializer,
@@ -585,6 +590,64 @@ class FlowPaymentConfirmView(APIView):
         return response({"received": True})
 
 
+class ProjectCollectionReminderView(APIView):
+    """IA prepara el mensaje — jamás envía. El clic de enviar vive aparte."""
+
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="project_collection_reminder_prepare",
+        request=CollectionReminderPrepareSerializer,
+        responses={200: CollectionReminderDraftResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def post(self, request, project_id):
+        data = validate(CollectionReminderPrepareSerializer, request.data)
+        try:
+            with scope(request, WRITE_ROLES) as (token, _, org):
+                return response(
+                    reminders.draft_reminder(
+                        org_id=org,
+                        project_id=project_id,
+                        actor_id=token.user_id,
+                        operation_key=str(data["operation_key"]),
+                    )
+                )
+        except ProviderError as error:
+            invocations.record_attached(error)
+            raise contract_error(
+                503,
+                error.code,
+                "El proveedor de IA no está disponible en este momento.",
+            ) from None
+        except ContractAPIException as error:
+            invocations.record_attached(error)
+            raise
+
+
+class ProjectCollectionReminderSendView(APIView):
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="project_collection_reminder_send",
+        request=CollectionReminderSendSerializer,
+        responses={200: CollectionReminderSendResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def post(self, request, project_id):
+        data = validate(CollectionReminderSendSerializer, request.data)
+        with scope(request, WRITE_ROLES) as (token, _, org):
+            return response(
+                reminders.send_reminder(
+                    org_id=org,
+                    project_id=project_id,
+                    actor_id=token.user_id,
+                    subject=str(data["subject"]),
+                    body=str(data["body"]),
+                )
+            )
+
+
 class OrganizationBrandingView(APIView):
     parser_classes = [DecimalJSONParser]
 
@@ -932,7 +995,15 @@ class SiiCertificateView(APIView):
     )
     def get(self, request):
         with scope(request, READ_ROLES) as (_, _, org):
-            return response({"certificate": sii_envio.certificate_status(org_id=org)})
+            return response(
+                {
+                    "certificate": sii_envio.certificate_status(org_id=org),
+                    # La misma verdad que la leyenda de los PDF: adaptador,
+                    # certificado vigente y folios — «No conectado» se decide
+                    # con esto, no con la presencia del certificado solo.
+                    "integration": sii_envio.integration_state(org_id=org),
+                }
+            )
 
     @extend_schema(
         operation_id="sii_certificate_upload",

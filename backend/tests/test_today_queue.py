@@ -175,6 +175,7 @@ def test_owner_queue_panels_and_receivables(monkeypatch):
                     "total_price_gross": "1435471",
                     "currency": "CLP",
                     "collected": "700000",
+                    "reminder_drafted": False,
                 }
             ],
         ),

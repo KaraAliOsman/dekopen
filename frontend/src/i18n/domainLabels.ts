@@ -314,7 +314,46 @@ export const DOMAIN_LABELS: Record<string, L> = {
   SiiEnvioStatusEnum: {
     PENDING: l("Pendiente", "warn"),
     ACCEPTED: l("Aceptado", "ok", "check"),
+    OBSERVED: l("Aceptado con observaciones", "warn"),
     REJECTED: l("Rechazado", "danger", "cross"),
+  },
+
+  /* ---------- Cobranza (P11) ---------- */
+  AdapterEnum: {
+    "sii-ws": l("SII (proveedor certificado)", "ok", "check"),
+    mock: l("Simulado", "warn"),
+    none: l("No conectado", "neutral"),
+  },
+  CollectionQuotaStateEnum: {
+    PENDING: l("Pendiente", "warn"),
+    PAID: l("Pagada", "ok", "check"),
+    OVERDUE: l("Vencida", "danger", "cross"),
+  },
+  CollectionReminderSendResponseStatusEnum: {
+    QUEUED: l("En cola", "neutral"),
+    SENT: l("Enviado", "ok", "check"),
+    FAILED: l("Falló", "danger", "cross"),
+    SKIPPED: l("Omitido", "neutral"),
+  },
+  KeyEnum: {
+    ANTICIPO: l("Anticipo", "neutral"),
+    SALDO: l("Saldo", "neutral"),
+  },
+  PctSourceEnum: {
+    terms: l("Condiciones pactadas", "neutral"),
+    default: l("Sugerido", "neutral"),
+  },
+  ProviderModeEnum: {
+    mock: l("Simulado", "warn"),
+    live: l("Producción", "ok", "check"),
+  },
+  TypeEnum: {
+    payment: l("Pago", "ok", "check"),
+    payment_void: l("Pago anulado", "danger", "cross"),
+    link: l("Link de pago", "info"),
+    invoice: l("Documento", "neutral"),
+    credit_note: l("Nota de crédito", "neutral"),
+    envio: l("Envío SII", "neutral"),
   },
 
   /* ---------- Trabajos IA ---------- */

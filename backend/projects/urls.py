@@ -6,6 +6,8 @@ from projects.views import (
     ClientView,
     ClientsView,
     FlowPaymentConfirmView,
+    ProjectCollectionReminderSendView,
+    ProjectCollectionReminderView,
     OrganizationBrandingLogoView,
     OrganizationBrandingView,
     ProjectCloneView,
@@ -110,6 +112,14 @@ urlpatterns = [
     path(
         "projects/<uuid:project_id>/payment-links/<uuid:link_id>/recover/",
         ProjectPaymentLinkRecoverView.as_view(),
+    ),
+    path(
+        "projects/<uuid:project_id>/collection-reminder/",
+        ProjectCollectionReminderView.as_view(),
+    ),
+    path(
+        "projects/<uuid:project_id>/collection-reminder/send/",
+        ProjectCollectionReminderSendView.as_view(),
     ),
     path(
         "projects/<uuid:project_id>/positions/measurement-resolve/",

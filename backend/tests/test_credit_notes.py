@@ -6,7 +6,7 @@ from uuid import uuid4
 
 import pytest
 
-from projects import credit_notes
+from projects import credit_notes, sii_envio
 
 
 class _Storage:
@@ -122,6 +122,15 @@ def _patch_env(monkeypatch, storage, *, invoice=None, existing=None, count=0, st
     monkeypatch.setattr(credit_notes, "SupabaseDocumentStorage", lambda: storage)
     monkeypatch.setattr(credit_notes.transaction, "atomic", _noop)
     monkeypatch.setattr(credit_notes, "documentary_backend", _noop)
+    # P11 — la leyenda tributaria sella el estado SII al emitir la NC;
+    # el import es perezoso (evita el ciclo projects.sii ↔ sii_envio), así
+    # que el stub va sobre el módulo origen.
+    monkeypatch.setattr(
+        sii_envio,
+        "integration_state",
+        lambda *, org_id: {"adapter": "none", "certified": False,
+                           "certificate": False, "caf_available": False},
+    )
     return one_calls
 
 

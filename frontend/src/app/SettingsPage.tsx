@@ -34,6 +34,7 @@ import type {
   ServiceArticleResponse,
   SiiCaf,
   SiiCertificate,
+  SiiIntegrationState,
 } from "../api/generated/models";
 import { PageHeader } from "../ui";
 import { StatusChip } from "../ui/StatusChip";
@@ -159,6 +160,9 @@ function FlowIntegrationCard({ orgId }: { orgId: string }): JSX.Element {
           tone={status?.configured ? "ok" : "warn"}
           value={null}
         />
+        {status?.provider_mode === "mock" && (
+          <StatusChip label={t("settings.flowSimulated")} tone="warn" value={null} />
+        )}
         {status?.api_key_preview && (
           <span className="settings-mono"> · {status.api_key_preview}</span>
         )}
@@ -338,6 +342,7 @@ function SiiCafCard({ orgId }: { orgId: string }): JSX.Element {
 
 function SiiCertificateCard({ orgId }: { orgId: string }): JSX.Element {
   const [certificate, setCertificate] = useState<SiiCertificate | null>(null);
+  const [integration, setIntegration] = useState<SiiIntegrationState | null>(null);
   const [pickFile, setPickFile] = useState<File | null>(null);
   const pickRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -349,6 +354,7 @@ function SiiCertificateCard({ orgId }: { orgId: string }): JSX.Element {
       const response = await siiCertificateStatus(requestOptions);
       if (response.status !== 200) throw new ApiError(response.status, response.data);
       setCertificate(response.data.certificate);
+      setIntegration(response.data.integration);
     } catch {
       setMessage({ text: t("settings.siiCertError"), error: true });
     }
@@ -398,6 +404,21 @@ function SiiCertificateCard({ orgId }: { orgId: string }): JSX.Element {
   return (
     <div className="settings-card">
       <h3 className="eyebrow">{t("settings.siiCertTitle")}</h3>
+      {integration && (
+        <p>
+          <StatusChip
+            label={
+              integration.certified
+                ? t("settings.siiConnected")
+                : integration.adapter === "mock"
+                  ? t("settings.siiSimulated")
+                  : t("settings.siiNotConnected")
+            }
+            tone={integration.certified ? "ok" : "warn"}
+            value={null}
+          />
+        </p>
+      )}
       {message && <p className={message.error ? "form-error" : "settings-hint"}>{message.text}</p>}
       {certificate === null ? (
         <p className="settings-hint">{t("settings.siiCertEmpty")}</p>

@@ -418,6 +418,9 @@ class ProjectInvoiceSerializer(serializers.Serializer):
     invoice_code = serializers.CharField()
     project_id = serializers.UUIDField()
     revision_code = serializers.CharField(allow_null=True)
+    total_net = serializers.CharField(allow_null=True, required=False)
+    total_tax = serializers.CharField(allow_null=True, required=False)
+    total_gross = serializers.CharField(allow_null=True, required=False)
     credit_note = ProjectCreditNoteSerializer(allow_null=True)
     dte = ProjectDteSerializer(allow_null=True, required=False)
     created_at = serializers.CharField()
@@ -472,8 +475,16 @@ class SiiCertificateSerializer(serializers.Serializer):
     created_at = serializers.CharField()
 
 
+class SiiIntegrationStateSerializer(serializers.Serializer):
+    adapter = serializers.ChoiceField(choices=("sii-ws", "mock", "none"))
+    certified = serializers.BooleanField()
+    certificate = serializers.BooleanField()
+    caf_available = serializers.BooleanField()
+
+
 class SiiCertificateStatusSerializer(serializers.Serializer):
     certificate = SiiCertificateSerializer(allow_null=True)
+    integration = SiiIntegrationStateSerializer()
 
 
 class SiiCertificateUploadSerializer(serializers.Serializer):
@@ -486,7 +497,9 @@ class SiiCertificateUploadSerializer(serializers.Serializer):
 class SiiEnvioSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     dte_id = serializers.UUIDField()
-    status = serializers.ChoiceField(choices=("PENDING", "ACCEPTED", "REJECTED"))
+    status = serializers.ChoiceField(
+        choices=("PENDING", "ACCEPTED", "OBSERVED", "REJECTED")
+    )
     track_id = serializers.CharField(allow_null=True)
     glosa = serializers.CharField(allow_null=True)
     sent_at = serializers.CharField()
@@ -504,9 +517,47 @@ class SiiEnvioAccessSerializer(SiiEnvioSerializer):
     signed_url = serializers.CharField()
 
 
+class CollectionQuotaSerializer(serializers.Serializer):
+    key = serializers.ChoiceField(choices=("ANTICIPO", "SALDO"))
+    amount = serializers.CharField()
+    covered = serializers.CharField()
+    due_at = serializers.CharField(allow_null=True)
+    due_basis = serializers.CharField()
+    pct = serializers.CharField()
+    pct_source = serializers.ChoiceField(choices=("terms", "default"))
+    state = serializers.ChoiceField(choices=("PENDING", "PAID", "OVERDUE"))
+
+
+class CollectionMovementSerializer(serializers.Serializer):
+    type = serializers.ChoiceField(
+        choices=("payment", "payment_void", "link", "invoice", "credit_note", "envio")
+    )
+    id = serializers.UUIDField()
+    kind = serializers.CharField(allow_null=True)
+    amount = serializers.CharField(allow_null=True)
+    method = serializers.CharField(allow_null=True)
+    voided = serializers.BooleanField()
+    at = serializers.CharField(allow_null=True)
+    actor = serializers.CharField(allow_null=True)
+    code = serializers.CharField(allow_null=True)
+    document_id = serializers.CharField(allow_null=True)
+    status = serializers.CharField(allow_null=True)
+
+
+class ReminderDraftSerializer(serializers.Serializer):
+    subject = serializers.CharField()
+    body = serializers.CharField()
+    model = serializers.CharField(required=False, allow_null=True)
+    created_at = serializers.CharField(required=False, allow_null=True)
+
+
 class PaymentsSummarySerializer(serializers.Serializer):
     payments = ProjectPaymentSerializer(many=True)
     invoices = ProjectInvoiceSerializer(many=True)
+    schedule = CollectionQuotaSerializer(many=True)
+    movements = CollectionMovementSerializer(many=True)
+    sii = SiiIntegrationStateSerializer()
+    reminder = ReminderDraftSerializer(allow_null=True)
     collected = serializers.CharField()
     quote_total_gross = serializers.CharField(allow_null=True)
     balance = serializers.CharField(allow_null=True)
@@ -543,6 +594,8 @@ class PaymentLinkSerializer(serializers.Serializer):
     environment = serializers.ChoiceField(choices=("sandbox", "production"))
     url = serializers.CharField(allow_null=True)
     project_payment_id = serializers.CharField(allow_null=True)
+    expires_at = serializers.CharField(allow_null=True)
+    expired = serializers.BooleanField(required=False, default=False)
     created_at = serializers.CharField()
     updated_at = serializers.CharField()
 
@@ -573,11 +626,40 @@ class PaymentIntegrationSerializer(StrictSerializer):
 
 class PaymentIntegrationStatusSerializer(serializers.Serializer):
     configured = serializers.BooleanField()
+    provider_mode = serializers.ChoiceField(
+        choices=("mock", "live"), required=False, allow_null=True
+    )
     api_url = serializers.CharField(required=False)
     api_key_preview = serializers.CharField(required=False)
     payer_return_url = serializers.CharField(required=False, allow_null=True)
     enabled = serializers.BooleanField(required=False)
     updated_at = serializers.CharField(required=False)
+
+
+class CollectionReminderPrepareSerializer(StrictSerializer):
+    operation_key = serializers.CharField(min_length=8, max_length=120)
+
+
+class CollectionReminderDraftResponseSerializer(serializers.Serializer):
+    subject = serializers.CharField()
+    body = serializers.CharField()
+    model = serializers.CharField()
+    audit_id = serializers.CharField()
+    credits_debited = serializers.IntegerField()
+    client_email = serializers.CharField(allow_null=True)
+    amount_due = serializers.CharField()
+    currency = serializers.CharField()
+
+
+class CollectionReminderSendSerializer(StrictSerializer):
+    subject = serializers.CharField(min_length=1, max_length=200)
+    body = serializers.CharField(min_length=1, max_length=4000)
+
+
+class CollectionReminderSendResponseSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=("QUEUED", "SENT", "FAILED", "SKIPPED"))
+    to = serializers.CharField()
+    mail_id = serializers.CharField(allow_null=True)
 
 
 class DesignAlternativesRequestSerializer(serializers.Serializer):
