@@ -3,7 +3,7 @@ type: state
 status: active
 updated: 2026-10-07
 volatility: high
-verified_ref: 9cd0ad11b1810ba606616ddebec75cef7d824b7e
+verified_ref: af6445ed8d9c5772b139f4800895f75b3c05a4df
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
