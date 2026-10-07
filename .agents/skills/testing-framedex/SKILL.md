@@ -762,3 +762,31 @@ fallback). Fix via guarded UPDATEs above or patch the sealed
 outside ISO-8859-1 — e.g. ’ — are rejected at stamp time).
 
 Devin Secrets needed: none (all keys come from `supabase status` / .fixture-state.json).
+## Delta-reverification additions (2026-10, post `8ca5c467`)
+
+- **Frontend magic-link needs Vite env**: `VITE_SUPABASE_URL` +
+  `VITE_SUPABASE_ANON_KEY` must be exported before `npm run dev` or the
+  OTP step fails with «No fue posible solicitar el enlace de acceso»
+  (supabaseClient reads `import.meta.env.VITE_*`). Take both values from
+  `supabase status`.
+- **Heredoc into `docker exec` needs `-i`**: `docker exec supabase_db_dekopen
+  psql <<EOF` silently runs nothing — stdin is not forwarded without `-i`.
+  Symptom: statements "succeed" but produce no output and apply nothing.
+- **Grant bugs hide behind earlier crashes**: `_seal_repr`'s
+  `UPDATE project_dtes SET repr_*` lacked `GRANT UPDATE` for
+  `documentary_backend`, but the PDF417 ValueError crashed *before* the
+  UPDATE — the missing grant only surfaced once the barcode was fixed
+  (409 `Pricing transaction rejected`, SQLSTATE 42501). When a fix moves
+  a failure boundary forward, re-check grants/RLS on every later statement
+  in the same transaction; test-workaround was column-level
+  `GRANT UPDATE (repr_storage_object_key, repr_file_sha256)`.
+- **`pkill -f` inside a compound command can kill the command itself** if the
+  pattern matches the parent shell's command line (e.g. `pkill -f vite` in a
+  shell that also contains 'vite' in argv) — verify the port is down, then
+  relaunch in a separate call.
+- **Bash `UID` is readonly** — never assign to it; use `OU`/`OWNER_UID`.
+- **pyotp not installed** — compute TOTP inline (hmac-sha1, T=30, `% 10**6`).
+- **Mock `_charges` dies with the runserver process**: previously created
+  flow-sim links 404 «cargo desconocido» after any backend restart — mint a
+  fresh link instead of reusing an old token.
+
