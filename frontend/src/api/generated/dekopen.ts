@@ -145,6 +145,7 @@ import type {
   ExtrasConfigWriteRequest,
   FlowAcknowledgement,
   FlowConfirmationRequest,
+  FollowQuoteResult,
   FreezeRequestRequest,
   FreezeResponse,
   GlobalSearchParams,
@@ -224,6 +225,9 @@ import type {
   PaymentRecordResponse,
   PaymentVoidRequest,
   PaymentsSummary,
+  PortalPayRequestRequest,
+  PortalPayResult,
+  PortalPaymentStatus,
   PortalQuote,
   PositionMoveRequest,
   PositionResponse,
@@ -10996,6 +11000,81 @@ export const organizationSecurityUpdate = async (
   });
 };
 
+export type portalPaymentStatusResponse200 = {
+  data: PortalPaymentStatus;
+  status: 200;
+};
+
+export type portalPaymentStatusResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type portalPaymentStatusResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type portalPaymentStatusResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type portalPaymentStatusResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type portalPaymentStatusResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type portalPaymentStatusResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type portalPaymentStatusResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type portalPaymentStatusResponseSuccess = portalPaymentStatusResponse200 & {
+  headers: Headers;
+};
+export type portalPaymentStatusResponseError = (
+  | portalPaymentStatusResponse400
+  | portalPaymentStatusResponse401
+  | portalPaymentStatusResponse403
+  | portalPaymentStatusResponse404
+  | portalPaymentStatusResponse409
+  | portalPaymentStatusResponse422
+  | portalPaymentStatusResponse503
+) & {
+  headers: Headers;
+};
+
+export type portalPaymentStatusResponse =
+  portalPaymentStatusResponseSuccess | portalPaymentStatusResponseError;
+
+export const getPortalPaymentStatusUrl = (flowToken: string) => {
+  return `/api/v1/portal/payments/${flowToken}/`;
+};
+
+/**
+ * Resolve a payment link's status by its Flow token.
+ */
+export const portalPaymentStatus = async (
+  flowToken: string,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<portalPaymentStatusResponse> => {
+  return apiMutator<portalPaymentStatusResponse>(getPortalPaymentStatusUrl(flowToken), {
+    ...options,
+    method: "GET",
+  });
+};
+
 export type portalQuoteRetrieveResponse200 = {
   data: PortalQuote;
   status: 200;
@@ -11154,6 +11233,166 @@ export const portalQuoteDecide = async (
     method: "POST",
     headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
     body: JSON.stringify(decideRequestRequest),
+  });
+};
+
+export type portalQuoteFollowResponse200 = {
+  data: FollowQuoteResult;
+  status: 200;
+};
+
+export type portalQuoteFollowResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type portalQuoteFollowResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type portalQuoteFollowResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type portalQuoteFollowResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type portalQuoteFollowResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type portalQuoteFollowResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type portalQuoteFollowResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type portalQuoteFollowResponseSuccess = portalQuoteFollowResponse200 & {
+  headers: Headers;
+};
+export type portalQuoteFollowResponseError = (
+  | portalQuoteFollowResponse400
+  | portalQuoteFollowResponse401
+  | portalQuoteFollowResponse403
+  | portalQuoteFollowResponse404
+  | portalQuoteFollowResponse409
+  | portalQuoteFollowResponse422
+  | portalQuoteFollowResponse503
+) & {
+  headers: Headers;
+};
+
+export type portalQuoteFollowResponse =
+  portalQuoteFollowResponseSuccess | portalQuoteFollowResponseError;
+
+export const getPortalQuoteFollowUrl = (token: string) => {
+  return `/api/v1/portal/quotes/${token}/follow/`;
+};
+
+/**
+ * On a superseded quote, mint a FOLLOW-channel link bound to the project's current sealed revision.
+ */
+export const portalQuoteFollow = async (
+  token: string,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<portalQuoteFollowResponse> => {
+  return apiMutator<portalQuoteFollowResponse>(getPortalQuoteFollowUrl(token), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export type portalQuotePayResponse200 = {
+  data: PortalPayResult;
+  status: 200;
+};
+
+export type portalQuotePayResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type portalQuotePayResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type portalQuotePayResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type portalQuotePayResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type portalQuotePayResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type portalQuotePayResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type portalQuotePayResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type portalQuotePayResponseSuccess = portalQuotePayResponse200 & {
+  headers: Headers;
+};
+export type portalQuotePayResponseError = (
+  | portalQuotePayResponse400
+  | portalQuotePayResponse401
+  | portalQuotePayResponse403
+  | portalQuotePayResponse404
+  | portalQuotePayResponse409
+  | portalQuotePayResponse422
+  | portalQuotePayResponse503
+) & {
+  headers: Headers;
+};
+
+export type portalQuotePayResponse = portalQuotePayResponseSuccess | portalQuotePayResponseError;
+
+export const getPortalQuotePayUrl = (token: string) => {
+  return `/api/v1/portal/quotes/${token}/pay/`;
+};
+
+/**
+ * Mint or reuse a payment link for the quote's outstanding balance, sealed to return the payer to this portal page.
+ */
+export const portalQuotePay = async (
+  token: string,
+  portalPayRequestRequest?: PortalPayRequestRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<portalQuotePayResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<portalQuotePayResponse>(getPortalQuotePayUrl(token), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+    body: JSON.stringify(portalPayRequestRequest),
   });
 };
 

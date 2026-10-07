@@ -1,7 +1,10 @@
 from django.urls import path
 
 from portal.views import (
+    PortalPaymentStatusView,
     PortalQuoteDecisionView,
+    PortalQuoteFollowView,
+    PortalQuotePayView,
     PortalQuoteView,
     ProjectQuoteApproveView,
     ProjectQuoteLinkRevokeView,
@@ -35,5 +38,20 @@ urlpatterns = [
         "portal/quotes/<str:token>/decide/",
         PortalQuoteDecisionView.as_view(),
         name="portal-quote-decide",
+    ),
+    path(
+        "portal/quotes/<str:token>/follow/",
+        PortalQuoteFollowView.as_view(),
+        name="portal-quote-follow",
+    ),
+    path(
+        "portal/quotes/<str:token>/pay/",
+        PortalQuotePayView.as_view(),
+        name="portal-quote-pay",
+    ),
+    path(
+        "portal/payments/<str:flow_token>/",
+        PortalPaymentStatusView.as_view(),
+        name="portal-payment-status",
     ),
 ]

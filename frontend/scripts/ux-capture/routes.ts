@@ -64,6 +64,36 @@ export const ROUTES: CaptureRoute[] = [
     extraMobile: true,
     toleratedHttpStatuses: [410],
   },
+  {
+    name: "portal-rechazada",
+    path: "/cotizacion/{{portal.rechazada}}",
+    role: "public",
+    extraMobile: true,
+  },
+  {
+    name: "portal-cambios",
+    path: "/cotizacion/{{portal.cambios}}",
+    role: "public",
+    extraMobile: true,
+  },
+  {
+    name: "portal-parcial",
+    path: "/cotizacion/{{portal.parcial}}",
+    role: "public",
+    extraMobile: true,
+  },
+  {
+    name: "portal-usd",
+    path: "/cotizacion/{{portal.usd}}",
+    role: "public",
+    extraMobile: true,
+  },
+  {
+    name: "portal-vitrina",
+    path: "/cotizacion/{{portal.vitrina}}",
+    role: "public",
+    extraMobile: true,
+  },
   { name: "pago-retorno", path: "/pago/retorno", role: "public" },
 
   // ---- owner (aal2) ------------------------------------------------------

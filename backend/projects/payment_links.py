@@ -243,7 +243,11 @@ def create_link(*, org_id: UUID, project_id: UUID, actor_id: UUID, data: dict) -
                 "flow_not_configured",
                 "Configura la integración Flow en Ajustes primero.",
             )
-        return_url = integration[0]["payer_return_url"] or (
+        # P10 — el link puede sellar su propio retorno (el portal cobra
+        # volviendo a la cotización); el default sigue siendo la URL de la
+        # integración o la genérica del frontend.
+        requested_return = (data.get("return_url") or "").strip() or None
+        return_url = requested_return or integration[0]["payer_return_url"] or (
             settings.BILLING_FRONTEND_ORIGIN.rstrip("/") + "/pago/retorno"
             if settings.BILLING_FRONTEND_ORIGIN
             else ""
@@ -310,8 +314,8 @@ def create_link(*, org_id: UUID, project_id: UUID, actor_id: UUID, data: dict) -
             INSERT INTO public.project_payment_links(
                 org_id, project_id, operation_key, kind, amount, payer_email,
                 subject, status, environment, created_by, deal_total, deal_currency,
-                expires_at)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,'DISPATCHING',%s,%s,%s,%s,%s)
+                expires_at, payer_return_url)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,'DISPATCHING',%s,%s,%s,%s,%s,%s)
             RETURNING *
             """,
             [
@@ -327,6 +331,7 @@ def create_link(*, org_id: UUID, project_id: UUID, actor_id: UUID, data: dict) -
                 deal_total,
                 deal_currency,
                 (timezone.now() + _LINK_TTL).isoformat(),
+                requested_return,
             ],
         )[0]
         integration = integration[0]
@@ -585,8 +590,11 @@ def confirm_simulated(*, token: str) -> dict:
         link = found[0]
         org_id = link["org_id"]
         integration = _integration_for_link(link)
+        # El retorno sellado en el link gana: el portal cobra volviendo a
+        # la cotización; sin override, la URL de la integración.
         return_url = (
-            integration.get("payer_return_url")
+            link.get("payer_return_url")
+            or integration.get("payer_return_url")
             or f"{settings.BILLING_FRONTEND_ORIGIN}/pago/retorno"
         )
         client = _client(integration)

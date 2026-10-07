@@ -2560,6 +2560,94 @@ export function ProjectQuotationPanel({
                       </>
                     )}
                   </div>
+                  {/* P10 — evidencia de la decisión del cliente: nombre, RUT,
+                      fecha/hora, IP, agente, aceptación literal y revisión+huella.
+                      Todo lo que el taller necesita si el cliente discute. */}
+                  {link.evidence ? (
+                    <details className="quotation-link__evidence">
+                      <summary>{t("quotation.linkEvidence")}</summary>
+                      <dl>
+                        {link.evidence.decision ? (
+                          <div>
+                            <dt>{t("quotation.evDecision")}</dt>
+                            <dd>
+                              {t(
+                                approvalStatusKeys[
+                                  link.evidence.decision as ApprovalRecord["status"]
+                                ] ?? "quotation.linkPending",
+                              )}
+                            </dd>
+                          </div>
+                        ) : null}
+                        {link.evidence.decided_by ? (
+                          <div>
+                            <dt>{t("quotation.evDecidedBy")}</dt>
+                            <dd>{link.evidence.decided_by}</dd>
+                          </div>
+                        ) : null}
+                        {link.evidence.decided_rut ? (
+                          <div>
+                            <dt>{t("quotation.evDecidedRut")}</dt>
+                            <dd>{link.evidence.decided_rut}</dd>
+                          </div>
+                        ) : null}
+                        {link.evidence.created_at ? (
+                          <div>
+                            <dt>{t("quotation.evDecidedAt")}</dt>
+                            <dd>{formatDateTime(link.evidence.created_at)}</dd>
+                          </div>
+                        ) : null}
+                        {link.evidence.acceptance_text ? (
+                          <div>
+                            <dt>{t("quotation.evAcceptance")}</dt>
+                            <dd>“{link.evidence.acceptance_text}”</dd>
+                          </div>
+                        ) : null}
+                        {link.evidence.revision_code ? (
+                          <div>
+                            <dt>{t("quotation.evRevision")}</dt>
+                            <dd>
+                              {formatRevision(link.evidence.revision_code)}
+                              {link.evidence.bom_hash
+                                ? ` · huella ${link.evidence.bom_hash.slice(0, 12)}…`
+                                : ""}
+                            </dd>
+                          </div>
+                        ) : null}
+                        {link.evidence.decision_ip ? (
+                          <div>
+                            <dt>{t("quotation.evIp")}</dt>
+                            <dd>{link.evidence.decision_ip}</dd>
+                          </div>
+                        ) : null}
+                        {link.evidence.decision_user_agent ? (
+                          <div>
+                            <dt>{t("quotation.evAgent")}</dt>
+                            <dd className="quotation-link__evidence-ua">
+                              {link.evidence.decision_user_agent}
+                            </dd>
+                          </div>
+                        ) : null}
+                        {link.evidence.decided_note ? (
+                          <div>
+                            <dt>{t("quotation.evNote")}</dt>
+                            <dd>“{link.evidence.decided_note}”</dd>
+                          </div>
+                        ) : null}
+                        {link.evidence.positions &&
+                        (link.evidence.positions as { position_index?: number }[]).length > 0 ? (
+                          <div>
+                            <dt>{t("quotation.evPositions")}</dt>
+                            <dd>
+                              {(link.evidence.positions as { position_index?: number }[])
+                                .map((position) => `Pos. ${position.position_index ?? "?"}`)
+                                .join(", ")}
+                            </dd>
+                          </div>
+                        ) : null}
+                      </dl>
+                    </details>
+                  ) : null}
                   {(link.status === "PENDING" || link.status === "CHANGES_REQUESTED") &&
                     canWrite && (
                       <div className="quotation-link__actions">

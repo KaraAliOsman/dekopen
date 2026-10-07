@@ -9710,6 +9710,69 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/portal/payments/{flow_token}/:
+    get:
+      operationId: portal_payment_status
+      description: Resolve a payment link's status by its Flow token.
+      parameters:
+      - in: path
+        name: flow_token
+        schema:
+          type: string
+        required: true
+      tags:
+      - v1
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalPaymentStatus'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/portal/quotes/{token}/:
     get:
       operationId: portal_quote_retrieve
@@ -9806,6 +9869,145 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PortalQuote'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/portal/quotes/{token}/follow/:
+    post:
+      operationId: portal_quote_follow
+      description: On a superseded quote, mint a FOLLOW-channel link bound to the
+        project's current sealed revision.
+      parameters:
+      - in: path
+        name: token
+        schema:
+          type: string
+        required: true
+      tags:
+      - v1
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FollowQuoteResult'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/portal/quotes/{token}/pay/:
+    post:
+      operationId: portal_quote_pay
+      description: Mint or reuse a payment link for the quote's outstanding balance,
+        sealed to return the payer to this portal page.
+      parameters:
+      - in: path
+        name: token
+        schema:
+          type: string
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PortalPayRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PortalPayRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PortalPayRequestRequest'
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalPayResult'
           description: ''
         '400':
           content:
@@ -20651,6 +20853,10 @@ components:
         decided_note:
           type: string
           nullable: true
+        evidence:
+          allOf:
+          - $ref: '#/components/schemas/DecisionEvent'
+          nullable: true
         expires_at:
           type: string
           format: date-time
@@ -23569,6 +23775,15 @@ components:
         note:
           type: string
           maxLength: 500
+        accepted:
+          type: boolean
+          default: false
+        marked_position_ids:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
       required:
       - decided_by
       - decision
@@ -23590,6 +23805,49 @@ components:
         * `APPROVED` - APPROVED
         * `DECLINED` - DECLINED
         * `CHANGES_REQUESTED` - CHANGES_REQUESTED
+    DecisionEvent:
+      type: object
+      description: |-
+        Evidencia de decisión append-only — pública (sin PII extra) en el
+        portal y completa para el estimador; mismo contrato, dos lecturas.
+      properties:
+        decision:
+          type: string
+          nullable: true
+        decided_by:
+          type: string
+          nullable: true
+        decided_rut:
+          type: string
+          nullable: true
+        decided_note:
+          type: string
+          nullable: true
+        decision_ip:
+          type: string
+          nullable: true
+        decision_user_agent:
+          type: string
+          nullable: true
+        acceptance_text:
+          type: string
+          nullable: true
+        revision_code:
+          type: string
+          nullable: true
+        bom_hash:
+          type: string
+          nullable: true
+        positions:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
     Delivery:
       type: object
       properties:
@@ -25982,6 +26240,14 @@ components:
           maxLength: 512
       required:
       - token
+    FollowQuoteResult:
+      type: object
+      properties:
+        follow_token:
+          type: string
+          nullable: true
+      required:
+      - follow_token
     FormatEnum:
       enum:
       - PDF
@@ -31519,6 +31785,8 @@ components:
         brand_color:
           type: string
           nullable: true
+        dekopen_credit:
+          type: boolean
       required:
       - brand_address
       - brand_color
@@ -31528,6 +31796,34 @@ components:
       - commercial_name
       - name
       - tax_id
+    PortalPayRequestRequest:
+      type: object
+      properties:
+        payer_email:
+          oneOf:
+          - type: string
+            format: email
+          - type: string
+            maxLength: 0
+    PortalPayResult:
+      type: object
+      properties:
+        payment_url:
+          type: string
+          nullable: true
+        flow_token:
+          type: string
+          nullable: true
+        amount:
+          type: string
+          nullable: true
+        simulated:
+          type: boolean
+      required:
+      - amount
+      - flow_token
+      - payment_url
+      - simulated
     PortalPayment:
       type: object
       properties:
@@ -31537,9 +31833,39 @@ components:
           type: string
         balance:
           type: string
+        payable:
+          type: boolean
+        reason:
+          type: string
+          nullable: true
+        simulated:
+          type: boolean
       required:
       - balance
       - collected
+      - payable
+      - reason
+      - simulated
+      - status
+    PortalPaymentStatus:
+      type: object
+      properties:
+        status:
+          type: string
+        amount:
+          type: string
+        kind:
+          type: string
+        payer_return_url:
+          type: string
+          nullable: true
+        project_id:
+          type: string
+      required:
+      - amount
+      - kind
+      - payer_return_url
+      - project_id
       - status
     PortalPosition:
       type: object
@@ -31558,6 +31884,8 @@ components:
         location_tag:
           type: string
           nullable: true
+        is_option:
+          type: boolean
         width_mm:
           type: string
         height_mm:
@@ -31613,6 +31941,8 @@ components:
       properties:
         schema:
           type: string
+        state:
+          type: string
         organization:
           $ref: '#/components/schemas/PortalOrganization'
         project_code:
@@ -31623,6 +31953,8 @@ components:
           type: string
         revision_code:
           type: string
+        current_revision:
+          type: string
         emitted_at:
           type: string
           format: date-time
@@ -31631,6 +31963,9 @@ components:
         payment_terms:
           type: string
           nullable: true
+        doc_terms:
+          type: object
+          additionalProperties: {}
         notes_commercial:
           type: string
           nullable: true
@@ -31656,8 +31991,14 @@ components:
           allOf:
           - $ref: '#/components/schemas/PortalPayment'
           nullable: true
-        payment_url:
+        follow_available:
+          type: boolean
+        acceptance_text:
           type: string
+          nullable: true
+        decision_event:
+          allOf:
+          - $ref: '#/components/schemas/DecisionEvent'
           nullable: true
         valid_until:
           type: string
@@ -31685,26 +32026,30 @@ components:
           type: string
           nullable: true
       required:
+      - acceptance_text
       - approval_status
       - client_name
       - currency
+      - current_revision
       - decided_at
       - decided_by
       - decided_note
+      - decision_event
       - emitted_at
       - expires_at
       - extras
+      - follow_available
       - notes_commercial
       - organization
       - payment
       - payment_terms
-      - payment_url
       - positions
       - project_code
       - project_name
       - quote_pdf_url
       - revision_code
       - schema
+      - state
       - superseded
       - total_price_gross
       - total_price_net
@@ -31993,6 +32338,8 @@ components:
           type: integer
         typology:
           type: string
+        is_option:
+          type: boolean
         price_net:
           type: string
         discount_pct:
@@ -32011,6 +32358,7 @@ components:
       - design
       - discount_pct
       - id
+      - is_option
       - location_tag
       - measurement
       - position_index
@@ -32035,6 +32383,9 @@ components:
           allOf:
           - $ref: '#/components/schemas/PositionMeasurementRequest'
           nullable: true
+        is_option:
+          type: boolean
+          default: false
         expected_updated_at:
           type: string
           format: date-time
@@ -32059,6 +32410,9 @@ components:
           allOf:
           - $ref: '#/components/schemas/PositionMeasurementRequest'
           nullable: true
+        is_option:
+          type: boolean
+          default: false
       required:
       - design
       - location_tag

@@ -81,6 +81,7 @@ POSITION_COLUMNS = (
     "measurement_state",
     "measurement_confirmed_at",
     "measurement_confirmed_by",
+    "is_option",
     "updated_at",
 )
 
@@ -219,6 +220,8 @@ def position_public(row):
         "discount_pct": str(row["discount_pct"]),
         "design": design,
         "bom": {**safe, "calculation_hash": expected},
+        # P10: alternativa declarada — se precifica pero no suma al total.
+        "is_option": bool(row.get("is_option")),
     }
 
 
@@ -570,6 +573,7 @@ def save_position(org_id, project_id, data, *, position_id=None):
     values = [
         data["location_tag"],
         data["quantity"],
+        bool(data.get("is_option")),
         _typology(design["parametric_tree"]),
         design["system_id"],
         design["nominal_width_mm"],
@@ -595,7 +599,8 @@ def save_position(org_id, project_id, data, *, position_id=None):
     ]
     if current:
         rows(
-            "UPDATE public.project_positions SET location_tag=%s,quantity=%s,typology=%s,"
+            "UPDATE public.project_positions SET location_tag=%s,quantity=%s,is_option=%s,"
+            "typology=%s,"
             "system_id=%s,width_mm=%s,height_mm=%s,color_interior=%s,color_exterior=%s,"
             "parametric_tree=%s::jsonb,bom_snapshot=%s::jsonb,"
             "glass_composition=%s::jsonb,glass_review_pending=%s,"
@@ -613,13 +618,13 @@ def save_position(org_id, project_id, data, *, position_id=None):
         )[0]["next_index"]
         position_id = uuid4()
         rows(
-            "INSERT INTO public.project_positions(location_tag,quantity,typology,system_id,"
+            "INSERT INTO public.project_positions(location_tag,quantity,is_option,typology,system_id,"
             "width_mm,height_mm,color_interior,color_exterior,parametric_tree,bom_snapshot,"
             "glass_composition,glass_review_pending,"
             "rough_opening_input,mounting_rule_id,fabrication_lock,"
             "measurement_state,measurement_confirmed_at,measurement_confirmed_by,"
             "id,project_id,org_id,position_index) "
-            "VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s::jsonb,%s,"
+            "VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s::jsonb,%s,"
             "%s::jsonb,%s,%s::jsonb,"
             "%s,%s,%s,"
             "%s,%s,%s,%s) RETURNING id",
@@ -817,6 +822,7 @@ def _assert_live_matches_version(org_id, project_id, version):
             "color_interior": position["color_interior"],
             "color_exterior": position["color_exterior"],
             "location_tag": position["location_tag"] or "",
+            "is_option": bool(position.get("is_option")),
             "parametric_tree": decoded(position["parametric_tree"]),
         }
         frozen_input = {key: frozen.get(key) for key in live_input}
@@ -860,6 +866,7 @@ def clone_project(org_id, actor_id, project_id, data):
                 "location_tag": position["location_tag"] or "",
                 "quantity": position["quantity"],
                 "design": deepcopy(position["design"]),
+                "is_option": bool(position.get("is_option")),
             }
         )
         serializer.is_valid(raise_exception=True)

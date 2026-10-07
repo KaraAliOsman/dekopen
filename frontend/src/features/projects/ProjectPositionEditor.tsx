@@ -354,6 +354,9 @@ function PositionWorkspace({
   const [result, setResult] = useState<EngineCalculateResponse | null>(null);
   const [location, setLocation] = useState("");
   const [quantity, setQuantity] = useState("1");
+  // P10 — alternativa presupuestable: queda fuera del total hasta que el
+  // cliente la pida o el estimador la promueva.
+  const [isOption, setIsOption] = useState(false);
   // The breadcrumb leaf is the estimator's own tag («Dormitorio») — the
   // shell falls back to «Vano» while the field is blank.
   useShellLeaf(location.trim() || null);
@@ -363,6 +366,7 @@ function PositionWorkspace({
     location: string;
     quantity: string;
     measurement: string;
+    isOption: boolean;
   } | null>(null);
   // D07 — registro del vano (obrador), preview resuelto por el motor y
   // confirmación explícita que gobierna la liberación de producción.
@@ -496,6 +500,7 @@ function PositionWorkspace({
         location: "",
         quantity: "1",
         measurement: vanoIdentity(EMPTY_VANO),
+        isOption: false,
       });
       offerDraftIfDivergent(baselineDesign, "", "1", vanoIdentity(EMPTY_VANO));
       setLoaded(true);
@@ -540,6 +545,7 @@ function PositionWorkspace({
           const loadedVano =
             !copyId && item.measurement ? vanoDraftFromSaved(item.measurement) : EMPTY_VANO;
           setVanoDraft(loadedVano);
+          const loadedOption = !copyId && !!item.is_option;
           setBaseline(
             copyId
               ? null
@@ -548,6 +554,7 @@ function PositionWorkspace({
                   location: item.location_tag ?? "",
                   quantity: String(item.quantity),
                   measurement: vanoIdentity(loadedVano),
+                  isOption: loadedOption,
                 },
           );
           offerDraftIfDivergent(
@@ -558,6 +565,7 @@ function PositionWorkspace({
           );
           setLocation(item.location_tag ?? "");
           setQuantity(String(item.quantity));
+          setIsOption(loadedOption);
           setResult(item.bom);
           setLoaded(true);
         })
@@ -659,7 +667,8 @@ function PositionWorkspace({
       : identity !== baseline.design ||
         location !== baseline.location ||
         quantity !== baseline.quantity ||
-        vanoDraftIdentity !== baseline.measurement;
+        vanoDraftIdentity !== baseline.measurement ||
+        isOption !== baseline.isOption;
 
   // Debounced draft write — clears once the design matches the saved state
   // again (including right after a successful save).
@@ -843,6 +852,7 @@ function PositionWorkspace({
     const body = {
       location_tag: location,
       quantity: Number(quantity),
+      is_option: isOption,
       design,
       ...(vanoPayload !== null ? { measurement: vanoPayload } : {}),
     };
@@ -865,6 +875,7 @@ function PositionWorkspace({
         location,
         quantity,
         measurement: vanoDraftIdentity,
+        isOption,
       });
       setMessage(t("projects.saved"));
       // The unsaved-changes blocker still sees dirty=true until the baseline
@@ -1142,6 +1153,7 @@ function PositionWorkspace({
         </nav>
         <input
           className="editor-strip__location"
+          data-option-tag={isOption ? "true" : undefined}
           aria-label={t("projects.location")}
           placeholder={t("projects.locationPlaceholder")}
           value={location}
@@ -1159,6 +1171,18 @@ function PositionWorkspace({
             onChange={(e) => setQuantity(e.target.value)}
           />
         </label>
+        <button
+          type="button"
+          className="editor-strip__chip editor-strip__option"
+          data-active={isOption}
+          aria-pressed={isOption}
+          aria-label={t("projects.isOption")}
+          title={t("projects.isOptionHint")}
+          disabled={busy || readOnly}
+          onClick={() => setIsOption((prev) => !prev)}
+        >
+          {t("projects.isOption")}
+        </button>
         <button
           type="button"
           ref={systemAnchorRef}

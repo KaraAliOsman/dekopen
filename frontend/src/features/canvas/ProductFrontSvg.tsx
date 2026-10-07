@@ -101,16 +101,23 @@ function SvgDim({
     return (
       <g
         className={`canvas-dim-wrap${active ? " is-active" : ""}`}
-        role="button"
+        // disabled = etiqueta de dibujo, no control: role=img permite
+        // aria-label sin fingir interacción (portal/readonly); el editor
+        // prueba tabindex=-1 como marca de dim deshabilitado.
+        role={disabled ? "img" : "button"}
         aria-label={label}
         tabIndex={disabled ? -1 : 0}
-        onClick={() => !disabled && setEditing(true)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            if (!disabled) setEditing(true);
-          }
-        }}
+        onClick={disabled ? undefined : () => setEditing(true)}
+        onKeyDown={
+          disabled
+            ? undefined
+            : (event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setEditing(true);
+                }
+              }
+        }
       >
         <rect
           className="canvas-dim-hit"
@@ -1524,16 +1531,20 @@ function AddHandle({
   return (
     <g
       className="add-handle"
-      role="button"
-      aria-label={label}
-      tabIndex={disabled ? -1 : 0}
-      onClick={() => !disabled && onAdd()}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          if (!disabled) onAdd();
-        }
-      }}
+      role={disabled ? undefined : "button"}
+      aria-label={disabled ? undefined : label}
+      tabIndex={disabled ? undefined : 0}
+      onClick={disabled ? undefined : () => onAdd()}
+      onKeyDown={
+        disabled
+          ? undefined
+          : (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onAdd();
+              }
+            }
+      }
     >
       <circle cx={x} cy={y} r={34} />
       <path d={`M${x - 14} ${y} H${x + 14} M${x} ${y - 14} V${y + 14}`} />

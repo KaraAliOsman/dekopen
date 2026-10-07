@@ -16,13 +16,15 @@ breadth and the full lifecycle:
                 carries the capture-visible reemplazada + aprobada tokens
   P-CONJUNTOS   Ampliación Vergara — bow + conjunto acoplado; seals
                 quote-only by design (production_allowed stays false)
-  P-VITRINA     10-position mix (fijo, abatible, oscilobatiente, corredera
+  P-VITRINA     12-position mix (fijo, abatible, oscilobatiente, corredera
                 2 hojas, corredera O/X/X/O, proyectante, puerta, mampara
                 fija+proyectante, extras, posición alternativa),
                 released to the workshop
   P-DESPACHADO  released order dispatched
   P-INSTALADO   released order installed
   P-RECHAZADO   client declined the quote
+  P-CAMBIOS     client asked for changes (portal CHANGES_REQUESTED)
+  P-USD         quote priced in USD (portal hides the payment CTA)
   P-EXPIRADA    sealed quote past its validity (portal shows "expirada")
   P-ESCALA      100 positions, priced (scale surface for lists/canvas)
 
@@ -50,8 +52,10 @@ Idempotent: deterministic ids upserted on every run.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import secrets
 import struct
 import sys
 import time
@@ -880,10 +884,16 @@ def main() -> None:
             project_status[project_id] = str(detail.get("status") or "DRAFT")
         return project_status[project_id] in ("DRAFT", "QUOTED")
 
-    def position(project_id: str, loc: str, design_payload: dict, qty: int) -> None:
+    def position(
+        project_id: str,
+        loc: str,
+        design_payload: dict,
+        qty: int,
+        is_option: bool = False,
+    ) -> None:
         rows_list = query(
             "project_positions?select=id,location_tag,parametric_tree,"
-            "width_mm,height_mm"
+            "width_mm,height_mm,is_option"
             f"&project_id=eq.{project_id}"
         )
         existing = next(
@@ -900,7 +910,12 @@ def main() -> None:
                 and str(existing.get("height_mm"))[:7].rstrip("0").rstrip(".")
                 == design_payload["nominal_height_mm"]
             )
-            if stored == wanted and same_dims and '"glass_article_sku"' in stored:
+            if (
+                stored == wanted
+                and same_dims
+                and bool(existing.get("is_option")) == is_option
+                and '"glass_article_sku"' in stored
+            ):
                 return
             detail = api(
                 estimator, "GET", f"/positions/{existing['id']}/",
@@ -915,6 +930,7 @@ def main() -> None:
                 {
                     "location_tag": loc,
                     "quantity": qty,
+                    "is_option": is_option,
                     "design": design_payload,
                     "expected_updated_at": detail["updated_at"],
                 },
@@ -945,6 +961,7 @@ def main() -> None:
                         {
                             "location_tag": loc,
                             "quantity": qty,
+                            "is_option": is_option,
                             "design": design_payload,
                             "expected_updated_at": detail["updated_at"],
                         },
@@ -954,7 +971,12 @@ def main() -> None:
             estimator,
             "POST",
             f"/projects/{project_id}/positions/",
-            {"location_tag": loc, "quantity": qty, "design": design_payload},
+            {
+                "location_tag": loc,
+                "quantity": qty,
+                "is_option": is_option,
+                "design": design_payload,
+            },
         )
 
     def prune_positions(project_id: str, keep_tags: set[str]) -> None:
@@ -983,10 +1005,15 @@ def main() -> None:
                 timeout=30,
             )
 
-    def set_positions(proj: dict, entries: list[tuple[str, dict, int]]) -> None:
+    def set_positions(
+        proj: dict,
+        entries: list[tuple[str, dict, int]],
+        options: set[str] | None = None,
+    ) -> None:
+        option_locs = options or set()
         keep = {loc for loc, _, _ in entries}
         for loc, tree, qty in entries:
-            position(proj["id"], loc, tree, qty)
+            position(proj["id"], loc, tree, qty, is_option=loc in option_locs)
         prune_positions(proj["id"], keep)
 
     FER = "María José Fernández Roa"
@@ -1097,7 +1124,7 @@ def main() -> None:
     )
 
     p_vitrina = project(
-        "P-VITRINA", "Casa Ríos — vitrina 10 posiciones", CSP, "Camino a Penco 2234, San Pedro de la Paz"
+        "P-VITRINA", "Casa Ríos — vitrina de 12 posiciones", CSP, "Camino a Penco 2234, San Pedro de la Paz"
     )
     set_positions(
         p_vitrina,
@@ -1109,12 +1136,15 @@ def main() -> None:
             ("V05 Corredera O/X/X/O quincho", sliding_oxoxo("3600", "1600", "v05"), 1),
             ("V06 Proyectante baño", awning("800", "600", "v06"), 1),
             ("V07 Puerta principal", door("1000", "2200", "v07"), 1),
+            ("V08 Ventana cocina sobre mesada", turn("1000", "900", "v08"), 1),
+            ("V09 Fijo escalera", fixed("800", "1800", "v09"), 1),
             ("V10 Mampara fija + proyectante", split_h_fixed_awning("1100", "1800", "v10"), 1),
             ("V11 Ventanal doble oscilobatiente", tilt_turn("2800", "1600", "v11"), 1),
-            # Posición alternativa: mismo vano que V02 resuelto con corredera —
-            # la comparación de diseños que un cotizador real muestra.
+            # Alternativa REAL (is_option): mismo vano que V02 resuelto con
+            # corredera — se dibuja y se precifica pero no entra al total.
             ("V12 Alternativa corredera (vano V02)", sliding_2l("1200", "1400", "v12"), 1),
         ],
+        options={"V12 Alternativa corredera (vano V02)"},
     )
 
     p_despachado = project(
@@ -1149,6 +1179,27 @@ def main() -> None:
         [
             ("Oficina 1", tilt_turn("1600", "1200", "rj1"), 1),
             ("Oficina 2", turn("1200", "1200", "rj2"), 1),
+        ],
+    )
+
+    p_cambios = project(
+        "P-CAMBIOS", "Dúplex Los Aromos — con observaciones", FER, "Los Aromos 1280, Concepción"
+    )
+    set_positions(
+        p_cambios,
+        [
+            ("Ventanal acceso", sliding_2l("2400", "1500", "cm1"), 1),
+            ("Ventana dormitorio", tilt_turn("1400", "1200", "cm2"), 1),
+        ],
+    )
+
+    p_usd = project(
+        "P-USD", "Bodega exportadora — cotización en dólares", ILA, "Ruta 160 km 4, Coronel"
+    )
+    set_positions(
+        p_usd,
+        [
+            ("Ventana oficina", tilt_turn("1800", "1200", "us1"), 2),
         ],
     )
 
@@ -1238,6 +1289,7 @@ def main() -> None:
         ("conjuntos", p_conjuntos), ("portal", p_portal),
         ("vitrina", p_vitrina), ("despachado", p_despachado),
         ("instalado", p_instalado), ("rechazado", p_rechazado),
+        ("cambios", p_cambios), ("usd", p_usd),
         ("expirada", p_expirada), ("escala", p_escala),
     ]:
         state["projects"][slug] = {"id": proj["id"], "name": proj["name"]}
@@ -1259,6 +1311,8 @@ def main() -> None:
         "despachado": p_despachado,
         "instalado": p_instalado,
         "rechazado": p_rechazado,
+        "cambios": p_cambios,
+        "usd": p_usd,
         "expirada": p_expirada,
         "escala": p_escala,
     }, state)
@@ -1396,6 +1450,30 @@ def stage(
                             or req.get("requested_height_mm")
                             or "1050"
                         )
+                        # Vano bajo (ventana sobre mesada): la altura
+                        # estándar ~1050 puede quedar sobre la hoja — baja
+                        # la manilla al centro de la hoja declarada.
+                        outer_h = float(req.get("outer_height_mm") or 0)
+                        rect = next(
+                            (
+                                r
+                                for r in req.get("leaf_rects") or []
+                                if str(r.get("placement_policy_id"))
+                                == str(placement_id)
+                            ),
+                            (req.get("leaf_rects") or [None])[0],
+                        )
+                        if (
+                            reference == "OUTER_BOTTOM"
+                            and rect is not None
+                            and outer_h > 0
+                            and float(suggested)
+                            > outer_h
+                            - float(rect["leaf_top_from_outer_top_mm"])
+                        ):
+                            suggested = (
+                                f"{outer_h - (float(rect['leaf_top_from_outer_top_mm']) + float(rect['leaf_height_mm']) / 2):.2f}"
+                            )
                     handle_intents.append(
                         {
                             "schema_version": 1,
@@ -1449,7 +1527,11 @@ def stage(
             },
         )
 
-    def priced_operation(project_id: str, valid_until: str | None = None) -> dict | None:
+    def priced_operation(
+        project_id: str,
+        valid_until: str | None = None,
+        currency: str = "CLP",
+    ) -> dict | None:
         detail = api(estimator, "GET", f"/projects/{project_id}/")
         # Inputs are only writable while the project stays in DRAFT — a
         # sealed revision makes them immutable, so reruns skip the PUT.
@@ -1467,7 +1549,7 @@ def stage(
                 "project_id": project_id,
                 "pricing_mode": "COST_PLUS_MARGIN",
                 "context_code": "DEFAULT",
-                "currency": "CLP",
+                "currency": currency,
                 "effective_date": today,
                 "discount_pct": "0",
                 "target_margin": "0.35",
@@ -1547,6 +1629,33 @@ def stage(
         )
         return result if result.get("id") else None
 
+    def successor_freeze(project_id: str) -> dict | None:
+        # Sellar REV-B exige la sucesora real: abrir la revisión siguiente
+        # (DRAFT), repreciarla y congelarla — congelar la misma operación
+        # dos veces solo re-lee la REV-A existente.
+        current = api(estimator, "GET", f"/projects/{project_id}/")
+        api(
+            estimator,
+            "POST",
+            f"/projects/{project_id}/successor/",
+            {
+                "expected_current_revision": current["current_revision"],
+                "confirmed": True,
+            },
+            tolerate=(409,),
+        )
+        op = priced_operation(project_id)
+        if not op:
+            return None
+        result = api(
+            estimator,
+            "POST",
+            f"/documents/projects/{project_id}/freeze/",
+            {"pricing_operation_id": op["id"], "confirmed": True},
+            tolerate=(409,),
+        )
+        return result if result.get("id") else None
+
     def emit_doc01(version_id: str) -> None:
         api(
             estimator,
@@ -1565,6 +1674,95 @@ def stage(
             estimator, "POST", f"/projects/{project_id}/quote-link/"
         )
 
+    def mint_portal_token(project_id: str, version_id: str) -> str:
+        """Mint directo del enlace de portal (misma forma que el endpoint).
+
+        Solo para proyectos que ya no admiten share (p.ej. la vitrina ya
+        liberada a taller): el token vive solo aquí y en el state file.
+        """
+        token = secrets.token_hex(32)
+        digest = hashlib.sha256(token.encode()).hexdigest()
+        previous = query(
+            "customer_approvals?select=created_by"
+            f"&org_id=eq.{ORG_ID}&limit=1"
+        )
+        created_by = previous[0]["created_by"] if previous else None
+        if not created_by:
+            created_by = query(
+                f"memberships?select=id&org_id=eq.{ORG_ID}&limit=1"
+            )[0]["id"]
+        sql(
+            "INSERT INTO public.customer_approvals(id,org_id,project_id,"
+            "project_version_id,token_hash,status,expires_at,created_by,"
+            "channel) VALUES(%s,%s,%s,%s,%s,'PENDING',"
+            "now()+interval '30 days',%s,'EMAIL')",
+            (
+                str(uuid.uuid5(NS, f"vitrina-link-{digest[:16]}")),
+                ORG_ID,
+                project_id,
+                version_id,
+                digest,
+                created_by,
+            ),
+        )
+        return token
+
+    def persist_state() -> None:
+        # Los tokens solo existen aquí — si el run muere antes del volcado
+        # final quedan huérfanos. Persiste tras cada cambio de `state`.
+        with open(STATE_PATH, "w", encoding="utf-8") as handle:
+            json.dump(state, handle, indent=2, ensure_ascii=False)
+
+    def stored_token_live(slug: str) -> bool:
+        # El .fixture-state.json sobrevive a un wipe de la base (el gate
+        # corre db reset): el token solo vale si su hash existe de verdad.
+        stored = state["portal"].get(slug)
+        if not stored:
+            return False
+        digest = hashlib.sha256(stored.encode()).hexdigest()
+        return bool(
+            query(
+                "customer_approvals?select=id"
+                f"&token_hash=eq.{digest}&limit=1"
+            )
+        )
+
+    def stored_token_anchor(slug: str) -> tuple[str, str] | None:
+        # (project_id, revision_code) del enlace guardado — None si el
+        # token no existe en la base. Detecta enlaces que quedaron en la
+        # revisión equivocada tras un re-seal o apuntando a otro proyecto.
+        stored = state["portal"].get(slug)
+        if not stored:
+            return None
+        digest = hashlib.sha256(stored.encode()).hexdigest()
+        approval = query(
+            "customer_approvals?select=project_id,project_version_id"
+            f"&token_hash=eq.{digest}&limit=1"
+        )
+        if not approval:
+            return None
+        version = query(
+            "project_versions?select=revision_code"
+            f"&id=eq.{approval[0]['project_version_id']}&limit=1"
+        )
+        if not version:
+            return None
+        return str(approval[0]["project_id"]), version[0]["revision_code"]
+
+    def stored_token_status(slug: str) -> str | None:
+        # Estado del link guardado (PENDING/APPROVED/…) o None si el
+        # token no existe — un mint interrumpido antes del decide deja
+        # el ancla correcta pero el link sin decidir.
+        stored = state["portal"].get(slug)
+        if not stored:
+            return None
+        digest = hashlib.sha256(stored.encode()).hexdigest()
+        approval = query(
+            "customer_approvals?select=status"
+            f"&token_hash=eq.{digest}&limit=1"
+        )
+        return approval[0]["status"] if approval else None
+
     def approvals(project_id: str) -> list[dict]:
         out = api(
             estimator, "GET", f"/projects/{project_id}/quote-link/",
@@ -1572,16 +1770,20 @@ def stage(
         )
         return out if isinstance(out, list) else out.get("items", [])
 
-    def portal_decide(token: str, decision: str, by: str, note: str) -> None:
-        public_api(
-            "POST",
-            f"/portal/quotes/{token}/decide/",
-            {
-                "decision": decision,
-                "decided_by": by,
-                "note": note,
-            },
-        )
+    def portal_decide(
+        token: str, decision: str, by: str, note: str, rut: str | None = None
+    ) -> None:
+        # La aprobación exige evidencia: RUT válido + checkbox literal de
+        # aceptación. Cambios/rechazo solo piden nombre (+ comentario).
+        payload: dict = {
+            "decision": decision,
+            "decided_by": by,
+            "note": note,
+        }
+        if decision == "APPROVED":
+            payload["decided_rut"] = rut or make_rut(13579246)
+            payload["accepted"] = True
+        public_api("POST", f"/portal/quotes/{token}/decide/", payload)
 
     def released_orders(version_id: str) -> list[dict]:
         released = api(
@@ -1807,33 +2009,68 @@ def stage(
     # ---- P-PORTAL: revisada + aprobada (tokens recuperables) -----------
     # El token solo existe en la respuesta de emisión: este proyecto porta
     # el par reemplazada/aprobada con tokens siempre vigentes en state.
-    if not (
-        state["portal"].get("reemplazada") and state["portal"].get("aprobada")
-    ):
-        op = priced_operation(projects["portal"]["id"])
+    # La existencia de REV-B es invariante del proyecto, no del state file:
+    # si la base se borró hay que re-sellar la sucesora aunque el state
+    # todavía tenga tokens.
+    portal_id = projects["portal"]["id"]
+    portal_detail = api(estimator, "GET", f"/projects/{portal_id}/")
+    if len(portal_detail.get("versions") or []) < 2:
+        op = priced_operation(portal_id)
         if op:
-            frozen_a = freeze(projects["portal"]["id"], op["id"])
+            frozen_a = freeze(portal_id, op["id"])
             if frozen_a:
                 emit_doc01(frozen_a["id"])
-                superseded = share_link(projects["portal"]["id"])
-                frozen_b = api(
-                    estimator,
-                    "POST",
-                    f"/documents/projects/{projects['portal']['id']}/freeze/",
-                    {"pricing_operation_id": op["id"], "confirmed": True},
-                    tolerate=(409,),
-                )
-                if frozen_b.get("id"):
+                superseded = share_link(portal_id)
+                frozen_b = successor_freeze(portal_id)
+                if frozen_b and frozen_b.get("id"):
                     emit_doc01(frozen_b["id"])
                     state["portal"]["reemplazada"] = superseded["token"]
-                    live = share_link(projects["portal"]["id"])
+                    persist_state()
+                    live = share_link(portal_id)
                     state["portal"]["aprobada"] = live["token"]
+                    persist_state()
                     portal_decide(
                         live["token"],
                         "APPROVED",
                         "Marcela Molina Contreras",
                         "Aprobada la segunda revisión con vidrio templado.",
                     )
+    else:
+        # Reparación: `reemplazada` debe apuntar a la revisión vieja y
+        # `aprobada` a la vigente — tokens stale (o minteados sobre la
+        # revisión equivocada por corridas viejas) se re-mintan.
+        portal_rev = portal_detail["current_revision"]
+        anchor = stored_token_anchor("reemplazada")
+        if anchor is None or anchor[0] != portal_id or anchor[1] == portal_rev:
+            old = query(
+                "project_versions?select=id"
+                f"&project_id=eq.{portal_id}"
+                f"&revision_code=neq.{portal_rev}&limit=1"
+            )
+            if old:
+                state["portal"]["reemplazada"] = mint_portal_token(
+                    portal_id, old[0]["id"]
+                )
+                persist_state()
+        if stored_token_anchor("aprobada") != (
+            portal_id,
+            portal_rev,
+        ) or stored_token_status("aprobada") != "APPROVED":
+            current = query(
+                "project_versions?select=id"
+                f"&project_id=eq.{portal_id}"
+                f"&revision_code=eq.{portal_rev}&limit=1"
+            )
+            if current:
+                token = mint_portal_token(portal_id, current[0]["id"])
+                state["portal"]["aprobada"] = token
+                persist_state()
+                portal_decide(
+                    token,
+                    "APPROVED",
+                    "Marcela Molina Contreras",
+                    "Aprobada la segunda revisión con vidrio templado.",
+                )
 
     # ---- P-ENVIADO: sealed + live link (+ revoked sibling) -------------
     op = priced_operation(projects["enviado"]["id"])
@@ -1875,6 +2112,7 @@ def stage(
                         tolerate=(404, 409),
                     )
                     state["portal"]["revocada"] = doomed["token"]
+                    persist_state()
             links = approvals(projects["enviado"]["id"])
             if not state["portal"].get("vigente"):
                 # Siempre un único link vigente: el token solo existe en la
@@ -1891,6 +2129,7 @@ def stage(
                         )
                 live = share_link(projects["enviado"]["id"])
                 state["portal"]["vigente"] = live["token"]
+                persist_state()
 
     # ---- P-APROBADO: superseded link + approved REV-B + anticipo -------
     op = priced_operation(projects["aprobado"]["id"])
@@ -1900,20 +2139,20 @@ def stage(
         if not decided:
             frozen_a = freeze(projects["aprobado"]["id"], op["id"])
             emit_doc01(frozen_a["id"])
-            superseded = share_link(projects["aprobado"]["id"])
-            state["portal"]["reemplazada"] = superseded["token"]
+            # Enlace de REV-A: quedará revocado/reemplazado al re-sellar —
+            # no se guarda token (el `reemplazada` del estado vive en
+            # P-PORTAL/Casa Molina; aquí solo importa la evidencia).
+            share_link(projects["aprobado"]["id"])
             # Re-seal: REV-B makes L1 the replaced revision.
-            frozen_b = api(
-                estimator,
-                "POST",
-                f"/documents/projects/{projects['aprobado']['id']}/freeze/",
-                {"pricing_operation_id": op["id"], "confirmed": True},
-                tolerate=(409,),
-            )
-            if frozen_b.get("id"):
+            frozen_b = successor_freeze(projects["aprobado"]["id"])
+            if frozen_b and frozen_b.get("id"):
                 emit_doc01(frozen_b["id"])
             live = share_link(projects["aprobado"]["id"])
-            state["portal"]["aprobada"] = live["token"]
+            # `aprobada` es exclusivo del proyecto P-PORTAL (Casa Molina):
+            # este link queda como `parcial` — aprobado con anticipo
+            # pagado, el estado "Abonado parcial" del portal.
+            state["portal"]["parcial"] = live["token"]
+            persist_state()
             portal_decide(
                 live["token"],
                 "APPROVED",
@@ -1955,6 +2194,34 @@ def stage(
         if frozen:
             emit_doc01(frozen["id"])
             state["vitrina_version_id"] = frozen["id"]
+            # Link de la vitrina ANTES de liberar (share exige QUOTED):
+            # la página pública del portal necesita un proyecto de 12
+            # posiciones para probar que la suma de líneas iguala el total.
+            if not stored_token_live("vitrina"):
+                for link in approvals(projects["vitrina"]["id"]):
+                    if link.get("status") == "PENDING":
+                        api(
+                            estimator,
+                            "POST",
+                            f"/projects/{projects['vitrina']['id']}/quote-links/"
+                            f"{link['id']}/revoke/",
+                            tolerate=(404, 409),
+                        )
+                detail = api(
+                    estimator, "GET", f"/projects/{projects['vitrina']['id']}/"
+                )
+                if detail.get("status") in ("QUOTED", "APPROVED"):
+                    live = share_link(projects["vitrina"]["id"])
+                    state["portal"]["vitrina"] = live["token"]
+                    persist_state()
+                else:
+                    # Ya liberada a taller en un run previo que murió sin
+                    # persistir el token — mint directo igual que el
+                    # endpoint (hash sha256 del token).
+                    state["portal"]["vitrina"] = mint_portal_token(
+                        projects["vitrina"]["id"], frozen["id"]
+                    )
+                persist_state()
             vitrina_orders = released_orders(frozen["id"])
             for order in vitrina_orders:
                 optimize_and_pack(order["id"])
@@ -2101,28 +2368,110 @@ def stage(
                 or link.get("status") == "DECLINED"
             ]
             if not declined:
-                pending = [ln for ln in links if ln.get("status") == "PENDING"]
-                if pending:
-                    # A link minted in an earlier run is already decided or
-                    # its token is unrecoverable — mint a fresh one instead.
-                    if not any(
-                        ln.get("status") == "DECLINED" for ln in links
-                    ):
-                        fresh = share_link(projects["rechazado"]["id"])
-                        portal_decide(
-                            fresh["token"],
-                            "DECLINED",
-                            "Juan Carlos Muñoz Vera",
-                            "El presupuesto supera lo previsto; no avanzamos.",
+                for link in links:
+                    if link.get("status") == "PENDING":
+                        api(
+                            estimator,
+                            "POST",
+                            f"/projects/{projects['rechazado']['id']}/quote-links/"
+                            f"{link['id']}/revoke/",
+                            tolerate=(404, 409),
                         )
-                else:
-                    fresh = share_link(projects["rechazado"]["id"])
+                fresh = share_link(projects["rechazado"]["id"])
+                portal_decide(
+                    fresh["token"],
+                    "DECLINED",
+                    "Juan Carlos Muñoz Vera",
+                    "El presupuesto supera lo previsto; no avanzamos.",
+                )
+                state["portal"]["rechazada"] = fresh["token"]
+                persist_state()
+
+    # ---- P-CAMBIOS: client asked for changes ---------------------------
+    op = priced_operation(projects["cambios"]["id"])
+    if op:
+        frozen = freeze(projects["cambios"]["id"], op["id"])
+        if frozen:
+            emit_doc01(frozen["id"])
+            links = approvals(projects["cambios"]["id"])
+            decided = [
+                link for link in links if link.get("status") == "CHANGES_REQUESTED"
+            ]
+            if not decided:
+                # El token solo existe en la respuesta de emisión: un
+                # PENDING huérfano se revoca y se emite uno recuperable.
+                for link in links:
+                    if link.get("status") == "PENDING":
+                        api(
+                            estimator,
+                            "POST",
+                            f"/projects/{projects['cambios']['id']}/quote-links/"
+                            f"{link['id']}/revoke/",
+                            tolerate=(404, 409),
+                        )
+                token = share_link(projects["cambios"]["id"]).get("token")
+                if token:
                     portal_decide(
-                        fresh["token"],
-                        "DECLINED",
-                        "Juan Carlos Muñoz Vera",
-                        "El presupuesto supera lo previsto; no avanzamos.",
+                        token,
+                        "CHANGES_REQUESTED",
+                        "María José Fernández Roa",
+                        "Cambiar el ventanal del acceso a oscilobatiente "
+                        "y revisar el vidrio del dormitorio.",
                     )
+                    state["portal"]["cambios"] = token
+                    persist_state()
+
+    # ---- P-USD: cotización en dólares — sin CTA de pago ----------------
+    # La autoría comercial solo emite en la moneda de la org (CLP): la
+    # mano de obra siempre se convierte CLP→trato y los snapshots FX solo
+    # cubren USD→CLP, así que una previsualización currency='USD' no es
+    # alcanzable. Para exponer el estado honesto "moneda no soportada" el
+    # snapshot sellado se re-etiqueta USD y se re-hashea con la misma
+    # función canónica — la cadena de evidencia queda intacta.
+    op = priced_operation(projects["usd"]["id"])
+    if op:
+        frozen = freeze(projects["usd"]["id"], op["id"])
+        if frozen:
+            from dekopen_engine.documentary_canonical import (
+                documentary_sha256_v1,
+            )
+
+            with psycopg.connect(DB, autocommit=True) as connection:
+                connection.execute(
+                    "SET session_replication_role = 'replica'"
+                )
+                (snapshot_text,) = connection.execute(
+                    "SELECT snapshot_json::text FROM public.project_versions"
+                    " WHERE id=%s",
+                    (frozen["id"],),
+                ).fetchone()
+                snapshot = json.loads(snapshot_text)
+                project_snapshot = snapshot.get("project")
+                if project_snapshot.get("currency") != "USD":
+                    project_snapshot["currency"] = "USD"
+                    connection.execute(
+                        "UPDATE public.project_versions SET snapshot_json=%s::jsonb,"
+                        " snapshot_sha256=%s WHERE id=%s",
+                        (
+                            json.dumps(snapshot),
+                            documentary_sha256_v1(snapshot),
+                            frozen["id"],
+                        ),
+                    )
+            emit_doc01(frozen["id"])
+            if not stored_token_live("usd"):
+                for link in approvals(projects["usd"]["id"]):
+                    if link.get("status") == "PENDING":
+                        api(
+                            estimator,
+                            "POST",
+                            f"/projects/{projects['usd']['id']}/quote-links/"
+                            f"{link['id']}/revoke/",
+                            tolerate=(404, 409),
+                        )
+                live = share_link(projects["usd"]["id"])
+                state["portal"]["usd"] = live["token"]
+                persist_state()
 
     # ---- P-EXPIRADA: sealed quote past validity -------------------------
     yesterday = str(date.today() - timedelta(days=1))
@@ -2135,6 +2484,7 @@ def stage(
             if not links or not state["portal"].get("expirada"):
                 live = share_link(projects["expirada"]["id"])
                 state["portal"]["expirada"] = live["token"]
+                persist_state()
 
     # ---- P-ESCALA: priced only ------------------------------------------
     priced_operation(projects["escala"]["id"])

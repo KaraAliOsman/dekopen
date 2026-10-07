@@ -21,9 +21,13 @@ from portal import service
 from portal.serializers import (
     ApprovalRecordSerializer,
     DecideRequestSerializer,
+    FollowQuoteResultSerializer,
     InternalApprovalResultSerializer,
     InternalApprovalSerializer,
     LinkExpirySerializer,
+    PortalPaymentStatusSerializer,
+    PortalPayRequestSerializer,
+    PortalPayResultSerializer,
     PortalQuoteSerializer,
     ShareQuoteResponseSerializer,
 )
@@ -70,6 +74,26 @@ def public_portal_errors():
         if error.code == "changes_note_required":
             raise contract_error(
                 400, error.code, "Describe los cambios que necesitas."
+            ) from error
+        if error.code == "acceptance_required":
+            raise contract_error(
+                400, error.code, "Marca la aceptación de la propuesta para aprobarla."
+            ) from error
+        if error.code == "decision_position_not_option":
+            raise contract_error(
+                400, error.code, "Una posición marcada no es una alternativa de la propuesta."
+            ) from error
+        if error.code == "payer_email_required":
+            raise contract_error(
+                400, error.code, "Indica el correo del pagador para continuar."
+            ) from error
+        if error.code == "payment_not_payable":
+            raise contract_error(
+                422, error.code, "Esta propuesta no admite cobro en línea en este momento."
+            ) from error
+        if error.code == "follow_limit_reached":
+            raise contract_error(
+                429, error.code, "Ya se generaron los enlaces de seguimiento disponibles."
             ) from error
         if error.code in ("quote_expired", "quote_validity_expired"):
             raise contract_error(
@@ -265,5 +289,86 @@ class PortalQuoteDecisionView(APIView):
                 decided_by=str(data["decided_by"]).strip(),
                 note=str(data.get("note") or "").strip() or None,
                 decided_rut=str(data.get("decided_rut") or "").strip() or None,
+                accepted=bool(data.get("accepted")),
+                marked_position_ids=[
+                    str(item) for item in data.get("marked_position_ids") or []
+                ],
+                decision_ip=_client_ip(request),
+                decision_user_agent=(
+                    str(request.META.get("HTTP_USER_AGENT") or "")[:500] or None
+                ),
             )
             return Response(output)
+
+
+def _client_ip(request) -> str | None:
+    """IP del cliente para la evidencia — el proxy confiable precede al
+    REMOTE_ADDR directo; truncada, nunca inventada."""
+    forwarded = str(request.META.get("HTTP_X_FORWARDED_FOR") or "").split(",")
+    candidate = (forwarded[0] if forwarded and forwarded[0] else "").strip()
+    return candidate or str(request.META.get("REMOTE_ADDR") or "") or None
+
+
+class PortalQuoteFollowView(APIView):
+    """Una cotización reemplazada ofrece seguir a la revisión vigente."""
+
+    authentication_classes = []
+    throttle_classes = [PortalRateThrottle]
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        operation_id="portal_quote_follow",
+        description=(
+            "On a superseded quote, mint a FOLLOW-channel link bound to the "
+            "project's current sealed revision."
+        ),
+        request=None,
+        responses={200: FollowQuoteResultSerializer, **ERRORS},
+    )
+    def post(self, request, token: str):
+        with public_portal_errors():
+            return Response(service.follow_quote(token))
+
+
+class PortalQuotePayView(APIView):
+    """El cliente paga desde la propuesta — minta o reusa el cobro sellado."""
+
+    authentication_classes = []
+    throttle_classes = [PortalRateThrottle]
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        operation_id="portal_quote_pay",
+        description=(
+            "Mint or reuse a payment link for the quote's outstanding "
+            "balance, sealed to return the payer to this portal page."
+        ),
+        request=PortalPayRequestSerializer,
+        responses={200: PortalPayResultSerializer, **ERRORS},
+    )
+    def post(self, request, token: str):
+        data = validate(PortalPayRequestSerializer, request.data or {})
+        with public_portal_errors():
+            return Response(
+                service.portal_pay(
+                    token,
+                    payer_email=str(data.get("payer_email") or "") or None,
+                )
+            )
+
+
+class PortalPaymentStatusView(APIView):
+    """Resuelve el estado de un cobro tras el retorno del proveedor."""
+
+    authentication_classes = []
+    throttle_classes = [PortalRateThrottle]
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        operation_id="portal_payment_status",
+        description="Resolve a payment link's status by its Flow token.",
+        responses={200: PortalPaymentStatusSerializer, **ERRORS},
+    )
+    def get(self, request, flow_token: str):
+        with public_portal_errors():
+            return Response(service.payment_status(flow_token))

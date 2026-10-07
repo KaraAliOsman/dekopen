@@ -335,6 +335,7 @@
   position: absolute;
   right: var(--space-4);
   bottom: var(--space-4);
+  z-index: var(--z-raise);
   display: inline-flex;
   background: var(--theme-surface-panel);
   border: 1px solid var(--theme-border-subtle);
@@ -349,7 +350,7 @@
   padding: var(--space-2) var(--space-6);
   font-size: var(--type-micro);
   font-weight: 600;
-  color: var(--theme-text-muted);
+  color: var(--theme-text-secondary);
   cursor: pointer;
 }
 
@@ -540,9 +541,13 @@
   max-width: 100%;
 }
 
+.portal-proposal__hero-render {
+  position: relative;
+}
+
 .portal-proposal__hero figcaption {
   font-size: var(--text-xs);
-  color: var(--theme-text-muted);
+  color: var(--theme-text-secondary);
 }
 
 /* decision recap — identity, total and validity next to the buttons, so the
@@ -714,4 +719,345 @@
   content: "↺";
   background: var(--theme-warning);
   color: var(--theme-surface-panel);
+}
+
+/* P10 — identidad del emisor, estados dedicados, zoom, alternativas,
+   evidencia de decisión y pago gateado (móvil primero). */
+
+.portal-proposal__issuer {
+  display: grid;
+  gap: var(--space-4);
+  justify-items: start;
+}
+
+/* Páginas de estado — el enlace muere con dignidad: qué pasó y con quién
+   hablar, con la marca del fabricante arriba. */
+.portal-state {
+  padding: var(--space-16);
+  border: 1px solid var(--theme-border-subtle);
+  border-left: 3px solid var(--theme-accent);
+  border-radius: var(--radius-lg);
+  background: var(--theme-surface-panel);
+}
+
+.portal-state__title {
+  margin: 0 0 var(--space-8);
+  font-size: var(--type-title-l);
+  line-height: var(--type-title-l-lh);
+}
+
+.portal-state__body {
+  margin: 0;
+  font-size: var(--text-body);
+}
+
+.portal-state__contact {
+  margin: var(--space-12) 0 0;
+  color: var(--theme-text-secondary);
+}
+
+.portal-state__follow {
+  margin-top: var(--space-16);
+  /* primary-action usa --theme-surface-panel como tinta — en tema oscuro ese
+   * token es oscuro y falla AA sobre la marca; brandOnFill decide la tinta. */
+  color: var(--theme-accent-onfill);
+}
+
+.portal-daysleft {
+  /* La marca como texto falla AA en oscuro cuando brand_color es oscuro —
+   * accent-ink es el rol "tinta de acento" que adapta por tema. */
+  color: var(--theme-accent-ink);
+  font-weight: 600;
+}
+
+/* Zoom — lightbox full-viewport, paneo por arrastre y pinch táctil. */
+.portal-zoom {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-toast);
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.portal-zoom__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: color-mix(in srgb, var(--g-950) 82%, transparent);
+  cursor: zoom-out;
+}
+
+.portal-zoom__bar {
+  position: relative;
+  z-index: var(--z-raise);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-16);
+  background: var(--g-950);
+  color: var(--paper);
+}
+
+.portal-zoom__title {
+  font-size: var(--text-s);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portal-zoom__tools {
+  display: flex;
+  gap: var(--space-4);
+  flex-shrink: 0;
+}
+
+.portal-zoom__tools button {
+  min-width: 2rem;
+  padding: var(--space-4) var(--space-8);
+  border: 1px solid color-mix(in srgb, var(--paper) 30%, transparent);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.portal-zoom__tools button:hover {
+  background: color-mix(in srgb, var(--paper) 12%, transparent);
+}
+
+.portal-zoom__stage {
+  position: relative;
+  z-index: var(--z-raise);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+}
+
+.portal-zoom__stage:active {
+  cursor: grabbing;
+}
+
+.portal-zoom__content {
+  transform-origin: center;
+  max-width: min(92vw, 900px);
+}
+
+.portal-zoom__content svg,
+.portal-zoom__content img,
+.portal-zoom__content canvas {
+  display: block;
+  max-width: 100%;
+  max-height: 82vh;
+}
+
+/* El render pide "tócame" sin romper el flujo — overlay hermano del
+   render (no envolvente) para no anidar controles interactivos. */
+.portal-position__zoom {
+  position: absolute;
+  inset: 0;
+  z-index: calc(var(--z-base) + 1);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: zoom-in;
+}
+
+.portal-position__zoomhint {
+  position: absolute;
+  left: var(--space-8);
+  bottom: var(--space-8);
+  padding: 0 var(--space-8);
+  border-radius: var(--radius-md);
+  /* Fondo sólido: el translúcido queda ilegible sobre renders claros y el
+   * detector AA no evalúa color-mix — papel sobre g-950 siempre pasa. */
+  background: var(--g-950);
+  color: var(--paper);
+  font-size: var(--text-xs);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.portal-position__zoom:hover .portal-position__zoomhint,
+.portal-position__zoom:focus-visible .portal-position__zoomhint {
+  opacity: 1;
+}
+
+.portal-position__viewname {
+  margin: var(--space-4) 0 0;
+  font-size: var(--text-xs);
+  color: var(--theme-text-secondary);
+}
+
+/* Alternativas — banda lateral ámbar, nunca confundida con lo incluido. */
+.portal-options > h2 {
+  color: var(--warn-ink);
+}
+
+.portal-options__note {
+  margin: 0 0 var(--space-8);
+  font-size: var(--text-s);
+  color: var(--theme-text-secondary);
+}
+
+.portal-position[data-option="true"] {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--theme-warning-soft) 40%, var(--theme-surface-panel));
+}
+
+.portal-option-tag {
+  display: inline-block;
+  margin-right: var(--space-8);
+  padding: 0 var(--space-8);
+  border-radius: var(--radius-md);
+  background: var(--theme-warning-soft);
+  color: var(--warn-ink);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.portal-option-note {
+  margin: var(--space-4) 0 0;
+  font-size: var(--text-xs);
+  color: var(--warn-ink);
+}
+
+.portal-condlist {
+  margin: 0;
+  display: grid;
+  gap: var(--space-8);
+}
+
+.portal-condlist div {
+  display: grid;
+  grid-template-columns: minmax(7rem, auto) 1fr;
+  gap: var(--space-8);
+}
+
+.portal-condlist dt {
+  font-size: var(--text-xs);
+  color: var(--theme-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.portal-condlist dd {
+  margin: 0;
+  font-size: var(--text-s);
+}
+
+/* Pago — el CTA vive dentro del bloque comercial, con su aviso de simulación. */
+.portal-paybox {
+  display: grid;
+  gap: var(--space-8);
+  align-content: start;
+  min-width: 14rem;
+}
+
+.portal-paybox__label {
+  font-size: var(--text-xs);
+  color: var(--theme-text-muted);
+}
+
+.portal-paybox input {
+  padding: var(--space-8) var(--space-12);
+  border: 1px solid var(--theme-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--theme-surface-panel);
+  color: var(--theme-text-primary);
+  font: inherit;
+}
+
+.portal-paybox__sim {
+  margin: 0;
+  padding: var(--space-4) var(--space-8);
+  border-radius: var(--radius-md);
+  background: var(--theme-warning-soft);
+  color: var(--warn-ink);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+/* Decisión — aceptación literal, alternativas marcables y evidencia visible. */
+.portal-decision__options {
+  margin: 0;
+  padding: var(--space-8) var(--space-12);
+  border: 1px dashed var(--theme-warning);
+  border-radius: var(--radius-md);
+}
+
+.portal-decision__options legend {
+  padding: 0 var(--space-4);
+  font-size: var(--text-s);
+  font-weight: 600;
+  color: var(--warn-ink);
+}
+
+.portal-decision__option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-4) 0;
+  font-size: var(--text-s);
+}
+
+.portal-decision__accept {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12);
+  border: 1px solid var(--theme-accent);
+  border-radius: var(--radius-md);
+  background: var(--theme-accent-soft);
+  font-size: var(--text-s);
+  font-weight: 500;
+}
+
+.portal-decision__accept input {
+  margin-top: 0.2em;
+  flex-shrink: 0;
+}
+
+.portal-evidence {
+  margin: var(--space-8) 0 0 !important;
+  padding: var(--space-8) var(--space-12);
+  border-left: 3px solid var(--theme-accent);
+  background: var(--theme-surface-panel);
+  border-radius: var(--radius-md);
+  font-size: var(--text-s);
+}
+
+.portal-evidence__label {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--theme-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: var(--space-4);
+}
+
+.portal-return__amount {
+  font-size: var(--text-m);
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .portal-zoom__title {
+    display: none;
+  }
+  .portal-zoom__bar {
+    justify-content: flex-end;
+  }
+  .portal-condlist div {
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+  }
 }

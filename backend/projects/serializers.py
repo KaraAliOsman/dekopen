@@ -94,6 +94,9 @@ class PositionWriteSerializer(StrictSerializer):
     quantity = serializers.IntegerField(min_value=1, max_value=2147483647)
     design = PositionDesignSerializer()
     measurement = PositionMeasurementSerializer(required=False, allow_null=True)
+    # P10 — la posición puede declararse alternativa: se precifica pero
+    # queda fuera del total de la cotización.
+    is_option = serializers.BooleanField(required=False, default=False)
 
 
 class PositionUpdateSerializer(PositionWriteSerializer):
@@ -186,6 +189,7 @@ class PositionResponseSerializer(serializers.Serializer):
     location_tag = serializers.CharField(allow_null=True)
     quantity = serializers.IntegerField()
     typology = serializers.CharField()
+    is_option = serializers.BooleanField()
     price_net = serializers.CharField()
     discount_pct = serializers.CharField()
     design = PositionDesignSerializer()

@@ -23,4 +23,5 @@ export interface PortalOrganization {
   brand_logo_url: string | null;
   /** @nullable */
   brand_color: string | null;
+  dekopen_credit?: boolean;
 }

@@ -74,9 +74,9 @@ def test_share_quote_mints_hashed_token(monkeypatch) -> None:
     # the document approval is hashed too and rides the DOCUMENT channel
     assert document_params[3] != email_params[3]
     assert "'document'" in document_sql
-    # the share-side revocation only kills EMAIL links — a prior document
-    # QR must keep resolving against its sealed PDF.
-    assert captured["updates"] and "channel='email'" in captured["updates"][0][0]
+    # the share-side revocation only kills emailed/follow links — a prior
+    # document QR must keep resolving against its sealed PDF.
+    assert captured["updates"] and "channel in ('email','follow')" in captured["updates"][0][0]
     # the artifact renders with the document approval URL, not the email one
     assert len(artifact_calls) == 1
     call = artifact_calls[0]
@@ -288,9 +288,14 @@ def test_portal_quote_unknown_and_expired_tokens(monkeypatch) -> None:
     with pytest.raises(DocumentaryError, match="quote_not_found"):
         service.portal_quote("bogus")
 
-    monkeypatch.setattr("portal.service.rows", lambda *a, **k: [_approval(expired=True)])
-    with pytest.raises(DocumentaryError, match="quote_expired"):
-        service.portal_quote("expired-token")
+    # P10 — un enlace real pero vencido ya no es un error: renderiza su
+    # estado dedicado «link_expired» con la identidad del emisor.
+    approval = _approval(expired=True)
+    _install_fakes(monkeypatch, approval)
+    with patch("portal.service.SupabaseDocumentStorage"):
+        out = service.portal_quote("expired-token")
+    assert out["state"] == "link_expired"
+    assert out["follow_available"] is False
 
 
 def test_portal_quote_reads_sealed_snapshot_not_live_totals(monkeypatch) -> None:
@@ -322,6 +327,8 @@ def test_portal_quote_reads_sealed_snapshot_not_live_totals(monkeypatch) -> None
     assert out["project_name"] == "Casa"
     assert out["revision_code"] == "REV-A"
     assert out["superseded"] is True
+    assert out["state"] == "superseded"
+    assert out["current_revision"] == "REV-B"
     assert out["valid_until"] == "2999-01-01"
 
 
@@ -394,16 +401,25 @@ def test_portal_quote_carries_positions_issuer_and_payment_state(monkeypatch) ->
         "brand_logo_url": None,
         # Sin color declarado el portal recibe el fallback efectivo (teal-800).
         "brand_color": "#075F5A",
+        # P10 — el pie «Generado con DEKOPEN» sigue la política sellada.
+        "dekopen_credit": True,
     }
     assert out["payment_terms"] == "50% anticipo"
     assert out["positions"][0]["typology"] == "2F_TT"
+    assert out["positions"][0]["is_option"] is False
     assert out["positions"][0]["parametric_tree"] == {"type": "ROOT"}
     assert len(out["positions"]) == 1
+    # P10 — el bloque de pago declara payable+reason, nunca un botón ciego.
     assert out["payment"] == {
         "status": "PARTIAL",
         "collected": "400.00",
         "balance": "790.00",
+        "payable": False,
+        "reason": "not_approved",
+        "simulated": False,
     }
+    assert out["acceptance_text"].startswith("Acepto la propuesta COT-")
+    assert "$1.190" in out["acceptance_text"]
 
 
 def test_decide_approves_project_and_replays(monkeypatch) -> None:
@@ -432,7 +448,14 @@ def test_decide_approves_project_and_replays(monkeypatch) -> None:
     )
     with patch("portal.service.SupabaseDocumentStorage"):
         out = service.decide_quote(
-            token="tok", decision="APPROVED", decided_by="Ana", note=None
+            token="tok",
+            decision="APPROVED",
+            decided_by="Ana",
+            note=None,
+            decided_rut="12.345.678-5",
+            accepted=True,
+            decision_ip="190.54.10.20",
+            decision_user_agent="Mozilla/5.0 (iPhone)",
         )
 
     assert any("pricing_backend" in c for c in role_calls)
@@ -445,6 +468,12 @@ def test_decide_approves_project_and_replays(monkeypatch) -> None:
     assert all("token" not in c or "token_hash" in c for c in calls)
     assert any("update public.customer_approvals" in c for c in calls)
     assert any("update public.projects" in c for c in calls)
+    # P10 — la decisión dejó su fila de evidencia append-only con IP,
+    # user agent, el literal de aceptación y la revisión sellada.
+    event_inserts = [
+        c for c in calls if "insert into public.customer_approval_events" in c
+    ]
+    assert len(event_inserts) == 1
 
 
 def test_decide_rejects_stale_link(monkeypatch) -> None:
@@ -457,7 +486,12 @@ def test_decide_rejects_stale_link(monkeypatch) -> None:
     with patch("portal.service.SupabaseDocumentStorage"):
         with pytest.raises(DocumentaryError, match="quote_link_stale"):
             service.decide_quote(
-                token="tok", decision="APPROVED", decided_by="Ana", note=None
+                token="tok",
+                decision="APPROVED",
+                decided_by="Ana",
+                note=None,
+                decided_rut="12.345.678-5",
+                accepted=True,
             )
     # nothing was written — no stale approval seal, no project transition
     assert not any(c.startswith("update") for c in calls)
@@ -470,7 +504,12 @@ def test_decide_confirm_on_already_approved_project(monkeypatch) -> None:
     calls = _install_fakes(monkeypatch, approval, live=_live(status="APPROVED"))
     with patch("portal.service.SupabaseDocumentStorage"):
         out = service.decide_quote(
-            token="tok", decision="APPROVED", decided_by="Ana", note=None
+            token="tok",
+            decision="APPROVED",
+            decided_by="Ana",
+            note=None,
+            decided_rut="12.345.678-5",
+            accepted=True,
         )
     # the approval seals, but the project is not transitioned again
     assert any("update public.customer_approvals" in c for c in calls)
@@ -491,7 +530,7 @@ def test_decide_decline_on_approved_project_is_honest(monkeypatch) -> None:
             )
 
 
-def test_portal_quote_hides_payment_url_on_superseded(monkeypatch) -> None:
+def test_portal_quote_not_payable_on_superseded(monkeypatch) -> None:
     """A superseded revision must not offer a pay link for dead money."""
     _roles(monkeypatch)
     approval = _approval()
@@ -506,6 +545,25 @@ def test_portal_quote_hides_payment_url_on_superseded(monkeypatch) -> None:
     live = _live(status="QUOTED", revision="REV-B")  # link bound to REV-A
     calls = _install_fakes(monkeypatch, approval, version=sealed, live=live)
 
+    with patch("portal.service.SupabaseDocumentStorage"):
+        out = service.portal_quote("tok")
+    assert out["superseded"] is True
+    assert out["state"] == "superseded"
+    assert out["payment"]["payable"] is False
+    assert out["payment"]["reason"] == "quote_not_current"
+    # the payments table is never even queried once the revision is dead
+    assert not any("project_payments" in c for c in calls)
+
+
+def test_portal_quote_superseded_offers_follow_when_live_link(monkeypatch) -> None:
+    """Reemplazada honesta: si la revisión vigente tiene un link vivo, el
+    cliente puede seguirlo («ver la cotización vigente»)."""
+    _roles(monkeypatch)
+    approval = _approval()
+    sealed = _version(snapshot={"project": {"currency": "CLP"}})
+    live = _live(status="QUOTED", revision="REV-B")
+    calls = _install_fakes(monkeypatch, approval, version=sealed, live=live)
+
     base_rows = service.rows
 
     def fake_rows(sql_text, params=()):
@@ -513,21 +571,20 @@ def test_portal_quote_hides_payment_url_on_superseded(monkeypatch) -> None:
         calls.append(lowered)
         if "token_hash" in lowered:
             return [approval]
-        if "project_payment_links" in lowered:
-            return [{"url": "https://pay.example/link"}]
+        # el link vivo de la revisión vigente (channel EMAIL/FOLLOW)
+        if "v.revision_code" in lowered and "channel in ('email','follow')" in lowered:
+            return [{"id": uuid4()}]
         return []
 
     monkeypatch.setattr("portal.service.rows", fake_rows)
     with patch("portal.service.SupabaseDocumentStorage"):
         out = service.portal_quote("tok")
-    assert out["superseded"] is True
-    assert out["payment_url"] is None
-    # the link table is never even queried once the revision is dead
-    assert not any("project_payment_links" in c for c in calls)
+    assert out["state"] == "superseded"
+    assert out["follow_available"] is True
     monkeypatch.setattr("portal.service.rows", base_rows)
 
 
-def test_portal_quote_hides_payment_url_on_declined(monkeypatch) -> None:
+def test_portal_quote_not_payable_on_declined(monkeypatch) -> None:
     """A rejected proposal must not offer a pay link — charging after the
     client declined reads as billing a dead deal."""
     _roles(monkeypatch)
@@ -543,20 +600,12 @@ def test_portal_quote_hides_payment_url_on_declined(monkeypatch) -> None:
     live = _live(status="QUOTED", revision="REV-A")
     calls = _install_fakes(monkeypatch, approval, version=sealed, live=live)
 
-    def fake_rows(sql_text, params=()):
-        lowered = " ".join(sql_text.lower().split())
-        calls.append(lowered)
-        if "token_hash" in lowered:
-            return [approval]
-        if "project_payment_links" in lowered:
-            return [{"url": "https://pay.example/link"}]
-        return []
-
-    monkeypatch.setattr("portal.service.rows", fake_rows)
     with patch("portal.service.SupabaseDocumentStorage"):
         out = service.portal_quote("tok")
-    assert out["payment_url"] is None
-    assert not any("project_payment_links" in c for c in calls)
+    assert out["state"] == "declined"
+    assert out["payment"]["payable"] is False
+    assert out["payment"]["reason"] == "not_approved"
+    assert not any("org_payment_integrations" in c for c in calls)
 
 
 def test_decide_rejects_expired_quote_validity(monkeypatch) -> None:
@@ -571,13 +620,19 @@ def test_decide_rejects_expired_quote_validity(monkeypatch) -> None:
     with patch("portal.service.SupabaseDocumentStorage"):
         with pytest.raises(DocumentaryError, match="quote_validity_expired"):
             service.decide_quote(
-                token="tok", decision="APPROVED", decided_by="Ana", note=None
+                token="tok",
+                decision="APPROVED",
+                decided_by="Ana",
+                note=None,
+                decided_rut="12.345.678-5",
+                accepted=True,
             )
     assert not any(c.startswith("update") for c in calls)
 
 
 def test_decide_replay_keeps_sealed_state(monkeypatch) -> None:
     _roles(monkeypatch)
+    _connection_stub(monkeypatch)
     approval = _approval(status="APPROVED")
     calls = _install_fakes(monkeypatch, approval, live=_live(status="APPROVED"))
     with patch("portal.service.SupabaseDocumentStorage"):
@@ -591,14 +646,22 @@ def test_decide_replay_keeps_sealed_state(monkeypatch) -> None:
 
 def test_revoked_token_is_dead(monkeypatch) -> None:
     _roles(monkeypatch)
-    monkeypatch.setattr(
-        "portal.service.rows", lambda *a, **k: [_approval(status="REVOKED")]
-    )
-    with pytest.raises(DocumentaryError, match="quote_revoked"):
-        service.portal_quote("revoked-token")
+    approval = _approval(status="REVOKED")
+    # El enlace revocado ya no decide ni cobra — pero tampoco desaparece:
+    # renderiza su página de estado honesta.
+    _install_fakes(monkeypatch, approval)
+    with patch("portal.service.SupabaseDocumentStorage"):
+        out = service.portal_quote("revoked-token")
+    assert out["state"] == "revoked"
+    assert out["payment"]["payable"] is False
     with pytest.raises(DocumentaryError, match="quote_revoked"):
         service.decide_quote(
-            token="revoked-token", decision="APPROVED", decided_by="Ana", note=None
+            token="revoked-token",
+            decision="APPROVED",
+            decided_by="Ana",
+            note=None,
+            decided_rut="12.345.678-5",
+            accepted=True,
         )
 
 
@@ -819,6 +882,18 @@ def test_list_approvals_exposes_the_view_signal(monkeypatch) -> None:
                     "view_count": 3,
                     "first_viewed_at": viewed_at,
                     "last_viewed_at": viewed_at,
+                    # enlaces anteriores a P10 no tienen fila de evidencia
+                    "ev_decision": None,
+                    "ev_decided_by": None,
+                    "ev_decided_rut": None,
+                    "ev_decided_note": None,
+                    "ev_ip": None,
+                    "ev_ua": None,
+                    "ev_acceptance": None,
+                    "ev_revision": None,
+                    "ev_bom": None,
+                    "ev_positions": None,
+                    "ev_at": None,
                 }
             ]
         return []
@@ -831,3 +906,500 @@ def test_list_approvals_exposes_the_view_signal(monkeypatch) -> None:
     out = service.list_approvals(org_id=uuid4(), project_id=uuid4())
     assert out[0]["view_count"] == 3
     assert out[0]["last_viewed_at"] == viewed_at.isoformat()
+    assert out[0]["evidence"] is None
+
+
+# ---------------------------------------------------------------------------
+# P10 — evidencia de decisión, estados honestos, follow y pago gateado
+# ---------------------------------------------------------------------------
+
+_VALID_RUT = "12.345.678-5"
+
+
+def _connection_stub(monkeypatch):
+    monkeypatch.setattr(
+        "portal.service.connection",
+        SimpleNamespace(cursor=lambda: _FakeCursor()),
+    )
+
+
+def test_decide_approved_requires_rut_and_acceptance(monkeypatch) -> None:
+    """Aprobar sin identidad no vale: RUT válido + aceptación explícita."""
+    _roles(monkeypatch)
+    _connection_stub(monkeypatch)
+    approval = _approval()
+    _install_fakes(monkeypatch, approval)
+
+    with patch("portal.service.SupabaseDocumentStorage"):
+        with pytest.raises(DocumentaryError, match="decided_rut_invalid"):
+            service.decide_quote(
+                token="tok", decision="APPROVED", decided_by="Ana", note=None
+            )
+        with pytest.raises(DocumentaryError, match="decided_rut_invalid"):
+            service.decide_quote(
+                token="tok",
+                decision="APPROVED",
+                decided_by="Ana",
+                note=None,
+                decided_rut="12.345.678-9",
+            )
+        with pytest.raises(DocumentaryError, match="acceptance_required"):
+            service.decide_quote(
+                token="tok",
+                decision="APPROVED",
+                decided_by="Ana",
+                note=None,
+                decided_rut=_VALID_RUT,
+                accepted=False,
+            )
+
+
+def test_decide_writes_complete_evidence_event(monkeypatch) -> None:
+    """La fila append-only lleva nombre, RUT, el literal exacto de
+    aceptación, revisión + huella, IP y user agent del dispositivo."""
+    _roles(monkeypatch)
+    _connection_stub(monkeypatch)
+    approval = _approval()
+    sealed = {
+        "project": {
+            "code": "P-9",
+            "total_price_gross": "1435471",
+            "currency": "CLP",
+            "quotation_valid_until": "2999-01-01",
+        }
+    }
+    version = _version(snapshot=sealed)
+    version["bom_hash"] = "abc123hash"
+    _install_fakes(monkeypatch, approval, version=version)
+    event_rows: list[list] = []
+
+    base_rows = service.rows
+
+    def fake_rows(sql_text, params=()):
+        lowered = " ".join(sql_text.lower().split())
+        if "insert into public.customer_approval_events" in lowered:
+            event_rows.append(list(params))
+            return [{"id": uuid4()}]
+        return base_rows(sql_text, params)
+
+    monkeypatch.setattr("portal.service.rows", fake_rows)
+    with patch("portal.service.SupabaseDocumentStorage"):
+        service.decide_quote(
+            token="tok",
+            decision="APPROVED",
+            decided_by="Ana María",
+            note=None,
+            decided_rut=_VALID_RUT,
+            accepted=True,
+            marked_position_ids=[],
+            decision_ip="190.54.10.20",
+            decision_user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 17_0)",
+        )
+
+    assert len(event_rows) == 1
+    params = event_rows[0]
+    # (org, approval, project, decision, name, rut, note, ip, ua, acceptance,
+    #  revision, bom, positions)
+    assert params[3] == "APPROVED"
+    assert params[4] == "Ana María"
+    assert params[5] == _VALID_RUT
+    assert params[7] == "190.54.10.20"
+    assert "iPhone" in params[8]
+    assert params[9] == (
+        "Acepto la propuesta COT-P-9-REV-A por $1.435.471 IVA incluido "
+        "y sus condiciones."
+    )
+    assert params[10] == "REV-A"
+    assert params[11] == "abc123hash"
+
+
+def test_acceptance_text_formats_each_currency() -> None:
+    """El literal de aceptación usa el formato de moneda de DOC-01 — la
+    evidencia lee idéntica a la propuesta impresa, no un monto crudo."""
+    sealed = {"code": "P-9"}
+    clp = service._acceptance_text(
+        sealed=sealed, revision_code="REV-A", gross="1435471", currency="CLP"
+    )
+    usd = service._acceptance_text(
+        sealed=sealed, revision_code="REV-A", gross="232584.00", currency="USD"
+    )
+    uf = service._acceptance_text(
+        sealed=sealed, revision_code="REV-A", gross="38.4521", currency="UF"
+    )
+    assert "por $1.435.471 IVA incluido" in clp
+    assert "por US$ 232.584,00 IVA incluido" in usd
+    assert "por UF 38,4521 IVA incluido" in uf
+
+
+def test_decide_marks_only_sealed_option_positions(monkeypatch) -> None:
+    """marked_position_ids solo acepta ids sellados con is_option — un id
+    de posición incluida o inventado rechaza la decisión completa."""
+    _roles(monkeypatch)
+    _connection_stub(monkeypatch)
+    approval = _approval()
+    sealed = {
+        "project": {"quotation_valid_until": "2999-01-01"},
+        "positions": [
+            {"id": "pos-base", "position_index": 1, "is_option": False},
+            {"id": "pos-alt", "position_index": 2, "is_option": True},
+        ],
+    }
+    calls = _install_fakes(monkeypatch, approval, version=_version(snapshot=sealed))
+
+    with patch("portal.service.SupabaseDocumentStorage"):
+        with pytest.raises(DocumentaryError, match="decision_position_not_option"):
+            service.decide_quote(
+                token="tok",
+                decision="CHANGES_REQUESTED",
+                decided_by="Ana",
+                note="cambiar vidrio",
+                marked_position_ids=["pos-base"],
+            )
+    assert not any("customer_approval_events" in c for c in calls)
+
+    with patch("portal.service.SupabaseDocumentStorage"):
+        out = service.decide_quote(
+            token="tok",
+            decision="CHANGES_REQUESTED",
+            decided_by="Ana",
+            note="sumar la fija del dormitorio",
+            marked_position_ids=["pos-alt"],
+        )
+    assert out["approval_status"] in {"PENDING", "CHANGES_REQUESTED"}
+
+
+def test_portal_quote_states_for_decided_and_live(monkeypatch) -> None:
+    """Cada estado terminal/intermedio se nombra explícitamente."""
+    _roles(monkeypatch)
+    _connection_stub(monkeypatch)
+    for status, expected in (
+        ("PENDING", "live"),
+        ("CHANGES_REQUESTED", "changes_requested"),
+        ("APPROVED", "approved"),
+    ):
+        approval = _approval(status=status)
+        _install_fakes(monkeypatch, approval, live=_live(status="QUOTED"))
+        with patch("portal.service.SupabaseDocumentStorage"):
+            out = service.portal_quote("tok")
+        assert out["state"] == expected, status
+
+
+def test_portal_quote_validity_expired_state(monkeypatch) -> None:
+    _roles(monkeypatch)
+    approval = _approval()
+    stale = {"project": {"quotation_valid_until": "2000-01-01"}}
+    _install_fakes(monkeypatch, approval, version=_version(snapshot=stale))
+    with patch("portal.service.SupabaseDocumentStorage"):
+        out = service.portal_quote("tok")
+    assert out["state"] == "validity_expired"
+    assert out["payment"]["payable"] is False
+    assert out["payment"]["reason"] == "quote_validity_expired"
+
+
+def test_portal_quote_doc_terms_and_credit_off(monkeypatch) -> None:
+    """Las condiciones selladas y el pie DEKOPEN siguen lo que la org fijó."""
+    _roles(monkeypatch)
+    sealed = {
+        "organization": {
+            "name": "Vidriería Sur",
+            "doc_dekopen_credit": False,
+            "doc_terms": {
+                "plazo_entrega": "15 días hábiles",
+                "garantia": "5 años perfiles",
+                "extra_key_ignored": "x",
+            },
+        },
+        "project": {"currency": "CLP", "quotation_valid_until": "2999-01-01"},
+    }
+    _install_fakes(monkeypatch, _approval(), version=_version(snapshot=sealed))
+    with patch("portal.service.SupabaseDocumentStorage"):
+        out = service.portal_quote("tok")
+    assert out["organization"]["dekopen_credit"] is False
+    assert out["doc_terms"] == {
+        "plazo_entrega": "15 días hábiles",
+        "garantia": "5 años perfiles",
+    }
+
+
+def test_follow_quote_mints_follow_channel(monkeypatch) -> None:
+    """El cliente con el link muerto obtiene uno nuevo a la revisión
+    vigente — channel FOLLOW, claims del creador del link original."""
+    _roles(monkeypatch)
+    _connection_stub(monkeypatch)
+    approval = _approval()
+    live_version_id = uuid4()
+    inserts: list[list] = []
+
+    def fake_one(sql_text, params, code="not_found"):
+        lowered = " ".join(sql_text.lower().split())
+        if "public.projects" in lowered:
+            return _live(status="QUOTED", revision="REV-B")
+        if "project_versions" in lowered:
+            return {"id": live_version_id, "revision_code": "REV-B"}
+        if lowered.startswith("insert into public.customer_approvals"):
+            inserts.append(list(params))
+            return {"id": uuid4()}
+        raise AssertionError(lowered)
+
+    monkeypatch.setattr("portal.service.rows", lambda *a, **k: [approval])
+    monkeypatch.setattr("portal.service.one", fake_one)
+    out = service.follow_quote("dead-token")
+
+    assert out["follow_token"]
+    assert len(inserts) == 1
+    params = inserts[0]
+    assert params[2] == str(live_version_id)
+    assert params[5] == str(approval["created_by"])
+
+
+def test_follow_quote_rejects_stale_and_caps_mints(monkeypatch) -> None:
+    _roles(monkeypatch)
+    _connection_stub(monkeypatch)
+    approval = _approval()
+    live_version_id = uuid4()
+
+    # el link ya apunta a la revisión vigente — nada que seguir
+    def fake_one_current(sql_text, params, code="not_found"):
+        lowered = " ".join(sql_text.lower().split())
+        if "public.projects" in lowered:
+            return _live(status="QUOTED", revision="REV-B")
+        if "project_versions" in lowered:
+            return {"id": approval["project_version_id"], "revision_code": "REV-B"}
+        raise AssertionError(lowered)
+
+    monkeypatch.setattr("portal.service.rows", lambda *a, **k: [approval])
+    monkeypatch.setattr("portal.service.one", fake_one_current)
+    with pytest.raises(DocumentaryError, match="quote_link_stale"):
+        service.follow_quote("tok")
+
+    # cap de reenvíos: 5 FOLLOW minteados → se acabó
+    def fake_one_dead(sql_text, params, code="not_found"):
+        lowered = " ".join(sql_text.lower().split())
+        if "public.projects" in lowered:
+            return _live(status="QUOTED", revision="REV-B")
+        if "project_versions" in lowered:
+            return {"id": live_version_id, "revision_code": "REV-B"}
+        raise AssertionError(lowered)
+
+    def fake_rows(sql_text, params=()):
+        lowered = " ".join(sql_text.lower().split())
+        if "token_hash" in lowered:
+            return [approval]
+        if "channel='follow'" in lowered:
+            return [{"id": uuid4()} for _ in range(5)]
+        return []
+
+    monkeypatch.setattr("portal.service.one", fake_one_dead)
+    monkeypatch.setattr("portal.service.rows", fake_rows)
+    with pytest.raises(DocumentaryError, match="follow_limit_reached"):
+        service.follow_quote("dead-token")
+
+
+def test_portal_pay_gates_and_mints_saldo(monkeypatch) -> None:
+    """El CTA de pago sólo abre con la revisión aprobada, vigente, CLP y
+    saldo — y sella el retorno a esta misma cotización."""
+    _roles(monkeypatch)
+    _connection_stub(monkeypatch)
+    approval = _approval(status="APPROVED")
+    sealed = {
+        "project": {
+            "code": "P-1",
+            "currency": "CLP",
+            "total_price_gross": "1190000",
+            "client_email": "ana@correo.cl",
+            "quotation_valid_until": "2999-01-01",
+        }
+    }
+
+    def fake_rows(sql_text, params=()):
+        lowered = " ".join(sql_text.lower().split())
+        if "token_hash" in lowered:
+            return [approval]
+        if "project_payments" in lowered:
+            return [{"amount": "400000", "voided_at": None}]
+        if "org_payment_integrations" in lowered:
+            return [{"id": uuid4()}]
+        return []
+
+    monkeypatch.setattr("portal.service.rows", fake_rows)
+    monkeypatch.setattr(
+        "portal.service.one",
+        lambda sql_text, params, code="not_found": (
+            _version(snapshot=sealed)
+            if "project_versions" in sql_text.lower()
+            else _live()
+        ),
+    )
+
+    captured: dict = {}
+
+    def fake_create_link(**kwargs):
+        captured.update(kwargs)
+        return {"link": {"url": "https://flow.example/pay", "flow_token": "FT-1",
+                         "amount": "790000", "environment": "PROD"}}
+
+    # create_link se importa perezoso dentro de portal_pay — parche sobre el
+    # módulo ya cargado.
+    import projects.payment_links as links_mod
+
+    monkeypatch.setattr(links_mod, "create_link", fake_create_link)
+    out = service.portal_pay("tok")
+    assert out["payment_url"] == "https://flow.example/pay"
+    assert captured["data"]["kind"] == "SALDO"
+    assert captured["data"]["amount"] == "790000"
+    assert captured["data"]["payer_email"] == "ana@correo.cl"
+    assert captured["data"]["return_url"].endswith("/cotizacion/tok")
+    assert captured["data"]["operation_key"].startswith("portal:")
+
+
+def test_portal_pay_rejects_unapproved_and_requires_payer(monkeypatch) -> None:
+    _roles(monkeypatch)
+    _connection_stub(monkeypatch)
+    approval = _approval(status="PENDING")
+    sealed = {
+        "project": {
+            "currency": "CLP",
+            "total_price_gross": "1190000",
+            "quotation_valid_until": "2999-01-01",
+        }
+    }
+    _install_fakes(monkeypatch, approval, version=_version(snapshot=sealed))
+    with pytest.raises(DocumentaryError, match="payment_not_payable"):
+        service.portal_pay("tok")
+
+    # aprobada + saldo pero sin proveedor → no payable, no minta
+    approval2 = _approval(status="APPROVED")
+    _install_fakes(monkeypatch, approval2, version=_version(snapshot=sealed))
+    with pytest.raises(DocumentaryError, match="payment_not_payable"):
+        service.portal_pay("tok")
+
+
+def test_portal_pay_requires_payer_email(monkeypatch) -> None:
+    """Aprobada + saldo + proveedor, pero sin correo del pagador en la
+    propuesta ni en el request → error explícito, nunca un cobro anónimo."""
+    _roles(monkeypatch)
+    _connection_stub(monkeypatch)
+    approval = _approval(status="APPROVED")
+    sealed = {
+        "project": {
+            "currency": "CLP",
+            "total_price_gross": "1190000",
+            "quotation_valid_until": "2999-01-01",
+        }
+    }
+
+    def fake_rows(sql_text, params=()):
+        lowered = " ".join(sql_text.lower().split())
+        if "token_hash" in lowered:
+            return [approval]
+        if "org_payment_integrations" in lowered:
+            return [{"id": uuid4()}]
+        return []
+
+    monkeypatch.setattr("portal.service.rows", fake_rows)
+    monkeypatch.setattr(
+        "portal.service.one",
+        lambda sql_text, params, code="not_found": (
+            _version(snapshot=sealed)
+            if "project_versions" in sql_text.lower()
+            else _live()
+        ),
+    )
+    with pytest.raises(DocumentaryError, match="payer_email_required"):
+        service.portal_pay("tok")
+
+    import projects.payment_links as links_mod
+
+    monkeypatch.setattr(
+        links_mod,
+        "create_link",
+        lambda **k: {"link": {"url": "https://flow.example/pay",
+                              "flow_token": "FT-2", "amount": "1190000",
+                              "environment": "PROD"}},
+    )
+    out = service.portal_pay("tok", payer_email="pagador@correo.cl")
+    assert out["payment_url"] == "https://flow.example/pay"
+
+
+def test_payment_status_resolves_link_state(monkeypatch) -> None:
+    """El retorno de Flow trae flow_token — el público ve el estado real
+    del cobro y la URL sellada a la que volver."""
+    _roles(monkeypatch)
+
+    def fake_rows(sql_text, params=()):
+        lowered = " ".join(sql_text.lower().split())
+        if "flow_token" in lowered:
+            return [
+                {
+                    "status": "PAID",
+                    "amount": "790000",
+                    "kind": "SALDO",
+                    "payer_return_url": "http://localhost:5173/cotizacion/abc",
+                    "project_id": uuid4(),
+                    "org_id": uuid4(),
+                }
+            ]
+        return []
+
+    monkeypatch.setattr("portal.service.rows", fake_rows)
+    out = service.payment_status("FT-1")
+    assert out["status"] == "PAID"
+    assert out["amount"] == "790000"
+    assert out["payer_return_url"].endswith("/cotizacion/abc")
+
+    monkeypatch.setattr("portal.service.rows", lambda *a, **k: [])
+    with pytest.raises(DocumentaryError, match="quote_not_found"):
+        service.payment_status("bogus")
+
+
+def test_list_approvals_exposes_decision_evidence(monkeypatch) -> None:
+    """El estimador ve la evidencia completa: nombre, RUT, IP, agente,
+    texto aceptado, revisión + huella y alternativas marcadas."""
+    _roles(monkeypatch)
+    viewed_at = datetime.now(timezone.utc)
+
+    def fake_rows(sql_text, params=()):
+        lowered = " ".join(sql_text.lower().split())
+        if "customer_approvals" in lowered:
+            return [
+                {
+                    "id": uuid4(),
+                    "status": "APPROVED",
+                    "channel": "EMAIL",
+                    "revision_code": "REV-A",
+                    "decided_by": "Ana · 12.345.678-5",
+                    "decided_at": viewed_at,
+                    "decided_note": None,
+                    "expires_at": viewed_at + timedelta(days=30),
+                    "created_at": viewed_at,
+                    "revoked_at": None,
+                    "view_count": 3,
+                    "first_viewed_at": viewed_at,
+                    "last_viewed_at": viewed_at,
+                    "ev_decision": "APPROVED",
+                    "ev_decided_by": "Ana",
+                    "ev_decided_rut": "12.345.678-5",
+                    "ev_decided_note": None,
+                    "ev_ip": "190.54.10.20",
+                    "ev_ua": "Mozilla/5.0",
+                    "ev_acceptance": "Acepto la propuesta COT-P-1-REV-A…",
+                    "ev_revision": "REV-A",
+                    "ev_bom": "abc123hash",
+                    "ev_positions": [{"position_id": "x", "position_index": 2}],
+                    "ev_at": viewed_at,
+                }
+            ]
+        return []
+
+    monkeypatch.setattr("portal.service.rows", fake_rows)
+    monkeypatch.setattr(
+        "portal.service.one",
+        lambda *a, **k: {"id": uuid4()},
+    )
+    out = service.list_approvals(org_id=uuid4(), project_id=uuid4())
+    evidence = out[0]["evidence"]
+    assert evidence["decision"] == "APPROVED"
+    assert evidence["decided_rut"] == "12.345.678-5"
+    assert evidence["decision_ip"] == "190.54.10.20"
+    assert evidence["bom_hash"] == "abc123hash"
+    assert evidence["positions"] == [{"position_id": "x", "position_index": 2}]

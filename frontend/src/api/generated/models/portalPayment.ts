@@ -10,4 +10,8 @@ export interface PortalPayment {
   status: string;
   collected: string;
   balance: string;
+  payable: boolean;
+  /** @nullable */
+  reason: string | null;
+  simulated: boolean;
 }

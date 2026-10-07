@@ -79,6 +79,7 @@ function makePosition(): PositionResponse {
     project_id: "project-a",
     position_index: 1,
     location_tag: "Dormitorio principal",
+    is_option: false,
     quantity: 2,
     price_net: "0",
     discount_pct: "0",
