@@ -17,11 +17,7 @@ import { t, tOptional, type TranslationKey } from "../../i18n/es-CL";
 import { formatMoney } from "../../format";
 import { addDecimal, formatDecimal, parseDecimal, subtractDecimal } from "./decimal";
 import { applyDesignOps, describeDesignOp, describeScopeOp } from "../canvas/designOps";
-import {
-  isProductModel,
-  wrapTreeAsProduct,
-  type ProductJson,
-} from "../canvas/productEditing";
+import { isProductModel, wrapTreeAsProduct, type ProductJson } from "../canvas/productEditing";
 import type { IntentNode } from "../canvas/intentEditing";
 import { designFromProduct } from "../assistant/designPayload";
 
