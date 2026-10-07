@@ -22,6 +22,13 @@ export interface Delivery {
   /** @nullable */
   installer_name: string | null;
   /** @nullable */
+  installer_user_id?: string | null;
+  /** @nullable */
+  crew_id?: string | null;
+  /** @nullable */
+  route_order?: number | null;
+  load_checked?: boolean;
+  /** @nullable */
   notes: string | null;
   status: DeliveryStatusEnum;
   /** @nullable */

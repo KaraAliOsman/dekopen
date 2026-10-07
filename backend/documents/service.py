@@ -1880,6 +1880,14 @@ def _revision_snapshot(
             # aunque la organización cambie sus ajustes después.
             "doc_paper_size": str(organization["doc_paper_size"]),
             "doc_terms": dict(effective_terms),
+            # P23 — plazo de garantía efectivo al momento de emitir: el
+            # texto legal ya va en doc_terms.garantia; este entero sella
+            # los meses que postventa usa para el vencimiento.
+            "doc_warranty_months": (
+                int(organization["doc_warranty_months"])
+                if organization.get("doc_warranty_months") is not None
+                else 24
+            ),
         },
         "revision": revision,
         "sealed_by": actor_id,
@@ -1897,6 +1905,12 @@ def _revision_snapshot(
             "delivery_address": project["delivery_address"],
             "payment_terms": str(project_input["payment_terms"]),
             "quotation_valid_until": project_input["quotation_valid_until"],
+            # P23 — override por cotización; null = usa el plazo de la org.
+            "warranty_months": (
+                int(project_input["warranty_months"])
+                if project_input.get("warranty_months") is not None
+                else None
+            ),
             "notes_commercial": project["notes_commercial"],
             "currency": request.get("currency"),
             "total_price_net": D(str(project["total_price_net"])),
@@ -2037,7 +2051,7 @@ def freeze_revision_a(
             "SELECT name, tax_id, commercial_name, giro, brand_address,"
             " brand_phone, brand_email, brand_logo_key, brand_logo_sha256,"
             " brand_color, doc_dekopen_credit, extras_display,"
-            " doc_paper_size, doc_terms"
+            " doc_paper_size, doc_terms, doc_warranty_months"
             " FROM public.tenancy_organizations WHERE id = %s",
             [str(org_id)],
             "organization_not_found",
@@ -2212,12 +2226,14 @@ def prepare_documentary_inputs(
         [project_id, org_id],
     )
     project_inputs = rows(
-        "SELECT payment_terms,quotation_valid_until,doc_terms FROM public.project_documentary_inputs "
+        "SELECT payment_terms,quotation_valid_until,doc_terms,warranty_months "
+        "FROM public.project_documentary_inputs "
         "WHERE project_id=%s AND org_id=%s",
         [project_id, org_id],
     )
     organization = one(
-        "SELECT doc_terms,doc_validity_days FROM public.tenancy_organizations WHERE id=%s",
+        "SELECT doc_terms,doc_validity_days,doc_warranty_months "
+        "FROM public.tenancy_organizations WHERE id=%s",
         [str(org_id)],
         "organization_not_found",
     )
@@ -2579,6 +2595,13 @@ def prepare_documentary_inputs(
         "org_doc_terms": org_terms,
         "default_payment_terms": org_terms.get("pago", ""),
         "doc_validity_days": int(organization["doc_validity_days"]),
+        # P23 — plazo de garantía: override guardado o plantilla de la org.
+        "warranty_months": values.get("warranty_months"),
+        "doc_warranty_months": (
+            int(organization["doc_warranty_months"])
+            if organization.get("doc_warranty_months") is not None
+            else 24
+        ),
         # Mapa efectivo de esta cotización: guardado encima de la plantilla.
         "doc_terms": effective_terms,
         "emission_missing": emission_missing,
@@ -2681,15 +2704,30 @@ def save_documentary_inputs(
         # edición explícita (clave presente, aunque sea {}) reemplaza.
         terms_supplied = "doc_terms" in data
         quote_terms = _quote_doc_terms(data.get("doc_terms"))
+        # P23 — igual que doc_terms: ausente conserva lo guardado;
+        # presente (incluso null) lo reemplaza. El CHECK 0-240 lo
+        # confirma la migración.
+        warranty_supplied = "warranty_months" in data
+        warranty_months = data.get("warranty_months")
+        if warranty_months is not None:
+            try:
+                warranty_months = int(warranty_months)
+            except (TypeError, ValueError):
+                raise DocumentaryError("warranty_months_invalid") from None
+            if not 0 <= warranty_months <= 240:
+                raise DocumentaryError("warranty_months_invalid")
         one(
             "INSERT INTO public.project_documentary_inputs("
-            "project_id,org_id,payment_terms,quotation_valid_until,doc_terms,created_by) "
-            "VALUES(%s,%s,%s,%s,COALESCE(%s::jsonb,'{}'::jsonb),%s) "
+            "project_id,org_id,payment_terms,quotation_valid_until,doc_terms,"
+            "warranty_months,created_by) "
+            "VALUES(%s,%s,%s,%s,COALESCE(%s::jsonb,'{}'::jsonb),%s,%s) "
             "ON CONFLICT(project_id,org_id) DO UPDATE SET "
             "payment_terms=EXCLUDED.payment_terms,"
             "quotation_valid_until=EXCLUDED.quotation_valid_until,"
             "doc_terms=CASE WHEN %s THEN EXCLUDED.doc_terms"
             " ELSE project_documentary_inputs.doc_terms END,"
+            "warranty_months=CASE WHEN %s THEN EXCLUDED.warranty_months"
+            " ELSE project_documentary_inputs.warranty_months END,"
             "updated_at=now() RETURNING id",
             [
                 project_id,
@@ -2697,8 +2735,10 @@ def save_documentary_inputs(
                 data["payment_terms"],
                 data["quotation_valid_until"],
                 json_text(quote_terms) if terms_supplied else None,
+                warranty_months if warranty_supplied else None,
                 actor_id,
                 terms_supplied,
+                warranty_supplied,
             ],
         )
         for item in supplied_values:
@@ -3148,13 +3188,13 @@ def preview_quote_document(
             "SELECT name, tax_id, commercial_name, giro, brand_address,"
             " brand_phone, brand_email, brand_logo_key, brand_logo_sha256,"
             " brand_color, doc_dekopen_credit, extras_display,"
-            " doc_paper_size, doc_terms"
+            " doc_paper_size, doc_terms, doc_warranty_months"
             " FROM public.tenancy_organizations WHERE id = %s",
             [str(org_id)],
             "organization_not_found",
         )
         stored = rows(
-            "SELECT payment_terms,quotation_valid_until,doc_terms "
+            "SELECT payment_terms,quotation_valid_until,doc_terms,warranty_months "
             "FROM public.project_documentary_inputs "
             "WHERE project_id=%s AND org_id=%s",
             [project_id, org_id],
@@ -3170,6 +3210,11 @@ def preview_quote_document(
             "doc_terms": data.get("doc_terms")
             if data.get("doc_terms") is not None
             else stored_input.get("doc_terms"),
+            "warranty_months": (
+                data.get("warranty_months")
+                if "warranty_months" in data
+                else stored_input.get("warranty_months")
+            ),
         }
         effective_terms = _effective_doc_terms(
             _doc_terms_map(organization["doc_terms"]),

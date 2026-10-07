@@ -19,5 +19,11 @@ export interface QuotePreviewRequest {
   /** @nullable */
   quotation_valid_until?: string | null;
   doc_terms?: QuotePreviewRequestDocTerms;
+  /**
+   * @minimum 0
+   * @maximum 240
+   * @nullable
+   */
+  warranty_months?: number | null;
   positions: PositionDocumentaryPreviewRequest[];
 }

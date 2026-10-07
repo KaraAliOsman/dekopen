@@ -17,4 +17,10 @@ export interface DocumentaryInputsRequest {
   quotation_valid_until: string;
   positions: PositionDocumentaryInputRequest[];
   doc_terms?: DocumentaryInputsRequestDocTerms;
+  /**
+   * @minimum 0
+   * @maximum 240
+   * @nullable
+   */
+  warranty_months?: number | null;
 }

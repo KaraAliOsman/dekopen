@@ -319,6 +319,39 @@ export const DOMAIN_LABELS: Record<string, L> = {
     DELIVERED: l("Entregada", "ok", "check"),
     FAILED: l("Fallida", "danger", "cross"),
   },
+
+  /* ---------- Terreno: despacho, instalación, postventa (P23) ---------- */
+  FieldCrewKindEnum: {
+    VEHICLE: l("Vehículo", "neutral"),
+    TEAM: l("Cuadrilla", "neutral"),
+  },
+  SiteIncidentKindEnum: {
+    DAMAGE: l("Daño", "danger", "cross"),
+    WRONG_MEASURE: l("Medida incorrecta", "danger", "cross"),
+    MISSING: l("Faltante", "warn", "warn"),
+    ADJUSTMENT: l("Regulación", "info"),
+  },
+  SiteIncidentResolutionEnum: {
+    REMAKE: l("Reproducción", "danger"),
+    PURCHASE: l("Compra de terreno", "info"),
+    SERVICE: l("Postventa", "info"),
+    NONE: l("Sin acción", "neutral"),
+  },
+  PurchaseRequestMarkStatusEnum: {
+    ORDERED: l("Pedida", "info"),
+    RECEIVED: l("Recibida", "ok", "check"),
+    CANCELLED: l("Anulada", "neutral"),
+  },
+  ServiceTicketKindEnum: {
+    WARRANTY: l("Garantía", "info"),
+    SERVICE: l("Servicio", "neutral"),
+  },
+  ServiceTicketTransitionStatusEnum: {
+    SCHEDULED: l("Agendado", "info", "calendar"),
+    IN_PROGRESS: l("En curso", "info"),
+    CLOSED: l("Cerrado", "ok", "check"),
+    CANCELLED: l("Anulado", "neutral"),
+  },
   TimeWindowEnum: {
     AM: l("Mañana", "neutral"),
     PM: l("Tarde", "neutral"),

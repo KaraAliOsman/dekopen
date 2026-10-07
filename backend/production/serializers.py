@@ -392,6 +392,10 @@ class DeliverySerializer(serializers.Serializer):
     contact_name = serializers.CharField(allow_null=True)
     contact_phone = serializers.CharField(allow_null=True)
     installer_name = serializers.CharField(allow_null=True)
+    installer_user_id = serializers.UUIDField(allow_null=True, required=False)
+    crew_id = serializers.UUIDField(allow_null=True, required=False)
+    route_order = serializers.IntegerField(allow_null=True, required=False)
+    load_checked = serializers.BooleanField(required=False)
     notes = serializers.CharField(allow_null=True)
     status = serializers.ChoiceField(
         choices=("SCHEDULED", "ON_ROUTE", "DELIVERED", "FAILED")
@@ -425,6 +429,9 @@ class DeliveryScheduleRequestSerializer(StrictSerializer):
     contact_name = serializers.CharField(required=False, allow_blank=True, max_length=200)
     contact_phone = serializers.CharField(required=False, allow_blank=True, max_length=50)
     installer_name = serializers.CharField(required=False, allow_blank=True, max_length=200)
+    installer_user_id = serializers.UUIDField(required=False, allow_null=True)
+    crew_id = serializers.UUIDField(required=False, allow_null=True)
+    route_order = serializers.IntegerField(required=False, allow_null=True, min_value=1)
     notes = serializers.CharField(required=False, allow_blank=True, max_length=500)
     unit_indexes = serializers.ListField(
         child=serializers.IntegerField(min_value=1),
@@ -454,6 +461,9 @@ class DeliveryConfirmRequestSerializer(StrictSerializer):
     receiver_rut = serializers.CharField(required=False, allow_blank=True, max_length=30)
     signature_png = serializers.CharField()
     payment = DeliveryPaymentRequestSerializer(required=False, allow_null=True)
+    observations = serializers.CharField(
+        required=False, allow_blank=True, max_length=1000
+    )
 
 
 class DeliveryConfirmResponseSerializer(serializers.Serializer):

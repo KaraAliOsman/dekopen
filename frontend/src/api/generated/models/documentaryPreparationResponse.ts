@@ -19,6 +19,9 @@ export interface DocumentaryPreparationResponse {
   org_doc_terms: DocumentaryPreparationResponseOrgDocTerms;
   default_payment_terms: string;
   doc_validity_days: number;
+  /** @nullable */
+  warranty_months?: number | null;
+  doc_warranty_months?: number;
   doc_terms: DocumentaryPreparationResponseDocTerms;
   emission_missing: string[];
   positions: DocumentaryPreparationPosition[];

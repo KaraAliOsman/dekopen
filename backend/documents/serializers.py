@@ -134,6 +134,11 @@ class DocumentaryInputsSerializer(StrictSerializer):
         child=serializers.CharField(allow_blank=True, max_length=4000),
         required=False,
     )
+    # P23 — plazo de garantía en meses para esta cotización; null/no
+    # presente usa el plazo por defecto de la organización.
+    warranty_months = serializers.IntegerField(
+        required=False, allow_null=True, min_value=0, max_value=240
+    )
 
 
 class DocumentaryInputsResponseSerializer(serializers.Serializer):
@@ -248,6 +253,8 @@ class DocumentaryPreparationResponseSerializer(serializers.Serializer):
     org_doc_terms = serializers.DictField(child=serializers.CharField())
     default_payment_terms = serializers.CharField(allow_blank=True)
     doc_validity_days = serializers.IntegerField()
+    warranty_months = serializers.IntegerField(allow_null=True, required=False)
+    doc_warranty_months = serializers.IntegerField(required=False)
     doc_terms = serializers.DictField(child=serializers.CharField())
     emission_missing = serializers.ListField(child=serializers.CharField())
     positions = DocumentaryPreparationPositionSerializer(many=True)
@@ -278,6 +285,9 @@ class QuotePreviewSerializer(StrictSerializer):
     doc_terms = serializers.DictField(
         child=serializers.CharField(allow_blank=True, max_length=4000),
         required=False,
+    )
+    warranty_months = serializers.IntegerField(
+        required=False, allow_null=True, min_value=0, max_value=240
     )
     positions = PositionDocumentaryPreviewSerializer(many=True, allow_empty=False)
 

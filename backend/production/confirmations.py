@@ -163,6 +163,7 @@ def confirm_delivery(
     receiver_rut: str | None,
     signature_b64: str,
     payment: dict | None,
+    observations: str | None = None,
 ) -> dict:
     """Seal the comprobante de entrega (and its cobro, if any) as one atomic
     act. The org advisory slot serializes CE codes; ``UNIQUE(order_id)``
@@ -366,6 +367,9 @@ def confirm_delivery(
                     "fittings": sum(int(u.get("fittings") or 0) for u in units),
                 },
                 "payment": payment_payload,
+                # P23 — observaciones de la recepción en obra: quedan
+                # selladas en el acta junto a la firma.
+                "observations": (observations or "").strip() or None,
             }
 
             storage = SupabaseDocumentStorage()

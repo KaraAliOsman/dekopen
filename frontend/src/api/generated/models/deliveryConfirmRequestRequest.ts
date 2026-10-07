@@ -18,4 +18,6 @@ export interface DeliveryConfirmRequestRequest {
   /** @minLength 1 */
   signature_png: string;
   payment?: DeliveryPaymentRequestRequest | null;
+  /** @maxLength 1000 */
+  observations?: string;
 }
