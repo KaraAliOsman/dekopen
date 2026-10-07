@@ -101,6 +101,10 @@ export const SHELL_NAV_GROUPS: ShellNavGroup[] = [
       { to: "/inventory", label: "nav.inventory" },
       { to: "/production", label: "nav.production" },
       { to: "/deliveries", label: "nav.deliveries" },
+      { to: "/field/dispatch", label: "nav.dispatchBoard" },
+      { to: "/field/agenda", label: "nav.fieldAgenda" },
+      { to: "/field/incidents", label: "nav.incidents" },
+      { to: "/field/service", label: "nav.service" },
     ],
   },
   {
@@ -160,7 +164,13 @@ export function navigationAllowedFor(
         role === "OPERATOR"
       );
     case "/deliveries":
+    case "/field/agenda":
       return role === "OWNER" || role === "WORKSHOP_MANAGER" || role === "INSTALLER";
+    case "/field/dispatch":
+      return role === "OWNER" || role === "WORKSHOP_MANAGER";
+    case "/field/incidents":
+    case "/field/service":
+      return role === "OWNER" || role === "WORKSHOP_MANAGER" || role === "ESTIMATOR";
     case "/assistant":
     case "/jobs":
       return hasAiSurface(role);

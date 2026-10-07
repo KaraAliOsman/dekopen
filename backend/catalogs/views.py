@@ -162,7 +162,7 @@ class MountingRuleCollectionView(APIView):
             raise contract_error(
                 400, "catalog_validation_error", "catalogs.errors.validation"
             )
-        with catalog_scope(request, roles=READ_ROLES) as org_id:
+        with catalog_scope(request, roles=(*READ_ROLES, "INSTALLER")) as org_id:
             return Response({
                 "items": [
                     mounting.mounting_rule_public(row)

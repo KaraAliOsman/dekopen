@@ -2351,11 +2351,18 @@ def transition_step(
 
 
 def create_remake(
-    *, org_id: UUID, order_id: UUID, actor_id: UUID, note: str | None = None
+    *,
+    org_id: UUID,
+    order_id: UUID,
+    actor_id: UUID,
+    note: str | None = None,
+    remake_reason: dict | None = None,
 ) -> dict[str, object]:
-    """Remake work order for a unit that failed QC: copies the sealed material
-    projection and routing from a HOLD order into a new ``-RM-`` order. The
-    unique release index excludes remakes (``remake_of`` in payload)."""
+    """Remake work order for a unit that failed QC or came back damaged from
+    obra: copies the sealed material projection and routing from a HOLD
+    order — or a DISPATCHED/INSTALLED one (P23: la incidencia de terreno
+    genera el remake) — into a new ``-RM-`` order. The unique release index
+    excludes remakes (``remake_of`` in payload)."""
     with transaction.atomic(), documentary_backend():
         source = one(
             """
@@ -2368,7 +2375,7 @@ def create_remake(
             [str(order_id), str(org_id)],
             "work_order_not_found",
         )
-        if str(source["status"]) != "HOLD":
+        if str(source["status"]) not in ("HOLD", "DISPATCHED", "INSTALLED"):
             raise DocumentaryError("remake_requires_hold")
         payload = _decoded(source["payload_json"])
         payload.pop("optimization", None)  # stale plan — re-optimize the remake
@@ -2401,6 +2408,10 @@ def create_remake(
             }
             if reason["qc_item"] or reason["note"]:
                 payload["remake_reason"] = reason
+        if remake_reason is not None:
+            # P23 — la incidencia de obra que originó el remake pisa el
+            # motivo: la fábrica rehace por daño/faltante/medida, no por QC.
+            payload["remake_reason"] = remake_reason
         prior = one(
             """
             SELECT COUNT(*) AS n FROM public.orders
@@ -4666,6 +4677,12 @@ def _public_delivery(
         "contact_name": delivery["contact_name"],
         "contact_phone": delivery["contact_phone"],
         "installer_name": delivery["installer_name"],
+        "installer_user_id": (
+            str(delivery["installer_user_id"]) if delivery.get("installer_user_id") else None
+        ),
+        "crew_id": str(delivery["crew_id"]) if delivery.get("crew_id") else None,
+        "route_order": delivery.get("route_order"),
+        "load_checked": delivery.get("load_checked_at") is not None,
         "notes": delivery["notes"],
         "status": str(delivery["status"]),
         "confirmation": confirmation,
@@ -4769,12 +4786,16 @@ def schedule_delivery(
     installer_name: str | None = None,
     notes: str | None = None,
     unit_indexes: list[int] | None = None,
+    crew_id: UUID | None = None,
+    route_order: int | None = None,
+    installer_user_id: UUID | None = None,
 ) -> dict[str, object]:
     """Create or update the order's delivery trip. An open trip (SCHEDULED)
     is upserted so retries and edits stay idempotent on the same row; once
     it resolves, a new schedule opens the next trip. ``unit_indexes`` scopes
     the trip to manifest units for partial deliveries — already delivered
-    or on-route units cannot be claimed twice."""
+    or on-route units cannot be claimed twice. ``crew_id``/``route_order``
+    feed the dispatch board; ``installer_user_id`` feeds the field agenda."""
     window = (time_window or "AM").strip().upper()
     if window not in _DELIVERY_WINDOWS:
         raise DocumentaryError("delivery_window_invalid")
@@ -4830,6 +4851,21 @@ def schedule_delivery(
             # A truck already moving can't be silently rewound to scheduled —
             # fail it first, then schedule the fresh attempt.
             raise DocumentaryError("delivery_already_on_route")
+        if crew_id is not None:
+            crew = rows(
+                "SELECT id FROM public.field_crews WHERE id=%s AND org_id=%s AND active",
+                [str(crew_id), str(org_id)],
+            )
+            if not crew:
+                raise DocumentaryError("crew_not_found")
+        if installer_user_id is not None:
+            member = rows(
+                "SELECT id FROM public.tenancy_memberships "
+                "WHERE org_id=%s AND user_id=%s AND is_active",
+                [str(org_id), str(installer_user_id)],
+            )
+            if not member:
+                raise DocumentaryError("installer_not_member")
         normalized = {
             "scheduled_date": day,
             "time_window": window,
@@ -4837,6 +4873,9 @@ def schedule_delivery(
             "contact_name": (contact_name or "").strip() or None,
             "contact_phone": (contact_phone or "").strip() or None,
             "installer_name": (installer_name or "").strip() or None,
+            "installer_user_id": str(installer_user_id) if installer_user_id else None,
+            "crew_id": str(crew_id) if crew_id else None,
+            "route_order": route_order,
             "notes": (notes or "").strip() or None,
             "unit_indexes": requested,
         }
@@ -4847,7 +4886,7 @@ def schedule_delivery(
                 else None
             )
             if all(
-                (open_trip[key] if key != "unit_indexes" else stored_units) == value
+                (open_trip.get(key) if key != "unit_indexes" else stored_units) == value
                 for key, value in normalized.items()
             ):
                 # Identical schedule replay — one row, no duplicate audit event.
@@ -4857,6 +4896,7 @@ def schedule_delivery(
                 UPDATE public.deliveries SET
                     scheduled_date=%s, time_window=%s, address=%s,
                     contact_name=%s, contact_phone=%s, installer_name=%s,
+                    installer_user_id=%s, crew_id=%s, route_order=%s,
                     notes=%s, unit_indexes=%s, scheduled_by=%s,
                     status='SCHEDULED', updated_at=%s
                 WHERE id=%s AND org_id=%s RETURNING *
@@ -4868,6 +4908,9 @@ def schedule_delivery(
                     (contact_name or "").strip() or None,
                     (contact_phone or "").strip() or None,
                     (installer_name or "").strip() or None,
+                    str(installer_user_id) if installer_user_id else None,
+                    str(crew_id) if crew_id else None,
+                    route_order,
                     (notes or "").strip() or None,
                     requested,
                     str(actor_id),
@@ -4882,8 +4925,9 @@ def schedule_delivery(
                 INSERT INTO public.deliveries(
                     org_id, order_id, scheduled_date, time_window, address,
                     contact_name, contact_phone, installer_name, notes,
-                    scheduled_by, unit_indexes)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    scheduled_by, unit_indexes,
+                    installer_user_id, crew_id, route_order)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 RETURNING *
                 """,
                 [
@@ -4898,6 +4942,9 @@ def schedule_delivery(
                     (notes or "").strip() or None,
                     str(actor_id),
                     requested,
+                    str(installer_user_id) if installer_user_id else None,
+                    str(crew_id) if crew_id else None,
+                    route_order,
                 ],
             )
         rows(

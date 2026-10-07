@@ -5399,6 +5399,9 @@ def _delivery_pod_body(payload: dict[str, object], signature_b64: str) -> str:
     body += "<h2>Entrega</h2>" + _table(
         ["Campo", "Valor"], detail_rows, ["", ""]
     )
+    observations = _value(payload.get("observations"))
+    if observations:
+        body += "<h2>Observaciones de la recepción</h2>" + f"<p>{escape(observations)}</p>"
     if payment:
         body += (
             "<h2>Cobro contra entrega</h2>"

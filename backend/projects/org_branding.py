@@ -78,6 +78,11 @@ def _branding(row: dict) -> dict:
             else 30
         ),
         "doc_validity_days": int(row.get("doc_validity_days") or 15),
+        "doc_warranty_months": (
+            int(row["doc_warranty_months"])
+            if row.get("doc_warranty_months") is not None
+            else 24
+        ),
     }
 
 
@@ -86,7 +91,7 @@ _FIELDS = (
     " brand_email, brand_logo_key, brand_logo_sha256, brand_color,"
     " doc_dekopen_credit, vano_spread_tolerance_mm,"
     " doc_paper_size, doc_terms, workshop_label_format, remnant_alert_days,"
-    " doc_validity_days"
+    " doc_validity_days, doc_warranty_months"
 )
 
 # P09 — claves legales declaradas que el documento del cliente imprime en
@@ -259,6 +264,20 @@ def _save_branding(*, org_id: UUID, data: dict) -> dict:
             )
         assignments.append("doc_validity_days=%s")
         params.append(days)
+    if "doc_warranty_months" in data:
+        raw_months = data.get("doc_warranty_months")
+        try:
+            months = int(raw_months)
+        except (TypeError, ValueError):
+            months = -1
+        if not (0 <= months <= 240):
+            raise contract_error(
+                400,
+                "doc_warranty_months_invalid",
+                "Los meses de garantía por defecto deben ser entre 0 y 240.",
+            )
+        assignments.append("doc_warranty_months=%s")
+        params.append(months)
     if not assignments:
         row = one(
             f"SELECT {_FIELDS} FROM public.tenancy_organizations WHERE id=%s",

@@ -662,6 +662,80 @@ def _manager_items(
             )
         )
 
+    # P23 — incidencias de obra abiertas y solicitudes de compra de
+    # terreno: el jefe decide el remake, la compra o la visita.
+    field = (rows(
+        """
+        SELECT
+            (SELECT count(*) FROM public.site_incidents i
+             WHERE i.org_id = %s AND i.status IN ('OPEN','IN_PROGRESS')) AS incidents,
+            (SELECT count(*) FROM public.field_purchase_requests r
+             WHERE r.org_id = %s AND r.status = 'PENDING') AS purchases,
+            (SELECT count(*) FROM public.service_tickets t
+             WHERE t.org_id = %s AND t.status IN ('OPEN','SCHEDULED','IN_PROGRESS')) AS tickets,
+            (SELECT count(*) FROM public.service_tickets t
+             WHERE t.org_id = %s AND t.status = 'SCHEDULED'
+               AND t.scheduled_visit_at::date = %s) AS visits_today,
+            (SELECT count(*) FROM public.service_tickets t
+             WHERE t.org_id = %s AND t.status <> 'CLOSED' AND t.status <> 'CANCELLED'
+               AND t.warranty_until IS NOT NULL
+               AND t.warranty_until <= %s + INTERVAL '30 days') AS warranties_expiring
+        """,
+        [str(org_id), str(org_id), str(org_id), str(org_id), today, str(org_id), today],
+    ) or [{}])[0]
+    open_incidents = int(field.get("incidents") or 0)
+    if open_incidents:
+        items.append(
+            _item(
+                "site_incidents_open",
+                "today",
+                f"{open_incidents} incidencia{'s' if open_incidents > 1 else ''} de obra abierta{'s' if open_incidents > 1 else ''}",
+                reason="Daño, faltante o medida — cada una decide remake, compra o servicio",
+                to="/field/incidents",
+                cta="Ver incidencias",
+                count=open_incidents,
+            )
+        )
+    pending_purchases = int(field.get("purchases") or 0)
+    if pending_purchases:
+        items.append(
+            _item(
+                "field_purchases_pending",
+                "today",
+                f"{pending_purchases} solicitud{'es' if pending_purchases > 1 else ''} de compra de terreno",
+                reason="La obra espera el material — confirma o rechaza cada solicitud",
+                to="/field/incidents?tab=purchases",
+                cta="Ver solicitudes",
+                count=pending_purchases,
+            )
+        )
+    visits_today = int(field.get("visits_today") or 0)
+    if visits_today:
+        items.append(
+            _item(
+                "service_visits_today",
+                "today",
+                f"{visits_today} visita{'s' if visits_today > 1 else ''} de postventa hoy",
+                reason="La cuadrilla sale a terreno — confirma dirección y hora",
+                to="/field/service",
+                cta="Ver postventa",
+                count=visits_today,
+            )
+        )
+    warranties = int(field.get("warranties_expiring") or 0)
+    if warranties:
+        items.append(
+            _item(
+                "warranties_expiring",
+                "soon",
+                f"{warranties} garantía{'s' if warranties > 1 else ''} por vencer",
+                reason="Vencen dentro de 30 días — decide visita preventiva o cierre",
+                to="/field/service?expiring=1",
+                cta="Ver garantías",
+                count=warranties,
+            )
+        )
+
     # Cola por estación — lo que cada puesto tiene esperando ahora.
     from production.service import station_queue
 
@@ -754,9 +828,65 @@ def _operator_items(
 
 
 def _installer_items(
-    org_id: UUID, today: date
+    org_id: UUID, user_id: UUID, today: date
 ) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
+    # P23 — la agenda del día manda: paradas asignadas al instalador
+    # (o a su cuadrilla) antes que el listado genérico.
+    my_stops = rows(
+        """
+        SELECT d.id, d.time_window, d.address, o.order_code,
+               p.name AS project_name
+        FROM public.deliveries d
+        JOIN public.orders o ON o.id = d.order_id AND o.org_id = d.org_id
+        JOIN public.projects p ON p.id = o.project_id AND p.org_id = o.org_id
+        WHERE d.org_id = %s AND d.scheduled_date = %s
+          AND d.status IN ('SCHEDULED','ON_ROUTE')
+          AND (d.installer_user_id = %s OR d.installer_user_id IS NULL)
+        ORDER BY d.route_order NULLS LAST, d.time_window, o.order_code
+        LIMIT 6
+        """,
+        [str(org_id), today, str(user_id)],
+    )
+    for stop in my_stops:
+        items.append(
+            _item(
+                "my_install_today",
+                "today",
+                f"Instalar en {stop['address']}",
+                reason="Tu parada de hoy — medición, checklist y firma en la ficha",
+                entity_code=str(stop["order_code"]),
+                entity_label=str(stop["project_name"]),
+                to="/field/agenda",
+                cta="Abrir agenda",
+            )
+        )
+    # Visitas de postventa agendadas para hoy.
+    visits = rows(
+        """
+        SELECT t.code, t.scheduled_visit_at, p.name AS project_name
+        FROM public.service_tickets t
+        JOIN public.projects p ON p.id = t.project_id AND p.org_id = t.org_id
+        WHERE t.org_id = %s AND t.status = 'SCHEDULED'
+          AND t.scheduled_visit_at::date = %s
+        ORDER BY t.scheduled_visit_at
+        LIMIT 4
+        """,
+        [str(org_id), today],
+    )
+    for visit in visits:
+        items.append(
+            _item(
+                "my_service_visit",
+                "today",
+                f"Visita de postventa {visit['code']}",
+                reason="Ticket de garantía/servicio agendado hoy",
+                entity_code=str(visit["code"]),
+                entity_label=str(visit["project_name"]),
+                to="/field/service",
+                cta="Ver postventa",
+            )
+        )
     deliveries = rows(
         """
         SELECT d.id, d.scheduled_date, d.time_window, d.status, d.address,
@@ -857,7 +987,7 @@ def today_queue(*, org_id: UUID, role: str, user_id: UUID) -> dict[str, Any]:
         elif role == "OPERATOR":
             items = _operator_items(org_id, user_id)
         elif role == "INSTALLER":
-            items = _installer_items(org_id, today)
+            items = _installer_items(org_id, user_id, today)
         else:
             items = []
     # Stable sort: urgency bucket first, the builder's own order inside.

@@ -104,7 +104,12 @@ def public_production_errors():
     try:
         yield
     except DocumentaryError as error:
-        if error.code in ("version_not_found", "work_order_not_found", "production_step_not_found", "delivery_not_found", "delivery_confirmation_not_found"):
+        if error.code in (
+            "version_not_found", "work_order_not_found", "production_step_not_found",
+            "delivery_not_found", "delivery_confirmation_not_found",
+            "incident_not_found", "service_ticket_not_found", "crew_not_found",
+            "purchase_request_not_found", "position_not_found", "project_not_found",
+        ):
             status_code = 404
         elif error.code == "work_order_cancelled":
             status_code = 409
@@ -887,6 +892,9 @@ class ProductionOrderDeliveryView(APIView):
                     contact_name=data.get("contact_name"),
                     contact_phone=data.get("contact_phone"),
                     installer_name=data.get("installer_name"),
+                    installer_user_id=data.get("installer_user_id"),
+                    crew_id=data.get("crew_id"),
+                    route_order=data.get("route_order"),
                     notes=data.get("notes"),
                     unit_indexes=data.get("unit_indexes"),
                 )
@@ -936,6 +944,7 @@ class ProductionOrderDeliveryConfirmView(APIView):
                     receiver_rut=data.get("receiver_rut"),
                     signature_b64=data["signature_png"],
                     payment=data.get("payment"),
+                    observations=data.get("observations"),
                 )
                 output = {
                     "confirmation": confirmation,

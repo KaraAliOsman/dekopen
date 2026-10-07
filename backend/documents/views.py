@@ -148,6 +148,22 @@ DOCUMENTARY_ERROR_DETAILS = {
     "glazier_order_no_glass": (
         "La orden no contiene vidrios; el pedido al vidriero queda vacío."
     ),
+    # P23 — despacho, obra y postventa.
+    "crew_not_found": "La cuadrilla no existe o está inactiva.",
+    "installer_not_member": "El instalador asignado no pertenece a la organización.",
+    "incident_not_found": "La incidencia no existe en esta organización.",
+    "service_ticket_not_found": "El ticket de postventa no existe en esta organización.",
+    "purchase_request_not_found": "La solicitud de compra de terreno no existe.",
+    "position_not_found": "La posición no existe en este proyecto.",
+    "site_incident_rejected": "La incidencia de obra no pudo registrarse.",
+    "purchase_request_rejected": "La solicitud de compra no pudo registrarse.",
+    "service_ticket_rejected": "El ticket de postventa no pudo registrarse.",
+    "warranty_months_invalid": "Los meses de garantía deben ser un entero entre 0 y 240.",
+    "installation_check_rejected": "El checklist de instalación no pudo guardarse.",
+    "site_measurement_rejected": "La medición de obra no pudo registrarse.",
+    "delivery_load_mismatch": (
+        "La carga no coincide con el manifiesto del viaje; revisa las unidades faltantes."
+    ),
 }
 
 

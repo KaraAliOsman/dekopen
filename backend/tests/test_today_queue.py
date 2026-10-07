@@ -313,7 +313,13 @@ def test_installer_queue_per_delivery(monkeypatch):
     ]
     out, _ = _run(monkeypatch, "INSTALLER", responses)
     by_kind = {i["kind"]: i for i in out["items"]}
-    assert set(by_kind) == {"delivery_failed", "delivery_due"}
+    # P23 — la parada de hoy también entra por la agenda de terreno.
+    assert set(by_kind) == {"my_install_today", "delivery_failed", "delivery_due"}
+    assert by_kind["my_install_today"]["to"] == "/field/agenda"
+    assert by_kind["my_install_today"]["entity_code"] in (
+        "OT-P-000005-REV-A-03",
+        "OT-P-000041-REV-A-01",
+    )
     assert by_kind["delivery_failed"]["urgency"] == "overdue"
     assert by_kind["delivery_failed"]["to"] == "/deliveries?when=open"
     assert by_kind["delivery_due"]["urgency"] in ("overdue", "today", "soon")

@@ -103,6 +103,31 @@ const DeliveriesPage = lazy(async () => {
   return { default: module.DeliveriesPage };
 });
 
+const FieldAgendaPage = lazy(async () => {
+  const module = await import("./features/field/FieldAgendaPage");
+  return { default: module.FieldAgendaPage };
+});
+
+const FieldOrderPage = lazy(async () => {
+  const module = await import("./features/field/FieldOrderPage");
+  return { default: module.FieldOrderPage };
+});
+
+const FieldDispatchPage = lazy(async () => {
+  const module = await import("./features/field/FieldDispatchPage");
+  return { default: module.FieldDispatchPage };
+});
+
+const FieldIncidentsPage = lazy(async () => {
+  const module = await import("./features/field/FieldIncidentsPage");
+  return { default: module.FieldIncidentsPage };
+});
+
+const FieldServicePage = lazy(async () => {
+  const module = await import("./features/field/FieldServicePage");
+  return { default: module.FieldServicePage };
+});
+
 const InventoryPage = lazy(async () => {
   const module = await import("./features/inventory/InventoryPage");
   return { default: module.InventoryPage };
@@ -461,6 +486,67 @@ export function AppRoutes(): JSX.Element {
             </ReadyGuard>
           }
         />
+        <Route
+          path="/field/agenda"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("field.loading")}</p>}>
+                  <FieldAgendaPage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route
+          path="/field/orders/:orderId"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("field.loading")}</p>}>
+                  <FieldOrderPage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route
+          path="/field/dispatch"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("field.loading")}</p>}>
+                  <FieldDispatchPage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route
+          path="/field/incidents"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("field.loading")}</p>}>
+                  <FieldIncidentsPage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route
+          path="/field/service"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("field.loading")}</p>}>
+                  <FieldServicePage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route path="/field" element={<Navigate to="/field/agenda" replace />} />
         {/* Bare guesses land on their real surface instead of silently
          * bouncing home — /settings lives inside General. */}
         <Route path="/settings" element={<Navigate to="/settings/general" replace />} />
