@@ -1579,6 +1579,7 @@ export const messages = {
   "quotations.state.viewed": "Vista",
   "quotations.state.approved": "Aprobada",
   "quotations.state.declined": "Rechazada",
+  "quotations.state.changesRequested": "Cambios solicitados",
   "quotations.state.expired": "Vencida",
   "quotations.state.noLink": "Sin enlace",
   "quotations.viewedYes": "Sí · {n} veces",

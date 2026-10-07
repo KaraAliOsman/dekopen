@@ -2192,22 +2192,6 @@ div:has(> table.production-plan) {
   color: var(--theme-text-secondary);
 }
 
-/* A ancho táctil la ficha de OT sigue la convención del shell (responsive.css
- * ≤1024 px): todo control interactivo alcanza 44 px de alto. */
-@media (max-width: 1024px) {
-  .ot-back,
-  .production-detail-head .production-chip,
-  .production-remake,
-  .production-dispatch,
-  .production-note input,
-  .ot-pieces__bar input {
-    min-height: 44px;
-  }
-  .production-detail-head .production-chip {
-    display: inline-flex;
-    align-items: center;
-  }
-}
 .ot-pieces__bar {
   display: flex;
   align-items: center;
@@ -2678,4 +2662,21 @@ button.piece-list__row:hover {
 }
 .cnc-panel-toggle {
   min-height: 2.75rem;
+}
+
+/* A ancho táctil la ficha de OT sigue la convención del shell (responsive.css
+ * ≤1024 px): todo control interactivo alcanza 44 px de alto. */
+@media (max-width: 1024px) {
+  .ot-back,
+  .production-detail-head .production-chip,
+  .production-remake,
+  .production-dispatch,
+  .production-note input,
+  .ot-pieces__bar input {
+    min-height: 44px;
+  }
+  .production-detail-head .production-chip {
+    display: inline-flex;
+    align-items: center;
+  }
 }

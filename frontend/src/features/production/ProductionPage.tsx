@@ -64,7 +64,7 @@ import {
 } from "../../ui";
 import { Dims, Length } from "../../ui/format";
 import type { TabItem } from "../../ui";
-import { fmtMm, fmtQty, formatDims, formatPercent } from "../../format";
+import { fmtMm, fmtQty, formatDims, formatPercent, formatRevision } from "../../format";
 import { formatDate } from "../../format";
 import { colorLabel, t, tOptional, typologyLabel } from "../../i18n/es-CL";
 import { useAssistantSurface } from "../assistant/assistantContext";
@@ -3522,7 +3522,7 @@ export function ProductionPage(): JSX.Element {
                               {trace.project?.code ? String(trace.project.code) : "—"}
                               {" → "}
                               {trace.version?.revision_code
-                                ? String(trace.version.revision_code)
+                                ? formatRevision(String(trace.version.revision_code))
                                 : "—"}
                               {" → "}
                               {String(trace.work_order?.order_code ?? "—")}

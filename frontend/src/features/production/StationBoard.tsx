@@ -5,7 +5,7 @@
  * honesto, no una promesa. */
 
 import type { ProductionOrder, ProductionPrep } from "../../api/generated/models";
-import { formatDate, formatPercent } from "../../format";
+import { formatDate, formatPercent, formatRevision } from "../../format";
 import { t } from "../../i18n/es-CL";
 import { StatusChip } from "../../ui";
 import {
@@ -127,7 +127,7 @@ export function StationBoard({
               <li key={version.version_id}>
                 <span className="board-prep__project">{version.project_code}</span>
                 <span className="board-prep__meta">
-                  {version.revision_code} · {version.positions}{" "}
+                  {formatRevision(version.revision_code)} · {version.positions}{" "}
                   {version.positions === 1
                     ? t("production.prepPositionOne")
                     : t("production.prepPositions")}

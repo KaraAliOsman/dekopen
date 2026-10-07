@@ -4,7 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { projectsList, projectsRetrieve } from "../../api/generated/dekopen";
 
 import type { PriceResponse, ProjectResponse } from "../../api/generated/models";
-import { formatDateTime, formatPercent, shortTechnicalId } from "../../format";
+import { formatDateTime, formatPercent, formatRevision, shortTechnicalId } from "../../format";
 import { formatMoney } from "../../format";
 import { apiMutator, ApiError } from "../../api/apiMutator";
 import { actionErrorDetail } from "../errors";
@@ -1523,7 +1523,7 @@ function OperationDecision({
           </span>
         )}
         <span className="operation-decision__meta">
-          {operation.revision_code} · {t("pricing.discount")}{" "}
+          {formatRevision(operation.revision_code)} · {t("pricing.discount")}{" "}
           {formatPercent(operation.discount_pct)}·{" "}
           <time dateTime={operation.created_at}>{formatDateTime(operation.created_at)}</time>
         </span>
@@ -1536,7 +1536,7 @@ function OperationDecision({
             <span>
               {t("pricing.currentTotal")}
               {sealedBaseline && !boundProject?.pricing_current
-                ? ` · ${sealedBaseline.revision_code}`
+                ? ` · ${formatRevision(sealedBaseline.revision_code)}`
                 : ""}
             </span>
             <strong>{formatMoney(baselineGross, operation.currency)}</strong>

@@ -5,7 +5,7 @@ import { ApiError } from "../../api/apiMutator";
 import { quotationsList } from "../../api/generated/dekopen";
 import type { QuotationItem } from "../../api/generated/models";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
-import { formatDate, formatMoney } from "../../format";
+import { formatDate, formatMoney, formatRevision } from "../../format";
 import { enumI18nKey, t, tDynamic } from "../../i18n/es-CL";
 import {
   DeniedState,
@@ -25,6 +25,7 @@ const STATE_TONE: Record<string, string> = {
   viewed: "info",
   approved: "ok",
   declined: "danger",
+  changes_requested: "person",
   expired: "person",
   no_link: "neutral",
 };
@@ -118,7 +119,7 @@ export function QuotationsPage(): JSX.Element {
                     </Link>
                   </td>
                   <td>{item.client_name}</td>
-                  <td className="mono">{item.current_revision}</td>
+                  <td className="mono">{formatRevision(item.current_revision)}</td>
                   <td className="mono">{formatMoney(item.total_price_gross, item.currency)}</td>
                   <td>
                     <StatusChip
