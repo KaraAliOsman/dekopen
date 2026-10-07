@@ -3,7 +3,7 @@ type: state
 status: active
 updated: 2026-10-06
 volatility: high
-verified_ref: f67c3c8b12ab174e38e4b8bb452f422e00d88b07
+verified_ref: cd64b5ae6fe60c09e104af73cf0cdc0e8b3b0a2f
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
@@ -30,6 +30,7 @@ sources:
   - P13 pack corte etiquetas PR https://github.com/KaraAliOsman/dekopen/pull/44
   - P06 bow acoplados PR https://github.com/KaraAliOsman/dekopen/pull/46
   - P15 compras inventario PR https://github.com/KaraAliOsman/dekopen/pull/47
+  - P14 CNC mecanizado PR https://github.com/KaraAliOsman/dekopen/pull/52
   - P15 compras/inventario branch devin/P15-compras-inventario
   - P17 asistente IA/trabajos/Orb branch devin/P17-asistente-orb
   - integracion/v1 merge 747c528b67d234d697624929ccbcc7098261ed54
@@ -423,6 +424,8 @@ PR sobre `integracion/v1` (branch `devin/P15-compras-inventario`):
 
 
 ## P14 CNC y mecanizado state
+
+Merged into `integracion/v1` as squash `cd64b5ae6fe60c09e104af73cf0cdc0e8b3b0a2f` (dekopen PR #52):
 
 Open PR (branch `devin/p14-cnc-mecanizado`, on `integracion/v1`):
 
