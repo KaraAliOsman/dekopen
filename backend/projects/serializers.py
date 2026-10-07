@@ -194,6 +194,23 @@ class PositionResponseSerializer(serializers.Serializer):
     updated_at = serializers.DateTimeField()
 
 
+class ClientContactSerializer(StrictSerializer):
+    name = serializers.CharField(max_length=255)
+    role_label = serializers.CharField(
+        max_length=80, required=False, allow_blank=True
+    )
+    email = serializers.EmailField(required=False, allow_blank=True)
+    phone = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    is_primary = serializers.BooleanField(required=False)
+
+
+class ClientAddressSerializer(StrictSerializer):
+    label = serializers.CharField(max_length=120)
+    address = serializers.CharField()
+    comuna = serializers.CharField(max_length=60, required=False, allow_blank=True)
+    is_default = serializers.BooleanField(required=False)
+
+
 class ClientWriteSerializer(StrictSerializer):
     name = serializers.CharField(max_length=255, allow_blank=False)
     rut = serializers.CharField(max_length=50, required=False, allow_blank=True)
@@ -202,11 +219,25 @@ class ClientWriteSerializer(StrictSerializer):
     address = serializers.CharField(required=False, allow_blank=True)
     giro = serializers.CharField(max_length=80, required=False, allow_blank=True)
     comuna = serializers.CharField(max_length=20, required=False, allow_blank=True)
-    notes = serializers.CharField(required=False, allow_blank=True)
+    kind = serializers.ChoiceField(
+        choices=(("PERSON", "Persona natural"), ("COMPANY", "Empresa")),
+        required=False,
+        default="COMPANY",
+    )
+    contacts = ClientContactSerializer(many=True, required=False)
+    addresses = ClientAddressSerializer(many=True, required=False)
 
 
 class ClientUpdateSerializer(ClientWriteSerializer):
     expected_updated_at = serializers.DateTimeField()
+
+
+class ClientNoteWriteSerializer(StrictSerializer):
+    body = serializers.CharField(allow_blank=False)
+
+
+class ClientMergeSerializer(StrictSerializer):
+    survivor_id = serializers.UUIDField()
 
 
 class ClientResponseSerializer(serializers.Serializer):
@@ -218,13 +249,125 @@ class ClientResponseSerializer(serializers.Serializer):
     address = serializers.CharField()
     giro = serializers.CharField(allow_null=True)
     comuna = serializers.CharField(allow_null=True)
-    notes = serializers.CharField()
+    kind = serializers.CharField()
     is_active = serializers.BooleanField()
+    merged_into = serializers.CharField(allow_null=True)
+    merged_at = serializers.CharField(allow_null=True)
+    created_at = serializers.DateTimeField()
     updated_at = serializers.DateTimeField()
 
 
+class ClientListItemSerializer(ClientResponseSerializer):
+    projects_count = serializers.IntegerField()
+    active_projects = serializers.IntegerField()
+    balance = serializers.CharField()
+
+
 class ClientListResponseSerializer(serializers.Serializer):
-    items = ClientResponseSerializer(many=True)
+    items = ClientListItemSerializer(many=True)
+
+
+class ClientContactResponseSerializer(ClientContactSerializer):
+    id = serializers.UUIDField()
+    updated_at = serializers.DateTimeField()
+
+
+class ClientAddressResponseSerializer(ClientAddressSerializer):
+    id = serializers.UUIDField()
+    updated_at = serializers.DateTimeField()
+
+
+class ClientNoteResponseSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    author_label = serializers.CharField()
+    body = serializers.CharField()
+    created_at = serializers.DateTimeField()
+
+
+class ClientProjectItemSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    code = serializers.CharField()
+    name = serializers.CharField()
+    status = serializers.CharField()
+    delivery_address = serializers.CharField()
+    billed = serializers.CharField()
+    collected = serializers.CharField()
+    balance = serializers.CharField()
+    created_at = serializers.DateTimeField()
+
+
+class ClientQuotationItemSerializer(serializers.Serializer):
+    project_id = serializers.UUIDField()
+    revision_code = serializers.CharField()
+    emitted_at = serializers.DateTimeField()
+    total_price_gross = serializers.CharField(allow_null=True)
+    currency = serializers.CharField()
+
+
+class ClientPaymentItemSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    project_id = serializers.UUIDField()
+    project_code = serializers.CharField()
+    kind = serializers.CharField()
+    amount = serializers.CharField()
+    method = serializers.CharField()
+    receipt_code = serializers.CharField(allow_null=True)
+    voided = serializers.BooleanField()
+    recorded_at = serializers.DateTimeField()
+
+
+class ClientDocumentItemSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    project_id = serializers.UUIDField()
+    project_code = serializers.CharField()
+    document_type = serializers.CharField()
+    format = serializers.CharField()
+    created_at = serializers.DateTimeField()
+
+
+class ClientMergeItemSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    survivor_id = serializers.UUIDField()
+    merged_client_id = serializers.UUIDField()
+    actor_label = serializers.CharField()
+    detail = serializers.DictField()
+    created_at = serializers.DateTimeField()
+
+
+class ClientTotalsSerializer(serializers.Serializer):
+    billed = serializers.CharField()
+    collected = serializers.CharField()
+    balance = serializers.CharField()
+    currency = serializers.CharField()
+
+
+class ClientDetailResponseSerializer(serializers.Serializer):
+    client = ClientResponseSerializer()
+    contacts = ClientContactResponseSerializer(many=True)
+    addresses = ClientAddressResponseSerializer(many=True)
+    notes = ClientNoteResponseSerializer(many=True)
+    projects = ClientProjectItemSerializer(many=True)
+    quotations = ClientQuotationItemSerializer(many=True)
+    payments = ClientPaymentItemSerializer(many=True)
+    documents = ClientDocumentItemSerializer(many=True)
+    merges = ClientMergeItemSerializer(many=True)
+    totals = ClientTotalsSerializer()
+
+
+class ClientDuplicateClientSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    name = serializers.CharField()
+    rut = serializers.CharField()
+    created_at = serializers.DateTimeField()
+
+
+class ClientDuplicateGroupSerializer(serializers.Serializer):
+    rut = serializers.CharField()
+    clients = ClientDuplicateClientSerializer(many=True)
+
+
+class ClientDuplicatesResponseSerializer(serializers.Serializer):
+    items = ClientDuplicateGroupSerializer(many=True)
 
 
 class ProjectVersionResponseSerializer(serializers.Serializer):
@@ -808,3 +951,189 @@ class OrgBrandingWriteSerializer(StrictSerializer):
         min_value=1,
         max_value=365,
     )
+
+
+# ---------------------------------------------------------------------------
+# P22 — ajustes por dominio.
+
+
+class OrgCompanySettingsSerializer(StrictSerializer):
+    name = serializers.CharField(max_length=255, required=False)
+    tax_id = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    commercial_name = serializers.CharField(
+        max_length=255, required=False, allow_blank=True
+    )
+    giro = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    brand_address = serializers.CharField(
+        max_length=255, required=False, allow_blank=True
+    )
+    brand_phone = serializers.CharField(max_length=64, required=False, allow_blank=True)
+    brand_email = serializers.CharField(
+        max_length=255, required=False, allow_blank=True
+    )
+    brand_color = serializers.RegexField(
+        regex=r"^#[0-9A-Fa-f]{6}$", required=False, allow_null=True
+    )
+
+
+class OrgCommercialSettingsSerializer(StrictSerializer):
+    currency = serializers.ChoiceField(
+        choices=("CLP", "USD", "UF"), required=False
+    )
+    tax_rate_pct = DecimalStringField(
+        max_digits=6, decimal_places=4, required=False
+    )
+    default_margin_pct = DecimalStringField(
+        max_digits=6, decimal_places=4, required=False
+    )
+    margin_min_pct = DecimalStringField(
+        max_digits=6, decimal_places=4, required=False, allow_null=True
+    )
+    margin_max_pct = DecimalStringField(
+        max_digits=6, decimal_places=4, required=False, allow_null=True
+    )
+    discount_approval_threshold_pct = DecimalStringField(
+        max_digits=6,
+        decimal_places=4,
+        min_value=Decimal("0.0001"),
+        max_value=Decimal("1"),
+        required=False,
+    )
+    doc_validity_days = serializers.IntegerField(
+        required=False, min_value=1, max_value=365
+    )
+
+
+class OrgDocumentsSettingsSerializer(StrictSerializer):
+    doc_paper_size = serializers.ChoiceField(
+        choices=("LETTER", "LEGAL", "A4"), required=False
+    )
+    doc_terms = serializers.DictField(
+        child=serializers.CharField(allow_blank=True, max_length=4000),
+        required=False,
+        allow_null=True,
+    )
+    doc_dekopen_credit = serializers.BooleanField(required=False)
+
+
+class OrgProductionSettingsSerializer(StrictSerializer):
+    vano_spread_tolerance_mm = DecimalStringField(
+        max_digits=6,
+        decimal_places=2,
+        min_value=Decimal("0"),
+        max_value=Decimal("100"),
+        required=False,
+        allow_null=True,
+    )
+    remnant_alert_days = serializers.IntegerField(
+        min_value=1, max_value=365, required=False
+    )
+    workshop_label_format = serializers.ChoiceField(
+        choices=("GRID", "THERMAL_100X50"), required=False
+    )
+
+
+class OrgSecuritySettingsSerializer(StrictSerializer):
+    require_totp = serializers.BooleanField()
+
+
+class OrgInviteSerializer(StrictSerializer):
+    email = serializers.EmailField(max_length=255)
+    role = serializers.ChoiceField(
+        choices=("ESTIMATOR", "WORKSHOP_MANAGER", "OPERATOR", "INSTALLER")
+    )
+
+
+class OrgMemberUpdateSerializer(StrictSerializer):
+    role = serializers.ChoiceField(
+        choices=("OWNER", "ESTIMATOR", "WORKSHOP_MANAGER", "OPERATOR", "INSTALLER"),
+        required=False,
+    )
+    is_active = serializers.BooleanField(required=False)
+
+
+class OrgSettingsResponseSerializer(serializers.Serializer):
+    company = serializers.DictField()
+    commercial = serializers.DictField()
+    documents = serializers.DictField()
+    production = serializers.DictField()
+    security = serializers.DictField()
+
+
+class OrgMemberSerializer(serializers.Serializer):
+    membership_id = serializers.UUIDField()
+    user_id = serializers.UUIDField()
+    email = serializers.CharField()
+    role = serializers.CharField()
+    is_active = serializers.BooleanField()
+    totp_enabled = serializers.BooleanField()
+    created_at = serializers.DateTimeField()
+
+
+class OrgInvitationSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    email = serializers.CharField()
+    role = serializers.CharField()
+    status = serializers.CharField()
+    invited_label = serializers.CharField()
+    created_at = serializers.DateTimeField()
+
+
+class OrgMembersResponseSerializer(serializers.Serializer):
+    members = OrgMemberSerializer(many=True)
+    invitations = OrgInvitationSerializer(many=True)
+
+
+class OrgNumberingItemSerializer(serializers.Serializer):
+    kind = serializers.CharField()
+    prefix = serializers.CharField()
+    next = serializers.IntegerField()
+    pattern = serializers.CharField()
+
+
+class OrgNumberingResponseSerializer(serializers.Serializer):
+    items = OrgNumberingItemSerializer(many=True)
+    read_only = serializers.BooleanField()
+
+
+class OrgIntegrationItemSerializer(serializers.Serializer):
+    key = serializers.CharField()
+    name = serializers.CharField()
+    state = serializers.CharField()
+    detail = serializers.CharField()
+    activation = serializers.CharField()
+
+
+class OrgIntegrationsResponseSerializer(serializers.Serializer):
+    items = OrgIntegrationItemSerializer(many=True)
+    runbook = serializers.CharField()
+
+
+class OrgDocumentPreviewSerializer(StrictSerializer):
+    # Borrador libre de campos de marca/documentos — sólo las claves
+    # conocidas se mezclan con la marca real al renderizar la mini hoja.
+    commercial_name = serializers.CharField(required=False, allow_blank=True)
+    name = serializers.CharField(required=False, allow_blank=True)
+    tax_id = serializers.CharField(required=False, allow_blank=True)
+    giro = serializers.CharField(required=False, allow_blank=True)
+    brand_address = serializers.CharField(required=False, allow_blank=True)
+    brand_phone = serializers.CharField(required=False, allow_blank=True)
+    brand_email = serializers.CharField(required=False, allow_blank=True)
+    brand_color = serializers.CharField(required=False, allow_blank=True)
+    doc_paper_size = serializers.CharField(required=False, allow_blank=True)
+    doc_dekopen_credit = serializers.BooleanField(required=False)
+    doc_terms = serializers.DictField(
+        child=serializers.CharField(allow_blank=True, max_length=4000),
+        required=False,
+        allow_null=True,
+    )
+
+
+class OrgDocumentPreviewResponseSerializer(serializers.Serializer):
+    html = serializers.CharField()
+
+
+class OrgSectionResponseSerializer(serializers.Serializer):
+    """Carga de una sección guardada — la forma depende del dominio."""
+
+    pass

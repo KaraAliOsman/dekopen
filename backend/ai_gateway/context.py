@@ -1193,7 +1193,7 @@ def _client(org_id: UUID, refs: dict) -> dict:
     """One client's desk: identity + their projects — the detail route's
     assistant must answer about THIS client, not the org aggregate."""
     client = rows(
-        "SELECT id, name, rut, email, phone, address, notes, is_active"
+        "SELECT id, name, rut, email, phone, address, is_active"
         " FROM public.clients WHERE id=%s AND org_id=%s",
         [refs["client_id"], org_id],
     )

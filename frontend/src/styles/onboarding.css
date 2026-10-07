@@ -128,3 +128,19 @@
   gap: var(--space-8);
   margin-bottom: var(--space-16);
 }
+
+/* P22 — con los 8 pasos (configuración añadida) las etiquetas exceden el
+   ancho: el step global es flex:none y nunca se contrae. Aquí, acotado al
+   asistente, el paso cede y la etiqueta envuelve en dos líneas. */
+.onboarding .ui-stepper__item {
+  min-width: 0;
+}
+
+.onboarding .ui-stepper__step {
+  flex: 1;
+  min-width: 0;
+}
+
+.onboarding .ui-stepper__label {
+  min-width: 0;
+}

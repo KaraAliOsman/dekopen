@@ -75,6 +75,13 @@ export const ROUTES: CaptureRoute[] = [
     extraMobile: true,
   },
   { name: "settings-general", path: "/settings/general", role: "owner" },
+  { name: "settings-empresa", path: "/settings/empresa", role: "owner" },
+  { name: "settings-usuarios", path: "/settings/usuarios", role: "owner" },
+  { name: "settings-comercial", path: "/settings/comercial", role: "owner" },
+  { name: "settings-documentos", path: "/settings/documentos", role: "owner" },
+  { name: "settings-numeracion", path: "/settings/numeracion", role: "owner" },
+  { name: "settings-produccion", path: "/settings/produccion", role: "owner" },
+  { name: "settings-integraciones", path: "/settings/integraciones", role: "owner" },
   { name: "settings-billing", path: "/settings/billing", role: "owner" },
   { name: "settings-wallet", path: "/settings/wallet", role: "owner" },
 

@@ -7,13 +7,14 @@ import { ApiError } from "../../api/apiMutator";
 import { UnsavedChangesGuard } from "../../app/UnsavedChangesGuard";
 import {
   clientsList,
+  clientsRetrieve,
   projectsList,
   projectsCreate,
   projectsUpdate,
   projectsClone,
 } from "../../api/generated/dekopen";
 import type {
-  ClientResponse,
+  ClientListItem,
   ProjectResponse,
   ProjectWriteRequest,
 } from "../../api/generated/models";
@@ -33,6 +34,63 @@ import { ProjectHub } from "./ProjectHub";
 import { fields, listNextKeys, statuses } from "./projectShared";
 import { Button, DeniedState, EmptyState, PageHeader, useConfirm } from "../../ui";
 import { StatusChip } from "../../ui/StatusChip";
+
+/** Direcciones de obra del cliente elegido — la cotización toma la obra
+ * registrada en la ficha en vez de reescribir la dirección a mano. */
+function ObraAddressPick({
+  clientId,
+  current,
+  orgId,
+  onPick,
+}: {
+  clientId: string;
+  current: string;
+  orgId: string;
+  onPick(address: string): void;
+}): JSX.Element | null {
+  const detail = useQuery({
+    queryKey: ["clients", orgId, "addresses", clientId],
+    queryFn: async ({ signal }) => {
+      const response = await clientsRetrieve(clientId, {
+        signal,
+        headers: { "X-Organization-ID": orgId },
+      });
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      return response.data.addresses;
+    },
+    staleTime: 30_000,
+    gcTime: 0,
+    refetchOnWindowFocus: false,
+  });
+  const addresses = detail.data ?? [];
+  if (addresses.length === 0) return null;
+  return (
+    <label>
+      {t("clients.obraPick")}
+      <select
+        value=""
+        onChange={(event) => {
+          const picked = addresses.find((item) => item.id === event.target.value);
+          if (picked) {
+            onPick(
+              `${picked.label}: ${picked.address}${picked.comuna ? `, ${picked.comuna}` : ""}`,
+            );
+          }
+        }}
+      >
+        <option value="">{t("clients.obraPickHint")}</option>
+        {addresses.map((item) => (
+          <option key={item.id} value={item.id}>
+            {item.label}
+            {item.is_default ? ` · ${t("clients.addressDefault")}` : ""} — {item.address}
+            {item.comuna ? `, ${item.comuna}` : ""}
+          </option>
+        ))}
+      </select>
+      {current ? <span className="field-hint">{current}</span> : null}
+    </label>
+  );
+}
 
 function metadata(project?: ProjectResponse): ProjectWriteRequest {
   return {
@@ -59,13 +117,15 @@ type Draft = {
 function ProjectMetadataForm({
   draft,
   clients,
+  orgId,
   disabled,
   onChange,
   onSave,
   onCancel,
 }: {
   draft: Draft;
-  clients: ClientResponse[];
+  clients: ClientListItem[];
+  orgId: string;
   disabled: boolean;
   onChange(value: Draft): void;
   onSave(): void;
@@ -128,6 +188,19 @@ function ProjectMetadataForm({
             </select>
           </label>
         )}
+        {draft.value.client_id ? (
+          <ObraAddressPick
+            clientId={draft.value.client_id}
+            current={draft.value.delivery_address ?? ""}
+            orgId={orgId}
+            onPick={(address) =>
+              onChange({
+                ...draft,
+                value: { ...draft.value, delivery_address: address },
+              })
+            }
+          />
+        ) : null}
         {/* Required fields first and marked; the nine optional commercial
          * fields collapse so the create flow reads as a step, not a wall
          * (review m11). Details opens automatically when stored values exist. */}
@@ -300,11 +373,11 @@ function ProjectWorkspace({
 
   // The picker only materializes when the metadata form opens — fetch then,
   // so the list page never pays for it.
-  const clientsQuery = useQuery<ClientResponse[]>({
+  const clientsQuery = useQuery<ClientListItem[]>({
     queryKey: ["clients", identity],
     enabled: draft !== null,
     queryFn: async ({ signal }) => {
-      const response = await clientsList({
+      const response = await clientsList(undefined, {
         signal,
         headers: { "X-Organization-ID": orgId },
       });
@@ -534,6 +607,7 @@ function ProjectWorkspace({
         <ProjectMetadataForm
           draft={draft}
           clients={clientsQuery.data ?? []}
+          orgId={orgId}
           disabled={disabled}
           onChange={setDraft}
           onSave={() => void save()}

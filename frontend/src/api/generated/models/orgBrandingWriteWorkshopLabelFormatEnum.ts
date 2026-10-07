@@ -10,10 +10,10 @@
  * * `GRID` - Grilla A4/Carta
  * * `THERMAL_100X50` - Rollo térmico 100×50 mm
  */
-export type WorkshopLabelFormatEnum =
-  (typeof WorkshopLabelFormatEnum)[keyof typeof WorkshopLabelFormatEnum];
+export type OrgBrandingWriteWorkshopLabelFormatEnum =
+  (typeof OrgBrandingWriteWorkshopLabelFormatEnum)[keyof typeof OrgBrandingWriteWorkshopLabelFormatEnum];
 
-export const WorkshopLabelFormatEnum = {
+export const OrgBrandingWriteWorkshopLabelFormatEnum = {
   GRID: "GRID",
   THERMAL_100X50: "THERMAL_100X50",
 } as const;

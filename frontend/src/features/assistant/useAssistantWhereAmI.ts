@@ -7,7 +7,6 @@ import {
   productionOrderDetail,
   projectsRetrieve,
 } from "../../api/generated/dekopen";
-import type { ClientResponse } from "../../api/generated/models/clientResponse";
 import type { PositionResponse } from "../../api/generated/models/positionResponse";
 import type { ProductionOrderDetail } from "../../api/generated/models/productionOrderDetail";
 import type { ProjectResponse } from "../../api/generated/models/projectResponse";
@@ -70,7 +69,7 @@ export function useAssistantWhereAmI({
     staleTime: 30_000,
     queryFn: async () => {
       const response = await clientsRetrieve(clientId, headers);
-      return response.status === 200 ? (response.data as ClientResponse) : null;
+      return response.status === 200 ? response.data.client : null;
     },
   });
 

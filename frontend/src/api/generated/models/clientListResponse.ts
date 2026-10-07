@@ -5,8 +5,8 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
-import type { ClientResponse } from "./clientResponse";
+import type { ClientListItem } from "./clientListItem";
 
 export interface ClientListResponse {
-  items: ClientResponse[];
+  items: ClientListItem[];
 }

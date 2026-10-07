@@ -6,12 +6,12 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { CostLineResponse } from "./costLineResponse";
-import type { CurrencyEnum } from "./currencyEnum";
 import type { LineResponse } from "./lineResponse";
 import type { PositionBreakdown } from "./positionBreakdown";
 import type { PriceResponseExtrasItem } from "./priceResponseExtrasItem";
 import type { PriceResponseRules } from "./priceResponseRules";
 import type { PriceResponseStateEnum } from "./priceResponseStateEnum";
+import type { PricingCurrencyEnum } from "./pricingCurrencyEnum";
 
 export interface PriceResponse {
   id: string;
@@ -25,7 +25,7 @@ export interface PriceResponse {
   pricing_mode: string;
   segment: string;
   state: PriceResponseStateEnum;
-  currency: CurrencyEnum;
+  currency: PricingCurrencyEnum;
   lines: LineResponse[];
   cost_lines: CostLineResponse[];
   extras: PriceResponseExtrasItem[];

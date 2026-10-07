@@ -144,6 +144,30 @@
   font-size: 0.75rem;
 }
 
+/* Filas de contactos y direcciones de obra en el formulario: se envuelven en
+ * lugar de desbordar en anchos medios (un input mínimo por celda). */
+.clients-subrow {
+  display: grid;
+  gap: var(--space-8);
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  margin: var(--space-8) 0;
+}
+
+.clients-subrow > input {
+  min-width: 0;
+  width: 100%;
+}
+
+.clients-inline-check {
+  align-items: center;
+  display: flex;
+  gap: var(--space-4);
+}
+
+.clients-subrow .ui-button {
+  justify-self: start;
+}
+
 @media (max-width: 900px) {
   .clients-desk {
     grid-template-columns: 1fr;

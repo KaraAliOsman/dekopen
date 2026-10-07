@@ -7,6 +7,7 @@ import hashlib
 import json
 import re
 from decimal import Decimal, InvalidOperation
+from functools import lru_cache
 from html import escape
 from pathlib import Path
 
@@ -65,8 +66,16 @@ _MARK = "#E56A32"
 _DANGER = "#991B1B"
 
 
-def _font_face(family: str, weight: int, filename: str) -> str:
-    uri = (_FONTS_DIR / filename).as_uri()
+def _font_face(family: str, weight: int, filename: str, *, embedded: bool = False) -> str:
+    """`file://` para el PDF sellado (lo resuelve el url_fetcher congela-
+    do); `data:` para la vista previa en pantalla, cuyo <iframe> no puede
+    leer el disco del servidor."""
+    if embedded:
+        uri = "data:font/truetype;base64," + base64.b64encode(
+            (_FONTS_DIR / filename).read_bytes()
+        ).decode("ascii")
+    else:
+        uri = (_FONTS_DIR / filename).as_uri()
     return (
         "@font-face {"
         f" font-family: '{family}'; font-style: normal; font-weight: {weight};"
@@ -75,18 +84,23 @@ def _font_face(family: str, weight: int, filename: str) -> str:
     )
 
 
-_FONTS = "".join(
-    [
-        _font_face("IBM Plex Sans", 400, "IBMPlexSans-400.ttf"),
-        _font_face("IBM Plex Sans", 500, "IBMPlexSans-500.ttf"),
-        _font_face("IBM Plex Sans", 600, "IBMPlexSans-600.ttf"),
-        _font_face("IBM Plex Sans", 700, "IBMPlexSans-700.ttf"),
-        _font_face("IBM Plex Mono", 400, "IBMPlexMono-400.ttf"),
-        _font_face("IBM Plex Mono", 500, "IBMPlexMono-500.ttf"),
-    ]
+_FONT_FILES = (
+    ("IBM Plex Sans", 400, "IBMPlexSans-400.ttf"),
+    ("IBM Plex Sans", 500, "IBMPlexSans-500.ttf"),
+    ("IBM Plex Sans", 600, "IBMPlexSans-600.ttf"),
+    ("IBM Plex Sans", 700, "IBMPlexSans-700.ttf"),
+    ("IBM Plex Mono", 400, "IBMPlexMono-400.ttf"),
+    ("IBM Plex Mono", 500, "IBMPlexMono-500.ttf"),
 )
 
-_CSS = _FONTS + """
+_FONTS = "".join(_font_face(*spec) for spec in _FONT_FILES)
+
+
+@lru_cache(maxsize=1)
+def _fonts_embedded() -> str:
+    return "".join(_font_face(*spec, embedded=True) for spec in _FONT_FILES)
+
+_CSS_BODY = """
 @page { size: letter portrait; margin: 13mm 12mm 22mm; @bottom-center { content: element(titleblock); } }
 * { box-sizing: border-box; } body { color: #161C1F; font: 9.5pt 'IBM Plex Sans', sans-serif; margin: 0; }
 .titleblock { position: running(titleblock); display: table; width: 100%; border-collapse: collapse; border-top: 1.5pt solid #075F5A; font-family: 'IBM Plex Mono', monospace; }
@@ -294,6 +308,9 @@ table.mini td.mini-fig svg { max-height: 13mm; margin: 0 auto; }
 .accept-online-copy { font-size: 8pt; color: #252D31; overflow-wrap: anywhere; }
 .accept-online-copy a { color: #075F5A; text-decoration: none; font-family: 'IBM Plex Mono', monospace; font-size: 6.8pt; }
 """
+_CSS = _FONTS + _CSS_BODY
+_CSS_EMBEDDED = _fonts_embedded() + _CSS_BODY
+
 
 
 def _object(value: object, code: str) -> dict[str, object]:
@@ -4021,10 +4038,14 @@ def render_document_html(
     snapshot: dict[str, object],
     *,
     render_context: dict | None = None,
+    embed_fonts: bool = False,
 ) -> str:
     """HTML completo del documento — la misma composición que alimenta el
     PDF sellado, expuesta para vistas previas en pantalla que deben ser
-    idénticas a lo que el cliente recibe."""
+    idénticas a lo que el cliente recibe. `embed_fonts` incrusta los Plex
+    TTF como data-URI: el <iframe> de vista previa no puede leer file://."""
+    if document_type == "DOC-01":
+        body = _doc01(snapshot, render_context=render_context)
     if document_type == "DOC-01":
         body = _doc01(snapshot, render_context=render_context)
     elif document_type == "DOC-02":
@@ -4052,7 +4073,7 @@ def render_document_html(
         order_obj = snapshot.get("order")
         title_code = order_obj.get("project_code") if isinstance(order_obj, dict) else None
     title = escape(f"{document_type} {_value(title_code)}")
-    css = _CSS
+    css = _CSS_EMBEDDED if embed_fonts else _CSS
     if document_type == "DOC-01":
         # Tamaño de papel del emisor (ajuste de organización sellado en
         # la revisión): Carta por defecto, Oficio o A4 por branding.

@@ -5,6 +5,9 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { ClientAddressRequest } from "./clientAddressRequest";
+import type { ClientContactRequest } from "./clientContactRequest";
+import type { ClientKindEnum } from "./clientKindEnum";
 
 export interface PatchedClientUpdateRequest {
   /**
@@ -22,6 +25,8 @@ export interface PatchedClientUpdateRequest {
   giro?: string;
   /** @maxLength 20 */
   comuna?: string;
-  notes?: string;
+  kind?: ClientKindEnum;
+  contacts?: ClientContactRequest[];
+  addresses?: ClientAddressRequest[];
   expected_updated_at?: string;
 }

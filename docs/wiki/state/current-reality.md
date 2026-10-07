@@ -3,7 +3,7 @@ type: state
 status: active
 updated: 2026-10-07
 volatility: high
-verified_ref: 51e2c87cbbb0a0bef37999d724a8d0cdbb3ebfbb
+verified_ref: af6445ed8d9c5772b139f4800895f75b3c05a4df
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
@@ -39,6 +39,7 @@ sources:
   - P15 compras/inventario branch devin/P15-compras-inventario
   - P08 emisión/cotización branch devin/P08-cotizacion-emision
   - P17 asistente IA/trabajos/Orb branch devin/P17-asistente-orb
+  - P22 clientes/ajustes branch devin/P22-clientes-ajustes
   - integracion/v1 merge 747c528b67d234d697624929ccbcc7098261ed54
   - open PR metadata observed 2026-09-27/28
   - AGENTS.md
@@ -520,3 +521,19 @@ Merged into `integracion/v1` as squash `51e2c87cbbb0a0bef37999d724a8d0cdbb3ebfbb
 - Pestañas perezosas: los paneles se montan al primer uso y quedan montados ocultos — tests/e2e navegan con `role="tab"` clic.
 - Backend nuevo cubierto por pgTAP/RLS + tests de integración del move (permiso, orden, candado); la ruta entra en el allowlist de `test_openapi.py`.
 - Verificado: `make lint|typecheck|test|build|test-db` (`PY=.venv/bin/python`); e2e auth+projects verde contra stack real; ux:capture 48 tomas 0 hallazgos; capturas `docs/redesign/captures/p21-proyecto-hub/`; decisiones en sección P21 de `valores-por-defecto.md`.
+
+## P22 clientes, empresa y ajustes state
+
+PR sobre `integracion/v1` (branch `devin/P22-clientes-ajustes`): la configuración que hace real lo demás — ficha de cliente completa y Ajustes agrupados por dominio con permisos por rol.
+
+- **Clientes**: lista con búsqueda por nombre/RUT/correo y filtro (todos, persona, empresa, con saldo); ficha con persona natural o empresa, RUT validado módulo-11, giro, contactos con rol (reemplazo total por guardado), direcciones de obra múltiples, proyectos del cliente, cotizaciones, pagos con facturado/cobrado/saldo, documentos emitidos y bitácora de notas append-only con autor y fecha. `clients.notes` migró a `client_notes` (backfill con autoría del `created_by`).
+- **Duplicados y fusión**: `GET clients/duplicates/` agrupa por RUT canónico; `POST clients/merge/` repunta proyectos, cotizaciones, pagos, documentos, contactos y notas al sobreviviente en una transacción y deja auditoría en `client_merges` (actor, timestamp, payload). El duplicado queda `merged_into` + inactivo. Grant excepcional: `UPDATE (client_id)` a nivel columna en `client_notes` — el cuerpo sigue append-only (REVOKE de UPDATE/DELETE tabla).
+- **Ajustes por secciones**: `/settings/:section` con nav lateral; `SECTION_KEYS = general, empresa, usuarios, comercial, documentos, numeracion, produccion, integraciones, plan`. Secciones de encargos no mergeados deshabilitadas con «Disponible cuando…». `usuarios`/`plan` bloqueadas para no-OWNER (`settings.lockedOwner`).
+- **API org-settings por dominio**: `backend/projects/org_settings.py` — snapshot `GET /organization/settings/` + PUT por sección (`company`, `commercial`, `documents`, `workshop`, `branding`) más `document-preview` (vista previa real con el `_CSS` del PDF) e `integrations` (estado Flow/SII/correo/IA sin exponer secretos). Roles: lectura OWNER/ESTIMATOR/WORKSHOP_MANAGER, escritura OWNER/ESTIMATOR, miembros solo OWNER.
+- **Usuarios y roles**: invitar por correo con rol, cambio de rol, desactivación; `claim_own_invitations` en `AuthMeView` auto-reclama invitaciones al entrar.
+- **Comercial**: moneda (`OrgCurrencyEnum` — renombra el `CurrencyEnum` anterior a `PricingCurrencyEnum` para pricing), IVA, vigencia por defecto, condiciones plantilla (`doc_terms` con `pago`/`garantia`), banda de margen min/max y `approval_threshold` (nuevo campo `discount_state`, default 0,10) — `null` = mantener valor.
+- **Numeración**: folios por tipo en solo lectura (la secuencia es autoridad de P02, no se edita).
+- **Onboarding**: paso «Ajustes» (índice 1) tras identidad — Empresa + Comercial + Documentos con defaults §11 editables (Carta, anticipo 50 %, vigencia 15 d, IVA 19 %, margen 35 %/25 %, pie DEKOPEN oculto). Etiquetas de paso acortadas (overflow-x a 8 pasos).
+- **Vista previa documental**: `render_document_html(..., embed_fonts=True)` embebe los Plex TTF como `data:` solo en el HTML de pantalla — el `<iframe>` no puede leer `file://` del servidor; el PDF sellado sigue con `_url_fetcher` congelado. Mismo patrón en `org_settings.document_preview` (`_CSS_EMBEDDED`).
+- **Migración** `20270220000000_p22_clientes_ajustes.sql` + pgTAP `183` (27 asserts); guard `to_regclass('auth.users')` en el backfill DO para pg vainilla.
+- Verificado: `make lint|typecheck|test|build|test-db` verdes (`PY=.venv/bin/python`); pgTAP 1162, integración 281, e2e 27/27, pg16 vainilla limpio, vitest 692; ux:capture 72 shots 0 hallazgos (corregidos enums crudos en estaciones, `file://` de fuentes en preview, overflow del stepper); capturas en `docs/redesign/captures/p22-clientes-ajustes/`; decisiones en sección P22 de `valores-por-defecto.md`.

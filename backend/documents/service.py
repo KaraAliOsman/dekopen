@@ -3182,7 +3182,7 @@ def preview_quote_document(
     )
 
     return {
-        "html": render_document_html("DOC-01", canonical_snapshot),
+        "html": render_document_html("DOC-01", canonical_snapshot, embed_fonts=True),
         "bom_hash": built["bom_hash"],
         "revision_code": revision,
     }
