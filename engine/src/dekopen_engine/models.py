@@ -693,6 +693,10 @@ class GlassProduct(EngineModel):
     price_tier: int | None = None
     surcharges: list[GlassSurchargeRate] = []
     review_pending: bool = False
+    # P18: provenance stamp — el Uw y el veredicto térmico distinguen dato
+    # declarado de dato certificado (`verified` = technical_reviewed_at).
+    data_provenance: str | None = None
+    verified: bool = False
 
 
 class GlassPiece(EngineModel):

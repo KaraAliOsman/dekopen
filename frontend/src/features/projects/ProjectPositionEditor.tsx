@@ -934,7 +934,7 @@ function PositionWorkspace({
   });
   const liveMountingLabel = useMemo(() => {
     const rule = vanoPreview?.mounting_rule ?? saved?.measurement?.mounting_rule ?? null;
-    return rule ? domainLabel("CodeEnum", rule.code).label : "";
+    return rule ? domainLabel("MountingRuleCodeEnum", rule.code).label : "";
   }, [vanoPreview, saved]);
   const vanoDim = vanoDimFromResolution(liveResolution, liveMountingLabel);
   const vanoChip =

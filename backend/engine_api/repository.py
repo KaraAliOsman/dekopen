@@ -705,7 +705,8 @@ class SystemParamsRepository:
                        p.safety_class, p.ug_w_m2k::text, p.g_value::text,
                        p.light_transmission_pct::text, p.weight_kg_m2::text,
                        p.min_billable_area_m2::text, p.review_pending, p.id,
-                       p.price_tier
+                       p.price_tier, p.data_provenance,
+                       (p.technical_reviewed_at IS NOT NULL) AS verified
                 FROM public.glass_products p
                 WHERE p.is_active = TRUE
                   AND (p.org_id = %s OR p.org_id IS NULL)
@@ -757,6 +758,8 @@ class SystemParamsRepository:
                 review_pending=bool(row[9]),
                 surcharges=surcharges.get(str(row[10]), []),
                 price_tier=int(row[11]) if row[11] is not None else None,
+                data_provenance=str(row[12]) if row[12] is not None else None,
+                verified=bool(row[13]),
             )
         return products
 

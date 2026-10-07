@@ -13,9 +13,9 @@
  * * `TRASLAPADO` - TRASLAPADO
  * * `RENOVACION` - RENOVACION
  */
-export type CodeEnum = (typeof CodeEnum)[keyof typeof CodeEnum];
+export type MountingRuleCodeEnum = (typeof MountingRuleCodeEnum)[keyof typeof MountingRuleCodeEnum];
 
-export const CodeEnum = {
+export const MountingRuleCodeEnum = {
   EN_VANO: "EN_VANO",
   PREMARCO: "PREMARCO",
   SOBRE_VANO: "SOBRE_VANO",

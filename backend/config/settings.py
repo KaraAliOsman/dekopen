@@ -199,6 +199,20 @@ SPECTACULAR_SETTINGS = {
         "SectionSourceEnum": ["POLYGON", "DXF_REFERENCE"],
         "BarAuthoritySourceEnum": ["PROFILE", "REINFORCEMENT"],
         "WorkCenterKindEnum": ["CUT", "ASSEMBLY", "GLAZING", "QC", "PACK"],
+        # P18 — 'code' también choca entre reglas de montaje y separadores;
+        # y los enums térmicos comparten nombres entre write/response.
+        "MountingRuleCodeEnum": ["EN_VANO", "PREMARCO", "SOBRE_VANO", "TRASLAPADO", "RENOVACION"],
+        "SpacerCodeEnum": ["ALUMINIUM", "WARM_EDGE"],
+        "FrameMemberGroupEnum": ["ALL", "FRAME", "SASH", "MULLION", "COUPLER", "THRESHOLD"],
+        "ThermalZoneEnum": ["A", "B", "C", "D", "E", "F", "G", "H", "I"],
+        "ThermalUseEnum": ["RESIDENTIAL", "EQUIPMENT"],
+        "ThermalOrientationEnum": ["N", "OP", "S", "OGT", "ROOF"],
+        # 'orientation' chocaría con el OrientationEnum de montaje
+        # (EXTERIOR_*) — nombre propio para el grupo cardinal OGUC.
+        "OrientationGroupEnum": ["N", "OP", "S", "OGT"],
+        "ThermalVerdictEnum": ["COMPLIES", "FAILS", "INSUFFICIENT_DATA", "NO_REQUIREMENT"],
+        "UwStatusEnum": ["OK", "UNKNOWN"],
+        "ThermalAlternativeKindEnum": ["GLASS", "SYSTEM"],
     },
     "TITLE": "Dekopen API",
     "DESCRIPTION": "Authenticated tenant and engine API boundary.",

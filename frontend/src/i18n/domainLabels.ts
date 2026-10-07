@@ -90,7 +90,7 @@ export const DOMAIN_LABELS: Record<string, L> = {
     MOVING: l("Hoja móvil", "info"),
     FIXED: l("Hoja fija", "neutral"),
   },
-  OrientationEnum: {
+  ProfileSectionOrientationEnum: {
     EXTERIOR_DOWN: l("Apertura abajo", "info"),
     EXTERIOR_UP: l("Apertura arriba", "info"),
     EXTERIOR_LEFT: l("Apertura izquierda", "info"),
@@ -116,7 +116,7 @@ export const DOMAIN_LABELS: Record<string, L> = {
     MANUAL_LOCK: l("Fijada a mano", "warn", "warn"),
     DECLARED: l("Declarada", "neutral"),
   },
-  CodeEnum: {
+  MountingRuleCodeEnum: {
     EN_VANO: l("En vano con holgura perimetral", "neutral"),
     PREMARCO: l("Con premarco", "neutral"),
     SOBRE_VANO: l("Sobre vano", "neutral"),
@@ -627,6 +627,7 @@ export const DOMAIN_LABELS: Record<string, L> = {
     fitting_purchase_mappings: l("Equivalencias de herrajes", "neutral"),
     glass_purchase_mappings: l("Equivalencias de vidrio", "neutral"),
     glazing_bead_matrix: l("Matriz de junquillos", "neutral"),
+    glazing_spacers: l("Separadores de vidrio", "neutral"),
     handle_requirement_policies: l("Políticas de manillas", "neutral"),
     hardware_kits: l("Kits de herraje", "neutral"),
     infill_articles: l("Rellenos", "neutral"),
@@ -634,6 +635,8 @@ export const DOMAIN_LABELS: Record<string, L> = {
     profile_articles: l("Artículos de perfil", "neutral"),
     profile_systems: l("Sistemas de perfil", "neutral"),
     reinforcement_cut_policies: l("Políticas de corte de refuerzo", "neutral"),
+    system_frame_uf: l("Uf de sistemas", "neutral"),
+    system_performance_tests: l("Ensayos de prestación", "neutral"),
   },
   ScopeEnum: {
     SYSTEM: l("Sistema", "neutral"),
@@ -767,6 +770,18 @@ export const ENUM_INTERNAL: readonly string[] = [
   // por catalog.ws.tab.* / los usa para scroll.
   "ReadinessTargetKindEnum",
   "TabEnum",
+  // P18 — enums térmicos: la UI los traduce con claves propias
+  // (projects.thermal.*, catalog.memberGroup.*) que incluyen causa y
+  // procedencia; nunca se muestran crudos.
+  "ThermalZoneEnum",
+  "ThermalUseEnum",
+  "ThermalOrientationEnum",
+  "OrientationGroupEnum",
+  "ThermalVerdictEnum",
+  "UwStatusEnum",
+  "ThermalAlternativeKindEnum",
+  "SpacerCodeEnum",
+  "FrameMemberGroupEnum",
 ];
 
 /** Etiqueta de un valor de enum — el nombre del enum (export orval) y el

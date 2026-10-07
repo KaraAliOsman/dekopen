@@ -5,6 +5,9 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { PatchedProjectUpdateRequestThermalWallAreas } from "./patchedProjectUpdateRequestThermalWallAreas";
+import type { PatchedProjectUpdateRequestThermalZone } from "./patchedProjectUpdateRequestThermalZone";
+import type { ThermalUseEnum } from "./thermalUseEnum";
 
 export interface PatchedProjectUpdateRequest {
   /**
@@ -33,5 +36,11 @@ export interface PatchedProjectUpdateRequest {
   delivery_address?: string;
   notes_commercial?: string;
   notes_internal?: string;
+  thermal_zone?:
+    | (typeof PatchedProjectUpdateRequestThermalZone)[keyof typeof PatchedProjectUpdateRequestThermalZone]
+    | null;
+  thermal_use?: ThermalUseEnum;
+  /** @nullable */
+  thermal_wall_areas?: PatchedProjectUpdateRequestThermalWallAreas;
   expected_updated_at?: string;
 }
