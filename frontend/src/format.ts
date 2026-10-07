@@ -37,7 +37,7 @@ export function fmtPct(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === "") return "—";
   const num = Number(value);
   if (!Number.isFinite(num)) return String(value);
-  return num.toFixed(1).replace(".", ",");
+  return quantize(String(num), 1).replace(".", ",");
 }
 
 /** Identificador técnico cuando falta la etiqueta humana — un UUID/hash
@@ -56,7 +56,12 @@ export function shortTechnicalId(value: string | null | undefined): string {
  * el wire exige el ancho exacto. Única vía permitida — la guarda prohíbe
  * toFixed disperso en features. */
 export function fmtWire(value: number, decimals = 2): string {
-  return value.toFixed(decimals);
+  // String() expande magnitudes extremas a notación científica; la forma
+  // decimal completa la pide quantize (half-up, sin float binario).
+  const text = /e/i.test(String(value))
+    ? value.toLocaleString("en-US", { maximumFractionDigits: 20, useGrouping: false })
+    : String(value);
+  return quantize(text, decimals);
 }
 
 /** Decimal canónico para INPUTS — sin agrupar ni coma: un valor editable o
@@ -81,16 +86,18 @@ export function fmtMm(value: string | number | null | undefined): string {
 }
 
 /** Cantidad §3.3 — sin escala forzada: recorta ceros sobrantes del NUMERIC
- * ("476.0000" → "476", "2.5000" → "2,5"), hasta 3 decimales reales con coma
- * ("0.125" → "0,125"). Precisión mayor se recorta a 3 — una cantidad con más
- * decimales es error del emisor, no detalle que se lee. */
+ * ("476.0000" → "476", "2.5000" → "2,5"), agrupa con espacio fino
+ * ("50000" → "50 000") y hasta 3 decimales reales con coma ("0.125" →
+ * "0,125"). Precisión mayor se recorta a 3 — una cantidad con más decimales
+ * es error del emisor, no detalle que se lee. */
 export function fmtQty(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === "") return "—";
   const text = String(value);
   if (!/^[+-]?\d+(\.\d+)?$/.test(text)) return text;
   const [intPart = "", fracRaw = ""] = text.split(".");
   const frac = fracRaw.replace(/0+$/, "").slice(0, 3);
-  return frac ? `${intPart},${frac}` : intPart;
+  const grouped = groupThin(intPart);
+  return frac ? `${grouped},${frac}` : grouped;
 }
 
 /** Chilean RUT — módulo-11 check digit. Accepts "12.345.678-5", "12345678-5",

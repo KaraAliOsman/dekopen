@@ -11,7 +11,7 @@
   gap: var(--space-4);
   letter-spacing: 0.01em;
   line-height: 1;
-  padding: 3px 8px;
+  padding: 3px var(--space-8);
   white-space: nowrap;
 }
 
@@ -130,26 +130,12 @@
 }
 
 .ui-skeleton__line {
-  animation: ui-sheen 1.4s ease-in-out infinite;
-  background: linear-gradient(
-    90deg,
-    var(--theme-skeleton) 0%,
-    var(--theme-skeleton-sheen) 50%,
-    var(--theme-skeleton) 100%
-  );
-  background-size: 200% 100%;
+  /* §9.4: nada de shimmer — el placeholder es una forma quieta, no una
+   * superficie que se mueva sola. */
+  background: var(--theme-skeleton);
   border-radius: var(--radius-sm);
   display: block;
   height: 0.85rem;
-}
-
-@keyframes ui-sheen {
-  0% {
-    background-position: 100% 0;
-  }
-  100% {
-    background-position: -100% 0;
-  }
 }
 
 /* ---------- banner ---------- */

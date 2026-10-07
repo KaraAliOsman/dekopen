@@ -56,7 +56,7 @@ button {
   border: 1px solid var(--theme-border-subtle);
   background: var(--theme-surface-card);
   cursor: pointer;
-  padding: 0.5rem 0.75rem;
+  padding: var(--space-8) var(--space-12);
 }
 
 button:hover,

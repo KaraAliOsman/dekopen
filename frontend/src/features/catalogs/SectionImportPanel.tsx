@@ -247,7 +247,12 @@ export function SectionImportPanel({
                   </p>
                 </div>
               )}
-              <button type="button" className="primary" disabled={!scaledPoints} onClick={confirm}>
+              <button
+                type="button"
+                className="ui-button ui-button--primary"
+                disabled={!scaledPoints}
+                onClick={confirm}
+              >
                 {ct("apply")}
               </button>
             </div>

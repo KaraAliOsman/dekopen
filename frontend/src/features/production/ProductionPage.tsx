@@ -64,9 +64,9 @@ import {
 } from "../../ui";
 import { Dims, Length } from "../../ui/format";
 import type { TabItem } from "../../ui";
-import { fmtMm, fmtQty, formatDims, formatPercent } from "../../format";
+import { fmtMm, fmtQty, formatDims, formatPercent, formatRevision } from "../../format";
 import { formatDate } from "../../format";
-import { t, tDynamic, tOptional } from "../../i18n/es-CL";
+import { colorLabel, t, tOptional, typologyLabel } from "../../i18n/es-CL";
 import { useAssistantSurface } from "../assistant/assistantContext";
 import { useTheme } from "../../theme/ThemeProvider";
 import {
@@ -1780,14 +1780,7 @@ export function ProductionPage(): JSX.Element {
                       // this order is, from the sealed revision (never CRM text).
                       const making = detail.making;
                       if (!making) return null;
-                      const typology = making.typology
-                        ? tDynamic(
-                            "typology",
-                            making.typology
-                              .toLowerCase()
-                              .replace(/_([a-z])/g, (_, c: string) => c.toUpperCase()),
-                          )
-                        : null;
+                      const typology = typologyLabel(making.typology) || null;
                       const colors = [
                         making.color_interior,
                         making.color_exterior && making.color_exterior !== making.color_interior
@@ -1795,6 +1788,7 @@ export function ProductionPage(): JSX.Element {
                           : null,
                       ]
                         .filter(Boolean)
+                        .map((code) => colorLabel(code))
                         .join(" / ");
                       const dims =
                         making.width_mm && making.height_mm
@@ -2046,7 +2040,7 @@ export function ProductionPage(): JSX.Element {
                                 <strong>
                                   {stats.bars_total}
                                   {stats.bars_remnant
-                                    ? ` (+${stats.bars_remnant} ${t("production.optimizeStatsRemnant")})`
+                                    ? ` (+${stats.bars_remnant} ${t(Number(stats.bars_remnant) === 1 ? "production.optimizeStatsRemnantOne" : "production.optimizeStatsRemnantMany")})`
                                     : ""}
                                 </strong>
                                 {" · "}
@@ -2122,7 +2116,7 @@ export function ProductionPage(): JSX.Element {
                                             <td>
                                               {row.bars_total}
                                               {row.bars_remnant
-                                                ? ` (+${row.bars_remnant} ${t("production.optimizeStatsRemnant")})`
+                                                ? ` (+${row.bars_remnant} ${t(Number(row.bars_remnant) === 1 ? "production.optimizeStatsRemnantOne" : "production.optimizeStatsRemnantMany")})`
                                                 : ""}
                                             </td>
                                             <td>{row.cuts_total}</td>
@@ -2369,7 +2363,7 @@ export function ProductionPage(): JSX.Element {
                                           {bar.cuts
                                             .map(
                                               (cut) =>
-                                                `${cutRoleLabel(cut.role)} ${fmtMm(cut.length_mm)}mm u${cut.unit_index ?? 1}`,
+                                                `${cutRoleLabel(cut.role)} ${fmtMm(cut.length_mm)} mm · u${cut.unit_index ?? 1}`,
                                             )
                                             .join(" · ")}
                                         </td>
@@ -2394,12 +2388,12 @@ export function ProductionPage(): JSX.Element {
                                   {purchases
                                     .map(
                                       (line) =>
-                                        `${line.qty_bars} ${t("production.optimizePurchaseUnit")} ${line.commercial_sku}`,
+                                        `${line.qty_bars} ${t(Number(line.qty_bars) === 1 ? "production.optimizePurchaseBar" : "production.optimizePurchaseBars")} ${line.commercial_sku}`,
                                     )
                                     .concat(
                                       sheetPurchases.map(
                                         (line) =>
-                                          `${line.qty_sheets} ${t("production.optimizePurchaseSheet")} ${line.purchasing_sku}`,
+                                          `${line.qty_sheets} ${t(Number(line.qty_sheets) === 1 ? "production.optimizePurchaseSheetOne" : "production.optimizePurchaseSheets")} ${line.purchasing_sku}`,
                                       ),
                                     )
                                     .join(" · ")}
@@ -3528,7 +3522,7 @@ export function ProductionPage(): JSX.Element {
                               {trace.project?.code ? String(trace.project.code) : "—"}
                               {" → "}
                               {trace.version?.revision_code
-                                ? String(trace.version.revision_code)
+                                ? formatRevision(String(trace.version.revision_code))
                                 : "—"}
                               {" → "}
                               {String(trace.work_order?.order_code ?? "—")}

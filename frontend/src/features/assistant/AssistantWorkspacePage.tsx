@@ -231,7 +231,7 @@ function JobRail({
         </button>
       </div>
       {jobs.length === 0 ? (
-        <p className="aiws-empty">{t("aiws.jobsEmpty")}</p>
+        <p className="ui-empty-inline">{t("aiws.jobsEmpty")}</p>
       ) : (
         <ul className="aiws-joblist">
           {jobs.map((job) => (
@@ -970,7 +970,7 @@ export function AssistantWorkspacePage(): JSX.Element {
                   <AiMetricsCard organizationId={orgId ?? ""} />
                 </div>
               </div>
-              <p className="aiws-empty">{t("aiws.hint")}</p>
+              <p className="ui-empty-inline">{t("aiws.hint")}</p>
             </>
           ) : (
             transcript.map((turn, index) =>
@@ -1107,7 +1107,7 @@ export function AssistantWorkspacePage(): JSX.Element {
             <ArtifactDetail artifact={artifact} />
           </div>
         ) : (
-          <p className="aiws-empty">{t("aiws.inspectorEmpty")}</p>
+          <p className="ui-empty-inline">{t("aiws.inspectorEmpty")}</p>
         )}
       </aside>
     </section>

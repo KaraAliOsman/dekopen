@@ -207,7 +207,7 @@ export function AssistantPanel({
           <div className="inspector-actions">
             <button
               type="button"
-              className="primary-button"
+              className="ui-button ui-button--primary"
               disabled={busy || disabled || !systemId || !prompt.trim()}
               onClick={() => void generate()}
             >
@@ -269,7 +269,7 @@ export function AssistantPanel({
                 <div className="inspector-actions">
                   <button
                     type="button"
-                    className="primary-button"
+                    className="ui-button ui-button--primary"
                     disabled={preview.ops.length === 0 || disabled}
                     onClick={() => {
                       onApply(preview.ops);

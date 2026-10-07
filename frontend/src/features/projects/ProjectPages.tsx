@@ -29,7 +29,7 @@ import type {
   RevisionCompareResponse,
 } from "../../api/generated/models";
 import { useAuthSession } from "../../auth/AuthSessionProvider";
-import { t, tOptional, type TranslationKey } from "../../i18n/es-CL";
+import { colorLabel, t, typologyLabel, type TranslationKey } from "../../i18n/es-CL";
 import { formatDate, formatMoney } from "../../format";
 import {
   fmtMm,
@@ -88,18 +88,6 @@ const listNextKeys: Record<ProjectResponse["status"], TranslationKey> = {
   IN_PRODUCTION: "projects.nextInProduction",
   COMPLETED: "projects.nextCompleted",
   CANCELLED: "projects.nextCancelled",
-};
-
-const typologyKeys: Record<string, TranslationKey> = {
-  FIXED: "typology.fixed",
-  TURN: "typology.turn",
-  TILT_TURN: "typology.tiltTurn",
-  SLIDING_2L: "typology.sliding2l",
-  SLIDING_3L: "typology.sliding3l",
-  SLIDING_4L: "typology.sliding4l",
-  AWNING: "typology.awning",
-  DOOR_ENTRY: "typology.doorEntry",
-  COMPOSITE: "typology.composite",
 };
 
 /** Derived per-position progression — the estimator reads "where in the
@@ -537,7 +525,7 @@ function commercialSteps(
       labelKey: "projects.step.sent",
       state: sent ? "done" : quoted ? "current" : "pending",
       detail: latestApproval
-        ? `${latestApproval.revision_code} · ${formatDate(latestApproval.created_at)}`
+        ? `${formatRevision(latestApproval.revision_code)} · ${formatDate(latestApproval.created_at)}`
         : sent
           ? undefined
           : quoted
@@ -1893,26 +1881,15 @@ function ProjectWorkspace({
                       {fmtMm(position.design.nominal_height_mm)}
                     </span>
                     <span className="position-row__spec">
-                      {typologyKeys[position.typology]
-                        ? t(typologyKeys[position.typology]!)
-                        : position.typology}
+                      {typologyLabel(position.typology)}
                       {position.design.color
                         ? ` · ${
                             position.design.color_exterior &&
                             position.design.color_exterior !== position.design.color
                               ? t("projects.colorSummary")
-                                  .replace(
-                                    "{exterior}",
-                                    tOptional(`projects.color.${position.design.color_exterior}`) ??
-                                      position.design.color_exterior,
-                                  )
-                                  .replace(
-                                    "{interior}",
-                                    tOptional(`projects.color.${position.design.color}`) ??
-                                      position.design.color,
-                                  )
-                              : (tOptional(`projects.color.${position.design.color}`) ??
-                                position.design.color)
+                                  .replace("{exterior}", colorLabel(position.design.color_exterior))
+                                  .replace("{interior}", colorLabel(position.design.color))
+                              : colorLabel(position.design.color)
                           }`
                         : ""}
                     </span>
@@ -1994,11 +1971,7 @@ function ProjectWorkspace({
                     )}
                     <div>
                       <dt>{t("projects.typology")}</dt>
-                      <dd>
-                        {typologyKeys[selected.typology]
-                          ? t(typologyKeys[selected.typology]!)
-                          : selected.typology}
-                      </dd>
+                      <dd>{typologyLabel(selected.typology)}</dd>
                     </div>
                   </dl>
                   <div className="projects-actions">

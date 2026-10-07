@@ -5,7 +5,7 @@ import { ApiError } from "../../api/apiMutator";
 import { portalQuoteDecide, portalQuoteRetrieve } from "../../api/generated/dekopen";
 import type { PortalPosition, PortalQuote } from "../../api/generated/models";
 import type { PositionDesign } from "../../api/generated/models";
-import { t, TranslationKey } from "../../i18n/es-CL";
+import { t, typologyLabel } from "../../i18n/es-CL";
 import { formatRevision } from "../../format";
 import { PositionThumb, THUMB_MEMBERS } from "../projects/PositionThumb";
 import {
@@ -77,24 +77,6 @@ function positionDesign(position: PortalPosition): PositionDesign {
   };
 }
 
-const typologyKeys: Record<string, TranslationKey> = {
-  FIXED: "typology.fixed",
-  TURN: "typology.turn",
-  TILT_TURN: "typology.tiltTurn",
-  TILT: "typology.tilt",
-  SLIDING_2L: "typology.sliding2l",
-  SLIDING_3L: "typology.sliding3l",
-  SLIDING_4L: "typology.sliding4l",
-  SLIDING: "typology.sliding",
-  AWNING: "typology.awning",
-  DOOR_ENTRY: "typology.doorEntry",
-  DOOR_DOUBLE: "typology.doorDouble",
-  CORNER: "typology.corner",
-  BOW: "typology.bow",
-  FRAMELESS: "typology.frameless",
-  COMPOSITE: "typology.composite",
-};
-
 // Misma curva sRGB que backend/documents/brand.py (_contrast_ratio):
 // elige la tinta que contrasta ≥ 4.5:1 con el acento de marca, sea cual
 // sea el tema — la validación AA del backend mide el acento sobre papel.
@@ -111,11 +93,6 @@ function pctLabel(raw: string | null | undefined): string {
   const fraction = Number(raw);
   if (!Number.isFinite(fraction)) return `${raw}%`;
   return formatPercent(fraction, fraction <= 1 ? "fraction" : "points");
-}
-
-function typologyLabel(raw: string | null | undefined): string {
-  const key = raw ? typologyKeys[raw] : undefined;
-  return key ? t(key) : (raw ?? "");
 }
 
 /** Long location/index lists wrap horribly — first…last plus the count. */

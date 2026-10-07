@@ -3,6 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { apiMutator } from "../../api/apiMutator";
 import { t } from "../../i18n/es-CL";
+import { domainLabel } from "../../i18n/domainLabels";
 import { ConfirmProvider } from "../../ui";
 import { PurchasingPage } from "./PurchasingPage";
 
@@ -416,9 +417,13 @@ it("lists org-wide orders with supplier, expected date and outstanding, filtered
   expect(within(index).getByText("OC-HW-7")).toBeInTheDocument();
   expect(within(index).getByText("OC-GL-2")).toBeInTheDocument();
   expect(within(index).getByText("Vorne SPA")).toBeInTheDocument();
-  expect(within(index).getByText("2026-10-01")).toBeInTheDocument();
+  expect(within(index).getByText("01-10-2026")).toBeInTheDocument();
   expect(within(index).getByText("8")).toBeInTheDocument();
-  fireEvent.click(within(index).getByRole("button", { name: t("purchasing.sent") }));
+  fireEvent.click(
+    within(index).getByRole("button", {
+      name: domainLabel("OrderStatusEnum", "SENT").label,
+    }),
+  );
   expect(within(index).getByText("OC-HW-7")).toBeInTheDocument();
   expect(within(index).queryByText("OC-GL-2")).not.toBeInTheDocument();
 });

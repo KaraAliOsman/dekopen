@@ -1,18 +1,18 @@
 .settings-group {
-  margin-top: 1.25rem;
+  margin-top: var(--space-16);
 }
 
 .settings-group__title {
   border-bottom: 1px solid var(--theme-border-subtle);
   font-size: 0.8125rem;
   font-weight: 600;
-  margin: 0 0 0.75rem;
-  padding-bottom: 0.5rem;
+  margin: 0 0 var(--space-12);
+  padding-bottom: var(--space-8);
 }
 
 .settings-grid {
   display: grid;
-  gap: 0.75rem;
+  gap: var(--space-12);
   grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
 }
 
@@ -20,18 +20,18 @@
   background: var(--theme-surface-panel);
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--r-2);
-  padding: 0.875rem 1rem;
+  padding: var(--space-12) var(--space-16);
 }
 
 .settings-card h2,
 .settings-card h3 {
   font-size: var(--type-micro);
-  margin: 0 0 0.625rem;
+  margin: 0 0 var(--space-8);
 }
 
 .settings-list {
   display: grid;
-  gap: 0.5rem;
+  gap: var(--space-8);
   margin: 0;
 }
 
@@ -44,7 +44,7 @@
   align-items: baseline;
   display: flex;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-16);
 }
 
 .settings-row dt {
@@ -72,9 +72,9 @@
   border-radius: var(--r-1);
   display: flex;
   justify-content: center;
-  margin: 0 0 0.75rem;
+  margin: 0 0 var(--space-12);
   min-height: 4rem;
-  padding: 0.5rem;
+  padding: var(--space-8);
 }
 
 .settings-branding-logo {
@@ -87,7 +87,7 @@
 .settings-branding-color {
   align-items: center;
   display: flex;
-  gap: 8px;
+  gap: var(--space-8);
 }
 
 .settings-branding-color input[type="color"] {
@@ -96,29 +96,29 @@
   border-radius: var(--r-1);
   cursor: pointer;
   inline-size: 2.5rem;
-  padding: 2px;
+  padding: var(--space-2);
 }
 
 .settings-branding-credit {
   align-items: baseline;
   display: flex;
-  gap: 8px;
+  gap: var(--space-8);
   grid-column: 1 / -1;
 }
 
 .settings-branding-credit .settings-hint {
   display: block;
-  margin: 2px 0 0;
+  margin: var(--space-2) 0 0;
 }
 
 .settings-docs {
   border: 1px solid var(--theme-border-subtle);
   border-radius: var(--r-1);
   display: grid;
-  gap: 10px 14px;
+  gap: var(--space-8) var(--space-12);
   grid-column: 1 / -1;
   margin: 0;
-  padding: 12px 14px;
+  padding: var(--space-12) var(--space-12);
 }
 
 .settings-docs legend {
@@ -126,7 +126,7 @@
   font-size: var(--type-micro);
   font-weight: 600;
   letter-spacing: 0.08em;
-  padding: 0 6px;
+  padding: 0 var(--space-6);
   text-transform: uppercase;
 }
 
@@ -137,9 +137,9 @@
 
 .settings-mail-grid {
   display: grid;
-  gap: 6px 16px;
+  gap: var(--space-6) var(--space-16);
   grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-  margin: 10px 0 0;
+  margin: var(--space-8) 0 0;
 }
 
 .settings-mail-grid dt {
@@ -158,13 +158,13 @@
 .payments-form {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 10px;
-  margin-top: 10px;
+  gap: var(--space-8);
+  margin-top: var(--space-8);
 }
 .payments-form label {
   display: grid;
-  gap: 4px;
-  font-size: var(--text-s, 12px);
+  gap: var(--space-4);
+  font-size: var(--text-s);
   color: var(--ink-muted);
 }
 .payments-form-wide {
@@ -173,13 +173,13 @@
 .payments-form-actions {
   grid-column: 1 / -1;
   display: flex;
-  gap: 8px;
+  gap: var(--space-8);
 }
 .payments-table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 10px;
-  font-size: var(--text-s, 13px);
+  margin-top: var(--space-8);
+  font-size: var(--text-s);
 }
 .payments-table-scroll {
   overflow-x: auto;
@@ -187,12 +187,12 @@
 .payments-table th,
 .payments-table td {
   text-align: left;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border, #e0deda);
+  padding: var(--space-6) var(--space-8);
+  border-bottom: 1px solid var(--border);
 }
 .payments-table .num {
   text-align: right;
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
 }
 .payments-voided td {
   opacity: 0.55;
@@ -207,11 +207,11 @@
   align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-8);
 }
 .file-field__name {
   color: var(--theme-text-secondary);
-  font-size: var(--text-s, 12px);
+  font-size: var(--text-s);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -228,7 +228,7 @@
   background: transparent;
   border: 0;
   color: var(--theme-text-secondary);
-  padding: 0.375rem 0.875rem;
+  padding: var(--space-6) var(--space-12);
 }
 
 .settings-theme-option[data-active="true"] {
@@ -238,12 +238,12 @@
 
 .settings-hint {
   color: var(--theme-text-secondary);
-  margin: 0 0 0.625rem;
+  margin: 0 0 var(--space-8);
 }
 
 .settings-links {
   display: flex;
-  gap: 1.25rem;
+  gap: var(--space-16);
 }
 
 .settings-links a {
@@ -256,13 +256,13 @@
 .settings-choice {
   align-items: center;
   display: flex !important;
-  gap: 8px;
+  gap: var(--space-8);
 }
 
 .payments-form fieldset {
   border: 0;
   display: grid;
-  gap: 8px;
+  gap: var(--space-8);
   grid-column: 1 / -1;
   margin: 0;
   min-width: 0;
@@ -277,7 +277,7 @@
 }
 
 .payments-form fieldset legend {
-  font-size: var(--text-s, 12px);
+  font-size: var(--text-s);
   font-weight: 600;
   padding: 0;
 }
@@ -286,7 +286,7 @@
 .ai-capabilities {
   border-collapse: collapse;
   font-size: var(--type-body);
-  margin: var(--space-8, 1rem) 0;
+  margin: var(--space-8) 0;
   width: 100%;
 }
 
@@ -295,21 +295,21 @@
   font-size: var(--type-micro);
   font-weight: 600;
   letter-spacing: 0.04em;
-  padding: 0.25rem 0.5rem;
+  padding: var(--space-4) var(--space-8);
   text-align: start;
   text-transform: uppercase;
 }
 
 .ai-capabilities td {
   border-top: 1px solid var(--theme-border-subtle);
-  padding: 0.375rem 0.5rem;
+  padding: var(--space-6) var(--space-8);
 }
 
 .ai-check-row {
   align-items: center;
   display: flex;
-  gap: 0.75rem;
-  margin: var(--space-8, 1rem) 0;
+  gap: var(--space-12);
+  margin: var(--space-8) 0;
 }
 
 .ai-check-result[data-ok="true"] {
@@ -332,6 +332,6 @@
   font-size: var(--type-micro);
   font-weight: 600;
   letter-spacing: 0.06em;
-  margin: var(--space-8, 1rem) 0 0.25rem;
+  margin: var(--space-8) 0 var(--space-4);
   text-transform: uppercase;
 }

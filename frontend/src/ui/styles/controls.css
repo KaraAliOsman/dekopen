@@ -44,7 +44,7 @@ a.ui-backlink {
 
 a.ui-backlink--back::before {
   content: "‹";
-  margin-right: 0.125rem;
+  margin-right: var(--space-2);
 }
 
 a.ui-backlink:hover {

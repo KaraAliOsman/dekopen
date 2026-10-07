@@ -1,0 +1,490 @@
+{
+  "summary": {
+    "generated_at": "2026-10-07T06:23:33.272Z",
+    "routes": 48,
+    "routes_with_findings": [],
+    "total_findings": 0
+  },
+  "results": [
+    {
+      "route": "project-borrador",
+      "url": "/projects/6eaae78e-6d1f-4af7-ab69-d3a75198c477",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/project-borrador--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/6eaae78e-6d1f-4af7-ab69-d3a75198c477"
+    },
+    {
+      "route": "project-borrador",
+      "url": "/projects/6eaae78e-6d1f-4af7-ab69-d3a75198c477",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/project-borrador--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/6eaae78e-6d1f-4af7-ab69-d3a75198c477"
+    },
+    {
+      "route": "project-borrador",
+      "url": "/projects/6eaae78e-6d1f-4af7-ab69-d3a75198c477",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/project-borrador--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/6eaae78e-6d1f-4af7-ab69-d3a75198c477"
+    },
+    {
+      "route": "project-borrador",
+      "url": "/projects/6eaae78e-6d1f-4af7-ab69-d3a75198c477",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/project-borrador--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/6eaae78e-6d1f-4af7-ab69-d3a75198c477"
+    },
+    {
+      "route": "project-borrador",
+      "url": "/projects/6eaae78e-6d1f-4af7-ab69-d3a75198c477",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/project-borrador--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/6eaae78e-6d1f-4af7-ab69-d3a75198c477"
+    },
+    {
+      "route": "project-borrador",
+      "url": "/projects/6eaae78e-6d1f-4af7-ab69-d3a75198c477",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/project-borrador--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/6eaae78e-6d1f-4af7-ab69-d3a75198c477"
+    },
+    {
+      "route": "project-cotizado",
+      "url": "/projects/c191d25f-b60e-44da-af17-207138aced18",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/project-cotizado--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/c191d25f-b60e-44da-af17-207138aced18"
+    },
+    {
+      "route": "project-cotizado",
+      "url": "/projects/c191d25f-b60e-44da-af17-207138aced18",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/project-cotizado--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/c191d25f-b60e-44da-af17-207138aced18"
+    },
+    {
+      "route": "project-cotizado",
+      "url": "/projects/c191d25f-b60e-44da-af17-207138aced18",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/project-cotizado--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/c191d25f-b60e-44da-af17-207138aced18"
+    },
+    {
+      "route": "project-cotizado",
+      "url": "/projects/c191d25f-b60e-44da-af17-207138aced18",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/project-cotizado--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/c191d25f-b60e-44da-af17-207138aced18"
+    },
+    {
+      "route": "project-cotizado",
+      "url": "/projects/c191d25f-b60e-44da-af17-207138aced18",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/project-cotizado--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/c191d25f-b60e-44da-af17-207138aced18"
+    },
+    {
+      "route": "project-cotizado",
+      "url": "/projects/c191d25f-b60e-44da-af17-207138aced18",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/project-cotizado--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/c191d25f-b60e-44da-af17-207138aced18"
+    },
+    {
+      "route": "project-vitrina",
+      "url": "/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/project-vitrina--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5"
+    },
+    {
+      "route": "project-vitrina",
+      "url": "/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/project-vitrina--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5"
+    },
+    {
+      "route": "project-vitrina",
+      "url": "/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/project-vitrina--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5"
+    },
+    {
+      "route": "project-vitrina",
+      "url": "/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/project-vitrina--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5"
+    },
+    {
+      "route": "project-vitrina",
+      "url": "/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/project-vitrina--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5"
+    },
+    {
+      "route": "project-vitrina",
+      "url": "/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/project-vitrina--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5"
+    },
+    {
+      "route": "project-conjuntos",
+      "url": "/projects/d0703692-5527-4119-b0c4-f12def884527",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/project-conjuntos--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/d0703692-5527-4119-b0c4-f12def884527"
+    },
+    {
+      "route": "project-conjuntos",
+      "url": "/projects/d0703692-5527-4119-b0c4-f12def884527",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/project-conjuntos--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/d0703692-5527-4119-b0c4-f12def884527"
+    },
+    {
+      "route": "project-conjuntos",
+      "url": "/projects/d0703692-5527-4119-b0c4-f12def884527",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/project-conjuntos--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/d0703692-5527-4119-b0c4-f12def884527"
+    },
+    {
+      "route": "project-conjuntos",
+      "url": "/projects/d0703692-5527-4119-b0c4-f12def884527",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/project-conjuntos--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/d0703692-5527-4119-b0c4-f12def884527"
+    },
+    {
+      "route": "project-conjuntos",
+      "url": "/projects/d0703692-5527-4119-b0c4-f12def884527",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/project-conjuntos--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/d0703692-5527-4119-b0c4-f12def884527"
+    },
+    {
+      "route": "project-conjuntos",
+      "url": "/projects/d0703692-5527-4119-b0c4-f12def884527",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/project-conjuntos--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/d0703692-5527-4119-b0c4-f12def884527"
+    },
+    {
+      "route": "project-escala",
+      "url": "/projects/1b3aae4e-c27b-4ef8-b043-56f5276e4d6a",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/project-escala--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/1b3aae4e-c27b-4ef8-b043-56f5276e4d6a"
+    },
+    {
+      "route": "project-escala",
+      "url": "/projects/1b3aae4e-c27b-4ef8-b043-56f5276e4d6a",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/project-escala--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/1b3aae4e-c27b-4ef8-b043-56f5276e4d6a"
+    },
+    {
+      "route": "project-escala",
+      "url": "/projects/1b3aae4e-c27b-4ef8-b043-56f5276e4d6a",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/project-escala--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/1b3aae4e-c27b-4ef8-b043-56f5276e4d6a"
+    },
+    {
+      "route": "project-escala",
+      "url": "/projects/1b3aae4e-c27b-4ef8-b043-56f5276e4d6a",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/project-escala--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/1b3aae4e-c27b-4ef8-b043-56f5276e4d6a"
+    },
+    {
+      "route": "project-escala",
+      "url": "/projects/1b3aae4e-c27b-4ef8-b043-56f5276e4d6a",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/project-escala--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/1b3aae4e-c27b-4ef8-b043-56f5276e4d6a"
+    },
+    {
+      "route": "project-escala",
+      "url": "/projects/1b3aae4e-c27b-4ef8-b043-56f5276e4d6a",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/project-escala--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/1b3aae4e-c27b-4ef8-b043-56f5276e4d6a"
+    },
+    {
+      "route": "project-position-new",
+      "url": "/projects/6eaae78e-6d1f-4af7-ab69-d3a75198c477/positions/new",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/project-position-new--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/6eaae78e-6d1f-4af7-ab69-d3a75198c477/positions/new"
+    },
+    {
+      "route": "project-position-new",
+      "url": "/projects/6eaae78e-6d1f-4af7-ab69-d3a75198c477/positions/new",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/project-position-new--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/6eaae78e-6d1f-4af7-ab69-d3a75198c477/positions/new"
+    },
+    {
+      "route": "project-position-new",
+      "url": "/projects/6eaae78e-6d1f-4af7-ab69-d3a75198c477/positions/new",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/project-position-new--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/6eaae78e-6d1f-4af7-ab69-d3a75198c477/positions/new"
+    },
+    {
+      "route": "project-position-new",
+      "url": "/projects/6eaae78e-6d1f-4af7-ab69-d3a75198c477/positions/new",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/project-position-new--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/6eaae78e-6d1f-4af7-ab69-d3a75198c477/positions/new"
+    },
+    {
+      "route": "project-position-new",
+      "url": "/projects/6eaae78e-6d1f-4af7-ab69-d3a75198c477/positions/new",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/project-position-new--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/6eaae78e-6d1f-4af7-ab69-d3a75198c477/positions/new"
+    },
+    {
+      "route": "project-position-new",
+      "url": "/projects/6eaae78e-6d1f-4af7-ab69-d3a75198c477/positions/new",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/project-position-new--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/6eaae78e-6d1f-4af7-ab69-d3a75198c477/positions/new"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5/positions/fda3132d-ef1d-4c5a-ade2-95a10e4e51c8/edit",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/project-position-edit--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5/positions/fda3132d-ef1d-4c5a-ade2-95a10e4e51c8/edit"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5/positions/fda3132d-ef1d-4c5a-ade2-95a10e4e51c8/edit",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/project-position-edit--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5/positions/fda3132d-ef1d-4c5a-ade2-95a10e4e51c8/edit"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5/positions/fda3132d-ef1d-4c5a-ade2-95a10e4e51c8/edit",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/project-position-edit--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5/positions/fda3132d-ef1d-4c5a-ade2-95a10e4e51c8/edit"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5/positions/fda3132d-ef1d-4c5a-ade2-95a10e4e51c8/edit",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/project-position-edit--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5/positions/fda3132d-ef1d-4c5a-ade2-95a10e4e51c8/edit"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5/positions/fda3132d-ef1d-4c5a-ade2-95a10e4e51c8/edit",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/project-position-edit--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5/positions/fda3132d-ef1d-4c5a-ade2-95a10e4e51c8/edit"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5/positions/fda3132d-ef1d-4c5a-ade2-95a10e4e51c8/edit",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/project-position-edit--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5/positions/fda3132d-ef1d-4c5a-ade2-95a10e4e51c8/edit"
+    },
+    {
+      "route": "project-pricing",
+      "url": "/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5/pricing",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/project-pricing--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5/pricing"
+    },
+    {
+      "route": "project-pricing",
+      "url": "/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5/pricing",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/project-pricing--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5/pricing"
+    },
+    {
+      "route": "project-pricing",
+      "url": "/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5/pricing",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/project-pricing--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5/pricing"
+    },
+    {
+      "route": "project-pricing",
+      "url": "/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5/pricing",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/project-pricing--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5/pricing"
+    },
+    {
+      "route": "project-pricing",
+      "url": "/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5/pricing",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/project-pricing--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5/pricing"
+    },
+    {
+      "route": "project-pricing",
+      "url": "/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5/pricing",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/project-pricing--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/projects/64a6a78a-ed4f-4fb6-8a73-cdf85aa1c6c5/pricing"
+    }
+  ]
+}

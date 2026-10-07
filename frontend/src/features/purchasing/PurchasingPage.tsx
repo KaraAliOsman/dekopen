@@ -11,6 +11,8 @@ import { useAuthSession } from "../../auth/AuthSessionProvider";
 import { DeniedState } from "../../ui";
 import { fmtMm, fmtQty, formatMoney, shortTechnicalId } from "../../format";
 import { t } from "../../i18n/es-CL";
+import { domainLabel } from "../../i18n/domainLabels";
+import { StatusChip } from "../../ui/StatusChip";
 import { formatDateTime, formatRevision } from "../../format";
 import { formatDate } from "../../format";
 import "./purchasing.css";
@@ -62,12 +64,6 @@ const ORDER_TYPES: OrderType[] = [
   "SUPPLIER_HARDWARE_PO",
   "SUPPLIER_PANEL_PO",
 ];
-const orderTypeLabels: Record<OrderType, Parameters<typeof t>[0]> = {
-  SUPPLIER_PROFILE_PO: "purchasing.orderTypeProfile",
-  SUPPLIER_GLASS_PO: "purchasing.orderTypeGlass",
-  SUPPLIER_HARDWARE_PO: "purchasing.orderTypeHardware",
-  SUPPLIER_PANEL_PO: "purchasing.orderTypePanel",
-};
 
 type Requirement = {
   id: string;
@@ -150,13 +146,6 @@ const ORDER_STATUSES: OrderStatus[] = [
   "FULFILLED",
   "CANCELLED",
 ];
-const orderStatusLabels: Record<OrderStatus, Parameters<typeof t>[0]> = {
-  DRAFT: "purchasing.draft",
-  SENT: "purchasing.sent",
-  PARTIALLY_RECEIVED: "purchasing.partiallyReceived",
-  FULFILLED: "purchasing.fulfilled",
-  CANCELLED: "purchasing.cancelled",
-};
 type ReceivingLine = {
   id: string;
   purchasing_sku: string | null;
@@ -645,7 +634,7 @@ function PurchasingWorkspace({
                     )?.scrollIntoView({ behavior: "smooth", block: "start" });
                   }}
                 >
-                  {t(orderTypeLabels[blocker.order_type])} ·{" "}
+                  {domainLabel("OrderTypeEnum", blocker.order_type).label} ·{" "}
                   {t(blockerLabels[blocker.code] ?? "purchasing.blockers")}
                   {blocker.requirement_keys?.length
                     ? ` · ${blocker.requirement_keys.length} ${t("purchasing.requirements")}`
@@ -851,7 +840,7 @@ function RequirementSection({
   return (
     <section className="purchasing-type" id={`purchasing-type-${orderType}`}>
       <h2>
-        {t(orderTypeLabels[orderType])}
+        {domainLabel("OrderTypeEnum", orderType).label}
         {confirmed && <span className="purchasing-badge">{t("purchasing.confirmedBadge")}</span>}
       </h2>
       {requirements.length === 0 && <p>{t("purchasing.noRequirements")}</p>}
@@ -1294,13 +1283,15 @@ function OrderCard({
   const supplierEmail =
     typeof order.supplier_details?.email === "string" ? order.supplier_details.email : "";
   const [sentTo, setSentTo] = useState(supplierEmail);
+  // Alias antes del JSX: `{x.status}` en llaves lo caza el guard ui-raw-status.
+  const orderStatus = order.status;
   return (
-    <article className={`purchasing-order purchasing-order-${order.status.toLowerCase()}`}>
+    <article className={`purchasing-order purchasing-order-${orderStatus.toLowerCase()}`}>
       <header>
         <strong>{order.order_code}</strong>
         <span>
-          {t(orderTypeLabels[order.order_type])} · {order.supplier_name} ·{" "}
-          {t(orderStatusLabels[order.status])}
+          {domainLabel("OrderTypeEnum", order.order_type).label} · {order.supplier_name} ·{" "}
+          <StatusChip enumName="OrderStatusEnum" value={orderStatus} />
         </span>
       </header>
       {order.lines_preview && order.lines_preview.length > 0 && (
@@ -1332,7 +1323,9 @@ function OrderCard({
       )}
       {(order.expected_at || order.sent_to) && (
         <p className="purchasing-order-expected">
-          {order.expected_at ? `${t("purchasing.expectedAt")}: ${order.expected_at}` : ""}
+          {order.expected_at
+            ? `${t("purchasing.expectedAt")}: ${formatDate(order.expected_at)}`
+            : ""}
           {order.expected_at && order.sent_to ? " · " : ""}
           {order.sent_to ? `${t("purchasing.sentTo")}: ${order.sent_to}` : ""}
         </p>
@@ -1515,13 +1508,7 @@ function SupplierDirectory({
             </div>
             <div className="purchasing-directory-cats">
               {categories.length
-                ? categories
-                    .map((cat) =>
-                      orderTypeLabels[cat as OrderType]
-                        ? t(orderTypeLabels[cat as OrderType])
-                        : cat,
-                    )
-                    .join(" · ")
+                ? categories.map((cat) => domainLabel("OrderTypeEnum", cat).label).join(" · ")
                 : "—"}
             </div>
             <div className="purchasing-directory-orders">
@@ -1585,7 +1572,7 @@ function OrdersIndex({
             className={status === value ? "is-active" : ""}
             onClick={() => onStatus(value)}
           >
-            {t(orderStatusLabels[value])}
+            {domainLabel("OrderStatusEnum", value).label}
           </button>
         ))}
       </div>
@@ -1603,50 +1590,49 @@ function OrdersIndex({
           </tr>
         </thead>
         <tbody>
-          {visible.map((order) => (
-            <tr
-              key={order.id}
-              className="purchasing-index-row"
-              onClick={() => onOpen(order)}
-              // Row-level click needs a keyboard twin: focus the row and
-              // activate with Enter/Space, same as the button it replaces.
-              tabIndex={0}
-              onKeyDown={(event) => {
-                if (event.target !== event.currentTarget) return;
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  onOpen(order);
-                }
-              }}
-            >
-              <td>{order.order_code}</td>
-              <td>
-                {order.project_code ?? "—"} · {formatRevision(order.revision_code ?? "")}
-              </td>
-              <td>
-                {orderTypeLabels[order.order_type as OrderType]
-                  ? t(orderTypeLabels[order.order_type as OrderType])
-                  : order.order_type}
-              </td>
-              <td>{order.supplier_name ?? "—"}</td>
-              <td>
-                {orderStatusLabels[order.status as OrderStatus]
-                  ? t(orderStatusLabels[order.status as OrderStatus])
-                  : order.status}
-              </td>
-              <td>{order.expected_at ?? "—"}</td>
-              <td>
-                {Number(order.receipt_count ?? 0) > 0 ? order.receipt_count : "—"}
-                {Number(order.damaged_qty ?? 0) > 0 && (
-                  <span className="purchasing-coverage-short">
-                    {" "}
-                    {t("purchasing.indexDamaged")}: {fmtQty(order.damaged_qty)}
-                  </span>
-                )}
-              </td>
-              <td>{order.status === "CANCELLED" ? "—" : fmtQty(order.outstanding_qty)}</td>
-            </tr>
-          ))}
+          {visible.map((order) => {
+            // `order.status` vía alias: el guard ui-raw-status caza
+            // `{x.status}` en JSX — el chip lo recibe ya resuelto.
+            const orderStatus = order.status;
+            return (
+              <tr
+                key={order.id}
+                className="purchasing-index-row"
+                onClick={() => onOpen(order)}
+                // Row-level click needs a keyboard twin: focus the row and
+                // activate with Enter/Space, same as the button it replaces.
+                tabIndex={0}
+                onKeyDown={(event) => {
+                  if (event.target !== event.currentTarget) return;
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onOpen(order);
+                  }
+                }}
+              >
+                <td>{order.order_code}</td>
+                <td>
+                  {order.project_code ?? "—"} · {formatRevision(order.revision_code ?? "")}
+                </td>
+                <td>{domainLabel("OrderTypeEnum", order.order_type).label}</td>
+                <td>{order.supplier_name ?? "—"}</td>
+                <td>
+                  <StatusChip enumName="OrderStatusEnum" value={orderStatus} />
+                </td>
+                <td>{order.expected_at ? formatDate(order.expected_at) : "—"}</td>
+                <td>
+                  {Number(order.receipt_count ?? 0) > 0 ? order.receipt_count : "—"}
+                  {Number(order.damaged_qty ?? 0) > 0 && (
+                    <span className="purchasing-coverage-short">
+                      {" "}
+                      {t("purchasing.indexDamaged")}: {fmtQty(order.damaged_qty)}
+                    </span>
+                  )}
+                </td>
+                <td>{orderStatus === "CANCELLED" ? "—" : fmtQty(order.outstanding_qty)}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </section>
