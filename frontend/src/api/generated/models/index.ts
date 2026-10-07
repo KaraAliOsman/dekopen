@@ -557,6 +557,7 @@ export * from "./positionDesignRequest";
 export * from "./positionDocumentaryInputRequest";
 export * from "./positionDocumentaryPreviewRequest";
 export * from "./positionMeasurementRequest";
+export * from "./positionMoveRequest";
 export * from "./positionResponse";
 export * from "./positionsDestroyParams";
 export * from "./positionUpdateRequest";

@@ -45,7 +45,7 @@ async function screenshot(page: Page, info: TestInfo, name: string): Promise<voi
  * offers its actions, then return the action link inside it. */
 async function card(page: Page, location: string, action: string) {
   await page.locator(".position-grid [role='option']").filter({ hasText: location }).click();
-  return page.locator(".project-desk__side").getByRole("link", { name: action, exact: true });
+  return page.locator(".positions-side").getByRole("link", { name: action, exact: true });
 }
 
 test("SHOT-10 real project core path and visual evidence", async ({ page, manual }, info) => {
@@ -93,10 +93,12 @@ test("SHOT-10 real project core path and visual evidence", async ({ page, manual
   const projectApi = `/api/v1/projects/${project.id}/`;
   await expect(page).toHaveURL(new RegExp(`${projectPath}$`));
   await expect(page.getByRole("heading", { level: 1 })).toContainText(projectName);
-  await expect(page.getByRole("link", { name: "Añadir vano" })).toBeVisible();
+  const addPosition = () =>
+    page.locator(".positions-toolbar").getByRole("link", { name: "Añadir vano" });
+  await expect(addPosition()).toBeVisible();
   await screenshot(page, info, "01-project-created");
 
-  await page.getByRole("link", { name: "Añadir vano", exact: true }).click();
+  await addPosition().click();
   await page.getByLabel("Ubicación del vano", { exact: true }).fill("Cocina original");
   await page.getByLabel("Cantidad", { exact: true }).fill("2");
 

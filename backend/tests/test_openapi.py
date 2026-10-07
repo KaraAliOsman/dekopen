@@ -32,6 +32,7 @@ def test_openapi_contains_only_authorized_shot_11_paths_and_bearer_security() ->
         "/api/v1/projects/{project_id}/services/",
         "/api/v1/projects/design-options/{system_id}/",
         "/api/v1/positions/{position_id}/",
+        "/api/v1/positions/{position_id}/move/",
         "/api/v1/positions/{position_id}/measurement-confirm/",
         "/api/v1/positions/{position_id}/design-assist/",
         "/api/v1/positions/{position_id}/design-alternatives/",

@@ -418,6 +418,60 @@ def test_frozen_project_rejects_edits_and_preserves_evidence(documentary_tenant)
             )
 
 
+def test_move_position_rewrites_the_whole_print_run(manual_pair):
+    pair, users, system = manual_pair
+    org, actor, project_id, first_id = pair[0]
+    with as_user(actor):
+        second = service.save_position(org, project_id, position_data(system))
+        third = service.save_position(org, project_id, position_data(system))
+
+        ordered = rows(
+            "SELECT id,position_index FROM public.project_positions "
+            "WHERE project_id=%s AND org_id=%s ORDER BY position_index",
+            [project_id, org],
+        )
+        assert [row["position_index"] for row in ordered] == [1, 2, 3]
+
+        first = service.position_row(org, first_id)
+        moved = service.move_position(org, first_id, 3, first["updated_at"])
+        assert moved["position_index"] == 3
+        reordered = rows(
+            "SELECT id,position_index FROM public.project_positions "
+            "WHERE project_id=%s AND org_id=%s ORDER BY position_index",
+            [project_id, org],
+        )
+        assert [row["position_index"] for row in reordered] == [1, 2, 3]
+        assert [row["id"] for row in reordered] == [second["id"], third["id"], first_id]
+
+        # Out-of-range targets clamp to the run instead of erroring — a
+        # stale row index after a sibling delete stays harmless.
+        third_row = service.position_row(org, third["id"])
+        clamped = service.move_position(org, third["id"], 99, third_row["updated_at"])
+        assert clamped["position_index"] == 3
+
+        # The optimistic lock still holds: replaying the stale timestamp
+        # must not silently reorder.
+        with rejected(409, "stale_edit"):
+            service.move_position(org, third["id"], 1, third_row["updated_at"])
+
+
+def test_move_position_rejects_foreign_and_frozen(manual_pair):
+    pair, users, _ = manual_pair
+    org, actor, project_id, position_id = pair[0]
+    other, other_actor, _, foreign_id = pair[1]
+    with as_user(actor):
+        position = service.position_row(org, position_id)
+        # Cross-tenant rows are invisible, not reordered.
+        with pytest.raises(ContractAPIException) as caught:
+            service.move_position(org, foreign_id, 1, position["updated_at"])
+        assert caught.value.status_code == 404
+    with as_user(other_actor):
+        foreign = service.position_row(other, foreign_id)
+        with pytest.raises(ContractAPIException) as caught:
+            service.move_position(other, position_id, 1, foreign["updated_at"])
+        assert caught.value.status_code == 404
+
+
 def test_project_creator_cannot_be_forged(documentary_tenant):
     org, _, users, _ = documentary_tenant
     with as_user(users["ESTIMATOR"]):

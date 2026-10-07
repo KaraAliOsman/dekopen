@@ -60,6 +60,9 @@ a.ui-backlink:hover {
 .ui-button--primary:hover:not(:disabled) {
   background: var(--theme-accent-deep);
   border-color: var(--theme-accent-deep);
+  /* `a:hover` in base.css outranks the plain-class colour on anchors —
+   * redeclare the ink or primary link-buttons go teal-on-teal. */
+  color: var(--theme-surface-panel);
 }
 
 .ui-button--danger {
@@ -71,6 +74,7 @@ a.ui-backlink:hover {
 .ui-button--danger:hover:not(:disabled) {
   background: var(--theme-danger);
   border-color: var(--danger-ink);
+  color: var(--theme-surface-panel);
   filter: brightness(0.92);
 }
 

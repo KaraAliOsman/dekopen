@@ -9268,6 +9268,85 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/positions/{position_id}/move/:
+    post:
+      operationId: positions_move
+      description: |-
+        Explicit reorder — the estimator arranges the print order of the
+        quotation lines; the service rewrites the whole 1..N run atomically.
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: position_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - projects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PositionMoveRequest'
+        required: true
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PositionResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/pricing/admin/{resource}/:
     get:
       operationId: pricing_admin_list
@@ -30010,6 +30089,22 @@ components:
           allOf:
           - $ref: '#/components/schemas/FabricationLockRequest'
           nullable: true
+    PositionMoveRequest:
+      type: object
+      description: |-
+        Explicit reorder of the printed position order — `position_index` is
+        server-owned, so a PUT can never edit it directly; the move endpoint
+        shifts the whole run atomically under the position's optimistic lock.
+      properties:
+        to_index:
+          type: integer
+          minimum: 1
+        expected_updated_at:
+          type: string
+          format: date-time
+      required:
+      - expected_updated_at
+      - to_index
     PositionResponse:
       type: object
       properties:

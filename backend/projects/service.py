@@ -648,6 +648,53 @@ def delete_position(org_id, position_id, expected):
         )
 
 
+def move_position(org_id, position_id, to_index, expected):
+    """Move a position inside its project's print order.
+
+    The (project_id, position_index) unique constraint makes an in-place
+    swap impossible, so every sibling first parks at a negative scratch
+    index and the final 1..N run is assigned in a second pass — all under
+    the same row locks the concurrent save path takes.
+    """
+    original = position_row(org_id, position_id)
+    editable(org_id, original["project_id"])
+    current = position_row(org_id, position_id, lock=True)
+    unchanged(current, expected)
+    project_id = original["project_id"]
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT id FROM public.project_positions "
+            "WHERE project_id=%s AND org_id=%s ORDER BY position_index FOR UPDATE",
+            [project_id, org_id],
+        )
+        order = [str(row[0]) for row in cursor.fetchall()]
+        order.remove(str(position_id))
+        target = max(0, min(int(to_index) - 1, len(order)))
+        order.insert(target, str(position_id))
+        for scratch, row_id in enumerate(order, start=1):
+            cursor.execute(
+                "UPDATE public.project_positions SET position_index=%s "
+                "WHERE id=%s AND org_id=%s",
+                [-scratch, row_id, org_id],
+            )
+        for index, row_id in enumerate(order, start=1):
+            # Only the moved row takes a fresh updated_at — bumping the
+            # siblings' timestamp would wrongly invalidate a parallel
+            # design edit holding their optimistic lock.
+            stamp = ",updated_at=clock_timestamp()" if row_id == str(position_id) else ""
+            cursor.execute(
+                "UPDATE public.project_positions SET position_index=%s"
+                + stamp
+                + " WHERE id=%s AND org_id=%s",
+                [index, row_id, org_id],
+            )
+        cursor.execute(
+            "UPDATE public.projects SET updated_at=clock_timestamp() WHERE id=%s AND org_id=%s",
+            [project_id, org_id],
+        )
+    return position_public(position_row(org_id, position_id))
+
+
 def _same_documentary_value(left, right):
     # Scale-free compare: the canonical BOM serializes mm as "16.00" while
     # the frozen snapshot's raw model_dump keeps "16" — the same

@@ -206,6 +206,12 @@ async function decide(approve: boolean): Promise<void> {
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 }
 
+/** El hub pereza-monta cada pestaña al primer toque — el test abre la
+ * pestaña real antes de tocar el panel (misma superficie que el usuario). */
+async function openTab(label: Parameters<typeof t>[0]): Promise<void> {
+  fireEvent.click(await screen.findByRole("tab", { name: t(label) }));
+}
+
 function change(label: Parameters<typeof t>[0], value: string): void {
   fireEvent.change(screen.getByLabelText(t(label)), {
     target: { value },
@@ -296,6 +302,7 @@ it("creates a project, navigates to the server ID and renders persisted metadata
   // The project code stays visible as secondary metadata, not as the title.
   expect(screen.getByText("P-1042")).toBeInTheDocument();
   expect(router.state.location.pathname).toBe("/projects/server-created-id");
+  await openTab("projects.tab.cotizacion");
   expect(screen.getByText("Cliente persistido")).toBeInTheDocument();
   expect(screen.getByText("persistido@example.test")).toBeInTheDocument();
   expect(screen.getByText("Nota recuperada desde detalle")).toBeInTheDocument();
@@ -350,6 +357,7 @@ it("PATCHes the exact original timestamp and reloads persisted metadata", async 
     level: 1,
     name: "Casa actualizada",
   });
+  await openTab("projects.tab.cotizacion");
   expect(screen.getByText(saved.client_phone!)).toBeInTheDocument();
   expect(screen.getByRole("status")).toHaveTextContent(t("projects.saved"));
   expect(screen.queryByLabelText(t("projects.name"))).not.toBeInTheDocument();
@@ -451,12 +459,12 @@ it("deletes using the exact position timestamp and renders the refreshed project
 
   mount();
   // The delete action lives in the side pane — select the vano first.
-  fireEvent.click(await screen.findByText("1. Dormitorio principal"));
+  fireEvent.click(await screen.findByTitle("Dormitorio principal"));
   fireEvent.click(screen.getByRole("button", { name: t("projects.deletePosition") }));
 
   await decide(true);
   expect(await screen.findByText(t("projects.noPositions"))).toBeInTheDocument();
-  expect(screen.queryByText("1. Dormitorio principal")).not.toBeInTheDocument();
+  expect(screen.queryByTitle("Dormitorio principal")).not.toBeInTheDocument();
   expect(screen.getByRole("status")).toHaveTextContent(t("projects.deleted"));
 
   expect(positionsDestroy).toHaveBeenCalledTimes(1);
@@ -488,12 +496,12 @@ it.each([
     );
 
     mount();
-    fireEvent.click(await screen.findByText("1. Dormitorio principal"));
+    fireEvent.click(await screen.findByTitle("Dormitorio principal"));
     fireEvent.click(screen.getByRole("button", { name: t("projects.deletePosition") }));
     await decide(true);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(t(message));
-    expect(screen.getByText("1. Dormitorio principal")).toBeInTheDocument();
+    expect(screen.getByTitle("Dormitorio principal")).toBeInTheDocument();
     expect(screen.queryByText(t("projects.noPositions"))).not.toBeInTheDocument();
     expect(screen.queryByText(t("projects.deleted"))).not.toBeInTheDocument();
     await waitFor(() => {
@@ -601,6 +609,7 @@ it("prepares and explicitly emits the current priced revision", async () => {
   });
 
   mount();
+  await openTab("projects.tab.cotizacion");
   fireEvent.click(await screen.findByRole("button", { name: t("quotation.prepare") }));
   await screen.findByLabelText(t("quotation.paymentTerms"));
   change("quotation.paymentTerms", "50% anticipo");
@@ -679,6 +688,7 @@ it("guards unsaved quotation preparation edits against navigation and cancel", a
   });
 
   const router = mount();
+  await openTab("projects.tab.cotizacion");
   fireEvent.click(await screen.findByRole("button", { name: t("quotation.prepare") }));
   await screen.findByLabelText(t("quotation.paymentTerms"));
   change("quotation.paymentTerms", "50% anticipo");
@@ -830,6 +840,7 @@ it("saves handle placement intents for operable leaves before emitting", async (
   });
 
   mount();
+  await openTab("projects.tab.cotizacion");
   fireEvent.click(await screen.findByRole("button", { name: t("quotation.prepare") }));
   const heightInput = await screen.findByLabelText(t("quotation.handleHeight"));
   // Missing intents are seeded with the displayed midpoint — the visible
@@ -1038,6 +1049,7 @@ it("reconciles handle intents when the handle policy changes", async () => {
   });
 
   mount();
+  await openTab("projects.tab.cotizacion");
   fireEvent.click(await screen.findByRole("button", { name: t("quotation.prepare") }));
   const policySelect = await screen.findByLabelText(t("quotation.handlePolicy"));
   fireEvent.change(policySelect, { target: { value: "handle-b" } });
@@ -1191,6 +1203,7 @@ it("keeps a manually edited height when the handle policy changes", async () => 
   });
 
   mount();
+  await openTab("projects.tab.cotizacion");
   fireEvent.click(await screen.findByRole("button", { name: t("quotation.prepare") }));
   const heightInput = await screen.findByLabelText(t("quotation.handleHeight"));
   expect(heightInput).toHaveValue("1000");
@@ -1367,6 +1380,7 @@ it("seals suggested heights only after the estimator confirms them", async () =>
   });
 
   mount();
+  await openTab("projects.tab.cotizacion");
   fireEvent.click(await screen.findByRole("button", { name: t("quotation.prepare") }));
   const heightInput = await screen.findByLabelText(t("quotation.handleHeight"));
   // The generated midpoint is visible but flagged as a suggestion — not yet
@@ -1479,6 +1493,7 @@ it("asks before cloning away from dirty quotation preparation edits", async () =
   });
 
   const router = mount();
+  await openTab("projects.tab.cotizacion");
   fireEvent.click(await screen.findByRole("button", { name: t("quotation.prepare") }));
   await screen.findByLabelText(t("quotation.paymentTerms"));
   change("quotation.paymentTerms", "50% anticipo");
@@ -1509,14 +1524,19 @@ it("opens one idempotent editable successor from a quoted revision", async () =>
   );
 
   mount();
+  await openTab("projects.tab.cotizacion");
   fireEvent.click(await screen.findByRole("button", { name: t("quotation.editQuoted") }));
 
   const dialog = await screen.findByRole("dialog");
   expect(dialog).toHaveTextContent(t("quotation.successorConfirm"));
   await decide(true);
   await screen.findByText("Revisión B");
-  expect(apiMutator).toHaveBeenCalledTimes(1);
-  expect(vi.mocked(apiMutator).mock.calls[0]?.[0]).toBe("/api/v1/projects/project-a/successor/");
+  // La sucesión es UN solo POST idempotente — el resto de llamadas son las
+  // lecturas del hub (preparación documental para la vigencia del header).
+  const successorCalls = vi
+    .mocked(apiMutator)
+    .mock.calls.filter(([url]) => String(url).endsWith("/successor/"));
+  expect(successorCalls).toHaveLength(1);
 });
 
 it("explicitly retires current draft pricing with an audit reason before editing", async () => {
@@ -1535,6 +1555,7 @@ it("explicitly retires current draft pricing with an audit reason before editing
     );
   vi.mocked(apiMutator).mockResolvedValue(response(200, {}) as never);
   mount();
+  await openTab("projects.tab.cotizacion");
   fireEvent.click(await screen.findByRole("button", { name: t("quotation.resetPricing") }));
   const dialog = await screen.findByRole("dialog");
   expect(dialog).toHaveTextContent(t("quotation.resetReason"));
@@ -1555,6 +1576,7 @@ it("explicitly retires current draft pricing with an audit reason before editing
       }),
     ),
   );
+  await openTab("projects.tab.posiciones");
   expect(await screen.findByRole("link", { name: t("projects.addPosition") })).toBeInTheDocument();
 });
 
@@ -1681,7 +1703,7 @@ it("lists human timeline events once the activity section opens", async () => {
   );
 
   mount();
-  fireEvent.click(await screen.findByText(t("projects.activityTitle")));
+  await openTab("projects.tab.actividad");
 
   expect(await screen.findByText(t("projects.activityEmitted"))).toBeInTheDocument();
   expect(screen.getByText(t("projects.activityApproved"))).toBeInTheDocument();

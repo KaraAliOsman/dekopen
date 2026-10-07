@@ -34,6 +34,7 @@ from projects.views import (
     PositionDesignAssistView,
     PositionMeasurementConfirmView,
     PositionMeasurementResolveView,
+    PositionMoveView,
     PositionView,
     SiiCafsView,
     SiiCertificateView,
@@ -126,6 +127,7 @@ urlpatterns = [
         PositionMeasurementResolveView.as_view(),
     ),
     path("positions/<uuid:position_id>/", PositionView.as_view()),
+    path("positions/<uuid:position_id>/move/", PositionMoveView.as_view()),
     path(
         "positions/<uuid:position_id>/measurement-confirm/",
         PositionMeasurementConfirmView.as_view(),

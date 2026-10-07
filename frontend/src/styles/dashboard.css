@@ -60,8 +60,12 @@ p[role="alert"]:only-child::before {
   text-decoration: none;
 }
 
-.primary-action:hover {
+a.primary-action:hover,
+button.primary-action:hover {
   background: var(--theme-accent-strong);
+  /* `a:hover`/`button:hover` tie the plain-class specificity — the element
+   * selector keeps the ink pinned on anchor and button CTAs alike. */
+  color: var(--theme-surface-panel);
 }
 
 /* Task dashboard, not a form column: the attention queue and active work

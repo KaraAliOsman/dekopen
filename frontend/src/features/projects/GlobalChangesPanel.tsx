@@ -110,6 +110,7 @@ export function GlobalChangesPanel({
   positions,
   disabled,
   pricingLocked = false,
+  initialScope = null,
   onApplied,
 }: {
   projectId: string;
@@ -119,13 +120,18 @@ export function GlobalChangesPanel({
   /** Precios aplicados: el PUT de posiciones 409 commercial_revision_required
    * — el panel se muestra bloqueado con la causa, no deja intentar. */
   pricingLocked?: boolean;
+  /** Alcance inicial (p. ej. la selección de la grilla del proyecto) —
+   * null = todas las posiciones; el usuario aún puede ampliarlo. */
+  initialScope?: Set<string> | null;
   onApplied(): Promise<unknown>;
 }): JSX.Element {
   const queryClient = useQueryClient();
   const headers = useMemo(() => ({ headers: { "X-Organization-ID": orgId } }), [orgId]);
   const [op, setOp] = useState<OpKind>("glass");
   const [value, setValue] = useState("");
-  const [scope, setScope] = useState<Set<string> | null>(null); // null = todas
+  const [scope, setScope] = useState<Set<string> | null>(
+    initialScope ? new Set(initialScope) : null,
+  ); // null = todas
   const [catalogs, setCatalogs] = useState<Catalogs | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [phase, setPhase] = useState<"idle" | "loading" | "ready" | "applying" | "done">("idle");

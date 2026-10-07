@@ -206,6 +206,7 @@ import type {
   PaymentVoidRequest,
   PaymentsSummary,
   PortalQuote,
+  PositionMoveRequest,
   PositionResponse,
   PositionUpdateRequest,
   PositionWriteRequest,
@@ -10417,6 +10418,92 @@ export const positionsMeasurementConfirm = async (
       body: JSON.stringify(measurementConfirmRequest),
     },
   );
+};
+
+export type positionsMoveResponse200 = {
+  data: PositionResponse;
+  status: 200;
+};
+
+export type positionsMoveResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type positionsMoveResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type positionsMoveResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type positionsMoveResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type positionsMoveResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type positionsMoveResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type positionsMoveResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type positionsMoveResponseSuccess = positionsMoveResponse200 & {
+  headers: Headers;
+};
+export type positionsMoveResponseError = (
+  | positionsMoveResponse400
+  | positionsMoveResponse401
+  | positionsMoveResponse403
+  | positionsMoveResponse404
+  | positionsMoveResponse409
+  | positionsMoveResponse422
+  | positionsMoveResponse503
+) & {
+  headers: Headers;
+};
+
+export type positionsMoveResponse = positionsMoveResponseSuccess | positionsMoveResponseError;
+
+export const getPositionsMoveUrl = (positionId: string) => {
+  return `/api/v1/positions/${positionId}/move/`;
+};
+
+/**
+ * Explicit reorder — the estimator arranges the print order of the
+ * quotation lines; the service rewrites the whole 1..N run atomically.
+ */
+export const positionsMove = async (
+  positionId: string,
+  positionMoveRequest: PositionMoveRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<positionsMoveResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<positionsMoveResponse>(getPositionsMoveUrl(positionId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+    body: JSON.stringify(positionMoveRequest),
+  });
 };
 
 export type pricingAdminListResponse200 = {
