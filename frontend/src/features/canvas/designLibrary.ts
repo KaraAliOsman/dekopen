@@ -1,5 +1,6 @@
 import type { TranslationKey } from "../../i18n/es-CL";
 import type { IntentNode, LeafSpecPayload, Opening, OpeningSpecPayload } from "./intentEditing";
+import { SLIDE_XO_LAYOUT } from "./intentEditing";
 import { fmtWire } from "../../format";
 import {
   makeArchModule,
@@ -244,14 +245,22 @@ export const STARTER_DEFINITIONS: StarterDefinition[] = [
     titleKey: "assembly.starter.hst",
     hintKey: "assembly.starter.hstHint",
     build: (w, h) =>
-      wrapTreeAsProduct(specTree({ movement: "LIFT_SLIDE" }), fmtWire(w), fmtWire(h)),
+      wrapTreeAsProduct(
+        specTree({ movement: "LIFT_SLIDE" }, { sliding_layout: SLIDE_XO_LAYOUT }),
+        fmtWire(w),
+        fmtWire(h),
+      ),
   },
   {
     key: "psk",
     titleKey: "assembly.starter.psk",
     hintKey: "assembly.starter.pskHint",
     build: (w, h) =>
-      wrapTreeAsProduct(specTree({ movement: "PARALLEL_SLIDE" }), fmtWire(w), fmtWire(h)),
+      wrapTreeAsProduct(
+        specTree({ movement: "PARALLEL_SLIDE" }, { sliding_layout: SLIDE_XO_LAYOUT }),
+        fmtWire(w),
+        fmtWire(h),
+      ),
   },
   {
     key: "foldable",
@@ -339,7 +348,7 @@ export const STARTER_DEFINITIONS: StarterDefinition[] = [
     // patio los aporta el kit DOOR_SLIDING de la serie.
     build: (w, h) =>
       wrapTreeAsProduct(
-        specTree({ movement: "SLIDE" }, { unit_kind: "DOOR" }),
+        specTree({ movement: "SLIDE" }, { unit_kind: "DOOR", sliding_layout: SLIDE_XO_LAYOUT }),
         fmtWire(w),
         fmtWire(h),
       ),

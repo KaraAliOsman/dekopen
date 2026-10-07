@@ -139,3 +139,24 @@ describe("openingSpecKeyAdmitted", () => {
     expect(openingSpecKeyAdmitted("PRIMARY:LIFT_SLIDE", undefined)).toBe(true);
   });
 });
+
+describe("starters de la familia slide — topología fabricable", () => {
+  it("HST, PSK y puerta corredera declaran sliding_layout X/O", () => {
+    for (const key of ["hst", "psk", "slidingDoor"]) {
+      const product = starter(key).build(2000, 2200);
+      const bay = product.assembly.modules[0]!.tree;
+      const layout = bay.sliding_layout;
+      expect(layout, `${key} debe declarar sliding_layout`).toBeTruthy();
+      expect(layout!.panels.some((p) => p.kind === "MOVING" && p.travel)).toBe(true);
+      expect(layout!.panels.some((p) => p.kind === "FIXED")).toBe(true);
+      expect(layout!.panels.every((p) => (p.kind === "FIXED") === (p.track == null))).toBe(true);
+    }
+  });
+
+  it("plegable, pivotante y guillotina no llevan sliding_layout", () => {
+    for (const key of ["foldable", "pivot", "guillotina"]) {
+      const product = starter(key).build(2000, 2200);
+      expect(product.assembly.modules[0]!.tree.sliding_layout).toBeUndefined();
+    }
+  });
+});

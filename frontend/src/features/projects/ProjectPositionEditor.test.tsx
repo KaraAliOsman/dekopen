@@ -950,9 +950,7 @@ it("renders the design library with rendered starter cards", async () => {
   expect(within(list).getAllByRole("listitem")).toHaveLength(21);
   // Every card previews through the same front-elevation renderer.
   expect(within(list).getAllByTestId("product-front").length).toBeGreaterThan(0);
-  expect(
-    within(list).getByRole("button", { name: /Corredera elevable/ }),
-  ).toBeInTheDocument();
+  expect(within(list).getByRole("button", { name: /Corredera elevable/ })).toBeInTheDocument();
 });
 
 it("picking a sliding starter card builds a sliding product", async () => {
