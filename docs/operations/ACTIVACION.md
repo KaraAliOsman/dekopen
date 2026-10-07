@@ -61,6 +61,7 @@ Este indice no contiene secretos. Los valores reales se cargan como variables de
 | Variables    | `AI_GATEWAY_MIMO_API_KEY`, `AI_GATEWAY_MIMO_BASE_URL`, `AI_GATEWAY_MIMO_MODEL`, `AI_GATEWAY_ROUTE_PROVIDER`.                  |
 | Activacion   | Cargar variables en backend y worker, seleccionar proveedor MIMO en rutas IA y ejecutar una consulta controlada.              |
 | Verificacion | Job IA termina con proveedor real, auditoria queda registrada y ningun valor secreto aparece en logs, HTML o bundle frontend. |
+| Desarrollo   | Proveedor MOCK cuando el cupo MIMO esta agotado (429): `AI_GATEWAY_MOCK_ENABLED=1` en el entorno del backend y `UPDATE ai_routes SET provider='MOCK'` en la base local; la extraccion/revision de importaciones corre el mismo pipeline. |
 
 ## Reglas de seguridad de vidrio (NCh 135/2)
 

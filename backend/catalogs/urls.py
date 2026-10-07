@@ -40,6 +40,11 @@ urlpatterns = [
         views.ArticleReviewView.as_view(),
         name="catalog-article-review",
     ),
+    path(
+        "articles/<uuid:row_id>/ficha/",
+        views.ArticleFichaView.as_view(),
+        name="catalog-article-ficha",
+    ),
     path("glazing/", views.BeadCollectionView.as_view(), name="catalog-bead-list"),
     path(
         "glazing/<uuid:row_id>/",

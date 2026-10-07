@@ -35,6 +35,7 @@ import type {
   AllocationResponse,
   ApplyRequest,
   ApprovalRecord,
+  ArticleFicha,
   ArticleList,
   ArticleResponse,
   ArticleWriteRequest,
@@ -3639,6 +3640,77 @@ export const catalogArticleDelete = async (
   return apiMutator<catalogArticleDeleteResponse>(getCatalogArticleDeleteUrl(rowId), {
     ...options,
     method: "DELETE",
+  });
+};
+
+export type catalogArticleFichaResponse200 = {
+  data: ArticleFicha;
+  status: 200;
+};
+
+export type catalogArticleFichaResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type catalogArticleFichaResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type catalogArticleFichaResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type catalogArticleFichaResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type catalogArticleFichaResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type catalogArticleFichaResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type catalogArticleFichaResponseSuccess = catalogArticleFichaResponse200 & {
+  headers: Headers;
+};
+export type catalogArticleFichaResponseError = (
+  | catalogArticleFichaResponse400
+  | catalogArticleFichaResponse401
+  | catalogArticleFichaResponse403
+  | catalogArticleFichaResponse404
+  | catalogArticleFichaResponse409
+  | catalogArticleFichaResponse503
+) & {
+  headers: Headers;
+};
+
+export type catalogArticleFichaResponse =
+  catalogArticleFichaResponseSuccess | catalogArticleFichaResponseError;
+
+export const getCatalogArticleFichaUrl = (rowId: string) => {
+  return `/api/v1/catalogs/articles/${rowId}/ficha/`;
+};
+
+/**
+ * GET articles/<id>/ficha/ — the article's full technical ficha: row,
+ * declared-section validations, evidence trail, purchase identities and
+ * bound reinforcements. The same data a reviewer sees before stamping.
+ */
+export const catalogArticleFicha = async (
+  rowId: string,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<catalogArticleFichaResponse> => {
+  return apiMutator<catalogArticleFichaResponse>(getCatalogArticleFichaUrl(rowId), {
+    ...options,
+    method: "GET",
   });
 };
 

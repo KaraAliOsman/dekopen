@@ -2993,6 +2993,74 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/catalogs/articles/{row_id}/ficha/:
+    get:
+      operationId: catalog_article_ficha
+      description: |-
+        GET articles/<id>/ficha/ — the article's full technical ficha: row,
+        declared-section validations, evidence trail, purchase identities and
+        bound reinforcements. The same data a reviewer sees before stamping.
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: path
+        name: row_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - catalogs
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArticleFicha'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/catalogs/articles/{row_id}/review/:
     post:
       operationId: catalog_article_review
@@ -19323,6 +19391,36 @@ components:
       - revoked_at
       - status
       - view_count
+    ArticleFicha:
+      type: object
+      description: |-
+        P16 article ficha: the row + real-geometry checks + provenance
+        evidence + purchase identities + bound reinforcements.
+      properties:
+        article:
+          $ref: '#/components/schemas/ArticleResponse'
+        section_checks:
+          type: array
+          items:
+            $ref: '#/components/schemas/SectionCheck'
+        evidence:
+          type: array
+          items:
+            $ref: '#/components/schemas/EvidenceRow'
+        purchase_mappings:
+          type: array
+          items:
+            $ref: '#/components/schemas/PurchaseMappingRow'
+        reinforcements:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReinforcementRow'
+      required:
+      - article
+      - evidence
+      - purchase_mappings
+      - reinforcements
+      - section_checks
     ArticleList:
       type: object
       properties:
@@ -19426,6 +19524,12 @@ components:
           type: string
           format: uuid
           readOnly: true
+          nullable: true
+        reviewed_by_label:
+          type: string
+          nullable: true
+        section_revised_by_label:
+          type: string
           nullable: true
       required:
       - data_provenance
@@ -20034,8 +20138,44 @@ components:
       properties:
         import:
           $ref: '#/components/schemas/CatalogImportResponse'
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogImportEvent'
       required:
+      - events
       - import
+    CatalogImportEvent:
+      type: object
+      description: |-
+        One immutable lifecycle event (UPLOADED/EXTRACTED/CONFIRMED) — the
+        audit trail from file upload to catalog publication.
+      properties:
+        id:
+          type: string
+          format: uuid
+        event:
+          type: string
+        actor_id:
+          type: string
+          format: uuid
+          nullable: true
+        actor_label:
+          type: string
+          nullable: true
+        detail:
+          type: object
+          additionalProperties: {}
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - actor_id
+      - actor_label
+      - created_at
+      - detail
+      - event
+      - id
     CatalogImportListResponse:
       type: object
       properties:
@@ -20078,6 +20218,24 @@ components:
         error_code:
           type: string
           nullable: true
+        created_by:
+          type: string
+          format: uuid
+          nullable: true
+        created_by_label:
+          type: string
+          nullable: true
+        reviewed_by:
+          type: string
+          format: uuid
+          nullable: true
+        reviewed_by_label:
+          type: string
+          nullable: true
+        reviewed_at:
+          type: string
+          format: date-time
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -20087,11 +20245,14 @@ components:
       required:
       - candidates
       - created_at
+      - created_by
       - error_code
       - file_name
       - id
       - kind
       - result
+      - reviewed_at
+      - reviewed_by
       - status
       - system_id
       - updated_at
@@ -21350,6 +21511,28 @@ components:
       - quantity
       - system_id
       - width_mm
+    CostCoverageRow:
+      type: object
+      description: |-
+        P07 coverage line — which purchase SKUs this system can demand and
+        how many active cost items price each.
+      properties:
+        sku:
+          type: string
+        name:
+          type: string
+        kind:
+          type: string
+        required_unit:
+          type: string
+        active_cost_items:
+          type: integer
+      required:
+      - active_cost_items
+      - kind
+      - name
+      - required_unit
+      - sku
     CostLineResponse:
       type: object
       properties:
@@ -21553,6 +21736,58 @@ components:
       - source_position_id
       - unit_index
       - workshop_sku
+    CutRuleRow:
+      type: object
+      description: Read-only provenance triple for tabular authority rows.
+      properties:
+        data_provenance:
+          type: string
+        technical_reviewed_at:
+          type: string
+          nullable: true
+        technical_reviewed_by:
+          type: string
+          format: uuid
+          nullable: true
+        review_pending:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+          nullable: true
+        system_id:
+          type: string
+          format: uuid
+        role:
+          type: string
+        cut_angle_deg:
+          type: string
+        welded_ends:
+          type: integer
+          nullable: true
+        interlock_deduction_mm:
+          type: string
+        rounding_mm:
+          type: string
+        created_at:
+          type: string
+      required:
+      - created_at
+      - cut_angle_deg
+      - data_provenance
+      - id
+      - interlock_deduction_mm
+      - org_id
+      - review_pending
+      - role
+      - rounding_mm
+      - system_id
+      - technical_reviewed_at
+      - technical_reviewed_by
+      - welded_ends
     DataProvenanceEnum:
       enum:
       - SEED_SYNTHETIC
@@ -23428,6 +23663,12 @@ components:
         reviewed_at:
           type: string
           nullable: true
+        declared_by_label:
+          type: string
+          nullable: true
+        reviewed_by_label:
+          type: string
+          nullable: true
       required:
       - applicability
       - authority_table
@@ -24205,6 +24446,139 @@ components:
       - total_thickness_mm
       - ug_w_m2k
       - weight_kg_m2
+    GlassProductRow:
+      type: object
+      description: Read-only provenance triple for tabular authority rows.
+      properties:
+        data_provenance:
+          type: string
+        technical_reviewed_at:
+          type: string
+          nullable: true
+        technical_reviewed_by:
+          type: string
+          format: uuid
+          nullable: true
+        review_pending:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+          nullable: true
+        system_id:
+          type: string
+          format: uuid
+          nullable: true
+        sku:
+          type: string
+        commercial_name:
+          type: string
+        notation:
+          type: string
+        composition:
+          type: object
+          additionalProperties: {}
+          nullable: true
+        total_thickness_mm:
+          type: string
+          nullable: true
+        safety_class:
+          type: string
+          nullable: true
+        ug_w_m2k:
+          type: string
+          nullable: true
+        g_value:
+          type: string
+          nullable: true
+        light_transmission_pct:
+          type: string
+          nullable: true
+        weight_kg_m2:
+          type: string
+          nullable: true
+        min_billable_area_m2:
+          type: string
+          nullable: true
+        price_tier:
+          type: integer
+          nullable: true
+        supplier_name:
+          type: string
+          nullable: true
+        supplier_sku:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+      required:
+      - commercial_name
+      - composition
+      - created_at
+      - data_provenance
+      - g_value
+      - id
+      - is_active
+      - light_transmission_pct
+      - min_billable_area_m2
+      - notation
+      - org_id
+      - price_tier
+      - review_pending
+      - safety_class
+      - sku
+      - supplier_name
+      - supplier_sku
+      - system_id
+      - technical_reviewed_at
+      - technical_reviewed_by
+      - total_thickness_mm
+      - ug_w_m2k
+      - weight_kg_m2
+    GlassPurchaseMappingRow:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+          nullable: true
+        system_id:
+          type: string
+          format: uuid
+        technical_sku:
+          type: string
+        purchasing_sku:
+          type: string
+        manufacturer_name:
+          type: string
+        purchase_unit:
+          type: string
+        version:
+          type: integer
+        provenance:
+          type: object
+          additionalProperties: {}
+        created_at:
+          type: string
+      required:
+      - created_at
+      - id
+      - manufacturer_name
+      - org_id
+      - provenance
+      - purchase_unit
+      - purchasing_sku
+      - system_id
+      - technical_sku
+      - version
     GlassSafetyFinding:
       type: object
       properties:
@@ -24237,6 +24611,82 @@ components:
       description: |-
         * `WARNING` - WARNING
         * `MANDATORY` - MANDATORY
+    GlassSafetyRuleRow:
+      type: object
+      description: Read-only provenance triple for tabular authority rows.
+      properties:
+        data_provenance:
+          type: string
+        technical_reviewed_at:
+          type: string
+          nullable: true
+        technical_reviewed_by:
+          type: string
+          format: uuid
+          nullable: true
+        review_pending:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+          nullable: true
+        code:
+          type: string
+        title:
+          type: string
+        message:
+          type: string
+          nullable: true
+        applies_openings:
+          type: array
+          items: {}
+          nullable: true
+        sill_below_mm:
+          type: string
+          nullable: true
+        min_area_m2:
+          type: string
+          nullable: true
+        requires_door:
+          type: boolean
+          nullable: true
+        requires_adjacent_door:
+          type: boolean
+          nullable: true
+        required_safety:
+          type: string
+        severity:
+          type: string
+        source_ref:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+      required:
+      - applies_openings
+      - code
+      - created_at
+      - data_provenance
+      - id
+      - is_active
+      - message
+      - min_area_m2
+      - org_id
+      - required_safety
+      - requires_adjacent_door
+      - requires_door
+      - review_pending
+      - severity
+      - sill_below_mm
+      - source_ref
+      - technical_reviewed_at
+      - technical_reviewed_by
+      - title
     GlassSpecChoice:
       type: object
       properties:
@@ -24269,6 +24719,61 @@ components:
       - kind
       - label
       - unit
+    GlassSurchargeRow:
+      type: object
+      description: Read-only provenance triple for tabular authority rows.
+      properties:
+        data_provenance:
+          type: string
+        technical_reviewed_at:
+          type: string
+          nullable: true
+        technical_reviewed_by:
+          type: string
+          format: uuid
+          nullable: true
+        review_pending:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+          nullable: true
+        product_id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+        unit:
+          type: string
+        unit_cost:
+          type: string
+        currency:
+          type: string
+        label:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+      required:
+      - created_at
+      - currency
+      - data_provenance
+      - id
+      - is_active
+      - kind
+      - label
+      - org_id
+      - product_id
+      - review_pending
+      - technical_reviewed_at
+      - technical_reviewed_by
+      - unit
+      - unit_cost
     GlassSurchargeSelection:
       type: object
       properties:
@@ -24300,6 +24805,114 @@ components:
         * `EDGE_POLISH` - EDGE_POLISH
         * `DRILL` - DRILL
         * `PALILLAJE` - PALILLAJE
+    GlassTab:
+      type: object
+      properties:
+        products:
+          type: array
+          items:
+            $ref: '#/components/schemas/GlassProductRow'
+        purchase_mappings:
+          type: array
+          items:
+            $ref: '#/components/schemas/GlassPurchaseMappingRow'
+        surcharges:
+          type: array
+          items:
+            $ref: '#/components/schemas/GlassSurchargeRow'
+        safety_rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/GlassSafetyRuleRow'
+        type_limits:
+          type: array
+          items:
+            $ref: '#/components/schemas/GlassTypeLimitRow'
+      required:
+      - products
+      - purchase_mappings
+      - safety_rules
+      - surcharges
+      - type_limits
+    GlassTypeLimitRow:
+      type: object
+      description: Read-only provenance triple for tabular authority rows.
+      properties:
+        data_provenance:
+          type: string
+        technical_reviewed_at:
+          type: string
+          nullable: true
+        technical_reviewed_by:
+          type: string
+          format: uuid
+          nullable: true
+        review_pending:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+          nullable: true
+        code:
+          type: string
+        lamina_kind:
+          type: string
+        thickness_min_mm:
+          type: string
+          nullable: true
+        thickness_max_mm:
+          type: string
+          nullable: true
+        min_side_mm:
+          type: string
+          nullable: true
+        max_side_mm:
+          type: string
+          nullable: true
+        min_area_m2:
+          type: string
+          nullable: true
+        max_area_m2:
+          type: string
+          nullable: true
+        max_aspect_ratio:
+          type: string
+          nullable: true
+        requires_exact_cut:
+          type: boolean
+        severity:
+          type: string
+        source_ref:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+      required:
+      - code
+      - created_at
+      - data_provenance
+      - id
+      - is_active
+      - lamina_kind
+      - max_area_m2
+      - max_aspect_ratio
+      - max_side_mm
+      - min_area_m2
+      - min_side_mm
+      - org_id
+      - requires_exact_cut
+      - review_pending
+      - severity
+      - source_ref
+      - technical_reviewed_at
+      - technical_reviewed_by
+      - thickness_max_mm
+      - thickness_min_mm
     GlazingBeadChoice:
       type: object
       properties:
@@ -24331,6 +24944,55 @@ components:
       - name
       - price_delta_clp
       - sku
+    HandleColorRow:
+      type: object
+      description: Read-only provenance triple for tabular authority rows.
+      properties:
+        data_provenance:
+          type: string
+        technical_reviewed_at:
+          type: string
+          nullable: true
+        technical_reviewed_by:
+          type: string
+          format: uuid
+          nullable: true
+        review_pending:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+          nullable: true
+        system_id:
+          type: string
+          format: uuid
+        opening_type:
+          type: string
+        sku:
+          type: string
+        name:
+          type: string
+        price_delta_clp:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+      required:
+      - created_at
+      - data_provenance
+      - id
+      - name
+      - opening_type
+      - org_id
+      - price_delta_clp
+      - review_pending
+      - sku
+      - system_id
+      - technical_reviewed_at
+      - technical_reviewed_by
     HandleIntent:
       type: object
       properties:
@@ -24427,6 +25089,58 @@ components:
       - name
       - price_delta_clp
       - sku
+    HandleModelRow:
+      type: object
+      description: Read-only provenance triple for tabular authority rows.
+      properties:
+        data_provenance:
+          type: string
+        technical_reviewed_at:
+          type: string
+          nullable: true
+        technical_reviewed_by:
+          type: string
+          format: uuid
+          nullable: true
+        review_pending:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+          nullable: true
+        system_id:
+          type: string
+          format: uuid
+        opening_type:
+          type: string
+        sku:
+          type: string
+        name:
+          type: string
+        kind:
+          type: string
+        price_delta_clp:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+      required:
+      - created_at
+      - data_provenance
+      - id
+      - kind
+      - name
+      - opening_type
+      - org_id
+      - price_delta_clp
+      - review_pending
+      - sku
+      - system_id
+      - technical_reviewed_at
+      - technical_reviewed_by
     HandlePolicy:
       type: object
       properties:
@@ -24636,6 +25350,61 @@ components:
       - handle_height_rule
       - handle_models
       - opening_type
+    HardwareFamilyRow:
+      type: object
+      description: Read-only provenance triple for tabular authority rows.
+      properties:
+        data_provenance:
+          type: string
+        technical_reviewed_at:
+          type: string
+          nullable: true
+        technical_reviewed_by:
+          type: string
+          format: uuid
+          nullable: true
+        review_pending:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+          nullable: true
+        system_id:
+          type: string
+          format: uuid
+        opening_type:
+          type: string
+        handle_height_rule:
+          type: string
+          nullable: true
+        handle_height_min_mm:
+          type: string
+          nullable: true
+        handle_height_max_mm:
+          type: string
+          nullable: true
+        handle_height_default_mm:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+      required:
+      - created_at
+      - data_provenance
+      - handle_height_default_mm
+      - handle_height_max_mm
+      - handle_height_min_mm
+      - handle_height_rule
+      - id
+      - opening_type
+      - org_id
+      - review_pending
+      - system_id
+      - technical_reviewed_at
+      - technical_reviewed_by
     HardwareItem:
       type: object
       properties:
@@ -24743,6 +25512,97 @@ components:
       - opening_type
       - price_delta_clp
       - sku
+    HardwareOptionRow:
+      type: object
+      description: Read-only provenance triple for tabular authority rows.
+      properties:
+        data_provenance:
+          type: string
+        technical_reviewed_at:
+          type: string
+          nullable: true
+        technical_reviewed_by:
+          type: string
+          format: uuid
+          nullable: true
+        review_pending:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+          nullable: true
+        system_id:
+          type: string
+          format: uuid
+        opening_type:
+          type: string
+        sku:
+          type: string
+        name:
+          type: string
+        kind:
+          type: string
+        price_delta_clp:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+      required:
+      - created_at
+      - data_provenance
+      - id
+      - is_active
+      - kind
+      - name
+      - opening_type
+      - org_id
+      - price_delta_clp
+      - review_pending
+      - sku
+      - system_id
+      - technical_reviewed_at
+      - technical_reviewed_by
+    HardwarePurchaseMappingRow:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+          nullable: true
+        hardware_kit_id:
+          type: string
+          format: uuid
+        purchasing_sku:
+          type: string
+        manufacturer_name:
+          type: string
+        purchase_unit:
+          type: string
+        version:
+          type: integer
+        provenance:
+          type: object
+          additionalProperties: {}
+        created_at:
+          type: string
+      required:
+      - created_at
+      - hardware_kit_id
+      - id
+      - manufacturer_name
+      - org_id
+      - provenance
+      - purchase_unit
+      - purchasing_sku
+      - version
     HardwareSelectionPrice:
       type: object
       properties:
@@ -24772,6 +25632,49 @@ components:
         * `HANDLE_MODEL` - HANDLE_MODEL
         * `HANDLE_COLOR` - HANDLE_COLOR
         * `OPTION` - OPTION
+    HardwareTab:
+      type: object
+      properties:
+        families:
+          type: array
+          items:
+            $ref: '#/components/schemas/HardwareFamilyRow'
+        handle_models:
+          type: array
+          items:
+            $ref: '#/components/schemas/HandleModelRow'
+        handle_colors:
+          type: array
+          items:
+            $ref: '#/components/schemas/HandleColorRow'
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/HardwareOptionRow'
+        purchase_mappings:
+          type: array
+          items:
+            $ref: '#/components/schemas/HardwarePurchaseMappingRow'
+      required:
+      - families
+      - handle_colors
+      - handle_models
+      - options
+      - purchase_mappings
+    HistoryTab:
+      type: object
+      properties:
+        imports:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportHistoryRow'
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportEventRow'
+      required:
+      - events
+      - imports
     ImportConfirmRequest:
       type: object
       properties:
@@ -24818,6 +25721,98 @@ components:
           $ref: '#/components/schemas/ImportResponse'
       required:
       - import
+    ImportEventRow:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        import_id:
+          type: string
+          format: uuid
+        event:
+          type: string
+        actor_id:
+          type: string
+          format: uuid
+          nullable: true
+        actor_label:
+          type: string
+          nullable: true
+        detail:
+          type: object
+          additionalProperties: {}
+        created_at:
+          type: string
+      required:
+      - actor_id
+      - actor_label
+      - created_at
+      - detail
+      - event
+      - id
+      - import_id
+      - org_id
+    ImportHistoryRow:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        file_name:
+          type: string
+        kind:
+          type: string
+        status:
+          type: string
+        error_code:
+          type: string
+          nullable: true
+        audit_id:
+          type: string
+          format: uuid
+          nullable: true
+        created_by:
+          type: string
+          format: uuid
+        created_by_label:
+          type: string
+          nullable: true
+        reviewed_by:
+          type: string
+          format: uuid
+          nullable: true
+        reviewed_by_label:
+          type: string
+          nullable: true
+        reviewed_at:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+        updated_at:
+          type: string
+      required:
+      - audit_id
+      - created_at
+      - created_by
+      - created_by_label
+      - error_code
+      - file_name
+      - id
+      - kind
+      - org_id
+      - reviewed_at
+      - reviewed_by
+      - reviewed_by_label
+      - status
+      - updated_at
     ImportListResponse:
       type: object
       properties:
@@ -24939,6 +25934,39 @@ components:
       description: |-
         * `1` - 1
         * `5` - 5
+    InspectorConfigRow:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+          nullable: true
+        system_id:
+          type: string
+          format: uuid
+        rule_id:
+          type: string
+        params:
+          type: object
+          additionalProperties: {}
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+        updated_at:
+          type: string
+      required:
+      - created_at
+      - id
+      - is_active
+      - org_id
+      - params
+      - rule_id
+      - system_id
+      - updated_at
     InspectorDiff:
       type: object
       properties:
@@ -26210,6 +27238,55 @@ components:
       - review_pending
       - system_id
       - version
+    MountingRuleRow:
+      type: object
+      description: Read-only provenance triple for tabular authority rows.
+      properties:
+        data_provenance:
+          type: string
+        technical_reviewed_at:
+          type: string
+          nullable: true
+        technical_reviewed_by:
+          type: string
+          format: uuid
+          nullable: true
+        review_pending:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+          nullable: true
+        system_id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        version:
+          type: integer
+        label:
+          type: string
+        authority:
+          type: object
+          additionalProperties: {}
+        created_at:
+          type: string
+      required:
+      - authority
+      - code
+      - created_at
+      - data_provenance
+      - id
+      - label
+      - org_id
+      - review_pending
+      - system_id
+      - technical_reviewed_at
+      - technical_reviewed_by
+      - version
     NewSystemRequest:
       type: object
       properties:
@@ -26331,6 +27408,64 @@ components:
       - kind
       - plan_tier
       - product_code
+    OpeningCapabilityRow:
+      type: object
+      description: Read-only provenance triple for tabular authority rows.
+      properties:
+        data_provenance:
+          type: string
+        technical_reviewed_at:
+          type: string
+          nullable: true
+        technical_reviewed_by:
+          type: string
+          format: uuid
+          nullable: true
+        review_pending:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+          nullable: true
+        system_id:
+          type: string
+          format: uuid
+        movement:
+          type: string
+        directions:
+          type: array
+          items: {}
+        leaf_roles:
+          type: array
+          items: {}
+        unit_kinds:
+          type: array
+          items: {}
+        fixed_in_sash:
+          type: boolean
+        hardware_group:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+      required:
+      - created_at
+      - data_provenance
+      - directions
+      - fixed_in_sash
+      - hardware_group
+      - id
+      - leaf_roles
+      - movement
+      - org_id
+      - review_pending
+      - system_id
+      - technical_reviewed_at
+      - technical_reviewed_by
+      - unit_kinds
     OpeningOption:
       type: object
       description: |-
@@ -30503,6 +31638,10 @@ components:
           type: string
         action:
           type: string
+        targets:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReadinessTarget'
       required:
       - action
       - affected
@@ -30525,6 +31664,42 @@ components:
       required:
       - blockers
       - level
+    ReadinessTarget:
+      type: object
+      description: |-
+        Deep-link target for a blocker: which tab opens and which row inside
+        it caused the BLOCK (or the section anchor when it is system-level).
+      properties:
+        kind:
+          $ref: '#/components/schemas/ReadinessTargetKindEnum'
+        id:
+          type: string
+          format: uuid
+          nullable: true
+        label:
+          type: string
+        tab:
+          $ref: '#/components/schemas/TabEnum'
+      required:
+      - kind
+      - label
+      - tab
+    ReadinessTargetKindEnum:
+      enum:
+      - article
+      - kit
+      - bead
+      - infill
+      - system
+      - section
+      type: string
+      description: |-
+        * `article` - article
+        * `kit` - kit
+        * `bead` - bead
+        * `infill` - infill
+        * `system` - system
+        * `section` - section
     ReceiptLineRequestRequest:
       type: object
       properties:
@@ -30655,6 +31830,61 @@ components:
       - supplier_name
       - system_id
       - thickness_mm
+    ReinforcementRuleRow:
+      type: object
+      description: Read-only provenance triple for tabular authority rows.
+      properties:
+        data_provenance:
+          type: string
+        technical_reviewed_at:
+          type: string
+          nullable: true
+        technical_reviewed_by:
+          type: string
+          format: uuid
+          nullable: true
+        review_pending:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+          nullable: true
+        system_id:
+          type: string
+          format: uuid
+        role:
+          type: string
+        finish_class:
+          type: string
+        min_length_mm:
+          type: string
+        mandatory:
+          type: boolean
+        cut_deduction_mm:
+          type: string
+        screws_per_m:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+      required:
+      - created_at
+      - cut_deduction_mm
+      - data_provenance
+      - finish_class
+      - id
+      - mandatory
+      - min_length_mm
+      - org_id
+      - review_pending
+      - role
+      - screws_per_m
+      - system_id
+      - technical_reviewed_at
+      - technical_reviewed_by
     RemakeRequestRequest:
       type: object
       properties:
@@ -31130,6 +32360,40 @@ components:
         * `FAIL` - FAIL
         * `NOT_APPLICABLE` - NOT_APPLICABLE
         * `MISSING_INPUT` - MISSING_INPUT
+    RulesTab:
+      type: object
+      properties:
+        cut_rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/CutRuleRow'
+        reinforcement_rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReinforcementRuleRow'
+        typology_limits:
+          type: array
+          items:
+            $ref: '#/components/schemas/TypologyLimitRow'
+        opening_capabilities:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpeningCapabilityRow'
+        mounting_rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/MountingRuleRow'
+        inspector_configs:
+          type: array
+          items:
+            $ref: '#/components/schemas/InspectorConfigRow'
+      required:
+      - cut_rules
+      - inspector_configs
+      - mounting_rules
+      - opening_capabilities
+      - reinforcement_rules
+      - typology_limits
     ScopeEnum:
       enum:
       - SYSTEM
@@ -31197,6 +32461,25 @@ components:
       required:
       - name
       - y_mm
+    SectionCheck:
+      type: object
+      description: One geometry validation on an article's declared section.
+      properties:
+        code:
+          type: string
+        ok:
+          type: boolean
+        value:
+          type: string
+          nullable: true
+        limit:
+          type: string
+          nullable: true
+      required:
+      - code
+      - limit
+      - ok
+      - value
     SectionImportCandidate:
       type: object
       properties:
@@ -32282,7 +33565,9 @@ components:
       type: object
       description: |-
         The §06 system home: identity + readiness + the entities bound to
-        this system across every catalog domain, in one fetch.
+        this system across every catalog domain, in one fetch. P16 turns the
+        sections into the tabs the system page shows (perfiles, refuerzos,
+        vidrios, herrajes, reglas, costos, historial).
       properties:
         system:
           $ref: '#/components/schemas/SystemResponse'
@@ -32290,6 +33575,12 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ArticleResponse'
+        article_checks:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              $ref: '#/components/schemas/SectionCheck'
         beads:
           type: array
           items:
@@ -32310,13 +33601,31 @@ components:
           allOf:
           - $ref: '#/components/schemas/ProcessProfileRow'
           nullable: true
+        glass:
+          $ref: '#/components/schemas/GlassTab'
+        hardware:
+          $ref: '#/components/schemas/HardwareTab'
+        rules:
+          $ref: '#/components/schemas/RulesTab'
+        costs:
+          type: array
+          items:
+            $ref: '#/components/schemas/CostCoverageRow'
+        history:
+          $ref: '#/components/schemas/HistoryTab'
       required:
+      - article_checks
       - articles
       - beads
+      - costs
+      - glass
+      - hardware
+      - history
       - kits
       - process_profile
       - purchase_mappings
       - reinforcements
+      - rules
       - system
     SystemWriteRequest:
       type: object
@@ -32465,6 +33774,26 @@ components:
       - sliding_glazing_deduction_width_mm
       - sliding_lateral_clearance_mm
       - version
+    TabEnum:
+      enum:
+      - sistema
+      - perfiles
+      - refuerzos
+      - vidrios
+      - herrajes
+      - reglas
+      - costos
+      - historial
+      type: string
+      description: |-
+        * `sistema` - sistema
+        * `perfiles` - perfiles
+        * `refuerzos` - refuerzos
+        * `vidrios` - vidrios
+        * `herrajes` - herrajes
+        * `reglas` - reglas
+        * `costos` - costos
+        * `historial` - historial
     TimeWindowEnum:
       enum:
       - AM
@@ -32605,6 +33934,69 @@ components:
       required:
       - opening_type
       - source
+    TypologyLimitRow:
+      type: object
+      description: Read-only provenance triple for tabular authority rows.
+      properties:
+        data_provenance:
+          type: string
+        technical_reviewed_at:
+          type: string
+          nullable: true
+        technical_reviewed_by:
+          type: string
+          format: uuid
+          nullable: true
+        review_pending:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+          nullable: true
+        system_id:
+          type: string
+          format: uuid
+        opening_type:
+          type: string
+        min_leaf_width_mm:
+          type: string
+          nullable: true
+        max_leaf_width_mm:
+          type: string
+          nullable: true
+        min_leaf_height_mm:
+          type: string
+          nullable: true
+        max_leaf_height_mm:
+          type: string
+          nullable: true
+        max_leaf_weight_kg:
+          type: string
+          nullable: true
+        max_aspect_ratio:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+      required:
+      - created_at
+      - data_provenance
+      - id
+      - max_aspect_ratio
+      - max_leaf_height_mm
+      - max_leaf_weight_kg
+      - max_leaf_width_mm
+      - min_leaf_height_mm
+      - min_leaf_width_mm
+      - opening_type
+      - org_id
+      - review_pending
+      - system_id
+      - technical_reviewed_at
+      - technical_reviewed_by
     UnitEnum:
       enum:
       - kit

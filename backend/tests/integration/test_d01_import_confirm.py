@@ -188,3 +188,32 @@ def test_confirm_publishes_system_profile_finish_and_rule(real_rows):
     )[0]
     assert kit["opening_type"] == "TILT_TURN"
     assert kit["data_provenance"] == "IMPORT"
+
+    # P16 — immutable audit trail + reviewer stamp: the confirm wrote a
+    # CONFIRMED ledger row and stamped reviewed_by/reviewed_at with the
+    # actor that published the import.
+    stamped = rows(
+        "SELECT reviewed_by, reviewed_at FROM public.catalog_imports WHERE id=%s",
+        [str(import_id)],
+    )[0]
+    assert str(stamped["reviewed_by"]) == str(actor)
+    assert stamped["reviewed_at"] is not None
+
+    with authenticated_rls_context(real_rows.tokens["A"].claims):
+        detail = catalog_service.get_catalog_import(org_id=org_id, import_id=import_id)
+    assert detail["import"]["id"] == str(import_id)
+    assert detail["import"]["reviewed_by_label"]
+    events = [entry["event"] for entry in detail["events"]]
+    assert "CONFIRMED" in events
+    confirmed = next(entry for entry in detail["events"] if entry["event"] == "CONFIRMED")
+    assert confirmed["actor_label"]
+    assert confirmed["detail"]["system_id"] == str(system["id"])
+    assert confirmed["detail"]["created"] >= 1
+
+    # The reviewer stamp is list-visible — the imports table shows it
+    # without opening the detail.
+    with authenticated_rls_context(real_rows.tokens["A"].claims):
+        listing = catalog_service.list_catalog_imports(org_id=org_id)
+    listed = next(row for row in listing["imports"] if row["id"] == str(import_id))
+    assert listed["reviewed_by_label"]
+    assert listed["created_by_label"]
