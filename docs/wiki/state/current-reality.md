@@ -3,7 +3,7 @@ type: state
 status: active
 updated: 2026-10-07
 volatility: high
-verified_ref: af6445ed8d9c5772b139f4800895f75b3c05a4df
+verified_ref: b6b18f0aa29f483283a3516ee986a8f0a0a894dc
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
@@ -36,6 +36,7 @@ sources:
   - P08 cotización emisión PR https://github.com/KaraAliOsman/dekopen/pull/50
   - ED2 pase editorial PR https://github.com/KaraAliOsman/dekopen/pull/58
   - P21 proyecto hub PR https://github.com/KaraAliOsman/dekopen/pull/60
+  - P22 clientes ajustes PR https://github.com/KaraAliOsman/dekopen/pull/61
   - P15 compras/inventario branch devin/P15-compras-inventario
   - P08 emisión/cotización branch devin/P08-cotizacion-emision
   - P17 asistente IA/trabajos/Orb branch devin/P17-asistente-orb
@@ -523,6 +524,8 @@ Merged into `integracion/v1` as squash `51e2c87cbbb0a0bef37999d724a8d0cdbb3ebfbb
 - Verificado: `make lint|typecheck|test|build|test-db` (`PY=.venv/bin/python`); e2e auth+projects verde contra stack real; ux:capture 48 tomas 0 hallazgos; capturas `docs/redesign/captures/p21-proyecto-hub/`; decisiones en sección P21 de `valores-por-defecto.md`.
 
 ## P22 clientes, empresa y ajustes state
+
+Merged into `integracion/v1` as squash `b6b18f0aa29f483283a3516ee986a8f0a0a894dc` (dekopen PR #61):
 
 PR sobre `integracion/v1` (branch `devin/P22-clientes-ajustes`): la configuración que hace real lo demás — ficha de cliente completa y Ajustes agrupados por dominio con permisos por rol.
 

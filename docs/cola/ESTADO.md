@@ -32,7 +32,7 @@
 | ED2 | ED2 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/58 | 26757d403f29f446b1f6a934690a636a0a82c575 | CI 6/6 verde; squash mergeado. Pase editorial ola 2: enumI18nKey/StatusChip compartidos, formatos §3.3 en 5 superficies, ~1300 literales→tokens + ~420 fallbacks var() muertos, scrims/empty/primarios dedup, ficha OT 390px sin overflow+44px, 322 capturas 0 findings, 3 hallazgos reales corregidos. |
 | P21 | 3 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/60 | 51e2c87cbbb0a0bef37999d724a8d0cdbb3ebfbb | CI 6/6 verde; squash mergeado. Hub /projects/<id> de 8 pestañas (monta paneles ola 2 sin reescribir), encabezado con stepper+una CTA por estado, posiciones reales (grilla render/lista densa 12 col, agrupación, edición en fila, lote, teclado completo), POST /positions/<id>/move con candado optimista, §8 con initialScope=selección. |
 | P10 | 3 | pendiente |  |  |  |
-| P22 | 3 | pendiente |  |  |  |
+| P22 | 3 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/61 | b6b18f0aa29f483283a3516ee986a8f0a0a894dc | CI 6/6 verde; squash mergeado. Clientes: búsqueda nombre/RUT, ficha completa (contactos/obras/proyectos/saldo/notas append-only), duplicados por RUT con fusión auditada; Ajustes por dominio con nav lateral + permisos por rol + onboarding config→primer proyecto + vista previa viva. Bug real: grants pricing_backend. |
 | P23 | 3 | pendiente |  |  |  |
 | D08 | 3 | pendiente |  |  |  |
 | P19 | 3 | pendiente |  |  |  |
