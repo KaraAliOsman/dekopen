@@ -3,7 +3,7 @@ type: state
 status: active
 updated: 2026-10-07
 volatility: high
-verified_ref: b6b18f0aa29f483283a3516ee986a8f0a0a894dc
+verified_ref: 773342c6278c2f06ef47a9d74bc9fb662736d4bc
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
@@ -37,6 +37,7 @@ sources:
   - ED2 pase editorial PR https://github.com/KaraAliOsman/dekopen/pull/58
   - P21 proyecto hub PR https://github.com/KaraAliOsman/dekopen/pull/60
   - P22 clientes ajustes PR https://github.com/KaraAliOsman/dekopen/pull/61
+  - D08 tipologías avanzadas PR https://github.com/KaraAliOsman/dekopen/pull/65
   - P15 compras/inventario branch devin/P15-compras-inventario
   - P08 emisión/cotización branch devin/P08-cotizacion-emision
   - P17 asistente IA/trabajos/Orb branch devin/P17-asistente-orb
@@ -109,6 +110,8 @@ Merged into `integracion/v1` as squash `d7dc6a9c83d19958ca7730930ec27381c30c967c
 - Verificado: `make lint|typecheck|test|build` y `make test-db` verdes (`PY=.venv/bin/python`); golden 1500+30+30→1560 mm e instalacion por ml de perimetro; suma sublineas == total de posicion; plantillas aplicadas en vano nuevo; 30 capturas en `docs/redesign/captures/d06-accesorios-extras/` (antes 4, despues 24 + 2 DOC-01) + ux-audit sin hallazgos nuevos (enum MOSQUITO_SCREEN corregido en BOM con `catalog.extraKind`).
 
 ## D08 state
+
+Merged into `integracion/v1` as squash `773342c6278c2f06ef47a9d74bc9fb662736d4bc` (dekopen PR #65):
 
 Delivered on branch `devin/D08-tipologias-avanzadas` (verified at `c564c055987d7a5edc1967a1642fce3e3b19d3d8`, PR head rebased on `b6b18f0a`):
 

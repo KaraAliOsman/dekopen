@@ -34,7 +34,7 @@
 | P10 | 3 | pendiente |  |  |  |
 | P22 | 3 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/61 | b6b18f0aa29f483283a3516ee986a8f0a0a894dc | CI 6/6 verde; squash mergeado. Clientes: búsqueda nombre/RUT, ficha completa (contactos/obras/proyectos/saldo/notas append-only), duplicados por RUT con fusión auditada; Ajustes por dominio con nav lateral + permisos por rol + onboarding config→primer proyecto + vista previa viva. Bug real: grants pricing_backend. |
 | P23 | 3 | pendiente |  |  |  |
-| D08 | 3 | pendiente |  |  |  |
+| D08 | 3 | mergeado | https://github.com/KaraAliOsman/dekopen/pull/65 | 773342c6278c2f06ef47a9d74bc9fb662736d4bc | CI 6/6 verde; squash mergeado. 6 tipologías avanzadas (HST/PSK/plegable/pivotante/guillotina/puerta corredera) con slice vertical completo, gating por catálogo con §8 "La admiten:", contrato typology_incompatible 400 revivido, bug sliding_layout de starters corregido. |
 | P19 | 3 | pendiente |  |  |  |
 | P18 | 3 | pendiente |  |  |  |
 | P24 | 4 | pendiente |  |  |  |
