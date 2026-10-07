@@ -3150,7 +3150,6 @@ input.quotation-share__url {
   background: var(--theme-warning-soft);
   font-weight: 600;
 }
-||||||| ac98c582
 
 /* P22 — ficha de cliente: subfilas de contactos/obras, notas y duplicados. */
 .clients-subrow {
