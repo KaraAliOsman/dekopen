@@ -1,5 +1,6 @@
 import * as client from "../../api/generated/dekopen";
 import type {
+  ArticleFicha,
   ErrorResponse,
   SectionImportResponse,
   SystemWriteRequest,
@@ -591,6 +592,14 @@ export function catalogApi(orgId: string) {
               : await client.catalogKitReview(row.id, headers);
       if (response.status !== 200) throw new Error("catalog_review_failed");
       return response.data as Row<R>;
+    },
+    /** P16 — ficha técnica completa de un artículo: geometría, validaciones
+     * de sección, evidencia de procedencia, identidades de compra y
+     * refuerzos vinculados. */
+    async articleFicha(articleId: string, signal?: AbortSignal): Promise<ArticleFicha> {
+      const response = await client.catalogArticleFicha(articleId, { ...options, signal });
+      if (response.status !== 200) throw new Error("catalog_ficha_read_failed");
+      return response.data;
     },
     async remove(resource: Resource, id: string, revision: string): Promise<void> {
       const options = { headers: { "X-Organization-ID": orgId, "If-Match": `"${revision}"` } };

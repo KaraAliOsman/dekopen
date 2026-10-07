@@ -109,14 +109,34 @@ class CatalogImportResponseSerializer(serializers.Serializer):
     warnings = serializers.ListField(child=serializers.CharField())
     result = serializers.ListField(child=serializers.DictField())
     error_code = serializers.CharField(allow_null=True)
+    created_by = serializers.UUIDField(allow_null=True)
+    created_by_label = serializers.CharField(allow_null=True, required=False)
+    reviewed_by = serializers.UUIDField(allow_null=True)
+    reviewed_by_label = serializers.CharField(allow_null=True, required=False)
+    reviewed_at = serializers.DateTimeField(allow_null=True)
     created_at = serializers.DateTimeField()
     updated_at = serializers.DateTimeField()
+
+
+class CatalogImportEventSerializer(serializers.Serializer):
+    """One immutable lifecycle event (UPLOADED/EXTRACTED/CONFIRMED) — the
+    audit trail from file upload to catalog publication."""
+
+    id = serializers.UUIDField()
+    event = serializers.CharField()
+    actor_id = serializers.UUIDField(allow_null=True)
+    actor_label = serializers.CharField(allow_null=True)
+    detail = serializers.DictField()
+    created_at = serializers.DateTimeField()
 
 
 CatalogImportDetailResponseSerializer = type(
     "CatalogImportDetailResponseSerializer",
     (serializers.Serializer,),
-    {"import": CatalogImportResponseSerializer()},
+    {
+        "import": CatalogImportResponseSerializer(),
+        "events": CatalogImportEventSerializer(many=True),
+    },
 )
 
 

@@ -5,8 +5,10 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { CatalogImportEvent } from "./catalogImportEvent";
 import type { CatalogImportResponse } from "./catalogImportResponse";
 
 export interface CatalogImportDetailResponse {
   import: CatalogImportResponse;
+  events: CatalogImportEvent[];
 }

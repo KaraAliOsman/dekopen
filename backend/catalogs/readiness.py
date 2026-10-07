@@ -29,15 +29,133 @@ from production.service import _STEP_CODE_FOR_CENTER, _load_profile_for
 
 _CENTER_KIND_FOR_STEP = {step: kind for kind, step in _STEP_CODE_FOR_CENTER.items()}
 
+# Blocker text is user-facing Spanish — machine codes (station codes, machine
+# ops, fabrication field names, purchase probe codes) must never reach the UI.
+_STATION_LABEL = {
+    "CUT": "corte de perfiles",
+    "PROFILE_CUT": "corte de perfiles",
+    "REINFORCEMENT_CUT": "corte de refuerzos",
+    "MACHINING": "mecanizado",
+    "WELD": "soldadura",
+    "CLEAN": "limpieza de esquinas",
+    "CRIMP": "prensado de esquinas",
+    "SASH_ASSEMBLE": "armado de hojas",
+    "ASSEMBLE": "armado y herrajes",
+    "HARDWARE": "montaje de herrajes",
+    "GLAZE": "vidriado y paneles",
+    "QC": "control de calidad",
+    "PACK": "embalaje",
+}
+_OP_LABEL = {
+    "SAW_CUT": "corte de sierra",
+    "END_MACHINING": "mecanizado de extremo",
+    "HANDLE_PREP": "preparación de manilla",
+}
+_FABRICATION_GAP_LABEL = {
+    "rebate_depth_mm": "profundidad de vidriado",
+    "end_milling_overlap_mm": "solape de fresado",
+    "coupler_articles": "acoples",
+}
+_PURCHASE_AFFECTED_LABEL = {
+    "glass_purchase_mapping_required": "vidrios del catálogo",
+    "profile_stock_binding_missing_or_ambiguous": "perfiles del catálogo",
+    "stock_authority": "precios de suministro",
+}
 
-def _blocker(code: str, missing: str, affected: str, why: str, action: str) -> dict:
+
+def _blocker(code: str, missing: str, affected: str, why: str, action: str,
+             targets: list[dict] | None = None) -> dict:
+    """One readiness blocker. ``targets`` are the P16 deep links: each names
+    the workspace tab and the exact row (or the system record) that caused
+    the BLOCK, so the UI can jump straight to the offending authority."""
     return {
         "code": code,
         "missing_authority": missing,
         "affected": affected,
         "why": why,
         "action": action,
+        "targets": targets or [],
     }
+
+
+def _target(kind: str, label: str, tab: str, row_id=None) -> dict:
+    target = {"kind": kind, "label": label, "tab": tab}
+    if row_id is not None:
+        target["id"] = str(row_id)
+    return target
+
+
+def _resolve_fabrication_targets(system_id, org_id, missing: list[str]) -> list[dict]:
+    """SKU/field names in the fabrication blocker → concrete catalog rows."""
+    targets: list[dict] = []
+    system_fields = [name for name in missing if name.endswith("_mm")]
+    skus = [name for name in missing if not name.endswith("_mm")
+            and name != "coupler_articles"]
+    for field in system_fields:
+        targets.append(
+            _target("system", _FABRICATION_GAP_LABEL.get(field, field), "sistema", system_id)
+        )
+    if "coupler_articles" in missing:
+        targets.append(_target("section", "acoples", "perfiles"))
+    if not skus:
+        return targets
+    found = rows(
+        "SELECT 'article' AS kind, id::text, sku FROM public.profile_articles "
+        "WHERE system_id=%s AND sku = ANY(%s) "
+        "AND (org_id IS NULL OR org_id=%s) "
+        "UNION ALL "
+        "SELECT 'kit', id::text, sku FROM public.hardware_kits "
+        "WHERE sku = ANY(%s) AND (system_id=%s OR system_id IS NULL) "
+        "AND (org_id IS NULL OR org_id=%s)",
+        [system_id, skus, org_id, skus, system_id, org_id],
+    )
+    by_sku = {row["sku"]: row for row in found}
+    for sku in skus:
+        row = by_sku.get(sku)
+        if row is None:
+            targets.append(_target("section", sku, "perfiles"))
+        elif row["kind"] == "kit":
+            targets.append(_target("kit", sku, "herrajes", row["id"]))
+        else:
+            targets.append(_target("article", sku, "perfiles", row["id"]))
+    return targets
+
+
+def _review_pending_targets(system_id, org_id) -> list[dict]:
+    """The exact rows whose legacy/stale-review state gates production —
+    scoped to org-owned rows, the same population the blocker counts."""
+    found = rows(
+        "SELECT 'system' AS kind, id::text, code AS label FROM public.profile_systems "
+        "WHERE id=%s AND org_id=%s "
+        "AND (data_provenance='LEGACY_UNVERIFIED' OR review_pending) "
+        "UNION ALL "
+        "SELECT 'article', id::text, sku FROM public.profile_articles "
+        "WHERE system_id=%s AND org_id=%s "
+        "AND (data_provenance='LEGACY_UNVERIFIED' OR review_pending) "
+        "UNION ALL "
+        "SELECT 'infill', id::text, sku FROM public.infill_articles "
+        "WHERE system_id=%s AND org_id=%s "
+        "AND (data_provenance='LEGACY_UNVERIFIED' OR review_pending) "
+        "UNION ALL "
+        "SELECT 'kit', id::text, sku FROM public.hardware_kits "
+        "WHERE system_id=%s AND org_id=%s "
+        "AND (data_provenance='LEGACY_UNVERIFIED' OR review_pending) "
+        "UNION ALL "
+        "SELECT 'bead', id::text, glass_thickness_mm::text || ' mm' "
+        "FROM public.glazing_bead_matrix "
+        "WHERE system_id=%s AND org_id=%s "
+        "AND (data_provenance='LEGACY_UNVERIFIED' OR review_pending) "
+        "LIMIT 12",
+        [system_id, org_id] * 5,
+    )
+    tab_for = {
+        "system": "sistema", "article": "perfiles", "kit": "herrajes",
+        "bead": "vidrios", "infill": "vidrios",
+    }
+    return [
+        _target(row["kind"], row["label"], tab_for[row["kind"]], row["id"])
+        for row in found
+    ]
 
 
 def catalog_readiness(system_id, org_id) -> dict[str, Any]:
@@ -58,13 +176,15 @@ def catalog_readiness(system_id, org_id) -> dict[str, Any]:
                 "technical_catalog", "serie, marco y junquillos compatibles",
                 str(system_id),
                 "sin serie completa el motor no puede construir el producto",
-                "completar la ficha técnica del sistema"))
+                "completar la ficha técnica del sistema",
+                [_target("system", "ficha del sistema", "sistema", system_id)]))
     except (SystemNotFound, UnsupportedCatalogContract, ValueError):
         design_b.append(_blocker(
             "technical_catalog", "serie, marco y junquillos compatibles",
             str(system_id),
             "sin serie completa el motor no puede construir el producto",
-            "completar la ficha técnica del sistema"))
+            "completar la ficha técnica del sistema",
+            [_target("system", "ficha del sistema", "sistema", system_id)]))
     try:
         InspectorRepository().load(system_id, org_id)
     except (ValueError, UnsupportedCatalogContract):
@@ -72,7 +192,8 @@ def catalog_readiness(system_id, org_id) -> dict[str, Any]:
             "inspection", "parámetros de inspección del sistema",
             str(system_id),
             "la geometría máxima/mínima no es verificable sin inspección declarada",
-            "completar los parámetros de inspección"))
+            "completar los parámetros de inspección",
+            [_target("section", "parámetros de inspección", "reglas")]))
 
     policies = []
     for table in ("manufacturing_placement_policies", "handle_requirement_policies",
@@ -86,7 +207,8 @@ def catalog_readiness(system_id, org_id) -> dict[str, Any]:
             "manufacturing", "políticas de fabricación (posición, manilla, refuerzo)",
             str(system_id),
             "sin políticas el taller no puede derivar mecanizados ni herrajes",
-            "completar las políticas de fabricación del sistema"))
+            "completar las políticas de fabricación del sistema",
+            [_target("section", "políticas de fabricación", "reglas")]))
     else:
         try:
             load_manufacturing_policies(system_id=system_id, org_id=org_id,
@@ -96,7 +218,8 @@ def catalog_readiness(system_id, org_id) -> dict[str, Any]:
                 "manufacturing", "políticas de fabricación (posición, manilla, refuerzo)",
                 str(system_id),
                 "sin políticas el taller no puede derivar mecanizados ni herrajes",
-                "completar las políticas de fabricación del sistema"))
+                "completar las políticas de fabricación del sistema",
+                [_target("section", "políticas de fabricación", "reglas")]))
 
     if params is not None:
         # Fabrication authorities the geometry actually consumes — mirror
@@ -149,9 +272,13 @@ def catalog_readiness(system_id, org_id) -> dict[str, Any]:
         if fabrication_missing:
             mfg_b.append(_blocker(
                 "fabrication", "autoridad de fabricación (soldadura, refuerzo, masa)",
-                ", ".join(sorted(set(fabrication_missing))[:8]),
+                ", ".join(sorted(
+                    _FABRICATION_GAP_LABEL.get(item, item)
+                    for item in set(fabrication_missing))[:8]),
                 "sin datos de fabricación el taller recibiría valores inventados",
-                "declarar soldadura, refuerzo y masa en los artículos afectados"))
+                "declarar soldadura, refuerzo y masa en los artículos afectados",
+                _resolve_fabrication_targets(
+                    system_id, org_id, sorted(set(fabrication_missing)))))
         # Production authority must not ride on values nobody ever verified:
         # LEGACY_UNVERIFIED rows and rows whose technical values changed after
         # their last review (review_pending) need a human review first —
@@ -190,7 +317,8 @@ def catalog_readiness(system_id, org_id) -> dict[str, Any]:
                 "catalog_review", "revisión técnica humana de datos heredados",
                 str(system_id),
                 "datos heredados sin verificar no pueden alimentar producción",
-                "revisar y aprobar los datos técnicos heredados del sistema"))
+                "revisar y aprobar los datos técnicos heredados del sistema",
+                _review_pending_targets(system_id, org_id)))
         purchase_code = None
         try:
             # The probe mirrors freeze's authority consumption at catalog
@@ -275,10 +403,12 @@ def catalog_readiness(system_id, org_id) -> dict[str, Any]:
             purchase_code = "stock_authority"
         if purchase_code:
             quote_b.append(_blocker(
-                "purchase", f"referencia de compra/suministro ({purchase_code})",
-                str(system_id),
+                "purchase", "referencia de compra/suministro",
+                _PURCHASE_AFFECTED_LABEL.get(
+                    purchase_code, "referencias de compra del catálogo"),
                 "sin referencias de suministro no hay precio honesto",
-                "completar las referencias de compra de los materiales"))
+                "completar las referencias de compra de los materiales",
+                [_target("section", "cobertura de costos", "costos")]))
 
     # ── Production level: declared process authority + work centers ──
     # The catalog resolves profiles exactly like production does, minus the
@@ -304,7 +434,8 @@ def catalog_readiness(system_id, org_id) -> dict[str, Any]:
             "process_profile", "perfil de proceso declarado",
             str(system_id),
             "sin autoridad de proceso versionada la ruta cae al genérico — ninguna unión real está garantizada",
-            "vincular un perfil de proceso al sistema"))
+            "vincular un perfil de proceso al sistema",
+            [_target("system", "perfil de proceso", "sistema", system_id)]))
 
     stations = (profile or {}).get("stations") or []
     station_map = (profile or {}).get("operation_station_map") or {}
@@ -375,9 +506,10 @@ def catalog_readiness(system_id, org_id) -> dict[str, Any]:
         if missing:
             prod_b.append(_blocker(
                 "work_centers", "centros de trabajo activos",
-                ", ".join(missing),
+                ", ".join(_STATION_LABEL.get(item, item) for item in missing),
                 "una estación requerida o con trabajo emitible sin centro no puede recibir pasos",
-                "crear los centros de trabajo de las estaciones faltantes"))
+                "crear los centros de trabajo de las estaciones faltantes",
+                [_target("section", "centros de trabajo", "sistema")]))
 
     # ── CNC level: every machine op the system can emit maps to a station ──
     if profile is not None and params is not None:
@@ -388,9 +520,10 @@ def catalog_readiness(system_id, org_id) -> dict[str, Any]:
         if unmapped:
             cnc_b.append(_blocker(
                 "station_map", "mapeo operación → estación",
-                ", ".join(unmapped),
+                ", ".join(_OP_LABEL.get(item, item) for item in unmapped),
                 "una operación de máquina sin estación declarada cae al fallback de UI",
-                "declarar la estación de cada operación en el perfil de proceso"))
+                "declarar la estación de cada operación en el perfil de proceso",
+                [_target("system", "perfil de proceso", "sistema", system_id)]))
 
     # quote_ready keeps its legacy contract — the WHITE_FIXED_CATALOG gate is
     # design + purchase + manufacturing authority; the new production/CNC

@@ -3,12 +3,14 @@ import { Fragment, useCallback, useEffect, useRef, useState, type ChangeEvent } 
 import { ApiError } from "../../api/apiMutator";
 import {
   catalogImportConfirm,
+  catalogImportGet,
   catalogImportsCreate,
   catalogImportsList,
   getCatalogImportTemplateUrl,
 } from "../../api/generated/dekopen";
 import { apiFetchBlob } from "../../api/apiMutator";
 import type {
+  CatalogImportEvent,
   CatalogImportResponse,
   CatalogItemRequest,
   NewSystemRequest,
@@ -33,6 +35,12 @@ type ExistingRef = {
   face_width_mm: string | null;
 };
 
+/** P16 — diff campo a campo contra el artículo existente (re-derivado en
+ * el servidor al leer el detalle: refleja el estado actual, no el de la
+ * extracción). */
+type DiffField = { field: string; current: string | null; proposed: string | null };
+type DiffEntry = { system_code: string; fields: DiffField[] };
+
 type Candidate = {
   key: string;
   entity: string;
@@ -53,6 +61,7 @@ type Candidate = {
   source_ref: string;
   conflict: boolean;
   existing: ExistingRef[];
+  diff: DiffEntry[];
 };
 
 type EditableRow = Candidate & { include: boolean; published?: boolean };
@@ -222,6 +231,7 @@ function asCandidate(raw: Record<string, unknown>): Candidate {
     source_ref: String(raw.source_ref ?? ""),
     conflict: raw.conflict === true,
     existing: Array.isArray(raw.existing) ? (raw.existing as ExistingRef[]) : [],
+    diff: Array.isArray(raw.diff) ? (raw.diff as DiffEntry[]) : [],
   };
 }
 
@@ -240,6 +250,11 @@ export function CatalogImportsPanel({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [reviewId, setReviewId] = useState<string | null>(null);
+  /** P16 — detalle de la importación en revisión: el GET trae el diff
+   * contra el artículo existente, los eventos de auditoría y el sello del
+   * revisor; la fila de la lista no los carga. */
+  const [reviewDetail, setReviewDetail] = useState<CatalogImportResponse | null>(null);
+  const [reviewEvents, setReviewEvents] = useState<CatalogImportEvent[]>([]);
   const [rows, setRows] = useState<EditableRow[]>([]);
   const [systemId, setSystemId] = useState("");
   const [reviewDirty, setReviewDirty] = useState(false);
@@ -280,11 +295,7 @@ export function CatalogImportsPanel({
     return () => window.clearTimeout(timer);
   }, [imports, load]);
 
-  function startReview(entry: CatalogImportResponse): void {
-    setReviewId(entry.id);
-    setItemErrors([]);
-    setMessage("");
-    setReviewDirty(false);
+  function hydrateReview(entry: CatalogImportResponse): void {
     setSystemId(entry.system_id ?? systems[0]?.id ?? "");
     // Claves ya publicadas por un confirm parcial anterior — quedan
     // marcadas Publicado y fuera de la selección; re-enviarlas (sobre todo
@@ -297,6 +308,36 @@ export function CatalogImportsPanel({
         return { ...candidate, include: isSafe(candidate) && !published, published };
       }),
     );
+  }
+
+  function startReview(entry: CatalogImportResponse): void {
+    setReviewId(entry.id);
+    setItemErrors([]);
+    setMessage("");
+    setReviewDirty(false);
+    setReviewDetail(entry);
+    setReviewEvents([]);
+    hydrateReview(entry);
+    void catalogImportGet(entry.id, requestOptions)
+      .then((response) => {
+        if (!mounted.current || response.status !== 200) return;
+        const detail = response.data as {
+          import: CatalogImportResponse;
+          events: CatalogImportEvent[];
+        };
+        setReviewDetail(detail.import);
+        setReviewEvents(detail.events ?? []);
+        // Los candidatos del detalle traen el diff contra el artículo
+        // existente; si el revisor ya empezó a editar, no le piso los
+        // cambios — solo se hidrata de nuevo mientras la revisión siga limpia.
+        setReviewDirty((dirty) => {
+          if (!dirty) hydrateReview(detail.import);
+          return dirty;
+        });
+      })
+      .catch(() => {
+        /* sin detalle se revisa con lo que trae la lista — sin diff ni auditoría */
+      });
   }
 
   async function downloadTemplate(): Promise<void> {
@@ -347,6 +388,8 @@ export function CatalogImportsPanel({
     setReviewId(null);
     setReviewDirty(false);
     setItemErrors([]);
+    setReviewDetail(null);
+    setReviewEvents([]);
   }
 
   async function confirm(entry: CatalogImportResponse): Promise<void> {
@@ -435,6 +478,13 @@ export function CatalogImportsPanel({
         }
         const errors = response.data.errors as { key: string; code: string }[];
         setItemErrors(errors);
+        const confirmedImport = (response.data as { import?: CatalogImportResponse }).import;
+        if (confirmedImport) {
+          setReviewDetail(confirmedImport);
+          setImports((current) =>
+            current.map((item) => (item.id === confirmedImport.id ? confirmedImport : item)),
+          );
+        }
         if (errors.length) {
           // Partial outcome — the import stays retryable; keep the review
           // open so the manager can fix the failed rows and resubmit.
@@ -544,6 +594,13 @@ export function CatalogImportsPanel({
                     {entry.status === "FAILED" && entry.error_code && (
                       <span className="imports-warning">{codeText(entry.error_code)}</span>
                     )}
+                    {entry.reviewed_by_label && entry.reviewed_at && (
+                      <span className="imports-reviewed">
+                        {ct("importsReviewedStamp")
+                          .replace("{who}", entry.reviewed_by_label)
+                          .replace("{when}", formatDate(entry.reviewed_at))}
+                      </span>
+                    )}
                   </td>
                   <td>{entry.candidates.length}</td>
                   <td>{formatDate(entry.created_at)}</td>
@@ -575,6 +632,33 @@ export function CatalogImportsPanel({
       {reviewImport && (
         <div className="imports-review">
           <p className="imports-hint">{ct("importsReviewHint")}</p>
+          {(reviewDetail?.created_by_label || reviewEvents.length > 0) && (
+            <ol className="imports-audit" aria-label={ct("importsAudit")}>
+              {reviewDetail?.created_by_label && (
+                <li>
+                  {ct("importsAuditUploaded")
+                    .replace("{who}", reviewDetail.created_by_label)
+                    .replace("{when}", formatDate(reviewDetail.created_at))}
+                </li>
+              )}
+              {reviewEvents
+                .filter((event) => event.event !== "UPLOADED")
+                .map((event) => (
+                  <li key={event.id}>
+                    {ct(`importsAuditEvent.${event.event}` as TranslationKey)
+                      .replace("{who}", event.actor_label ?? ct("importsSystemActor"))
+                      .replace("{when}", formatDate(event.created_at))}
+                  </li>
+                ))}
+              {reviewDetail?.reviewed_by_label && reviewDetail.reviewed_at && (
+                <li className="imports-audit-reviewed">
+                  {ct("importsReviewedStamp")
+                    .replace("{who}", reviewDetail.reviewed_by_label)
+                    .replace("{when}", formatDate(reviewDetail.reviewed_at))}
+                </li>
+              )}
+            </ol>
+          )}
           {reviewImport.warnings.length > 0 && (
             <ul className="imports-warning">
               {reviewImport.warnings.map((warning) => (
@@ -688,10 +772,22 @@ export function CatalogImportsPanel({
                             <td colSpan={10}>
                               {row.source_ref && (
                                 <span className="imports-evidence-ref">{row.source_ref}</span>
-                              )}
+                              )}{" "}
                               <code className="imports-evidence-text">
                                 {row.source_text || candidateFieldSummary(row.fields)}
-                              </code>
+                              </code>{" "}
+                              {row.diff.map((entry) => (
+                                <span key={entry.system_code} className="imports-diff">
+                                  {ct("importsDiffTitle").replace("{system}", entry.system_code)}{" "}
+                                  {entry.fields.map((diff) => (
+                                    <span key={diff.field} className="imports-diff-field">
+                                      {fieldNameLabel(diff.field)}:{" "}
+                                      {fieldValueLabel(diff.field, diff.current) || "—"} →{" "}
+                                      {fieldValueLabel(diff.field, diff.proposed) || "—"}
+                                    </span>
+                                  ))}
+                                </span>
+                              ))}
                             </td>
                           </tr>
                         )}
@@ -721,6 +817,7 @@ export function CatalogImportsPanel({
                         <td>
                           <input
                             value={row.sku}
+                            placeholder={ct("importsNoFields")}
                             maxLength={100}
                             size={12}
                             onChange={(event) => patchRow(row.key, { sku: event.target.value })}
@@ -729,6 +826,7 @@ export function CatalogImportsPanel({
                         <td>
                           <input
                             value={row.name}
+                            placeholder={ct("importsNoFields")}
                             maxLength={255}
                             size={20}
                             onChange={(event) => patchRow(row.key, { name: event.target.value })}
@@ -749,6 +847,7 @@ export function CatalogImportsPanel({
                         <td>
                           <input
                             value={row.face_width_mm}
+                            placeholder={ct("importsNoFields")}
                             inputMode="decimal"
                             size={6}
                             onChange={(event) =>
@@ -759,6 +858,7 @@ export function CatalogImportsPanel({
                         <td>
                           <input
                             value={row.commercial_length_mm}
+                            placeholder={ct("importsNoFields")}
                             inputMode="decimal"
                             size={7}
                             onChange={(event) =>
@@ -769,6 +869,7 @@ export function CatalogImportsPanel({
                         <td>
                           <input
                             value={row.welding_loss_mm}
+                            placeholder={ct("importsNoFields")}
                             inputMode="decimal"
                             size={6}
                             onChange={(event) =>
@@ -779,6 +880,7 @@ export function CatalogImportsPanel({
                         <td>
                           <input
                             value={row.reinforcement_sku}
+                            placeholder={ct("importsNoFields")}
                             maxLength={100}
                             size={10}
                             onChange={(event) =>
@@ -789,6 +891,7 @@ export function CatalogImportsPanel({
                         <td>
                           <input
                             value={row.weight_kg_m}
+                            placeholder={ct("importsNoFields")}
                             inputMode="decimal"
                             size={7}
                             onChange={(event) =>
@@ -799,6 +902,7 @@ export function CatalogImportsPanel({
                         <td>
                           <input
                             value={row.steel_weight_kg_m}
+                            placeholder={ct("importsNoFields")}
                             inputMode="decimal"
                             size={7}
                             onChange={(event) =>
@@ -843,13 +947,25 @@ export function CatalogImportsPanel({
                           <td colSpan={11}>
                             {row.source_ref && (
                               <span className="imports-evidence-ref">{row.source_ref}</span>
-                            )}
-                            <code className="imports-evidence-text">{row.source_text}</code>
+                            )}{" "}
+                            <code className="imports-evidence-text">{row.source_text}</code>{" "}
                             {row.existing.map((match) => (
                               <span key={match.system_code} className="imports-existing">
                                 {ct("importsExisting").replace("{system}", match.system_code)}:{" "}
                                 {match.name} · {ct(`option.${match.role}`)}
                                 {match.face_width_mm ? ` · ${fmtMm(match.face_width_mm)} mm` : ""}
+                              </span>
+                            ))}{" "}
+                            {row.diff.map((entry) => (
+                              <span key={entry.system_code} className="imports-diff">
+                                {ct("importsDiffTitle").replace("{system}", entry.system_code)}{" "}
+                                {entry.fields.map((diff) => (
+                                  <span key={diff.field} className="imports-diff-field">
+                                    {fieldNameLabel(diff.field)}:{" "}
+                                    {fieldValueLabel(diff.field, diff.current) || "—"} →{" "}
+                                    {fieldValueLabel(diff.field, diff.proposed) || "—"}
+                                  </span>
+                                ))}
                               </span>
                             ))}
                           </td>

@@ -36,6 +36,7 @@ from catalogs.serializers import (
     EvidenceListSerializer,
     EvidenceReviewInputSerializer,
     EvidenceRowSerializer,
+    ArticleFichaSerializer,
     ArticleListSerializer,
     ArticleResponseSerializer,
     BeadListSerializer,
@@ -395,6 +396,25 @@ ServiceArticleCollectionView, ServiceArticleDetailView = _endpoint_classes(
 ServiceArticleReviewView = _review_view(
     "ServiceArticle", service.SERVICE_ARTICLES, ServiceArticleResponseSerializer
 )
+
+
+class ArticleFichaView(APIView):
+    """GET articles/<id>/ficha/ — the article's full technical ficha: row,
+    declared-section validations, evidence trail, purchase identities and
+    bound reinforcements. The same data a reviewer sees before stamping."""
+
+    @extend_schema(
+        operation_id="catalog_article_ficha",
+        parameters=HEADERS,
+        responses={200: ArticleFichaSerializer, **ERRORS},
+        tags=["catalogs"],
+    )
+    def get(self, request, row_id):
+        with catalog_scope(request, roles=READ_ROLES) as org_id:
+            output = ArticleFichaSerializer(
+                service.article_ficha(org_id, row_id)
+            ).data
+        return Response(output)
 
 
 class SystemWorkspaceView(APIView):

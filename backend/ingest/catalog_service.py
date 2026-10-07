@@ -94,9 +94,134 @@ def _public(row: dict) -> dict:
         "warnings": _as_list(row["warnings"]),
         "result": _as_list(row["result"]),
         "error_code": row["error_code"],
+        "created_by": str(row["created_by"]) if row.get("created_by") else None,
+        "reviewed_by": str(row["reviewed_by"]) if row.get("reviewed_by") else None,
+        "reviewed_at": _stamp(row.get("reviewed_at")),
         "created_at": _stamp(row["created_at"]),
         "updated_at": _stamp(row["updated_at"]),
     }
+
+
+def _record_event(*, org_id: UUID, import_id: UUID, event: str,
+                  actor_id: UUID | None, detail: dict | None = None) -> None:
+    """Append one immutable audit row — UPLOADED / EXTRACTED / CONFIRMED.
+    Members read them on their org's import; nobody can rewrite them."""
+    with documentary_backend():
+        rows(
+            "INSERT INTO public.catalog_import_events("
+            "org_id, import_id, event, actor_id, detail)"
+            " VALUES(%s,%s,%s,%s,%s::jsonb) RETURNING id",
+            [
+                str(org_id), str(import_id), event,
+                str(actor_id) if actor_id else None,
+                json.dumps(detail or {}, default=str),
+            ],
+        )
+
+
+def _import_events(org_id: UUID, import_id: UUID) -> list[dict]:
+    found = rows(
+        "SELECT e.id,e.event,e.actor_id,e.detail,e.created_at "
+        "FROM public.catalog_import_events e "
+        "WHERE e.org_id=%s AND e.import_id=%s "
+        "ORDER BY e.created_at,e.id",
+        [str(org_id), str(import_id)],
+    )
+    actors = _resolve_actor_labels(
+        [str(row["actor_id"]) for row in found if row["actor_id"]]
+    )
+    return [
+        {
+            "id": str(row["id"]),
+            "event": row["event"],
+            "actor_id": str(row["actor_id"]) if row["actor_id"] else None,
+            "actor_label": actors.get(str(row["actor_id"])),
+            "detail": row["detail"]
+            if isinstance(row["detail"], dict)
+            else json.loads(row["detail"] or "{}"),
+            "created_at": row["created_at"].isoformat()
+            if hasattr(row["created_at"], "isoformat")
+            else row["created_at"],
+        }
+        for row in found
+    ]
+
+
+def _resolve_actor_labels(user_ids: list[str]) -> dict[str, str]:
+    """Actor/reviewer uuid → email label, resolved under the backend role
+    (members never call private.user_email directly)."""
+    unique = sorted(set(user_ids))
+    if not unique:
+        return {}
+    with catalog_backend():
+        found = rows(
+            "SELECT value::text AS user_id, private.user_email(value::uuid) AS email "
+            "FROM unnest(%s::uuid[]) AS value",
+            [unique],
+        )
+    return {row["user_id"]: row["email"] for row in found}
+
+
+_DIFF_FIELDS = (
+    "name", "role", "face_width_mm", "commercial_length_mm",
+    "welding_loss_mm", "reinforcement_sku", "weight_kg_m",
+    "steel_weight_kg_m",
+)
+
+
+def _field_differs(current, proposed) -> bool:
+    if current is None and proposed in (None, ""):
+        return False
+    if proposed in (None, ""):
+        return False
+    try:
+        return Decimal(str(current)) != Decimal(str(proposed))
+    except Exception:
+        return str(current or "") != str(proposed or "")
+
+
+def _annotate_candidate_diffs(org_id: UUID, candidates: list[dict]) -> None:
+    """Field-level diff vs the stored article for candidates with an
+    `existing` match — current vs proposed, re-derived live at read so the
+    review shows the article as it is now, not as it was at extraction."""
+    skus = sorted(
+        {str(c.get("sku")) for c in candidates if c.get("existing") and c.get("sku")}
+    )
+    if not skus:
+        return
+    found = rows(
+        "SELECT a.id, a.sku, a.name, a.role, a.face_width_mm,"
+        " a.commercial_length_mm, a.welding_loss_mm, a.reinforcement_sku,"
+        " a.weight_kg_m, a.steel_weight_kg_m, s.code AS system_code "
+        "FROM public.profile_articles a "
+        "JOIN public.profile_systems s ON s.id = a.system_id "
+        "WHERE a.org_id=%s AND s.org_id=%s AND a.sku = ANY(%s)",
+        [str(org_id), str(org_id), skus],
+    )
+    by_sku: dict[str, list[dict]] = {}
+    for article in found:
+        by_sku.setdefault(article["sku"], []).append(article)
+    for candidate in candidates:
+        matches = by_sku.get(str(candidate.get("sku") or "")) or []
+        diffs: list[dict] = []
+        for match in matches:
+            changed = [
+                {
+                    "field": field,
+                    "current": str(match.get(field))
+                    if match.get(field) is not None
+                    else None,
+                    "proposed": str(candidate.get(field))
+                    if candidate.get(field) is not None
+                    else None,
+                }
+                for field in _DIFF_FIELDS
+                if _field_differs(match.get(field), candidate.get(field))
+            ]
+            if changed:
+                diffs.append({"system_code": match["system_code"], "fields": changed})
+        if diffs:
+            candidate["diff"] = diffs
 
 
 def _get(org_id: UUID, import_id: UUID) -> dict:
@@ -159,6 +284,9 @@ def create_catalog_import(
                     " VALUES (%s,%s,%s,%s,%s,%s) RETURNING *",
                     [str(import_id), str(org_id), file_name, kind, storage_path, str(actor_id)],
                 )[0]
+                _record_event(org_id=org_id, import_id=import_id,
+                              event="UPLOADED", actor_id=actor_id,
+                              detail={"file_name": file_name, "kind": kind})
             # job_runs is a service-owned table — service_role only, inside the
             # atomic so row and job commit together.
             with jobs_service.job_backend():
@@ -184,11 +312,33 @@ def list_catalog_imports(*, org_id: UUID) -> dict:
         "SELECT * FROM public.catalog_imports WHERE org_id=%s ORDER BY created_at DESC, id DESC",
         [str(org_id)],
     )
-    return {"imports": [_public(row) for row in found]}
+    imports = [_public(row) for row in found]
+    # The review stamp renders on the list itself — resolve the people it
+    # names (uploader + reviewer) in one backend-scoped lookup.
+    labels = _resolve_actor_labels(
+        [
+            value
+            for row in imports
+            for value in (row["created_by"], row["reviewed_by"])
+            if value
+        ]
+    )
+    for row in imports:
+        row["created_by_label"] = labels.get(row["created_by"])
+        row["reviewed_by_label"] = labels.get(row["reviewed_by"])
+    return {"imports": imports}
 
 
 def get_catalog_import(*, org_id: UUID, import_id: UUID) -> dict:
-    return {"import": _public(_get(org_id, import_id))}
+    row = _get(org_id, import_id)
+    data = _public(row)
+    _annotate_candidate_diffs(org_id, data.get("candidates") or [])
+    labels = _resolve_actor_labels(
+        [value for value in (data["created_by"], data["reviewed_by"]) if value]
+    )
+    data["created_by_label"] = labels.get(data["created_by"])
+    data["reviewed_by_label"] = labels.get(data["reviewed_by"])
+    return {"import": data, "events": _import_events(org_id, import_id)}
 
 
 # Roles a profile series must cover to be workable; a document missing some
@@ -387,6 +537,13 @@ def extract_catalog_import(*, org_id: UUID, import_id: UUID, actor_id: UUID) -> 
                 "candidate_count": len(_as_list(current["candidates"])),
             }
         raise CatalogImportError("catalog_import_status_invalid")
+    # The extraction itself is system work (runjobs): the audit actor is the
+    # system, not the uploader — only UPLOADED/CONFIRMED carry a human actor.
+    _record_event(org_id=org_id, import_id=import_id, event="EXTRACTED",
+                  actor_id=None,
+                  detail={"candidate_count": len(candidates),
+                          "audit_id": str(audit_id) if audit_id else None,
+                          "warning_count": len(warnings)})
     return {"import": _public(updated[0]), "candidate_count": len(candidates)}
 
 
@@ -1117,8 +1274,12 @@ def confirm_catalog_import(
             with documentary_backend():
                 updated = rows(
                     "UPDATE public.catalog_imports SET result=%s::jsonb, "
-                    "system_id=%s, updated_at=now() WHERE id=%s RETURNING *",
-                    [json.dumps(created), str(system_id), str(import_id)],
+                    "system_id=%s, updated_at=now(), "
+                    "reviewed_by=COALESCE(reviewed_by,%s), "
+                    "reviewed_at=COALESCE(reviewed_at,now()) "
+                    "WHERE id=%s RETURNING *",
+                    [json.dumps(created), str(system_id), str(actor_id),
+                     str(import_id)],
                 )[0]
             return {
                 "import": _public(updated),
@@ -1128,8 +1289,15 @@ def confirm_catalog_import(
         with documentary_backend():
             updated = rows(
                 "UPDATE public.catalog_imports SET status='CONFIRMED', "
-                "result=%s::jsonb, system_id=%s, updated_at=now() "
+                "result=%s::jsonb, system_id=%s, updated_at=now(), "
+                "reviewed_by=COALESCE(reviewed_by,%s), "
+                "reviewed_at=COALESCE(reviewed_at,now()) "
                 "WHERE id=%s RETURNING *",
-                [json.dumps(created), str(system_id), str(import_id)],
+                [json.dumps(created), str(system_id), str(actor_id),
+                 str(import_id)],
             )[0]
+            _record_event(org_id=org_id, import_id=import_id, event="CONFIRMED",
+                          actor_id=actor_id,
+                          detail={"system_id": str(system_id),
+                                  "created": len(created)})
     return {"import": _public(updated), "created": created, "errors": []}

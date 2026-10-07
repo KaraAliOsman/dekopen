@@ -729,6 +729,11 @@ export const ENUM_INTERNAL: readonly string[] = [
   "DocumentTypeEnum",
   "IndTrasladoEnum",
   "NullEnum",
+  // P16 — ids técnicos de navegación interna (pestañas del workspace y
+  // destinos de deep link); nunca se muestran crudos: la UI los traduce
+  // por catalog.ws.tab.* / los usa para scroll.
+  "ReadinessTargetKindEnum",
+  "TabEnum",
 ];
 
 /** Etiqueta de un valor de enum — el nombre del enum (export orval) y el
