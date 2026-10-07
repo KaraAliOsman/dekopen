@@ -3,7 +3,7 @@ type: state
 status: active
 updated: 2026-10-06
 volatility: high
-verified_ref: ae7fa66efc306bae474a324c515b16d03be3c806
+verified_ref: 26757d403f29f446b1f6a934690a636a0a82c575
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
@@ -486,6 +486,8 @@ Abierto en la rama `devin/P08-cotizacion-emision` (PR pendiente sobre `integraci
 - Verificado: `make lint|typecheck|test|build` verdes (`PY=.venv/bin/python`); `make test-db` con fixtures actualizados a la compuerta; capturas `docs/redesign/captures/p08-emision/`; decisiones sección P08 de `valores-por-defecto.md`.
 
 ## ED2 pase editorial de la ola 2 state
+
+Merged into `integracion/v1` as squash `26757d403f29f446b1f6a934690a636a0a82c575` (dekopen PR #58):
 
 PR sobre `integracion/v1` (branch `devin/ED2-pase-editorial-ola2`); encargo sin funcionalidad nueva — corrección, unificación y pulido del conjunto, con foco en las superficies de la ola 2 (compras, producción/CNC, cotización, proyectos, portal, asistente) y continuidad con las decisiones vinculantes de ED1:
 
