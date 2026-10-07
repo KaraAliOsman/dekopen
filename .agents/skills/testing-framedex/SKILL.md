@@ -790,3 +790,34 @@ Devin Secrets needed: none (all keys come from `supabase status` / .fixture-stat
   flow-sim links 404 «cargo desconocido» after any backend restart — mint a
   fresh link instead of reusing an old token.
 
+- **Feature-gated systems not in the series picker**: systems with
+  `quote_ready=False` (the synthetic D08 typology series — DEMO_ELEVACION_90,
+  DEMO_PSK_90, DEMO_PLEGABLE_70, DEMO_PIVOTANTE_120, DEMO_GUILLOTINA_60,
+  DEMO_PUERTA_CORREDERA_70) never appear in the series `<select>`; preselect
+  them via URL param `/projects/<id>/positions/new?system=<uuid>`.
+- **Wire format pitfalls (product-v2)**: `nominal_width_mm`/`width_mm`/
+  `height_mm` are Decimal **strings** (`"1200.00"`, raw numbers → 400);
+  `color` is the English enum (`WHITE`), not the UI label;
+  `POST /api/v1/engine/assembly/calculate/` takes `product`, while
+  `POST /api/v1/engine/calculate/` takes `parametric_tree` +
+  `glass_thickness_mm`/`glass_spec` + legacy `opening_type` enums;
+  design-options is `GET /api/v1/projects/design-options/<system_id>/`
+  (trailing slash).
+- **Slide-family spec bays need `sliding_layout`** (`LIFT_SLIDE`/
+  `PARALLEL_SLIDE`/`SLIDE`): the engine rejects them with
+  `sliding_layout_invalid` without a declared track topology — panels have
+  `kind` MOVING/FIXED, `track` (0-based, null on FIXED) and `travel`; jamb
+  rule: first MOVING can't travel LEFT, last can't travel RIGHT.
+  Spec `leaves` carry `slot`/`opening`/`axis_offset_mm` and `unit_kind`
+  lives on the unit's top node.
+- **3200×2400 @ dpr 2 display**: physical px = CSS px × 2; `wmctrl -i -r
+  <winid> -e 0,x,y,W,H` sizes the outer window (subtract ~110 CSS px of
+  Chrome chrome); use `wmctrl -i` — `:ACTIVE:` can resolve to the Plasma
+  layer. Theme via `localStorage["dekopen.theme"]` + reload.
+- **`B` opens the design-library flyout** (Escape does NOT close it — the
+  panel is non-modal); `UnsavedChangesGuard` fires a native "Leave site?"
+  dialog on `location.href=` mid-edit — click Leave; `Descartar` clears
+  the draft-recovery banner.
+- **To capture the request the UI sends**, patch `window.fetch` AFTER load
+  (navigation drops the patch); for a fresh JWT read `access_token` out of
+  the logged-in tab's localStorage instead of re-logging (tokens ~1h).
