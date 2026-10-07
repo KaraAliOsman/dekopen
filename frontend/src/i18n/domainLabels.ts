@@ -55,6 +55,7 @@ export const DOMAIN_LABELS: Record<string, L> = {
   DecisionEnum: {
     APPROVED: l("Aprobado", "ok", "check"),
     DECLINED: l("Rechazado", "danger", "cross"),
+    CHANGES_REQUESTED: l("Cambios solicitados", "warn", "clock"),
   },
 
   /* ---------- Aperturas §3.6 ---------- */

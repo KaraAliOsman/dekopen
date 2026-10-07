@@ -5,6 +5,7 @@ from portal.views import (
     PortalQuoteView,
     ProjectQuoteApproveView,
     ProjectQuoteLinkRevokeView,
+    ProjectQuoteLinkUpdateView,
     ProjectQuoteLinkView,
 )
 
@@ -18,6 +19,11 @@ urlpatterns = [
         "projects/<uuid:project_id>/approve/",
         ProjectQuoteApproveView.as_view(),
         name="project-quote-approve",
+    ),
+    path(
+        "projects/<uuid:project_id>/quote-links/<uuid:approval_id>/",
+        ProjectQuoteLinkUpdateView.as_view(),
+        name="project-quote-link-update",
     ),
     path(
         "projects/<uuid:project_id>/quote-links/<uuid:approval_id>/revoke/",

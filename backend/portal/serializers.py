@@ -79,6 +79,7 @@ class ApprovalRecordSerializer(serializers.Serializer):
     id = serializers.CharField()
     status = serializers.CharField()
     revision_code = serializers.CharField()
+    channel = serializers.CharField()
     decided_by = serializers.CharField(allow_null=True)
     decided_at = serializers.DateTimeField(allow_null=True)
     decided_note = serializers.CharField(allow_null=True)
@@ -86,7 +87,12 @@ class ApprovalRecordSerializer(serializers.Serializer):
     created_at = serializers.DateTimeField()
     revoked_at = serializers.DateTimeField(allow_null=True)
     view_count = serializers.IntegerField()
+    first_viewed_at = serializers.DateTimeField(allow_null=True)
     last_viewed_at = serializers.DateTimeField(allow_null=True)
+
+
+class LinkExpirySerializer(serializers.Serializer):
+    expires_at = serializers.DateTimeField()
 
 
 class InternalApprovalSerializer(serializers.Serializer):
@@ -98,7 +104,9 @@ class InternalApprovalResultSerializer(serializers.Serializer):
 
 
 class DecideRequestSerializer(serializers.Serializer):
-    decision = serializers.ChoiceField(choices=["APPROVED", "DECLINED"])
+    decision = serializers.ChoiceField(
+        choices=["APPROVED", "DECLINED", "CHANGES_REQUESTED"]
+    )
     decided_by = serializers.CharField(max_length=255)
     decided_rut = serializers.CharField(required=False, allow_blank=True, max_length=32)
     note = serializers.CharField(required=False, allow_blank=True, max_length=500)
@@ -108,3 +116,10 @@ class DecideRequestSerializer(serializers.Serializer):
         if not trimmed:
             raise serializers.ValidationError("required")
         return trimmed
+
+    def validate(self, attrs):
+        if attrs.get("decision") == "CHANGES_REQUESTED" and not str(
+            attrs.get("note") or ""
+        ).strip():
+            raise serializers.ValidationError({"note": "required"})
+        return attrs

@@ -696,3 +696,22 @@
     align-items: stretch;
   }
 }
+
+/* P08 — el cliente pidió cambios: estado intermedio naranja (requiere
+ * persona), el enlace sigue vivo para aprobar/rechazar después. */
+.portal-decided[data-state="changes"] {
+  background: var(--theme-warning-soft, rgba(217, 119, 6, 0.12));
+  border-color: var(--theme-warning);
+  color: var(--theme-text);
+}
+
+.portal-step[data-state="changes"] {
+  border-color: var(--theme-warning);
+  color: var(--theme-text);
+}
+
+.portal-step[data-state="changes"]::before {
+  content: "↺";
+  background: var(--theme-warning);
+  color: var(--theme-surface-panel);
+}

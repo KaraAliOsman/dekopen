@@ -174,7 +174,7 @@ def test_invalid_annotation_target_fails_closed(documentary_tenant):
                 project_id=project_id,
                 data={
                     "payment_terms": "Contado",
-                    "quotation_valid_until": date(2026, 10, 1),
+                    "quotation_valid_until": date(2030, 12, 31),
                     "positions": [{
                         "position_id": position_id,
                         "manufacturing_placement_policy_id": policies["placement_id"],

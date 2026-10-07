@@ -808,6 +808,7 @@ def test_list_approvals_exposes_the_view_signal(monkeypatch) -> None:
                 {
                     "id": uuid4(),
                     "status": "PENDING",
+                    "channel": "EMAIL",
                     "revision_code": "REV-A",
                     "decided_by": None,
                     "decided_at": None,
@@ -816,6 +817,7 @@ def test_list_approvals_exposes_the_view_signal(monkeypatch) -> None:
                     "created_at": datetime.now(timezone.utc),
                     "revoked_at": None,
                     "view_count": 3,
+                    "first_viewed_at": viewed_at,
                     "last_viewed_at": viewed_at,
                 }
             ]

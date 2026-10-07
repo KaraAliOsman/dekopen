@@ -737,6 +737,7 @@ class OrgBrandingSerializer(serializers.Serializer):
     doc_terms = serializers.DictField(child=serializers.CharField())
     workshop_label_format = serializers.CharField()
     remnant_alert_days = serializers.IntegerField()
+    doc_validity_days = serializers.IntegerField()
 
 
 class OrgBrandingWriteSerializer(StrictSerializer):
@@ -791,4 +792,10 @@ class OrgBrandingWriteSerializer(StrictSerializer):
         child=serializers.CharField(allow_blank=True, max_length=4000),
         required=False,
         allow_null=True,
+    )
+    doc_validity_days = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        min_value=1,
+        max_value=365,
     )

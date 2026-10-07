@@ -18,6 +18,7 @@ from mail.serializers import (
     PaymentReceivedSerializer,
     PricingDecisionSerializer,
     QuoteApprovedSerializer,
+    QuoteChangesRequestedSerializer,
     QuoteSentSerializer,
     StepBlockedSerializer,
 )
@@ -77,6 +78,28 @@ def quote_approved(
                 org_id=context.org_id,
                 project_id=payload["project_id"],
                 decided_by=str(payload["decided_by"]),
+            )
+    except DocumentaryError as error:
+        raise JobPermanentError(error.code) from error
+
+
+@register(
+    "mail.quote_changes_requested",
+    roles=_MAIL_ROLES,
+    payload_serializer=QuoteChangesRequestedSerializer,
+    label="Aviso interno: el cliente pidió cambios",
+)
+def quote_changes_requested(
+    payload: dict[str, Any], context: JobContext, report: ProgressReporter
+) -> dict[str, Any]:
+    try:
+        with transaction.atomic(), documentary_backend():
+            _set_claims(context)
+            return service.deliver_quote_changes_requested(
+                org_id=context.org_id,
+                project_id=payload["project_id"],
+                decided_by=str(payload["decided_by"]),
+                note=str(payload.get("note") or ""),
             )
     except DocumentaryError as error:
         raise JobPermanentError(error.code) from error

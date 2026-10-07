@@ -23,6 +23,7 @@ from documents.repository import DocumentaryError, documentary_backend
 from documents.renderers import _doc01, _doc03
 from documents.service import revision_snapshot, save_documentary_inputs
 from tests.integration.test_shot09_documentary import (
+    _EMISSION_DOC_TERMS,
     _tenant,
     as_user,
 )
@@ -204,7 +205,8 @@ def _seed_bow_project(
             project_id=project_id,
             data={
                 "payment_terms": "Contado",
-                "quotation_valid_until": date(2026, 10, 14),
+                "quotation_valid_until": date(2030, 12, 31),
+                "doc_terms": _EMISSION_DOC_TERMS,
                 "positions": [{
                     "position_id": position_id,
                     "calculation_hash": bom_response["calculation_hash"],

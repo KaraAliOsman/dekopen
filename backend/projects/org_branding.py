@@ -77,6 +77,7 @@ def _branding(row: dict) -> dict:
             if row.get("remnant_alert_days") is not None
             else 30
         ),
+        "doc_validity_days": int(row.get("doc_validity_days") or 15),
     }
 
 
@@ -84,7 +85,8 @@ _FIELDS = (
     "name, tax_id, commercial_name, giro, brand_address, brand_phone,"
     " brand_email, brand_logo_key, brand_logo_sha256, brand_color,"
     " doc_dekopen_credit, vano_spread_tolerance_mm,"
-    " doc_paper_size, doc_terms, workshop_label_format, remnant_alert_days"
+    " doc_paper_size, doc_terms, workshop_label_format, remnant_alert_days,"
+    " doc_validity_days"
 )
 
 # P09 — claves legales declaradas que el documento del cliente imprime en
@@ -97,11 +99,17 @@ _DOC_TERM_KEYS = (
     "exclusiones",
     "garantia",
     "jurisdiccion",
+    # 'pago' es la plantilla del calendario de pagos: se prellena en el
+    # constructor pero no se imprime en el bloque legal del DOC-01 (la
+    # propuesta ya imprime payment_terms arriba).
+    "pago",
 )
 _DOC_PAPER_SIZES = ("LETTER", "LEGAL", "A4")
 # P13 — formato de la hoja de etiquetas del pack de corte: grilla sobre el
 # papel documental o rollo térmico 100×50 mm para etiquetadoras de taller.
 _LABEL_FORMATS = ("GRID", "THERMAL_100X50")
+_DOC_VALIDITY_MIN = 1
+_DOC_VALIDITY_MAX = 365
 
 
 def _doc_terms(raw: object) -> dict:
@@ -237,6 +245,20 @@ def _save_branding(*, org_id: UUID, data: dict) -> dict:
                 "Claves de texto no reconocidas: " + ", ".join(sorted(unknown)) + ".",
             )
         params.append(json.dumps(_doc_terms(terms)))
+    if "doc_validity_days" in data:
+        raw_days = data.get("doc_validity_days")
+        try:
+            days = int(raw_days)
+        except (TypeError, ValueError):
+            days = 0
+        if not (_DOC_VALIDITY_MIN <= days <= _DOC_VALIDITY_MAX):
+            raise contract_error(
+                400,
+                "doc_validity_days_invalid",
+                "La vigencia por defecto debe ser entre 1 y 365 días.",
+            )
+        assignments.append("doc_validity_days=%s")
+        params.append(days)
     if not assignments:
         row = one(
             f"SELECT {_FIELDS} FROM public.tenancy_organizations WHERE id=%s",

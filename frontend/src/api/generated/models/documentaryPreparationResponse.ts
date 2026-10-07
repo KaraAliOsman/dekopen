@@ -6,6 +6,8 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { DocumentaryPreparationPosition } from "./documentaryPreparationPosition";
+import type { DocumentaryPreparationResponseDocTerms } from "./documentaryPreparationResponseDocTerms";
+import type { DocumentaryPreparationResponseOrgDocTerms } from "./documentaryPreparationResponseOrgDocTerms";
 
 export interface DocumentaryPreparationResponse {
   project_id: string;
@@ -14,5 +16,10 @@ export interface DocumentaryPreparationResponse {
   payment_terms: string;
   /** @nullable */
   quotation_valid_until: string | null;
+  org_doc_terms: DocumentaryPreparationResponseOrgDocTerms;
+  default_payment_terms: string;
+  doc_validity_days: number;
+  doc_terms: DocumentaryPreparationResponseDocTerms;
+  emission_missing: string[];
   positions: DocumentaryPreparationPosition[];
 }

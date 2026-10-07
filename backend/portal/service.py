@@ -28,6 +28,7 @@ from documents.repository import (
     write,
 )
 from mail.service import _frontend_origin
+from rut import rut_mod11_valid
 
 logger = logging.getLogger(__name__)
 
@@ -94,11 +95,14 @@ def share_quote(
         # revision — otherwise pending tokens accumulate and stay
         # concurrently valid. DOCUMENT-channel approvals survive: the QR
         # sealed inside the stored DOC-01 names that token, and the PDF is
-        # immutable evidence that must keep resolving.
+        # immutable evidence that must keep resolving. CHANGES_REQUESTED
+        # counts as outstanding: re-sharing answers the client's request
+        # with a fresh live link.
         rows(
             "UPDATE public.customer_approvals SET status='REVOKED',revoked_at=%s,"
             "revoked_by=%s WHERE org_id=%s AND project_id=%s "
-            "AND project_version_id=%s AND status='PENDING' AND channel='EMAIL' "
+            "AND project_version_id=%s AND status IN ('PENDING','CHANGES_REQUESTED') "
+            "AND channel='EMAIL' "
             "RETURNING id",
             [
                 datetime.now(timezone.utc),
@@ -218,6 +222,32 @@ def revoke_link(
         )
 
 
+def update_link_expiry(
+    *, org_id: UUID, project_id: UUID, approval_id: UUID, expires_at: datetime
+) -> dict[str, object]:
+    """Move a live link's expiry — never resurrects a dead one, never
+    touches a decided one (the decision record keeps its timestamps)."""
+    if expires_at <= datetime.now(timezone.utc):
+        raise DocumentaryError("link_expiry_invalid")
+    with documentary_backend():
+        approval = one(
+            "SELECT id,status FROM public.customer_approvals "
+            "WHERE id=%s AND org_id=%s AND project_id=%s",
+            [str(approval_id), str(org_id), str(project_id)],
+            "approval_not_found",
+        )
+        if str(approval["status"]) not in ("PENDING", "CHANGES_REQUESTED"):
+            raise DocumentaryError("approval_not_live")
+        return one(
+            "UPDATE public.customer_approvals SET expires_at=%s "
+            "WHERE id=%s AND status IN ('PENDING','CHANGES_REQUESTED') "
+            "RETURNING id,expires_at",
+            [expires_at, str(approval_id)],
+            "approval_not_found",
+        )
+
+
+
 def list_approvals(*, org_id: UUID, project_id: UUID) -> list[dict[str, object]]:
     """The org-side record of every link minted for a project: who it went
     to (the token stays opaque — the link URL is the capability), which
@@ -232,6 +262,7 @@ def list_approvals(*, org_id: UUID, project_id: UUID) -> list[dict[str, object]]
             {
                 "id": str(row["id"]),
                 "status": str(row["status"]),
+                "channel": str(row["channel"]),
                 "revision_code": str(row["revision_code"]),
                 "decided_by": row["decided_by"],
                 "decided_at": row["decided_at"].isoformat()
@@ -244,13 +275,17 @@ def list_approvals(*, org_id: UUID, project_id: UUID) -> list[dict[str, object]]
                 else None,
                 "decided_note": row["decided_note"],
                 "view_count": int(row["view_count"] or 0),
+                "first_viewed_at": row["first_viewed_at"].isoformat()
+                if row["first_viewed_at"]
+                else None,
                 "last_viewed_at": row["last_viewed_at"].isoformat()
                 if row["last_viewed_at"]
                 else None,
             }
             for row in rows(
-                "SELECT a.id,a.status,a.decided_by,a.decided_at,a.decided_note,"
-                "a.expires_at,a.created_at,a.revoked_at,a.view_count,a.last_viewed_at,"
+                "SELECT a.id,a.status,a.channel,a.decided_by,a.decided_at,a.decided_note,"
+                "a.expires_at,a.created_at,a.revoked_at,a.view_count,"
+                "a.first_viewed_at,a.last_viewed_at,"
                 "v.revision_code "
                 "FROM public.customer_approvals a "
                 "JOIN public.project_versions v "
@@ -493,7 +528,7 @@ def portal_quote(token: str, *, track: bool = True) -> dict[str, object]:
             str(sealed.get("currency") or "CLP") == "CLP"
             and not superseded
             and not validity_expired
-            and str(approval["status"]) != "DECLINED"
+            and str(approval["status"]) not in ("DECLINED", "CHANGES_REQUESTED")
         ):
             live_link = rows(
                 "SELECT url FROM public.project_payment_links "
@@ -640,7 +675,7 @@ def approve_internal(
         write(
             "UPDATE public.customer_approvals SET status='REVOKED',revoked_at=%s,"
             "revoked_by=%s WHERE org_id=%s AND project_id=%s "
-            "AND project_version_id=%s AND status='PENDING'",
+            "AND project_version_id=%s AND status IN ('PENDING','CHANGES_REQUESTED')",
             [now, str(actor_id), str(org_id), str(project_id),
              str(versions[0]["id"])],
         )
@@ -688,11 +723,20 @@ def decide_quote(
     note: str | None,
     decided_rut: str | None = None,
 ) -> dict[str, object]:
-    """Approve or decline the shared quote; replays return the sealed state."""
+    """Approve, decline or request changes on the shared quote; replays
+    return the sealed state. CHANGES_REQUESTED keeps the link alive — the
+    client can still decide later, or the estimator re-shares and the link
+    rotates."""
+    if decision not in ("APPROVED", "DECLINED", "CHANGES_REQUESTED"):
+        raise DocumentaryError("decision_invalid")
+    if decision == "CHANGES_REQUESTED" and not note:
+        raise DocumentaryError("changes_note_required")
+    if decided_rut is not None and not rut_mod11_valid(decided_rut):
+        raise DocumentaryError("decided_rut_invalid")
     with transaction.atomic(), portal_backend():
         approval = _approval_for_token(token)
         _scope_org(approval["org_id"])
-        if approval["status"] == "PENDING":
+        if approval["status"] in ("PENDING", "CHANGES_REQUESTED"):
             version = _bound_version(approval)
             valid_until = _sealed_project(version).get("quotation_valid_until")
             if _validity_expired(valid_until):
@@ -714,7 +758,8 @@ def decide_quote(
             # below replays the sealed state instead of overwriting it.
             decided = rows(
                 "UPDATE public.customer_approvals SET status=%s,decided_by=%s,"
-                "decided_at=%s,decided_note=%s WHERE id=%s AND status='PENDING' "
+                "decided_at=%s,decided_note=%s WHERE id=%s "
+                "AND status IN ('PENDING','CHANGES_REQUESTED') "
                 "RETURNING id",
                 [
                     decision,
@@ -746,5 +791,23 @@ def decide_quote(
                         if decided_rut
                         else decided_by
                     ),
+                )
+            if decided and decision == "CHANGES_REQUESTED":
+                # P08: pedido de ajustes — aviso interno al equipo; el
+                # enlace sigue vivo para una decisión posterior.
+                from automations.service import emit
+
+                emit(
+                    "mail.quote_changes_requested",
+                    org_id=UUID(str(approval["org_id"])),
+                    actor_id=UUID(str(approval["created_by"])),
+                    idempotency_key=f"mail:quote-changes:{approval['id']}:{now.isoformat()}",
+                    project_id=str(approval["project_id"]),
+                    decided_by=(
+                        f"{decided_by} · {decided_rut}"
+                        if decided_rut
+                        else decided_by
+                    ),
+                    note=note or "",
                 )
     return portal_quote(token, track=False)

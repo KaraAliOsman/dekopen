@@ -204,6 +204,44 @@ def quote_approved(ctx: dict) -> RenderedMail:
     )
 
 
+def quote_changes_requested(ctx: dict) -> RenderedMail:
+    """Interno: el cliente pidió ajustes sin rechazar — la propuesta sigue
+    vigente y el estimador debe emitir la siguiente revisión."""
+    project = str(ctx["project_name"])
+    decided = str(ctx.get("decided_by") or "el cliente")
+    note = str(ctx.get("note") or "").strip()
+    project_url = str(ctx["project_url"])
+    paragraphs = [
+        f"El cliente pidió cambios sobre la cotización <strong>{escape(project)}</strong>"
+        f" (solicitud de {escape(decided)}). El enlace sigue vigente: ajusta "
+        "y emite la siguiente revisión.",
+    ]
+    if note:
+        paragraphs.append(f"Comentario del cliente: <em>«{escape(note)}»</em>")
+    body = _internal_body(
+        paragraphs,
+        [
+            ("Proyecto", f"{ctx.get('project_code') or '—'} · {project}"),
+            ("Cliente", str(ctx.get("client_name") or "—")),
+            ("Solicita", decided),
+            ("Total", str(ctx.get("total_label") or "—")),
+        ],
+        _button(project_url, "Revisar cotización", _TEAL_800),
+    )
+    html = _internal_shell(kicker="Cambios solicitados", body=body)
+    text = (
+        f"Cambios solicitados\n\n{project} — {decided} pidió ajustes."
+        + (f"\nComentario: «{note}»" if note else "")
+        + f"\nAbrir: {project_url}\n"
+    )
+    return RenderedMail(
+        subject=f"[DEKOPEN] Cambios solicitados — {project}",
+        html=html,
+        text=text,
+        inline_images={"mark.png": _mark_png()},
+    )
+
+
 def payment_received(ctx: dict) -> RenderedMail:
     """Interno: cobro registrado contra el proyecto."""
     project = str(ctx["project_name"])

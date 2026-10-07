@@ -127,6 +127,13 @@ class DocumentaryInputsSerializer(StrictSerializer):
     payment_terms = serializers.CharField(max_length=2000, allow_blank=False, trim_whitespace=True)
     quotation_valid_until = serializers.DateField()
     positions = PositionDocumentaryInputSerializer(many=True, allow_empty=False)
+    # P08 — ediciones por cotización sobre la plantilla de la organización:
+    # claves del documento (plazo_entrega, instalacion, exclusiones,
+    # garantia, jurisdiccion); un texto vacío omite la línea.
+    doc_terms = serializers.DictField(
+        child=serializers.CharField(allow_blank=True, max_length=4000),
+        required=False,
+    )
 
 
 class DocumentaryInputsResponseSerializer(serializers.Serializer):
@@ -227,6 +234,9 @@ class DocumentaryPreparationPositionSerializer(PositionDocumentaryInputSerialize
     # "Sólo cotización" before the estimator clicks Emitir.
     production_ready = serializers.BooleanField()
     documentary_ready = serializers.BooleanField()
+    # Regla RED con evaluación FAIL — el freeze la rechaza; el checklist
+    # de emisión la declara antes de que el estimador pulse «Emitir».
+    inspector_blocked = serializers.BooleanField()
 
 
 class DocumentaryPreparationResponseSerializer(serializers.Serializer):
@@ -234,7 +244,48 @@ class DocumentaryPreparationResponseSerializer(serializers.Serializer):
     revision_code = serializers.RegexField(r"^REV-[A-Z]+$")
     payment_terms = serializers.CharField(allow_blank=True)
     quotation_valid_until = serializers.DateField(allow_null=True)
+    # P08 — plantillas de Ajustes y mapa efectivo editable por cotización.
+    org_doc_terms = serializers.DictField(child=serializers.CharField())
+    default_payment_terms = serializers.CharField(allow_blank=True)
+    doc_validity_days = serializers.IntegerField()
+    doc_terms = serializers.DictField(child=serializers.CharField())
+    emission_missing = serializers.ListField(child=serializers.CharField())
     positions = DocumentaryPreparationPositionSerializer(many=True)
+
+
+class PositionDocumentaryPreviewSerializer(PositionDocumentaryInputSerializer):
+    """En la vista previa la ubicación y las políticas pueden ir vacías — el
+    documento imprime '—' y el checklist marca el pendiente; el sello sigue
+    exigiéndolas."""
+
+    location_tag = serializers.CharField(
+        max_length=100, allow_blank=True, trim_whitespace=True
+    )
+    manufacturing_placement_policy_id = serializers.UUIDField(allow_null=True)
+    handle_requirement_policy_id = serializers.UUIDField(allow_null=True)
+    reinforcement_cut_policy_id = serializers.UUIDField(allow_null=True)
+
+
+class QuotePreviewSerializer(StrictSerializer):
+    """Vista previa real del DOC-01: payload del formulario tal cual (aún no
+    guardado) + la operación de precios que autoriza la revisión."""
+
+    pricing_operation_id = serializers.UUIDField()
+    payment_terms = serializers.CharField(
+        max_length=2000, allow_blank=True, trim_whitespace=True, required=False
+    )
+    quotation_valid_until = serializers.DateField(allow_null=True, required=False)
+    doc_terms = serializers.DictField(
+        child=serializers.CharField(allow_blank=True, max_length=4000),
+        required=False,
+    )
+    positions = PositionDocumentaryPreviewSerializer(many=True, allow_empty=False)
+
+
+class QuotePreviewResponseSerializer(serializers.Serializer):
+    html = serializers.CharField()
+    bom_hash = serializers.RegexField(r"^[0-9a-f]{64}$")
+    revision_code = serializers.RegexField(r"^REV-[A-Z]+$")
 
 
 class FreezeRequestSerializer(StrictSerializer):

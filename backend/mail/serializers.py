@@ -16,6 +16,12 @@ class QuoteApprovedSerializer(serializers.Serializer):
     decided_by = serializers.CharField(max_length=255)
 
 
+class QuoteChangesRequestedSerializer(serializers.Serializer):
+    project_id = serializers.UUIDField()
+    decided_by = serializers.CharField(max_length=255)
+    note = serializers.CharField(max_length=500, allow_blank=True)
+
+
 class PaymentReceivedSerializer(serializers.Serializer):
     project_id = serializers.UUIDField()
     payment_id = serializers.UUIDField()

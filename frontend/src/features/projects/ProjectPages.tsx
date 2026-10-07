@@ -9,7 +9,6 @@ import {
   clientsList,
   documentsCompareVersions,
   projectPaymentsList,
-  projectQuoteLinkCreate,
   projectQuoteLinksList,
   projectsList,
   projectsCreate,
@@ -599,10 +598,6 @@ interface NextAction {
   labelKey: TranslationKey;
   to?: string;
   section?: FactsSection;
-  /** "Enviar al cliente" performs the share itself — mint the portal link
-   * and copy it — instead of merely revealing the rail where it lives
-   * (review WB1). */
-  share?: boolean;
 }
 
 function projectNextAction(
@@ -631,14 +626,17 @@ function projectNextAction(
       // A live PENDING link on the current revision means the client already
       // has the quote — the next action is reviewing that outstanding link,
       // not minting another one.
+      // P08 — sin caminos alternativos de envío: la acción siempre abre la
+      // sección de cotización, donde vive el ciclo de vida del enlace
+      // (copiar, regenerar, revocar, cambiar vencimiento).
       return approvals.some(
         (a) =>
           a.revision_code === project.current_revision &&
-          a.status === "PENDING" &&
+          (a.status === "PENDING" || a.status === "CHANGES_REQUESTED") &&
           Date.parse(a.expires_at) > now,
       )
         ? { labelKey: "projects.next.awaiting", section: "quote" }
-        : { labelKey: "projects.next.share", share: true };
+        : { labelKey: "projects.next.share", section: "quote" };
     case "APPROVED":
       // Payment recording is estimator/owner work; release is owner/WM.
       // Check each capability separately — a WM (canRelease, !canWrite)
@@ -666,16 +664,12 @@ function ProjectHeader({
   canWrite,
   canRelease,
   onOpenSection,
-  onShareQuote,
-  shareBusy,
 }: {
   project: ProjectResponse;
   orgId: string;
   canWrite: boolean;
   canRelease: boolean;
   onOpenSection: (section: FactsSection) => void;
-  onShareQuote: () => void;
-  shareBusy?: boolean;
 }): JSX.Element {
   const payments = useQuery({
     queryKey: ["projects", "payments-summary", orgId, project.id],
@@ -693,9 +687,14 @@ function ProjectHeader({
       return response.data;
     },
     // A client-side approval or expiry lands on no websocket — poll while a
-    // live PENDING link exists so the timeline moves without a reload.
+    // live link (pendiente o con cambios pedidos) exists so the timeline
+    // moves without a reload.
     refetchInterval: (query) =>
-      query.state.data?.some((a) => a.status === "PENDING" && Date.parse(a.expires_at) > Date.now())
+      query.state.data?.some(
+        (a) =>
+          (a.status === "PENDING" || a.status === "CHANGES_REQUESTED") &&
+          Date.parse(a.expires_at) > Date.now(),
+      )
         ? 15000
         : false,
   });
@@ -756,10 +755,7 @@ function ProjectHeader({
             ) : (
               <button
                 className="primary-action"
-                disabled={action.share === true && shareBusy === true}
-                onClick={() =>
-                  action.share ? onShareQuote() : action.section && onOpenSection(action.section)
-                }
+                onClick={() => action.section && onOpenSection(action.section)}
                 type="button"
               >
                 {t(action.labelKey)}
@@ -1272,8 +1268,7 @@ function ProjectWorkspace({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [sharedUrl, setSharedUrl] = useState("");
-  const [shareBusy, setShareBusy] = useState(false);
+
   const [mustReload, setMustReload] = useState(false);
   const lifetime = useRef<AbortController | null>(null);
   const locked = useRef(false);
@@ -1536,45 +1531,6 @@ function ProjectWorkspace({
   const sortKey = params.get("sort") ?? "updated";
   const needle = search.toLocaleLowerCase("es-CL");
 
-  // The header's "Enviar al cliente" CTA performs the share itself — mint
-  // the portal link, copy it, refresh the approvals track (review WB1).
-  async function shareQuote(): Promise<void> {
-    // Each click mints a new portal link — without the busy guard a
-    // double-click issues two links and the second silently wins.
-    if (!project || shareBusy) return;
-    setShareBusy(true);
-    setNotice("");
-    setError("");
-    try {
-      const response = await projectQuoteLinkCreate(project.id, {
-        headers: { "X-Organization-ID": orgId },
-      });
-      if (response.status !== 200) throw new ApiError(response.status, response.data);
-      void queryClient.invalidateQueries({
-        queryKey: ["projects", "quote-approvals", orgId, project.id],
-      });
-      const url = `${window.location.origin}${response.data.path}`;
-      // Reveal the quote section so the share visibly lands somewhere —
-      // a bare toast under the header reads as "nothing happened".
-      setFactsCollapsed(false);
-      setOpenSection("quote");
-      // The minted link stays on state so the estimator can also send it by
-      // mail from the notice — copying alone leaves the send step implicit.
-      setSharedUrl(url);
-      try {
-        await navigator.clipboard.writeText(url);
-        // The notice carries the URL verbatim: some clipboards accept the
-        // write without copying, so the link must always be selectable.
-        setNotice(`${t("quotation.shareCopied")} — ${url}`);
-      } catch {
-        setNotice(url);
-      }
-    } catch {
-      setError(t("quotation.error"));
-    } finally {
-      setShareBusy(false);
-    }
-  }
   // Deep-linkable triage filter — the dashboard attention queue lands on
   // /projects?status=QUOTED so the promised list is already filtered.
   const statusFilter = params.get("status") ?? "";
@@ -1621,8 +1577,6 @@ function ProjectWorkspace({
             setFactsCollapsed(false);
             setOpenSection(section);
           }}
-          onShareQuote={() => void shareQuote()}
-          shareBusy={shareBusy}
           project={project}
         />
       ) : null}
@@ -1722,7 +1676,9 @@ function ProjectWorkspace({
                   {fields
                     .filter(([name]) => name !== "name" && Boolean(project[name]))
                     .map(([name, label]) => (
-                      <div key={name}>
+                      /* El checklist de emisión enlaza aquí: id estable por
+                       * campo para scroll+resaltado (P08). */
+                      <div id={`project-fact-${name}`} key={name}>
                         <dt>{t(label)}</dt>
                         <dd>{project[name]}</dd>
                       </div>
@@ -1779,7 +1735,7 @@ function ProjectWorkspace({
                     orgId={orgId}
                     canWrite={canWrite}
                     canRelease={canSendEnvio}
-                    sharedUrlSeed={sharedUrl}
+
                     onChanged={() => query.refetch()}
                     onDirtyChange={setQuotationDirty}
                   />

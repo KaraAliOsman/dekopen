@@ -40,4 +40,5 @@ export interface OrgBranding {
   doc_terms: OrgBrandingDocTerms;
   workshop_label_format: string;
   remnant_alert_days: number;
+  doc_validity_days: number;
 }

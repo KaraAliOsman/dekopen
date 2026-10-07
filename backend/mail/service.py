@@ -430,6 +430,32 @@ def deliver_quote_approved(*, org_id: UUID, project_id: UUID, decided_by: str) -
     return {"sent": len(sent)}
 
 
+def deliver_quote_changes_requested(
+    *, org_id: UUID, project_id: UUID, decided_by: str, note: str
+) -> dict:
+    """P08: pedido de cambios del cliente — aviso interno al equipo."""
+    project = _project_mail_row(org_id=org_id, project_id=project_id)
+    rendered = templates.quote_changes_requested(
+        {
+            "project_name": project.get("name"),
+            "project_code": project.get("code"),
+            "client_name": project.get("client_name"),
+            "decided_by": decided_by,
+            "note": note,
+            "total_label": _money_label(project.get("total_gross"), project.get("currency")),
+            "project_url": _project_url(project_id),
+        }
+    )
+    sent = _deliver_to_staff(
+        org_id=org_id,
+        template="quote_changes_requested",
+        roles=_STAFF_QUOTE_ROLES,
+        render=rendered,
+        context={"project_id": str(project_id), "decided_by": decided_by},
+    )
+    return {"sent": len(sent)}
+
+
 def deliver_payment_received(*, org_id: UUID, project_id: UUID, payment_id: UUID) -> dict:
     project = _project_mail_row(org_id=org_id, project_id=project_id)
     payment = one(
@@ -626,6 +652,10 @@ def dev_previews(*, org_id: UUID) -> list[dict[str, str]]:
         ("magic_link", templates.magic_link({})),
         ("quote_sent", templates.quote_sent(sample_client)),
         ("quote_approved", templates.quote_approved(sample_internal)),
+        (
+            "quote_changes_requested",
+            templates.quote_changes_requested(sample_internal),
+        ),
         ("payment_received", templates.payment_received(sample_internal)),
         ("work_order_blocked", templates.work_order_blocked(sample_internal)),
     ]

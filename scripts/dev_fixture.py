@@ -832,6 +832,8 @@ def main() -> None:
             ],
         )
         client_ids[name] = cid
+
+    client_ruts = {name: rut for name, rut, _email in clients}
     rest(
         "clients",
         [
@@ -862,6 +864,7 @@ def main() -> None:
                 "name": name,
                 "client_id": client_ids[client],
                 "client_name": client,
+                "client_rut": client_ruts[client],
                 "delivery_address": address,
                 "notes_internal": f"{DEMO_MARK} [{slug}]",
             },
@@ -1436,6 +1439,12 @@ def stage(
                 "quotation_valid_until": valid_until or str(
                     date.today() + timedelta(days=30)
                 ),
+                "doc_terms": {
+                    "plazo_entrega": "15 días hábiles desde la aprobación",
+                    "instalacion": "Instalación en obra incluida; andamios a cargo del cliente",
+                    "exclusiones": "No incluye terminaciones de albañilería ni sellos perimetrales",
+                    "garantia": "10 años perfiles, 5 años herrajes y vidrios",
+                },
                 "positions": positions,
             },
         )

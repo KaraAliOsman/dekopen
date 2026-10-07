@@ -115,7 +115,7 @@ def _estimator_items(
         JOIN public.projects p ON p.id = a.project_id AND p.org_id = a.org_id
         WHERE a.org_id = %s
           AND v.revision_code = p.current_revision
-          AND a.status IN ('PENDING', 'DECLINED')
+          AND a.status IN ('PENDING', 'DECLINED', 'CHANGES_REQUESTED')
           AND p.status::text <> 'CANCELLED'
         ORDER BY a.created_at DESC
         """,
@@ -145,6 +145,24 @@ def _estimator_items(
                     entity_label=name,
                     to=_project_link(approval["project_id"]),
                     cta="Retomar",
+                )
+            )
+        elif approval["status"] == "CHANGES_REQUESTED":
+            note = str(approval.get("decided_note") or "").strip()
+            items.append(
+                _item(
+                    "changes_requested",
+                    "today",
+                    f"El cliente pidió cambios en la cotización de {name}",
+                    reason=(
+                        f"«{note[:140]}»"
+                        if note
+                        else "Sin comentario — revisa la propuesta y emite la siguiente revisión"
+                    ),
+                    entity_code=str(approval["project_code"]),
+                    entity_label=name,
+                    to=_project_link(approval["project_id"]),
+                    cta="Revisar",
                 )
             )
         elif days is not None and days < 0:
