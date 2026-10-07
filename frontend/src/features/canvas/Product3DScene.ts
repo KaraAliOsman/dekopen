@@ -1390,7 +1390,13 @@ function leafMotionFor(leafId: string, leafRegion: Region, spec: ResolvedLeaf): 
       partZ: { sash: 0, glazing: 0, bead: 0 },
     };
   }
-  if (spec.movement === "TURN" || spec.door) {
+  // Una hoja de unidad DOOR sólo abate sobre el borde cuando su
+  // movimiento lo declara (TURN / legado DOOR_ENTRY → TURN): la pivotante
+  // gira sobre su `axis_offset_mm`, la corredera de puerta ya se resolvió
+  // por la ruta sliding y la plegable pivota en bisagras intermedias —
+  // sin pose honesta para esos ejes la hoja queda cerrada (null), nunca
+  // un vaivén de bisagra fabricado.
+  if (spec.movement === "TURN") {
     const right = spec.hinge === "RIGHT";
     return {
       leafId,

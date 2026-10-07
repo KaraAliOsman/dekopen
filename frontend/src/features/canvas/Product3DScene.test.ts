@@ -887,6 +887,24 @@ describe("P19 spec-form pose fidelity", () => {
     expect(handle.length).toBeGreaterThanOrEqual(4);
   });
 
+  it("keeps a pivot door closed rather than fabricating an edge swing", () => {
+    // D08: a PIVOT_V leaf rotates on its declared `axis_offset_mm`, not on
+    // the jamb edge — the view emits no motion before posing a lie.
+    const product = specProduct(
+      {
+        id: "b1",
+        type: "BAY",
+        unit_kind: "DOOR",
+        opening: { movement: "PIVOT_V" },
+        glass_thickness_mm: "4.00",
+      },
+      1200,
+      2100,
+    );
+    const scene = buildScene3D(product, members);
+    expect(scene.modules[0]!.leaves).toHaveLength(0);
+  });
+
   it("tips a bottom-hung leaf ~10° on its bottom axis", () => {
     const product = specProduct({
       id: "b1",

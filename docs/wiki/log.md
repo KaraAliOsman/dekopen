@@ -354,7 +354,6 @@ Append-only chronology. Keep newest entries at the bottom.
 - Contrato revivido: `IncompatibleTypologyError` llega como 400 `typology_incompatible` con `compatible_systems` (lo tragaba el `except ValueError` genérico del adaptador); bug `compatible` en `assert_opening_allowed` corregido (comparaba enum con strings de familia — siempre True).
 - Biblioteca del editor: grupo "Avanzadas"; `starterCompatible` exige la clave de composición exacta por vano (`openingSpecKeyAdmitted`/`openingOptionAdmitted`); tarjetas bloqueadas con causa y consulta perezosa por serie que nombra qué series la admiten (§8 — nunca se inventa).
 - Verificado `make lint|typecheck|test|build|test-db` verde (`PY=.venv/bin/python`): 1185 pgTAP, 283 integración, 27 e2e, 742 motor, 1315 backend, 723 frontend; goldens por tipología + fixtures de símbolos; decisiones en `valores-por-defecto.md` (sección D08); capturas en `docs/redesign/captures/d08-tipologias-avanzadas/`.
-<<<<<<< HEAD
 
 ## [2026-10-07] P18 | desempeño térmico y normativa chilena: Uw, aire y zona térmica (OGUC 4.1.10)
 
