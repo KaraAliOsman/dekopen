@@ -93,12 +93,10 @@ from dekopen_engine.models import (
     UnitKind,
 )
 from dekopen_engine.openings import (
-    UNIMPLEMENTED_MOVEMENTS,
+    SLIDE_FAMILY_MOVEMENTS,
     admitted_capabilities,
     declared_unit_kind,
-    families_admitting_movement,
     families_admitting_spec,
-    families_admitting_unit,
     leaf_hardware_group,
     leaf_hinge_handedness,
     leaf_sash_role_candidates,
@@ -138,6 +136,15 @@ _SLIDING_OPENING_TYPES = frozenset(
         BayOpeningType.SLIDING_4L,
         BayOpeningType.SLIDING,
     }
+)
+
+# Movements whose leaf rides a rail/channel instead of hinging — its
+# position lives in the track topology, never in a direct rect: the
+# SLIDING_LEAF/SLIDING_INFILL placement domains and the sliding glazing
+# deduction apply to all of them (D08: elevable, osciloparalela and the
+# vertical guillotina ride the same domain as the corredera).
+_SLIDING_DOMAIN_MOVEMENTS = SLIDE_FAMILY_MOVEMENTS | frozenset(
+    {OpeningMovement.VERTICAL_SLIDE}
 )
 
 
@@ -194,27 +201,12 @@ def assert_opening_allowed(
             },
         )
     spec = resolve_opening_spec(node, default_unit=unit)
-    for leaf in spec.leaves:
-        if leaf.opening.movement in UNIMPLEMENTED_MOVEMENTS:
-            raise NotImplementedError(
-                f"{spec_display_name_es(spec)} usa movimiento "
-                f"{leaf.opening.movement.value} — declarado en D03, fabricación en D08"
-            )
     if not spec_movement_is_family_compatible(spec, params):
-        failed = [
-            leaf.opening.movement
-            for leaf in spec.leaves
-            if not spec_movement_is_family_compatible(
-                OpeningSpec(unit_kind=spec.unit_kind, leaves=[leaf]), params
-            )
-        ]
-        compatible: list[str] = []
-        for movement in failed:
-            for family in families_admitting_movement(movement):
-                if family not in compatible:
-                    compatible.append(family)
-        if spec.unit_kind not in families_admitting_unit(spec.unit_kind):
-            compatible = families_admitting_unit(spec.unit_kind)
+        # Families that could honestly build the whole spec — unit kind
+        # AND every leaf movement (an enum was compared against strings
+        # here before: the unit check always fired and clobbered the
+        # movement list with every window-capable family).
+        compatible = families_admitting_spec(spec)
         raise IncompatibleTypologyError(
             "typology_family_incompatible",
             f"tipología {spec_display_name_es(spec)} incompatible con un sistema de familia "
@@ -340,25 +332,33 @@ def panel_travel(panel: SlidingPanel, index: int, count: int) -> "SlidingTravel 
     return SlidingTravel.RIGHT if index * 2 < count else SlidingTravel.LEFT
 
 
-def resolved_sliding_layout(node: ParametricNode) -> SlidingLayout:
-    """Explicit layout wins; otherwise the SLIDING_*L preset supplies one."""
+def resolved_sliding_layout(
+    node: ParametricNode, movement: OpeningMovement = OpeningMovement.SLIDE
+) -> SlidingLayout:
+    """Explicit layout wins; otherwise the SLIDING_*L preset supplies one.
+
+    A new-form slide opening (corredera, elevable, osciloparalela, puerta
+    corredera) carries no preset — its track topology is declared data:
+    fabricating without it would invent the panels' rails and travels."""
     if node.sliding_layout is not None:
         return node.sliding_layout
-    if node.opening_type is BayOpeningType.SLIDING:
-        raise SlidingLayoutError(
-            "sliding_layout_invalid",
-            f"BAY {node.id} opening SLIDING requires a sliding_layout",
-            {"bay": node.id},
-        )
-    try:
+    if node.opening_type in _SLIDING_PRESETS:
         assert node.opening_type is not None
         return _SLIDING_PRESETS[node.opening_type]
-    except KeyError as error:
+    if (
+        node.opening_type is BayOpeningType.SLIDING
+        or movement in SLIDE_FAMILY_MOVEMENTS
+    ):
         raise SlidingLayoutError(
             "sliding_layout_invalid",
-            f"BAY {node.id} is not a sliding opening",
-            {"bay": node.id},
-        ) from error
+            f"BAY {node.id} opening {movement.value} requires a declared sliding_layout",
+            {"bay": node.id, "movement": movement.value},
+        )
+    raise SlidingLayoutError(
+        "sliding_layout_invalid",
+        f"BAY {node.id} is not a sliding opening",
+        {"bay": node.id},
+    )
 
 
 def rail_count(params: SystemParams) -> int:
@@ -523,12 +523,17 @@ class _LeafCtx:
 
 
 def _handle_expected(leaf: BayLeaf) -> bool:
-    """Whether the leaf takes a user-operated handle (D03): a PASSIVE leaf
-    closes with its falleba and a fixed-in-sash leaf never opens — the
-    handle policy skips both instead of mounting phantom handles."""
+    """Whether the leaf takes a user-operated handle (D03/D08): a PASSIVE
+    leaf closes with its falleba — a fold pack member with its guide
+    carriages —, a fixed-in-sash lite never opens, and a guillotina sash
+    locks at its meeting rail (the lock travels in the kit, not as a
+    manilla) — the handle policy skips all three instead of mounting
+    phantom handles."""
     if leaf.opening.leaf_role is LeafRole.PASSIVE:
         return False
     if leaf.opening.movement is OpeningMovement.FIXED:
+        return False
+    if leaf.opening.movement is OpeningMovement.VERTICAL_SLIDE:
         return False
     return True
 
@@ -898,6 +903,7 @@ def _append_frame(
     params: SystemParams,
     nominal_width_mm: Decimal,
     nominal_height_mm: Decimal,
+    top_article: EffectiveProfileArticle | None = None,
     bottom_article: EffectiveProfileArticle | None = None,
 ) -> None:
     horizontal = [
@@ -944,7 +950,7 @@ def _append_frame(
             _trace_segment(nominal_width_mm, Decimal("0"), nominal_width_mm, nominal_height_mm),
         ),
     ]
-    if bottom_article is None:
+    if top_article is None and bottom_article is None:
         _append_profile(
             accumulator,
             article=frame_article,
@@ -955,12 +961,10 @@ def _append_frame(
             params=params,
         )
     else:
-        # The sliding frame separates its bottom member as the rail/guide
-        # article — only the horizontal members split then.
         _append_profile(
             accumulator,
-            article=frame_article,
-            length_mm=nominal_width_mm + _TWO * joint_adjustment_per_end(params, frame_article),
+            article=top_article if top_article is not None else frame_article,
+            length_mm=nominal_width_mm + _TWO * joint_adjustment_per_end(params, top_article or frame_article),
             qty=1,
             welded_ends=2,
             placements=horizontal[:1],
@@ -968,8 +972,8 @@ def _append_frame(
         )
         _append_profile(
             accumulator,
-            article=bottom_article,
-            length_mm=nominal_width_mm + _TWO * joint_adjustment_per_end(params, bottom_article),
+            article=bottom_article if bottom_article is not None else frame_article,
+            length_mm=nominal_width_mm + _TWO * joint_adjustment_per_end(params, bottom_article or frame_article),
             qty=1,
             welded_ends=2,
             placements=horizontal[1:],
@@ -1201,7 +1205,7 @@ def _append_leaf(
     assembly = f"BAY:{node.id}:LEAF:{leaf_slot}"
     placement_domain: Literal[PlacementDomain.DIRECT, PlacementDomain.SLIDING_LEAF] = (
         PlacementDomain.SLIDING_LEAF
-        if leaf.opening.movement is OpeningMovement.SLIDE
+        if leaf.opening.movement in _SLIDING_DOMAIN_MOVEMENTS
         else PlacementDomain.DIRECT
     )
     accumulator.semantic_leaves.append(
@@ -1277,17 +1281,70 @@ def _append_leaf(
             parent_leaf_id=semantic_leaf_id,
         )
 
-    _append_profile(
-        accumulator,
-        article=article,
-        length_mm=sash.cut_width_mm,
-        qty=2,
-        welded_ends=2,
-        placements=[member("TOP", Axis.HORIZONTAL), member("BOTTOM", Axis.HORIZONTAL)],
-        bay_id=node.id,
-        leaf_id=leaf_id,
-        params=params,
-    )
+    h_meeting_edges = {edge for edge in meetings if edge in ("TOP", "BOTTOM")}
+    if len(h_meeting_edges) == 1:
+        # A horizontal meeting stile (guillotina's encuentro, D08): the
+        # meeting edge is cut from its article with the declared
+        # deduction; the other rail stays a sash member.
+        meeting = next(iter(h_meeting_edges))
+        plain = "BOTTOM" if meeting == "TOP" else "TOP"
+        _append_profile(
+            accumulator,
+            article=meetings[meeting],
+            length_mm=sash.cut_width_mm - meeting_deduction[meeting],
+            qty=1,
+            welded_ends=2,
+            placements=[member(meeting, Axis.HORIZONTAL)],
+            bay_id=node.id,
+            leaf_id=leaf_id,
+            params=params,
+        )
+        _append_profile(
+            accumulator,
+            article=article,
+            length_mm=sash.cut_width_mm,
+            qty=1,
+            welded_ends=2,
+            placements=[member(plain, Axis.HORIZONTAL)],
+            bay_id=node.id,
+            leaf_id=leaf_id,
+            params=params,
+        )
+    elif h_meeting_edges == {"TOP", "BOTTOM"}:
+        _append_profile(
+            accumulator,
+            article=meetings["TOP"],
+            length_mm=sash.cut_width_mm - meeting_deduction["TOP"],
+            qty=1,
+            welded_ends=2,
+            placements=[member("TOP", Axis.HORIZONTAL)],
+            bay_id=node.id,
+            leaf_id=leaf_id,
+            params=params,
+        )
+        _append_profile(
+            accumulator,
+            article=meetings["BOTTOM"],
+            length_mm=sash.cut_width_mm - meeting_deduction["BOTTOM"],
+            qty=1,
+            welded_ends=2,
+            placements=[member("BOTTOM", Axis.HORIZONTAL)],
+            bay_id=node.id,
+            leaf_id=leaf_id,
+            params=params,
+        )
+    else:
+        _append_profile(
+            accumulator,
+            article=article,
+            length_mm=sash.cut_width_mm,
+            qty=2,
+            welded_ends=2,
+            placements=[member("TOP", Axis.HORIZONTAL), member("BOTTOM", Axis.HORIZONTAL)],
+            bay_id=node.id,
+            leaf_id=leaf_id,
+            params=params,
+        )
     meeting_edges = {edge for edge in meetings if edge in ("LEFT", "RIGHT")}
     if meetings and len(meeting_edges) == 1:
         # Mixed stiles: the meeting edge takes the encuentro/inversor
@@ -1358,7 +1415,7 @@ def _append_leaf(
         sash.finished_width_mm, article, params, clearance_mm, pocket_faces
     )
     height = _pocket_dimension(sash.finished_height_mm, article, params, clearance_mm)
-    if leaf.opening.movement is OpeningMovement.SLIDE:
+    if leaf.opening.movement in _SLIDING_DOMAIN_MOVEMENTS:
         sliding = params.sliding
         if (
             sliding.sliding_glazing_deduction_width_mm is None
@@ -1486,7 +1543,7 @@ def _append_leaf(
         )
     )
     semantic_infill_id = f"{semantic_leaf_id}/infill"
-    sliding_infill = leaf.opening.movement is OpeningMovement.SLIDE
+    sliding_infill = leaf.opening.movement in _SLIDING_DOMAIN_MOVEMENTS
     direct_infill_rect = None
     if not sliding_infill:
         assert direct_rect is not None
@@ -1872,16 +1929,20 @@ def _append_sliding(
     params: SystemParams,
     clearance_mm: Decimal,
 ) -> None:
-    """Sliding unit on an explicit or preset track topology (mandate §12).
+    """Sliding unit on an explicit or preset track topology (mandate §12
+    + D08): corredera, corredera elevable, osciloparalela and the puerta
+    corredera share the track math — the leaf's movement only changes
+    its hardware family, its sash role and the symbology downstream.
 
     The opening inside the frame is divided into N slots: every finished
     panel spans `pitch + central_overlap_mm`, so adjacent panels overlap by
     the system's central overlap. MOVING panels are sliding sash leaves;
     FIXED panels are glazed straight into their slot.
     """
-    layout = resolved_sliding_layout(node)
+    movement = spec.leaves[0].opening.movement
+    layout = resolved_sliding_layout(node, movement)
     validate_sliding_layout(layout, params)
-    sliding_leaf = BayLeaf(slot="PRIMARY", opening=Opening(movement=OpeningMovement.SLIDE))
+    sliding_leaf = BayLeaf(slot="PRIMARY", opening=Opening(movement=movement))
     sliding_spec = OpeningSpec(unit_kind=spec.unit_kind, leaves=[sliding_leaf])
     article = _article(params, _leaf_sash_role(params, sliding_spec, sliding_leaf))
     sliding = params.sliding
@@ -1924,7 +1985,7 @@ def _append_sliding(
             )
             panel_leaf = BayLeaf(
                 slot=leaf_slot,
-                opening=Opening(movement=OpeningMovement.SLIDE),
+                opening=Opening(movement=movement),
             )
             meeting_articles: dict[str, EffectiveProfileArticle] = {}
             interlock_article = _meeting_stile_article(params, ProfileRole.INTERLOCK)
@@ -1974,6 +2035,252 @@ def _append_sliding(
         slot_x += pitches[index]
 
 
+def _append_folding(
+    accumulator: _GeometryAccumulator,
+    *,
+    node: ParametricNode,
+    spec: OpeningSpec,
+    topology_path: str,
+    rect: _Rect,
+    params: SystemParams,
+    clearance_mm: Decimal,
+) -> None:
+    """Folding unit (D08): the pack leaves tile the reveal in equal
+    pitches on the 0.01 mm grid (the last absorbs the remainder).
+
+    Every finished leaf loses `fold_leaf_clearance_mm` of width — the
+    hinge/guide play the catalog declares — and `fold_guide_clearance_mm`
+    of height (top + bottom guide channels, shared evenly). Both are
+    declared authorities: a system that never declared them refuses,
+    never fabricates on an assumed clearance."""
+    if (
+        params.fold_guide_clearance_mm is None
+        or params.fold_leaf_clearance_mm is None
+    ):
+        raise MissingFabricationAuthority(
+            "Missing fold authority: fold_guide_clearance_mm / fold_leaf_clearance_mm"
+        )
+    leaf_clear = params.fold_leaf_clearance_mm
+    half_guide = params.fold_guide_clearance_mm / _TWO
+    count = len(spec.leaves)
+    pitch = (rect.width_mm / count).quantize(Decimal("0.01"))
+    pitches = [pitch] * (count - 1) + [rect.width_mm - pitch * (count - 1)]
+    finished_height = rect.height_mm - params.fold_guide_clearance_mm
+    slot_x = rect.x_mm
+    for index, leaf in enumerate(spec.leaves):
+        reveal_w = pitches[index]
+        finished_w = reveal_w - leaf_clear
+        if finished_w <= Decimal("0") or finished_height <= Decimal("0"):
+            raise ValueError(
+                f"Plegable {node.id}: la hoja {leaf.slot} no cabe en el vano "
+                "tras los juegos declarados"
+            )
+        sash = _jointed_sash(
+            finished_w,
+            finished_height,
+            _article(params, _leaf_sash_role(params, spec, leaf)),
+            params,
+        )
+        leaf_rect = _Rect(slot_x, rect.y_mm, reveal_w, rect.height_mm)
+        direct_rect = _Rect(
+            slot_x + leaf_clear / _TWO,
+            rect.y_mm + half_guide,
+            finished_w,
+            finished_height,
+        )
+        _append_leaf(
+            accumulator,
+            ctx=_LeafCtx(
+                node=node,
+                leaf=leaf,
+                spec=spec,
+                trace_opening=leaf_trace_opening(spec, leaf, node.opening_type),
+                handle_expected=_handle_expected(leaf),
+            ),
+            leaf_id=f"{node.id}:{leaf.slot}",
+            topology_path=topology_path,
+            reference_rect=leaf_rect,
+            direct_rect=direct_rect,
+            sash=sash,
+            params=params,
+            clearance_mm=clearance_mm,
+            slot_pitch_mm=pitch,
+        )
+        slot_x += reveal_w
+
+
+def _append_vertical_slide(
+    accumulator: _GeometryAccumulator,
+    *,
+    node: ParametricNode,
+    spec: OpeningSpec,
+    topology_path: str,
+    rect: _Rect,
+    params: SystemParams,
+    clearance_mm: Decimal,
+) -> None:
+    """Guillotina (D08): stacked sashes riding the side channels.
+
+    The reveal splits into TOP / BOTTOM pitches on the 0.01 mm grid;
+    every moving sash's finished height gains the declared
+    `central_overlap_mm` so the sashes lap at the meeting rail, and the
+    width loses two channel depths (`pulley_height_mm` — the family's
+    declared channel reserve, the same authority the corredera reads).
+    A FIXED top sash is glazed straight into its slot. A single-leaf
+    guillotina's sash covers the whole reveal minus the declared
+    `sliding_lateral_clearance_mm` travel play."""
+    sliding = params.sliding
+    count = len(spec.leaves)
+    pitches: list[Decimal]
+    if count == 2:
+        pitch = ((rect.height_mm - sliding.central_overlap_mm) / count).quantize(
+            Decimal("0.01")
+        )
+        pitches = [pitch, rect.height_mm - sliding.central_overlap_mm - pitch]
+    else:
+        pitches = [rect.height_mm]
+    article: EffectiveProfileArticle | None = None
+    for leaf in spec.leaves:
+        if leaf.opening.movement is OpeningMovement.VERTICAL_SLIDE:
+            article = _article(params, _leaf_sash_role(params, spec, leaf))
+            break
+    if article is None:
+        raise ValueError(f"Guillotina {node.id} without a moving sash")
+    adjustment = joint_adjustment_per_end(params, article)
+    interlock = _meeting_stile_article(params, ProfileRole.INTERLOCK)
+    slot_y = rect.y_mm
+    for index, leaf in enumerate(spec.leaves):
+        pitch_i = pitches[index]
+        slot_rect = _Rect(rect.x_mm, slot_y, rect.width_mm, pitch_i)
+        slot_y += pitch_i
+        if leaf.opening.movement is OpeningMovement.FIXED:
+            _append_frame_glazed_pane(
+                accumulator,
+                node=node,
+                topology_path=topology_path,
+                rect=slot_rect,
+                assembly=f"BAY:{node.id}:VSLIDING_FIXED:{leaf.slot}",
+                semantic_infill_id=f"{topology_path}/infill/{leaf.slot}",
+                leaf_slot=leaf.slot,
+                params=params,
+                clearance_mm=clearance_mm,
+            )
+            continue
+        finished_width = rect.width_mm - _TWO * sliding.pulley_height_mm
+        if count == 1:
+            if sliding.sliding_lateral_clearance_mm is None:
+                raise MissingFabricationAuthority(
+                    "Missing guillotina authority: sliding_lateral_clearance_mm"
+                )
+            finished_height = (
+                rect.height_mm - _TWO * sliding.sliding_lateral_clearance_mm
+            )
+        else:
+            finished_height = pitch_i + sliding.central_overlap_mm
+        # The travel axis is vertical: the declared end add lengthens the
+        # cut height; the channel axis (width) takes the joint adjustment.
+        cut_height = finished_height + sliding.sliding_end_add_mm
+        cut_width = finished_width
+        sash = SashGeometry(
+            finished_width_mm=cut_width - _TWO * adjustment,
+            finished_height_mm=cut_height - _TWO * adjustment,
+            cut_width_mm=cut_width,
+            cut_height_mm=cut_height,
+        )
+        meeting_articles: dict[str, EffectiveProfileArticle] = {}
+        if count == 2 and interlock is not None:
+            meeting_articles[
+                "BOTTOM" if leaf.slot == "TOP" else "TOP"
+            ] = interlock
+        _append_leaf(
+            accumulator,
+            ctx=_LeafCtx(
+                node=node,
+                leaf=leaf,
+                spec=spec,
+                trace_opening=leaf_trace_opening(spec, leaf, node.opening_type),
+                handle_expected=_handle_expected(leaf),
+            ),
+            leaf_id=f"{node.id}:{leaf.slot}",
+            topology_path=topology_path,
+            reference_rect=slot_rect,
+            direct_rect=None,
+            sash=sash,
+            params=params,
+            clearance_mm=clearance_mm,
+            slot_pitch_mm=pitch_i,
+            meeting_articles=meeting_articles,
+        )
+
+
+def _append_pivot(
+    accumulator: _GeometryAccumulator,
+    *,
+    node: ParametricNode,
+    spec: OpeningSpec,
+    leaf: BayLeaf,
+    rect: _Rect,
+    topology_path: str,
+    params: SystemParams,
+    clearance_mm: Decimal,
+) -> None:
+    """Pivot leaf (D08): the reveal minus the declared perimeter play
+    `pivot_clearance_mm` on every side. The displaced axis is declared
+    estimator data — `axis_offset_mm` from the leaf's left finished edge
+    (PIVOT_V) or top finished edge (PIVOT_H); fabrication refuses both a
+    missing axis and an axis outside the leaf."""
+    if params.pivot_clearance_mm is None:
+        raise MissingFabricationAuthority(
+            "Missing pivot authority: pivot_clearance_mm"
+        )
+    if leaf.axis_offset_mm is None:
+        raise MissingFabricationAuthority(
+            "Missing pivot axis: axis_offset_mm — el eje desplazado es dato declarado"
+        )
+    clear = params.pivot_clearance_mm
+    finished_w = rect.width_mm - _TWO * clear
+    finished_h = rect.height_mm - _TWO * clear
+    axis_limit = (
+        finished_w
+        if leaf.opening.movement is OpeningMovement.PIVOT_V
+        else finished_h
+    )
+    if not Decimal("0") < leaf.axis_offset_mm < axis_limit:
+        raise ValueError(
+            f"Eje pivotante {leaf.axis_offset_mm} fuera de la hoja "
+            f"({axis_limit} mm) — declaralo dentro del paño"
+        )
+    sash = _jointed_sash(
+        finished_w,
+        finished_h,
+        _article(params, _leaf_sash_role(params, spec, leaf)),
+        params,
+    )
+    direct_rect = _Rect(
+        rect.x_mm + clear,
+        rect.y_mm + clear,
+        finished_w,
+        finished_h,
+    )
+    _append_leaf(
+        accumulator,
+        ctx=_LeafCtx(
+            node=node,
+            leaf=leaf,
+            spec=spec,
+            trace_opening=leaf_trace_opening(spec, leaf, node.opening_type),
+            handle_expected=_handle_expected(leaf),
+        ),
+        leaf_id=None if leaf.slot == "PRIMARY" else f"{node.id}:{leaf.slot}",
+        topology_path=topology_path,
+        reference_rect=rect,
+        direct_rect=direct_rect,
+        sash=sash,
+        params=params,
+        clearance_mm=clearance_mm,
+    )
+
+
 def _append_bay(
     accumulator: _GeometryAccumulator,
     *,
@@ -2005,8 +2312,31 @@ def _append_bay(
     first = spec.leaves[0]
     if len(spec.leaves) == 1:
         movement = first.opening.movement
-        if movement is OpeningMovement.SLIDE:
+        if movement in SLIDE_FAMILY_MOVEMENTS:
             _append_sliding(
+                accumulator,
+                node=node,
+                spec=spec,
+                topology_path=topology_path,
+                rect=rect,
+                params=params,
+                clearance_mm=clearance_mm,
+            )
+            return
+        if movement in (OpeningMovement.PIVOT_V, OpeningMovement.PIVOT_H):
+            _append_pivot(
+                accumulator,
+                node=node,
+                spec=spec,
+                leaf=first,
+                rect=rect,
+                topology_path=topology_path,
+                params=params,
+                clearance_mm=clearance_mm,
+            )
+            return
+        if movement is OpeningMovement.VERTICAL_SLIDE:
+            _append_vertical_slide(
                 accumulator,
                 node=node,
                 spec=spec,
@@ -2068,6 +2398,29 @@ def _append_bay(
             reference_rect=rect,
             direct_rect=direct_rect,
             sash=sash,
+            params=params,
+            clearance_mm=clearance_mm,
+        )
+        return
+    movements = {leaf.opening.movement for leaf in spec.leaves}
+    if movements == {OpeningMovement.FOLD}:
+        _append_folding(
+            accumulator,
+            node=node,
+            spec=spec,
+            topology_path=topology_path,
+            rect=rect,
+            params=params,
+            clearance_mm=clearance_mm,
+        )
+        return
+    if movements <= {OpeningMovement.VERTICAL_SLIDE, OpeningMovement.FIXED}:
+        _append_vertical_slide(
+            accumulator,
+            node=node,
+            spec=spec,
+            topology_path=topology_path,
+            rect=rect,
             params=params,
             clearance_mm=clearance_mm,
         )
@@ -2596,17 +2949,28 @@ def compute_geometry(
     else:
         # When the frame of a sliding unit separates its bottom rail as a
         # dedicated RAIL article, that member is cut from it (D01).
+        top_article = None
         bottom_article = None
         if top.type is NodeType.BAY:
             top_spec = assert_opening_allowed(top, params, unit=unit_kind)
-            if top_spec.leaves[0].opening.movement is OpeningMovement.SLIDE:
+            top_movement = top_spec.leaves[0].opening.movement
+            if top_movement in SLIDE_FAMILY_MOVEMENTS:
                 bottom_article = _optional_article(params, ProfileRole.RAIL)
+            if any(
+                leaf.opening.movement is OpeningMovement.FOLD
+                for leaf in top_spec.leaves
+            ):
+                rail = _optional_article(params, ProfileRole.RAIL)
+                if rail is not None:
+                    top_article = rail
+                    bottom_article = rail
         _append_frame(
             accumulator,
             frame_article=frame_article,
             params=params,
             nominal_width_mm=nominal_width_mm,
             nominal_height_mm=nominal_height_mm,
+            top_article=top_article,
             bottom_article=bottom_article,
         )
         frame_clear_rect = _Rect(

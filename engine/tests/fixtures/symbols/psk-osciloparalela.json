@@ -1,22 +1,22 @@
 {
-  "id": "awning",
-  "name": "Proyectante (awning)",
+  "id": "psk-osciloparalela",
+  "name": "Osciloparalela (PSK) — basculante + desplazamiento",
   "box": {
     "x": 0,
     "y": 0,
-    "w": 800,
-    "h": 1200
+    "w": 1200,
+    "h": 1400
   },
   "input": {
     "kind": "leaves",
     "unit": "WINDOW",
     "leaves": [
       {
-        "movement": "TOP_HUNG",
-        "hinge_side": "TOP",
-        "direction": "OUTWARD",
+        "movement": "PARALLEL_SLIDE",
+        "hinge_side": "NONE",
+        "direction": null,
         "leaf_role": "SINGLE",
-        "handle_mm": 900,
+        "handle_mm": 1050,
         "slot": null,
         "axis_offset_mm": null
       }
@@ -30,13 +30,25 @@
           "prims": [
             {
               "k": "tri",
-              "hinge": "TOP",
+              "hinge": "BOTTOM",
               "apex_at": "0.4",
-              "dash": true,
+              "dash": false,
               "dir": null,
               "vdir": null,
               "axis_dir": null,
               "inferred": false,
+              "side": null,
+              "at_mm": null
+            },
+            {
+              "k": "arrow",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": true,
               "side": null,
               "at_mm": null
             },
@@ -49,17 +61,21 @@
               "vdir": null,
               "axis_dir": null,
               "inferred": false,
-              "side": "bottom",
-              "at_mm": "900"
+              "side": "top",
+              "at_mm": "1050"
             }
           ],
           "paths": [
             {
-              "d": "M 160 144 L 352 1056 L 640 144",
-              "dash": "6 3"
+              "d": "M 240 1232 L 528 168 L 960 1232",
+              "dash": null
             },
             {
-              "d": "M 391 1174 H 409 M 400 1165 V 1183",
+              "d": "M 427.2 700 H 772.8 M 695.04 644.7 L 772.8 700 L 695.04 755.3 M 504.96 644.7 L 427.2 700 L 504.96 755.3",
+              "dash": null
+            },
+            {
+              "d": "M 591 26 H 609 M 600 17 V 35",
               "dash": null
             }
           ]
@@ -73,13 +89,25 @@
           "prims": [
             {
               "k": "tri",
-              "hinge": "TOP",
+              "hinge": "BOTTOM",
               "apex_at": "0.4",
               "dash": false,
               "dir": null,
               "vdir": null,
               "axis_dir": null,
               "inferred": false,
+              "side": null,
+              "at_mm": null
+            },
+            {
+              "k": "arrow",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": true,
               "side": null,
               "at_mm": null
             },
@@ -92,17 +120,21 @@
               "vdir": null,
               "axis_dir": null,
               "inferred": false,
-              "side": "bottom",
-              "at_mm": "900"
+              "side": "top",
+              "at_mm": "1050"
             }
           ],
           "paths": [
             {
-              "d": "M 160 144 L 352 1056 L 640 144",
+              "d": "M 240 1232 L 528 168 L 960 1232",
               "dash": null
             },
             {
-              "d": "M 391 1174 H 409 M 400 1165 V 1183",
+              "d": "M 427.2 700 H 772.8 M 695.04 644.7 L 772.8 700 L 695.04 755.3 M 504.96 644.7 L 427.2 700 L 504.96 755.3",
+              "dash": null
+            },
+            {
+              "d": "M 591 26 H 609 M 600 17 V 35",
               "dash": null
             }
           ]

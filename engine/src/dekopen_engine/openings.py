@@ -29,16 +29,15 @@ from dekopen_engine.models import (
 )
 
 
-# Movements whose fabrication D08 owns — declared today, refused on the
-# geometry path until their cuts exist.
-UNIMPLEMENTED_MOVEMENTS = frozenset(
+# Slide-family movements that fabricate inside a track topology — the
+# same `_append_sliding` path serves corredera, elevable and
+# osciloparalela; the movement only changes the leaf's hardware family
+# and its symbology.
+SLIDE_FAMILY_MOVEMENTS = frozenset(
     {
+        OpeningMovement.SLIDE,
         OpeningMovement.LIFT_SLIDE,
         OpeningMovement.PARALLEL_SLIDE,
-        OpeningMovement.FOLD,
-        OpeningMovement.PIVOT_V,
-        OpeningMovement.PIVOT_H,
-        OpeningMovement.VERTICAL_SLIDE,
     }
 )
 
@@ -318,9 +317,22 @@ def leaf_hardware_group(spec: OpeningSpec, leaf: BayLeaf) -> str | None:
     opening = leaf.opening
     if opening.fixed_in_sash:
         return None
+    # A folding pack leaf mounts the fold set (carriages, guides,
+    # intermediate hinges) — not the falleba of a hinged passive leaf.
+    if opening.movement is OpeningMovement.FOLD and opening.leaf_role is LeafRole.PASSIVE:
+        return "FOLD"
     if opening.leaf_role is LeafRole.PASSIVE:
         return "FALLEBA"
     if spec.unit_kind is UnitKind.DOOR:
+        # A sliding leaf inside a door unit is a puerta corredera — its
+        # kit is the sliding-door family (rollers + patio lock), not the
+        # hinged-door multipoint.
+        if opening.movement in SLIDE_FAMILY_MOVEMENTS:
+            return "DOOR_SLIDING"
+        if opening.movement in (OpeningMovement.PIVOT_V, OpeningMovement.PIVOT_H):
+            # Una puerta pivotante monta el kit de pivote (pivotes + tirador),
+            # no el multipunto de puerta practicable.
+            return "PIVOT"
         return "DOOR"
     return {
         OpeningMovement.TURN: "TURN",
@@ -329,15 +341,33 @@ def leaf_hardware_group(spec: OpeningSpec, leaf: BayLeaf) -> str | None:
         OpeningMovement.TOP_HUNG: "AWNING",
         OpeningMovement.BOTTOM_HUNG: "BOTTOM_HUNG",
         OpeningMovement.SLIDE: "SLIDING",
+        # D08 kit families — declared per system in hardware_kits.
+        OpeningMovement.LIFT_SLIDE: "LIFT_SLIDE",
+        OpeningMovement.PARALLEL_SLIDE: "PARALLEL_SLIDE",
+        # The fold pack's ACTIVE leaf is the hoja de paso: on a door unit
+        # the branch above already resolved it as DOOR; on a window it is
+        # a hinged leaf with lock and handle — a TURN-family kit.
+        OpeningMovement.FOLD: "TURN",
+        OpeningMovement.PIVOT_V: "PIVOT",
+        OpeningMovement.PIVOT_H: "PIVOT",
+        OpeningMovement.VERTICAL_SLIDE: "VERTICAL_SLIDE",
     }.get(opening.movement)
 
 
 def leaf_sash_role_candidates(spec: OpeningSpec, leaf: BayLeaf) -> tuple[ProfileRole, ProfileRole]:
-    """(dedicated role, fallback role) for a leaf's sash article."""
+    """(dedicated role, fallback role) for a leaf's sash article (D08).
+
+    Every leaf that runs on channels — corredera, elevable,
+    osciloparalela, guillotina — is cut from the sliding sash profile
+    when the catalog carries one, on window and door units alike. A
+    pivot door leaf wears the door sash; folding and window pivots use
+    the standard sash profile."""
+    if leaf.opening.movement in SLIDE_FAMILY_MOVEMENTS | {
+        OpeningMovement.VERTICAL_SLIDE
+    }:
+        return ProfileRole.SLIDING_SASH, ProfileRole.SASH
     if spec.unit_kind is UnitKind.DOOR:
         return ProfileRole.DOOR_SASH, ProfileRole.SASH
-    if leaf.opening.movement is OpeningMovement.SLIDE:
-        return ProfileRole.SLIDING_SASH, ProfileRole.SASH
     return ProfileRole.SASH, ProfileRole.SASH
 
 
@@ -396,16 +426,57 @@ def _legacy_capabilities(family: SystemFamily) -> tuple[OpeningCapability, ...]:
             ),
         )
     if family is SystemFamily.SLIDING:
+        # Sliding families physically build window and patio-door units —
+        # a system may narrow this to window-only via declared rows.
         return (
             fixed,
-            OpeningCapability(movement=OpeningMovement.SLIDE, unit_kinds=window),
+            OpeningCapability(movement=OpeningMovement.SLIDE, unit_kinds=both_units),
         )
     if family is SystemFamily.LIFT_SLIDE:
         return (
             fixed,
-            OpeningCapability(movement=OpeningMovement.SLIDE, unit_kinds=window),
+            OpeningCapability(movement=OpeningMovement.SLIDE, unit_kinds=both_units),
             OpeningCapability(
-                movement=OpeningMovement.LIFT_SLIDE, unit_kinds=window
+                movement=OpeningMovement.LIFT_SLIDE, unit_kinds=both_units
+            ),
+        )
+    if family is SystemFamily.PARALLEL_SLIDE:
+        return (
+            fixed,
+            OpeningCapability(
+                movement=OpeningMovement.PARALLEL_SLIDE, unit_kinds=both_units
+            ),
+        )
+    if family is SystemFamily.FOLDING:
+        # A folding series composes packs up to the family's physical
+        # ceiling on windows and doors; the catalog narrows the count.
+        return (
+            fixed,
+            OpeningCapability(
+                movement=OpeningMovement.FOLD,
+                directions=any_direction,
+                leaf_roles=(LeafRole.ACTIVE, LeafRole.PASSIVE),
+                unit_kinds=both_units,
+                max_leaves=8,
+            ),
+        )
+    if family is SystemFamily.PIVOT:
+        return (
+            fixed,
+            OpeningCapability(
+                movement=OpeningMovement.PIVOT_V, unit_kinds=both_units
+            ),
+            OpeningCapability(
+                movement=OpeningMovement.PIVOT_H, unit_kinds=both_units
+            ),
+        )
+    if family is SystemFamily.VERTICAL_SLIDE:
+        return (
+            fixed,
+            OpeningCapability(
+                movement=OpeningMovement.VERTICAL_SLIDE,
+                unit_kinds=window,
+                max_leaves=2,
             ),
         )
     if family is SystemFamily.DOOR:
@@ -461,6 +532,12 @@ def spec_options_from_capabilities(
     options: list[dict[str, object]] = []
     seen: set[str] = set()
     for cap in capabilities:
+        if cap.movement is OpeningMovement.FOLD:
+            _emit_fold_options(options, seen, cap)
+            continue
+        if cap.movement is OpeningMovement.VERTICAL_SLIDE:
+            _emit_vertical_slide_options(options, seen, cap, capabilities)
+            continue
         for unit_kind in cap.unit_kinds:
             # Directions the row admits; FIXED/SLIDE-family leaves carry
             # none (their kinematics forbid it).
@@ -582,6 +659,127 @@ def _pair_spec(
         return None
 
 
+def _fold_spec(
+    count: int,
+    left_count: int,
+    direction: OpeningDirection,
+    unit_kind: UnitKind,
+    *,
+    active_at: int | None = None,
+) -> OpeningSpec | None:
+    """One folding composition: `left_count` LEFT-hinged leaves pack
+    against the left jamb, the rest pack right; `active_at` marks the
+    hoja de paso (the pack's jamb leaf)."""
+    try:
+        leaves = [
+            BayLeaf(
+                slot=f"L{index + 1}",
+                opening=Opening(
+                    movement=OpeningMovement.FOLD,
+                    hinge_side=(
+                        HingeSide.LEFT if index < left_count else HingeSide.RIGHT
+                    ),
+                    direction=direction,
+                    leaf_role=(
+                        LeafRole.ACTIVE if index == active_at else LeafRole.PASSIVE
+                    ),
+                ),
+            )
+            for index in range(count)
+        ]
+        return OpeningSpec(unit_kind=unit_kind, leaves=leaves)
+    except ValueError:
+        return None
+
+
+def _emit_fold_options(
+    options: list[dict[str, object]],
+    seen: set[str],
+    cap: OpeningCapability,
+) -> None:
+    """Every folding scheme the row admits: for each leaf count, every
+    pack split (n+0 .. 0+n), all-PASSIVE plus the hoja-de-paso variants
+    an anchor leaf can carry — per declared direction and unit kind."""
+    pass_door = LeafRole.ACTIVE in cap.leaf_roles
+    for unit_kind in cap.unit_kinds:
+        for direction in cap.directions:
+            for count in range(2, cap.max_leaves + 1):
+                for left_count in range(0, count + 1):
+                    anchors: list[int | None] = [None]
+                    if pass_door:
+                        if left_count > 0:
+                            anchors.append(0)
+                        if count - left_count > 0:
+                            anchors.append(count - 1)
+                    for anchor in anchors:
+                        spec = _fold_spec(
+                            count, left_count, direction, unit_kind,
+                            active_at=anchor,
+                        )
+                        if spec is not None:
+                            _emit_option(options, seen, spec)
+
+
+def _emit_vertical_slide_options(
+    options: list[dict[str, object]],
+    seen: set[str],
+    cap: OpeningCapability,
+    capabilities: tuple[OpeningCapability, ...],
+) -> None:
+    """The guillotina compositions the row admits: the single full-height
+    sash, the double-hung TOP/BOTTOM pair when the row allows two leaves,
+    and the single-hung variant (fixed lite above + sliding sash below)
+    when a FIXED row covers the same unit."""
+    for unit_kind in cap.unit_kinds:
+        single = _single_spec(
+            OpeningMovement.VERTICAL_SLIDE, HingeSide.NONE, None, unit_kind, False
+        )
+        if single is not None:
+            _emit_option(options, seen, single)
+        if cap.max_leaves < 2:
+            continue
+        double = OpeningSpec(
+            unit_kind=unit_kind,
+            leaves=[
+                BayLeaf(
+                    slot="TOP",
+                    opening=Opening(movement=OpeningMovement.VERTICAL_SLIDE),
+                ),
+                BayLeaf(
+                    slot="BOTTOM",
+                    opening=Opening(movement=OpeningMovement.VERTICAL_SLIDE),
+                ),
+            ],
+        )
+        _emit_option(options, seen, double)
+        # Single-hung: the top sash stays a fixed pane — only offered when
+        # the catalog also declares FIXED for this unit kind.
+        fixed_covered = any(
+            other.movement is OpeningMovement.FIXED
+            and unit_kind in other.unit_kinds
+            and LeafRole.SINGLE in other.leaf_roles
+            for other in capabilities
+        )
+        if fixed_covered:
+            _emit_option(
+                options,
+                seen,
+                OpeningSpec(
+                    unit_kind=unit_kind,
+                    leaves=[
+                        BayLeaf(
+                            slot="TOP",
+                            opening=Opening(movement=OpeningMovement.FIXED),
+                        ),
+                        BayLeaf(
+                            slot="BOTTOM",
+                            opening=Opening(movement=OpeningMovement.VERTICAL_SLIDE),
+                        ),
+                    ],
+                ),
+            )
+
+
 def _emit_option(
     options: list[dict[str, object]],
     seen: set[str],
@@ -598,6 +796,14 @@ def _emit_option(
         "unit_kind": spec.unit_kind.value,
         "legacy": sorted(item.value for item in legacy)[0] if legacy else None,
     }
+    if any(
+        leaf.opening.movement in (OpeningMovement.PIVOT_V, OpeningMovement.PIVOT_H)
+        for leaf in spec.leaves
+    ):
+        # A pivot option exists but its leaf is incomplete until the
+        # estimator declares the displaced axis — surfaces must collect
+        # axis_offset_mm before fabrication will accept the spec.
+        descriptor["requires_axis"] = True
     if len(spec.leaves) == 1:
         descriptor["opening"] = _opening_payload(spec.leaves[0].opening)
     else:
@@ -675,16 +881,38 @@ FAMILY_MOVEMENTS: dict[SystemFamily, frozenset[OpeningMovement]] = {
     ),
     SystemFamily.DOOR: frozenset({OpeningMovement.FIXED, OpeningMovement.TURN}),
     SystemFamily.FACADE_FIXED: frozenset({OpeningMovement.FIXED}),
+    # D08 — the advanced fabrication families: each builds its own
+    # translational/rotational leaf machinery plus FIXED panes.
+    SystemFamily.PARALLEL_SLIDE: frozenset(
+        {OpeningMovement.FIXED, OpeningMovement.PARALLEL_SLIDE}
+    ),
+    SystemFamily.FOLDING: frozenset(
+        {OpeningMovement.FIXED, OpeningMovement.FOLD}
+    ),
+    SystemFamily.PIVOT: frozenset(
+        {OpeningMovement.FIXED, OpeningMovement.PIVOT_V, OpeningMovement.PIVOT_H}
+    ),
+    SystemFamily.VERTICAL_SLIDE: frozenset(
+        {OpeningMovement.FIXED, OpeningMovement.VERTICAL_SLIDE}
+    ),
 }
 
 # Unit kinds a family builds: casement series sell hinged door leaves,
 # the door family lives on door units; the rest are window-only frames.
 FAMILY_UNIT_KINDS: dict[SystemFamily, frozenset[UnitKind]] = {
     SystemFamily.CASEMENT: frozenset({UnitKind.WINDOW, UnitKind.DOOR}),
-    SystemFamily.SLIDING: frozenset({UnitKind.WINDOW}),
-    SystemFamily.LIFT_SLIDE: frozenset({UnitKind.WINDOW}),
+    # Translational families physically fabricate patio-door units too
+    # (puerta corredera, elevable, osciloparalela, plegable, pivotante) —
+    # capability rows then narrow what a concrete system actually sells.
+    SystemFamily.SLIDING: frozenset({UnitKind.WINDOW, UnitKind.DOOR}),
+    SystemFamily.LIFT_SLIDE: frozenset({UnitKind.WINDOW, UnitKind.DOOR}),
     SystemFamily.DOOR: frozenset({UnitKind.WINDOW, UnitKind.DOOR}),
     SystemFamily.FACADE_FIXED: frozenset({UnitKind.WINDOW}),
+    SystemFamily.PARALLEL_SLIDE: frozenset({UnitKind.WINDOW, UnitKind.DOOR}),
+    SystemFamily.FOLDING: frozenset({UnitKind.WINDOW, UnitKind.DOOR}),
+    SystemFamily.PIVOT: frozenset({UnitKind.WINDOW, UnitKind.DOOR}),
+    # Guillotina is a window typology — no sash-door product exists.
+    SystemFamily.VERTICAL_SLIDE: frozenset({UnitKind.WINDOW}),
 }
 
 
@@ -771,13 +999,68 @@ def opening_leaf_name_es(opening: Opening, unit_kind: UnitKind) -> str:
             " — bisagras abajo"
         )
     if movement is OpeningMovement.SLIDE:
-        return "Corredera"
-    return str(movement.value).replace("_", " ").title()
+        return "Puerta corredera" if unit_kind is UnitKind.DOOR else "Corredera"
+    if movement is OpeningMovement.LIFT_SLIDE:
+        return (
+            "Puerta corredera elevable"
+            if unit_kind is UnitKind.DOOR
+            else "Corredera elevable"
+        )
+    if movement is OpeningMovement.PARALLEL_SLIDE:
+        return (
+            "Puerta osciloparalela"
+            if unit_kind is UnitKind.DOOR
+            else "Osciloparalela"
+        )
+    if movement is OpeningMovement.FOLD:
+        return "Hoja de paso plegable" if opening.leaf_role is LeafRole.ACTIVE else "Hoja plegable"
+    if movement is OpeningMovement.PIVOT_V:
+        return (
+            "Puerta pivotante"
+            if unit_kind is UnitKind.DOOR
+            else "Pivotante de eje vertical"
+        )
+    if movement is OpeningMovement.PIVOT_H:
+        return (
+            "Puerta pivotante horizontal"
+            if unit_kind is UnitKind.DOOR
+            else "Pivotante de eje horizontal"
+        )
+    if movement is OpeningMovement.VERTICAL_SLIDE:
+        return "Guillotina"
+    raise ValueError(f"Movimiento sin nombre en español: {movement.value}")
 
 
 def spec_display_name_es(spec: OpeningSpec) -> str:
     """Human name for a whole opening spec — multi-leaf compositions get
-    their typology name (Francesa, Puerta doble)."""
+    their typology name (Francesa, Puerta doble, Plegable n+m,
+    Guillotina simple/doble)."""
+    if all(leaf.opening.movement is OpeningMovement.FOLD for leaf in spec.leaves):
+        left_count = sum(
+            1 for leaf in spec.leaves if leaf.opening.hinge_side is HingeSide.LEFT
+        )
+        right_count = len(spec.leaves) - left_count
+        direction = spec.leaves[0].opening.direction
+        parts = [f"Plegable {left_count}+{right_count}"]
+        if spec.unit_kind is UnitKind.DOOR:
+            parts[0] = f"Puerta plegable {left_count}+{right_count}"
+        parts.append(_DIRECTION_ES.get(direction or OpeningDirection.INWARD, ""))
+        name = " — ".join(part for part in parts if part)
+        if any(leaf.opening.leaf_role is LeafRole.ACTIVE for leaf in spec.leaves):
+            name += " — hoja de paso"
+        return name
+    if any(
+        leaf.opening.movement is OpeningMovement.VERTICAL_SLIDE
+        for leaf in spec.leaves
+    ):
+        if len(spec.leaves) == 2:
+            if all(
+                leaf.opening.movement is OpeningMovement.VERTICAL_SLIDE
+                for leaf in spec.leaves
+            ):
+                return "Guillotina doble"
+            return "Guillotina simple"
+        return "Guillotina"
     if len(spec.leaves) == 2:
         movement = spec.leaves[0].opening.movement
         active = next(leaf for leaf in spec.leaves if leaf.opening.leaf_role is LeafRole.ACTIVE)

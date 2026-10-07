@@ -9,6 +9,12 @@ from engine.tests.catalog import (
     alu_65_params as build_alu_65_params,
     demo_60_params as build_demo_60_params,
     demo_corredera_60_params as build_demo_corredera_60_params,
+    demo_elevacion_90_params as build_demo_elevacion_90_params,
+    demo_guillotina_60_params as build_demo_guillotina_60_params,
+    demo_osciloparalela_params as build_demo_osciloparalela_params,
+    demo_plegable_70_params as build_demo_plegable_70_params,
+    demo_pivotante_120_params as build_demo_pivotante_120_params,
+    demo_puerta_corredera_params as build_demo_puerta_corredera_params,
 )
 
 
@@ -29,6 +35,37 @@ def demo_corredera_60_params() -> SystemParams:
 @pytest.fixture(scope="session")
 def alu_65_params() -> SystemParams:
     return build_alu_65_params()
+
+
+# D08 synthetic DEMO families — one fixture per advanced fabrication family.
+@pytest.fixture(scope="session")
+def demo_elevacion_90_params() -> SystemParams:
+    return build_demo_elevacion_90_params()
+
+
+@pytest.fixture(scope="session")
+def demo_osciloparalela_params() -> SystemParams:
+    return build_demo_osciloparalela_params()
+
+
+@pytest.fixture(scope="session")
+def demo_plegable_70_params() -> SystemParams:
+    return build_demo_plegable_70_params()
+
+
+@pytest.fixture(scope="session")
+def demo_pivotante_120_params() -> SystemParams:
+    return build_demo_pivotante_120_params()
+
+
+@pytest.fixture(scope="session")
+def demo_guillotina_60_params() -> SystemParams:
+    return build_demo_guillotina_60_params()
+
+
+@pytest.fixture(scope="session")
+def demo_puerta_corredera_params() -> SystemParams:
+    return build_demo_puerta_corredera_params()
 
 
 def bay_node(

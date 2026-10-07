@@ -15,6 +15,7 @@ import segno
 
 from dekopen_engine.contour import Contour, contour_points
 from dekopen_engine.models import (
+    BayLeaf,
     HingeSide,
     OpeningDirection,
     OpeningMovement,
@@ -834,6 +835,98 @@ def _parse_sliding_layout(raw: object) -> SlidingLayout | None:
         return None
 
 
+def _bay_slide_movement(node: dict[str, object]) -> OpeningMovement:
+    """The sliding-family movement a bay declares — LIFT_SLIDE (HST),
+    PARALLEL_SLIDE (PSK) or plain SLIDE — read off its spec leaves or
+    its single opening. Falls back to SLIDE for a legacy layout-only
+    bay."""
+    slide_family = {
+        OpeningMovement.LIFT_SLIDE,
+        OpeningMovement.PARALLEL_SLIDE,
+        OpeningMovement.SLIDE,
+    }
+    raw_leaves = node.get("leaves")
+    if isinstance(raw_leaves, list):
+        for raw_leaf in raw_leaves:
+            if not isinstance(raw_leaf, dict):
+                continue
+            raw_opening = raw_leaf.get("opening")
+            if not isinstance(raw_opening, dict):
+                continue
+            try:
+                movement = OpeningMovement(str(raw_opening.get("movement")))
+            except ValueError:
+                continue
+            if movement in slide_family:
+                return movement
+    raw_opening = node.get("opening")
+    if isinstance(raw_opening, dict):
+        try:
+            movement = OpeningMovement(str(raw_opening.get("movement")))
+        except ValueError:
+            return OpeningMovement.SLIDE
+        if movement in slide_family:
+            return movement
+    return OpeningMovement.SLIDE
+
+
+def _bay_plan_kind(node: dict[str, object]) -> str | None:
+    """Which plan strip a bay draws under the elevation — None when it
+    has no plan semantics. The sliding family (corredera, HST,
+    osciloparalela) draws rail tracks; FOLD draws the folded package,
+    PIVOT the declared axis, VERTICAL_SLIDE the two stacked sashes."""
+    if node.get("sliding_layout") is not None:
+        return "sliding"
+    opening = str(node.get("opening_type") or "")
+    if opening.startswith("SLIDING"):
+        return "sliding"
+
+    def _leaf_movements() -> list[OpeningMovement]:
+        movements: list[OpeningMovement] = []
+        raw_leaves = node.get("leaves")
+        if isinstance(raw_leaves, list):
+            for raw_leaf in raw_leaves:
+                if not isinstance(raw_leaf, dict):
+                    continue
+                raw_opening = raw_leaf.get("opening")
+                if not isinstance(raw_opening, dict):
+                    continue
+                try:
+                    movements.append(
+                        OpeningMovement(str(raw_opening.get("movement")))
+                    )
+                except ValueError:
+                    continue
+        raw_opening = node.get("opening")
+        if not movements and isinstance(raw_opening, dict):
+            try:
+                movements.append(
+                    OpeningMovement(str(raw_opening.get("movement")))
+                )
+            except ValueError:
+                pass
+        return movements
+
+    movements = _leaf_movements()
+    if not movements:
+        return None
+    if any(
+        m in (OpeningMovement.LIFT_SLIDE, OpeningMovement.PARALLEL_SLIDE)
+        for m in movements
+    ):
+        return "sliding"
+    if any(m is OpeningMovement.FOLD for m in movements):
+        return "fold"
+    if any(
+        m in (OpeningMovement.PIVOT_V, OpeningMovement.PIVOT_H)
+        for m in movements
+    ):
+        return "pivot"
+    if any(m is OpeningMovement.VERTICAL_SLIDE for m in movements):
+        return "guillotina"
+    return None
+
+
 def _legacy_leaf_specs(
     opening: str, node: dict[str, object]
 ) -> tuple[list[Opening], "UnitKind"]:
@@ -946,11 +1039,13 @@ def _svg_elements(node: dict[str, object], x: Decimal, y: Decimal,
     handle_raw = node.get("handle_height_mm")
     handle_mm = _num(handle_raw) if handle_raw is not None else None
     view: ElevationView = "interior"  # issued elevations are interior unless asked
-    if opening is None:
+    spec_leaves: list[tuple[Decimal, Decimal, BayLeaf]] = []
+    if opening is None and node.get("sliding_layout") is None:
         # D03 spec form — `opening`/`leaves`/`unit_kind` instead of the
         # legacy enum: resolve each leaf and draw the shared DIN grammar
-        # per leaf (interior view; dashed when it opens away).
-        spec_leaves: list[tuple[Decimal, Decimal, Opening]] = []
+        # per leaf (interior view; dashed when it opens away). A declared
+        # `sliding_layout` wins over spec leaves — the panel topology is
+        # the authority on a sliding-family bay (HST, corredera, PSK).
         raw_leaves = node.get("leaves")
         if isinstance(raw_leaves, list) and raw_leaves:
             try:
@@ -962,13 +1057,19 @@ def _svg_elements(node: dict[str, object], x: Decimal, y: Decimal,
             if spec is not None and spec.leaves:
                 leaf_w = iw / len(spec.leaves)
                 spec_leaves = [
-                    (ix + leaf_w * index, leaf_w, leaf.opening)
+                    (ix + leaf_w * index, leaf_w, leaf)
                     for index, leaf in enumerate(spec.leaves)
                 ]
         raw_opening = node.get("opening")
         if not spec_leaves and isinstance(raw_opening, dict):
             try:
-                spec_leaves = [(ix, iw, _parse_opening(raw_opening))]
+                spec_leaves = [
+                    (
+                        ix,
+                        iw,
+                        BayLeaf(slot="PRIMARY", opening=_parse_opening(raw_opening)),
+                    )
+                ]
             except InvalidEngineRequest:
                 spec_leaves = []
         if spec_leaves:
@@ -982,17 +1083,24 @@ def _svg_elements(node: dict[str, object], x: Decimal, y: Decimal,
                 )
             for leaf_x, leaf_w, leaf in spec_leaves:
                 _glyph_paths_out(
-                    leaf_primitives(leaf, view, unit=unit, handle_mm=handle_mm),
+                    leaf_primitives(
+                        leaf.opening,
+                        view,
+                        unit=unit,
+                        handle_mm=handle_mm,
+                        axis_mm=leaf.axis_offset_mm,
+                        slot=leaf.slot,
+                    ),
                     leaf_x, iy, leaf_w, ih, out, pal, stroke_mm,
                 )
             if pal.get("hardware"):
                 for leaf_x, leaf_w, leaf in spec_leaves:
-                    hinge = leaf.hinge_side.value if leaf.hinge_side else None
+                    hinge = leaf.opening.hinge_side.value if leaf.opening.hinge_side else None
                     pseudo = {
                         "TILT_TURN": {"LEFT": "TILT_TURN_LEFT", "RIGHT": "TILT_TURN_RIGHT"},
                         "TURN": {"LEFT": "TURN_LEFT", "RIGHT": "TURN_RIGHT"},
                         "TOP_HUNG": {"TOP": "AWNING"},
-                    }.get(leaf.movement.value, {}).get(hinge or "")
+                    }.get(leaf.opening.movement.value, {}).get(hinge or "")
                     if unit == UnitKind.DOOR and pseudo:
                         pseudo = "DOOR_ENTRY"
                     if pseudo:
@@ -1000,7 +1108,7 @@ def _svg_elements(node: dict[str, object], x: Decimal, y: Decimal,
                             pseudo, "RIGHT" if hinge == "RIGHT" else "",
                             leaf_x, iy, leaf_w, ih, out, pal,
                         )
-    elif opening in ("SLIDING_2L", "SLIDING_3L", "SLIDING_4L", "SLIDING"):
+    elif opening in ("SLIDING_2L", "SLIDING_3L", "SLIDING_4L", "SLIDING") or node.get("sliding_layout") is not None:
         # The layout owns the semantics: track assignment + declared travel.
         # A frozen tree saved before `travel` resolves direction by the
         # documented convention and the arrow carries `inferred`.
@@ -1017,7 +1125,9 @@ def _svg_elements(node: dict[str, object], x: Decimal, y: Decimal,
                 ],
             )
         leaf_w = iw / len(parsed_layout.panels)
-        panel_prims = sliding_primitives(parsed_layout, view)
+        panel_prims = sliding_primitives(
+            parsed_layout, view, movement=_bay_slide_movement(node)
+        )
         for index, panel in enumerate(parsed_layout.panels):
             lx = ix + leaf_w * index
             out.append(
@@ -1193,8 +1303,7 @@ def _collect_sliding_bays(
         return
     if node_type != "BAY":
         return
-    opening = str(node.get("opening_type") or "")
-    if opening.startswith("SLIDING") or node.get("sliding_layout") is not None:
+    if _bay_plan_kind(node) is not None:
         acc.append((x, y, width, height, node))
 
 
@@ -1208,6 +1317,7 @@ def _sliding_plan_strip(
     stroke_mm: Decimal,
     font_mm: Decimal,
     track_h: Decimal,
+    movement: OpeningMovement = OpeningMovement.SLIDE,
 ) -> Decimal:
     """Plan cut of a sliding bay under the technical elevation: the wall
     bar on the exterior side, one numbered rail per track, the leaves in
@@ -1249,7 +1359,9 @@ def _sliding_plan_strip(
             f'stroke-width="{_pt(stroke_mm)}"/>'
         )
         if panel.kind != "FIXED":
-            prim = sliding_primitives(layout, "interior")[index]
+            prim = sliding_primitives(
+                layout, "interior", movement=movement
+            )[index]
             _glyph_paths_out(
                 prim, slot_x, slot_y, pitch, track_h, out, pal, stroke_mm / 2
             )
@@ -1260,6 +1372,149 @@ def _sliding_plan_strip(
         f'fill="{pal["glyph"]}">INTERIOR</text>'
     )
     return interior_y - strip_top + font_mm * Decimal("0.6")
+
+
+def _typology_plan_strip(
+    bx: Decimal,
+    strip_top: Decimal,
+    bw: Decimal,
+    node: dict[str, object],
+    kind: str,
+    out: list[str],
+    pal: dict[str, str | None],
+    stroke_mm: Decimal,
+    font_mm: Decimal,
+    track_h: Decimal,
+) -> Decimal:
+    """D08 plan cut for non-track typologies — same wall/convention as
+    the sliding strip, but the glyph is the typology's real travel:
+    ``fold`` draws the package collapsed against its anchor jamb,
+    ``pivot`` the leaf on the reveal with its declared axis, and
+    ``guillotina`` the two sashes on their parallel depths.
+    """
+    wall_h = track_h / Decimal("3")
+    out.append(
+        f'<rect x="{_pt(bx)}" y="{_pt(strip_top)}" width="{_pt(bw)}" '
+        f'height="{_pt(wall_h)}" fill="{pal["frame_edge"]}"/>'
+    )
+    out.append(
+        f'<text x="{_pt(bx + bw)}" y="{_pt(strip_top + wall_h + font_mm)}" '
+        f'font-size="{_pt(font_mm)}" text-anchor="end" '
+        f'fill="{pal["glyph"]}">EXTERIOR</text>'
+    )
+    strip_inner_top = strip_top + wall_h + font_mm * Decimal("1.6")
+
+    raw_leaves = node.get("leaves")
+    leaves = (
+        [leaf for leaf in raw_leaves if isinstance(leaf, dict)]
+        if isinstance(raw_leaves, list)
+        else []
+    )
+
+    if kind == "fold":
+        # Paquete plegado: las hojas recogidas junto al jamón de anclaje
+        # — la dirección de plegado la declara la bisagra de la primera
+        # hoja; el paquete queda en el canto opuesto al de apertura libre.
+        count = max(len(leaves), 1)
+        first = leaves[0].get("opening") if leaves else None
+        hinge = str(first.get("hinge_side") or "LEFT") if isinstance(first, dict) else "LEFT"
+        pack_w = track_h * Decimal("1.2")
+        pack_x = bx if hinge == "RIGHT" else bx + bw - pack_w
+        leaf_h = track_h * Decimal("0.55")
+        for index in range(count):
+            leaf_x = pack_x + index * (pack_w / max(count, 1) / 2)
+            out.append(
+                f'<rect x="{_pt(leaf_x)}" y="{_pt(strip_inner_top)}" '
+                f'width="{_pt(track_h / 4)}" height="{_pt(leaf_h + index * track_h / 8)}" '
+                f'fill="none" stroke="{pal["bay_edge"]}" '
+                f'stroke-width="{_pt(stroke_mm)}"/>'
+            )
+        interior_y = strip_inner_top + leaf_h + count * track_h / 8 + font_mm * Decimal("1.4")
+        out.append(
+            f'<text x="{_pt(bx + bw)}" y="{_pt(interior_y)}" '
+            f'font-size="{_pt(font_mm)}" text-anchor="end" '
+            f'fill="{pal["glyph"]}">INTERIOR</text>'
+        )
+        return interior_y - strip_top + font_mm * Decimal("0.6")
+
+    if kind == "pivot":
+        # Hoja pivotante en el vano: la hoja es la línea del paramento y
+        # el eje pivotante se marca a la distancia declarada.
+        leaf_y = strip_inner_top + track_h * Decimal("0.6")
+        out.append(
+            f'<line x1="{_pt(bx)}" y1="{_pt(leaf_y)}" x2="{_pt(bx + bw)}" '
+            f'y2="{_pt(leaf_y)}" stroke="{pal["bay_edge"]}" '
+            f'stroke-width="{_pt(stroke_mm)}"/>'
+        )
+        axis_raw = leaves[0].get("axis_offset_mm") if leaves else None
+        axis_x = bx + (_num(axis_raw) if axis_raw is not None else bw / 2)
+        axis_x = min(max(axis_x, bx), bx + bw)
+        tick = track_h * Decimal("0.5")
+        out.append(
+            f'<line x1="{_pt(axis_x)}" y1="{_pt(leaf_y - tick)}" '
+            f'x2="{_pt(axis_x)}" y2="{_pt(leaf_y + tick)}" '
+            f'stroke="{pal["glyph"]}" stroke-width="{_pt(stroke_mm)}"/>'
+        )
+        out.append(
+            f'<text x="{_pt(axis_x)}" y="{_pt(leaf_y + tick + font_mm)}" '
+            f'font-size="{_pt(font_mm)}" text-anchor="middle" '
+            f'fill="{pal["glyph"]}">EJE</text>'
+        )
+        interior_y = leaf_y + tick + font_mm * Decimal("2.2")
+        out.append(
+            f'<text x="{_pt(bx + bw)}" y="{_pt(interior_y)}" '
+            f'font-size="{_pt(font_mm)}" text-anchor="end" '
+            f'fill="{pal["glyph"]}">INTERIOR</text>'
+        )
+        return interior_y - strip_top + font_mm * Decimal("0.6")
+
+    if kind == "guillotina":
+        # Dos paños correderos a dos profundidades — la hoja superior en
+        # el plano exterior, la inferior en el interior (doble guillotina;
+        # con una sola móvil la otra queda fija, sin flecha).
+        depth_leaf = {
+            depth: next(
+                (
+                    leaf
+                    for leaf in leaves
+                    if str(leaf.get("slot")) == ("TOP" if depth == 0 else "BOTTOM")
+                ),
+                None,
+            )
+            for depth in range(2)
+        }
+        for depth in range(2):
+            rail_y = strip_inner_top + track_h * depth
+            out.append(
+                f'<line x1="{_pt(bx)}" y1="{_pt(rail_y)}" x2="{_pt(bx + bw)}" '
+                f'y2="{_pt(rail_y)}" stroke="{pal["split"]}" '
+                f'stroke-width="{_pt(stroke_mm / 2)}"/>'
+            )
+            leaf_x = bx + bw * Decimal("0.15")
+            out.append(
+                f'<rect x="{_pt(leaf_x)}" y="{_pt(rail_y - track_h / 6)}" '
+                f'width="{_pt(bw * Decimal("0.7"))}" height="{_pt(track_h / 3)}" '
+                f'fill="none" stroke="{pal["bay_edge"]}" '
+                f'stroke-width="{_pt(stroke_mm)}"/>'
+            )
+            leaf = depth_leaf[depth]
+            leaf_opening = leaf.get("opening") if isinstance(leaf, dict) else None
+            if isinstance(leaf_opening, dict) and leaf_opening.get("movement") == "VERTICAL_SLIDE":
+                out.append(
+                    f'<text x="{_pt(leaf_x + bw * Decimal("0.35"))}" '
+                    f'y="{_pt(rail_y + track_h / 3)}" '
+                    f'font-size="{_pt(font_mm)}" text-anchor="middle" '
+                    f'fill="{pal["glyph"]}">↕</text>'
+                )
+        interior_y = strip_inner_top + track_h + font_mm * Decimal("1.4")
+        out.append(
+            f'<text x="{_pt(bx + bw)}" y="{_pt(interior_y)}" '
+            f'font-size="{_pt(font_mm)}" text-anchor="end" '
+            f'fill="{pal["glyph"]}">INTERIOR</text>'
+        )
+        return interior_y - strip_top + font_mm * Decimal("0.6")
+
+    return track_h
 
 
 def _bay_fields(
@@ -1739,22 +1994,32 @@ def _position_svg(
         strip_stroke = height / Decimal("120") if height > 0 else Decimal("2")
         plan_bottom = height
         for bx, _by, bw, _bh, bay_node in sliding_bays:
-            bay_layout = _parse_sliding_layout(bay_node.get("sliding_layout"))
-            if bay_layout is None or not bay_layout.panels:
-                leaf_count = {
-                    "SLIDING_2L": 2, "SLIDING_3L": 3, "SLIDING_4L": 4
-                }.get(str(bay_node.get("opening_type")), 2)
-                bay_layout = SlidingLayout(
-                    tracks=2,
-                    panels=[
-                        SlidingPanel(slot=str(i), kind=SlidingPanelKind.MOVING)
-                        for i in range(leaf_count)
-                    ],
+            plan_kind = _bay_plan_kind(bay_node) or "sliding"
+            if plan_kind == "sliding":
+                bay_layout = _parse_sliding_layout(bay_node.get("sliding_layout"))
+                if bay_layout is None or not bay_layout.panels:
+                    leaf_count = {
+                        "SLIDING_2L": 2, "SLIDING_3L": 3, "SLIDING_4L": 4
+                    }.get(str(bay_node.get("opening_type")), 2)
+                    bay_layout = SlidingLayout(
+                        tracks=2,
+                        panels=[
+                            SlidingPanel(slot=str(i), kind=SlidingPanelKind.MOVING)
+                            for i in range(leaf_count)
+                        ],
+                    )
+                plan_bottom = strip_top + _sliding_plan_strip(
+                    bx, strip_top, bw, bay_layout, elements, pal,
+                    strip_stroke, font_mm, track_h,
+                    movement=_bay_slide_movement(bay_node),
                 )
-            plan_bottom = strip_top + _sliding_plan_strip(
-                bx, strip_top, bw, bay_layout, elements, pal,
-                strip_stroke, font_mm, track_h,
-            )
+            else:
+                # D08 — plegable / pivotante / guillotina: la planta
+                # muestra el viaje real de la tipología.
+                plan_bottom = strip_top + _typology_plan_strip(
+                    bx, strip_top, bw, bay_node, plan_kind, elements, pal,
+                    strip_stroke, font_mm, track_h,
+                )
             strip_top = plan_bottom + bottom_pad / 2
         if draw_fields:
             plan = position.get("plan")

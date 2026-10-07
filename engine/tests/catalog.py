@@ -1343,3 +1343,1076 @@ def alu_corredera_params() -> SystemParams:
         reinforcement_rules=[],
         typology_limits=_sliding_limits(),
     )
+
+
+# ---------------------------------------------------------------------------
+# D08 — tipologías avanzadas: synthetic DEMO systems per fabrication family.
+# Every fixture below is SEED_SYNTHETIC-grade data: plausible catalog values,
+# never certified. The golden tests freeze what the engine computes from them.
+# ---------------------------------------------------------------------------
+
+
+def _d08_beads(prefix: str) -> dict[Decimal, GlazingBeadRule]:
+    return {
+        d("4.00"): GlazingBeadRule(
+            glass_thickness_mm=d("4.00"),
+            bead_article=_article(
+                sku=f"JQ-{prefix}-24",
+                role=ProfileRole.GLAZING_BEAD,
+                face_width_mm="24.00",
+                welding_loss_mm="0.00",
+                reinforcement_gap_mm="15.00",
+            ),
+            bead_width_mm=d("24.00"),
+            gasket_interior_mm=d("3.00"),
+            gasket_exterior_mm=d("3.00"),
+            cut_add_mm=d("9.00"),
+        ),
+        d("24.00"): GlazingBeadRule(
+            glass_thickness_mm=d("24.00"),
+            bead_article=_article(
+                sku=f"JQ-{prefix}-10",
+                role=ProfileRole.GLAZING_BEAD,
+                face_width_mm="10.00",
+                welding_loss_mm="0.00",
+                reinforcement_gap_mm="15.00",
+            ),
+            bead_width_mm=d("10.00"),
+            gasket_interior_mm=d("3.00"),
+            gasket_exterior_mm=d("3.00"),
+            cut_add_mm=d("9.00"),
+        ),
+    }
+
+
+def _limit(
+    opening: str,
+    min_w: str,
+    max_w: str,
+    min_h: str,
+    max_h: str,
+    max_kg: str,
+) -> TypologyLimit:
+    return TypologyLimit(
+        opening_type=opening,
+        min_leaf_width_mm=d(min_w),
+        max_leaf_width_mm=d(max_w),
+        min_leaf_height_mm=d(min_h),
+        max_leaf_height_mm=d(max_h),
+        max_leaf_weight_kg=d(max_kg),
+    )
+
+
+def _d08_panel_rule() -> dict[str, PanelRule]:
+    return {
+        "PANEL-SANDWICH-DEMO-24": PanelRule(
+            sku="PANEL-SANDWICH-DEMO-24",
+            name="Panel Sándwich Demo 24mm",
+            kind="SANDWICH_PANEL",
+            thickness_mm=d("24.00"),
+            weight_kg_m2=d("10.0000"),
+        ),
+    }
+
+
+def demo_elevacion_90_params() -> SystemParams:
+    """DEMO_ELEVACION_90 — PVC lift-slide (HST). Synthetic DEMO fixture.
+
+    Carretillas escalonadas por peso (≤200 kg dobles, ≤400 kg reforzadas),
+    umbral elevador RAIL, y puerta corredera en la misma serie."""
+    return SystemParams(
+        system_code="DEMO_ELEVACION_90",
+        finishes=("WHITE", "FOILED"),
+        depth_mm=d("90.00"),
+        material=MaterialType.PVC,
+        system_family=SystemFamily.LIFT_SLIDE,
+        effective_profile_articles={
+            ProfileRole.FRAME: _article(
+                sku="MARCO-ELEV",
+                role=ProfileRole.FRAME,
+                face_width_mm="58.00",
+                welding_loss_mm="6.00",
+                reinforcement_gap_mm="15.00",
+            ),
+            ProfileRole.RAIL: _article(
+                sku="RIEL-ELEV",
+                role=ProfileRole.RAIL,
+                face_width_mm="42.00",
+                welding_loss_mm="6.00",
+                reinforcement_gap_mm="15.00",
+            ),
+            ProfileRole.SLIDING_SASH: _article(
+                sku="HOJA-ELEV",
+                role=ProfileRole.SLIDING_SASH,
+                face_width_mm="52.00",
+                welding_loss_mm="6.00",
+                reinforcement_gap_mm="15.00",
+            ),
+            ProfileRole.INTERLOCK: _article(
+                sku="ENC-ELEV",
+                role=ProfileRole.INTERLOCK,
+                face_width_mm="40.00",
+                welding_loss_mm="6.00",
+                reinforcement_gap_mm="15.00",
+            ),
+            # Umbral de aluminio para la unidad de puerta (HST y corredera).
+            ProfileRole.THRESHOLD: _article(
+                sku="UMBRAL-ELEV",
+                role=ProfileRole.THRESHOLD,
+                face_width_mm="25.00",
+                welding_loss_mm="0.00",
+                reinforcement_gap_mm="0.00",
+            ),
+            ProfileRole.MULLION_V: _article(
+                sku="POSTE-ELEV-V",
+                role=ProfileRole.MULLION_V,
+                face_width_mm="70.00",
+                welding_loss_mm="0.00",
+                reinforcement_gap_mm="5.00",
+            ),
+            ProfileRole.MULLION_H: _article(
+                sku="POSTE-ELEV-H",
+                role=ProfileRole.MULLION_H,
+                face_width_mm="70.00",
+                welding_loss_mm="0.00",
+                reinforcement_gap_mm="5.00",
+            ),
+        },
+        glazing_bead_rules=_d08_beads("ELEV"),
+        rebate_depth_mm=d("20.00"),
+        end_milling_overlap_mm=d("0.00"),
+        sash_overlap_mm=d("8.00"),
+        glass_clearance_white_mm=d("5.00"),
+        glass_clearance_foil_mm=d("5.00"),
+        pulley_height_mm=d("20.00"),
+        central_overlap_mm=d("55.00"),
+        sliding_lateral_clearance_mm=d("0.00"),
+        sliding_end_add_mm=d("8.00"),
+        corner_bracket_loss_mm=d("0.00"),
+        hook_depth_mm=d("0.00"),
+        door_threshold_mm=d("25.00"),
+        door_bottom_clearance_mm=d("10.00"),
+        rail_type=RailType.DUAL,
+        sliding_glazing_deduction_width_mm=d("28.00"),
+        sliding_glazing_deduction_height_mm=d("28.00"),
+        door_leaf_side_clearance_mm=d("6.00"),
+        available_panel_rules=_d08_panel_rule(),
+        available_hardware_kits=[
+            # HST carriages are weight-classed — a 350 kg leaf takes the
+            # reinforced set, a 150 kg leaf the standard one.
+            HardwareKitRule(
+                sku="KIT-HST-200",
+                name="Kit Elevable HST 200kg Demo",
+                opening_type="LIFT_SLIDE",
+                min_leaf_width_mm=d("700"),
+                max_leaf_width_mm=d("3200"),
+                min_leaf_height_mm=d("800"),
+                max_leaf_height_mm=d("2800"),
+                max_leaf_weight_kg=d("200"),
+                rail_type=RailType.DUAL,
+                carriages_qty=2,
+                stay_arms_qty=0,
+                weight_kg=d("4.80"),
+                contents=[
+                    HardwareComponent(
+                        sku="DEMO-CAR-HST-200",
+                        name="Carretilla elevadora 200kg Demo",
+                        qty=d("2"),
+                        unit="unit",
+                        category="ROLLER",
+                    ),
+                    HardwareComponent(
+                        sku="DEMO-MANILLA-ELEV",
+                        name="Manilla de elevación Demo",
+                        qty=d("1"),
+                        unit="unit",
+                        category="HANDLE",
+                    ),
+                    HardwareComponent(
+                        sku="DEMO-CIERRE-ELEV",
+                        name="Cierre elevable Demo",
+                        qty=d("1"),
+                        unit="unit",
+                        category="LOCK",
+                    ),
+                ],
+            ),
+            HardwareKitRule(
+                sku="KIT-HST-400",
+                name="Kit Elevable HST 400kg Reforzado Demo",
+                opening_type="LIFT_SLIDE",
+                min_leaf_width_mm=d("700"),
+                max_leaf_width_mm=d("3200"),
+                min_leaf_height_mm=d("800"),
+                max_leaf_height_mm=d("2800"),
+                max_leaf_weight_kg=d("400"),
+                rail_type=RailType.DUAL,
+                carriages_qty=4,
+                stay_arms_qty=0,
+                weight_kg=d("7.20"),
+                contents=[
+                    HardwareComponent(
+                        sku="DEMO-CAR-HST-400",
+                        name="Carretilla elevadora reforzada 400kg Demo",
+                        qty=d("4"),
+                        unit="unit",
+                        category="ROLLER",
+                    ),
+                    HardwareComponent(
+                        sku="DEMO-MANILLA-ELEV",
+                        name="Manilla de elevación Demo",
+                        qty=d("1"),
+                        unit="unit",
+                        category="HANDLE",
+                    ),
+                    HardwareComponent(
+                        sku="DEMO-CIERRE-ELEV",
+                        name="Cierre elevable Demo",
+                        qty=d("1"),
+                        unit="unit",
+                        category="LOCK",
+                    ),
+                ],
+            ),
+            HardwareKitRule(
+                sku="KIT-SLIDING-ELEV",
+                name="Kit Corredera estándar Elevación 90",
+                opening_type="SLIDING",
+                min_leaf_width_mm=d("400"),
+                max_leaf_width_mm=d("1500"),
+                min_leaf_height_mm=d("500"),
+                max_leaf_height_mm=d("2500"),
+                max_leaf_weight_kg=d("120"),
+                rail_type=RailType.DUAL,
+                carriages_qty=2,
+                stay_arms_qty=0,
+                weight_kg=d("2.50"),
+                contents=[],
+            ),
+            # Puerta corredera: carretillas de puerta + cerradura de patio.
+            HardwareKitRule(
+                sku="KIT-PTA-CORR-ELEV",
+                name="Kit Puerta Corredera Elevación 90 Demo",
+                opening_type="DOOR_SLIDING",
+                min_leaf_width_mm=d("700"),
+                max_leaf_width_mm=d("1800"),
+                min_leaf_height_mm=d("1700"),
+                max_leaf_height_mm=d("2600"),
+                max_leaf_weight_kg=d("160"),
+                rail_type=RailType.DUAL,
+                carriages_qty=2,
+                stay_arms_qty=0,
+                weight_kg=d("3.40"),
+                contents=[
+                    HardwareComponent(
+                        sku="DEMO-CAR-PTA-ELEV",
+                        name="Carretilla puerta corredera Demo",
+                        qty=d("2"),
+                        unit="unit",
+                        category="ROLLER",
+                    ),
+                    HardwareComponent(
+                        sku="DEMO-CERR-PATIO",
+                        name="Cerradura patio corredera Demo",
+                        qty=d("1"),
+                        unit="unit",
+                        category="LOCK",
+                    ),
+                ],
+            ),
+        ],
+        cut_rules=_sliding_cut_rules(),
+        reinforcement_rules=_sliding_reinforcement_rules(),
+        typology_limits={
+            **_sliding_limits(),
+            "LIFT_SLIDE": _limit(
+                "LIFT_SLIDE", "700.00", "3200.00", "800.00", "2800.00", "400.00"
+            ),
+            "DOOR:LIFT_SLIDE": _limit(
+                "DOOR:LIFT_SLIDE", "700.00", "1800.00", "1700.00", "2600.00", "400.00"
+            ),
+            "SLIDE": _limit(
+                "SLIDE", "400.00", "1500.00", "500.00", "2500.00", "160.00"
+            ),
+            "DOOR:SLIDE": _limit(
+                "DOOR:SLIDE", "700.00", "1800.00", "1700.00", "2600.00", "160.00"
+            ),
+        },
+        opening_capabilities=(
+            OpeningCapability(
+                movement=OpeningMovement.FIXED,
+                leaf_roles=(LeafRole.SINGLE,),
+                unit_kinds=(UnitKind.WINDOW, UnitKind.DOOR),
+                max_leaves=2,
+            ),
+            OpeningCapability(
+                movement=OpeningMovement.SLIDE,
+                leaf_roles=(LeafRole.SINGLE,),
+                unit_kinds=(UnitKind.WINDOW, UnitKind.DOOR),
+            ),
+            OpeningCapability(
+                movement=OpeningMovement.LIFT_SLIDE,
+                leaf_roles=(LeafRole.SINGLE,),
+                unit_kinds=(UnitKind.WINDOW, UnitKind.DOOR),
+            ),
+        ),
+    )
+
+
+def demo_osciloparalela_params() -> SystemParams:
+    """DEMO_PSK_90 — PVC osciloparalela (tilt-slide). Synthetic DEMO fixture.
+
+    El kit basculante+paralelo escala por peso de hoja (≤130 kg / ≤200 kg)."""
+    return SystemParams(
+        system_code="DEMO_PSK_90",
+        finishes=("WHITE", "FOILED"),
+        depth_mm=d("90.00"),
+        material=MaterialType.PVC,
+        system_family=SystemFamily.PARALLEL_SLIDE,
+        effective_profile_articles={
+            ProfileRole.FRAME: _article(
+                sku="MARCO-PSK",
+                role=ProfileRole.FRAME,
+                face_width_mm="52.00",
+                welding_loss_mm="6.00",
+                reinforcement_gap_mm="15.00",
+            ),
+            ProfileRole.RAIL: _article(
+                sku="RIEL-PSK",
+                role=ProfileRole.RAIL,
+                face_width_mm="45.00",
+                welding_loss_mm="6.00",
+                reinforcement_gap_mm="15.00",
+            ),
+            ProfileRole.SLIDING_SASH: _article(
+                sku="HOJA-PSK",
+                role=ProfileRole.SLIDING_SASH,
+                face_width_mm="46.00",
+                welding_loss_mm="6.00",
+                reinforcement_gap_mm="15.00",
+            ),
+            ProfileRole.INTERLOCK: _article(
+                sku="ENC-PSK",
+                role=ProfileRole.INTERLOCK,
+                face_width_mm="36.00",
+                welding_loss_mm="6.00",
+                reinforcement_gap_mm="15.00",
+            ),
+            ProfileRole.MULLION_V: _article(
+                sku="POSTE-PSK-V",
+                role=ProfileRole.MULLION_V,
+                face_width_mm="66.00",
+                welding_loss_mm="0.00",
+                reinforcement_gap_mm="5.00",
+            ),
+            ProfileRole.MULLION_H: _article(
+                sku="POSTE-PSK-H",
+                role=ProfileRole.MULLION_H,
+                face_width_mm="66.00",
+                welding_loss_mm="0.00",
+                reinforcement_gap_mm="5.00",
+            ),
+        },
+        glazing_bead_rules=_d08_beads("PSK"),
+        rebate_depth_mm=d("20.00"),
+        end_milling_overlap_mm=d("0.00"),
+        sash_overlap_mm=d("8.00"),
+        glass_clearance_white_mm=d("5.00"),
+        glass_clearance_foil_mm=d("5.00"),
+        pulley_height_mm=d("16.00"),
+        central_overlap_mm=d("42.00"),
+        sliding_lateral_clearance_mm=d("0.00"),
+        sliding_end_add_mm=d("6.00"),
+        corner_bracket_loss_mm=d("0.00"),
+        hook_depth_mm=d("0.00"),
+        door_threshold_mm=d("22.00"),
+        door_bottom_clearance_mm=d("10.00"),
+        rail_type=RailType.DUAL,
+        sliding_glazing_deduction_width_mm=d("26.00"),
+        sliding_glazing_deduction_height_mm=d("26.00"),
+        door_leaf_side_clearance_mm=d("6.00"),
+        available_hardware_kits=[
+            HardwareKitRule(
+                sku="KIT-PSK-130",
+                name="Kit Osciloparalela PSK 130kg Demo",
+                opening_type="PARALLEL_SLIDE",
+                min_leaf_width_mm=d("650"),
+                max_leaf_width_mm=d("1600"),
+                min_leaf_height_mm=d("600"),
+                max_leaf_height_mm=d("2400"),
+                max_leaf_weight_kg=d("130"),
+                rail_type=RailType.DUAL,
+                carriages_qty=2,
+                stay_arms_qty=0,
+                weight_kg=d("3.60"),
+                contents=[
+                    HardwareComponent(
+                        sku="DEMO-BOGIE-PSK",
+                        name="Bogie osciloparalelo Demo",
+                        qty=d("2"),
+                        unit="unit",
+                        category="ROLLER",
+                    ),
+                    HardwareComponent(
+                        sku="DEMO-BASC-PSK",
+                        name="Brazo basculante PSK Demo",
+                        qty=d("2"),
+                        unit="unit",
+                        category="FITTING",
+                    ),
+                    HardwareComponent(
+                        sku="DEMO-MANILLA-PSK",
+                        name="Manilla PSK Demo",
+                        qty=d("1"),
+                        unit="unit",
+                        category="HANDLE",
+                    ),
+                ],
+            ),
+            HardwareKitRule(
+                sku="KIT-PSK-200",
+                name="Kit Osciloparalela PSK 200kg Reforzado Demo",
+                opening_type="PARALLEL_SLIDE",
+                min_leaf_width_mm=d("650"),
+                max_leaf_width_mm=d("2000"),
+                min_leaf_height_mm=d("600"),
+                max_leaf_height_mm=d("2400"),
+                max_leaf_weight_kg=d("200"),
+                rail_type=RailType.DUAL,
+                carriages_qty=2,
+                stay_arms_qty=0,
+                weight_kg=d("4.40"),
+                contents=[
+                    HardwareComponent(
+                        sku="DEMO-BOGIE-PSK-R",
+                        name="Bogie osciloparalelo reforzado Demo",
+                        qty=d("2"),
+                        unit="unit",
+                        category="ROLLER",
+                    ),
+                    HardwareComponent(
+                        sku="DEMO-BASC-PSK",
+                        name="Brazo basculante PSK Demo",
+                        qty=d("2"),
+                        unit="unit",
+                        category="FITTING",
+                    ),
+                    HardwareComponent(
+                        sku="DEMO-MANILLA-PSK",
+                        name="Manilla PSK Demo",
+                        qty=d("1"),
+                        unit="unit",
+                        category="HANDLE",
+                    ),
+                ],
+            ),
+        ],
+        cut_rules=_sliding_cut_rules(),
+        reinforcement_rules=_sliding_reinforcement_rules(),
+        typology_limits={
+            "PARALLEL_SLIDE": _limit(
+                "PARALLEL_SLIDE", "650.00", "2000.00", "600.00", "2400.00", "200.00"
+            ),
+            "DOOR:PARALLEL_SLIDE": _limit(
+                "DOOR:PARALLEL_SLIDE",
+                "700.00",
+                "1400.00",
+                "1700.00",
+                "2400.00",
+                "200.00",
+            ),
+        },
+        opening_capabilities=(
+            OpeningCapability(
+                movement=OpeningMovement.FIXED,
+                leaf_roles=(LeafRole.SINGLE,),
+                unit_kinds=(UnitKind.WINDOW,),
+                max_leaves=2,
+            ),
+            OpeningCapability(
+                movement=OpeningMovement.PARALLEL_SLIDE,
+                leaf_roles=(LeafRole.SINGLE,),
+                unit_kinds=(UnitKind.WINDOW, UnitKind.DOOR),
+            ),
+        ),
+    )
+
+
+def demo_plegable_70_params() -> SystemParams:
+    """DEMO_PLEGABLE_70 — PVC folding wall. Synthetic DEMO fixture.
+
+    Paquetes de hasta 4 hojas (3+0, 2+1, 2+2…), hoja de paso opcional,
+    guía RAIL arriba y abajo, kit de carretillas+bisagras por peso."""
+    return SystemParams(
+        system_code="DEMO_PLEGABLE_70",
+        finishes=("WHITE", "FOILED"),
+        depth_mm=d("70.00"),
+        material=MaterialType.PVC,
+        system_family=SystemFamily.FOLDING,
+        effective_profile_articles={
+            ProfileRole.FRAME: _article(
+                sku="MARCO-FOLD",
+                role=ProfileRole.FRAME,
+                face_width_mm="60.00",
+                welding_loss_mm="6.00",
+                reinforcement_gap_mm="15.00",
+            ),
+            ProfileRole.RAIL: _article(
+                sku="GUIA-FOLD",
+                role=ProfileRole.RAIL,
+                face_width_mm="45.00",
+                welding_loss_mm="6.00",
+                reinforcement_gap_mm="15.00",
+            ),
+            ProfileRole.SASH: _article(
+                sku="HOJA-FOLD",
+                role=ProfileRole.SASH,
+                face_width_mm="55.00",
+                welding_loss_mm="6.00",
+                reinforcement_gap_mm="15.00",
+            ),
+            ProfileRole.MULLION_V: _article(
+                sku="POSTE-FOLD-V",
+                role=ProfileRole.MULLION_V,
+                face_width_mm="70.00",
+                welding_loss_mm="0.00",
+                reinforcement_gap_mm="5.00",
+            ),
+            ProfileRole.MULLION_H: _article(
+                sku="POSTE-FOLD-H",
+                role=ProfileRole.MULLION_H,
+                face_width_mm="70.00",
+                welding_loss_mm="0.00",
+                reinforcement_gap_mm="5.00",
+            ),
+        },
+        glazing_bead_rules=_d08_beads("FOLD"),
+        rebate_depth_mm=d("20.00"),
+        end_milling_overlap_mm=d("0.00"),
+        sash_overlap_mm=d("8.00"),
+        glass_clearance_white_mm=d("5.00"),
+        glass_clearance_foil_mm=d("5.00"),
+        pulley_height_mm=d("12.00"),
+        central_overlap_mm=d("40.00"),
+        sliding_lateral_clearance_mm=d("0.00"),
+        sliding_end_add_mm=d("6.00"),
+        corner_bracket_loss_mm=d("0.00"),
+        hook_depth_mm=d("0.00"),
+        door_threshold_mm=d("20.00"),
+        door_bottom_clearance_mm=d("12.00"),
+        rail_type=RailType.DUAL,
+        sliding_glazing_deduction_width_mm=d("22.00"),
+        sliding_glazing_deduction_height_mm=d("22.00"),
+        door_leaf_side_clearance_mm=d("6.00"),
+        fold_guide_clearance_mm=d("50.00"),
+        fold_leaf_clearance_mm=d("6.00"),
+        available_panel_rules=_d08_panel_rule(),
+        available_hardware_kits=[
+            # The pack kit covers the folding leaves — carriages, guides,
+            # intermediate hinges; the pack stays inside its declared
+            # weight envelope.
+            HardwareKitRule(
+                sku="KIT-FOLD-80",
+                name="Kit Plegable 80kg Demo",
+                opening_type="FOLD",
+                min_leaf_width_mm=d("400"),
+                max_leaf_width_mm=d("1000"),
+                min_leaf_height_mm=d("800"),
+                max_leaf_height_mm=d("2600"),
+                max_leaf_weight_kg=d("80"),
+                rail_type=RailType.DUAL,
+                carriages_qty=2,
+                stay_arms_qty=0,
+                weight_kg=d("3.10"),
+                contents=[
+                    HardwareComponent(
+                        sku="DEMO-CAR-FOLD",
+                        name="Carretilla de guía plegable Demo",
+                        qty=d("2"),
+                        unit="unit",
+                        category="ROLLER",
+                    ),
+                    HardwareComponent(
+                        sku="DEMO-BISAGRA-FOLD",
+                        name="Bisagra intermedia plegable Demo",
+                        qty=d("3"),
+                        unit="unit",
+                        category="HINGE",
+                    ),
+                ],
+            ),
+            HardwareKitRule(
+                sku="KIT-FOLD-100",
+                name="Kit Plegable 100kg Reforzado Demo",
+                opening_type="FOLD",
+                min_leaf_width_mm=d("400"),
+                max_leaf_width_mm=d("1000"),
+                min_leaf_height_mm=d("800"),
+                max_leaf_height_mm=d("2600"),
+                max_leaf_weight_kg=d("100"),
+                rail_type=RailType.DUAL,
+                carriages_qty=2,
+                stay_arms_qty=0,
+                weight_kg=d("3.60"),
+                contents=[
+                    HardwareComponent(
+                        sku="DEMO-CAR-FOLD-R",
+                        name="Carretilla de guía plegable reforzada Demo",
+                        qty=d("2"),
+                        unit="unit",
+                        category="ROLLER",
+                    ),
+                    HardwareComponent(
+                        sku="DEMO-BISAGRA-FOLD",
+                        name="Bisagra intermedia plegable Demo",
+                        qty=d("3"),
+                        unit="unit",
+                        category="HINGE",
+                    ),
+                ],
+            ),
+            # La hoja de paso es una hoja practicable con cierre y manilla.
+            HardwareKitRule(
+                sku="KIT-FOLD-PASO",
+                name="Kit Hoja de Paso Plegable Demo",
+                opening_type="TURN",
+                min_leaf_width_mm=d("400"),
+                max_leaf_width_mm=d("1000"),
+                min_leaf_height_mm=d("800"),
+                max_leaf_height_mm=d("2600"),
+                max_leaf_weight_kg=d("100"),
+                rail_type=RailType.DUAL,
+                carriages_qty=0,
+                stay_arms_qty=0,
+                weight_kg=d("1.80"),
+                contents=[
+                    HardwareComponent(
+                        sku="DEMO-CIERRE-PASO",
+                        name="Cierre hoja de paso Demo",
+                        qty=d("1"),
+                        unit="unit",
+                        category="LOCK",
+                    ),
+                    HardwareComponent(
+                        sku="DEMO-MANILLA-PASO",
+                        name="Manilla hoja de paso Demo",
+                        qty=d("1"),
+                        unit="unit",
+                        category="HANDLE",
+                    ),
+                ],
+            ),
+            HardwareKitRule(
+                sku="KIT-FOLD-PASO-DOOR",
+                name="Kit Hoja de Paso Plegable Puerta Demo",
+                opening_type="DOOR",
+                min_leaf_width_mm=d("600"),
+                max_leaf_width_mm=d("1000"),
+                min_leaf_height_mm=d("1700"),
+                max_leaf_height_mm=d("2600"),
+                max_leaf_weight_kg=d("120"),
+                rail_type=RailType.DUAL,
+                carriages_qty=0,
+                stay_arms_qty=0,
+                weight_kg=d("2.20"),
+                contents=[
+                    HardwareComponent(
+                        sku="DEMO-CERR-PASO-PTA",
+                        name="Cerradura hoja de paso puerta Demo",
+                        qty=d("1"),
+                        unit="unit",
+                        category="LOCK",
+                    ),
+                    HardwareComponent(
+                        sku="DEMO-MANILLA-PASO",
+                        name="Manilla hoja de paso Demo",
+                        qty=d("1"),
+                        unit="unit",
+                        category="HANDLE",
+                    ),
+                ],
+            ),
+        ],
+        cut_rules=_sliding_cut_rules(),
+        reinforcement_rules=_sliding_reinforcement_rules(),
+        typology_limits={
+            "FOLD": _limit(
+                "FOLD", "400.00", "1000.00", "800.00", "2600.00", "100.00"
+            ),
+            "DOOR:FOLD": _limit(
+                "DOOR:FOLD", "600.00", "1000.00", "1700.00", "2600.00", "120.00"
+            ),
+            # The hoja de paso resolves DOOR/TURN kits — its envelope is
+            # the pass-door row, not the pack row.
+            "DOOR:FOLD:LEFT:OUTWARD:ACTIVE": _limit(
+                "DOOR:FOLD:LEFT:OUTWARD:ACTIVE",
+                "600.00",
+                "1000.00",
+                "1700.00",
+                "2600.00",
+                "120.00",
+            ),
+        },
+        opening_capabilities=(
+            OpeningCapability(
+                movement=OpeningMovement.FIXED,
+                leaf_roles=(LeafRole.SINGLE,),
+                unit_kinds=(UnitKind.WINDOW, UnitKind.DOOR),
+                max_leaves=2,
+            ),
+            OpeningCapability(
+                movement=OpeningMovement.FOLD,
+                directions=(OpeningDirection.INWARD, OpeningDirection.OUTWARD),
+                leaf_roles=(LeafRole.ACTIVE, LeafRole.PASSIVE),
+                unit_kinds=(UnitKind.WINDOW, UnitKind.DOOR),
+                max_leaves=4,
+            ),
+        ),
+    )
+
+
+def demo_pivotante_120_params() -> SystemParams:
+    """DEMO_PIVOTANTE_120 — pivot door/window. Synthetic DEMO fixture.
+
+    Eje desplazado declarado (`axis_offset_mm`), kits de pivote por peso,
+    puerta con panel sándwich."""
+    return SystemParams(
+        system_code="DEMO_PIVOTANTE_120",
+        finishes=("WHITE", "FOILED"),
+        depth_mm=d("120.00"),
+        material=MaterialType.PVC,
+        system_family=SystemFamily.PIVOT,
+        effective_profile_articles={
+            ProfileRole.FRAME: _article(
+                sku="MARCO-PIV",
+                role=ProfileRole.FRAME,
+                face_width_mm="75.00",
+                welding_loss_mm="6.00",
+                reinforcement_gap_mm="15.00",
+            ),
+            ProfileRole.SASH: _article(
+                sku="HOJA-PIV-V",
+                role=ProfileRole.SASH,
+                face_width_mm="70.00",
+                welding_loss_mm="6.00",
+                reinforcement_gap_mm="15.00",
+            ),
+            ProfileRole.DOOR_SASH: _article(
+                sku="HOJA-PIV",
+                role=ProfileRole.DOOR_SASH,
+                face_width_mm="95.00",
+                welding_loss_mm="6.00",
+                reinforcement_gap_mm="15.00",
+            ),
+            ProfileRole.THRESHOLD: _article(
+                sku="UMBRAL-PIV",
+                role=ProfileRole.THRESHOLD,
+                face_width_mm="25.00",
+                welding_loss_mm="0.00",
+                reinforcement_gap_mm="0.00",
+            ),
+            ProfileRole.MULLION_V: _article(
+                sku="POSTE-PIV-V",
+                role=ProfileRole.MULLION_V,
+                face_width_mm="80.00",
+                welding_loss_mm="0.00",
+                reinforcement_gap_mm="5.00",
+            ),
+            ProfileRole.MULLION_H: _article(
+                sku="POSTE-PIV-H",
+                role=ProfileRole.MULLION_H,
+                face_width_mm="80.00",
+                welding_loss_mm="0.00",
+                reinforcement_gap_mm="5.00",
+            ),
+        },
+        glazing_bead_rules=_d08_beads("PIV"),
+        rebate_depth_mm=d("20.00"),
+        end_milling_overlap_mm=d("0.00"),
+        sash_overlap_mm=d("8.00"),
+        glass_clearance_white_mm=d("5.00"),
+        glass_clearance_foil_mm=d("5.00"),
+        pulley_height_mm=d("12.00"),
+        central_overlap_mm=d("40.00"),
+        sliding_lateral_clearance_mm=d("0.00"),
+        sliding_end_add_mm=d("6.00"),
+        corner_bracket_loss_mm=d("0.00"),
+        hook_depth_mm=d("0.00"),
+        door_threshold_mm=d("25.00"),
+        door_bottom_clearance_mm=d("8.00"),
+        door_leaf_side_clearance_mm=d("6.00"),
+        pivot_clearance_mm=d("10.00"),
+        rail_type=RailType.DUAL,
+        sliding_glazing_deduction_width_mm=d("24.00"),
+        sliding_glazing_deduction_height_mm=d("24.00"),
+        available_panel_rules=_d08_panel_rule(),
+        available_hardware_kits=[
+            HardwareKitRule(
+                sku="KIT-PIV-300",
+                name="Kit Pivotante Puerta 300kg Demo",
+                opening_type="PIVOT",
+                min_leaf_width_mm=d("900"),
+                max_leaf_width_mm=d("2000"),
+                min_leaf_height_mm=d("1900"),
+                max_leaf_height_mm=d("3000"),
+                max_leaf_weight_kg=d("300"),
+                rail_type=RailType.DUAL,
+                carriages_qty=0,
+                stay_arms_qty=0,
+                weight_kg=d("6.50"),
+                contents=[
+                    HardwareComponent(
+                        sku="DEMO-PIVOT-INF",
+                        name="Pivote inferior 300kg Demo",
+                        qty=d("1"),
+                        unit="unit",
+                        category="FITTING",
+                    ),
+                    HardwareComponent(
+                        sku="DEMO-PIVOT-SUP",
+                        name="Pivote superior guía Demo",
+                        qty=d("1"),
+                        unit="unit",
+                        category="FITTING",
+                    ),
+                    HardwareComponent(
+                        sku="DEMO-TIRADOR-PIV",
+                        name="Tirador pivotante Demo",
+                        qty=d("1"),
+                        unit="unit",
+                        category="HANDLE",
+                    ),
+                ],
+            ),
+            HardwareKitRule(
+                sku="KIT-PIV-80",
+                name="Kit Pivotante Ventana 80kg Demo",
+                opening_type="PIVOT",
+                min_leaf_width_mm=d("500"),
+                max_leaf_width_mm=d("1400"),
+                min_leaf_height_mm=d("500"),
+                max_leaf_height_mm=d("1900"),
+                max_leaf_weight_kg=d("80"),
+                rail_type=RailType.DUAL,
+                carriages_qty=0,
+                stay_arms_qty=0,
+                weight_kg=d("2.10"),
+                contents=[
+                    HardwareComponent(
+                        sku="DEMO-PIVOT-V-80",
+                        name="Pivote ventana 80kg Demo",
+                        qty=d("2"),
+                        unit="unit",
+                        category="FITTING",
+                    ),
+                ],
+            ),
+        ],
+        cut_rules=_sliding_cut_rules(),
+        reinforcement_rules=_sliding_reinforcement_rules(),
+        typology_limits={
+            "PIVOT_V": _limit(
+                "PIVOT_V", "500.00", "1400.00", "500.00", "1900.00", "80.00"
+            ),
+            "PIVOT_H": _limit(
+                "PIVOT_H", "500.00", "1400.00", "500.00", "1900.00", "80.00"
+            ),
+            "DOOR:PIVOT_V": _limit(
+                "DOOR:PIVOT_V", "900.00", "2000.00", "1900.00", "3000.00", "300.00"
+            ),
+        },
+        opening_capabilities=(
+            OpeningCapability(
+                movement=OpeningMovement.FIXED,
+                leaf_roles=(LeafRole.SINGLE,),
+                unit_kinds=(UnitKind.WINDOW, UnitKind.DOOR),
+                max_leaves=2,
+            ),
+            OpeningCapability(
+                movement=OpeningMovement.PIVOT_V,
+                leaf_roles=(LeafRole.SINGLE,),
+                unit_kinds=(UnitKind.DOOR,),
+            ),
+            OpeningCapability(
+                movement=OpeningMovement.PIVOT_H,
+                leaf_roles=(LeafRole.SINGLE,),
+                unit_kinds=(UnitKind.WINDOW, UnitKind.DOOR),
+            ),
+        ),
+    )
+
+
+def demo_guillotina_60_params() -> SystemParams:
+    """DEMO_GUILLOTINA_60 — PVC vertical slider. Synthetic DEMO fixture.
+
+    Hojas apiladas TOP/BOTTOM en canal lateral; contrapesos o muelles
+    según clase de peso declarada."""
+    return SystemParams(
+        system_code="DEMO_GUILLOTINA_60",
+        finishes=("WHITE", "FOILED"),
+        depth_mm=d("60.00"),
+        material=MaterialType.PVC,
+        system_family=SystemFamily.VERTICAL_SLIDE,
+        effective_profile_articles={
+            ProfileRole.FRAME: _article(
+                sku="MARCO-GUI",
+                role=ProfileRole.FRAME,
+                face_width_mm="50.00",
+                welding_loss_mm="6.00",
+                reinforcement_gap_mm="15.00",
+            ),
+            ProfileRole.SLIDING_SASH: _article(
+                sku="HOJA-GUI",
+                role=ProfileRole.SLIDING_SASH,
+                face_width_mm="38.00",
+                welding_loss_mm="6.00",
+                reinforcement_gap_mm="15.00",
+            ),
+            ProfileRole.INTERLOCK: _article(
+                sku="TRAVES-GUI",
+                role=ProfileRole.INTERLOCK,
+                face_width_mm="34.00",
+                welding_loss_mm="6.00",
+                reinforcement_gap_mm="15.00",
+            ),
+            ProfileRole.MULLION_V: _article(
+                sku="POSTE-GUI-V",
+                role=ProfileRole.MULLION_V,
+                face_width_mm="60.00",
+                welding_loss_mm="0.00",
+                reinforcement_gap_mm="5.00",
+            ),
+            ProfileRole.MULLION_H: _article(
+                sku="POSTE-GUI-H",
+                role=ProfileRole.MULLION_H,
+                face_width_mm="60.00",
+                welding_loss_mm="0.00",
+                reinforcement_gap_mm="5.00",
+            ),
+        },
+        glazing_bead_rules=_d08_beads("GUI"),
+        rebate_depth_mm=d("20.00"),
+        end_milling_overlap_mm=d("0.00"),
+        sash_overlap_mm=d("8.00"),
+        glass_clearance_white_mm=d("5.00"),
+        glass_clearance_foil_mm=d("5.00"),
+        # Canal lateral = la autoridad sliding del sistema: pulley_height
+        # declara la profundidad del canal por lado.
+        pulley_height_mm=d("14.00"),
+        central_overlap_mm=d("30.00"),
+        sliding_lateral_clearance_mm=d("4.00"),
+        sliding_end_add_mm=d("6.00"),
+        corner_bracket_loss_mm=d("0.00"),
+        hook_depth_mm=d("0.00"),
+        door_threshold_mm=d("0.00"),
+        door_bottom_clearance_mm=d("0.00"),
+        rail_type=RailType.DUAL,
+        sliding_glazing_deduction_width_mm=d("20.00"),
+        sliding_glazing_deduction_height_mm=d("20.00"),
+        door_leaf_side_clearance_mm=d("0.00"),
+        available_hardware_kits=[
+            # Dos clases de balance: contrapeso hasta 60 kg, muelles
+            # (espiral) hasta 40 kg — el kit ganador se elige por peso.
+            HardwareKitRule(
+                sku="KIT-GUI-CONTRAPESO",
+                name="Kit Guillotina Contrapeso 60kg Demo",
+                opening_type="VERTICAL_SLIDE",
+                min_leaf_width_mm=d("400"),
+                max_leaf_width_mm=d("1400"),
+                min_leaf_height_mm=d("300"),
+                max_leaf_height_mm=d("1400"),
+                max_leaf_weight_kg=d("60"),
+                rail_type=RailType.DUAL,
+                carriages_qty=0,
+                stay_arms_qty=0,
+                weight_kg=d("5.80"),
+                contents=[
+                    HardwareComponent(
+                        sku="DEMO-CONTRAPESO-GUI",
+                        name="Contrapeso guillotina Demo",
+                        qty=d("2"),
+                        unit="unit",
+                        category="FITTING",
+                    ),
+                    HardwareComponent(
+                        sku="DEMO-CORDON-GUI",
+                        name="Cordón/polea guillotina Demo",
+                        qty=d("2"),
+                        unit="unit",
+                        category="FITTING",
+                    ),
+                ],
+            ),
+            HardwareKitRule(
+                sku="KIT-GUI-MUELLES",
+                name="Kit Guillotina Muelles 40kg Demo",
+                opening_type="VERTICAL_SLIDE",
+                min_leaf_width_mm=d("400"),
+                max_leaf_width_mm=d("1200"),
+                min_leaf_height_mm=d("300"),
+                max_leaf_height_mm=d("1200"),
+                max_leaf_weight_kg=d("40"),
+                rail_type=RailType.DUAL,
+                carriages_qty=0,
+                stay_arms_qty=0,
+                weight_kg=d("2.40"),
+                contents=[
+                    HardwareComponent(
+                        sku="DEMO-ESPIRAL-GUI",
+                        name="Balance espiral guillotina Demo",
+                        qty=d("2"),
+                        unit="unit",
+                        category="FITTING",
+                    ),
+                ],
+            ),
+        ],
+        cut_rules=_sliding_cut_rules(),
+        reinforcement_rules=_sliding_reinforcement_rules(),
+        typology_limits={
+            "VERTICAL_SLIDE": _limit(
+                "VERTICAL_SLIDE", "400.00", "1400.00", "300.00", "1400.00", "60.00"
+            ),
+        },
+        opening_capabilities=(
+            OpeningCapability(
+                movement=OpeningMovement.FIXED,
+                leaf_roles=(LeafRole.SINGLE,),
+                unit_kinds=(UnitKind.WINDOW,),
+                max_leaves=2,
+            ),
+            OpeningCapability(
+                movement=OpeningMovement.VERTICAL_SLIDE,
+                leaf_roles=(LeafRole.SINGLE,),
+                unit_kinds=(UnitKind.WINDOW,),
+                max_leaves=2,
+            ),
+        ),
+    )
+
+
+def demo_puerta_corredera_params() -> SystemParams:
+    """DEMO_PUERTA_CORREDERA_70 — sliding patio door. Synthetic DEMO fixture.
+
+    Una serie corredera que además declara la hoja corredera de puerta:
+    unidad DOOR con umbral, kit DOOR_SLIDING y cerradura de patio."""
+    params = demo_elevacion_90_params().model_copy(
+        update={
+            "system_code": "DEMO_PUERTA_CORREDERA_70",
+            "system_family": SystemFamily.SLIDING,
+            "opening_capabilities": (
+                OpeningCapability(
+                    movement=OpeningMovement.FIXED,
+                    leaf_roles=(LeafRole.SINGLE,),
+                    unit_kinds=(UnitKind.WINDOW, UnitKind.DOOR),
+                    max_leaves=2,
+                ),
+                OpeningCapability(
+                    movement=OpeningMovement.SLIDE,
+                    leaf_roles=(LeafRole.SINGLE,),
+                    unit_kinds=(UnitKind.WINDOW, UnitKind.DOOR),
+                ),
+            ),
+        }
+    )
+    return params

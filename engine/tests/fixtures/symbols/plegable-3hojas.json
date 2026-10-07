@@ -1,65 +1,83 @@
 {
-  "id": "sliding-4l",
-  "name": "Corredera 4 hojas",
+  "id": "plegable-3hojas",
+  "name": "Plegable 3+0 — triángulos en alzado",
   "box": {
     "x": 0,
     "y": 0,
-    "w": 3200,
-    "h": 1200
+    "w": 2400,
+    "h": 1600
   },
   "input": {
-    "kind": "sliding",
+    "kind": "leaves",
     "unit": "WINDOW",
-    "tracks": 2,
-    "panels": [
+    "leaves": [
       {
-        "slot": "S1",
-        "kind": "MOVING",
-        "track": 0,
-        "travel": "RIGHT"
+        "movement": "FOLD",
+        "hinge_side": "LEFT",
+        "direction": "OUTWARD",
+        "leaf_role": "ACTIVE",
+        "handle_mm": 1050,
+        "slot": "L1",
+        "axis_offset_mm": null
       },
       {
-        "slot": "S2",
-        "kind": "MOVING",
-        "track": 1,
-        "travel": "RIGHT"
+        "movement": "FOLD",
+        "hinge_side": "LEFT",
+        "direction": "OUTWARD",
+        "leaf_role": "PASSIVE",
+        "handle_mm": null,
+        "slot": "L2",
+        "axis_offset_mm": null
       },
       {
-        "slot": "S3",
-        "kind": "MOVING",
-        "track": 0,
-        "travel": "LEFT"
-      },
-      {
-        "slot": "S4",
-        "kind": "MOVING",
-        "track": 1,
-        "travel": "LEFT"
+        "movement": "FOLD",
+        "hinge_side": "LEFT",
+        "direction": "OUTWARD",
+        "leaf_role": "PASSIVE",
+        "handle_mm": null,
+        "slot": "L3",
+        "axis_offset_mm": null
       }
     ]
   },
   "views": {
     "interior": {
-      "stiles": 0,
+      "stiles": 2,
       "leaves": [
         {
           "prims": [
             {
-              "k": "arrow",
-              "hinge": null,
+              "k": "tri",
+              "hinge": "LEFT",
               "apex_at": "0.4",
-              "dash": false,
-              "dir": "RIGHT",
+              "dash": true,
+              "dir": null,
               "vdir": null,
               "axis_dir": null,
               "inferred": false,
               "side": null,
               "at_mm": null
+            },
+            {
+              "k": "handle",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": "right",
+              "at_mm": "1050"
             }
           ],
           "paths": [
             {
-              "d": "M 284.8 600 H 515.2 M 463.36 563.14 L 515.2 600 L 463.36 636.86",
+              "d": "M 160 192 L 640 678.4 L 160 1408",
+              "dash": "6 3"
+            },
+            {
+              "d": "M 765 550 H 783 M 774 541 V 559",
               "dash": null
             }
           ]
@@ -67,11 +85,11 @@
         {
           "prims": [
             {
-              "k": "arrow",
-              "hinge": null,
+              "k": "tri",
+              "hinge": "LEFT",
               "apex_at": "0.4",
-              "dash": false,
-              "dir": "RIGHT",
+              "dash": true,
+              "dir": null,
               "vdir": null,
               "axis_dir": null,
               "inferred": false,
@@ -81,19 +99,19 @@
           ],
           "paths": [
             {
-              "d": "M 1084.8 600 H 1315.2 M 1263.36 563.14 L 1315.2 600 L 1263.36 636.86",
-              "dash": null
+              "d": "M 960 192 L 1440 678.4 L 960 1408",
+              "dash": "6 3"
             }
           ]
         },
         {
           "prims": [
             {
-              "k": "arrow",
-              "hinge": null,
+              "k": "tri",
+              "hinge": "LEFT",
               "apex_at": "0.4",
-              "dash": false,
-              "dir": "LEFT",
+              "dash": true,
+              "dir": null,
               "vdir": null,
               "axis_dir": null,
               "inferred": false,
@@ -103,56 +121,50 @@
           ],
           "paths": [
             {
-              "d": "M 2115.2 600 H 1884.8 M 1936.64 563.14 L 1884.8 600 L 1936.64 636.86",
-              "dash": null
-            }
-          ]
-        },
-        {
-          "prims": [
-            {
-              "k": "arrow",
-              "hinge": null,
-              "apex_at": "0.4",
-              "dash": false,
-              "dir": "LEFT",
-              "vdir": null,
-              "axis_dir": null,
-              "inferred": false,
-              "side": null,
-              "at_mm": null
-            }
-          ],
-          "paths": [
-            {
-              "d": "M 2915.2 600 H 2684.8 M 2736.64 563.14 L 2684.8 600 L 2736.64 636.86",
-              "dash": null
+              "d": "M 1760 192 L 2240 678.4 L 1760 1408",
+              "dash": "6 3"
             }
           ]
         }
       ]
     },
     "exterior": {
-      "stiles": 0,
+      "stiles": 2,
       "leaves": [
         {
           "prims": [
             {
-              "k": "arrow",
-              "hinge": null,
+              "k": "tri",
+              "hinge": "LEFT",
               "apex_at": "0.4",
               "dash": false,
-              "dir": "RIGHT",
+              "dir": null,
               "vdir": null,
               "axis_dir": null,
               "inferred": false,
               "side": null,
               "at_mm": null
+            },
+            {
+              "k": "handle",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": "right",
+              "at_mm": "1050"
             }
           ],
           "paths": [
             {
-              "d": "M 284.8 600 H 515.2 M 463.36 563.14 L 515.2 600 L 463.36 636.86",
+              "d": "M 160 192 L 640 678.4 L 160 1408",
+              "dash": null
+            },
+            {
+              "d": "M 765 550 H 783 M 774 541 V 559",
               "dash": null
             }
           ]
@@ -160,11 +172,11 @@
         {
           "prims": [
             {
-              "k": "arrow",
-              "hinge": null,
+              "k": "tri",
+              "hinge": "LEFT",
               "apex_at": "0.4",
               "dash": false,
-              "dir": "RIGHT",
+              "dir": null,
               "vdir": null,
               "axis_dir": null,
               "inferred": false,
@@ -174,7 +186,7 @@
           ],
           "paths": [
             {
-              "d": "M 1084.8 600 H 1315.2 M 1263.36 563.14 L 1315.2 600 L 1263.36 636.86",
+              "d": "M 960 192 L 1440 678.4 L 960 1408",
               "dash": null
             }
           ]
@@ -182,11 +194,11 @@
         {
           "prims": [
             {
-              "k": "arrow",
-              "hinge": null,
+              "k": "tri",
+              "hinge": "LEFT",
               "apex_at": "0.4",
               "dash": false,
-              "dir": "LEFT",
+              "dir": null,
               "vdir": null,
               "axis_dir": null,
               "inferred": false,
@@ -196,29 +208,7 @@
           ],
           "paths": [
             {
-              "d": "M 2115.2 600 H 1884.8 M 1936.64 563.14 L 1884.8 600 L 1936.64 636.86",
-              "dash": null
-            }
-          ]
-        },
-        {
-          "prims": [
-            {
-              "k": "arrow",
-              "hinge": null,
-              "apex_at": "0.4",
-              "dash": false,
-              "dir": "LEFT",
-              "vdir": null,
-              "axis_dir": null,
-              "inferred": false,
-              "side": null,
-              "at_mm": null
-            }
-          ],
-          "paths": [
-            {
-              "d": "M 2915.2 600 H 2684.8 M 2736.64 563.14 L 2684.8 600 L 2736.64 636.86",
+              "d": "M 1760 192 L 2240 678.4 L 1760 1408",
               "dash": null
             }
           ]

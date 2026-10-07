@@ -24,6 +24,17 @@ KIT_OPENING_TYPES = sorted(
     # D03 kit families that only exist on the Opening axis: banderola,
     # abatimiento de bisagras abajo y la falleba de la hoja pasiva.
     | {"TILT", "BOTTOM_HUNG", "FALLEBA"}
+    # D08: familias de herraje de las tipologías avanzadas — elevable,
+    # osciloparalela, paquete plegable, pivote, guillotina y la hoja
+    # corredera de puerta.
+    | {
+        "LIFT_SLIDE",
+        "PARALLEL_SLIDE",
+        "FOLD",
+        "PIVOT",
+        "VERTICAL_SLIDE",
+        "DOOR_SLIDING",
+    }
 )
 
 

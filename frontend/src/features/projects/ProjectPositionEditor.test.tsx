@@ -945,9 +945,14 @@ it("does not offer FOILED or a catalog the backend marks incomplete", async () =
 it("renders the design library with rendered starter cards", async () => {
   mount("/projects/project-a/positions/new");
   const list = await openStarterLibrary();
-  expect(within(list).getAllByRole("listitem")).toHaveLength(15);
+  // 15 classic recipes + the 6 advanced D08 typologies (the mock declares
+  // no opening_options, so the library shows everything).
+  expect(within(list).getAllByRole("listitem")).toHaveLength(21);
   // Every card previews through the same front-elevation renderer.
   expect(within(list).getAllByTestId("product-front").length).toBeGreaterThan(0);
+  expect(
+    within(list).getByRole("button", { name: /Corredera elevable/ }),
+  ).toBeInTheDocument();
 });
 
 it("picking a sliding starter card builds a sliding product", async () => {

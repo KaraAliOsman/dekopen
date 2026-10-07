@@ -2077,7 +2077,27 @@ JOIN (VALUES
      '20.00'::numeric, '0.30'::numeric, 2::smallint, FALSE::boolean),
     ('GLASS_45'::text, 'MONO-8'::text, 'Monolítico incoloro 8 mm'::text, '8 Float Incoloro'::text,
      '{"layers":[{"type":"lamina","panes":["8"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null}]}'::text, '8'::numeric, NULL::text, NULL::numeric, NULL::numeric, NULL::numeric,
-     '20.00'::numeric, '0.30'::numeric, 1::smallint, FALSE::boolean)
+     '20.00'::numeric, '0.30'::numeric, 1::smallint, FALSE::boolean),
+    -- D08: cada serie sintética de tipología avanzada ofrece el termopanel
+    -- base para que la regla "todo sistema global tiene vidrio" se cumpla.
+    ('DEMO_ELEVACION_90'::text, 'VIDRIO-BASE'::text, 'Termopanel incoloro 4·16·4'::text, '4-16-4 Float Incoloro'::text,
+     '{"layers":[{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null},{"type":"chamber","width_mm":"16","gas":"AIR","spacer":"ALUMINIUM","sealant":null},{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null}]}'::text, '24'::numeric, NULL::text, NULL::numeric, NULL::numeric, NULL::numeric,
+     '20.00'::numeric, '0.30'::numeric, 2::smallint, FALSE::boolean),
+    ('DEMO_PSK_90'::text, 'VIDRIO-BASE'::text, 'Termopanel incoloro 4·16·4'::text, '4-16-4 Float Incoloro'::text,
+     '{"layers":[{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null},{"type":"chamber","width_mm":"16","gas":"AIR","spacer":"ALUMINIUM","sealant":null},{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null}]}'::text, '24'::numeric, NULL::text, NULL::numeric, NULL::numeric, NULL::numeric,
+     '20.00'::numeric, '0.30'::numeric, 2::smallint, FALSE::boolean),
+    ('DEMO_PLEGABLE_70'::text, 'VIDRIO-BASE'::text, 'Termopanel incoloro 4·16·4'::text, '4-16-4 Float Incoloro'::text,
+     '{"layers":[{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null},{"type":"chamber","width_mm":"16","gas":"AIR","spacer":"ALUMINIUM","sealant":null},{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null}]}'::text, '24'::numeric, NULL::text, NULL::numeric, NULL::numeric, NULL::numeric,
+     '20.00'::numeric, '0.30'::numeric, 2::smallint, FALSE::boolean),
+    ('DEMO_PIVOTANTE_120'::text, 'VIDRIO-BASE'::text, 'Termopanel incoloro 4·16·4'::text, '4-16-4 Float Incoloro'::text,
+     '{"layers":[{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null},{"type":"chamber","width_mm":"16","gas":"AIR","spacer":"ALUMINIUM","sealant":null},{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null}]}'::text, '24'::numeric, NULL::text, NULL::numeric, NULL::numeric, NULL::numeric,
+     '20.00'::numeric, '0.30'::numeric, 2::smallint, FALSE::boolean),
+    ('DEMO_GUILLOTINA_60'::text, 'VIDRIO-BASE'::text, 'Termopanel incoloro 4·16·4'::text, '4-16-4 Float Incoloro'::text,
+     '{"layers":[{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null},{"type":"chamber","width_mm":"16","gas":"AIR","spacer":"ALUMINIUM","sealant":null},{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null}]}'::text, '24'::numeric, NULL::text, NULL::numeric, NULL::numeric, NULL::numeric,
+     '20.00'::numeric, '0.30'::numeric, 2::smallint, FALSE::boolean),
+    ('DEMO_PUERTA_CORREDERA_70'::text, 'VIDRIO-BASE'::text, 'Termopanel incoloro 4·16·4'::text, '4-16-4 Float Incoloro'::text,
+     '{"layers":[{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null},{"type":"chamber","width_mm":"16","gas":"AIR","spacer":"ALUMINIUM","sealant":null},{"type":"lamina","panes":["4"],"interlayer":null,"tint":"CLEAR","treatment":null,"coating":null,"coating_face":null,"supplier_sku":null}]}'::text, '24'::numeric, NULL::text, NULL::numeric, NULL::numeric, NULL::numeric,
+     '20.00'::numeric, '0.30'::numeric, 2::smallint, FALSE::boolean)
     ) AS p(sys_code, sku, commercial_name, notation, composition, total_thickness_mm,
             safety_class, ug_w_m2k, g_value, light_transmission_pct, weight_kg_m2,
             min_billable_area_m2, price_tier, review_pending)
@@ -2421,7 +2441,25 @@ CROSS JOIN (VALUES
     ('DEMO_CORREDERA_60', 'FIXED', 'cap-fixed', '{}',          '{SINGLE}',                  '{WINDOW}',      1, FALSE),
     ('DEMO_CORREDERA_60', 'SLIDE', 'cap-slide', '{}',          '{SINGLE}',                  '{WINDOW}',      1, FALSE),
     ('ALU_CORREDERA_70',  'FIXED', 'cap-fixed', '{}',          '{SINGLE}',                  '{WINDOW}',      1, FALSE),
-    ('ALU_CORREDERA_70',  'SLIDE', 'cap-slide', '{}',          '{SINGLE}',                  '{WINDOW}',      1, FALSE)
+    ('ALU_CORREDERA_70',  'SLIDE', 'cap-slide', '{}',          '{SINGLE}',                  '{WINDOW}',      1, FALSE),
+    -- D08 — tipologías avanzadas: una serie sintética por familia. La
+    -- elevable fabrica además corredera estándar y puerta corredera sobre
+    -- el mismo riel; el plegable admite hasta 4 hojas con hoja de paso;
+    -- la pivotante separa eje vertical (puerta) y horizontal (ambas).
+    ('DEMO_ELEVACION_90',       'FIXED',          'cap-fixed', '{}',               '{SINGLE}',          '{WINDOW,DOOR}', 2, TRUE),
+    ('DEMO_ELEVACION_90',       'SLIDE',          'cap-slide', '{}',               '{SINGLE}',          '{WINDOW,DOOR}', 1, FALSE),
+    ('DEMO_ELEVACION_90',       'LIFT_SLIDE',     'cap-lift',  '{}',               '{SINGLE}',          '{WINDOW,DOOR}', 1, FALSE),
+    ('DEMO_PSK_90',             'FIXED',          'cap-fixed', '{}',               '{SINGLE}',          '{WINDOW}',      2, TRUE),
+    ('DEMO_PSK_90',             'PARALLEL_SLIDE', 'cap-psk',   '{}',               '{SINGLE}',          '{WINDOW,DOOR}', 1, FALSE),
+    ('DEMO_PLEGABLE_70',        'FIXED',          'cap-fixed', '{}',               '{SINGLE}',          '{WINDOW,DOOR}', 2, TRUE),
+    ('DEMO_PLEGABLE_70',        'FOLD',           'cap-fold',  '{INWARD,OUTWARD}', '{ACTIVE,PASSIVE}',  '{WINDOW,DOOR}', 4, FALSE),
+    ('DEMO_PIVOTANTE_120',      'FIXED',          'cap-fixed', '{}',               '{SINGLE}',          '{WINDOW,DOOR}', 2, TRUE),
+    ('DEMO_PIVOTANTE_120',      'PIVOT_V',        'cap-pivv',  '{}',               '{SINGLE}',          '{DOOR}',        1, FALSE),
+    ('DEMO_PIVOTANTE_120',      'PIVOT_H',        'cap-pivh',  '{}',               '{SINGLE}',          '{WINDOW,DOOR}', 1, FALSE),
+    ('DEMO_GUILLOTINA_60',      'FIXED',          'cap-fixed', '{}',               '{SINGLE}',          '{WINDOW}',      2, TRUE),
+    ('DEMO_GUILLOTINA_60',      'VERTICAL_SLIDE', 'cap-gui',   '{}',               '{SINGLE}',          '{WINDOW}',      2, FALSE),
+    ('DEMO_PUERTA_CORREDERA_70','FIXED',          'cap-fixed', '{}',               '{SINGLE}',          '{WINDOW,DOOR}', 2, TRUE),
+    ('DEMO_PUERTA_CORREDERA_70','SLIDE',          'cap-slide', '{}',               '{SINGLE}',          '{WINDOW,DOOR}', 1, FALSE)
 ) AS cap(sys_code, movement, key, directions, roles, units, max_leaves, sash)
 WHERE s.code = cap.sys_code AND s.is_global = TRUE
 ON CONFLICT DO NOTHING;

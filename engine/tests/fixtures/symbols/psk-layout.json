@@ -1,24 +1,29 @@
 {
-  "id": "tilt-turn-left",
-  "name": "Oscilobatiente izquierda",
+  "id": "psk-layout",
+  "name": "Osciloparalela (PSK) — layout con travel",
   "box": {
     "x": 0,
     "y": 0,
-    "w": 800,
-    "h": 1200
+    "w": 2400,
+    "h": 1400
   },
   "input": {
-    "kind": "leaves",
+    "kind": "sliding",
     "unit": "WINDOW",
-    "leaves": [
+    "movement": "PARALLEL_SLIDE",
+    "tracks": 2,
+    "panels": [
       {
-        "movement": "TILT_TURN",
-        "hinge_side": "LEFT",
-        "direction": "INWARD",
-        "leaf_role": "SINGLE",
-        "handle_mm": 1050,
-        "slot": null,
-        "axis_offset_mm": null
+        "slot": "O1",
+        "kind": "FIXED",
+        "track": null,
+        "travel": null
+      },
+      {
+        "slot": "X1",
+        "kind": "MOVING",
+        "track": 0,
+        "travel": "RIGHT"
       }
     ]
   },
@@ -29,8 +34,8 @@
         {
           "prims": [
             {
-              "k": "tri",
-              "hinge": "LEFT",
+              "k": "none",
+              "hinge": null,
               "apex_at": "0.4",
               "dash": false,
               "dir": null,
@@ -39,7 +44,12 @@
               "inferred": false,
               "side": null,
               "at_mm": null
-            },
+            }
+          ],
+          "paths": []
+        },
+        {
+          "prims": [
             {
               "k": "tri",
               "hinge": "BOTTOM",
@@ -53,29 +63,25 @@
               "at_mm": null
             },
             {
-              "k": "handle",
+              "k": "arrow",
               "hinge": null,
               "apex_at": "0.4",
               "dash": false,
-              "dir": null,
+              "dir": "RIGHT",
               "vdir": null,
               "axis_dir": null,
               "inferred": false,
-              "side": "right",
-              "at_mm": "1050"
+              "side": null,
+              "at_mm": null
             }
           ],
           "paths": [
             {
-              "d": "M 160 144 L 640 508.8 L 160 1056",
+              "d": "M 1440 1232 L 1728 168 L 2160 1232",
               "dash": null
             },
             {
-              "d": "M 160 1056 L 352 144 L 640 1056",
-              "dash": null
-            },
-            {
-              "d": "M 765 150 H 783 M 774 141 V 159",
+              "d": "M 1627.2 700 H 1972.8 M 1895.04 644.7 L 1972.8 700 L 1895.04 755.3",
               "dash": null
             }
           ]
@@ -88,31 +94,7 @@
         {
           "prims": [
             {
-              "k": "tri",
-              "hinge": "LEFT",
-              "apex_at": "0.4",
-              "dash": true,
-              "dir": null,
-              "vdir": null,
-              "axis_dir": null,
-              "inferred": false,
-              "side": null,
-              "at_mm": null
-            },
-            {
-              "k": "tri",
-              "hinge": "BOTTOM",
-              "apex_at": "0.4",
-              "dash": true,
-              "dir": null,
-              "vdir": null,
-              "axis_dir": null,
-              "inferred": false,
-              "side": null,
-              "at_mm": null
-            },
-            {
-              "k": "handle",
+              "k": "none",
               "hinge": null,
               "apex_at": "0.4",
               "dash": false,
@@ -120,21 +102,46 @@
               "vdir": null,
               "axis_dir": null,
               "inferred": false,
-              "side": "right",
-              "at_mm": "1050"
+              "side": null,
+              "at_mm": null
+            }
+          ],
+          "paths": []
+        },
+        {
+          "prims": [
+            {
+              "k": "tri",
+              "hinge": "BOTTOM",
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": null,
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
+            },
+            {
+              "k": "arrow",
+              "hinge": null,
+              "apex_at": "0.4",
+              "dash": false,
+              "dir": "RIGHT",
+              "vdir": null,
+              "axis_dir": null,
+              "inferred": false,
+              "side": null,
+              "at_mm": null
             }
           ],
           "paths": [
             {
-              "d": "M 160 144 L 640 508.8 L 160 1056",
-              "dash": "6 3"
+              "d": "M 1440 1232 L 1728 168 L 2160 1232",
+              "dash": null
             },
             {
-              "d": "M 160 1056 L 352 144 L 640 1056",
-              "dash": "6 3"
-            },
-            {
-              "d": "M 765 150 H 783 M 774 141 V 159",
+              "d": "M 1627.2 700 H 1972.8 M 1895.04 644.7 L 1972.8 700 L 1895.04 755.3",
               "dash": null
             }
           ]

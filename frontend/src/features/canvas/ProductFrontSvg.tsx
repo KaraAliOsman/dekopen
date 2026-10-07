@@ -6,6 +6,7 @@ import { t } from "../../i18n/es-CL";
 import type { IntentNode, UnitKind } from "./intentEditing";
 import {
   bayLeafTraces,
+  baySlideMovement,
   isSlidingOpening,
   OPTION_SPEC_KEY,
   panelTravel,
@@ -275,6 +276,8 @@ export function OpeningGlyph({
   h,
   doorHinge,
   view = "interior",
+  axisMm = null,
+  slot = null,
 }: {
   opening: string | null | undefined;
   x: number;
@@ -283,11 +286,15 @@ export function OpeningGlyph({
   h: number;
   doorHinge?: "left" | "right";
   view?: ElevationView;
+  /** Eje declarado de una hoja pivotante (mm desde el canto de la hoja). */
+  axisMm?: number | null;
+  /** Slot de la hoja (TOP/BOTTOM resuelven la flecha de guillotina). */
+  slot?: string | null;
 }): JSX.Element {
   const kind = opening ?? "FIXED";
   const spec = glyphLeafSpec(kind, doorHinge);
   const prims = spec
-    ? leafPrimitives(spec.opening, view, { unit: spec.unit })
+    ? leafPrimitives(spec.opening, view, { unit: spec.unit, axis_mm: axisMm, slot })
     : [{ k: "none" as const }];
   const paths = glyphPaths(prims, x, y, w, h);
   return (
@@ -674,11 +681,12 @@ function Bay({
   // Sliding topology (mandate §12): panels on rails — each slot is pitch
   // wide, a moving leaf covers its slot plus the meeting-stile overlap;
   // rear track draws first so the front leaf covers the interlock. Fixed
-  // panels glaze their slot directly like a fixed bay.
-  if (isSlidingOpening(opening)) {
+  // panels glaze their slot directly like a fixed bay. Un layout declarado
+  // (HST, corredera spec) tiene prioridad sobre las hojas sueltas.
+  if (isSlidingOpening(opening) || resolvedSlidingLayout(node) != null) {
     const layout = resolvedSlidingLayout(node);
     const panels = layout?.panels ?? [];
-    const panelPrims = layout ? slidingPrimitives(layout, view) : [];
+    const panelPrims = layout ? slidingPrimitives(layout, view, baySlideMovement(node)) : [];
     const interlock = members.sash.faceWidthMm;
     const pitch = region.w / Math.max(panels.length, 1);
     const leafW = pitch + interlock;
@@ -825,6 +833,9 @@ function Bay({
     return { leaf, operable, sash, hinge, passive };
   });
   const anySash = leafDraws.some((leaf) => leaf.sash);
+  // Guillotina: las hojas apiladas TOP/BOTTOM ocupan filas, no columnas.
+  const stackedLeaves =
+    leafCount > 1 && leafDraws.every((leaf) => ["TOP", "BOTTOM"].includes(leaf.leaf.slot));
 
   const thresholdH = isDoor ? (members.threshold?.faceWidthMm ?? 30) : 0;
   const sashArea: Region = anySash
@@ -838,12 +849,21 @@ function Bay({
   const sashT = members.sash.faceWidthMm;
   // Each leaf owns an equal column of the sash area — pair leaves meet at
   // the inversor stile straddling the boundary.
-  const leafBoxes: Region[] = leafDraws.map((_, index) => ({
-    x: sashArea.x + (sashArea.w * index) / leafCount,
-    y: sashArea.y,
-    w: sashArea.w / leafCount,
-    h: sashArea.h,
-  }));
+  const leafBoxes: Region[] = leafDraws.map((_, index) =>
+    stackedLeaves
+      ? {
+          x: sashArea.x,
+          y: sashArea.y + (sashArea.h * index) / leafCount,
+          w: sashArea.w,
+          h: sashArea.h / leafCount,
+        }
+      : {
+          x: sashArea.x + (sashArea.w * index) / leafCount,
+          y: sashArea.y,
+          w: sashArea.w / leafCount,
+          h: sashArea.h,
+        },
+  );
   const leafGeom = leafDraws.map((leaf, index) => {
     const box = leafBoxes[index]!;
     const glassBox: Region = leaf.sash
@@ -918,16 +938,28 @@ function Bay({
             </g>
           ),
       )}
-      {leafCount > 1 && (
-        <Member
-          x={sashArea.x + sashArea.w / 2 - sashT * 0.45}
-          y={sashArea.y}
-          w={sashT * 0.9}
-          h={Math.max(sashArea.h, 0)}
-          surface={sashSurface}
-          className="member-inversor"
-        />
-      )}
+      {leafCount > 1 &&
+        (stackedLeaves ? (
+          // Guillotina — el encuentro entre las dos hojas apiladas es
+          // horizontal.
+          <Member
+            x={sashArea.x}
+            y={sashArea.y + sashArea.h / 2 - sashT * 0.45}
+            w={Math.max(sashArea.w, 0)}
+            h={sashT * 0.9}
+            surface={sashSurface}
+            className="member-inversor"
+          />
+        ) : (
+          <Member
+            x={sashArea.x + sashArea.w / 2 - sashT * 0.45}
+            y={sashArea.y}
+            w={sashT * 0.9}
+            h={Math.max(sashArea.h, 0)}
+            surface={sashSurface}
+            className="member-inversor"
+          />
+        ))}
       {leafGeom.map((leaf, index) =>
         isPanel ? (
           <rect
@@ -986,6 +1018,8 @@ function Bay({
             h={leaf.pane.h}
             doorHinge={leaf.doorHinge ?? (node.door_handedness === "RIGHT" ? "right" : "left")}
             view={view}
+            axisMm={leaf.leaf.axisOffsetMm}
+            slot={leaf.leaf.slot}
           />
         ) : null,
       )}

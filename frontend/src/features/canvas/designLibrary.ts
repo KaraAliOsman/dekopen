@@ -1,5 +1,5 @@
 import type { TranslationKey } from "../../i18n/es-CL";
-import type { IntentNode, Opening } from "./intentEditing";
+import type { IntentNode, LeafSpecPayload, Opening, OpeningSpecPayload } from "./intentEditing";
 import { fmtWire } from "../../format";
 import {
   makeArchModule,
@@ -13,6 +13,17 @@ import {
 
 function starterTree(opening: Opening): IntentNode {
   return { id: crypto.randomUUID(), type: "BAY", opening_type: opening };
+}
+
+/** Spec-form bay for the advanced typologies (D08): the legacy enum can't
+ * express LIFT_SLIDE / FOLD / PIVOT / VERTICAL_SLIDE, so the recipe declares
+ * the leaf spec the catalog capability row emits. */
+function specTree(opening: OpeningSpecPayload, extra?: Partial<IntentNode>): IntentNode {
+  return { id: crypto.randomUUID(), type: "BAY", opening, ...extra };
+}
+
+function leavesTree(leaves: LeafSpecPayload[], extra?: Partial<IntentNode>): IntentNode {
+  return { id: crypto.randomUUID(), type: "BAY", leaves, ...extra };
 }
 
 export interface StarterDefinition {
@@ -224,6 +235,115 @@ export const STARTER_DEFINITIONS: StarterDefinition[] = [
       },
     }),
   },
+  // -------------------------------------------------------------------
+  // Tipologías avanzadas (D08) — spec bays; solo las ofrece la biblioteca
+  // cuando la serie seleccionada declara la composición en opening_options.
+  // -------------------------------------------------------------------
+  {
+    key: "hst",
+    titleKey: "assembly.starter.hst",
+    hintKey: "assembly.starter.hstHint",
+    build: (w, h) =>
+      wrapTreeAsProduct(specTree({ movement: "LIFT_SLIDE" }), fmtWire(w), fmtWire(h)),
+  },
+  {
+    key: "psk",
+    titleKey: "assembly.starter.psk",
+    hintKey: "assembly.starter.pskHint",
+    build: (w, h) =>
+      wrapTreeAsProduct(specTree({ movement: "PARALLEL_SLIDE" }), fmtWire(w), fmtWire(h)),
+  },
+  {
+    key: "foldable",
+    titleKey: "assembly.starter.foldable",
+    hintKey: "assembly.starter.foldableHint",
+    // Plegable 3+0 hacia adentro con hoja de paso en la jamba izquierda —
+    // la composición que el catálogo emite para una capacidad FOLD.
+    build: (w, h) =>
+      wrapTreeAsProduct(
+        leavesTree([
+          {
+            slot: "L1",
+            opening: {
+              movement: "FOLD",
+              hinge_side: "LEFT",
+              direction: "INWARD",
+              leaf_role: "ACTIVE",
+            },
+          },
+          {
+            slot: "L2",
+            opening: {
+              movement: "FOLD",
+              hinge_side: "LEFT",
+              direction: "INWARD",
+              leaf_role: "PASSIVE",
+            },
+          },
+          {
+            slot: "L3",
+            opening: {
+              movement: "FOLD",
+              hinge_side: "LEFT",
+              direction: "INWARD",
+              leaf_role: "PASSIVE",
+            },
+          },
+        ]),
+        fmtWire(w),
+        fmtWire(h),
+      ),
+  },
+  {
+    key: "pivot",
+    titleKey: "assembly.starter.pivot",
+    hintKey: "assembly.starter.pivotHint",
+    // Puerta pivotante de eje vertical — el eje desplazado se declara ahora
+    // (la fabricación rechaza una hoja pivotante sin axis_offset_mm).
+    build: (w, h) =>
+      wrapTreeAsProduct(
+        leavesTree(
+          [
+            {
+              slot: "PRIMARY",
+              opening: { movement: "PIVOT_V" },
+              axis_offset_mm: Math.min(500, Math.round(w / 3)),
+            },
+          ],
+          { unit_kind: "DOOR" },
+        ),
+        fmtWire(w),
+        fmtWire(h),
+      ),
+  },
+  {
+    key: "guillotina",
+    titleKey: "assembly.starter.guillotina",
+    hintKey: "assembly.starter.guillotinaHint",
+    // Guillotina simple: paño fijo arriba (TOP) y corredera vertical abajo.
+    build: (w, h) =>
+      wrapTreeAsProduct(
+        leavesTree([
+          { slot: "TOP", opening: { movement: "FIXED" } },
+          { slot: "BOTTOM", opening: { movement: "VERTICAL_SLIDE" } },
+        ]),
+        fmtWire(w),
+        fmtWire(h),
+      ),
+  },
+  {
+    key: "slidingDoor",
+    titleKey: "assembly.starter.slidingDoor",
+    hintKey: "assembly.starter.slidingDoorHint",
+    // Puerta corredera: hoja SLIDE en unidad DOOR — umbral y cerradura de
+    // patio los aporta el kit DOOR_SLIDING de la serie.
+    build: (w, h) =>
+      wrapTreeAsProduct(
+        specTree({ movement: "SLIDE" }, { unit_kind: "DOOR" }),
+        fmtWire(w),
+        fmtWire(h),
+      ),
+  },
 ];
 
 export type StarterKey = (typeof STARTER_DEFINITIONS)[number]["key"];
@@ -258,6 +378,18 @@ export function starterNominalSize(key: string): { widthMm: number; heightMm: nu
       return { widthMm: 1200, heightMm: 800 };
     case "twoSash":
       return { widthMm: 1400, heightMm: 1400 };
+    case "hst":
+      return { widthMm: 2000, heightMm: 2200 };
+    case "psk":
+      return { widthMm: 1400, heightMm: 1400 };
+    case "foldable":
+      return { widthMm: 2800, heightMm: 2400 };
+    case "pivot":
+      return { widthMm: 1200, heightMm: 2200 };
+    case "guillotina":
+      return { widthMm: 1200, heightMm: 1800 };
+    case "slidingDoor":
+      return { widthMm: 1800, heightMm: 2200 };
     default:
       return { widthMm: 1200, heightMm: 1400 };
   }

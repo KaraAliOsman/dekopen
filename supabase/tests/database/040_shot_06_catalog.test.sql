@@ -104,7 +104,7 @@ SELECT is((SELECT ARRAY[sliding_glazing_deduction_width_mm,
     FROM public.profile_systems WHERE code = 'DEMO_60'),
     ARRAY[20.00, 20.00, 7.00], 'DEMO_60 has exactly the three approved authorities');
 SELECT is((SELECT count(*) FROM public.profile_articles WHERE sku <> 'UMBRAL-ALU'
-    AND material = 'PVC'), 35::BIGINT, 'historical DEMO articles have explicit PVC material (31 + 4 D06 ensanche/tapajunta PVC)');
+    AND material = 'PVC'), 83::BIGINT, 'historical DEMO articles have explicit PVC material (31 + 4 D06 ensanche/tapajunta PVC + 48 D08 tipologías avanzadas)');
 SELECT is((SELECT count(*) FROM pg_constraint WHERE conrelid = 'public.infill_articles'::REGCLASS
     AND contype = 'p'), 1::BIGINT, 'panel catalog has a primary key');
 SELECT ok(EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'public.infill_articles'::REGCLASS

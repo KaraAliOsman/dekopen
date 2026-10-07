@@ -17,6 +17,7 @@ from dekopen_engine.cutting import (
 )
 from dekopen_engine.geometry import compute_geometry
 from dekopen_engine.hardware import AmbiguousHardwareKit
+from dekopen_engine.geometry import IncompatibleTypologyError
 from dekopen_engine.inspection_models import (
     InspectionMode, InspectorConfigurationError, InspectorInput, StructuralInput, WorkshopAnnotations,
 )
@@ -126,6 +127,10 @@ def _execute(request: Request, *, inspection: bool) -> Response:
     except InvalidColorCombination as error:
         # D05: la razón es-CL del motor ya nombra las caras y la regla.
         raise contract_error(400, "color_combination_invalid", str(error), error_extra={"reason": error.reason}) from error
+    except IncompatibleTypologyError as error:
+        # D08: la tipología no declarada llega con su causa y las familias
+        # que la admiten — nunca un validation_error sin nombre.
+        raise contract_error(400, "typology_incompatible", str(error), error_extra=error.params) from error
     except (UnsupportedEngineContract, UnsupportedCatalogContract, NotImplementedError) as error:
         raise contract_error(422, "unsupported_engine_contract", "Este diseño requiere una capacidad técnica que aún no está disponible.") from error
     except ValueError as error:

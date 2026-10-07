@@ -1,24 +1,24 @@
 {
-  "id": "fixed",
-  "name": "Fijo",
+  "id": "pivotante-h",
+  "name": "Pivotante horizontal — eje desplazado",
   "box": {
     "x": 0,
     "y": 0,
-    "w": 800,
-    "h": 1200
+    "w": 1200,
+    "h": 1000
   },
   "input": {
     "kind": "leaves",
     "unit": "WINDOW",
     "leaves": [
       {
-        "movement": "FIXED",
+        "movement": "PIVOT_H",
         "hinge_side": "NONE",
         "direction": null,
         "leaf_role": "SINGLE",
         "handle_mm": null,
-        "slot": null,
-        "axis_offset_mm": null
+        "slot": "PRIMARY",
+        "axis_offset_mm": 400
       }
     ]
   },
@@ -29,19 +29,24 @@
         {
           "prims": [
             {
-              "k": "none",
+              "k": "axis",
               "hinge": null,
               "apex_at": "0.4",
               "dash": false,
               "dir": null,
               "vdir": null,
-              "axis_dir": null,
+              "axis_dir": "h",
               "inferred": false,
               "side": null,
-              "at_mm": null
+              "at_mm": "400"
             }
           ],
-          "paths": []
+          "paths": [
+            {
+              "d": "M 0 400 H 1200",
+              "dash": "6 3"
+            }
+          ]
         }
       ]
     },
@@ -51,19 +56,24 @@
         {
           "prims": [
             {
-              "k": "none",
+              "k": "axis",
               "hinge": null,
               "apex_at": "0.4",
               "dash": false,
               "dir": null,
               "vdir": null,
-              "axis_dir": null,
+              "axis_dir": "h",
               "inferred": false,
               "side": null,
-              "at_mm": null
+              "at_mm": "400"
             }
           ],
-          "paths": []
+          "paths": [
+            {
+              "d": "M 0 400 H 1200",
+              "dash": "6 3"
+            }
+          ]
         }
       ]
     }

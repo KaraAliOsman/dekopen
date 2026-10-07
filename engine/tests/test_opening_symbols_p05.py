@@ -139,6 +139,12 @@ def _actual(fixture: dict[str, Any], view: str) -> dict[str, Any]:
                                 if leaf.get("handle_mm") is not None
                                 else None
                             ),
+                            axis_mm=(
+                                Decimal(str(leaf["axis_offset_mm"]))
+                                if leaf.get("axis_offset_mm") is not None
+                                else None
+                            ),
+                            slot=leaf.get("slot"),
                         )
                     ),
                     "paths": _paths(
@@ -153,7 +159,11 @@ def _actual(fixture: dict[str, Any], view: str) -> dict[str, Any]:
             ],
         }
     layout = _build_layout(inp)
-    all_prims = sliding_primitives(layout, view)  # type: ignore[arg-type]
+    all_prims = sliding_primitives(
+        layout,
+        view,  # type: ignore[arg-type]
+        movement=OpeningMovement(inp.get("movement") or "SLIDE"),
+    )
     n = len(all_prims)
     leaf_w = box["w"] / n
     return {

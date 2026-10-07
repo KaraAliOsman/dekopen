@@ -1,24 +1,24 @@
 {
-  "id": "awning",
-  "name": "Proyectante (awning)",
+  "id": "pivotante-v",
+  "name": "Pivotante vertical — eje desplazado",
   "box": {
     "x": 0,
     "y": 0,
-    "w": 800,
-    "h": 1200
+    "w": 1400,
+    "h": 1600
   },
   "input": {
     "kind": "leaves",
     "unit": "WINDOW",
     "leaves": [
       {
-        "movement": "TOP_HUNG",
-        "hinge_side": "TOP",
-        "direction": "OUTWARD",
+        "movement": "PIVOT_V",
+        "hinge_side": "NONE",
+        "direction": null,
         "leaf_role": "SINGLE",
-        "handle_mm": 900,
-        "slot": null,
-        "axis_offset_mm": null
+        "handle_mm": 1050,
+        "slot": "PRIMARY",
+        "axis_offset_mm": 560
       }
     ]
   },
@@ -29,16 +29,16 @@
         {
           "prims": [
             {
-              "k": "tri",
-              "hinge": "TOP",
+              "k": "axis",
+              "hinge": null,
               "apex_at": "0.4",
-              "dash": true,
+              "dash": false,
               "dir": null,
               "vdir": null,
-              "axis_dir": null,
+              "axis_dir": "v",
               "inferred": false,
               "side": null,
-              "at_mm": null
+              "at_mm": "560"
             },
             {
               "k": "handle",
@@ -49,17 +49,17 @@
               "vdir": null,
               "axis_dir": null,
               "inferred": false,
-              "side": "bottom",
-              "at_mm": "900"
+              "side": "top",
+              "at_mm": "1050"
             }
           ],
           "paths": [
             {
-              "d": "M 160 144 L 352 1056 L 640 144",
+              "d": "M 560 0 V 1600",
               "dash": "6 3"
             },
             {
-              "d": "M 391 1174 H 409 M 400 1165 V 1183",
+              "d": "M 691 26 H 709 M 700 17 V 35",
               "dash": null
             }
           ]
@@ -72,16 +72,16 @@
         {
           "prims": [
             {
-              "k": "tri",
-              "hinge": "TOP",
+              "k": "axis",
+              "hinge": null,
               "apex_at": "0.4",
               "dash": false,
               "dir": null,
               "vdir": null,
-              "axis_dir": null,
+              "axis_dir": "v",
               "inferred": false,
               "side": null,
-              "at_mm": null
+              "at_mm": "560"
             },
             {
               "k": "handle",
@@ -92,17 +92,17 @@
               "vdir": null,
               "axis_dir": null,
               "inferred": false,
-              "side": "bottom",
-              "at_mm": "900"
+              "side": "top",
+              "at_mm": "1050"
             }
           ],
           "paths": [
             {
-              "d": "M 160 144 L 352 1056 L 640 144",
-              "dash": null
+              "d": "M 560 0 V 1600",
+              "dash": "6 3"
             },
             {
-              "d": "M 391 1174 H 409 M 400 1165 V 1183",
+              "d": "M 691 26 H 709 M 700 17 V 35",
               "dash": null
             }
           ]

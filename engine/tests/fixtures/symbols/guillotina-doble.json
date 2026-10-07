@@ -1,53 +1,58 @@
 {
-  "id": "sliding-2l-inferred",
-  "name": "Corredera 2 hojas sin travel (dirección inferida)",
+  "id": "guillotina-doble",
+  "name": "Guillotina doble — flechas verticales",
   "box": {
     "x": 0,
     "y": 0,
-    "w": 1600,
-    "h": 1200
+    "w": 900,
+    "h": 1600
   },
   "input": {
-    "kind": "sliding",
+    "kind": "leaves",
     "unit": "WINDOW",
-    "tracks": 2,
-    "panels": [
+    "leaves": [
       {
-        "slot": "S1",
-        "kind": "MOVING",
-        "track": 0,
-        "travel": null
+        "movement": "VERTICAL_SLIDE",
+        "hinge_side": "NONE",
+        "direction": null,
+        "leaf_role": "SINGLE",
+        "handle_mm": null,
+        "slot": "TOP",
+        "axis_offset_mm": null
       },
       {
-        "slot": "S2",
-        "kind": "MOVING",
-        "track": 1,
-        "travel": null
+        "movement": "VERTICAL_SLIDE",
+        "hinge_side": "NONE",
+        "direction": null,
+        "leaf_role": "SINGLE",
+        "handle_mm": null,
+        "slot": "BOTTOM",
+        "axis_offset_mm": null
       }
     ]
   },
   "views": {
     "interior": {
-      "stiles": 0,
+      "stiles": 1,
       "leaves": [
         {
           "prims": [
             {
-              "k": "arrow",
+              "k": "varrow",
               "hinge": null,
               "apex_at": "0.4",
               "dash": false,
-              "dir": "RIGHT",
-              "vdir": null,
+              "dir": null,
+              "vdir": "DOWN",
               "axis_dir": null,
-              "inferred": true,
+              "inferred": false,
               "side": null,
               "at_mm": null
             }
           ],
           "paths": [
             {
-              "d": "M 284.8 600 H 515.2 M 463.36 563.14 L 515.2 600 L 463.36 636.86",
+              "d": "M 225 508.16 V 1091.84 M 131.61 960.51 L 225 1091.84 L 318.39 960.51",
               "dash": null
             }
           ]
@@ -55,21 +60,21 @@
         {
           "prims": [
             {
-              "k": "arrow",
+              "k": "varrow",
               "hinge": null,
               "apex_at": "0.4",
               "dash": false,
-              "dir": "LEFT",
-              "vdir": null,
+              "dir": null,
+              "vdir": "UP",
               "axis_dir": null,
-              "inferred": true,
+              "inferred": false,
               "side": null,
               "at_mm": null
             }
           ],
           "paths": [
             {
-              "d": "M 1315.2 600 H 1084.8 M 1136.64 563.14 L 1084.8 600 L 1136.64 636.86",
+              "d": "M 675 1091.84 V 508.16 M 581.61 639.49 L 675 508.16 L 768.39 639.49",
               "dash": null
             }
           ]
@@ -77,26 +82,26 @@
       ]
     },
     "exterior": {
-      "stiles": 0,
+      "stiles": 1,
       "leaves": [
         {
           "prims": [
             {
-              "k": "arrow",
+              "k": "varrow",
               "hinge": null,
               "apex_at": "0.4",
               "dash": false,
-              "dir": "RIGHT",
-              "vdir": null,
+              "dir": null,
+              "vdir": "DOWN",
               "axis_dir": null,
-              "inferred": true,
+              "inferred": false,
               "side": null,
               "at_mm": null
             }
           ],
           "paths": [
             {
-              "d": "M 284.8 600 H 515.2 M 463.36 563.14 L 515.2 600 L 463.36 636.86",
+              "d": "M 225 508.16 V 1091.84 M 131.61 960.51 L 225 1091.84 L 318.39 960.51",
               "dash": null
             }
           ]
@@ -104,21 +109,21 @@
         {
           "prims": [
             {
-              "k": "arrow",
+              "k": "varrow",
               "hinge": null,
               "apex_at": "0.4",
               "dash": false,
-              "dir": "LEFT",
-              "vdir": null,
+              "dir": null,
+              "vdir": "UP",
               "axis_dir": null,
-              "inferred": true,
+              "inferred": false,
               "side": null,
               "at_mm": null
             }
           ],
           "paths": [
             {
-              "d": "M 1315.2 600 H 1084.8 M 1136.64 563.14 L 1084.8 600 L 1136.64 636.86",
+              "d": "M 675 1091.84 V 508.16 M 581.61 639.49 L 675 508.16 L 768.39 639.49",
               "dash": null
             }
           ]

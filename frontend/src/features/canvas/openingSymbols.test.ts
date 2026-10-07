@@ -50,6 +50,8 @@ const DEFAULT_PRIM: Required<Omit<GlyphPrimitive, never>> = {
   apex_at: 0.4,
   dash: false,
   dir: null,
+  vdir: null,
+  axis_dir: null,
   inferred: false,
   side: null,
   at_mm: null,
@@ -63,6 +65,8 @@ function dumpPrim(prim: GlyphPrimitive): Json {
     apex_at: full.apex_at,
     dash: full.dash,
     dir: full.dir,
+    vdir: full.vdir,
+    axis_dir: full.axis_dir,
     inferred: full.inferred,
     side: full.side,
     at_mm: full.at_mm,
@@ -75,6 +79,8 @@ interface LeafInput {
   direction?: string | null;
   leaf_role?: string;
   handle_mm?: number | null;
+  slot?: string | null;
+  axis_offset_mm?: number | null;
 }
 
 interface FixtureJson {
@@ -84,6 +90,7 @@ interface FixtureJson {
   input: {
     kind: "leaves" | "sliding";
     unit: string;
+    movement?: string;
     leaves?: LeafInput[];
     tracks?: number;
     panels?: { slot: string; kind: string; track: number | null; travel?: string | null }[];
@@ -102,6 +109,8 @@ function actual(fixture: FixtureJson, view: "interior" | "exterior"): Json {
         const prims = leafPrimitives(leaf as unknown as OpeningSpecPayload, view, {
           unit: input.unit,
           handle_mm: leaf.handle_mm ?? null,
+          axis_mm: leaf.axis_offset_mm ?? null,
+          slot: leaf.slot ?? null,
         });
         return {
           prims: prims.map(dumpPrim),
@@ -121,7 +130,7 @@ function actual(fixture: FixtureJson, view: "interior" | "exterior"): Json {
       travel: (panel.travel ?? null) as "LEFT" | "RIGHT" | null,
     })),
   };
-  const allPrims = slidingPrimitives(layout, view);
+  const allPrims = slidingPrimitives(layout, view, input.movement ?? "SLIDE");
   const leafW = box.w / allPrims.length;
   return {
     stiles: 0,

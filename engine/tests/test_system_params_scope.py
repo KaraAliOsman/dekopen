@@ -1,4 +1,4 @@
-"""Canonical SHOT-06 scope: 36 mapped, 31 consumed, 2 metadata, 3 reserved."""
+"""Canonical SHOT-06 scope: 40 mapped, 35 consumed, 2 metadata, 2 reserved."""
 
 import ast
 from collections.abc import Callable
@@ -52,9 +52,18 @@ CORE_CONSUMERS: dict[str, Callable[..., object]] = {
     # D06: catalog-provided accessory articles the position evaluator
     # prices/cuts against (extras.py); read inside evaluate_product.
     "extra_articles": product.evaluate_product,
+    # D08: declared authorities the advanced typologies consume — fold
+    # guide/leaf clearances inside the pack builder, the pivot jamb
+    # clearance inside the pivot builder.
+    "fold_guide_clearance_mm": geometry._append_folding,
+    "fold_leaf_clearance_mm": geometry._append_folding,
+    "pivot_clearance_mm": geometry._append_pivot,
+    # D08: the channel play a single-leaf guillotina subtracts from its
+    # finished height — consumed inside the vertical-slide builder.
+    "sliding_lateral_clearance_mm": geometry._append_vertical_slide,
 }
 METADATA = {"system_code", "depth_mm"}
-RESERVED = {"sliding_lateral_clearance_mm", "corner_bracket_loss_mm", "hook_depth_mm"}
+RESERVED = {"corner_bracket_loss_mm", "hook_depth_mm"}
 # Input-validity authority consumed by the API adapter (finish membership gates
 # `color`), not a formula input — `backend/engine_api/adapter.py` reads it.
 # D05: the finish catalog + bicolor capability resolve into the
@@ -78,9 +87,9 @@ def _param_reads(consumer: Callable[..., object]) -> set[str]:
 
 def test_every_system_parameter_has_an_explicit_scope() -> None:
     assert (
-        len(CORE_CONSUMERS) == 31
+        len(CORE_CONSUMERS) == 35
         and len(METADATA) == 2
-        and len(RESERVED) == 3
+        and len(RESERVED) == 2
         and len(API_BOUNDARY) == 3
     )
     assert (

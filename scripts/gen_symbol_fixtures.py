@@ -45,13 +45,17 @@ OUT_DIR = ROOT / "engine" / "tests" / "fixtures" / "symbols"
 
 
 def _leaf(movement: str, hinge: str, direction: str | None,
-          role: str = "SINGLE", handle_mm: float | None = None) -> dict[str, Any]:
+          role: str = "SINGLE", handle_mm: float | None = None,
+          slot: str | None = None,
+          axis_offset_mm: float | None = None) -> dict[str, Any]:
     return {
         "movement": movement,
         "hinge_side": hinge,
         "direction": direction,
         "leaf_role": role,
         "handle_mm": handle_mm,
+        "slot": slot,
+        "axis_offset_mm": axis_offset_mm,
     }
 
 
@@ -233,6 +237,115 @@ CASES: list[dict[str, Any]] = [
             ],
         },
     },
+    # --- D08 — tipologías avanzadas ----------------------------------
+    {
+        "id": "hst-elevacion",
+        "name": "Corredera elevable (HST) — esquema A",
+        "box": {"x": 0, "y": 0, "w": 2400, "h": 1600},
+        "input": {
+            "kind": "sliding",
+            "unit": "WINDOW",
+            "movement": "LIFT_SLIDE",
+            "tracks": 1,
+            "panels": [
+                _panel("O1", "FIXED", None),
+                _panel("X1", "MOVING", 0, "RIGHT"),
+            ],
+        },
+    },
+    {
+        "id": "psk-osciloparalela",
+        "name": "Osciloparalela (PSK) — basculante + desplazamiento",
+        "box": {"x": 0, "y": 0, "w": 1200, "h": 1400},
+        "input": {
+            "kind": "leaves",
+            "unit": "WINDOW",
+            "leaves": [
+                _leaf("PARALLEL_SLIDE", "NONE", None, handle_mm=1050),
+            ],
+        },
+    },
+    {
+        "id": "psk-layout",
+        "name": "Osciloparalela (PSK) — layout con travel",
+        "box": {"x": 0, "y": 0, "w": 2400, "h": 1400},
+        "input": {
+            "kind": "sliding",
+            "unit": "WINDOW",
+            "movement": "PARALLEL_SLIDE",
+            "tracks": 2,
+            "panels": [
+                _panel("O1", "FIXED", None),
+                _panel("X1", "MOVING", 0, "RIGHT"),
+            ],
+        },
+    },
+    {
+        "id": "plegable-3hojas",
+        "name": "Plegable 3+0 — triángulos en alzado",
+        "box": {"x": 0, "y": 0, "w": 2400, "h": 1600},
+        "input": {
+            "kind": "leaves",
+            "unit": "WINDOW",
+            "leaves": [
+                _leaf("FOLD", "LEFT", "OUTWARD", "ACTIVE",
+                      handle_mm=1050, slot="L1"),
+                _leaf("FOLD", "LEFT", "OUTWARD", "PASSIVE", slot="L2"),
+                _leaf("FOLD", "LEFT", "OUTWARD", "PASSIVE", slot="L3"),
+            ],
+        },
+    },
+    {
+        "id": "pivotante-v",
+        "name": "Pivotante vertical — eje desplazado",
+        "box": {"x": 0, "y": 0, "w": 1400, "h": 1600},
+        "input": {
+            "kind": "leaves",
+            "unit": "WINDOW",
+            "leaves": [
+                _leaf("PIVOT_V", "NONE", None, handle_mm=1050,
+                      slot="PRIMARY", axis_offset_mm=560),
+            ],
+        },
+    },
+    {
+        "id": "pivotante-h",
+        "name": "Pivotante horizontal — eje desplazado",
+        "box": {"x": 0, "y": 0, "w": 1200, "h": 1000},
+        "input": {
+            "kind": "leaves",
+            "unit": "WINDOW",
+            "leaves": [
+                _leaf("PIVOT_H", "NONE", None, slot="PRIMARY",
+                      axis_offset_mm=400),
+            ],
+        },
+    },
+    {
+        "id": "guillotina-doble",
+        "name": "Guillotina doble — flechas verticales",
+        "box": {"x": 0, "y": 0, "w": 900, "h": 1600},
+        "input": {
+            "kind": "leaves",
+            "unit": "WINDOW",
+            "leaves": [
+                _leaf("VERTICAL_SLIDE", "NONE", None, slot="TOP"),
+                _leaf("VERTICAL_SLIDE", "NONE", None, slot="BOTTOM"),
+            ],
+        },
+    },
+    {
+        "id": "puerta-corredera",
+        "name": "Puerta corredera — umbral + flecha",
+        "box": {"x": 0, "y": 0, "w": 1000, "h": 1600},
+        "input": {
+            "kind": "leaves",
+            "unit": "DOOR",
+            "leaves": [
+                _leaf("SLIDE", "NONE", None, handle_mm=1050, slot="PRIMARY"),
+            ],
+        },
+    },
 ]
 
 
@@ -312,6 +425,8 @@ def generate() -> int:
                         view,  # type: ignore[arg-type]
                         unit=unit,
                         handle_mm=Decimal(str(leaf["handle_mm"])) if leaf.get("handle_mm") is not None else None,
+                        axis_mm=Decimal(str(leaf["axis_offset_mm"])) if leaf.get("axis_offset_mm") is not None else None,
+                        slot=leaf.get("slot"),
                     )
                     lx = box["x"] + leaf_w * index
                     per_leaf.append(
@@ -330,7 +445,9 @@ def generate() -> int:
             else:
                 layout = _build_layout(inp)
                 all_prims = sliding_primitives(
-                    layout, view  # type: ignore[arg-type]
+                    layout,
+                    view,  # type: ignore[arg-type]
+                    movement=OpeningMovement(inp.get("movement") or "SLIDE"),
                 )
                 n = len(all_prims)
                 leaf_w = box["w"] / n
