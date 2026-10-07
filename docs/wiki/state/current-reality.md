@@ -3,7 +3,7 @@ type: state
 status: active
 updated: 2026-10-07
 volatility: high
-verified_ref: ad31bf73a47afc3e8ad5ee5f15558cae58c4ca27
+verified_ref: c1f3ed0df1336d7d37a86c2bd3544283922d891e
 sources:
   - repository main
   - P00 evidence-harness PR https://github.com/KaraAliOsman/dekopen/pull/1
@@ -40,6 +40,7 @@ sources:
   - D08 tipologías avanzadas PR https://github.com/KaraAliOsman/dekopen/pull/65
   - P10 portal propuesta PR https://github.com/KaraAliOsman/dekopen/pull/64
   - P18 térmico OGUC PR https://github.com/KaraAliOsman/dekopen/pull/69
+  - P19 3D fidelidad PR https://github.com/KaraAliOsman/dekopen/pull/68
   - P18 térmico OGUC branch devin/P18-termico-normativa
   - P15 compras/inventario branch devin/P15-compras-inventario
   - P08 emisión/cotización branch devin/P08-cotizacion-emision
@@ -590,6 +591,8 @@ Detalle completo en `docs/wiki/log.md` — entrada «[2026-10-07] P18 | desempe�
 - Migración `20270219000000` (renombrada por colisión con D08): `glazing_spacers`, `system_frame_uf`, `system_performance_tests`, `projects.thermal_zone/thermal_use/thermal_wall_areas`, `project_positions.thermal_orientation` — todas con `data_provenance` + sello técnico bajo guard P16. pgTAP 1211, integración 290, e2e 37/37.
 
 ## P19 3D con fidelidad física state
+
+Merged into `integracion/v1` as squash `c1f3ed0df1336d7d37a86c2bd3544283922d891e` (dekopen PR #68):
 
 PR sobre `integracion/v1` (branch `devin/P19-3d-fidelidad`): la vista 3D pasa a representar el mismo modelo del producto — pose real por apertura declarada, acabado por cara con honestidad de catálogo, vano y herrajes — sin contradictoriedad con el dibujo técnico.
 
