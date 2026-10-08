@@ -5,6 +5,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-16, 16px);
+  min-width: 0;
   padding: var(--space-16, 16px);
 }
 
@@ -16,7 +17,15 @@
 }
 
 .analytics-toolbar--detail {
+  /* El control de 8 fuentes es más ancho que el panel en pantallas angostas:
+     scroll interno antes que overflow de toda la página. */
   margin-block-end: var(--space-12, 12px);
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+
+.analytics .ui-table {
+  min-width: 0;
 }
 
 .analytics-custom {

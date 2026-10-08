@@ -152,7 +152,13 @@ function MetricValue({ metric, kind }: { metric: MetricCell; kind: MetricKind })
     case "pct":
       return <Percent kind="points" value={metric.value} />;
     case "pp":
-      return <Percent kind="points" value={metric.value} />;
+      // Desviación en puntos porcentuales, con signo — no es un porcentaje.
+      return (
+        <>
+          {metric.value > 0 ? "+" : ""}
+          {formatQty(metric.value)} pp
+        </>
+      );
     case "days":
       return (
         <>
@@ -257,22 +263,40 @@ function DetailCell({ column, value }: { column: string; value: unknown }): JSX.
     return <>{value ? t("analytics.yes") : t("analytics.no")}</>;
   }
   if (typeof value === "number") {
+    if (column.endsWith("_count") || column === "ots_total" || column === "ots_done")
+      return <>{formatQty(value)}</>;
     if (column.endsWith("_mm2")) return <>{formatQty(value)} mm²</>;
     if (column.endsWith("_mm") || column === "mm_amount") return <>{formatQty(value)} mm</>;
     if (column.endsWith("_hours") || column === "hours") return <>{formatQty(value)} h</>;
     if (column.endsWith("_days")) return <>{formatQty(value)} d</>;
-    if (column.endsWith("_pct") || column.endsWith("_pp"))
-      return <Percent kind="points" value={value} />;
-    if (/(^|_)(net|cost|price|total)$|amount|discount/.test(column)) return <Money value={value} />;
+    if (column.endsWith("_pp"))
+      return (
+        <>
+          {value > 0 ? "+" : ""}
+          {formatQty(value)} pp
+        </>
+      );
+    if (column.endsWith("_pct")) return <Percent kind="points" value={value} />;
+    if (/(^|_)(net|cost|price|total|amount)$|discount/.test(column)) return <Money value={value} />;
     return <>{formatQty(value)}</>;
   }
-  if (typeof value === "string" && /_at$|_date/.test(column)) {
-    return <>{formatDate(value)}</>;
+  if (typeof value === "string") {
+    if (/^[A-Z][A-Z0-9_]{2,}$/.test(value)) {
+      const label = tOptional(`analytics.value.${value}`);
+      if (label !== undefined) return <>{label}</>;
+    }
+    if (/_at$|_date$|_until$/.test(column)) return <>{formatDate(value)}</>;
   }
   if (Array.isArray(value)) {
     return <>{value.length === 0 ? "—" : value.map(String).join(", ")}</>;
   }
-  return <>{typeof value === "object" ? JSON.stringify(value) : String(value)}</>;
+  if (typeof value === "object" && value !== null) {
+    const obj = value as JsonObject;
+    if (typeof obj.note === "string" && obj.note !== "") return <>{obj.note}</>;
+    if (typeof obj.qc_item === "string" && obj.qc_item !== "") return <>{obj.qc_item}</>;
+    return <>{JSON.stringify(value)}</>;
+  }
+  return <>{String(value)}</>;
 }
 
 function DetailTable({ rows }: { rows: JsonObject[] }): JSX.Element {
