@@ -73,6 +73,7 @@ describe("matriz rol → navegación", () => {
       "/field/service",
       "/assistant",
       "/jobs",
+      "/analitica",
       "/settings/general",
     ],
     INSTALLER: ["/dashboard", "/production", "/deliveries", "/field/agenda"],

@@ -9,6 +9,7 @@ branding) y las reglas comerciales por `pricing.repository.admin_write`
 
 from __future__ import annotations
 
+from decimal import Decimal
 
 from django.db import transaction
 
@@ -23,7 +24,8 @@ _ORG_FIELDS = (
     " brand_email, brand_color, brand_logo_key, currency, country,"
     " doc_paper_size, doc_dekopen_credit, doc_terms, doc_validity_days,"
     " vano_spread_tolerance_mm, remnant_alert_days, workshop_label_format,"
-    " require_totp, created_at"
+    " require_totp, analytics_financial_roles, analytics_hourly_rate_clp,"
+    " created_at"
 )
 
 _RULE_FIELDS = (
@@ -102,6 +104,16 @@ def settings_snapshot(org_id) -> dict:
             "workshop_label_format": org.get("workshop_label_format") or "GRID",
         },
         "security": {"require_totp": bool(org.get("require_totp"))},
+        "analytics": {
+            "financial_roles": list(
+                org.get("analytics_financial_roles") or ["OWNER"]
+            ),
+            "hourly_rate_clp": (
+                None
+                if org.get("analytics_hourly_rate_clp") is None
+                else str(org["analytics_hourly_rate_clp"])
+            ),
+        },
         "updated_at": None,
     }
 
@@ -236,6 +248,49 @@ def save_security(org_id, data: dict) -> dict:
             "organization_not_found",
         )
     return {"require_totp": bool(row["require_totp"])}
+
+
+_ANALYTICS_ROLES = ("OWNER", "ESTIMATOR", "WORKSHOP_MANAGER", "INSTALLER",
+                    "OPERATOR")
+
+
+def save_analytics(org_id, data: dict) -> dict:
+    """Quién ve montos y márgenes en Analítica + tarifa horaria que convierte
+    las horas de estación en costo real. La lista de roles no puede quedar
+    vacía (el CHECK de la columna también lo impide)."""
+    fields: dict = {}
+    if "financial_roles" in data:
+        roles = [str(r) for r in (data.get("financial_roles") or [])]
+        bad = [r for r in roles if r not in _ANALYTICS_ROLES]
+        if bad or not roles:
+            raise contract_error(
+                400,
+                "analytics_financial_roles_invalid",
+                "Debe quedar al menos un rol con acceso a montos y márgenes.",
+            )
+        fields["analytics_financial_roles"] = roles
+    if "hourly_rate_clp" in data:
+        rate = data.get("hourly_rate_clp")
+        if rate is not None and rate != "" and Decimal(str(rate)) < 0:
+            raise contract_error(
+                400,
+                "analytics_hourly_rate_invalid",
+                "La tarifa horaria no puede ser negativa.",
+            )
+        fields["analytics_hourly_rate_clp"] = (
+            None if rate in (None, "") else Decimal(str(rate))
+        )
+    if not fields:
+        return settings_snapshot(org_id)["analytics"]
+    assignments = ", ".join(f"{key}=%s" for key in fields)
+    with transaction.atomic(), documentary_backend():
+        one(
+            f"UPDATE public.tenancy_organizations SET {assignments},"
+            f" updated_at=now() WHERE id=%s RETURNING id",
+            [*fields.values(), str(org_id)],
+            "organization_not_found",
+        )
+    return settings_snapshot(org_id)["analytics"]
 
 
 def numbering(org_id) -> dict:

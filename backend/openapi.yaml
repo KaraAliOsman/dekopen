@@ -1258,6 +1258,246 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/v1/analytics/export/:
+    get:
+      operationId: analytics_export
+      description: El detalle de una métrica como CSV — las mismas filas del drill-down.
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: query
+        name: desde
+        schema:
+          type: string
+          format: date
+        description: Primer día del período (AAAA-MM-DD, inclusive).
+      - in: query
+        name: hasta
+        schema:
+          type: string
+          format: date
+        description: Último día del período (AAAA-MM-DD, inclusive).
+      - in: query
+        name: metric
+        schema:
+          type: string
+        description: 'Métrica: quotes, obras, ots, steps, remakes, deliveries, incidents,
+          warranties.'
+        required: true
+      tags:
+      - analytics
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: string
+                format: binary
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/analytics/margin-breakdown/:
+    get:
+      operationId: analytics_margin_breakdown
+      description: |-
+        Descomposición del margen de una obra (§8): cada causa de la
+        diferencia entre lo cotizado y lo real, con los orígenes enlazados.
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: query
+        name: project_id
+        schema:
+          type: string
+          format: uuid
+        description: Obra cuyo margen se descompone.
+        required: true
+      tags:
+      - analytics
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/analytics/overview/:
+    get:
+      operationId: analytics_overview
+      description: |-
+        Las cuatro secciones del panel en un viaje: ventas, margen real vs.
+        cotizado, producción e instalación/postventa, en el período pedido
+        (por defecto los últimos 30 días).
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      - in: query
+        name: desde
+        schema:
+          type: string
+          format: date
+        description: Primer día del período (AAAA-MM-DD, inclusive).
+      - in: query
+        name: hasta
+        schema:
+          type: string
+          format: date
+        description: Último día del período (AAAA-MM-DD, inclusive).
+      tags:
+      - analytics
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsOverview'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
   /api/v1/analytics/summary/:
     get:
       operationId: analytics_operational_summary
@@ -12012,6 +12252,74 @@ paths:
               schema:
                 $ref: '#/components/schemas/OrgSettingsResponse'
           description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/v1/organization/settings/analytics/:
+    put:
+      operationId: organization_settings_analytics_update
+      description: |-
+        Quién ve montos/márgenes en Analítica y la tarifa horaria de mano de
+        obra — decisión del dueño (OWNER explícito, no WRITE_ROLES).
+      parameters:
+      - in: header
+        name: X-Organization-ID
+        schema:
+          type: string
+          format: uuid
+        description: Active organization; validated against the JWT user's active
+          memberships.
+      tags:
+      - projects
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrgAnalyticsSettingsRequest'
+      security:
+      - SupabaseBearer: []
+      responses:
+        '200':
+          description: No response body
         '400':
           content:
             application/json:
@@ -23825,6 +24133,40 @@ components:
       - id
       - requirement_line_id
       - supplier_eligibility_id
+    AnalyticsOverview:
+      type: object
+      description: |-
+        Las secciones viajan como jsonb directo de ``private.analytics_*`` —
+        el contrato detallado vive en docs/analytics/metricas.md.
+      properties:
+        schema:
+          type: string
+        period:
+          type: object
+          additionalProperties: {}
+        definitions:
+          type: object
+          additionalProperties: {}
+        sales:
+          type: object
+          additionalProperties: {}
+        margins:
+          type: object
+          additionalProperties: {}
+        production:
+          type: object
+          additionalProperties: {}
+        field:
+          type: object
+          additionalProperties: {}
+      required:
+      - definitions
+      - field
+      - margins
+      - period
+      - production
+      - sales
+      - schema
     AnnotationRequest:
       type: object
       properties:
@@ -33870,6 +34212,18 @@ components:
         * `SUPPLIER_GLASS_PO` - SUPPLIER_GLASS_PO
         * `SUPPLIER_HARDWARE_PO` - SUPPLIER_HARDWARE_PO
         * `SUPPLIER_PANEL_PO` - SUPPLIER_PANEL_PO
+    OrgAnalyticsSettingsRequest:
+      type: object
+      properties:
+        financial_roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/MembershipRoleEnum'
+        hourly_rate_clp:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
     OrgBranding:
       type: object
       description: Org white-label identity rendered on emitted documents.
@@ -34348,7 +34702,11 @@ components:
         security:
           type: object
           additionalProperties: {}
+        analytics:
+          type: object
+          additionalProperties: {}
       required:
+      - analytics
       - commercial
       - company
       - documents

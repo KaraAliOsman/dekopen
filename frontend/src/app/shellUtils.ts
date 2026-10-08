@@ -116,6 +116,11 @@ export const SHELL_NAV_GROUPS: ShellNavGroup[] = [
     ],
   },
   {
+    id: "analytics",
+    title: "nav.groupAnalytics",
+    items: [{ to: "/analitica", label: "nav.analytics" }],
+  },
+  {
     id: "settings",
     title: "nav.groupSettings",
     items: [{ to: "/settings/general", label: "nav.settings" }],
@@ -174,6 +179,10 @@ export function navigationAllowedFor(
     case "/assistant":
     case "/jobs":
       return hasAiSurface(role);
+    // P24: espejo de READER_ROLES del backend — montos ya vienen recortados
+    // por analytics_financial_roles; la puerta es membership, no dinero.
+    case "/analitica":
+      return role === "OWNER" || role === "WORKSHOP_MANAGER";
     case "/settings/general":
       return role === "OWNER" || role === "WORKSHOP_MANAGER";
     default:

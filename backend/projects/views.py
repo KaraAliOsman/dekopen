@@ -52,6 +52,7 @@ from projects.serializers import (
     CollectionReminderPrepareSerializer,
     CollectionReminderSendResponseSerializer,
     CollectionReminderSendSerializer,
+    OrgAnalyticsSettingsSerializer,
     OrgBrandingSerializer,
     OrgBrandingWriteSerializer,
     OrgCommercialSettingsSerializer,
@@ -1322,6 +1323,24 @@ class OrganizationProductionSettingsView(APIView):
         data = validate(OrgProductionSettingsSerializer, request.data, partial=True)
         with scope(request, WRITE_ROLES) as (_, _, org):
             return response(org_settings.save_production(org, data))
+
+
+class OrganizationAnalyticsSettingsView(APIView):
+    """Quién ve montos/márgenes en Analítica y la tarifa horaria de mano de
+    obra — decisión del dueño (OWNER explícito, no WRITE_ROLES)."""
+
+    parser_classes = [DecimalJSONParser]
+
+    @extend_schema(
+        operation_id="organization_settings_analytics_update",
+        request=OrgAnalyticsSettingsSerializer,
+        responses={200: OrgSectionResponseSerializer, **ERRORS},
+        **SCHEMA,
+    )
+    def put(self, request):
+        data = validate(OrgAnalyticsSettingsSerializer, request.data, partial=True)
+        with scope(request, ("OWNER",)) as (_, _, org):
+            return response(org_settings.save_analytics(org, data))
 
 
 class OrganizationSecurityView(APIView):
