@@ -1,0 +1,4766 @@
+{
+  "summary": {
+    "generated_at": "2026-10-08T03:06:56.504Z",
+    "routes": 444,
+    "routes_with_findings": [
+      "dashboard-manager",
+      "production-manager",
+      "production-order",
+      "inventory-alias",
+      "field-dispatch",
+      "production-operator",
+      "dashboard-operator",
+      "jobs-operator",
+      "dashboard-installer",
+      "jobs-installer",
+      "production-installer",
+      "field-agenda",
+      "field-order",
+      "select-organization"
+    ],
+    "total_findings": 68
+  },
+  "results": [
+    {
+      "route": "login",
+      "url": "/login",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/login--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "login",
+      "url": "/login",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/login--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "login",
+      "url": "/login",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/login--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "login",
+      "url": "/login",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/login--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "login",
+      "url": "/login",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/login--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "login",
+      "url": "/login",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/login--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "portal-vigente",
+      "url": "/cotizacion/5kbK-QFRn3q_Pbx0SzWkm_b0NC0jlkZoFJgj4zGGusc",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/portal-vigente--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/5kbK-QFRn3q_Pbx0SzWkm_b0NC0jlkZoFJgj4zGGusc"
+    },
+    {
+      "route": "portal-vigente",
+      "url": "/cotizacion/5kbK-QFRn3q_Pbx0SzWkm_b0NC0jlkZoFJgj4zGGusc",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/portal-vigente--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/5kbK-QFRn3q_Pbx0SzWkm_b0NC0jlkZoFJgj4zGGusc"
+    },
+    {
+      "route": "portal-vigente",
+      "url": "/cotizacion/5kbK-QFRn3q_Pbx0SzWkm_b0NC0jlkZoFJgj4zGGusc",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/portal-vigente--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/5kbK-QFRn3q_Pbx0SzWkm_b0NC0jlkZoFJgj4zGGusc"
+    },
+    {
+      "route": "portal-vigente",
+      "url": "/cotizacion/5kbK-QFRn3q_Pbx0SzWkm_b0NC0jlkZoFJgj4zGGusc",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/portal-vigente--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/5kbK-QFRn3q_Pbx0SzWkm_b0NC0jlkZoFJgj4zGGusc"
+    },
+    {
+      "route": "portal-vigente",
+      "url": "/cotizacion/5kbK-QFRn3q_Pbx0SzWkm_b0NC0jlkZoFJgj4zGGusc",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/portal-vigente--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/5kbK-QFRn3q_Pbx0SzWkm_b0NC0jlkZoFJgj4zGGusc"
+    },
+    {
+      "route": "portal-vigente",
+      "url": "/cotizacion/5kbK-QFRn3q_Pbx0SzWkm_b0NC0jlkZoFJgj4zGGusc",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/portal-vigente--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/5kbK-QFRn3q_Pbx0SzWkm_b0NC0jlkZoFJgj4zGGusc"
+    },
+    {
+      "route": "portal-vigente",
+      "url": "/cotizacion/5kbK-QFRn3q_Pbx0SzWkm_b0NC0jlkZoFJgj4zGGusc",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/portal-vigente--390x844--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/5kbK-QFRn3q_Pbx0SzWkm_b0NC0jlkZoFJgj4zGGusc"
+    },
+    {
+      "route": "portal-vigente",
+      "url": "/cotizacion/5kbK-QFRn3q_Pbx0SzWkm_b0NC0jlkZoFJgj4zGGusc",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/portal-vigente--390x844--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/5kbK-QFRn3q_Pbx0SzWkm_b0NC0jlkZoFJgj4zGGusc"
+    },
+    {
+      "route": "portal-aprobada",
+      "url": "/cotizacion/ViXogNCDR9_HClZq_r_KiaupaLr4mmXEPlsOv6SxId0",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/portal-aprobada--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/ViXogNCDR9_HClZq_r_KiaupaLr4mmXEPlsOv6SxId0"
+    },
+    {
+      "route": "portal-aprobada",
+      "url": "/cotizacion/ViXogNCDR9_HClZq_r_KiaupaLr4mmXEPlsOv6SxId0",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/portal-aprobada--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/ViXogNCDR9_HClZq_r_KiaupaLr4mmXEPlsOv6SxId0"
+    },
+    {
+      "route": "portal-aprobada",
+      "url": "/cotizacion/ViXogNCDR9_HClZq_r_KiaupaLr4mmXEPlsOv6SxId0",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/portal-aprobada--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/ViXogNCDR9_HClZq_r_KiaupaLr4mmXEPlsOv6SxId0"
+    },
+    {
+      "route": "portal-aprobada",
+      "url": "/cotizacion/ViXogNCDR9_HClZq_r_KiaupaLr4mmXEPlsOv6SxId0",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/portal-aprobada--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/ViXogNCDR9_HClZq_r_KiaupaLr4mmXEPlsOv6SxId0"
+    },
+    {
+      "route": "portal-aprobada",
+      "url": "/cotizacion/ViXogNCDR9_HClZq_r_KiaupaLr4mmXEPlsOv6SxId0",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/portal-aprobada--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/ViXogNCDR9_HClZq_r_KiaupaLr4mmXEPlsOv6SxId0"
+    },
+    {
+      "route": "portal-aprobada",
+      "url": "/cotizacion/ViXogNCDR9_HClZq_r_KiaupaLr4mmXEPlsOv6SxId0",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/portal-aprobada--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/ViXogNCDR9_HClZq_r_KiaupaLr4mmXEPlsOv6SxId0"
+    },
+    {
+      "route": "portal-aprobada",
+      "url": "/cotizacion/ViXogNCDR9_HClZq_r_KiaupaLr4mmXEPlsOv6SxId0",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/portal-aprobada--390x844--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/ViXogNCDR9_HClZq_r_KiaupaLr4mmXEPlsOv6SxId0"
+    },
+    {
+      "route": "portal-aprobada",
+      "url": "/cotizacion/ViXogNCDR9_HClZq_r_KiaupaLr4mmXEPlsOv6SxId0",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/portal-aprobada--390x844--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/ViXogNCDR9_HClZq_r_KiaupaLr4mmXEPlsOv6SxId0"
+    },
+    {
+      "route": "portal-revocada",
+      "url": "/cotizacion/YaRyCV_TTcHKP8bfhDNqB4WMxUBNFlnUgNKogx5RGLU",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/portal-revocada--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/YaRyCV_TTcHKP8bfhDNqB4WMxUBNFlnUgNKogx5RGLU"
+    },
+    {
+      "route": "portal-revocada",
+      "url": "/cotizacion/YaRyCV_TTcHKP8bfhDNqB4WMxUBNFlnUgNKogx5RGLU",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/portal-revocada--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/YaRyCV_TTcHKP8bfhDNqB4WMxUBNFlnUgNKogx5RGLU"
+    },
+    {
+      "route": "portal-revocada",
+      "url": "/cotizacion/YaRyCV_TTcHKP8bfhDNqB4WMxUBNFlnUgNKogx5RGLU",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/portal-revocada--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/YaRyCV_TTcHKP8bfhDNqB4WMxUBNFlnUgNKogx5RGLU"
+    },
+    {
+      "route": "portal-revocada",
+      "url": "/cotizacion/YaRyCV_TTcHKP8bfhDNqB4WMxUBNFlnUgNKogx5RGLU",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/portal-revocada--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/YaRyCV_TTcHKP8bfhDNqB4WMxUBNFlnUgNKogx5RGLU"
+    },
+    {
+      "route": "portal-revocada",
+      "url": "/cotizacion/YaRyCV_TTcHKP8bfhDNqB4WMxUBNFlnUgNKogx5RGLU",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/portal-revocada--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/YaRyCV_TTcHKP8bfhDNqB4WMxUBNFlnUgNKogx5RGLU"
+    },
+    {
+      "route": "portal-revocada",
+      "url": "/cotizacion/YaRyCV_TTcHKP8bfhDNqB4WMxUBNFlnUgNKogx5RGLU",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/portal-revocada--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/YaRyCV_TTcHKP8bfhDNqB4WMxUBNFlnUgNKogx5RGLU"
+    },
+    {
+      "route": "portal-revocada",
+      "url": "/cotizacion/YaRyCV_TTcHKP8bfhDNqB4WMxUBNFlnUgNKogx5RGLU",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/portal-revocada--390x844--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/YaRyCV_TTcHKP8bfhDNqB4WMxUBNFlnUgNKogx5RGLU"
+    },
+    {
+      "route": "portal-revocada",
+      "url": "/cotizacion/YaRyCV_TTcHKP8bfhDNqB4WMxUBNFlnUgNKogx5RGLU",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/portal-revocada--390x844--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/YaRyCV_TTcHKP8bfhDNqB4WMxUBNFlnUgNKogx5RGLU"
+    },
+    {
+      "route": "portal-expirada",
+      "url": "/cotizacion/4Sz5M93sthCqzbhC8f5Jl10C4d8Da_wwMR7a7Vu3eqs",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/portal-expirada--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/4Sz5M93sthCqzbhC8f5Jl10C4d8Da_wwMR7a7Vu3eqs"
+    },
+    {
+      "route": "portal-expirada",
+      "url": "/cotizacion/4Sz5M93sthCqzbhC8f5Jl10C4d8Da_wwMR7a7Vu3eqs",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/portal-expirada--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/4Sz5M93sthCqzbhC8f5Jl10C4d8Da_wwMR7a7Vu3eqs"
+    },
+    {
+      "route": "portal-expirada",
+      "url": "/cotizacion/4Sz5M93sthCqzbhC8f5Jl10C4d8Da_wwMR7a7Vu3eqs",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/portal-expirada--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/4Sz5M93sthCqzbhC8f5Jl10C4d8Da_wwMR7a7Vu3eqs"
+    },
+    {
+      "route": "portal-expirada",
+      "url": "/cotizacion/4Sz5M93sthCqzbhC8f5Jl10C4d8Da_wwMR7a7Vu3eqs",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/portal-expirada--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/4Sz5M93sthCqzbhC8f5Jl10C4d8Da_wwMR7a7Vu3eqs"
+    },
+    {
+      "route": "portal-expirada",
+      "url": "/cotizacion/4Sz5M93sthCqzbhC8f5Jl10C4d8Da_wwMR7a7Vu3eqs",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/portal-expirada--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/4Sz5M93sthCqzbhC8f5Jl10C4d8Da_wwMR7a7Vu3eqs"
+    },
+    {
+      "route": "portal-expirada",
+      "url": "/cotizacion/4Sz5M93sthCqzbhC8f5Jl10C4d8Da_wwMR7a7Vu3eqs",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/portal-expirada--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/4Sz5M93sthCqzbhC8f5Jl10C4d8Da_wwMR7a7Vu3eqs"
+    },
+    {
+      "route": "portal-expirada",
+      "url": "/cotizacion/4Sz5M93sthCqzbhC8f5Jl10C4d8Da_wwMR7a7Vu3eqs",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/portal-expirada--390x844--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/4Sz5M93sthCqzbhC8f5Jl10C4d8Da_wwMR7a7Vu3eqs"
+    },
+    {
+      "route": "portal-expirada",
+      "url": "/cotizacion/4Sz5M93sthCqzbhC8f5Jl10C4d8Da_wwMR7a7Vu3eqs",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/portal-expirada--390x844--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/4Sz5M93sthCqzbhC8f5Jl10C4d8Da_wwMR7a7Vu3eqs"
+    },
+    {
+      "route": "portal-reemplazada",
+      "url": "/cotizacion/SjA0OM-VAnJ64zEookQFBq1JBNVy9WjGc847ZPPzkX4",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/portal-reemplazada--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/SjA0OM-VAnJ64zEookQFBq1JBNVy9WjGc847ZPPzkX4"
+    },
+    {
+      "route": "portal-reemplazada",
+      "url": "/cotizacion/SjA0OM-VAnJ64zEookQFBq1JBNVy9WjGc847ZPPzkX4",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/portal-reemplazada--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/SjA0OM-VAnJ64zEookQFBq1JBNVy9WjGc847ZPPzkX4"
+    },
+    {
+      "route": "portal-reemplazada",
+      "url": "/cotizacion/SjA0OM-VAnJ64zEookQFBq1JBNVy9WjGc847ZPPzkX4",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/portal-reemplazada--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/SjA0OM-VAnJ64zEookQFBq1JBNVy9WjGc847ZPPzkX4"
+    },
+    {
+      "route": "portal-reemplazada",
+      "url": "/cotizacion/SjA0OM-VAnJ64zEookQFBq1JBNVy9WjGc847ZPPzkX4",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/portal-reemplazada--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/SjA0OM-VAnJ64zEookQFBq1JBNVy9WjGc847ZPPzkX4"
+    },
+    {
+      "route": "portal-reemplazada",
+      "url": "/cotizacion/SjA0OM-VAnJ64zEookQFBq1JBNVy9WjGc847ZPPzkX4",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/portal-reemplazada--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/SjA0OM-VAnJ64zEookQFBq1JBNVy9WjGc847ZPPzkX4"
+    },
+    {
+      "route": "portal-reemplazada",
+      "url": "/cotizacion/SjA0OM-VAnJ64zEookQFBq1JBNVy9WjGc847ZPPzkX4",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/portal-reemplazada--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/SjA0OM-VAnJ64zEookQFBq1JBNVy9WjGc847ZPPzkX4"
+    },
+    {
+      "route": "portal-reemplazada",
+      "url": "/cotizacion/SjA0OM-VAnJ64zEookQFBq1JBNVy9WjGc847ZPPzkX4",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/portal-reemplazada--390x844--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/SjA0OM-VAnJ64zEookQFBq1JBNVy9WjGc847ZPPzkX4"
+    },
+    {
+      "route": "portal-reemplazada",
+      "url": "/cotizacion/SjA0OM-VAnJ64zEookQFBq1JBNVy9WjGc847ZPPzkX4",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/portal-reemplazada--390x844--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/SjA0OM-VAnJ64zEookQFBq1JBNVy9WjGc847ZPPzkX4"
+    },
+    {
+      "route": "portal-rechazada",
+      "url": "/cotizacion/vhQQ8l9uEUd5uaP_Wy2lGjBNDvwzH3Ud-VCPGNfZN4Q",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/portal-rechazada--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/vhQQ8l9uEUd5uaP_Wy2lGjBNDvwzH3Ud-VCPGNfZN4Q"
+    },
+    {
+      "route": "portal-rechazada",
+      "url": "/cotizacion/vhQQ8l9uEUd5uaP_Wy2lGjBNDvwzH3Ud-VCPGNfZN4Q",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/portal-rechazada--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/vhQQ8l9uEUd5uaP_Wy2lGjBNDvwzH3Ud-VCPGNfZN4Q"
+    },
+    {
+      "route": "portal-rechazada",
+      "url": "/cotizacion/vhQQ8l9uEUd5uaP_Wy2lGjBNDvwzH3Ud-VCPGNfZN4Q",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/portal-rechazada--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/vhQQ8l9uEUd5uaP_Wy2lGjBNDvwzH3Ud-VCPGNfZN4Q"
+    },
+    {
+      "route": "portal-rechazada",
+      "url": "/cotizacion/vhQQ8l9uEUd5uaP_Wy2lGjBNDvwzH3Ud-VCPGNfZN4Q",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/portal-rechazada--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/vhQQ8l9uEUd5uaP_Wy2lGjBNDvwzH3Ud-VCPGNfZN4Q"
+    },
+    {
+      "route": "portal-rechazada",
+      "url": "/cotizacion/vhQQ8l9uEUd5uaP_Wy2lGjBNDvwzH3Ud-VCPGNfZN4Q",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/portal-rechazada--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/vhQQ8l9uEUd5uaP_Wy2lGjBNDvwzH3Ud-VCPGNfZN4Q"
+    },
+    {
+      "route": "portal-rechazada",
+      "url": "/cotizacion/vhQQ8l9uEUd5uaP_Wy2lGjBNDvwzH3Ud-VCPGNfZN4Q",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/portal-rechazada--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/vhQQ8l9uEUd5uaP_Wy2lGjBNDvwzH3Ud-VCPGNfZN4Q"
+    },
+    {
+      "route": "portal-rechazada",
+      "url": "/cotizacion/vhQQ8l9uEUd5uaP_Wy2lGjBNDvwzH3Ud-VCPGNfZN4Q",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/portal-rechazada--390x844--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/vhQQ8l9uEUd5uaP_Wy2lGjBNDvwzH3Ud-VCPGNfZN4Q"
+    },
+    {
+      "route": "portal-rechazada",
+      "url": "/cotizacion/vhQQ8l9uEUd5uaP_Wy2lGjBNDvwzH3Ud-VCPGNfZN4Q",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/portal-rechazada--390x844--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/vhQQ8l9uEUd5uaP_Wy2lGjBNDvwzH3Ud-VCPGNfZN4Q"
+    },
+    {
+      "route": "portal-cambios",
+      "url": "/cotizacion/fF-woqRSxyiVFtka3NezEtwH5HRn1_UnidVctDfL5bI",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/portal-cambios--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/fF-woqRSxyiVFtka3NezEtwH5HRn1_UnidVctDfL5bI"
+    },
+    {
+      "route": "portal-cambios",
+      "url": "/cotizacion/fF-woqRSxyiVFtka3NezEtwH5HRn1_UnidVctDfL5bI",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/portal-cambios--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/fF-woqRSxyiVFtka3NezEtwH5HRn1_UnidVctDfL5bI"
+    },
+    {
+      "route": "portal-cambios",
+      "url": "/cotizacion/fF-woqRSxyiVFtka3NezEtwH5HRn1_UnidVctDfL5bI",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/portal-cambios--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/fF-woqRSxyiVFtka3NezEtwH5HRn1_UnidVctDfL5bI"
+    },
+    {
+      "route": "portal-cambios",
+      "url": "/cotizacion/fF-woqRSxyiVFtka3NezEtwH5HRn1_UnidVctDfL5bI",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/portal-cambios--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/fF-woqRSxyiVFtka3NezEtwH5HRn1_UnidVctDfL5bI"
+    },
+    {
+      "route": "portal-cambios",
+      "url": "/cotizacion/fF-woqRSxyiVFtka3NezEtwH5HRn1_UnidVctDfL5bI",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/portal-cambios--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/fF-woqRSxyiVFtka3NezEtwH5HRn1_UnidVctDfL5bI"
+    },
+    {
+      "route": "portal-cambios",
+      "url": "/cotizacion/fF-woqRSxyiVFtka3NezEtwH5HRn1_UnidVctDfL5bI",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/portal-cambios--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/fF-woqRSxyiVFtka3NezEtwH5HRn1_UnidVctDfL5bI"
+    },
+    {
+      "route": "portal-cambios",
+      "url": "/cotizacion/fF-woqRSxyiVFtka3NezEtwH5HRn1_UnidVctDfL5bI",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/portal-cambios--390x844--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/fF-woqRSxyiVFtka3NezEtwH5HRn1_UnidVctDfL5bI"
+    },
+    {
+      "route": "portal-cambios",
+      "url": "/cotizacion/fF-woqRSxyiVFtka3NezEtwH5HRn1_UnidVctDfL5bI",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/portal-cambios--390x844--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/fF-woqRSxyiVFtka3NezEtwH5HRn1_UnidVctDfL5bI"
+    },
+    {
+      "route": "portal-parcial",
+      "url": "/cotizacion/wmbK8NEgPzxuwdK0_sPQ-hz0hclp33hr0uquXMgCyec",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/portal-parcial--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/wmbK8NEgPzxuwdK0_sPQ-hz0hclp33hr0uquXMgCyec"
+    },
+    {
+      "route": "portal-parcial",
+      "url": "/cotizacion/wmbK8NEgPzxuwdK0_sPQ-hz0hclp33hr0uquXMgCyec",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/portal-parcial--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/wmbK8NEgPzxuwdK0_sPQ-hz0hclp33hr0uquXMgCyec"
+    },
+    {
+      "route": "portal-parcial",
+      "url": "/cotizacion/wmbK8NEgPzxuwdK0_sPQ-hz0hclp33hr0uquXMgCyec",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/portal-parcial--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/wmbK8NEgPzxuwdK0_sPQ-hz0hclp33hr0uquXMgCyec"
+    },
+    {
+      "route": "portal-parcial",
+      "url": "/cotizacion/wmbK8NEgPzxuwdK0_sPQ-hz0hclp33hr0uquXMgCyec",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/portal-parcial--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/wmbK8NEgPzxuwdK0_sPQ-hz0hclp33hr0uquXMgCyec"
+    },
+    {
+      "route": "portal-parcial",
+      "url": "/cotizacion/wmbK8NEgPzxuwdK0_sPQ-hz0hclp33hr0uquXMgCyec",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/portal-parcial--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/wmbK8NEgPzxuwdK0_sPQ-hz0hclp33hr0uquXMgCyec"
+    },
+    {
+      "route": "portal-parcial",
+      "url": "/cotizacion/wmbK8NEgPzxuwdK0_sPQ-hz0hclp33hr0uquXMgCyec",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/portal-parcial--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/wmbK8NEgPzxuwdK0_sPQ-hz0hclp33hr0uquXMgCyec"
+    },
+    {
+      "route": "portal-parcial",
+      "url": "/cotizacion/wmbK8NEgPzxuwdK0_sPQ-hz0hclp33hr0uquXMgCyec",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/portal-parcial--390x844--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/wmbK8NEgPzxuwdK0_sPQ-hz0hclp33hr0uquXMgCyec"
+    },
+    {
+      "route": "portal-parcial",
+      "url": "/cotizacion/wmbK8NEgPzxuwdK0_sPQ-hz0hclp33hr0uquXMgCyec",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/portal-parcial--390x844--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/wmbK8NEgPzxuwdK0_sPQ-hz0hclp33hr0uquXMgCyec"
+    },
+    {
+      "route": "portal-usd",
+      "url": "/cotizacion/2GeaYwxc828r7a2MVZmzWs_yKM7-M0ike6HpIU8M_VQ",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/portal-usd--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/2GeaYwxc828r7a2MVZmzWs_yKM7-M0ike6HpIU8M_VQ"
+    },
+    {
+      "route": "portal-usd",
+      "url": "/cotizacion/2GeaYwxc828r7a2MVZmzWs_yKM7-M0ike6HpIU8M_VQ",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/portal-usd--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/2GeaYwxc828r7a2MVZmzWs_yKM7-M0ike6HpIU8M_VQ"
+    },
+    {
+      "route": "portal-usd",
+      "url": "/cotizacion/2GeaYwxc828r7a2MVZmzWs_yKM7-M0ike6HpIU8M_VQ",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/portal-usd--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/2GeaYwxc828r7a2MVZmzWs_yKM7-M0ike6HpIU8M_VQ"
+    },
+    {
+      "route": "portal-usd",
+      "url": "/cotizacion/2GeaYwxc828r7a2MVZmzWs_yKM7-M0ike6HpIU8M_VQ",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/portal-usd--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/2GeaYwxc828r7a2MVZmzWs_yKM7-M0ike6HpIU8M_VQ"
+    },
+    {
+      "route": "portal-usd",
+      "url": "/cotizacion/2GeaYwxc828r7a2MVZmzWs_yKM7-M0ike6HpIU8M_VQ",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/portal-usd--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/2GeaYwxc828r7a2MVZmzWs_yKM7-M0ike6HpIU8M_VQ"
+    },
+    {
+      "route": "portal-usd",
+      "url": "/cotizacion/2GeaYwxc828r7a2MVZmzWs_yKM7-M0ike6HpIU8M_VQ",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/portal-usd--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/2GeaYwxc828r7a2MVZmzWs_yKM7-M0ike6HpIU8M_VQ"
+    },
+    {
+      "route": "portal-usd",
+      "url": "/cotizacion/2GeaYwxc828r7a2MVZmzWs_yKM7-M0ike6HpIU8M_VQ",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/portal-usd--390x844--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/2GeaYwxc828r7a2MVZmzWs_yKM7-M0ike6HpIU8M_VQ"
+    },
+    {
+      "route": "portal-usd",
+      "url": "/cotizacion/2GeaYwxc828r7a2MVZmzWs_yKM7-M0ike6HpIU8M_VQ",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/portal-usd--390x844--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/2GeaYwxc828r7a2MVZmzWs_yKM7-M0ike6HpIU8M_VQ"
+    },
+    {
+      "route": "portal-vitrina",
+      "url": "/cotizacion/LlJ-4ijusJwR123kjH66qpuPiiCLY9MnHO__Ho6wEE8",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/portal-vitrina--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/LlJ-4ijusJwR123kjH66qpuPiiCLY9MnHO__Ho6wEE8"
+    },
+    {
+      "route": "portal-vitrina",
+      "url": "/cotizacion/LlJ-4ijusJwR123kjH66qpuPiiCLY9MnHO__Ho6wEE8",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/portal-vitrina--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/LlJ-4ijusJwR123kjH66qpuPiiCLY9MnHO__Ho6wEE8"
+    },
+    {
+      "route": "portal-vitrina",
+      "url": "/cotizacion/LlJ-4ijusJwR123kjH66qpuPiiCLY9MnHO__Ho6wEE8",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/portal-vitrina--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/LlJ-4ijusJwR123kjH66qpuPiiCLY9MnHO__Ho6wEE8"
+    },
+    {
+      "route": "portal-vitrina",
+      "url": "/cotizacion/LlJ-4ijusJwR123kjH66qpuPiiCLY9MnHO__Ho6wEE8",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/portal-vitrina--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/LlJ-4ijusJwR123kjH66qpuPiiCLY9MnHO__Ho6wEE8"
+    },
+    {
+      "route": "portal-vitrina",
+      "url": "/cotizacion/LlJ-4ijusJwR123kjH66qpuPiiCLY9MnHO__Ho6wEE8",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/portal-vitrina--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/LlJ-4ijusJwR123kjH66qpuPiiCLY9MnHO__Ho6wEE8"
+    },
+    {
+      "route": "portal-vitrina",
+      "url": "/cotizacion/LlJ-4ijusJwR123kjH66qpuPiiCLY9MnHO__Ho6wEE8",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/portal-vitrina--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/LlJ-4ijusJwR123kjH66qpuPiiCLY9MnHO__Ho6wEE8"
+    },
+    {
+      "route": "portal-vitrina",
+      "url": "/cotizacion/LlJ-4ijusJwR123kjH66qpuPiiCLY9MnHO__Ho6wEE8",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/portal-vitrina--390x844--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/LlJ-4ijusJwR123kjH66qpuPiiCLY9MnHO__Ho6wEE8"
+    },
+    {
+      "route": "portal-vitrina",
+      "url": "/cotizacion/LlJ-4ijusJwR123kjH66qpuPiiCLY9MnHO__Ho6wEE8",
+      "role": "public",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/portal-vitrina--390x844--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/cotizacion/LlJ-4ijusJwR123kjH66qpuPiiCLY9MnHO__Ho6wEE8"
+    },
+    {
+      "route": "pago-retorno",
+      "url": "/pago/retorno",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/pago-retorno--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/pago/retorno"
+    },
+    {
+      "route": "pago-retorno",
+      "url": "/pago/retorno",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/pago-retorno--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/pago/retorno"
+    },
+    {
+      "route": "pago-retorno",
+      "url": "/pago/retorno",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/pago-retorno--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/pago/retorno"
+    },
+    {
+      "route": "pago-retorno",
+      "url": "/pago/retorno",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/pago-retorno--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/pago/retorno"
+    },
+    {
+      "route": "pago-retorno",
+      "url": "/pago/retorno",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/pago-retorno--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/pago/retorno"
+    },
+    {
+      "route": "pago-retorno",
+      "url": "/pago/retorno",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/pago-retorno--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/pago/retorno"
+    },
+    {
+      "route": "dashboard-owner",
+      "url": "/dashboard",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/dashboard-owner--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-owner",
+      "url": "/dashboard",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-owner--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-owner",
+      "url": "/dashboard",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/dashboard-owner--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-owner",
+      "url": "/dashboard",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-owner--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-owner",
+      "url": "/dashboard",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/dashboard-owner--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-owner",
+      "url": "/dashboard",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-owner--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-owner",
+      "url": "/dashboard",
+      "role": "owner",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/dashboard-owner--390x844--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-owner",
+      "url": "/dashboard",
+      "role": "owner",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-owner--390x844--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-general",
+      "url": "/settings/general",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/settings-general--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-general",
+      "url": "/settings/general",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/settings-general--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-general",
+      "url": "/settings/general",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/settings-general--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-general",
+      "url": "/settings/general",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/settings-general--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-general",
+      "url": "/settings/general",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/settings-general--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-general",
+      "url": "/settings/general",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/settings-general--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-empresa",
+      "url": "/settings/empresa",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/settings-empresa--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-empresa",
+      "url": "/settings/empresa",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/settings-empresa--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-empresa",
+      "url": "/settings/empresa",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/settings-empresa--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-empresa",
+      "url": "/settings/empresa",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/settings-empresa--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-empresa",
+      "url": "/settings/empresa",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/settings-empresa--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-empresa",
+      "url": "/settings/empresa",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/settings-empresa--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-usuarios",
+      "url": "/settings/usuarios",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/settings-usuarios--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-usuarios",
+      "url": "/settings/usuarios",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/settings-usuarios--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-usuarios",
+      "url": "/settings/usuarios",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/settings-usuarios--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-usuarios",
+      "url": "/settings/usuarios",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/settings-usuarios--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-usuarios",
+      "url": "/settings/usuarios",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/settings-usuarios--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-usuarios",
+      "url": "/settings/usuarios",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/settings-usuarios--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-comercial",
+      "url": "/settings/comercial",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/settings-comercial--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-comercial",
+      "url": "/settings/comercial",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/settings-comercial--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-comercial",
+      "url": "/settings/comercial",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/settings-comercial--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-comercial",
+      "url": "/settings/comercial",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/settings-comercial--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-comercial",
+      "url": "/settings/comercial",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/settings-comercial--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-comercial",
+      "url": "/settings/comercial",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/settings-comercial--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-documentos",
+      "url": "/settings/documentos",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/settings-documentos--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-documentos",
+      "url": "/settings/documentos",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/settings-documentos--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-documentos",
+      "url": "/settings/documentos",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/settings-documentos--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-documentos",
+      "url": "/settings/documentos",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/settings-documentos--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-documentos",
+      "url": "/settings/documentos",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/settings-documentos--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-documentos",
+      "url": "/settings/documentos",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/settings-documentos--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-numeracion",
+      "url": "/settings/numeracion",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/settings-numeracion--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-numeracion",
+      "url": "/settings/numeracion",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/settings-numeracion--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-numeracion",
+      "url": "/settings/numeracion",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/settings-numeracion--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-numeracion",
+      "url": "/settings/numeracion",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/settings-numeracion--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-numeracion",
+      "url": "/settings/numeracion",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/settings-numeracion--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-numeracion",
+      "url": "/settings/numeracion",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/settings-numeracion--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-produccion",
+      "url": "/settings/produccion",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/settings-produccion--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-produccion",
+      "url": "/settings/produccion",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/settings-produccion--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-produccion",
+      "url": "/settings/produccion",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/settings-produccion--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-produccion",
+      "url": "/settings/produccion",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/settings-produccion--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-produccion",
+      "url": "/settings/produccion",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/settings-produccion--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-produccion",
+      "url": "/settings/produccion",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/settings-produccion--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-integraciones",
+      "url": "/settings/integraciones",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/settings-integraciones--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-integraciones",
+      "url": "/settings/integraciones",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/settings-integraciones--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-integraciones",
+      "url": "/settings/integraciones",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/settings-integraciones--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-integraciones",
+      "url": "/settings/integraciones",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/settings-integraciones--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-integraciones",
+      "url": "/settings/integraciones",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/settings-integraciones--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-integraciones",
+      "url": "/settings/integraciones",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/settings-integraciones--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-billing",
+      "url": "/settings/billing",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/settings-billing--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-billing",
+      "url": "/settings/billing",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/settings-billing--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-billing",
+      "url": "/settings/billing",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/settings-billing--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-billing",
+      "url": "/settings/billing",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/settings-billing--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-billing",
+      "url": "/settings/billing",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/settings-billing--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-billing",
+      "url": "/settings/billing",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/settings-billing--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-wallet",
+      "url": "/settings/wallet",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/settings-wallet--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-wallet",
+      "url": "/settings/wallet",
+      "role": "owner",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/settings-wallet--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-wallet",
+      "url": "/settings/wallet",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/settings-wallet--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-wallet",
+      "url": "/settings/wallet",
+      "role": "owner",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/settings-wallet--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-wallet",
+      "url": "/settings/wallet",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/settings-wallet--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "settings-wallet",
+      "url": "/settings/wallet",
+      "role": "owner",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/settings-wallet--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard",
+      "url": "/dashboard",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/dashboard--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard",
+      "url": "/dashboard",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/dashboard--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard",
+      "url": "/dashboard",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/dashboard--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard",
+      "url": "/dashboard",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/dashboard--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard",
+      "url": "/dashboard",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/dashboard--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard",
+      "url": "/dashboard",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/dashboard--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard",
+      "url": "/dashboard",
+      "role": "estimator",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/dashboard--390x844--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard",
+      "url": "/dashboard",
+      "role": "estimator",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/dashboard--390x844--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "projects",
+      "url": "/projects",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/projects--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "projects",
+      "url": "/projects",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/projects--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "projects",
+      "url": "/projects",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/projects--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "projects",
+      "url": "/projects",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/projects--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "projects",
+      "url": "/projects",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/projects--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "projects",
+      "url": "/projects",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/projects--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-borrador",
+      "url": "/projects/2b1c60d6-d0b5-4c00-8b16-b0928ede5a76",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/project-borrador--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-borrador",
+      "url": "/projects/2b1c60d6-d0b5-4c00-8b16-b0928ede5a76",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/project-borrador--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-borrador",
+      "url": "/projects/2b1c60d6-d0b5-4c00-8b16-b0928ede5a76",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/project-borrador--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-borrador",
+      "url": "/projects/2b1c60d6-d0b5-4c00-8b16-b0928ede5a76",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/project-borrador--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-borrador",
+      "url": "/projects/2b1c60d6-d0b5-4c00-8b16-b0928ede5a76",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/project-borrador--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-borrador",
+      "url": "/projects/2b1c60d6-d0b5-4c00-8b16-b0928ede5a76",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/project-borrador--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-cotizado",
+      "url": "/projects/ed5ecd7e-032e-4cd3-8009-f50c68f918e8",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/project-cotizado--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-cotizado",
+      "url": "/projects/ed5ecd7e-032e-4cd3-8009-f50c68f918e8",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/project-cotizado--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-cotizado",
+      "url": "/projects/ed5ecd7e-032e-4cd3-8009-f50c68f918e8",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/project-cotizado--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-cotizado",
+      "url": "/projects/ed5ecd7e-032e-4cd3-8009-f50c68f918e8",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/project-cotizado--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-cotizado",
+      "url": "/projects/ed5ecd7e-032e-4cd3-8009-f50c68f918e8",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/project-cotizado--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-cotizado",
+      "url": "/projects/ed5ecd7e-032e-4cd3-8009-f50c68f918e8",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/project-cotizado--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-vitrina",
+      "url": "/projects/1c0aa031-aca9-43f4-a4c9-a78c6b3efb44",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/project-vitrina--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-vitrina",
+      "url": "/projects/1c0aa031-aca9-43f4-a4c9-a78c6b3efb44",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/project-vitrina--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-vitrina",
+      "url": "/projects/1c0aa031-aca9-43f4-a4c9-a78c6b3efb44",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/project-vitrina--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-vitrina",
+      "url": "/projects/1c0aa031-aca9-43f4-a4c9-a78c6b3efb44",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/project-vitrina--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-vitrina",
+      "url": "/projects/1c0aa031-aca9-43f4-a4c9-a78c6b3efb44",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/project-vitrina--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-vitrina",
+      "url": "/projects/1c0aa031-aca9-43f4-a4c9-a78c6b3efb44",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/project-vitrina--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-conjuntos",
+      "url": "/projects/6de1733e-553b-495a-8237-5bde5e22d981",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/project-conjuntos--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-conjuntos",
+      "url": "/projects/6de1733e-553b-495a-8237-5bde5e22d981",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/project-conjuntos--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-conjuntos",
+      "url": "/projects/6de1733e-553b-495a-8237-5bde5e22d981",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/project-conjuntos--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-conjuntos",
+      "url": "/projects/6de1733e-553b-495a-8237-5bde5e22d981",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/project-conjuntos--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-conjuntos",
+      "url": "/projects/6de1733e-553b-495a-8237-5bde5e22d981",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/project-conjuntos--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-conjuntos",
+      "url": "/projects/6de1733e-553b-495a-8237-5bde5e22d981",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/project-conjuntos--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-escala",
+      "url": "/projects/d6210663-2e14-4469-84f1-27a530428f9f",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/project-escala--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-escala",
+      "url": "/projects/d6210663-2e14-4469-84f1-27a530428f9f",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/project-escala--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-escala",
+      "url": "/projects/d6210663-2e14-4469-84f1-27a530428f9f",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/project-escala--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-escala",
+      "url": "/projects/d6210663-2e14-4469-84f1-27a530428f9f",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/project-escala--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-escala",
+      "url": "/projects/d6210663-2e14-4469-84f1-27a530428f9f",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/project-escala--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-escala",
+      "url": "/projects/d6210663-2e14-4469-84f1-27a530428f9f",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/project-escala--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-position-new",
+      "url": "/projects/2b1c60d6-d0b5-4c00-8b16-b0928ede5a76/positions/new",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/project-position-new--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-position-new",
+      "url": "/projects/2b1c60d6-d0b5-4c00-8b16-b0928ede5a76/positions/new",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/project-position-new--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-position-new",
+      "url": "/projects/2b1c60d6-d0b5-4c00-8b16-b0928ede5a76/positions/new",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/project-position-new--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-position-new",
+      "url": "/projects/2b1c60d6-d0b5-4c00-8b16-b0928ede5a76/positions/new",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/project-position-new--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-position-new",
+      "url": "/projects/2b1c60d6-d0b5-4c00-8b16-b0928ede5a76/positions/new",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/project-position-new--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-position-new",
+      "url": "/projects/2b1c60d6-d0b5-4c00-8b16-b0928ede5a76/positions/new",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/project-position-new--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/1c0aa031-aca9-43f4-a4c9-a78c6b3efb44/positions/f1a23bc0-9145-4f15-9ac4-0a35c6c84a94/edit",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/project-position-edit--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/1c0aa031-aca9-43f4-a4c9-a78c6b3efb44/positions/f1a23bc0-9145-4f15-9ac4-0a35c6c84a94/edit",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/project-position-edit--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/1c0aa031-aca9-43f4-a4c9-a78c6b3efb44/positions/f1a23bc0-9145-4f15-9ac4-0a35c6c84a94/edit",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/project-position-edit--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/1c0aa031-aca9-43f4-a4c9-a78c6b3efb44/positions/f1a23bc0-9145-4f15-9ac4-0a35c6c84a94/edit",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/project-position-edit--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/1c0aa031-aca9-43f4-a4c9-a78c6b3efb44/positions/f1a23bc0-9145-4f15-9ac4-0a35c6c84a94/edit",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/project-position-edit--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-position-edit",
+      "url": "/projects/1c0aa031-aca9-43f4-a4c9-a78c6b3efb44/positions/f1a23bc0-9145-4f15-9ac4-0a35c6c84a94/edit",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/project-position-edit--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-pricing",
+      "url": "/projects/1c0aa031-aca9-43f4-a4c9-a78c6b3efb44/pricing",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/project-pricing--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-pricing",
+      "url": "/projects/1c0aa031-aca9-43f4-a4c9-a78c6b3efb44/pricing",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/project-pricing--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-pricing",
+      "url": "/projects/1c0aa031-aca9-43f4-a4c9-a78c6b3efb44/pricing",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/project-pricing--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-pricing",
+      "url": "/projects/1c0aa031-aca9-43f4-a4c9-a78c6b3efb44/pricing",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/project-pricing--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-pricing",
+      "url": "/projects/1c0aa031-aca9-43f4-a4c9-a78c6b3efb44/pricing",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/project-pricing--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "project-pricing",
+      "url": "/projects/1c0aa031-aca9-43f4-a4c9-a78c6b3efb44/pricing",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/project-pricing--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "pricing-commercial",
+      "url": "/pricing/commercial",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/pricing-commercial--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "pricing-commercial",
+      "url": "/pricing/commercial",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/pricing-commercial--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "pricing-commercial",
+      "url": "/pricing/commercial",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/pricing-commercial--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "pricing-commercial",
+      "url": "/pricing/commercial",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/pricing-commercial--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "pricing-commercial",
+      "url": "/pricing/commercial",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/pricing-commercial--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "pricing-commercial",
+      "url": "/pricing/commercial",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/pricing-commercial--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "pricing-cost-lists",
+      "url": "/pricing/cost-lists",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/pricing-cost-lists--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "pricing-cost-lists",
+      "url": "/pricing/cost-lists",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/pricing-cost-lists--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "pricing-cost-lists",
+      "url": "/pricing/cost-lists",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/pricing-cost-lists--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "pricing-cost-lists",
+      "url": "/pricing/cost-lists",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/pricing-cost-lists--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "pricing-cost-lists",
+      "url": "/pricing/cost-lists",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/pricing-cost-lists--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "pricing-cost-lists",
+      "url": "/pricing/cost-lists",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/pricing-cost-lists--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "clients-list",
+      "url": "/clients",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/clients-list--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "clients-list",
+      "url": "/clients",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/clients-list--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "clients-list",
+      "url": "/clients",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/clients-list--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "clients-list",
+      "url": "/clients",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/clients-list--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "clients-list",
+      "url": "/clients",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/clients-list--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "clients-list",
+      "url": "/clients",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/clients-list--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "quotations",
+      "url": "/quotations",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/quotations--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "quotations",
+      "url": "/quotations",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/quotations--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "quotations",
+      "url": "/quotations",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/quotations--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "quotations",
+      "url": "/quotations",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/quotations--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "quotations",
+      "url": "/quotations",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/quotations--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "quotations",
+      "url": "/quotations",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/quotations--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "deliveries",
+      "url": "/deliveries",
+      "role": "manager",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/deliveries--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "deliveries",
+      "url": "/deliveries",
+      "role": "manager",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/deliveries--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "deliveries",
+      "url": "/deliveries",
+      "role": "manager",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/deliveries--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "deliveries",
+      "url": "/deliveries",
+      "role": "manager",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/deliveries--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "deliveries",
+      "url": "/deliveries",
+      "role": "manager",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/deliveries--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "deliveries",
+      "url": "/deliveries",
+      "role": "manager",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/deliveries--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "catalogs-systems",
+      "url": "/catalogs/systems",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/catalogs-systems--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "catalogs-systems",
+      "url": "/catalogs/systems",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/catalogs-systems--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "catalogs-systems",
+      "url": "/catalogs/systems",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/catalogs-systems--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "catalogs-systems",
+      "url": "/catalogs/systems",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/catalogs-systems--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "catalogs-systems",
+      "url": "/catalogs/systems",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/catalogs-systems--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "catalogs-systems",
+      "url": "/catalogs/systems",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/catalogs-systems--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "catalogs-alias",
+      "url": "/catalogs",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/catalogs-alias--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "catalogs-alias",
+      "url": "/catalogs",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/catalogs-alias--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "catalogs-alias",
+      "url": "/catalogs",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/catalogs-alias--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "catalogs-alias",
+      "url": "/catalogs",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/catalogs-alias--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "catalogs-alias",
+      "url": "/catalogs",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/catalogs-alias--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "catalogs-alias",
+      "url": "/catalogs",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/catalogs-alias--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "assistant",
+      "url": "/assistant",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/assistant--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "assistant",
+      "url": "/assistant",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/assistant--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "assistant",
+      "url": "/assistant",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/assistant--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "assistant",
+      "url": "/assistant",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/assistant--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "assistant",
+      "url": "/assistant",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/assistant--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "assistant",
+      "url": "/assistant",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/assistant--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "onboarding",
+      "url": "/onboarding",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/onboarding--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "onboarding",
+      "url": "/onboarding",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/onboarding--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "onboarding",
+      "url": "/onboarding",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/onboarding--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "onboarding",
+      "url": "/onboarding",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/onboarding--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "onboarding",
+      "url": "/onboarding",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/onboarding--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "onboarding",
+      "url": "/onboarding",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/onboarding--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "benchmark",
+      "url": "/benchmark",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/benchmark--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/benchmark"
+    },
+    {
+      "route": "benchmark",
+      "url": "/benchmark",
+      "role": "estimator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/benchmark--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/benchmark"
+    },
+    {
+      "route": "benchmark",
+      "url": "/benchmark",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/benchmark--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/benchmark"
+    },
+    {
+      "route": "benchmark",
+      "url": "/benchmark",
+      "role": "estimator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/benchmark--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/benchmark"
+    },
+    {
+      "route": "benchmark",
+      "url": "/benchmark",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/benchmark--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/benchmark"
+    },
+    {
+      "route": "benchmark",
+      "url": "/benchmark",
+      "role": "estimator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/benchmark--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/benchmark"
+    },
+    {
+      "route": "dashboard-manager",
+      "url": "/dashboard",
+      "role": "manager",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/dashboard-manager--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-manager",
+      "url": "/dashboard",
+      "role": "manager",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-manager--1440x900--dark.png",
+      "findings": [
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "404 http://127.0.0.1:5173/src/api/generated/dekopen.ts?t=1791428417457"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-manager",
+      "url": "/dashboard",
+      "role": "manager",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/dashboard-manager--1280x800--light.png",
+      "findings": [
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "404 http://127.0.0.1:5173/src/api/generated/dekopen.ts?t=1791428417457"
+        },
+        {
+          "kind": "http-error",
+          "detail": "404 http://127.0.0.1:5173/src/api/generated/dekopen.ts?t=1791428417457"
+        },
+        {
+          "kind": "http-error",
+          "detail": "404 http://127.0.0.1:5173/src/api/generated/dekopen.ts?t=1791428417457"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-manager",
+      "url": "/dashboard",
+      "role": "manager",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-manager--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-manager",
+      "url": "/dashboard",
+      "role": "manager",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/dashboard-manager--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-manager",
+      "url": "/dashboard",
+      "role": "manager",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-manager--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-manager",
+      "url": "/dashboard",
+      "role": "manager",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/dashboard-manager--390x844--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-manager",
+      "url": "/dashboard",
+      "role": "manager",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-manager--390x844--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-manager",
+      "url": "/production",
+      "role": "manager",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/production-manager--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-manager",
+      "url": "/production",
+      "role": "manager",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/production-manager--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-manager",
+      "url": "/production",
+      "role": "manager",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/production-manager--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-manager",
+      "url": "/production",
+      "role": "manager",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/production-manager--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-manager",
+      "url": "/production",
+      "role": "manager",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/production-manager--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-manager",
+      "url": "/production",
+      "role": "manager",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/production-manager--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-manager",
+      "url": "/production",
+      "role": "manager",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/production-manager--390x844--light.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "label · Correo · 324×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Enviar enlace de acceso · 324×32px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-manager",
+      "url": "/production",
+      "role": "manager",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/production-manager--390x844--dark.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "label · Correo · 324×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Enviar enlace de acceso · 324×32px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "purchasing",
+      "url": "/purchasing",
+      "role": "manager",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/purchasing--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "purchasing",
+      "url": "/purchasing",
+      "role": "manager",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/purchasing--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "purchasing",
+      "url": "/purchasing",
+      "role": "manager",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/purchasing--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "purchasing",
+      "url": "/purchasing",
+      "role": "manager",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/purchasing--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "purchasing",
+      "url": "/purchasing",
+      "role": "manager",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/purchasing--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "purchasing",
+      "url": "/purchasing",
+      "role": "manager",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/purchasing--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-order",
+      "url": "/production?order=8e62ea76-29c5-40e0-95b1-ee4f4c022fe5",
+      "role": "manager",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/production-order--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-order",
+      "url": "/production?order=8e62ea76-29c5-40e0-95b1-ee4f4c022fe5",
+      "role": "manager",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/production-order--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-order",
+      "url": "/production?order=8e62ea76-29c5-40e0-95b1-ee4f4c022fe5",
+      "role": "manager",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/production-order--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-order",
+      "url": "/production?order=8e62ea76-29c5-40e0-95b1-ee4f4c022fe5",
+      "role": "manager",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/production-order--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-order",
+      "url": "/production?order=8e62ea76-29c5-40e0-95b1-ee4f4c022fe5",
+      "role": "manager",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/production-order--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-order",
+      "url": "/production?order=8e62ea76-29c5-40e0-95b1-ee4f4c022fe5",
+      "role": "manager",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/production-order--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-order",
+      "url": "/production?order=8e62ea76-29c5-40e0-95b1-ee4f4c022fe5",
+      "role": "manager",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/production-order--390x844--light.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "label · Correo · 324×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Enviar enlace de acceso · 324×32px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-order",
+      "url": "/production?order=8e62ea76-29c5-40e0-95b1-ee4f4c022fe5",
+      "role": "manager",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/production-order--390x844--dark.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "label · Correo · 324×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Enviar enlace de acceso · 324×32px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-order-blocked",
+      "url": "/production?order=cffa3534-bbf3-4693-975a-92c878f4500a",
+      "role": "manager",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/production-order-blocked--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-order-blocked",
+      "url": "/production?order=cffa3534-bbf3-4693-975a-92c878f4500a",
+      "role": "manager",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/production-order-blocked--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-order-blocked",
+      "url": "/production?order=cffa3534-bbf3-4693-975a-92c878f4500a",
+      "role": "manager",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/production-order-blocked--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-order-blocked",
+      "url": "/production?order=cffa3534-bbf3-4693-975a-92c878f4500a",
+      "role": "manager",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/production-order-blocked--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-order-blocked",
+      "url": "/production?order=cffa3534-bbf3-4693-975a-92c878f4500a",
+      "role": "manager",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/production-order-blocked--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-order-blocked",
+      "url": "/production?order=cffa3534-bbf3-4693-975a-92c878f4500a",
+      "role": "manager",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/production-order-blocked--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "inventory-alias",
+      "url": "/inventory",
+      "role": "manager",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/inventory-alias--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "inventory-alias",
+      "url": "/inventory",
+      "role": "manager",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/inventory-alias--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "inventory-alias",
+      "url": "/inventory",
+      "role": "manager",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/inventory-alias--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "inventory-alias",
+      "url": "/inventory",
+      "role": "manager",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/inventory-alias--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "inventory-alias",
+      "url": "/inventory",
+      "role": "manager",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/inventory-alias--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "inventory-alias",
+      "url": "/inventory",
+      "role": "manager",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/inventory-alias--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "inventory-alias",
+      "url": "/inventory",
+      "role": "manager",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/inventory-alias--390x844--light.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "label · Correo · 324×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Enviar enlace de acceso · 324×32px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "inventory-alias",
+      "url": "/inventory",
+      "role": "manager",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/inventory-alias--390x844--dark.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "label · Correo · 324×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Enviar enlace de acceso · 324×32px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "jobs-manager",
+      "url": "/jobs",
+      "role": "manager",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/jobs-manager--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "jobs-manager",
+      "url": "/jobs",
+      "role": "manager",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/jobs-manager--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "jobs-manager",
+      "url": "/jobs",
+      "role": "manager",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/jobs-manager--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "jobs-manager",
+      "url": "/jobs",
+      "role": "manager",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/jobs-manager--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "jobs-manager",
+      "url": "/jobs",
+      "role": "manager",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/jobs-manager--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "jobs-manager",
+      "url": "/jobs",
+      "role": "manager",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/jobs-manager--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-dispatch",
+      "url": "/field/dispatch",
+      "role": "manager",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/field-dispatch--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-dispatch",
+      "url": "/field/dispatch",
+      "role": "manager",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/field-dispatch--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-dispatch",
+      "url": "/field/dispatch",
+      "role": "manager",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/field-dispatch--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-dispatch",
+      "url": "/field/dispatch",
+      "role": "manager",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/field-dispatch--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-dispatch",
+      "url": "/field/dispatch",
+      "role": "manager",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/field-dispatch--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-dispatch",
+      "url": "/field/dispatch",
+      "role": "manager",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/field-dispatch--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-dispatch",
+      "url": "/field/dispatch",
+      "role": "manager",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/field-dispatch--390x844--light.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "label · Correo · 324×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Enviar enlace de acceso · 324×32px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-dispatch",
+      "url": "/field/dispatch",
+      "role": "manager",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/field-dispatch--390x844--dark.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "label · Correo · 324×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Enviar enlace de acceso · 324×32px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-incidents",
+      "url": "/field/incidents",
+      "role": "manager",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/field-incidents--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-incidents",
+      "url": "/field/incidents",
+      "role": "manager",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/field-incidents--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-incidents",
+      "url": "/field/incidents",
+      "role": "manager",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/field-incidents--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-incidents",
+      "url": "/field/incidents",
+      "role": "manager",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/field-incidents--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-incidents",
+      "url": "/field/incidents",
+      "role": "manager",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/field-incidents--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-incidents",
+      "url": "/field/incidents",
+      "role": "manager",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/field-incidents--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-incidents",
+      "url": "/field/incidents",
+      "role": "manager",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/field-incidents--390x844--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-incidents",
+      "url": "/field/incidents",
+      "role": "manager",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/field-incidents--390x844--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-service",
+      "url": "/field/service",
+      "role": "manager",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/field-service--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-service",
+      "url": "/field/service",
+      "role": "manager",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/field-service--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-service",
+      "url": "/field/service",
+      "role": "manager",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/field-service--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-service",
+      "url": "/field/service",
+      "role": "manager",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/field-service--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-service",
+      "url": "/field/service",
+      "role": "manager",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/field-service--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-service",
+      "url": "/field/service",
+      "role": "manager",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/field-service--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-service",
+      "url": "/field/service",
+      "role": "manager",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/field-service--390x844--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-service",
+      "url": "/field/service",
+      "role": "manager",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/field-service--390x844--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-operator",
+      "url": "/production",
+      "role": "operator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/production-operator--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-operator",
+      "url": "/production",
+      "role": "operator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/production-operator--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-operator",
+      "url": "/production",
+      "role": "operator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/production-operator--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-operator",
+      "url": "/production",
+      "role": "operator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/production-operator--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-operator",
+      "url": "/production",
+      "role": "operator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/production-operator--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-operator",
+      "url": "/production",
+      "role": "operator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/production-operator--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-operator",
+      "url": "/production",
+      "role": "operator",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/production-operator--390x844--light.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "label · Correo · 324×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Enviar enlace de acceso · 324×32px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-operator",
+      "url": "/production",
+      "role": "operator",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/production-operator--390x844--dark.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "label · Correo · 324×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Enviar enlace de acceso · 324×32px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-operator",
+      "url": "/dashboard",
+      "role": "operator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/dashboard-operator--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-operator",
+      "url": "/dashboard",
+      "role": "operator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-operator--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-operator",
+      "url": "/dashboard",
+      "role": "operator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/dashboard-operator--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-operator",
+      "url": "/dashboard",
+      "role": "operator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-operator--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-operator",
+      "url": "/dashboard",
+      "role": "operator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/dashboard-operator--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-operator",
+      "url": "/dashboard",
+      "role": "operator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-operator--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-operator",
+      "url": "/dashboard",
+      "role": "operator",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/dashboard-operator--390x844--light.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "label · Correo · 324×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Enviar enlace de acceso · 324×32px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-operator",
+      "url": "/dashboard",
+      "role": "operator",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-operator--390x844--dark.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "label · Correo · 324×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Enviar enlace de acceso · 324×32px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "jobs-operator",
+      "url": "/jobs",
+      "role": "operator",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/jobs-operator--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "jobs-operator",
+      "url": "/jobs",
+      "role": "operator",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/jobs-operator--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "jobs-operator",
+      "url": "/jobs",
+      "role": "operator",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/jobs-operator--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "jobs-operator",
+      "url": "/jobs",
+      "role": "operator",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/jobs-operator--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "jobs-operator",
+      "url": "/jobs",
+      "role": "operator",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/jobs-operator--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "jobs-operator",
+      "url": "/jobs",
+      "role": "operator",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/jobs-operator--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "jobs-operator",
+      "url": "/jobs",
+      "role": "operator",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/jobs-operator--390x844--light.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "label · Correo · 324×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Enviar enlace de acceso · 324×32px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "jobs-operator",
+      "url": "/jobs",
+      "role": "operator",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/jobs-operator--390x844--dark.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "label · Correo · 324×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Enviar enlace de acceso · 324×32px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-installer",
+      "url": "/dashboard",
+      "role": "installer",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/dashboard-installer--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-installer",
+      "url": "/dashboard",
+      "role": "installer",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-installer--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-installer",
+      "url": "/dashboard",
+      "role": "installer",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/dashboard-installer--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-installer",
+      "url": "/dashboard",
+      "role": "installer",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-installer--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-installer",
+      "url": "/dashboard",
+      "role": "installer",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/dashboard-installer--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-installer",
+      "url": "/dashboard",
+      "role": "installer",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-installer--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-installer",
+      "url": "/dashboard",
+      "role": "installer",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/dashboard-installer--390x844--light.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "label · Correo · 324×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Enviar enlace de acceso · 324×32px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-installer",
+      "url": "/dashboard",
+      "role": "installer",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-installer--390x844--dark.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "label · Correo · 324×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Enviar enlace de acceso · 324×32px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "jobs-installer",
+      "url": "/jobs",
+      "role": "installer",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/jobs-installer--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "jobs-installer",
+      "url": "/jobs",
+      "role": "installer",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/jobs-installer--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "jobs-installer",
+      "url": "/jobs",
+      "role": "installer",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/jobs-installer--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "jobs-installer",
+      "url": "/jobs",
+      "role": "installer",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/jobs-installer--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "jobs-installer",
+      "url": "/jobs",
+      "role": "installer",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/jobs-installer--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "jobs-installer",
+      "url": "/jobs",
+      "role": "installer",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/jobs-installer--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "jobs-installer",
+      "url": "/jobs",
+      "role": "installer",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/jobs-installer--390x844--light.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "label · Correo · 324×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Enviar enlace de acceso · 324×32px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "jobs-installer",
+      "url": "/jobs",
+      "role": "installer",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/jobs-installer--390x844--dark.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "label · Correo · 324×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Enviar enlace de acceso · 324×32px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-installer",
+      "url": "/production",
+      "role": "installer",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/production-installer--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-installer",
+      "url": "/production",
+      "role": "installer",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/production-installer--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-installer",
+      "url": "/production",
+      "role": "installer",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/production-installer--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-installer",
+      "url": "/production",
+      "role": "installer",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/production-installer--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-installer",
+      "url": "/production",
+      "role": "installer",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/production-installer--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-installer",
+      "url": "/production",
+      "role": "installer",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/production-installer--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-installer",
+      "url": "/production",
+      "role": "installer",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/production-installer--390x844--light.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "label · Correo · 324×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Enviar enlace de acceso · 324×32px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "production-installer",
+      "url": "/production",
+      "role": "installer",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/production-installer--390x844--dark.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "label · Correo · 324×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Enviar enlace de acceso · 324×32px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-agenda",
+      "url": "/field/agenda",
+      "role": "installer",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/field-agenda--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-agenda",
+      "url": "/field/agenda",
+      "role": "installer",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/field-agenda--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-agenda",
+      "url": "/field/agenda",
+      "role": "installer",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/field-agenda--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-agenda",
+      "url": "/field/agenda",
+      "role": "installer",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/field-agenda--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-agenda",
+      "url": "/field/agenda",
+      "role": "installer",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/field-agenda--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-agenda",
+      "url": "/field/agenda",
+      "role": "installer",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/field-agenda--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-agenda",
+      "url": "/field/agenda",
+      "role": "installer",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/field-agenda--390x844--light.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "label · Correo · 324×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Enviar enlace de acceso · 324×32px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-agenda",
+      "url": "/field/agenda",
+      "role": "installer",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/field-agenda--390x844--dark.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "label · Correo · 324×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Enviar enlace de acceso · 324×32px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-order",
+      "url": "/field/orders/95094a8d-1191-4632-8f50-dd559a945c8d",
+      "role": "installer",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/field-order--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-order",
+      "url": "/field/orders/95094a8d-1191-4632-8f50-dd559a945c8d",
+      "role": "installer",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/field-order--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-order",
+      "url": "/field/orders/95094a8d-1191-4632-8f50-dd559a945c8d",
+      "role": "installer",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/field-order--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-order",
+      "url": "/field/orders/95094a8d-1191-4632-8f50-dd559a945c8d",
+      "role": "installer",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/field-order--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-order",
+      "url": "/field/orders/95094a8d-1191-4632-8f50-dd559a945c8d",
+      "role": "installer",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/field-order--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-order",
+      "url": "/field/orders/95094a8d-1191-4632-8f50-dd559a945c8d",
+      "role": "installer",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/field-order--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-order",
+      "url": "/field/orders/95094a8d-1191-4632-8f50-dd559a945c8d",
+      "role": "installer",
+      "viewport": "390x844",
+      "theme": "light",
+      "screenshot": "shots/field-order--390x844--light.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "label · Correo · 324×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Enviar enlace de acceso · 324×32px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "field-order",
+      "url": "/field/orders/95094a8d-1191-4632-8f50-dd559a945c8d",
+      "role": "installer",
+      "viewport": "390x844",
+      "theme": "dark",
+      "screenshot": "shots/field-order--390x844--dark.png",
+      "findings": [
+        {
+          "kind": "touch-too-small",
+          "detail": "label · Correo · 324×18px"
+        },
+        {
+          "kind": "touch-too-small",
+          "detail": "button · Enviar enlace de acceso · 324×32px"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "select-organization",
+      "url": "/select-organization",
+      "role": "multi",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/select-organization--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "select-organization",
+      "url": "/select-organization",
+      "role": "multi",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/select-organization--1440x900--dark.png",
+      "findings": [
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "404 http://127.0.0.1:5173/src/api/generated/dekopen.ts?t=1791428779616"
+        },
+        {
+          "kind": "http-error",
+          "detail": "404 http://127.0.0.1:5173/src/api/generated/dekopen.ts?t=1791428779616"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/select-organization"
+    },
+    {
+      "route": "select-organization",
+      "url": "/select-organization",
+      "role": "multi",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/select-organization--1280x800--light.png",
+      "findings": [
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+        },
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "404 http://127.0.0.1:5173/src/api/generated/dekopen.ts?t=1791428779616"
+        },
+        {
+          "kind": "http-error",
+          "detail": "404 http://127.0.0.1:5173/src/api/generated/dekopen.ts?t=1791428779616"
+        },
+        {
+          "kind": "http-error",
+          "detail": "404 http://127.0.0.1:5173/src/api/generated/dekopen.ts?t=1791428779616"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/select-organization"
+    },
+    {
+      "route": "select-organization",
+      "url": "/select-organization",
+      "role": "multi",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/select-organization--1280x800--dark.png",
+      "findings": [
+        {
+          "kind": "console-error",
+          "detail": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+        },
+        {
+          "kind": "http-error",
+          "detail": "404 http://127.0.0.1:5173/src/api/generated/dekopen.ts?t=1791428779616"
+        }
+      ],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "select-organization",
+      "url": "/select-organization",
+      "role": "multi",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/select-organization--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "select-organization",
+      "url": "/select-organization",
+      "role": "multi",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/select-organization--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-multi",
+      "url": "/dashboard",
+      "role": "multi",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/dashboard-multi--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-multi",
+      "url": "/dashboard",
+      "role": "multi",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-multi--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-multi",
+      "url": "/dashboard",
+      "role": "multi",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/dashboard-multi--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-multi",
+      "url": "/dashboard",
+      "role": "multi",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-multi--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-multi",
+      "url": "/dashboard",
+      "role": "multi",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/dashboard-multi--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dashboard-multi",
+      "url": "/dashboard",
+      "role": "multi",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/dashboard-multi--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/login"
+    },
+    {
+      "route": "dev-ui",
+      "url": "/dev/ui",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/dev-ui--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/dev/ui"
+    },
+    {
+      "route": "dev-ui",
+      "url": "/dev/ui",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/dev-ui--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/dev/ui"
+    },
+    {
+      "route": "dev-ui",
+      "url": "/dev/ui",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/dev-ui--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/dev/ui"
+    },
+    {
+      "route": "dev-ui",
+      "url": "/dev/ui",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/dev-ui--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/dev/ui"
+    },
+    {
+      "route": "dev-ui",
+      "url": "/dev/ui",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/dev-ui--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/dev/ui"
+    },
+    {
+      "route": "dev-ui",
+      "url": "/dev/ui",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/dev-ui--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/dev/ui"
+    },
+    {
+      "route": "dev-ui-mal",
+      "url": "/dev/ui/mal",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "light",
+      "screenshot": "shots/dev-ui-mal--1440x900--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/dev/ui/mal"
+    },
+    {
+      "route": "dev-ui-mal",
+      "url": "/dev/ui/mal",
+      "role": "public",
+      "viewport": "1440x900",
+      "theme": "dark",
+      "screenshot": "shots/dev-ui-mal--1440x900--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/dev/ui/mal"
+    },
+    {
+      "route": "dev-ui-mal",
+      "url": "/dev/ui/mal",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "light",
+      "screenshot": "shots/dev-ui-mal--1280x800--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/dev/ui/mal"
+    },
+    {
+      "route": "dev-ui-mal",
+      "url": "/dev/ui/mal",
+      "role": "public",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "screenshot": "shots/dev-ui-mal--1280x800--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/dev/ui/mal"
+    },
+    {
+      "route": "dev-ui-mal",
+      "url": "/dev/ui/mal",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "light",
+      "screenshot": "shots/dev-ui-mal--1024x768--light.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/dev/ui/mal"
+    },
+    {
+      "route": "dev-ui-mal",
+      "url": "/dev/ui/mal",
+      "role": "public",
+      "viewport": "1024x768",
+      "theme": "dark",
+      "screenshot": "shots/dev-ui-mal--1024x768--dark.png",
+      "findings": [],
+      "finalUrl": "http://127.0.0.1:5173/dev/ui/mal"
+    }
+  ]
+}

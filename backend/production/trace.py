@@ -349,7 +349,12 @@ def _trace_operations(
         return {"count": 0, "items": [], "unemitted_kinds": []}
     try:
         bars = [
-            CutBar.model_validate_json(json.dumps(bar)) for bar in raw_bars
+            CutBar.model_validate_json(
+                json.dumps(
+                    {k: v for k, v in bar.items() if k != "remnant_code"}
+                )
+            )
+            for bar in raw_bars
         ]
         fact_units = [
             ManufacturingFactsV1.model_validate_json(json.dumps(unit))
