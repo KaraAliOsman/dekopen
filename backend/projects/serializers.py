@@ -1082,6 +1082,29 @@ class OrgSecuritySettingsSerializer(StrictSerializer):
     require_totp = serializers.BooleanField()
 
 
+class OrgAnalyticsSettingsSerializer(StrictSerializer):
+    financial_roles = serializers.ListField(
+        child=serializers.ChoiceField(
+            choices=(
+                "OWNER",
+                "ESTIMATOR",
+                "WORKSHOP_MANAGER",
+                "INSTALLER",
+                "OPERATOR",
+            )
+        ),
+        required=False,
+        allow_empty=False,
+    )
+    hourly_rate_clp = DecimalStringField(
+        max_digits=14,
+        decimal_places=2,
+        required=False,
+        allow_null=True,
+        min_value=Decimal("0"),
+    )
+
+
 class OrgInviteSerializer(StrictSerializer):
     email = serializers.EmailField(max_length=255)
     role = serializers.ChoiceField(
@@ -1103,6 +1126,7 @@ class OrgSettingsResponseSerializer(serializers.Serializer):
     documents = serializers.DictField()
     production = serializers.DictField()
     security = serializers.DictField()
+    analytics = serializers.DictField()
 
 
 class OrgMemberSerializer(serializers.Serializer):

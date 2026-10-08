@@ -55,3 +55,16 @@ class TodayQueueSerializer(serializers.Serializer):
     date = serializers.CharField()
     items = TodayQueueItemSerializer(many=True)
     panels = TodayQueuePanelSerializer(many=True)
+
+
+class AnalyticsOverviewSerializer(serializers.Serializer):
+    """Las secciones viajan como jsonb directo de ``private.analytics_*`` —
+    el contrato detallado vive en docs/analytics/metricas.md."""
+
+    schema = serializers.CharField()
+    period = serializers.DictField()
+    definitions = serializers.DictField()
+    sales = serializers.DictField()
+    margins = serializers.DictField()
+    production = serializers.DictField()
+    field = serializers.DictField()

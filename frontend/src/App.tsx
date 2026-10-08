@@ -92,6 +92,10 @@ const ProductionPage = lazy(async () => {
   const module = await import("./features/production/ProductionPage");
   return { default: module.ProductionPage };
 });
+const AnalyticsPage = lazy(async () => {
+  const module = await import("./features/analytics/AnalyticsPage");
+  return { default: module.AnalyticsPage };
+});
 
 const QuotationsPage = lazy(async () => {
   const module = await import("./features/quotations/QuotationsPage");
@@ -385,6 +389,18 @@ export function AppRoutes(): JSX.Element {
               <AppShell>
                 <Suspense fallback={<p role="status">{t("production.loading")}</p>}>
                   <ProductionPage />
+                </Suspense>
+              </AppShell>
+            </ReadyGuard>
+          }
+        />
+        <Route
+          path="/analitica"
+          element={
+            <ReadyGuard>
+              <AppShell>
+                <Suspense fallback={<p role="status">{t("analytics.loading")}</p>}>
+                  <AnalyticsPage />
                 </Suspense>
               </AppShell>
             </ReadyGuard>

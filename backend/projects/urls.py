@@ -11,6 +11,7 @@ from projects.views import (
     FlowPaymentConfirmView,
     ProjectCollectionReminderSendView,
     ProjectCollectionReminderView,
+    OrganizationAnalyticsSettingsView,
     OrganizationBrandingLogoView,
     OrganizationBrandingView,
     OrganizationCommercialSettingsView,
@@ -86,6 +87,10 @@ urlpatterns = [
         OrganizationProductionSettingsView.as_view(),
     ),
     path("organization/settings/security/", OrganizationSecurityView.as_view()),
+    path(
+        "organization/settings/analytics/",
+        OrganizationAnalyticsSettingsView.as_view(),
+    ),
     path(
         "organization/settings/numbering/",
         OrganizationNumberingView.as_view(),

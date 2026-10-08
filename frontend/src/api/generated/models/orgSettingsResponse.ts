@@ -5,6 +5,7 @@
  * Authenticated tenant and engine API boundary.
  * OpenAPI spec version: 1.0.0
  */
+import type { OrgSettingsResponseAnalytics } from "./orgSettingsResponseAnalytics";
 import type { OrgSettingsResponseCommercial } from "./orgSettingsResponseCommercial";
 import type { OrgSettingsResponseCompany } from "./orgSettingsResponseCompany";
 import type { OrgSettingsResponseDocuments } from "./orgSettingsResponseDocuments";
@@ -17,4 +18,5 @@ export interface OrgSettingsResponse {
   documents: OrgSettingsResponseDocuments;
   production: OrgSettingsResponseProduction;
   security: OrgSettingsResponseSecurity;
+  analytics: OrgSettingsResponseAnalytics;
 }

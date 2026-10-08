@@ -33,6 +33,11 @@ import type {
   AiSettingsWriteRequest,
   AllocationRequestRequest,
   AllocationResponse,
+  AnalyticsExportParams,
+  AnalyticsMarginBreakdown200,
+  AnalyticsMarginBreakdownParams,
+  AnalyticsOverview,
+  AnalyticsOverviewParams,
   ApplyRequest,
   ApprovalRecord,
   ArticleFicha,
@@ -210,6 +215,7 @@ import type {
   OrderReceiptRequestRequest,
   OrderReceiving,
   OrderResponse,
+  OrgAnalyticsSettingsRequest,
   OrgBranding,
   OrgBrandingWriteRequest,
   OrgCommercialSettingsRequest,
@@ -1751,6 +1757,269 @@ export const aiSettingsUpdate = async (
     method: "PUT",
     headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
     body: JSON.stringify(aiSettingsWriteRequest),
+  });
+};
+
+export type analyticsExportResponse200 = {
+  data: Blob;
+  status: 200;
+};
+
+export type analyticsExportResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type analyticsExportResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type analyticsExportResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type analyticsExportResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type analyticsExportResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type analyticsExportResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type analyticsExportResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type analyticsExportResponseSuccess = analyticsExportResponse200 & {
+  headers: Headers;
+};
+export type analyticsExportResponseError = (
+  | analyticsExportResponse400
+  | analyticsExportResponse401
+  | analyticsExportResponse403
+  | analyticsExportResponse404
+  | analyticsExportResponse409
+  | analyticsExportResponse422
+  | analyticsExportResponse503
+) & {
+  headers: Headers;
+};
+
+export type analyticsExportResponse = analyticsExportResponseSuccess | analyticsExportResponseError;
+
+export const getAnalyticsExportUrl = (params: AnalyticsExportParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v1/analytics/export/?${stringifiedParams}`
+    : `/api/v1/analytics/export/`;
+};
+
+/**
+ * El detalle de una métrica como CSV — las mismas filas del drill-down.
+ */
+export const analyticsExport = async (
+  params: AnalyticsExportParams,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<analyticsExportResponse> => {
+  return apiMutator<analyticsExportResponse>(getAnalyticsExportUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export type analyticsMarginBreakdownResponse200 = {
+  data: AnalyticsMarginBreakdown200;
+  status: 200;
+};
+
+export type analyticsMarginBreakdownResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type analyticsMarginBreakdownResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type analyticsMarginBreakdownResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type analyticsMarginBreakdownResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type analyticsMarginBreakdownResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type analyticsMarginBreakdownResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type analyticsMarginBreakdownResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type analyticsMarginBreakdownResponseSuccess = analyticsMarginBreakdownResponse200 & {
+  headers: Headers;
+};
+export type analyticsMarginBreakdownResponseError = (
+  | analyticsMarginBreakdownResponse400
+  | analyticsMarginBreakdownResponse401
+  | analyticsMarginBreakdownResponse403
+  | analyticsMarginBreakdownResponse404
+  | analyticsMarginBreakdownResponse409
+  | analyticsMarginBreakdownResponse422
+  | analyticsMarginBreakdownResponse503
+) & {
+  headers: Headers;
+};
+
+export type analyticsMarginBreakdownResponse =
+  analyticsMarginBreakdownResponseSuccess | analyticsMarginBreakdownResponseError;
+
+export const getAnalyticsMarginBreakdownUrl = (params: AnalyticsMarginBreakdownParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v1/analytics/margin-breakdown/?${stringifiedParams}`
+    : `/api/v1/analytics/margin-breakdown/`;
+};
+
+/**
+ * Descomposición del margen de una obra (§8): cada causa de la
+ * diferencia entre lo cotizado y lo real, con los orígenes enlazados.
+ */
+export const analyticsMarginBreakdown = async (
+  params: AnalyticsMarginBreakdownParams,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<analyticsMarginBreakdownResponse> => {
+  return apiMutator<analyticsMarginBreakdownResponse>(getAnalyticsMarginBreakdownUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export type analyticsOverviewResponse200 = {
+  data: AnalyticsOverview;
+  status: 200;
+};
+
+export type analyticsOverviewResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type analyticsOverviewResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type analyticsOverviewResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type analyticsOverviewResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type analyticsOverviewResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type analyticsOverviewResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type analyticsOverviewResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type analyticsOverviewResponseSuccess = analyticsOverviewResponse200 & {
+  headers: Headers;
+};
+export type analyticsOverviewResponseError = (
+  | analyticsOverviewResponse400
+  | analyticsOverviewResponse401
+  | analyticsOverviewResponse403
+  | analyticsOverviewResponse404
+  | analyticsOverviewResponse409
+  | analyticsOverviewResponse422
+  | analyticsOverviewResponse503
+) & {
+  headers: Headers;
+};
+
+export type analyticsOverviewResponse =
+  analyticsOverviewResponseSuccess | analyticsOverviewResponseError;
+
+export const getAnalyticsOverviewUrl = (params?: AnalyticsOverviewParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v1/analytics/overview/?${stringifiedParams}`
+    : `/api/v1/analytics/overview/`;
+};
+
+/**
+ * Las cuatro secciones del panel en un viaje: ventas, margen real vs.
+ * cotizado, producción e instalación/postventa, en el período pedido
+ * (por defecto los últimos 30 días).
+ */
+export const analyticsOverview = async (
+  params?: AnalyticsOverviewParams,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<analyticsOverviewResponse> => {
+  return apiMutator<analyticsOverviewResponse>(getAnalyticsOverviewUrl(params), {
+    ...options,
+    method: "GET",
   });
 };
 
@@ -13543,6 +13812,97 @@ export const organizationSettingsRead = async (
     ...options,
     method: "GET",
   });
+};
+
+export type organizationSettingsAnalyticsUpdateResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type organizationSettingsAnalyticsUpdateResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type organizationSettingsAnalyticsUpdateResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type organizationSettingsAnalyticsUpdateResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type organizationSettingsAnalyticsUpdateResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type organizationSettingsAnalyticsUpdateResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type organizationSettingsAnalyticsUpdateResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type organizationSettingsAnalyticsUpdateResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type organizationSettingsAnalyticsUpdateResponseSuccess =
+  organizationSettingsAnalyticsUpdateResponse200 & {
+    headers: Headers;
+  };
+export type organizationSettingsAnalyticsUpdateResponseError = (
+  | organizationSettingsAnalyticsUpdateResponse400
+  | organizationSettingsAnalyticsUpdateResponse401
+  | organizationSettingsAnalyticsUpdateResponse403
+  | organizationSettingsAnalyticsUpdateResponse404
+  | organizationSettingsAnalyticsUpdateResponse409
+  | organizationSettingsAnalyticsUpdateResponse422
+  | organizationSettingsAnalyticsUpdateResponse503
+) & {
+  headers: Headers;
+};
+
+export type organizationSettingsAnalyticsUpdateResponse =
+  | organizationSettingsAnalyticsUpdateResponseSuccess
+  | organizationSettingsAnalyticsUpdateResponseError;
+
+export const getOrganizationSettingsAnalyticsUpdateUrl = () => {
+  return `/api/v1/organization/settings/analytics/`;
+};
+
+/**
+ * Quién ve montos/márgenes en Analítica y la tarifa horaria de mano de
+ * obra — decisión del dueño (OWNER explícito, no WRITE_ROLES).
+ */
+export const organizationSettingsAnalyticsUpdate = async (
+  orgAnalyticsSettingsRequest?: OrgAnalyticsSettingsRequest,
+  options?: Parameters<typeof apiMutator>[1],
+): Promise<organizationSettingsAnalyticsUpdateResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+  return apiMutator<organizationSettingsAnalyticsUpdateResponse>(
+    getOrganizationSettingsAnalyticsUpdateUrl(),
+    {
+      ...options,
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+      body: JSON.stringify(orgAnalyticsSettingsRequest),
+    },
+  );
 };
 
 export type organizationSettingsCommercialUpdateResponse200 = {

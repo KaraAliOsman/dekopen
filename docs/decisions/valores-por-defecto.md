@@ -562,3 +562,18 @@ Registradas al implementar la Constitucion como codigo. No son configurables por
 | Catálogo reglas | `MountingRuleCollectionView` admite INSTALLER en lectura (la regla se sugiere en la medición de terreno) | `catalogs/views.py` | `*READ_ROLES + INSTALLER` — la escritura sigue restringida. |
 | Probes ux:capture | Textos dentro de `svg[aria-hidden="true"]` se saltan (ilustraciones decorativas con fuente de 6 px) | `scripts/ux-capture/capture.ts` | SVG decorativo no es contenido — medir su fuente generaba falsos `font-too-small`. |
 | Tablas jefe en 390 | `.field-table-wrap { overflow-x:auto }` + `min-width:38rem` bajo 40 rem — las tablas anchas se deslizan, nunca se comprimen ilegibles | `field.css`, `FieldServicePage`, `FieldIncidentsPage` | Antes 10 columnas se aplastaban al ancho del teléfono. |
+
+## Decisiones de implementación — P24 (analítica que sirve para decidir)
+
+| Decisión | Valor adoptado | Dónde vive | Notas |
+| -------- | -------------- | ---------- | ----- |
+| Cohorte de las métricas | «Reportan en el período»: una cotización cuenta por su fecha de emisión, una OT por su liberación, una entrega/incidencia/ticket por su fecha | `docs/analytics/metricas.md` §3, `private.analytics_*` | Conversión no re-cuenta historiales: el período elige qué filas entran y la métrica las resume donde están. |
+| Período por defecto | Últimos 30 días terminando hoy, días calendario `America/Santiago` | `analytics/decision.py::period_from` | Selector 7/30/90 días, 12 meses o rango a medida; la fecha se interpreta en la zona del taller, no UTC. |
+| Métrica desconocida | `{value:null, n, cause}` → «Sin dato» con la causa; jamás 0 ni estimación | funciones `private.analytics_*`, `MetricValue`/`UnknownValue` | `n` declara cuántas filas entraron al denominador aunque el valor sea nulo — una cifra sin denominador también es información. |
+| Acceso financiero | `analytics_financial_roles` de la org (por defecto `{OWNER}`); lectores OWNER + WORKSHOP_MANAGER | `private.analytics_access`, ajuste «Analítica» en Ajustes | Un lector sin rol financiero ve operación (OT, conversiones, incidencias) pero cada monto/margen cae a NULL con la causa «sin permiso financiero». |
+| Tarifa horaria | `analytics.hourly_rate_clp` en org settings; sin tarifa las horas no se valorizan | `OrgAnalyticsSettingsSerializer`, `analytics_margin_breakdown` | El costo de mano de obra faltante se declara «tarifa horaria no configurada» en `real.missing`, no se inventa. |
+| Merma real de barras | `consumido − colocado − producido + mm_desechados`; OT sin corte medido (placas, vidrio) → NULL | `analytics_production` | La merma «conocida» sólo sale de movimientos reales; la placa se mide aparte en mm² (`merma_placas_mm2`). |
+| Desglose de margen (§8) | Causas material/remake/horas/descarte/descuento con monto y enlace a la obra; OT de origen enlazan a `/production` | `analytics_margin_breakdown`, `MarginBreakdownDialog` | El «por qué bajó el margen» descompone la diferencia cotizado→real por causa y muestra la OT/movimiento que la originó. |
+| Detalle exportable | Las mismas filas del drill-down por sección (quotes/obras/ots/steps/remakes/deliveries/incidents/warranties) → CSV de columnas unión | `analytics_export_rows`, `export_csv` | Exportar nunca recalcula: el CSV es la tabla que ya viste, con su período en el nombre de archivo. |
+| Agregación | Funciones `private.analytics_*` SECURITY DEFINER por `org_id` del JWT; cada resultado lleva `org` verificada | migración P24 | Sin lecturas cruzadas: org B no ve datos de A (test pgTAP 187). |
+| Menú | Grupo «Analítica» propio antes de Ajustes; visible sólo a OWNER/WORKSHOP_MANAGER | `shellUtils.ts`, `App.tsx` `/analitica` | Coherente con la matriz rol→navegación (test actualizado). |

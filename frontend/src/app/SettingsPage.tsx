@@ -20,6 +20,7 @@ import {
   organizationMemberUpdate,
   organizationNumberingRead,
   organizationSecurityUpdate,
+  organizationSettingsAnalyticsUpdate,
   organizationSettingsCommercialUpdate,
   organizationSettingsCompanyUpdate,
   organizationSettingsDocumentsUpdate,
@@ -1023,6 +1024,115 @@ function StationsCard({ orgId }: { orgId: string }): JSX.Element {
       <p className="settings-hint">
         <Link className="ui-backlink" to="/production">
           {t("settings.stationsOpen")}
+        </Link>
+      </p>
+    </div>
+  );
+}
+
+/** P24 — quién ve montos en Analítica (analytics_financial_roles) y la
+ * tarifa horaria que valoriza las horas de producción en el margen real.
+ * Lo decide el dueño — la escritura es OWNER-only también en el backend. */
+function AnalyticsSettingsCard({ orgId }: { orgId: string }): JSX.Element {
+  const [roles, setRoles] = useState<Set<MembershipRoleEnum>>(new Set(["OWNER"]));
+  const [rate, setRate] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
+  const requestOptions = { headers: { "X-Organization-ID": orgId } };
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const response = await organizationSettingsRead(requestOptions);
+        if (response.status !== 200) return;
+        const analytics = response.data.analytics as {
+          financial_roles?: string[];
+          hourly_rate_clp?: string | null;
+        };
+        if (Array.isArray(analytics?.financial_roles) && analytics.financial_roles.length > 0) {
+          setRoles(new Set(analytics.financial_roles as MembershipRoleEnum[]));
+        }
+        setRate(
+          analytics?.hourly_rate_clp === null || analytics?.hourly_rate_clp === undefined
+            ? ""
+            : String(analytics.hourly_rate_clp),
+        );
+      } catch {
+        /* la tarjeta principal ya reporta el fallo de carga */
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId]);
+
+  function toggle(role: MembershipRoleEnum): void {
+    setRoles((current) => {
+      const next = new Set(current);
+      if (next.has(role)) next.delete(role);
+      else next.add(role);
+      return next;
+    });
+  }
+
+  async function save(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    setBusy(true);
+    setMessage(null);
+    if (roles.size === 0) {
+      setMessage({ text: t("settings.analyticsRolesError"), error: true });
+      setBusy(false);
+      return;
+    }
+    try {
+      const response = await organizationSettingsAnalyticsUpdate(
+        {
+          financial_roles: [...roles],
+          hourly_rate_clp: rate.trim() === "" ? null : rate.trim(),
+        },
+        requestOptions,
+      );
+      if (response.status !== 200) throw new ApiError(response.status, response.data);
+      setMessage({ text: t("settings.analyticsSaved"), error: false });
+    } catch {
+      setMessage({ text: t("settings.analyticsSaveError"), error: true });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="settings-card">
+      <h3 className="eyebrow">{t("settings.analytics")}</h3>
+      <p className="settings-hint">{t("settings.analyticsHint")}</p>
+      {message && <p className={message.error ? "form-error" : "settings-hint"}>{message.text}</p>}
+      <form noValidate className="payments-form" onSubmit={save}>
+        <fieldset>
+          <legend className="settings-hint">{t("settings.analyticsRoles")}</legend>
+          {(Object.keys(ROLE_KEYS) as MembershipRoleEnum[]).map((role) => (
+            <label className="settings-check" key={role}>
+              <input checked={roles.has(role)} onChange={() => toggle(role)} type="checkbox" />
+              {t(ROLE_KEYS[role])}
+            </label>
+          ))}
+        </fieldset>
+        <label>
+          {t("settings.analyticsRate")}
+          <input
+            inputMode="decimal"
+            maxLength={15}
+            value={rate}
+            onChange={(event) => setRate(event.target.value)}
+          />
+          <span className="settings-hint">{t("settings.analyticsRateHint")}</span>
+        </label>
+        <div className="payments-form-actions">
+          <button type="submit" className="primary-action" disabled={busy}>
+            {t("settings.workshopSave")}
+          </button>
+        </div>
+      </form>
+      <p className="settings-hint">
+        <Link className="ui-backlink" to="/analitica">
+          {t("nav.analytics")}
         </Link>
       </p>
     </div>
@@ -2170,6 +2280,7 @@ export function SettingsPage(): JSX.Element {
                 {canWrite ? (
                   <>
                     <ProductionRulesCard orgId={org.id} />
+                    {role === "OWNER" && <AnalyticsSettingsCard orgId={org.id} />}
                     <OrgExtrasCard orgId={org.id} />
                   </>
                 ) : (
