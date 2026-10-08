@@ -530,7 +530,15 @@ def _pack_html(
     quantity = max(int(payload.get("quantity") or 1), 1)
     member_count = sum(len(unit.members) for unit in fact_units)
     ops = operations_from_plan(
-        bars=[CutBar.model_validate_json(json.dumps(b)) for b in bars],
+        bars=[
+            # The remnant-claim pass stamps `remnant_code` (RT- folio) onto
+            # plan rows for the printed pack — strip that backend enrichment
+            # before strict engine validation.
+            CutBar.model_validate_json(
+                json.dumps({k: v for k, v in b.items() if k != "remnant_code"})
+            )
+            for b in bars
+        ],
         fact_units=fact_units,
     )
 

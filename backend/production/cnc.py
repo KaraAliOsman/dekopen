@@ -683,7 +683,9 @@ def _order_ops(*, org_id: UUID, order_id: UUID) -> dict[str, object]:
     position_id = str(payload.get("position_id") or "") or None
     fact_units = _operations_fact_units(version_snapshot, position_id)
     bars = [
-        CutBar.model_validate_json(json.dumps(bar))
+        CutBar.model_validate_json(
+            json.dumps({k: v for k, v in bar.items() if k != "remnant_code"})
+        )
         for bar in (optimization.get("bars") or {}).get("workshop_cut_plan") or []
     ]
     ops_issues: list[dict[str, object]] = []

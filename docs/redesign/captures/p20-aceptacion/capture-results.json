@@ -1,0 +1,32 @@
+[
+ {
+  "role": "estimator",
+  "route": "/dashboard",
+  "status": "ok",
+  "file": "/home/ubuntu/repos/dekopen/docs/redesign/captures/p20-aceptacion/shots/estimator__dashboard_d__1440x900.png"
+ },
+ {
+  "role": "estimator",
+  "route": "/projects/1c0aa031-aca9-43f4-a4c9-a78c6b3efb44",
+  "status": "ok",
+  "file": "/home/ubuntu/repos/dekopen/docs/redesign/captures/p20-aceptacion/shots/estimator__proyecto_vitrina_d__1440x900.png"
+ },
+ {
+  "role": "estimator",
+  "route": "/projects",
+  "status": "ok",
+  "file": "/home/ubuntu/repos/dekopen/docs/redesign/captures/p20-aceptacion/shots/estimator__proyectos_d__1440x900.png"
+ },
+ {
+  "role": "estimator",
+  "route": "/quotations",
+  "status": "ok",
+  "file": "/home/ubuntu/repos/dekopen/docs/redesign/captures/p20-aceptacion/shots/estimator__quotations_d__1440x900.png"
+ },
+ {
+  "role": "estimator",
+  "route": "/settings/general",
+  "status": "ok",
+  "file": "/home/ubuntu/repos/dekopen/docs/redesign/captures/p20-aceptacion/shots/estimator__settings_d__1440x900.png"
+ }
+]
